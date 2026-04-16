@@ -1,0 +1,107 @@
+"""Analysis report repository."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from models.tables import AnalysisReport
+
+
+def create_analysis_report(
+    session: Session,
+    *,
+    risk_score: int,
+    severity: str,
+    recommendation: str,
+    top_risk: str,
+    parse_summary: str,
+    narrative_opening: str,
+    narrative_explanation: str,
+    warnings_json: str,
+    contributors_json: str,
+    analyzed_files_json: str,
+    llm_provider: str | None,
+    llm_model: str | None,
+    llm_local_mode: str | None,
+    source_interface: str | None,
+    trigger_type: str | None,
+    trigger_id: str | None,
+    dashboard_display_duration_seconds: int | None,
+) -> AnalysisReport:
+    report = AnalysisReport(
+        risk_score=risk_score,
+        severity=severity,
+        recommendation=recommendation,
+        top_risk=top_risk,
+        parse_summary=parse_summary,
+        narrative_opening=narrative_opening,
+        narrative_explanation=narrative_explanation,
+        warnings_json=warnings_json,
+        contributors_json=contributors_json,
+        analyzed_files_json=analyzed_files_json,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        llm_local_mode=llm_local_mode,
+        source_interface=source_interface,
+        trigger_type=trigger_type,
+        trigger_id=trigger_id,
+        dashboard_display_duration_seconds=dashboard_display_duration_seconds,
+    )
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
+
+
+def get_analysis_report(session: Session, report_id: int) -> AnalysisReport | None:
+    return session.get(AnalysisReport, report_id)
+
+
+def delete_analysis_report(session: Session, report_id: int) -> bool:
+    report = session.get(AnalysisReport, report_id)
+    if report is None:
+        return False
+    session.delete(report)
+    session.commit()
+    return True
+
+
+def list_analysis_reports(
+    session: Session,
+    *,
+    severity: str | None = None,
+    recommendation: str | None = None,
+    search: str | None = None,
+) -> list[AnalysisReport]:
+    stmt = select(AnalysisReport).order_by(AnalysisReport.id.desc())
+    if severity:
+        stmt = stmt.where(AnalysisReport.severity == severity)
+    if recommendation:
+        stmt = stmt.where(AnalysisReport.recommendation == recommendation)
+    if search:
+        like = f"%{search}%"
+        stmt = stmt.where(
+            AnalysisReport.top_risk.ilike(like)
+            | AnalysisReport.narrative_opening.ilike(like)
+            | AnalysisReport.parse_summary.ilike(like)
+        )
+    result = session.execute(stmt)
+    return list(result.scalars().all())
+
+
+def latest_active_dashboard_report(session: Session, *, now: datetime | None = None) -> AnalysisReport | None:
+    current_time = now or datetime.now(UTC)
+    reports = list_analysis_reports(session)
+    for report in reports:
+        duration = report.dashboard_display_duration_seconds or 0
+        if duration <= 0:
+            continue
+        created_at = report.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        if created_at + timedelta(seconds=duration) > current_time:
+            return report
+    return None

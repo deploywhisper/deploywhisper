@@ -1,0 +1,44 @@
+{
+  "updated_at": "2026-04-16T00:00:00Z",
+  "services": [
+    {
+      "id": "database",
+      "label": "Primary Database",
+      "resource_keys": [
+        "aws_security_group.main",
+        "resource/PrimaryDatabase"
+      ],
+      "downstream": [
+        "api",
+        "worker"
+      ]
+    },
+    {
+      "id": "api",
+      "label": "API Service",
+      "resource_keys": [
+        "Deployment/api",
+        "stage/Deploy"
+      ],
+      "downstream": [
+        "frontend"
+      ]
+    },
+    {
+      "id": "worker",
+      "label": "Worker Service",
+      "resource_keys": [
+        "task-background-jobs"
+      ],
+      "downstream": []
+    },
+    {
+      "id": "frontend",
+      "label": "Frontend Service",
+      "resource_keys": [
+        "Deployment/frontend"
+      ],
+      "downstream": []
+    }
+  ]
+}

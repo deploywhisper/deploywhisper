@@ -3,7 +3,7 @@
   <br/>
   <strong style="font-size: 2em;">DeployWhisper</strong>
   <br/>
-  <em>AI-Powered Pre-Deployment Risk Intelligence Platform</em>
+  <em>AI-Powered Pre-Deployment Risk Intelligence Platform for infrastructure changes</em>
   <br/><br/>
   <a href="#quick-start">Quick Start</a> · <a href="#features">Features</a> · <a href="#architecture">Architecture</a> · <a href="#ai-skills">AI Skills</a> · <a href="#docs">Docs</a>
 </p>
@@ -20,128 +20,71 @@ It uses large language models enriched with **AI Skills** (deep, tool-specific d
 Upload IaC files → AI analyzes changes → Get risk score + narrative + rollback plan
 ```
 
-**Built entirely in Python. No JavaScript. No React. No npm.**
+### Complete Project Directory Structure
 
----
-
-## Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/ai-deploy-whisper.git
-cd ai-deploy-whisper
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set your LLM API key (pick one)
-export ANTHROPIC_API_KEY="sk-ant-..."       # For Claude
-# OR
-export OPENAI_API_KEY="sk-..."              # For OpenAI
-# OR use Ollama locally (no key needed)
-
-# Launch the dashboard
-streamlit run app.py
-```
-
-Open `http://localhost:8501` — click **"Load demo report"** to see a sample analysis instantly.
-
-**Time from clone to first analysis: under 5 minutes.**
-
----
-
-## Features
-
-### Multi-Tool IaC Analysis
-| Tool | Input Format | What It Catches |
-|------|-------------|----------------|
-| **Terraform** | `terraform plan -json` | SG 0.0.0.0/0 exposure, IAM wildcards, RDS without deletion protection, state-breaking changes |
-| **Kubernetes** | YAML manifests | Missing readiness probes, privileged containers, resource limit gaps, RBAC escalation |
-| **Ansible** | Playbook YAML | Non-idempotent shell tasks, production inventory targeting, dangerous module usage |
-| **Jenkins** | Jenkinsfile | Removed approval gates, credential exposure, missing rollback hooks |
-| **CloudFormation** | Template YAML/JSON | Resource replacements, missing DeletionPolicy, cross-stack dependency risks |
-
-### AI-Powered Risk Narrative
-Not just a diff viewer — DeployWhisper generates a **human-readable story** explaining:
-- What changed and why it matters
-- How changes interact across tools
-- Which downstream services are affected (blast radius)
-- A clear **GO / CAUTION / NO-GO** recommendation
-- Step-by-step rollback plan with time estimates
-
-### AI Skills Knowledge Base
-Each tool has a dedicated **AI Skill** — a curated knowledge module injected into the LLM context:
-- **Terraform Skill**: Provider-specific risks, state operations, lifecycle rule pitfalls
-- **Kubernetes Skill**: Workload safety, rolling update risks, network policy gaps
-- **Ansible Skill**: Module danger classification, idempotency violations, inventory targeting
-- **Jenkins Skill**: Approval gate analysis, credential exposure, agent security
-- **CloudFormation Skill**: Replacement detection, deletion policies, drift patterns
-- **Git Skill**: Commit context, sensitive file detection, branch risk signals
-- **Docker Skill**: Dockerfile risks, image provenance, compose file security
-
-Skills are **customizable** — drop a markdown file in `skills/custom/` to add your team's domain knowledge.
-
-### Bring Your Own LLM
-| Provider | Models | API Key Required |
-|----------|--------|-----------------|
-| Anthropic Claude | claude-sonnet-4-20250514, claude-opus-4-20250115 | Yes |
-| OpenAI | gpt-4o, gpt-4-turbo | Yes |
-| Ollama (Local) | llama3, mistral, codellama | **No** (fully air-gapped) |
-| Groq | llama-3.3-70b, mixtral-8x7b | Yes |
-| Azure OpenAI | Any deployment | Yes |
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  PARSER LAYER                                               │
-│  Terraform · Kubernetes · Ansible · Jenkins · CloudFormation │
-│                    ↓ UnifiedChange JSON                     │
-├─────────────────────────────────────────────────────────────┤
-│  ANALYSIS ENGINE                                            │
-│  Blast Radius · Risk Scorer · Incident Matcher · Env Detect │
-│                    ↓ Enriched Context                       │
-├─────────────────────────────────────────────────────────────┤
-│  AI SKILLS ENGINE                                           │
-│  Loads tool-specific knowledge → injects into LLM prompt    │
-├─────────────────────────────────────────────────────────────┤
-│  LLM LAYER (LiteLLM)                                       │
-│  Claude · OpenAI · Ollama · Groq · Azure                    │
-│                    ↓ Structured Risk Report                 │
-├─────────────────────────────────────────────────────────────┤
-│  OUTPUT LAYER                                               │
-│  Streamlit Dashboard · CLI · REST API · Slack Bot           │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Full architecture diagram**: See `docs/DeployWhisper_Architecture.docx`, Section 1.2
-
----
-
-## Project Structure
-
-```
+```text
 ai-deploy-whisper/
-├── app.py                      # Streamlit dashboard entry point
-├── server.py                   # FastAPI entry point (API/CLI mode)
-├── config.py                   # Settings and LLM configuration
+├── README.md
+├── pyproject.toml
 ├── requirements.txt
+├── .env.example
+├── .gitignore
 ├── Dockerfile
 ├── docker-compose.yml
-│
-├── parsers/                    # IaC file parsers
-│   ├── base.py                 # UnifiedChange Pydantic model
-│   ├── registry.py             # Auto-detect parser from file type
+├── alembic.ini
+├── app.py
+├── api_server.py
+├── cli.py
+├── config.py
+├── logging_config.py
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── migrations/
+│   ├── env.py
+│   ├── script.py.mako
+│   └── versions/
+├── api/
+│   ├── __init__.py
+│   ├── routes/
+│   │   ├── analyses.py
+│   │   ├── incidents.py
+│   │   ├── health.py
+│   │   └── settings.py
+│   ├── dependencies.py
+│   ├── errors.py
+│   └── schemas.py
+├── services/
+│   ├── __init__.py
+│   ├── analysis_service.py
+│   ├── intake_service.py
+│   ├── report_service.py
+│   ├── incident_service.py
+│   ├── topology_service.py
+│   └── settings_service.py
+├── parsers/
+│   ├── __init__.py
+│   ├── base.py
+│   ├── registry.py
 │   ├── terraform_parser.py
 │   ├── kubernetes_parser.py
 │   ├── ansible_parser.py
 │   ├── jenkins_parser.py
 │   └── cloudformation_parser.py
-│
-├── skills/                     # AI Skills knowledge base
-│   ├── loader.py               # Skill discovery + prompt injection
+├── analysis/
+│   ├── __init__.py
+│   ├── risk_scorer.py
+│   ├── blast_radius.py
+│   ├── env_classifier.py
+│   ├── incident_matcher.py
+│   └── rollback_planner.py
+├── llm/
+│   ├── __init__.py
+│   ├── narrator.py
+│   ├── providers.py
+│   ├── prompts.py
+│   └── skill_context.py
+├── skills/
 │   ├── terraform.md
 │   ├── kubernetes.md
 │   ├── ansible.md
@@ -149,160 +92,172 @@ ai-deploy-whisper/
 │   ├── cloudformation.md
 │   ├── git.md
 │   ├── docker.md
-│   └── custom/                 # Team-specific skill overrides
-│
-├── analysis/                   # Risk intelligence engine
-│   ├── blast_radius.py         # NetworkX dependency graph + BFS
-│   ├── risk_scorer.py          # Weighted heuristic scoring
-│   ├── incident_matcher.py     # Embedding similarity search
-│   └── env_classifier.py       # Prod/staging/dev detection
-│
-├── llm/                        # LLM abstraction layer
-│   ├── narrator.py             # LiteLLM + skill-enhanced prompts
-│   ├── prompts.py              # System prompts + output schemas
-│   └── providers.py            # Provider config + validation
-│
-├── models/                     # Data layer
-│   ├── database.py             # SQLAlchemy engine + session
-│   ├── schemas.py              # Pydantic API schemas
-│   └── tables.py               # ORM models
-│
-├── ui/                         # Streamlit frontend
-│   ├── components/             # Reusable UI components
-│   ├── pages/                  # Multi-page app routes
-│   └── styles/theme.py         # Custom theming
-│
-├── samples/                    # Demo scenarios
+│   └── custom/
+├── models/
+│   ├── __init__.py
+│   ├── database.py
+│   ├── tables.py
+│   ├── repositories/
+│   │   ├── analysis_reports.py
+│   │   ├── incident_records.py
+│   │   └── settings.py
+│   └── types.py
+├── ui/
+│   ├── __init__.py
+│   ├── routes/
+│   │   ├── dashboard.py
+│   │   ├── history.py
+│   │   ├── settings.py
+│   │   └── incidents.py
+│   ├── components/
+│   │   ├── upload_panel.py
+│   │   ├── risk_summary.py
+│   │   ├── change_table.py
+│   │   ├── blast_radius_graph.py
+│   │   ├── rollback_plan.py
+│   │   └── progress_tracker.py
+│   ├── state/
+│   │   └── session_state.py
+│   └── formatters/
+│       ├── narrative.py
+│       └── risk_labels.py
+├── cli/
+│   ├── __init__.py
+│   └── analyze.py
+├── samples/
 │   ├── safe_deploy/
 │   ├── medium_risk/
 │   └── critical_risk/
-│
+├── data/
+│   ├── topology/
+│   │   └── service_topology.json
+│   └── incidents/
 ├── tests/
 │   ├── test_parsers/
-│   ├── test_skills/
 │   ├── test_analysis/
-│   └── test_integration/
-│
+│   ├── test_llm/
+│   ├── test_api/
+│   ├── test_ui/
+│   ├── test_services/
+│   ├── test_cli/
+│   └── fixtures/
 └── docs/
-    ├── DeployWhisper_PRD.docx
-    └── DeployWhisper_Architecture.docx
+    └── assets/
 ```
 
----
+## Current Status
 
-## Running Modes
+This repository is currently a **planning workspace with an implemented foundation scaffold**, not a completed feature-complete product.
 
-| Mode | Command | Use Case |
-|------|---------|----------|
-| **Dashboard** | `streamlit run app.py` | Interactive web UI |
-| **API Server** | `uvicorn server:app --port 8000` | REST API for CI/CD, Slack bots |
-| **CLI** | `python -m deploywhisper analyze plan.json` | Terminal / headless analysis |
-| **Docker** | `docker compose up -d` | Containerized deployment |
+What exists today:
+- Product requirements document
+- Architecture decision document
+- UX design specification
+- Epics and stories breakdown
+- Implementation readiness assessment
+- Story `1.1` foundation scaffold with a working shared runtime shell and health endpoint
 
----
+These artifacts were created through BMAD workflows and live under [`_bmad-output/planning-artifacts/`](/Users/psaho01/ai-deploy-whisper/_bmad-output/planning-artifacts).
 
-## Configuration
+Core planning artifacts:
+- [PRD](/Users/psaho01/ai-deploy-whisper/_bmad-output/planning-artifacts/prd.md)
+- [Architecture](/Users/psaho01/ai-deploy-whisper/_bmad-output/planning-artifacts/architecture.md)
+- [UX Specification](/Users/psaho01/ai-deploy-whisper/_bmad-output/planning-artifacts/ux-design-specification.md)
+- [Epics and Stories](/Users/psaho01/ai-deploy-whisper/_bmad-output/planning-artifacts/epics.md)
+- [Implementation Readiness Report](/Users/psaho01/ai-deploy-whisper/_bmad-output/planning-artifacts/implementation-readiness-report-2026-04-16.md)
 
-Copy `.env.example` to `.env` and set your preferred LLM provider:
+## Product Summary
 
-```bash
-# LLM Provider (claude / openai / ollama / groq / azure)
-LLM_PROVIDER=claude
-LLM_MODEL=claude-sonnet-4-20250514
-LLM_API_KEY=sk-ant-your-key-here
+DeployWhisper is intended to replace fragmented manual deploy review with one deploy briefing that includes:
+- Unified multi-tool change analysis
+- Explainable risk score and deploy recommendation
+- Plain-English narrative of what changed and why it matters
+- Blast radius view of downstream impact
+- Rollback guidance and recovery complexity
+- Historical incident similarity matching
+- Audit trail and history review
 
-# For Ollama (no key needed)
-# LLM_PROVIDER=ollama
-# LLM_MODEL=ollama/llama3
-# LLM_API_BASE=http://localhost:11434
-```
+The product is advisory-only in v1. It supports human judgment; it does not block deployments.
 
-Or configure interactively via the **Settings** page in the dashboard.
+## Why It Exists
 
----
+Existing tools mostly review one artifact at a time:
+- linters catch single-tool rule violations
+- plan viewers show raw infrastructure diffs
+- policy engines enforce only pre-written rules
+- generic LLM prompts lack system context and auditability
 
-## Security
+DeployWhisper’s core thesis is that real deployment risk is a **context problem**, not a single-file problem. The value comes from combining:
+- multi-tool parsing
+- tool-specific AI Skills
+- blast radius analysis
+- incident memory
+- one decision-ready briefing
 
-- **API keys** are stored only in environment variables or session memory — never written to disk or logs
-- **Raw IaC content** is parsed locally — only structured summaries (resource names, action types) are sent to the LLM
-- **Sensitive files** (.env, private keys, kubeconfig) are auto-detected by the Git skill and blocked from LLM transmission
-- **Air-gap mode**: Use Ollama for fully offline operation where zero data leaves your machine
-- **Log sanitization**: Application logs never contain API keys, file content, or LLM responses
+## Target Users
 
----
+- Platform engineers running day-to-day pre-deploy review
+- SRE / DevOps leads making go/no-go decisions
+- Junior engineers learning from plain-English explanations
+- Engineering managers reviewing trends and audit history
+- Platform admins managing topology, incident records, and AI Skills
+- Technical users integrating analysis into CLI/API/CI workflows
 
-## Custom AI Skills
+## Planned Technical Foundation
 
-Add your team's domain knowledge without writing any Python:
+The current architecture source of truth is the BMAD architecture document, not older exploratory drafts.
 
-```bash
-# Create a custom skill for your internal Terraform modules
-cat > skills/custom/terraform.md << 'EOF'
----
-skill: terraform
-version: 1.0
-triggers: [.tf, .tfvars]
-token_budget: 500
----
+Planned v1 stack:
+- **UI runtime:** NiceGUI
+- **API runtime:** FastAPI
+- **Persistence:** SQLite + SQLAlchemy + Alembic
+- **Contracts and validation:** Pydantic
+- **LLM abstraction:** LiteLLM
+- **Graph analysis:** NetworkX
+- **Artifact parsing:** Python-native parsers for Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation
 
-## Internal module patterns
-- Module `corp-vpc` v2.x requires NAT gateway — flag if nat_enabled = false
-- Module `corp-rds` always sets multi_az in prod — flag if single-AZ detected
-- Tag `team` is mandatory on all resources — flag if missing
+Key architectural constraints:
+- pure Python, no JavaScript build tooling
+- single-container application runtime
+- local-first raw IaC handling
+- structured-summary-only LLM boundary
+- fully offline Ollama mode supported
 
-## Naming conventions
-- Production resources must match pattern: prod-{region}-{service}
-- Security groups must have description field populated
-EOF
-```
+## UX Direction
 
-Custom skills **override** built-in skills with the same name, so your team-specific patterns take precedence.
+The UX source of truth is the generated UX specification. The high-level UX direction is:
+- desktop-first, internal operational tool
+- verdict-first review experience
+- calm, high-signal briefing rather than dashboard sprawl
+- dark-mode-first visual system
+- parser coverage and uncertainty made explicit
+- summary first, evidence below
 
----
+Supporting UX assets:
+- [UX spec](/Users/psaho01/ai-deploy-whisper/_bmad-output/planning-artifacts/ux-design-specification.md)
+- [Design directions HTML](/Users/psaho01/ai-deploy-whisper/_bmad-output/planning-artifacts/ux-design-directions.html)
 
-## Tech Stack
+## Repository Intent
 
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| Frontend | **Streamlit** | Pure Python, zero JS, built-in charts/tables/uploads |
-| Backend API | **FastAPI** | Async, auto OpenAPI docs, Pydantic integration |
-| LLM Abstraction | **LiteLLM** | Single `completion()` call for 100+ providers |
-| AI Skills | **Markdown files** | Human-readable, version-controlled, customizable |
-| Database | **SQLite + SQLAlchemy** | Zero setup, file-based persistence |
-| Visualization | **Plotly + streamlit-agraph** | Interactive gauges, charts, and network graphs |
-| Graph Engine | **NetworkX** | Blast radius dependency traversal |
+This repo currently serves as:
+- a BMAD planning workspace
+- a technical source of truth for implementation
+- a handoff package for story execution
 
----
+It does **not** yet contain the full application described by the planning artifacts, but it now includes the first implemented foundation story and a runnable shared runtime scaffold.
 
-## Documentation
+## Related Source Documents
 
-| Document | Description |
-|----------|-------------|
-| `docs/DeployWhisper_PRD.docx` | Product Requirements Document — functional requirements, user stories, success metrics, release plan |
-| `docs/DeployWhisper_Architecture.docx` | Technical Architecture — complete tech stack, system design, AI Skills engine, data flow, database schema, deployment guide |
+The original source documents used during planning are still present in the repository root:
+- [DeployWhisper_PRD.docx](/Users/psaho01/ai-deploy-whisper/DeployWhisper_PRD.docx)
+- [DeployWhisper_Architecture.docx](/Users/psaho01/ai-deploy-whisper/DeployWhisper_Architecture.docx)
 
----
+These are useful for provenance, but the BMAD-generated markdown artifacts should now be treated as the current planning baseline.
 
-## Contributing
+## Recommended Next Step
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/new-parser`)
-3. Add tests in `tests/`
-4. Run the test suite: `pytest`
-5. Run the linter: `ruff check .`
-6. Submit a pull request
+The planning set is now marked ready for implementation. The next practical BMAD step is story execution:
+- `bmad-create-story`
+- or `bmad-dev-story`
 
-To add a new IaC parser, see `docs/DeployWhisper_Architecture.docx`, Section 9.1.
-To add a new AI skill, see `skills/custom/` and the Custom AI Skills section above.
-
----
-
-## License
-
-MIT License. See `LICENSE` for details.
-
----
-
-<p align="center">
-  Built with Python · Powered by AI Skills · Made for DevOps teams who ship safely
-</p>
+If implementation changes the design or architecture materially, update the planning artifacts rather than letting code and docs drift apart.

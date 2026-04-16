@@ -1,0 +1,1 @@
+"""Incidents route placeholder."""
