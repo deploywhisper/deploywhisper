@@ -179,6 +179,77 @@ DeployWhisper is intended to replace fragmented manual deploy review with one de
 
 The product is advisory-only in v1. It supports human judgment; it does not block deployments.
 
+## LLM API Key Handling
+
+DeployWhisper is designed to keep LLM API keys in process memory and environment variables, not in the application database.
+
+Why:
+- container restarts should recover secrets from the runtime environment, not from app-managed persistence
+- storing an encrypted secret in the same app database is weaker unless the decryption key lives outside the app and outside that database
+- the project requirement explicitly forbids persisting API keys to local DB tables, logs, or generated reports
+
+Current code behavior:
+- provider/model/base URL can be persisted in `app_settings`
+- provider API keys are resolved from environment variables at runtime
+- the app intentionally deletes any DB key entries instead of saving them
+
+Relevant code:
+- [config.py](/Users/psaho01/ai-deploy-whisper/config.py:17)
+- [services/settings_service.py](/Users/psaho01/ai-deploy-whisper/services/settings_service.py:100)
+- [models/tables.py](/Users/psaho01/ai-deploy-whisper/models/tables.py:55)
+- [PRD requirement](/Users/psaho01/ai-deploy-whisper/_bmad-output/planning-artifacts/prd.md:430)
+
+Recommended runtime pattern:
+- local dev: `.env`
+- Docker Compose: `env_file: .env` or host-exported environment variables
+- production: orchestrator secrets or an external secret manager
+
+Supported environment variables:
+- `LLM_PROVIDER`
+- `LLM_MODEL`
+- `LLM_API_BASE`
+- `LLM_API_KEY` as a generic fallback
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- `OPENROUTER_API_KEY`
+- `GROQ_API_KEY`
+- `XAI_API_KEY`
+
+### Docker Compose
+
+The repo now passes through provider keys from your host or `.env` file into the container. Define them in `.env` next to `docker-compose.yml` or export them in your shell before starting Compose.
+
+Example `.env` for OpenAI:
+
+```env
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4.1-mini
+LLM_API_BASE=https://api.openai.com/v1
+OPENAI_API_KEY=your-real-key
+```
+
+Start the stack:
+
+```bash
+docker compose up --build
+```
+
+Example `.env` for Ollama:
+
+```env
+LLM_PROVIDER=ollama
+LLM_MODEL=ollama/llama3
+LLM_API_BASE=http://host.docker.internal:11434
+```
+
+No API key is required for local Ollama mode.
+
+### Dockerfile
+
+Do not bake API keys into the `Dockerfile` with `ENV` instructions.
+Pass them at runtime through Compose, `docker run -e ...`, Kubernetes secrets, or your platform's secret manager.
+
 ## Why It Exists
 
 Existing tools mostly review one artifact at a time:

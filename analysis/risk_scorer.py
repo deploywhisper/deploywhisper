@@ -77,6 +77,7 @@ class RiskAssessment(BaseModel):
     interaction_risks: list[InteractionRisk] = Field(default_factory=list, description="Cross-tool interaction findings")
     partial_context: bool = Field(..., description="Whether some files failed to parse")
     warnings: list[str] = Field(default_factory=list, description="Assessment warnings")
+    source: Literal["heuristic-only", "heuristic+llm"] = Field(default="heuristic-only", description="Whether the structured risk assessment was heuristic-only or LLM-assisted")
 
 
 def _normalize_action(action: str) -> str:
@@ -394,9 +395,9 @@ def _apply_llm_scores(
     *,
     partial_context: bool,
     completion_client=None,
-) -> tuple[list[RiskContributor], str | None]:
+) -> tuple[list[RiskContributor], str | None, bool]:
     if not contributors:
-        return contributors, None
+        return contributors, None, False
 
     runtime = resolve_provider_runtime()
     try:
@@ -404,7 +405,6 @@ def _apply_llm_scores(
             {"role": "system", "content": _assessment_system_prompt()},
             {"role": "user", "content": _assessment_prompt_payload(contributors, partial_context)},
         ]
-        logger.info("llm_assessment_prompt=%s", json.dumps(prompt_messages))
         raw_response = generate_completion_with_settings(
             prompt_messages,
             provider=runtime["provider"],
@@ -414,10 +414,9 @@ def _apply_llm_scores(
             local_mode=runtime["local_mode"],
             completion_client=completion_client,
         )
-        logger.info("llm_assessment_response=%s", raw_response)
         payload = json.loads(raw_response)
     except Exception as exc:  # noqa: BLE001
-        return contributors, f"LLM severity assessment unavailable; falling back to heuristic matrix: {exc}"
+        return contributors, f"LLM severity assessment unavailable; falling back to heuristic matrix: {exc}", False
 
     by_key = {(item["source_file"], item["resource_id"]): item for item in payload.get("change_scores", []) if isinstance(item, dict)}
     updated: list[RiskContributor] = []
@@ -439,7 +438,7 @@ def _apply_llm_scores(
             + min(len(contributor.security_flags) * 10, 20),
         )
         updated.append(contributor)
-    return updated, None
+    return updated, None, True
 
 
 def _build_top_risk(contributors: list[RiskContributor], interaction_risks: list[InteractionRisk]) -> str:
@@ -488,7 +487,7 @@ def score_changes(
         _build_contributor(change, topology=topology, raw_files=raw_files)
         for change in changes
     ]
-    contributors, llm_warning = _apply_llm_scores(
+    contributors, llm_warning, llm_used = _apply_llm_scores(
         contributors,
         partial_context=partial_context,
         completion_client=completion_client,
@@ -515,6 +514,7 @@ def score_changes(
         interaction_risks=interaction_risks,
         partial_context=partial_context,
         warnings=warnings,
+        source="heuristic+llm" if llm_used else "heuristic-only",
     )
 
 

@@ -240,6 +240,26 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(payload["error"]["message"], "Analysis failed.")
         self.assertEqual(payload["error"]["details"]["reason"], "boom")
 
+    def test_analyze_command_rejects_payloads_over_limit_before_reading_all_bytes(self) -> None:
+        artifact_path = Path(self.tempdir.name) / "large-plan.json"
+        artifact_path.write_text("x" * 11, encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch("cli.analyze.MAX_TOTAL_UPLOAD_BYTES", 10),
+            patch("sys.argv", ["deploywhisper", "analyze", str(artifact_path)]),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "upload_limit_exceeded")
+
     def test_analyze_command_preserves_advisory_output_for_high_risk_results(self) -> None:
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(

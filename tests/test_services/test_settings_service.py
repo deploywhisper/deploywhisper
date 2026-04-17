@@ -7,9 +7,11 @@ import tempfile
 import unittest
 from importlib import reload
 from pathlib import Path
+from unittest.mock import patch
 
 import config as config_module
 import models.database as database_module
+import models.repositories.settings as settings_repository_module
 import models.tables as tables_module
 import services.settings_service as settings_service_module
 
@@ -38,12 +40,18 @@ class SettingsServiceTests(unittest.TestCase):
             api_key="sk-test",
         )
         self.assertEqual(saved.provider, "openai")
+        self.assertEqual(saved.api_key, "sk-test")
 
         loaded = settings_service_module.get_provider_settings()
         self.assertEqual(loaded.provider, "openai")
         self.assertEqual(loaded.model, "gpt-test")
         self.assertEqual(loaded.api_base, "http://localhost:9999")
-        self.assertEqual(loaded.api_key, "sk-test")
+        self.assertIsNone(loaded.api_key)
+
+        with database_module.SessionLocal() as session:
+            keys = {record.key for record in settings_repository_module.list_settings(session)}
+        self.assertNotIn("llm_api_key", keys)
+        self.assertNotIn("llm_provider_config::openai::api_key", keys)
 
     def test_provider_profiles_can_be_saved_per_provider_and_switched(self) -> None:
         settings_service_module.save_provider_settings(
@@ -65,9 +73,36 @@ class SettingsServiceTests(unittest.TestCase):
         anthropic = settings_service_module.get_provider_settings("anthropic")
 
         self.assertEqual(active.provider, "openai")
-        self.assertEqual(active.api_key, "sk-openai")
+        self.assertIsNone(active.api_key)
         self.assertEqual(anthropic.provider, "anthropic")
-        self.assertEqual(anthropic.api_key, "sk-anthropic")
+        self.assertIsNone(anthropic.api_key)
+
+    def test_provider_profiles_resolve_provider_specific_env_keys(self) -> None:
+        os.environ["OPENAI_API_KEY"] = "sk-openai-env"
+        os.environ["ANTHROPIC_API_KEY"] = "sk-anthropic-env"
+        reload(config_module)
+        reload(settings_service_module)
+
+        settings_service_module.save_provider_settings(
+            provider="openai",
+            model="gpt-4.1-mini",
+            api_base="https://api.openai.com/v1",
+            activate=True,
+        )
+        settings_service_module.save_provider_settings(
+            provider="anthropic",
+            model="claude-3-5-sonnet-latest",
+            api_base="https://api.anthropic.com",
+            activate=False,
+        )
+
+        active = settings_service_module.get_provider_settings()
+        anthropic = settings_service_module.get_provider_settings("anthropic")
+
+        self.assertEqual(active.api_key, "sk-openai-env")
+        self.assertEqual(anthropic.api_key, "sk-anthropic-env")
+        os.environ.pop("OPENAI_API_KEY", None)
+        os.environ.pop("ANTHROPIC_API_KEY", None)
 
     def test_validate_provider_settings_returns_failure_message(self) -> None:
         config = settings_service_module.ProviderSettings(
@@ -84,6 +119,58 @@ class SettingsServiceTests(unittest.TestCase):
         result = settings_service_module.validate_provider_settings(config, completion_client=broken_completion)
         self.assertFalse(result["valid"])
         self.assertIn("provider offline", result["message"])
+
+    def test_check_provider_readiness_reports_missing_api_key(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_API_KEY": "",
+                "OPENAI_API_KEY": "",
+                "ANTHROPIC_API_KEY": "",
+                "GEMINI_API_KEY": "",
+                "GOOGLE_API_KEY": "",
+                "OPENROUTER_API_KEY": "",
+                "GROQ_API_KEY": "",
+                "XAI_API_KEY": "",
+            },
+            clear=False,
+        ):
+            reload(config_module)
+            reload(settings_service_module)
+            settings_service_module.save_provider_settings(
+                provider="openai",
+                model="gpt-4.1-mini",
+                api_base="https://api.openai.com/v1",
+                activate=True,
+            )
+
+            readiness = settings_service_module.check_provider_readiness()
+
+        self.assertFalse(readiness.ready)
+        self.assertTrue(readiness.requires_api_key)
+        self.assertFalse(readiness.has_api_key)
+        self.assertIn("no API key is available", readiness.message)
+
+    def test_check_provider_readiness_reports_provider_failure(self) -> None:
+        os.environ["OPENAI_API_KEY"] = "sk-openai-env"
+        reload(config_module)
+        reload(settings_service_module)
+        settings_service_module.save_provider_settings(
+            provider="openai",
+            model="gpt-4.1-mini",
+            api_base="https://api.openai.com/v1",
+            activate=True,
+        )
+
+        def broken_completion(**_: object):
+            raise RuntimeError("provider offline")
+
+        readiness = settings_service_module.check_provider_readiness(completion_client=broken_completion)
+
+        self.assertFalse(readiness.ready)
+        self.assertTrue(readiness.has_api_key)
+        self.assertIn("provider offline", readiness.message)
+        os.environ.pop("OPENAI_API_KEY", None)
 
     def test_validate_provider_settings_uses_supplied_values(self) -> None:
         captured: dict[str, str] = {}

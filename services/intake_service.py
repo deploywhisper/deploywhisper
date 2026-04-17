@@ -17,6 +17,8 @@ SENSITIVE_FILE_MARKERS = {
     "kubeconfig",
     "credentials",
 }
+MAX_TOTAL_UPLOAD_BYTES = 50_000_000
+
 
 def is_sensitive_file(name: str) -> bool:
     lower_name = name.lower()
@@ -26,13 +28,40 @@ def is_sensitive_file(name: str) -> bool:
     if any(marker in lower_name for marker in SENSITIVE_FILE_MARKERS):
         return True
     return False
+
+
+def uniquify_artifact_names(
+    files: Iterable[tuple[str, bytes | None]],
+    *,
+    existing_names: Iterable[str] = (),
+) -> list[tuple[str, bytes | None]]:
+    used_names: set[str] = set(existing_names)
+    duplicate_counts: dict[str, int] = {}
+    normalized: list[tuple[str, bytes | None]] = []
+
+    for original_name, raw_content in files:
+        candidate = Path(original_name).name or "artifact.bin"
+        duplicate_counts.setdefault(candidate, 0)
+        unique_name = candidate
+        while unique_name in used_names:
+            duplicate_counts[candidate] += 1
+            base = Path(candidate).stem or "artifact"
+            suffix = Path(candidate).suffix
+            unique_name = f"{base}#{duplicate_counts[candidate] + 1}{suffix}"
+        used_names.add(unique_name)
+        normalized.append((unique_name, raw_content))
+    return normalized
+
+
+def total_upload_bytes(files: Iterable[tuple[str, bytes | None]]) -> int:
+    return sum(len(raw_content or b"") for _, raw_content in files)
+
+
 def build_pending_analysis(files: Iterable[tuple[str, bytes | None]]) -> PendingAnalysis:
-    latest_by_name: dict[str, bytes | None] = {}
-    for name, raw_content in files:
-        latest_by_name[name] = raw_content
+    normalized_files = list(files)
 
     items: list[IntakeItem] = []
-    for name, raw_content in latest_by_name.items():
+    for name, raw_content in normalized_files:
         if is_sensitive_file(name):
             items.append(
                 IntakeItem(
@@ -69,11 +98,8 @@ def build_pending_analysis(files: Iterable[tuple[str, bytes | None]]) -> Pending
 
 
 def build_parse_batch(files: Iterable[tuple[str, bytes | None]]):
-    latest_by_name: dict[str, bytes | None] = {}
-    for name, raw_content in files:
-        latest_by_name[name] = raw_content
     ready_files = []
-    for name, raw_content in latest_by_name.items():
+    for name, raw_content in files:
         if is_sensitive_file(name):
             continue
         if detect_tool_type(name, raw_content) == "unsupported":

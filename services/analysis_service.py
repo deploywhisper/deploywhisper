@@ -187,7 +187,7 @@ def build_analysis_artifacts(
     blast_radius = compute_blast_radius(changes, topology, topology_warning)
     rollback_plan = generate_rollback_plan(changes, partial_context=parse_batch.has_partial_context)
     incident_matches = find_incident_matches(changes)
-    narrative = generate_narrative(assessment, completion_client=completion_client)
+    narrative = generate_narrative(assessment, completion_client=completion_client, raw_files={name: raw_content for name, raw_content in files})
     return AnalysisArtifacts(
         parse_batch=parse_batch,
         assessment=assessment,

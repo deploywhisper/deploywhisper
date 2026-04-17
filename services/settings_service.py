@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import OperationalError
 
@@ -17,6 +19,17 @@ class ProviderSettings(BaseModel):
     api_base: str = Field(..., description="Configured API base")
     api_key: str | None = Field(default=None, description="Configured API key")
     local_mode: bool = Field(default=False, description="Whether local-only mode is active")
+    source: str = Field(..., description="Where the settings came from")
+
+
+class ProviderReadiness(BaseModel):
+    provider: str = Field(..., description="Configured provider name")
+    model: str = Field(..., description="Configured model")
+    local_mode: bool = Field(default=False, description="Whether local-only mode is active")
+    ready: bool = Field(..., description="Whether the provider is reachable for analysis")
+    requires_api_key: bool = Field(..., description="Whether this provider requires an API key")
+    has_api_key: bool = Field(..., description="Whether an API key is currently available")
+    message: str = Field(..., description="Human-readable readiness summary")
     source: str = Field(..., description="Where the settings came from")
 
 
@@ -74,6 +87,15 @@ PROVIDER_CATALOG: dict[str, dict[str, str | bool | None]] = {
 
 DASHBOARD_RESULT_DURATION_OPTIONS = [60, 300, 600, 900, 1800]
 DEFAULT_DASHBOARD_RESULT_DURATION_SECONDS = 300
+PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
+    "openai": ("OPENAI_API_KEY",),
+    "anthropic": ("ANTHROPIC_API_KEY",),
+    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "openrouter": ("OPENROUTER_API_KEY",),
+    "groq": ("GROQ_API_KEY",),
+    "xai": ("XAI_API_KEY",),
+    "ollama": (),
+}
 
 
 def provider_select_options() -> dict[str, str]:
@@ -84,6 +106,14 @@ def provider_select_options() -> dict[str, str]:
 def provider_defaults(provider: str) -> dict[str, str | bool | None]:
     """Return defaults for a supported provider."""
     return PROVIDER_CATALOG.get(provider, PROVIDER_CATALOG["openai"]).copy()
+
+
+def _provider_env_api_key(provider: str) -> str | None:
+    for env_name in PROVIDER_ENV_API_KEYS.get(provider.lower(), ()):
+        value = os.getenv(env_name)
+        if value:
+            return value
+    return os.getenv("LLM_API_KEY")
 
 
 def _provider_key(provider: str, field: str) -> str:
@@ -104,10 +134,7 @@ def save_provider_settings(
         upsert_setting(session, key=_provider_key(provider, "model"), value=model)
         upsert_setting(session, key=_provider_key(provider, "api_base"), value=api_base)
         upsert_setting(session, key=_provider_key(provider, "local_mode"), value="true" if local_mode else "false")
-        if api_key:
-            upsert_setting(session, key=_provider_key(provider, "api_key"), value=api_key)
-        else:
-            delete_setting(session, _provider_key(provider, "api_key"))
+        delete_setting(session, _provider_key(provider, "api_key"))
 
         if activate:
             upsert_setting(session, key="active_llm_provider", value=provider)
@@ -115,10 +142,7 @@ def save_provider_settings(
             upsert_setting(session, key="llm_model", value=model)
             upsert_setting(session, key="llm_api_base", value=api_base)
             upsert_setting(session, key="llm_local_mode", value="true" if local_mode else "false")
-            if api_key:
-                upsert_setting(session, key="llm_api_key", value=api_key)
-            else:
-                delete_setting(session, "llm_api_key")
+            delete_setting(session, "llm_api_key")
 
     return ProviderSettings(
         provider=provider,
@@ -142,7 +166,6 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
             )
             model = get_setting(session, _provider_key(selected_provider, "model"))
             api_base = get_setting(session, _provider_key(selected_provider, "api_base"))
-            api_key = get_setting(session, _provider_key(selected_provider, "api_key"))
             local_mode = get_setting(session, _provider_key(selected_provider, "local_mode"))
 
             if model and api_base and local_mode:
@@ -150,7 +173,7 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                     provider=selected_provider,
                     model=model.value,
                     api_base=api_base.value,
-                    api_key=api_key.value if api_key else None,
+                    api_key=_provider_env_api_key(selected_provider),
                     local_mode=local_mode.value == "true",
                     source="database",
                 )
@@ -159,13 +182,12 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                 legacy_model = get_setting(session, "llm_model")
                 legacy_api_base = get_setting(session, "llm_api_base")
                 legacy_local_mode = get_setting(session, "llm_local_mode")
-                legacy_api_key = get_setting(session, "llm_api_key")
                 if legacy_provider and legacy_model and legacy_api_base and legacy_local_mode:
                     return ProviderSettings(
                         provider=legacy_provider.value,
                         model=legacy_model.value,
                         api_base=legacy_api_base.value,
-                        api_key=legacy_api_key.value if legacy_api_key else None,
+                        api_key=_provider_env_api_key(legacy_provider.value),
                         local_mode=legacy_local_mode.value == "true",
                         source="database",
                     )
@@ -175,7 +197,7 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
         selected_provider = requested_provider or selected_provider
 
     defaults = provider_defaults(selected_provider)
-    env_api_key = settings.llm_api_key
+    env_api_key = _provider_env_api_key(selected_provider)
     return ProviderSettings(
         provider=selected_provider,
         model=str(defaults["model"] if requested_provider else settings.llm_model or defaults["model"]),
@@ -201,6 +223,53 @@ def validate_provider_settings(provider_settings: ProviderSettings, completion_c
         return {"valid": True, "message": "Provider configuration accepted for narrative generation."}
     except NarrativeProviderError as exc:
         return {"valid": False, "message": str(exc)}
+
+
+def check_provider_readiness(completion_client=None) -> ProviderReadiness:
+    """Return whether the active provider is ready for live LLM-assisted analysis."""
+    provider_settings = get_provider_settings()
+    defaults = provider_defaults(provider_settings.provider)
+    requires_api_key = bool(defaults.get("requires_api_key", False))
+    has_api_key = bool(provider_settings.api_key)
+
+    if requires_api_key and not has_api_key:
+        return ProviderReadiness(
+            provider=provider_settings.provider,
+            model=provider_settings.model,
+            local_mode=provider_settings.local_mode,
+            ready=False,
+            requires_api_key=True,
+            has_api_key=False,
+            message=(
+                f"{provider_settings.provider} is selected but no API key is available in environment variables. "
+                "Analysis can continue with heuristic-only results."
+            ),
+            source=provider_settings.source,
+        )
+
+    validation = validate_provider_settings(provider_settings, completion_client=completion_client)
+    if validation["valid"]:
+        return ProviderReadiness(
+            provider=provider_settings.provider,
+            model=provider_settings.model,
+            local_mode=provider_settings.local_mode,
+            ready=True,
+            requires_api_key=requires_api_key,
+            has_api_key=has_api_key,
+            message="LLM provider connection validated for analysis.",
+            source=provider_settings.source,
+        )
+
+    return ProviderReadiness(
+        provider=provider_settings.provider,
+        model=provider_settings.model,
+        local_mode=provider_settings.local_mode,
+        ready=False,
+        requires_api_key=requires_api_key,
+        has_api_key=has_api_key,
+        message=validation["message"] + " Analysis can continue with heuristic-only results.",
+        source=provider_settings.source,
+    )
 
 
 def activate_local_mode(*, model: str, api_base: str) -> ProviderSettings:
@@ -230,7 +299,7 @@ def resolve_provider_runtime() -> dict:
         "model": provider_settings.model,
         "api_base": provider_settings.api_base,
         "local_mode": provider_settings.local_mode,
-        "api_key": provider_settings.api_key or settings.llm_api_key,
+        "api_key": provider_settings.api_key,
     }
 
 

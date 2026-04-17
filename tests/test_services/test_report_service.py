@@ -82,6 +82,11 @@ class ReportServiceTests(unittest.TestCase):
             guidance=["Inspect the change table."],
             degraded=False,
             warnings=[],
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["git", "terraform"],
         )
 
         persisted = report_service_module.persist_analysis_report(
@@ -96,18 +101,82 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["audit"]["trigger_id"], "sess-123")
         self.assertEqual(persisted["audit"]["files_analyzed"], ["plan.json"])
         self.assertEqual(persisted["audit"]["llm_provider"], "ollama")
+        self.assertEqual(persisted["assessment_source"], "heuristic-only")
+        self.assertEqual(persisted["narrative_source"], "llm")
+        self.assertEqual(persisted["narrative_provider"], "ollama")
+        self.assertEqual(persisted["narrative_model"], "ollama/llama3")
+        self.assertEqual(persisted["skills_applied"], ["git", "terraform"])
 
         fetched = report_service_module.fetch_analysis_report(persisted["id"])
         self.assertIsNotNone(fetched)
         self.assertEqual(fetched["risk_score"], 42)
         self.assertEqual(fetched["audit"]["source_interface"], "api")
         self.assertEqual(fetched["audit"]["files_analyzed"], ["plan.json"])
+        self.assertEqual(fetched["assessment_source"], "heuristic-only")
+        self.assertEqual(fetched["narrative_source"], "llm")
+        self.assertEqual(fetched["skills_applied"], ["git", "terraform"])
         self.assertNotIn("prompt", json.dumps(fetched))
 
         history = report_service_module.fetch_analysis_history()
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["id"], persisted["id"])
         self.assertEqual(history[0]["audit"]["llm_provider"], "ollama")
+
+    def test_persist_analysis_report_combines_assessment_and_narrative_warnings(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="deployment.yaml",
+                            tool="kubernetes",
+                            resource_id="Deployment/api",
+                            action="apply",
+                            summary="Kubernetes deployment included in analysis.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Kubernetes deployment requires review.",
+            contributors=[
+                RiskContributor(
+                    source_file="deployment.yaml",
+                    tool="kubernetes",
+                    resource_id="Deployment/api",
+                    action="apply",
+                    contribution=12,
+                    summary="Kubernetes deployment requires review.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=True,
+            warnings=["LLM severity assessment unavailable; falling back to heuristic matrix: provider offline"],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the deployment.",
+            explanation="Fallback output used.",
+            guidance=[],
+            degraded=True,
+            warnings=["Narrative provider unavailable: provider offline"],
+            source="fallback",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["git", "kubernetes"],
+        )
+
+        persisted = report_service_module.persist_analysis_report(parse_batch, assessment, narrative)
+
+        self.assertIn("LLM severity assessment unavailable", " ".join(persisted["warnings"]))
+        self.assertIn("Narrative provider unavailable", " ".join(persisted["warnings"]))
 
     def test_fetch_active_dashboard_report_returns_recent_dashboard_upload(self) -> None:
         settings_service_module.save_dashboard_result_display_duration_seconds(600)
@@ -156,6 +225,11 @@ class ReportServiceTests(unittest.TestCase):
             guidance=["Inspect the change table."],
             degraded=False,
             warnings=[],
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["git", "terraform"],
         )
 
         report_service_module.persist_analysis_report(
@@ -170,6 +244,9 @@ class ReportServiceTests(unittest.TestCase):
         self.assertIsNotNone(active)
         self.assertEqual(active["recommendation"], "no-go")
         self.assertEqual(active["dashboard_display_duration_seconds"], 600)
+        self.assertEqual(active["assessment_source"], "heuristic-only")
+        self.assertEqual(active["narrative_source"], "llm")
+        self.assertEqual(active["skills_applied"], ["git", "terraform"])
         self.assertGreater(active["dashboard_remaining_seconds"], 0)
 
     def test_init_db_upgrades_existing_analysis_reports_table_for_audit_columns(self) -> None:
@@ -243,6 +320,11 @@ class ReportServiceTests(unittest.TestCase):
             guidance=["Inspect the change table."],
             degraded=False,
             warnings=[],
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["git", "terraform"],
         )
 
         persisted = report_service_module.persist_analysis_report(parse_batch, assessment, narrative)

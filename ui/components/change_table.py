@@ -10,7 +10,7 @@ from parsers.base import ParseBatchResult
 def render_change_table(parse_batch: ParseBatchResult) -> None:
     """Render a compact normalized change table for review."""
     with ui.card().classes("w-full dw-panel shadow-none"):
-        ui.label("Normalized changes").classes("text-lg font-medium text-[#1D2420]")
+        ui.label("Normalized changes").classes("text-lg font-medium dw-text")
 
         changes = [
             change
@@ -26,6 +26,6 @@ def render_change_table(parse_batch: ParseBatchResult) -> None:
             for change in changes:
                 with ui.row().classes("w-full items-start justify-between gap-4 dw-panel-soft px-3 py-3"):
                     with ui.column().classes("gap-1"):
-                        ui.label(change.summary).classes("text-sm font-medium text-[#1D2420]")
+                        ui.label(change.summary).classes("text-sm font-medium dw-text")
                         ui.label(f"{change.source_file} · {change.resource_id}").classes("text-xs dw-muted")
                     ui.label(f"{change.tool} · {change.action}").classes("text-xs uppercase dw-muted")

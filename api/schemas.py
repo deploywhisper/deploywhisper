@@ -58,6 +58,9 @@ class PendingAnalysis(BaseModel):
 
 class CountMetaPayload(MetaPayload):
     count: int = Field(..., description="Count of returned items")
+    total_count: int | None = Field(default=None, description="Total number of matching items")
+    page: int | None = Field(default=None, description="Current results page")
+    page_size: int | None = Field(default=None, description="Current results page size")
 
 
 class ResourceMetaPayload(MetaPayload):
@@ -99,6 +102,12 @@ class PersistedReportData(BaseModel):
     top_risk: str
     parse_summary: str
     narrative_opening: str
+    assessment_source: Literal["heuristic-only", "heuristic+llm"] | None = Field(default=None)
+    narrative_source: Literal["llm", "fallback"] | None = Field(default=None)
+    narrative_provider: str | None = Field(default=None)
+    narrative_model: str | None = Field(default=None)
+    narrative_local_mode: bool | None = Field(default=None)
+    skills_applied: list[str] = Field(default_factory=list)
     created_at: str
     warnings: list[str] = Field(default_factory=list)
     contributors: list["RiskContributorData"] = Field(default_factory=list)
@@ -171,6 +180,7 @@ class AssessmentData(BaseModel):
     interaction_risks: list[InteractionRiskData] = Field(default_factory=list, description="Cross-tool interaction findings")
     partial_context: bool = Field(..., description="Whether some files failed to parse")
     warnings: list[str] = Field(default_factory=list, description="Assessment warnings")
+    source: Literal["heuristic-only", "heuristic+llm"] = Field(..., description="Whether structured risk scoring was heuristic-only or LLM-assisted")
 
 
 class ImpactNodeData(BaseModel):
@@ -216,6 +226,11 @@ class NarrativeData(BaseModel):
     guidance: list[str] = Field(default_factory=list, description="Actionable guidance")
     degraded: bool = Field(..., description="Whether fallback mode was used")
     warnings: list[str] = Field(default_factory=list, description="Narrative warnings")
+    source: Literal["llm", "fallback"] = Field(..., description="Whether the narrative was produced by the LLM or local fallback logic")
+    provider: str | None = Field(default=None, description="Provider used for narrative generation")
+    model: str | None = Field(default=None, description="Model used for narrative generation")
+    local_mode: bool | None = Field(default=None, description="Whether local-only mode was active for the narrative")
+    skills_applied: list[str] = Field(default_factory=list, description="Resolved skill names included in the narrative prompt")
 
 
 class AdvisorySummaryData(BaseModel):
@@ -316,6 +331,7 @@ def build_analysis_run_data(
             interaction_risks=[_copy_model(interaction_risk, InteractionRiskData) for interaction_risk in assessment.interaction_risks],
             partial_context=assessment.partial_context,
             warnings=list(assessment.warnings),
+            source=assessment.source,
         ),
         blast_radius=BlastRadiusData(
             affected=[_copy_model(node, ImpactNodeData) for node in blast_radius.affected],

@@ -95,6 +95,69 @@ class SkillContextTests(unittest.TestCase):
         self.assertIn("custom-new", skill_context)
         self.assertIn("Internal helm guidance.", skill_context)
 
+    def test_non_matching_git_skill_is_not_loaded_for_plain_terraform_analysis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skills_dir = Path(tmpdir) / "skills"
+            custom_dir = skills_dir / "custom"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+            custom_dir.mkdir(parents=True, exist_ok=True)
+            (skills_dir / "terraform.md").write_text("# Terraform\nTerraform guidance.", encoding="utf-8")
+            (skills_dir / "git.md").write_text(
+                "---\nalways_load: true\n---\n# Git\nGit guidance.",
+                encoding="utf-8",
+            )
+            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+                skill_context = build_skill_context(self._assessment("terraform"))
+        self.assertIn("Terraform guidance.", skill_context)
+        self.assertNotIn("Git guidance.", skill_context)
+
+    def test_triggered_skill_is_included_from_raw_file_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skills_dir = Path(tmpdir) / "skills"
+            custom_dir = skills_dir / "custom"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+            custom_dir.mkdir(parents=True, exist_ok=True)
+            (skills_dir / "terraform.md").write_text("# Terraform\nTerraform guidance.", encoding="utf-8")
+            (skills_dir / "docker.md").write_text(
+                "---\ntriggers: [docker-compose.yml]\ntrigger_content_patterns: [services]\n---\n# Docker\nDocker guidance.",
+                encoding="utf-8",
+            )
+            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+                skill_context = build_skill_context(
+                    self._assessment("terraform"),
+                    raw_files={"docker-compose.yml": b"services:\n  app:\n    image: example"},
+                )
+        self.assertIn("Terraform guidance.", skill_context)
+        self.assertIn("Docker guidance.", skill_context)
+
+    def test_parser_family_skills_do_not_cross_match_on_shared_yaml_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skills_dir = Path(tmpdir) / "skills"
+            custom_dir = skills_dir / "custom"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+            custom_dir.mkdir(parents=True, exist_ok=True)
+            (skills_dir / "kubernetes.md").write_text(
+                "---\ntriggers: [.yaml, .yml]\n---\n# Kubernetes\nKubernetes guidance.",
+                encoding="utf-8",
+            )
+            (skills_dir / "ansible.md").write_text(
+                "---\ntriggers: [.yaml, .yml]\n---\n# Ansible\nAnsible guidance.",
+                encoding="utf-8",
+            )
+            (skills_dir / "cloudformation.md").write_text(
+                "---\ntriggers: [.yaml, .yml]\n---\n# CloudFormation\nCloudFormation guidance.",
+                encoding="utf-8",
+            )
+            assessment = self._assessment("kubernetes")
+            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+                skill_context = build_skill_context(
+                    assessment,
+                    raw_files={"deployment.yaml": b"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\n"},
+                )
+        self.assertIn("Kubernetes guidance.", skill_context)
+        self.assertNotIn("Ansible guidance.", skill_context)
+        self.assertNotIn("CloudFormation guidance.", skill_context)
+
 
 if __name__ == "__main__":
     unittest.main()

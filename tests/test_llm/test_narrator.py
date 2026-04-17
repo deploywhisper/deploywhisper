@@ -51,6 +51,8 @@ class NarrativeTests(unittest.TestCase):
 
         narrative = generate_narrative(self._assessment(), completion_client=fake_completion)
         self.assertFalse(narrative.degraded)
+        self.assertEqual(narrative.source, "llm")
+        self.assertIn("terraform", narrative.skills_applied)
         self.assertEqual(narrative.guidance[0], "Inspect the change table.")
 
     def test_generate_narrative_gracefully_degrades_on_provider_error(self) -> None:
@@ -59,6 +61,7 @@ class NarrativeTests(unittest.TestCase):
 
         narrative = generate_narrative(self._assessment(), completion_client=broken_completion)
         self.assertTrue(narrative.degraded)
+        self.assertEqual(narrative.source, "fallback")
         self.assertTrue(narrative.warnings)
         self.assertIn("provider offline", narrative.warnings[-1])
 

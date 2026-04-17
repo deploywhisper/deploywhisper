@@ -18,7 +18,7 @@ def recommendation_classes(value: str, *, size: str = "sm") -> str:
         "caution": "text-amber-600",
     }
     text_size = "text-sm" if size == "sm" else "text-base"
-    color_class = palette.get(value.lower(), "text-[#1D2420]")
+    color_class = palette.get(value.lower(), "dw-text")
     return f"{text_size} font-bold uppercase tracking-[0.04em] {color_class}"
 
 

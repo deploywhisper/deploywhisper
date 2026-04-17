@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from models.tables import AnalysisReport
@@ -26,6 +26,9 @@ def create_analysis_report(
     llm_provider: str | None,
     llm_model: str | None,
     llm_local_mode: str | None,
+    assessment_source: str | None,
+    narrative_source: str | None,
+    narrative_skills_json: str | None,
     source_interface: str | None,
     trigger_type: str | None,
     trigger_id: str | None,
@@ -45,6 +48,9 @@ def create_analysis_report(
         llm_provider=llm_provider,
         llm_model=llm_model,
         llm_local_mode=llm_local_mode,
+        assessment_source=assessment_source,
+        narrative_source=narrative_source,
+        narrative_skills_json=narrative_skills_json,
         source_interface=source_interface,
         trigger_type=trigger_type,
         trigger_id=trigger_id,
@@ -75,6 +81,8 @@ def list_analysis_reports(
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> list[AnalysisReport]:
     stmt = select(AnalysisReport).order_by(AnalysisReport.id.desc())
     if severity:
@@ -88,8 +96,41 @@ def list_analysis_reports(
             | AnalysisReport.narrative_opening.ilike(like)
             | AnalysisReport.parse_summary.ilike(like)
         )
+    if offset:
+        stmt = stmt.offset(offset)
+    if limit is not None:
+        stmt = stmt.limit(limit)
     result = session.execute(stmt)
     return list(result.scalars().all())
+
+
+def count_analysis_reports(
+    session: Session,
+    *,
+    severity: str | None = None,
+    recommendation: str | None = None,
+    search: str | None = None,
+) -> int:
+    stmt = select(func.count()).select_from(AnalysisReport)
+    if severity:
+        stmt = stmt.where(AnalysisReport.severity == severity)
+    if recommendation:
+        stmt = stmt.where(AnalysisReport.recommendation == recommendation)
+    if search:
+        like = f"%{search}%"
+        stmt = stmt.where(
+            AnalysisReport.top_risk.ilike(like)
+            | AnalysisReport.narrative_opening.ilike(like)
+            | AnalysisReport.parse_summary.ilike(like)
+        )
+    return int(session.execute(stmt).scalar_one())
+
+
+def count_analysis_reports_by_field(session: Session, field_name: str) -> dict[str, int]:
+    column = getattr(AnalysisReport, field_name)
+    stmt = select(column, func.count()).group_by(column)
+    rows = session.execute(stmt).all()
+    return {str(value): int(count) for value, count in rows if value is not None}
 
 
 def latest_active_dashboard_report(session: Session, *, now: datetime | None = None) -> AnalysisReport | None:

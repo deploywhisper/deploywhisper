@@ -28,14 +28,21 @@ def render_analysis_history_row(report: dict, on_open, *, on_toggle=None, on_del
                 ui.label(interface.upper()).classes("w-10 text-xs font-semibold tracking-[0.08em] dw-muted text-center")
             with ui.column().classes("min-w-0 flex-1 gap-2"):
                 with ui.row().classes("w-full items-start justify-between gap-3"):
-                    ui.label(report["top_risk"]).classes("min-w-0 flex-1 text-sm font-medium text-[#1D2420] leading-5")
+                    ui.label(report["top_risk"]).classes("min-w-0 flex-1 text-sm font-medium dw-text leading-5")
                     render_recommendation_label(report["recommendation"])
                 summary = report.get("narrative_opening") or report.get("parse_summary") or ""
                 if summary:
                     ui.label(summary).classes("text-xs dw-muted leading-5")
+                provenance = (
+                    f"Risk: {report.get('assessment_source') or 'unknown'} · "
+                    f"Narrative: {report.get('narrative_source') or 'unknown'}"
+                )
+                if report.get("narrative_provider"):
+                    provenance += f" · {report['narrative_provider']}"
+                ui.label(provenance).classes("text-[11px] dw-muted leading-5")
                 if on_delete:
                     with ui.row().classes("w-full justify-end"):
                         delete_button = ui.button("Delete").props("flat no-caps dense")
-                        delete_button.classes("px-0 text-[#C24141] font-medium")
+                        delete_button.classes("px-0 dw-danger-text font-medium")
                     delete_button.on("click.stop", lambda *_: on_delete(report["id"]))
     return checkbox

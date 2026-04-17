@@ -54,10 +54,15 @@ def generate_completion_with_settings(
     if api_key and not local_mode:
         kwargs["api_key"] = api_key
     try:
-        logger.info("llm_messages=%s", messages)
+        logger.info(
+            "llm_completion_request provider=%s model=%s local_mode=%s message_count=%s",
+            provider,
+            model,
+            local_mode,
+            len(messages),
+        )
         response = client(**kwargs)
     except Exception as exc:  # noqa: BLE001
         raise NarrativeProviderError(str(exc)) from exc
 
-    logger.info("llm_response=%s", response.choices[0].message.content)
     return response.choices[0].message.content

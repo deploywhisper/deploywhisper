@@ -24,6 +24,8 @@ class SettingsPageTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("AI provider", response.text)
         self.assertIn("OpenAI / ChatGPT", response.text)
+        self.assertIn("Secrets", response.text)
+        self.assertIn("API keys are not stored in the app database", response.text)
         self.assertIn("API key", response.text)
         self.assertIn("Dashboard Result Display Duration", response.text)
         self.assertIn("Topology context", response.text)

@@ -15,10 +15,43 @@ from api.schemas import (
     build_meta,
 )
 from services.analysis_service import analyze_uploaded_files, build_advisory_summary, build_share_summary
-from services.intake_service import build_pending_analysis
+from services.intake_service import MAX_TOTAL_UPLOAD_BYTES, build_pending_analysis, total_upload_bytes, uniquify_artifact_names
 from services.report_service import fetch_analysis_report, fetch_filtered_analysis_history
+from services.report_service import fetch_filtered_analysis_history_page
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
+READ_CHUNK_BYTES = 1024 * 1024
+
+
+async def _read_upload_files_with_limit(files: list[UploadFile]) -> list[tuple[str, bytes]]:
+    remaining = MAX_TOTAL_UPLOAD_BYTES
+    buffered: list[tuple[str, bytes]] = []
+
+    for upload in files:
+        file_size = getattr(upload, "size", None)
+        if isinstance(file_size, int) and file_size > remaining:
+            raise ApiError(
+                status_code=413,
+                code="upload_limit_exceeded",
+                message="Total artifact payload exceeds the 50 MB analysis-session limit.",
+            )
+
+        chunks = bytearray()
+        while True:
+            chunk = await upload.read(min(READ_CHUNK_BYTES, remaining + 1))
+            if not chunk:
+                break
+            if len(chunk) > remaining:
+                raise ApiError(
+                    status_code=413,
+                    code="upload_limit_exceeded",
+                    message="Total artifact payload exceeds the 50 MB analysis-session limit.",
+                )
+            chunks.extend(chunk)
+            remaining -= len(chunk)
+        buffered.append((upload.filename or "artifact.bin", bytes(chunks)))
+
+    return uniquify_artifact_names(buffered)
 
 
 @router.get("", response_model=AnalysisListResponse)
@@ -26,15 +59,24 @@ def list_analyses(
     severity: str | None = Query(default=None),
     recommendation: str | None = Query(default=None),
     search: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
 ) -> AnalysisListResponse:
-    data = fetch_filtered_analysis_history(
+    page_payload = fetch_filtered_analysis_history_page(
         severity=severity,
         recommendation=recommendation,
         search=search,
+        page=page,
+        page_size=page_size,
     )
     return AnalysisListResponse(
-        data=[AnalysisReportData(**report) for report in data],
-        meta=build_meta(count=len(data)),
+        data=[AnalysisReportData(**report) for report in page_payload["items"]],
+        meta=build_meta(
+            count=len(page_payload["items"]),
+            total_count=page_payload["total_count"],
+            page=page_payload["page"],
+            page_size=page_payload["page_size"],
+        ),
     )
 
 
@@ -43,6 +85,7 @@ def list_analyses(
     response_model=AnalysisRunResponse,
     responses={
         400: {"model": ErrorResponse},
+        413: {"model": ErrorResponse},
         405: {"model": ErrorResponse},
         422: {"model": ErrorResponse},
         500: {"model": ErrorResponse},
@@ -60,7 +103,7 @@ async def create_analysis(
             message="At least one artifact file is required.",
         )
 
-    raw_files = [(upload.filename or "artifact.bin", await upload.read()) for upload in files]
+    raw_files = await _read_upload_files_with_limit(files)
     pending_analysis = build_pending_analysis(raw_files)
     if pending_analysis.ready_count == 0:
         raise ApiError(

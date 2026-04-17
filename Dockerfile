@@ -12,7 +12,9 @@ RUN python -m venv "${VIRTUAL_ENV}"
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-compile -r requirements.txt \
+    && python -c "import pathlib, shutil, site; site_packages=[pathlib.Path(path) for path in site.getsitepackages()]; patterns=('pip','pip-*','wheel','wheel-*'); [shutil.rmtree(path, ignore_errors=True) if path.is_dir() else path.unlink(missing_ok=True) for base in site_packages for pattern in patterns for path in base.glob(pattern)]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for path in base.rglob('__pycache__')]" \
+    && rm -f "${VIRTUAL_ENV}"/bin/pip "${VIRTUAL_ENV}"/bin/pip3 "${VIRTUAL_ENV}"/bin/pip3.11
 
 
 FROM python:3.11-slim AS runtime
@@ -26,11 +28,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN groupadd --system appuser \
     && useradd --system --gid appuser --home-dir /app --shell /usr/sbin/nologin appuser \
-    && mkdir -p /app/data \
+    && mkdir -p /app/data /app/skills/custom \
     && chown -R appuser:appuser /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser app.py config.py logging_config.py ./
+COPY --chown=appuser:appuser api ./api
+COPY --chown=appuser:appuser analysis ./analysis
+COPY --chown=appuser:appuser llm ./llm
+COPY --chown=appuser:appuser models ./models
+COPY --chown=appuser:appuser parsers ./parsers
+COPY --chown=appuser:appuser services ./services
+COPY --chown=appuser:appuser skills ./skills
+COPY --chown=appuser:appuser ui ./ui
 
 USER appuser
 

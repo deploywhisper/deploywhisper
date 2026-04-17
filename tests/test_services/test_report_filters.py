@@ -105,6 +105,22 @@ class ReportFilterTests(unittest.TestCase):
         self.assertEqual(reports[0]["audit"]["source_interface"], "api")
         self.assertEqual(reports[0]["audit"]["llm_provider"], "ollama")
 
+    def test_fetch_filtered_analysis_history_page_limits_results_and_reports_total_count(self) -> None:
+        for index in range(6):
+            self._persist(
+                severity="high" if index % 2 == 0 else "low",
+                recommendation="caution",
+                top_risk=f"Risk {index}",
+            )
+
+        page_one = report_service_module.fetch_filtered_analysis_history_page(page=1, page_size=2)
+        page_two = report_service_module.fetch_filtered_analysis_history_page(page=2, page_size=2)
+
+        self.assertEqual(len(page_one["items"]), 2)
+        self.assertEqual(len(page_two["items"]), 2)
+        self.assertEqual(page_one["total_count"], 6)
+        self.assertEqual(page_two["page"], 2)
+
     def test_remove_analysis_reports_supports_single_and_bulk_delete(self) -> None:
         self._persist(severity="high", recommendation="caution", top_risk="Database exposure risk", source_interface="api")
         self._persist(severity="low", recommendation="go", top_risk="Minor change", source_interface="ui")

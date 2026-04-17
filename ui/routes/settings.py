@@ -74,7 +74,7 @@ def build_settings_page() -> None:
     provider_options = provider_select_options()
 
     with ui.column().classes("dw-main-content dw-shell gap-5"):
-        with ui.card().classes("w-full dw-panel shadow-none"):
+        with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
             build_page_header(
                 eyebrow="Settings",
                 title="Operational settings",
@@ -83,10 +83,15 @@ def build_settings_page() -> None:
                 back_label="Back to dashboard",
             )
         with ui.card().classes("w-full dw-panel shadow-none"):
-            ui.label("AI provider").classes("text-lg font-medium text-[#1D2420]")
+            ui.label("AI provider").classes("text-lg font-medium dw-text")
             ui.label(
                 "Configure one active provider at a time. Saved provider profiles stay in the database so you can switch between them later."
             ).classes("text-sm dw-muted")
+            with ui.column().classes("w-full gap-1 rounded-lg dw-panel-soft px-4 py-3"):
+                ui.label("Secrets").classes("text-sm font-semibold dw-text")
+                ui.label(
+                    "Provider selection, model, and API base can be persisted. API keys are not stored in the app database and must come from environment variables or runtime secrets."
+                ).classes("text-sm dw-muted")
             provider_select = ui.select(
                 options=provider_options,
                 value=settings.provider,
@@ -164,7 +169,7 @@ def build_settings_page() -> None:
             duration_feedback.text = f"Dashboard results currently remain visible for {duration_options[dashboard_duration_seconds]}."
 
         with ui.card().classes("w-full dw-panel shadow-none"):
-            ui.label("Topology context").classes("text-lg font-medium text-[#1D2420]")
+            ui.label("Topology context").classes("text-lg font-medium dw-text")
             ui.label(
                 "Upload or replace the service-topology JSON used by blast-radius analysis. "
                 "DeployWhisper validates the structure immediately and shows any uncertainty."
@@ -175,16 +180,16 @@ def build_settings_page() -> None:
                 topology_feedback.clear()
                 with topology_feedback:
                     if error_message:
-                        ui.label(error_message).classes("text-sm text-[#CF3F3F]")
+                        ui.label(error_message).classes("text-sm dw-danger-text")
 
                     if success_message:
-                        ui.label(success_message).classes("text-sm text-[#53C26B]")
+                        ui.label(success_message).classes("text-sm dw-success-text")
 
                     if status.exists:
                         ui.label(
                             f"{status.service_count} services · {status.dependency_count} dependencies · "
                             f"{status.resource_key_count} resource mappings"
-                        ).classes("text-sm text-[#1D2420]")
+                        ).classes("text-sm dw-text")
                         updated_at = status.updated_at or "timestamp unavailable"
                         ui.label(f"Active file: {status.path}").classes("text-xs dw-muted")
                         ui.label(f"Last updated: {updated_at}").classes("text-xs dw-muted")
@@ -195,9 +200,9 @@ def build_settings_page() -> None:
                         ui.label("No topology is active yet.").classes("text-sm dw-muted")
 
                     for blocking_error in status.blocking_errors:
-                        ui.label(blocking_error).classes("text-xs text-[#CF3F3F]")
+                        ui.label(blocking_error).classes("text-xs dw-danger-text")
                     for warning in status.warnings:
-                        ui.label(warning).classes("text-xs text-[#D8A432]")
+                        ui.label(warning).classes("text-xs dw-warning-text")
 
             def handle_topology_upload(event) -> None:
                 upload_result = process_topology_upload_content(event.content.read())
@@ -216,7 +221,7 @@ def build_settings_page() -> None:
             render_topology_feedback(topology_status)
 
         with ui.card().classes("w-full dw-panel shadow-none"):
-            ui.label("Custom AI Skills").classes("text-lg font-medium text-[#1D2420]")
+            ui.label("Custom AI Skills").classes("text-lg font-medium dw-text")
             ui.label(
                 "Add markdown skills under skills/custom to override built-ins or introduce team-specific guidance."
             ).classes("text-sm dw-muted")
@@ -231,10 +236,10 @@ def build_settings_page() -> None:
                 skill_feedback.clear()
                 with skill_feedback:
                     if error_message:
-                        ui.label(error_message).classes("text-sm text-[#CF3F3F]")
+                        ui.label(error_message).classes("text-sm dw-danger-text")
 
                     if success_message:
-                        ui.label(success_message).classes("text-sm text-[#53C26B]")
+                        ui.label(success_message).classes("text-sm dw-success-text")
 
                     if statuses:
                         for status in statuses:
@@ -242,10 +247,10 @@ def build_settings_page() -> None:
                             state_text = "detected" if status.active else "ignored"
                             ui.label(
                                 f"{status.name} · {mode_text} · {state_text}"
-                            ).classes("text-sm text-[#1D2420]")
+                            ).classes("text-sm dw-text")
                             ui.label(status.path).classes("text-xs dw-muted")
                             if status.warning:
-                                ui.label(status.warning).classes("text-xs text-[#D8A432]")
+                                ui.label(status.warning).classes("text-xs dw-warning-text")
                     else:
                         ui.label("No custom skills detected.").classes("text-sm dw-muted")
 

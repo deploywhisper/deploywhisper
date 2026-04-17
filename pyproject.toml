@@ -19,8 +19,6 @@ dependencies = [
   "pyyaml==6.0.3",
   "ruamel.yaml==0.18.16",
   "deepdiff==8.6.1",
-  "networkx==3.5",
-  "plotly==6.3.1",
   "python-hcl2==7.3.1",
   "python-dotenv==1.1.1",
 ]

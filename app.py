@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -41,7 +43,7 @@ def _ensure_nicegui_config_defaults() -> None:
         "socket_io_js_extra_headers": {},
         "socket_io_js_query_params": {},
         "socket_io_js_transports": None,
-        "tailwind": False,
+        "tailwind": True,
         "unocss": False,
         "vue_config_script": None,
     }
@@ -56,6 +58,20 @@ fastapi_app.add_exception_handler(RequestValidationError, validation_error_handl
 fastapi_app.add_exception_handler(StarletteHTTPException, http_error_envelope_handler)
 fastapi_app.include_router(health_router)
 fastapi_app.include_router(analyses_router)
+
+
+_original_lifespan = fastapi_app.router.lifespan_context
+
+
+@asynccontextmanager
+async def lifespan(app):
+    """Compose NiceGUI startup/shutdown with DeployWhisper app initialization."""
+    async with _original_lifespan(app):
+        init_db()
+        yield
+
+
+fastapi_app.router.lifespan_context = lifespan
 
 
 @fastapi_app.get("/api/v1", include_in_schema=False)
@@ -92,12 +108,6 @@ def versioned_redoc_ui() -> HTMLResponse:
 def openapi_document() -> JSONResponse:
     """Expose the generated OpenAPI document for compatibility consumers."""
     return JSONResponse(content=fastapi_app.openapi())
-
-
-@fastapi_app.on_event("startup")
-def startup_event() -> None:
-    """Initialize local persistence for the application runtime."""
-    init_db()
 
 
 @ui.page("/")

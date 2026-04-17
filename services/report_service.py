@@ -13,6 +13,8 @@ from sqlalchemy.exc import OperationalError
 
 from models.database import SessionLocal, init_db
 from models.repositories.analysis_reports import (
+    count_analysis_reports,
+    count_analysis_reports_by_field,
     create_analysis_report,
     delete_analysis_report,
     get_analysis_report,
@@ -29,7 +31,13 @@ def _run_with_schema_retry(operation):
     try:
         return operation()
     except OperationalError as exc:
-        if "dashboard_display_duration_seconds" not in str(exc):
+        schema_markers = (
+            "dashboard_display_duration_seconds",
+            "assessment_source",
+            "narrative_source",
+            "narrative_skills_json",
+        )
+        if not any(marker in str(exc) for marker in schema_markers):
             raise
         init_db()
         return operation()
@@ -83,6 +91,12 @@ def _serialize_report(report) -> dict:
         "top_risk": report.top_risk,
         "parse_summary": report.parse_summary,
         "narrative_opening": report.narrative_opening,
+        "assessment_source": report.assessment_source,
+        "narrative_source": report.narrative_source,
+        "narrative_provider": report.llm_provider,
+        "narrative_model": report.llm_model,
+        "narrative_local_mode": report.llm_local_mode == "true" if report.llm_local_mode is not None else None,
+        "skills_applied": json.loads(report.narrative_skills_json or "[]"),
         "created_at": created_at.isoformat(),
         "warnings": json.loads(report.warnings_json or "[]"),
         "contributors": json.loads(report.contributors_json or "[]"),
@@ -99,6 +113,7 @@ def persist_analysis_report(
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
     audit = _build_audit_metadata(parse_batch, audit_context=audit_context)
+    combined_warnings = list(dict.fromkeys([*assessment.warnings, *narrative.warnings]))
     dashboard_display_duration_seconds = None
     if audit.get("source_interface") == "ui" and audit.get("trigger_type") == "dashboard_upload":
         dashboard_display_duration_seconds = get_dashboard_result_display_duration_seconds()
@@ -113,12 +128,15 @@ def persist_analysis_report(
                 parse_summary=_build_parse_summary(parse_batch),
                 narrative_opening=narrative.opening_sentence,
                 narrative_explanation=narrative.explanation,
-                warnings_json=json.dumps(assessment.warnings),
+                warnings_json=json.dumps(combined_warnings),
                 contributors_json=json.dumps([contributor.model_dump() for contributor in assessment.contributors]),
                 analyzed_files_json=json.dumps(audit["files_analyzed"]),
                 llm_provider=audit["llm_provider"],
                 llm_model=audit["llm_model"],
                 llm_local_mode="true" if audit["llm_local_mode"] else "false",
+                assessment_source=assessment.source,
+                narrative_source=narrative.source,
+                narrative_skills_json=json.dumps(narrative.skills_applied),
                 source_interface=audit["source_interface"],
                 trigger_type=audit["trigger_type"],
                 trigger_id=audit["trigger_id"],
@@ -148,33 +166,72 @@ def fetch_filtered_analysis_history(
     recommendation: str | None = None,
     search: str | None = None,
 ) -> list[dict]:
+    page = fetch_filtered_analysis_history_page(
+        severity=severity,
+        recommendation=recommendation,
+        search=search,
+    )
+    return page["items"]
+
+
+def fetch_filtered_analysis_history_page(
+    *,
+    severity: str | None = None,
+    recommendation: str | None = None,
+    search: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict[str, Any]:
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 100))
+    offset = (page - 1) * page_size
+
     def operation():
         with SessionLocal() as session:
-            return list_analysis_reports(
+            reports = list_analysis_reports(
+                session,
+                severity=severity,
+                recommendation=recommendation,
+                search=search,
+                limit=page_size,
+                offset=offset,
+            )
+            total_count = count_analysis_reports(
                 session,
                 severity=severity,
                 recommendation=recommendation,
                 search=search,
             )
-    reports = _run_with_schema_retry(operation)
-    return [_serialize_report(report) for report in reports]
+            return reports, total_count
+    reports, total_count = _run_with_schema_retry(operation)
+    return {
+        "items": [_serialize_report(report) for report in reports],
+        "total_count": total_count,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 def fetch_risk_trends() -> dict:
     """Return high-signal trend summaries over stored reports."""
+    trend_sample_size = 100
+
     def operation():
         with SessionLocal() as session:
-            return list_analysis_reports(session)
-    reports = _run_with_schema_retry(operation)
+            reports = list_analysis_reports(session, limit=trend_sample_size)
+            return {
+                "reports": reports,
+                "total_reports": count_analysis_reports(session),
+                "severity_counts": count_analysis_reports_by_field(session, "severity"),
+                "recommendation_counts": count_analysis_reports_by_field(session, "recommendation"),
+            }
+    trend_data = _run_with_schema_retry(operation)
+    reports = trend_data["reports"]
 
-    severity_counts: Counter[str] = Counter()
-    recommendation_counts: Counter[str] = Counter()
     tool_counts: Counter[str] = Counter()
     audit_rows: list[dict] = []
 
     for report in reports:
-        severity_counts[report.severity] += 1
-        recommendation_counts[report.recommendation] += 1
         contributors = json.loads(report.contributors_json or "[]")
         tools = sorted({contributor.get("tool", "unknown") for contributor in contributors})
         for tool in tools:
@@ -195,11 +252,12 @@ def fetch_risk_trends() -> dict:
         )
 
     return {
-        "total_reports": len(reports),
-        "severity_counts": dict(severity_counts),
-        "recommendation_counts": dict(recommendation_counts),
+        "total_reports": trend_data["total_reports"],
+        "severity_counts": trend_data["severity_counts"],
+        "recommendation_counts": trend_data["recommendation_counts"],
         "tool_counts": dict(tool_counts),
         "audit_rows": audit_rows,
+        "trend_sample_size": trend_sample_size,
     }
 
 
@@ -224,6 +282,59 @@ def fetch_dashboard_stats() -> dict:
             "high": severity_counts.get("high", 0),
             "critical": severity_counts.get("critical", 0),
         },
+    }
+
+
+def fetch_dashboard_briefing() -> dict[str, Any]:
+    """Return dashboard hero metrics and latest-scan context from persisted reports."""
+
+    def operation():
+        with SessionLocal() as session:
+            return list_analysis_reports(session)
+
+    reports = _run_with_schema_retry(operation)
+    serialized_reports = [_serialize_report(report) for report in reports]
+    stats = fetch_dashboard_stats()
+    severity_counts = stats["severity_counts"]
+    saved_briefings = len(serialized_reports)
+    high_focus = severity_counts["high"] + severity_counts["critical"]
+    weighted_focus_score = (
+        severity_counts["critical"] * 4
+        + severity_counts["high"] * 3
+        + severity_counts["medium"] * 2
+        + severity_counts["low"] * 1
+    )
+
+    latest_summary = "Last scan: none yet"
+    latest_report: dict[str, Any] | None = serialized_reports[0] if serialized_reports else None
+    if latest_report is not None:
+        latest_files = latest_report.get("audit", {}).get("files_analyzed") or []
+        latest_file = latest_files[0] if latest_files else "unknown artifact"
+        created_at = datetime.fromisoformat(latest_report["created_at"].replace("Z", "+00:00"))
+        elapsed_seconds = max(int((datetime.now(UTC) - created_at).total_seconds()), 0)
+        if elapsed_seconds < 60:
+            age_label = "just now"
+        elif elapsed_seconds < 3600:
+            minutes = max(1, elapsed_seconds // 60)
+            age_label = f"{minutes} min ago"
+        elif elapsed_seconds < 86400:
+            hours = max(1, elapsed_seconds // 3600)
+            age_label = f"{hours} hr ago"
+        else:
+            days = max(1, elapsed_seconds // 86400)
+            age_label = f"{days} day ago" if days == 1 else f"{days} days ago"
+        latest_summary = (
+            f"Last scan: {latest_file} · {latest_report['severity'].upper()} · "
+            f"{latest_report['recommendation'].upper()} · {age_label}"
+        )
+
+    return {
+        "total_files_scanned": stats["total_files_scanned"],
+        "saved_briefings": saved_briefings,
+        "high_focus": high_focus,
+        "severity_counts": severity_counts,
+        "weighted_focus_score": weighted_focus_score,
+        "latest_summary": latest_summary,
     }
 
 

@@ -14,7 +14,7 @@ from api.errors import build_error
 from api.schemas import build_analysis_run_data, build_meta
 import llm.skill_context as skill_context_module
 from services.analysis_service import analyze_uploaded_files, build_advisory_summary, build_share_summary
-from services.intake_service import build_pending_analysis
+from services.intake_service import MAX_TOTAL_UPLOAD_BYTES, build_pending_analysis, total_upload_bytes, uniquify_artifact_names
 
 
 def _emit_json(payload: dict, *, stream) -> None:
@@ -24,15 +24,22 @@ def _emit_json(payload: dict, *, stream) -> None:
 
 def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
     artifacts: list[tuple[str, bytes]] = []
-    seen_names: dict[str, int] = {}
+    running_total = 0
     for raw_path in paths:
         path = Path(raw_path)
         try:
-            display_name = path.name
-            seen_names[display_name] = seen_names.get(display_name, 0) + 1
-            if seen_names[display_name] > 1:
-                display_name = f"{path.stem}#{seen_names[display_name]}{path.suffix}"
-            artifacts.append((display_name, path.read_bytes()))
+            file_size = path.stat().st_size
+            running_total += file_size
+            if running_total > MAX_TOTAL_UPLOAD_BYTES:
+                raise ValueError(
+                    json.dumps(
+                        build_error(
+                            code="upload_limit_exceeded",
+                            message="Total artifact payload exceeds the 50 MB analysis-session limit.",
+                        )
+                    )
+                )
+            artifacts.append((path.name, path.read_bytes()))
         except OSError as exc:
             raise ValueError(
                 json.dumps(
@@ -43,7 +50,7 @@ def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
                     )
                 )
             ) from exc
-    return artifacts
+    return [(str(name), bytes(raw_content or b"")) for name, raw_content in uniquify_artifact_names(artifacts)]
 
 
 def _run_skills() -> int:

@@ -96,6 +96,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
             interaction_risks=[],
             partial_context=False,
             warnings=[],
+            source="heuristic+llm",
         )
         narrative = NarrativeResult(
             opening_sentence="Ingress widens access to production resources.",
@@ -103,6 +104,11 @@ class HistoryPageRenderingTests(unittest.TestCase):
             guidance=[],
             degraded=False,
             warnings=[],
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["git", "terraform"],
         )
         report_service_module.persist_analysis_report(parse_batch, assessment, narrative, audit_context={"source_interface": "ui"})
 
@@ -116,6 +122,8 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Delete selected", response.text)
         self.assertIn("Security group exposure risk", response.text)
         self.assertIn("NO-GO", response.text)
+        self.assertIn("Risk: heuristic+llm", response.text)
+        self.assertIn("Narrative: llm", response.text)
 
 
 if __name__ == "__main__":

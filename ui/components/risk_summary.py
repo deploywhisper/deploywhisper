@@ -27,9 +27,9 @@ def render_risk_brief(assessment: RiskAssessment, narrative: NarrativeResult) ->
         with ui.row().classes("items-center gap-3"):
             render_risk_badge(assessment.severity, f"{assessment.severity.upper()} · {assessment.score}")
             render_recommendation_label(assessment.recommendation)
-        ui.label(narrative.opening_sentence).classes("text-xl font-medium text-[#1D2420]")
+        ui.label(narrative.opening_sentence).classes("text-xl font-medium dw-text")
         ui.label(narrative.explanation).classes("text-sm dw-muted")
         for guidance_item in narrative.guidance:
             ui.label(f"• {guidance_item}").classes("text-sm dw-muted")
         for warning in narrative.warnings:
-            ui.label(warning).classes("text-xs text-[#D8A432]")
+            ui.label(warning).classes("text-xs dw-warning-text")

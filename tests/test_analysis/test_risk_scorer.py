@@ -15,16 +15,16 @@ class RiskScorerTests(unittest.TestCase):
                 UnifiedChange(
                     source_file="plan.json",
                     tool="terraform",
-                    resource_id="aws_security_group.main",
+                    resource_id="aws_security_group.payments",
                     action="destroy",
-                    summary="Terraform resource aws_security_group.main marked for destroy.",
+                    summary="Terraform resource aws_security_group.payments marked for destroy.",
                 ),
                 UnifiedChange(
                     source_file="deployment.yaml",
                     tool="kubernetes",
-                    resource_id="Deployment/api",
+                    resource_id="Deployment/payments",
                     action="modify",
-                    summary="Kubernetes Deployment api included in analysis set.",
+                    summary="Kubernetes Deployment payments included in analysis set.",
                 ),
             ]
         )

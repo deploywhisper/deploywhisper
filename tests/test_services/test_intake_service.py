@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from services.intake_service import build_pending_analysis, detect_tool_type, is_sensitive_file
+from services.intake_service import build_pending_analysis, detect_tool_type, is_sensitive_file, uniquify_artifact_names
 
 
 class IntakeServiceTests(unittest.TestCase):
@@ -68,16 +68,28 @@ Outputs:
         self.assertEqual(pending.items[1].status, "sensitive")
         self.assertEqual(pending.items[2].status, "unsupported")
 
-    def test_pending_analysis_replaces_duplicate_file_names_with_latest_upload(self) -> None:
-        pending = build_pending_analysis(
+    def test_uniquify_artifact_names_preserves_same_basename_uploads(self) -> None:
+        files = uniquify_artifact_names(
             [
-                ("plan.json", b"not-json"),
-                ("plan.json", b'{"resource_changes": []}'),
+                ("plan.json", b"first"),
+                ("plan.json", b"second"),
             ]
         )
-        self.assertEqual(len(pending.items), 1)
-        self.assertEqual(pending.items[0].tool, "terraform")
-        self.assertEqual(pending.items[0].status, "ready")
+        self.assertEqual([name for name, _ in files], ["plan.json", "plan#2.json"])
+
+    def test_pending_analysis_preserves_duplicate_file_names_after_uniquifying(self) -> None:
+        pending = build_pending_analysis(
+            uniquify_artifact_names(
+                [
+                    ("plan.json", b'{"resource_changes": []}'),
+                    ("plan.json", b'{"resource_changes": []}'),
+                ]
+            )
+        )
+        self.assertEqual(len(pending.items), 2)
+        self.assertEqual(pending.items[0].name, "plan.json")
+        self.assertEqual(pending.items[1].name, "plan#2.json")
+        self.assertTrue(all(item.status == "ready" for item in pending.items))
 
 
 if __name__ == "__main__":

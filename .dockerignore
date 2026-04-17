@@ -24,3 +24,6 @@ _bmad-output/
 .omx/
 tests/
 samples/
+data/
+*.docx
+Screenshot*.png

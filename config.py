@@ -22,6 +22,11 @@ class Settings:
         os.getenv("LLM_API_KEY")
         or os.getenv("OPENAI_API_KEY")
         or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("GOOGLE_API_KEY")
+        or os.getenv("OPENROUTER_API_KEY")
+        or os.getenv("GROQ_API_KEY")
+        or os.getenv("XAI_API_KEY")
     )
 
 

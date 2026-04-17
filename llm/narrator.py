@@ -3,19 +3,16 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from analysis.risk_scorer import RiskAssessment
 from llm.prompts import build_system_prompt, build_user_payload
 from llm.providers import NarrativeProviderError, generate_completion_with_settings
-from llm.skill_context import build_skill_context
+from llm.skill_context import build_skill_context, resolve_skills
 from services.settings_service import resolve_provider_runtime
-
-logger = logging.getLogger(__name__)
-
 
 class NarrativeResult(BaseModel):
     opening_sentence: str = Field(..., description="First-scan deploy briefing sentence")
@@ -23,9 +20,22 @@ class NarrativeResult(BaseModel):
     guidance: list[str] = Field(default_factory=list, description="Actionable guidance")
     degraded: bool = Field(..., description="Whether fallback mode was used")
     warnings: list[str] = Field(default_factory=list, description="Narrative warnings")
+    source: Literal["llm", "fallback"] = Field(default="fallback", description="Whether the narrative came from the LLM or local fallback logic")
+    provider: str | None = Field(default=None, description="Provider used for narrative generation when applicable")
+    model: str | None = Field(default=None, description="Model used for narrative generation when applicable")
+    local_mode: bool | None = Field(default=None, description="Whether local-only mode was active for the narrative")
+    skills_applied: list[str] = Field(default_factory=list, description="Resolved skill names applied to the narrative prompt")
 
 
-def _fallback_narrative(assessment: RiskAssessment, error_message: str | None = None) -> NarrativeResult:
+def _fallback_narrative(
+    assessment: RiskAssessment,
+    error_message: str | None = None,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+    local_mode: bool | None = None,
+    skills_applied: list[str] | None = None,
+) -> NarrativeResult:
     warnings = list(assessment.warnings)
     if error_message:
         warnings.append(f"Narrative provider unavailable: {error_message}")
@@ -45,28 +55,39 @@ def _fallback_narrative(assessment: RiskAssessment, error_message: str | None = 
         guidance=guidance,
         degraded=True,
         warnings=warnings,
+        source="fallback",
+        provider=provider,
+        model=model,
+        local_mode=local_mode,
+        skills_applied=list(skills_applied or []),
     )
 
 
 def generate_narrative(
     assessment: RiskAssessment,
     completion_client=None,
+    raw_files: dict[str, bytes | None] | None = None,
 ) -> NarrativeResult:
+    runtime = resolve_provider_runtime()
+    applied_skills = [skill.name for skill in resolve_skills(assessment, raw_files=raw_files)]
     if not assessment.contributors:
-        return _fallback_narrative(assessment)
+        return _fallback_narrative(
+            assessment,
+            provider=runtime["provider"],
+            model=runtime["model"],
+            local_mode=runtime["local_mode"],
+            skills_applied=applied_skills,
+        )
 
-    skill_context = build_skill_context(assessment)
+    skill_context = build_skill_context(assessment, raw_files=raw_files)
     messages = [
         {"role": "system", "content": build_system_prompt(skill_context)},
         {"role": "user", "content": build_user_payload(assessment)},
     ]
 
     try:
-        runtime = resolve_provider_runtime()
-        prompt_messages = messages
-        logger.info("llm_narrative_prompt=%s", json.dumps(prompt_messages))
         raw_content = generate_completion_with_settings(
-            prompt_messages,
+            messages,
             provider=runtime["provider"],
             model=runtime["model"],
             api_base=runtime["api_base"],
@@ -108,6 +129,18 @@ def generate_narrative(
             guidance=[sanitize_scope_claims(item) for item in list(payload.get("guidance", []))],
             degraded=False,
             warnings=list(assessment.warnings),
+            source="llm",
+            provider=runtime["provider"],
+            model=runtime["model"],
+            local_mode=runtime["local_mode"],
+            skills_applied=applied_skills,
         )
     except (Exception, KeyError, json.JSONDecodeError, TypeError) as exc:
-        return _fallback_narrative(assessment, str(exc))
+        return _fallback_narrative(
+            assessment,
+            str(exc),
+            provider=runtime["provider"],
+            model=runtime["model"],
+            local_mode=runtime["local_mode"],
+            skills_applied=applied_skills,
+        )

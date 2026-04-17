@@ -78,6 +78,37 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.persisted = report_service_module.persist_analysis_report(parse_batch, assessment, narrative)
 
+    @staticmethod
+    def _analysis_assessment(
+        *,
+        severity: str = "high",
+        recommendation: str = "no-go",
+        top_risk: str = "Security group exposure risk",
+        partial_context: bool = False,
+    ) -> RiskAssessment:
+        return RiskAssessment(
+            score=72,
+            severity=severity,
+            recommendation=recommendation,
+            top_risk=top_risk,
+            contributors=[
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=20,
+                    summary=top_risk,
+                    severity=severity,
+                    reasoning=top_risk,
+                )
+            ],
+            interaction_risks=[],
+            partial_context=partial_context,
+            warnings=[],
+            source="heuristic+llm",
+        )
+
     def tearDown(self) -> None:
         database_module.engine.dispose()
         os.environ.pop("DATABASE_URL", None)
@@ -88,6 +119,9 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["meta"]["count"], 1)
+        self.assertEqual(payload["meta"]["total_count"], 1)
+        self.assertEqual(payload["meta"]["page"], 1)
+        self.assertEqual(payload["meta"]["page_size"], 50)
 
     def test_get_analysis_returns_single_report(self) -> None:
         response = self.client.get(f"/api/v1/analyses/{self.persisted['id']}")
@@ -113,9 +147,15 @@ class AnalysesApiTests(unittest.TestCase):
             guidance=["Review the security group change before deploy."],
             degraded=False,
             warnings=[],
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["git", "terraform"],
         )
 
         with (
+            patch("services.analysis_service.evaluate_parse_batch", return_value=self._analysis_assessment()),
             patch("services.analysis_service.generate_narrative", return_value=narrative),
             patch("services.analysis_service.find_incident_matches", return_value=[]),
         ):
@@ -127,7 +167,10 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(payload["meta"]["advisory_only"])
         self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
         self.assertEqual(payload["data"]["intake"]["items"][0]["status"], "ready")
+        self.assertEqual(payload["data"]["assessment"]["source"], "heuristic+llm")
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
+        self.assertEqual(payload["data"]["narrative"]["source"], "llm")
+        self.assertTrue(payload["data"]["narrative"]["skills_applied"])
         self.assertFalse(payload["data"]["advisory"]["should_block"])
         self.assertTrue(payload["data"]["advisory"]["requires_attention"])
         self.assertIn("Advisory only", payload["data"]["share_summary"]["markdown"])
@@ -153,9 +196,15 @@ class AnalysesApiTests(unittest.TestCase):
             guidance=["Review the security group change before deploy."],
             degraded=False,
             warnings=[],
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["git", "terraform"],
         )
 
         with (
+            patch("services.analysis_service.evaluate_parse_batch", return_value=self._analysis_assessment()),
             patch("services.analysis_service.generate_narrative", return_value=narrative),
             patch("services.analysis_service.find_incident_matches", return_value=[]),
         ):
@@ -169,6 +218,60 @@ class AnalysesApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["data"]["persisted_report"]["audit"]["trigger_type"], "user_session")
         self.assertEqual(payload["data"]["persisted_report"]["audit"]["trigger_id"], "sess-456")
+
+    def test_create_analysis_preserves_distinct_artifacts_with_same_basename(self) -> None:
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.first", "change": {"actions": ["modify"]}}]}',
+                    "application/json",
+                ),
+            ),
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.second", "change": {"actions": ["modify"]}}]}',
+                    "application/json",
+                ),
+            ),
+        ]
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group updates.",
+            explanation="The deployment widens database access and should be reviewed.",
+            guidance=["Review both security group changes before deploy."],
+            degraded=False,
+            warnings=[],
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["git", "terraform"],
+        )
+
+        with (
+            patch("services.analysis_service.evaluate_parse_batch", return_value=self._analysis_assessment(top_risk="Security group updates")),
+            patch("services.analysis_service.generate_narrative", return_value=narrative),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            response = self.client.post("/api/v1/analyses", files=files)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        intake_names = [item["name"] for item in payload["data"]["intake"]["items"]]
+        self.assertEqual(intake_names, ["plan.json", "plan#2.json"])
+
+    def test_create_analysis_rejects_payloads_over_50_mb(self) -> None:
+        oversized = b"x" * 50_000_001
+        files = [("files", ("plan.json", oversized, "application/json"))]
+
+        response = self.client.post("/api/v1/analyses", files=files)
+
+        self.assertEqual(response.status_code, 413)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "upload_limit_exceeded")
 
     def test_create_analysis_rejects_requests_without_supported_artifacts(self) -> None:
         files = [("files", ("README.txt", b"hello", "text/plain"))]
@@ -217,7 +320,22 @@ class AnalysesApiTests(unittest.TestCase):
         ]
         client = TestClient(create_app(), raise_server_exceptions=False)
 
-        with patch("services.analysis_service.find_incident_matches", side_effect=RuntimeError("boom")):
+        with (
+            patch("services.analysis_service.evaluate_parse_batch", return_value=self._analysis_assessment()),
+            patch("services.analysis_service.generate_narrative", return_value=NarrativeResult(
+                opening_sentence="CAUTION: review the security group update.",
+                explanation="The deployment widens database access and should be reviewed.",
+                guidance=["Review the security group change before deploy."],
+                degraded=False,
+                warnings=[],
+                source="llm",
+                provider="ollama",
+                model="ollama/llama3",
+                local_mode=True,
+                skills_applied=["git", "terraform"],
+            )),
+            patch("services.analysis_service.find_incident_matches", side_effect=RuntimeError("boom")),
+        ):
             response = client.post("/api/v1/analyses", files=files)
 
         self.assertEqual(response.status_code, 500)

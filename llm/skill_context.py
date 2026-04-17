@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+import yaml
 
 from analysis.risk_scorer import RiskAssessment
 
 
 SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
 CUSTOM_DIR = SKILLS_DIR / "custom"
+PRIMARY_TOOL_SKILLS = {"terraform", "kubernetes", "ansible", "jenkins", "cloudformation"}
 
 
 class ActiveSkill(BaseModel):
@@ -22,6 +24,9 @@ class ActiveSkill(BaseModel):
     source: Literal["built-in", "custom-override", "custom-new"] = Field(..., description="Resolved skill source")
     path: str = Field(..., description="Resolved markdown path")
     content: str = Field(..., description="Skill markdown without frontmatter")
+    always_load: bool = Field(default=False, description="Whether the skill should always be included")
+    triggers: list[str] = Field(default_factory=list, description="Filename or extension triggers")
+    trigger_content_patterns: list[str] = Field(default_factory=list, description="Content markers for local matching")
 
 
 class CustomSkillStatus(BaseModel):
@@ -34,13 +39,16 @@ class CustomSkillStatus(BaseModel):
     warning: str | None = Field(default=None, description="Why the custom skill was ignored")
 
 
-def _strip_frontmatter(content: str) -> str:
+def _split_frontmatter(content: str) -> tuple[dict[str, Any], str]:
     content = content.strip()
     if content.startswith("---"):
         parts = content.split("---", 2)
         if len(parts) == 3:
-            content = parts[2].strip()
-    return content.strip()
+            frontmatter = yaml.safe_load(parts[1]) or {}
+            if not isinstance(frontmatter, dict):
+                frontmatter = {}
+            return frontmatter, parts[2].strip()
+    return {}, content.strip()
 
 
 def _skill_name_from_path(path: Path) -> str | None:
@@ -53,8 +61,17 @@ def _skill_name_from_path(path: Path) -> str | None:
 def _read_skill_file(path: Path) -> str | None:
     if not path.exists():
         return None
-    content = _strip_frontmatter(path.read_text(encoding="utf-8"))
+    _, content = _split_frontmatter(path.read_text(encoding="utf-8"))
     return content or None
+
+
+def _read_skill_definition(path: Path) -> tuple[dict[str, Any], str] | None:
+    if not path.exists():
+        return None
+    metadata, content = _split_frontmatter(path.read_text(encoding="utf-8"))
+    if not content:
+        return None
+    return metadata, content
 
 
 def _iter_skill_files(directory: Path) -> list[Path]:
@@ -69,18 +86,40 @@ def get_active_skills() -> dict[str, ActiveSkill]:
 
     for path in _iter_skill_files(SKILLS_DIR):
         name = _skill_name_from_path(path)
-        content = _read_skill_file(path)
-        if not name or not content:
+        definition = _read_skill_definition(path)
+        if not name or not definition:
             continue
-        active[name] = ActiveSkill(name=name, source="built-in", path=str(path), content=content)
+        metadata, content = definition
+        active[name] = ActiveSkill(
+            name=name,
+            source="built-in",
+            path=str(path),
+            content=content,
+            always_load=bool(metadata.get("always_load", False)),
+            triggers=[str(item).strip() for item in metadata.get("triggers", []) if str(item).strip()],
+            trigger_content_patterns=[
+                str(item).strip() for item in metadata.get("trigger_content_patterns", []) if str(item).strip()
+            ],
+        )
 
     for path in _iter_skill_files(CUSTOM_DIR):
         name = _skill_name_from_path(path)
-        content = _read_skill_file(path)
-        if not name or not content:
+        definition = _read_skill_definition(path)
+        if not name or not definition:
             continue
+        metadata, content = definition
         source = "custom-override" if name in active else "custom-new"
-        active[name] = ActiveSkill(name=name, source=source, path=str(path), content=content)
+        active[name] = ActiveSkill(
+            name=name,
+            source=source,
+            path=str(path),
+            content=content,
+            always_load=bool(metadata.get("always_load", False)),
+            triggers=[str(item).strip() for item in metadata.get("triggers", []) if str(item).strip()],
+            trigger_content_patterns=[
+                str(item).strip() for item in metadata.get("trigger_content_patterns", []) if str(item).strip()
+            ],
+        )
 
     return active
 
@@ -122,7 +161,7 @@ def save_custom_skill(filename: str, raw_text: str) -> CustomSkillStatus:
     if not skill_name:
         raise ValueError("Custom skill filename must include a skill name.")
 
-    stripped = _strip_frontmatter(raw_text)
+    _, stripped = _split_frontmatter(raw_text)
     if not stripped:
         raise ValueError("Custom skill content cannot be empty.")
 
@@ -164,26 +203,78 @@ def _custom_skill_applies(skill_name: str, search_blob: str) -> bool:
     return False
 
 
-def build_skill_context(assessment: RiskAssessment) -> str:
+def _raw_file_search_blob(raw_files: dict[str, bytes | None] | None) -> str:
+    if not raw_files:
+        return ""
+    parts: list[str] = []
+    for name, raw_content in raw_files.items():
+        parts.append(name.lower())
+        if raw_content:
+            parts.append(raw_content.decode("utf-8", errors="ignore").lower())
+    return "\n".join(parts)
+
+
+def _filename_matches_trigger(filename: str, trigger: str) -> bool:
+    normalized_filename = filename.lower()
+    normalized_trigger = trigger.lower()
+    if normalized_trigger.startswith("."):
+        return normalized_filename.endswith(normalized_trigger)
+    return Path(normalized_filename).name == normalized_trigger
+
+
+def _trigger_matches_raw_files(skill: ActiveSkill, raw_files: dict[str, bytes | None] | None) -> bool:
+    if not raw_files:
+        return False
+    if any(
+        _filename_matches_trigger(name, trigger)
+        for name in raw_files
+        for trigger in skill.triggers
+    ):
+        return True
+
+    if not skill.trigger_content_patterns:
+        return False
+    raw_search_blob = _raw_file_search_blob(raw_files)
+    return any(pattern.lower() in raw_search_blob for pattern in skill.trigger_content_patterns)
+
+
+def resolve_skills(
+    assessment: RiskAssessment,
+    raw_files: dict[str, bytes | None] | None = None,
+) -> list[ActiveSkill]:
+    """Resolve the effective skills that should be included for this analysis."""
     active_skills = get_active_skills()
     seen: set[str] = set()
-    sections: list[str] = []
+    selected: list[ActiveSkill] = []
     search_blob = _assessment_search_blob(assessment)
+
     for contributor in assessment.contributors:
         tool_name = contributor.tool.lower()
-        if tool_name in seen:
-            continue
-        seen.add(tool_name)
         skill = active_skills.get(tool_name)
-        if skill:
-            sections.append(f"## {tool_name.upper()} SKILL ({skill.source})\n{skill.content}")
+        if skill and tool_name not in seen:
+            selected.append(skill)
+            seen.add(tool_name)
 
     for skill_name, skill in active_skills.items():
-        if skill.source != "custom-new":
-            continue
         if skill_name in seen:
             continue
-        if _custom_skill_applies(skill_name, search_blob):
-            sections.append(f"## {skill_name.upper()} SKILL ({skill.source})\n{skill.content}")
+        if skill_name not in PRIMARY_TOOL_SKILLS and _trigger_matches_raw_files(skill, raw_files):
+            selected.append(skill)
             seen.add(skill_name)
+            continue
+        if skill.source == "custom-new" and _custom_skill_applies(skill_name, search_blob):
+            selected.append(skill)
+            seen.add(skill_name)
+
+    return selected
+
+
+def build_skill_context(
+    assessment: RiskAssessment,
+    raw_files: dict[str, bytes | None] | None = None,
+) -> str:
+    sections = [
+        f"## {skill.name.upper()} SKILL ({skill.source})\n{skill.content}"
+        for skill in resolve_skills(assessment, raw_files=raw_files)
+    ]
     return "\n\n".join(sections)
