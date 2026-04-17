@@ -9,9 +9,8 @@ from typing import Any
 
 from analysis.risk_scorer import RiskAssessment
 from llm.narrator import NarrativeResult
-from sqlalchemy.exc import OperationalError
 
-from models.database import SessionLocal, init_db
+from models.database import SessionLocal
 from models.repositories.analysis_reports import (
     count_analysis_reports,
     count_analysis_reports_by_field,
@@ -27,20 +26,8 @@ from services.settings_service import resolve_provider_runtime
 
 
 def _run_with_schema_retry(operation):
-    """Retry one report operation after applying runtime DB upgrades."""
-    try:
-        return operation()
-    except OperationalError as exc:
-        schema_markers = (
-            "dashboard_display_duration_seconds",
-            "assessment_source",
-            "narrative_source",
-            "narrative_skills_json",
-        )
-        if not any(marker in str(exc) for marker in schema_markers):
-            raise
-        init_db()
-        return operation()
+    """Execute one report operation without runtime schema mutation."""
+    return operation()
 
 
 def _build_parse_summary(parse_batch: ParseBatchResult) -> str:

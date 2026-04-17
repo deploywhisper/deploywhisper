@@ -9,6 +9,14 @@ import yaml
 
 
 class ContainerContractTests(unittest.TestCase):
+    def test_migration_history_is_single_baseline(self) -> None:
+        versions_dir = Path("migrations/versions")
+        migrations = sorted(path for path in versions_dir.glob("*.py") if path.name != "__init__.py")
+        self.assertEqual([path.name for path in migrations], ["0001_create_analysis_reports.py"])
+        content = migrations[0].read_text(encoding="utf-8")
+        self.assertIn('down_revision = None', content)
+        self.assertIn('"app_settings"', content)
+
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())
 
