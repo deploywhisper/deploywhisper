@@ -2,19 +2,225 @@ name: CI
 
 on:
   push:
+    branches:
+      - master
+      - develop
   pull_request:
+    branches:
+      - master
+      - develop
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_PYTHON_VERSION_WARNING: "1"
 
 jobs:
-  foundation-checks:
+  quality:
+    name: Quality Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Run smoke tests
-        run: python -m unittest discover -s tests -p "test_*.py"
+
+      - name: Validate dependency graph
+        run: |
+          python -m pip check 2>&1 | tee pip-check.log
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Bytecode compile project modules
+        run: |
+          python -m compileall \
+            api \
+            analysis \
+            cli \
+            llm \
+            models \
+            parsers \
+            services \
+            ui \
+            app.py \
+            api_server.py \
+            cli.py \
+            config.py \
+            logging_config.py \
+            2>&1 | tee compileall.log
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Upload quality logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-logs
+          path: |
+            pip-check.log
+            compileall.log
+          retention-days: 14
+
+  changed-tests:
+    name: Changed Tests Fast Feedback
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run changed tests
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          # Security: inputs passed through env: to prevent script injection
+          bash scripts/test-changed.sh 2>&1 | tee changed-tests.log
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Upload changed-test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: changed-tests-log
+          path: changed-tests.log
+          retention-days: 14
+
+  test:
+    name: Test Shard - ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - quality
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: api-cli-infra
+            targets: tests/test_api tests/test_cli tests/test_infra
+          - shard: analysis-parsers
+            targets: tests/test_analysis tests/test_parsers
+          - shard: services
+            targets: tests/test_services
+          - shard: ui-llm
+            targets: tests/test_ui tests/test_llm
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run shard
+        run: |
+          bash scripts/run-test-targets.sh ${{ matrix.targets }} 2>&1 | tee shard-${{ matrix.shard }}.log
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Upload shard logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-log-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}.log
+          retention-days: 14
+
+  report:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - quality
+      - changed-tests
+      - test
+
+    steps:
+      - name: Publish summary
+        run: |
+          echo "## CI Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Quality checks: ${{ needs.quality.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Changed tests: ${{ needs.changed-tests.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Test shards: ${{ needs.test.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Python: ${PYTHON_VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Backend burn-in: intentionally skipped by default (backend unittest stack)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Failure logs are attached as workflow artifacts when a job fails." >> "$GITHUB_STEP_SUMMARY"
+
+  notify-failure:
+    name: Failure Notification
+    runs-on: ubuntu-latest
+    if: failure() && secrets.SLACK_WEBHOOK_URL != ''
+    needs:
+      - quality
+      - changed-tests
+      - test
+      - report
+
+    steps:
+      - name: Notify Slack on failure
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          payload = {
+              "text": "DeployWhisper CI failed. Review the GitHub Actions run summary and failure artifacts."
+          }
+          request = urllib.request.Request(
+              os.environ["SLACK_WEBHOOK_URL"],
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=10):
+              pass
+          PY
