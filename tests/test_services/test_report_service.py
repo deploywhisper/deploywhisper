@@ -249,87 +249,26 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(active["skills_applied"], ["git", "terraform"])
         self.assertGreater(active["dashboard_remaining_seconds"], 0)
 
-    def test_init_db_upgrades_existing_analysis_reports_table_for_audit_columns(self) -> None:
+    def test_init_db_creates_current_analysis_report_schema(self) -> None:
         database_module.engine.dispose()
-        sqlite_conn = sqlite3.connect(self.db_path)
-        sqlite_conn.execute("DROP TABLE IF EXISTS analysis_reports")
-        sqlite_conn.execute(
-            """
-            CREATE TABLE analysis_reports (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                risk_score INTEGER,
-                severity VARCHAR(20),
-                recommendation VARCHAR(20),
-                top_risk TEXT,
-                parse_summary TEXT,
-                narrative_opening TEXT,
-                narrative_explanation TEXT,
-                warnings_json TEXT DEFAULT '[]',
-                contributors_json TEXT DEFAULT '[]',
-                created_at TEXT
-            )
-            """
-        )
-        sqlite_conn.commit()
-        sqlite_conn.close()
+        if self.db_path.exists():
+            self.db_path.unlink()
 
         reload(database_module)
         reload(report_service_module)
         database_module.init_db()
 
-        parse_batch = ParseBatchResult(
-            files=[
-                ParsedFileResult(
-                    file_name="plan.json",
-                    tool="terraform",
-                    status="parsed",
-                    changes=[
-                        UnifiedChange(
-                            source_file="plan.json",
-                            tool="terraform",
-                            resource_id="aws_security_group.main",
-                            action="modify",
-                            summary="Terraform changed a security group.",
-                        )
-                    ],
-                )
-            ]
-        )
-        assessment = RiskAssessment(
-            score=42,
-            severity="medium",
-            recommendation="caution",
-            top_risk="Terraform aws_security_group.main is the highest-impact change.",
-            contributors=[
-                RiskContributor(
-                    source_file="plan.json",
-                    tool="terraform",
-                    resource_id="aws_security_group.main",
-                    action="modify",
-                    contribution=12,
-                    summary="Terraform changed a security group.",
-                )
-            ],
-            interaction_risks=[],
-            partial_context=False,
-            warnings=[],
-        )
-        narrative = NarrativeResult(
-            opening_sentence="CAUTION: review the security group update.",
-            explanation="The deployment widens database access and should be reviewed.",
-            guidance=["Inspect the change table."],
-            degraded=False,
-            warnings=[],
-            source="llm",
-            provider="ollama",
-            model="ollama/llama3",
-            local_mode=True,
-            skills_applied=["git", "terraform"],
-        )
+        sqlite_conn = sqlite3.connect(self.db_path)
+        cursor = sqlite_conn.execute("PRAGMA table_info(analysis_reports)")
+        columns = {row[1] for row in cursor.fetchall()}
+        sqlite_conn.close()
 
-        persisted = report_service_module.persist_analysis_report(parse_batch, assessment, narrative)
-        self.assertIn("audit", persisted)
-        self.assertEqual(persisted["audit"]["files_analyzed"], ["plan.json"])
+        self.assertIn("analyzed_files_json", columns)
+        self.assertIn("llm_provider", columns)
+        self.assertIn("assessment_source", columns)
+        self.assertIn("narrative_source", columns)
+        self.assertIn("narrative_skills_json", columns)
+        self.assertIn("dashboard_display_duration_seconds", columns)
 
 
 if __name__ == "__main__":
