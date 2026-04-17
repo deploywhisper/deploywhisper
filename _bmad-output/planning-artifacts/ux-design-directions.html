@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DeployWhisper UX Design Directions</title>
+    <style>
+      :root {
+        --bg: #111110;
+        --surface: #1a1a18;
+        --surface-2: #20201e;
+        --border: #2c2c2a;
+        --text: #f2f1ee;
+        --muted: #b5b3ac;
+        --accent: #d85a30;
+        --low: #53c26b;
+        --medium: #d8a432;
+        --high: #d87a30;
+        --critical: #cf3f3f;
+        --uncertain: #c3a04a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.4;
+      }
+
+      .page {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+
+      .eyebrow {
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 500;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 860px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+      }
+
+      .directions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+        gap: 20px;
+      }
+
+      .direction {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      .direction-header {
+        padding: 20px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface-2);
+      }
+
+      .direction-header h2 {
+        margin: 0 0 6px;
+        font-size: 18px;
+        font-weight: 500;
+      }
+
+      .direction-header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .tag {
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: #242421;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .mockup {
+        padding: 20px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .frame {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #151513;
+        padding: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand {
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .brand span {
+        color: var(--accent);
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .status.low { background: rgba(83, 194, 107, 0.12); color: var(--low); }
+      .status.medium { background: rgba(216, 164, 50, 0.12); color: var(--medium); }
+      .status.high { background: rgba(216, 122, 48, 0.12); color: var(--high); }
+      .status.critical { background: rgba(207, 63, 63, 0.12); color: var(--critical); }
+      .status.uncertain { background: rgba(195, 160, 74, 0.12); color: var(--uncertain); border: 1px dashed rgba(195, 160, 74, 0.45); }
+
+      .hero-row {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 16px;
+      }
+
+      .gauge {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        min-height: 120px;
+        display: grid;
+        place-items: center;
+        background: #1c1c19;
+        text-align: center;
+      }
+
+      .gauge strong {
+        display: block;
+        font-size: 28px;
+      }
+
+      .summary {
+        display: grid;
+        gap: 10px;
+      }
+
+      .summary h3,
+      .section h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 500;
+      }
+
+      .summary p,
+      .section p,
+      .section li {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .top-risk {
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(216, 122, 48, 0.35);
+        background: rgba(216, 122, 48, 0.08);
+      }
+
+      .sections {
+        display: grid;
+        gap: 12px;
+      }
+
+      .section {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .table {
+        display: grid;
+        gap: 8px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1.4fr 0.8fr 0.9fr;
+        gap: 8px;
+        align-items: center;
+        padding: 10px;
+        border-radius: 6px;
+        background: #20201d;
+      }
+
+      .mono {
+        font-family: "DM Mono", ui-monospace, SFMono-Regular, monospace;
+        font-size: 12px;
+      }
+
+      .graph {
+        min-height: 140px;
+        display: grid;
+        place-items: center;
+        border: 1px dashed var(--border);
+        border-radius: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .footer-notes {
+        display: grid;
+        gap: 6px;
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      ul {
+        padding-left: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="hero">
+        <div class="eyebrow">DeployWhisper UX Direction Showcase</div>
+        <h1>Design Directions for the Deploy Briefing Experience</h1>
+        <p>
+          These directions all preserve the same UX principles: verdict first, one-screen operational clarity, visible uncertainty, and evidence on demand.
+          What changes is the balance between summary calm, data density, and how strongly the interface leans toward cockpit, review, or observability metaphors.
+        </p>
+        <div class="legend">
+          <div class="pill"><span class="dot" style="background: var(--low)"></span> Low</div>
+          <div class="pill"><span class="dot" style="background: var(--medium)"></span> Medium</div>
+          <div class="pill"><span class="dot" style="background: var(--high)"></span> High</div>
+          <div class="pill"><span class="dot" style="background: var(--critical)"></span> Critical</div>
+          <div class="pill"><span class="dot" style="background: var(--uncertain)"></span> Uncertain</div>
+        </div>
+      </div>
+
+      <div class="directions">
+        <section class="direction">
+          <div class="direction-header">
+            <h2>Direction 1: Verdict-First Cockpit</h2>
+            <p>Strongest emphasis on the top-level deploy decision, with the rest of the screen supporting the verdict.</p>
+            <div class="tags"><span class="tag">Best first-scan clarity</span><span class="tag">Strongest above-the-fold hierarchy</span></div>
+          </div>
+          <div class="mockup">
+            <div class="frame">
+              <div class="topbar"><div class="brand"><span>Deploy</span>Whisper</div><div class="status critical">NO-GO · 81</div></div>
+              <div class="hero-row">
+                <div class="gauge"><div><strong>81</strong><span class="mono">critical</span></div></div>
+                <div class="summary">
+                  <h3>Deploy recommendation</h3>
+                  <p>This deploy opens a broader database access path during a service restart and should be escalated before release.</p>
+                  <div class="top-risk"><strong>Top risk:</strong> Security group exposure combined with application restart window.</div>
+                </div>
+              </div>
+              <div class="sections">
+                <div class="section"><h3>Change evidence</h3><div class="table"><div class="row"><span class="mono">sg-main</span><span class="status critical">critical</span><span>Port 5432 exposed</span></div><div class="row"><span class="mono">api-deploy</span><span class="status high">high</span><span>Image rollout</span></div></div></div>
+                <div class="section"><h3>Blast radius</h3><div class="graph">5 affected services · direct + transitive impact</div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="direction">
+          <div class="direction-header">
+            <h2>Direction 2: Briefing Panel Split</h2>
+            <p>Left side for verdict and narrative, right side for operational evidence. Feels closest to a senior-operator briefing.</p>
+            <div class="tags"><span class="tag">Most balanced</span><span class="tag">Strong narrative presence</span></div>
+          </div>
+          <div class="mockup">
+            <div class="frame">
+              <div class="topbar"><div class="brand"><span>Deploy</span>Whisper</div><div class="status high">CAUTION · 68</div></div>
+              <div class="hero-row">
+                <div class="summary" style="grid-column: 1 / span 2;">
+                  <h3>Briefing summary</h3>
+                  <p>The deployment is viable, but the replica increase and missing resource-limit changes create an elevated runtime failure risk under load.</p>
+                  <div class="top-risk"><strong>Top risk:</strong> Scaling event without updated resource guardrails.</div>
+                </div>
+              </div>
+              <div class="hero-row" style="grid-template-columns: 1fr 1fr;">
+                <div class="section"><h3>Decision context</h3><ul><li>Risk score visible first</li><li>Escalation path visible immediately</li><li>Rollback always in reach</li></ul></div>
+                <div class="section"><h3>Operational evidence</h3><div class="graph">Blast radius panel with static service map</div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="direction">
+          <div class="direction-header">
+            <h2>Direction 3: Review Workflow</h2>
+            <p>Most inspired by GitHub PR review. Status, summary, evidence, then supporting sections in clear review order.</p>
+            <div class="tags"><span class="tag">Most familiar</span><span class="tag">Strong mental model transfer</span></div>
+          </div>
+          <div class="mockup">
+            <div class="frame">
+              <div class="topbar"><div class="brand"><span>Deploy</span>Whisper</div><div class="status medium">GO · 29</div></div>
+              <div class="section">
+                <h3>Checks</h3>
+                <div class="table">
+                  <div class="row"><span>Terraform</span><span class="status low">ok</span><span>3 changes analyzed</span></div>
+                  <div class="row"><span>Kubernetes</span><span class="status low">ok</span><span>2 changes analyzed</span></div>
+                  <div class="row"><span>Ansible</span><span class="status uncertain">warn</span><span>1 file skipped</span></div>
+                </div>
+              </div>
+              <div class="section"><h3>Review summary</h3><p>No blocking risk detected. One parser warning reduces confidence in full environment coverage.</p></div>
+              <div class="section"><h3>Details</h3><p>Expandable review sections for changes, blast radius, rollback, and incident history.</p></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="direction">
+          <div class="direction-header">
+            <h2>Direction 4: Incident Operations Console</h2>
+            <p>Leans more into Sentry/Datadog incident-detail framing, with stronger emphasis on “what went wrong / what’s affected.”</p>
+            <div class="tags"><span class="tag">Most operational</span><span class="tag">Strongest issue framing</span></div>
+          </div>
+          <div class="mockup">
+            <div class="frame">
+              <div class="topbar"><div class="brand"><span>Deploy</span>Whisper</div><div class="status critical">NO-GO · 84</div></div>
+              <div class="section"><h3>Primary incident-style finding</h3><p>Database exposure via security-group change during application restart path.</p></div>
+              <div class="hero-row" style="grid-template-columns: 1fr 1fr;">
+                <div class="section"><h3>Impact</h3><p>5 downstream services affected</p><p>2 direct · 3 transitive</p></div>
+                <div class="section"><h3>History</h3><p>Similar to March 12, 2025 · P1 outage · 89% match</p></div>
+              </div>
+              <div class="section"><h3>Recovery</h3><p>Rollback timeline presented as a breadcrumb-style operational sequence.</p></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="direction">
+          <div class="direction-header">
+            <h2>Direction 5: Narrative-Led Briefing</h2>
+            <p>Puts the narrative and top risk in stronger visual focus, treating the rest of the interface as evidence for the briefing.</p>
+            <div class="tags"><span class="tag">Most “senior SRE with me”</span><span class="tag">Strongest explanation-first tone</span></div>
+          </div>
+          <div class="mockup">
+            <div class="frame">
+              <div class="topbar"><div class="brand"><span>Deploy</span>Whisper</div><div class="status high">CAUTION · 61</div></div>
+              <div class="section">
+                <h3>Briefing</h3>
+                <p>The infrastructure changes are not independently alarming, but together they indicate a scaling event without enough resource protection.</p>
+                <div class="top-risk"><strong>Top risk:</strong> K8s replica increase without matching runtime safeguards.</div>
+              </div>
+              <div class="section"><h3>Evidence summary</h3><div class="table"><div class="row"><span class="mono">deployment/api</span><span class="status high">high</span><span>Replicas 3 → 10</span></div><div class="row"><span class="mono">nginx.conf</span><span class="status medium">medium</span><span>Concurrency change</span></div></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="direction">
+          <div class="direction-header">
+            <h2>Direction 6: Scanable History + Quick Review</h2>
+            <p>Extends Linear’s compact scanability into the history and repeat-review experience.</p>
+            <div class="tags"><span class="tag">Best for repeat use</span><span class="tag">History-centric</span></div>
+          </div>
+          <div class="mockup">
+            <div class="frame">
+              <div class="topbar"><div class="brand"><span>Deploy</span>Whisper</div><div class="status low">GO · 22</div></div>
+              <div class="section"><h3>Recent analyses</h3><div class="table"><div class="row"><span>Today · terraform + k8s</span><span class="status low">go</span><span>Safe with minor warnings</span></div><div class="row"><span>Yesterday · terraform + ansible</span><span class="status high">caution</span><span>Rollback risk elevated</span></div></div></div>
+              <div class="section"><h3>Current report</h3><p>The selected report opens into the same verdict-first review pattern used everywhere else.</p></div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="footer-notes">
+        <div>Recommended base direction: <strong>Direction 2: Briefing Panel Split</strong></div>
+        <div>Strong complementary borrowing: Direction 1 verdict hierarchy + Direction 3 parser checks + Direction 4 incident framing + Direction 6 history scanability.</div>
+      </div>
+    </div>
+  </body>
+</html>
