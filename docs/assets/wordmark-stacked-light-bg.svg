@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="600" viewBox="0 0 512 600">
+  <path d="M153 115 L256 78 L359 115 L359 235 C359 316 302 358 256 382 C210 358 153 316 153 235Z" fill="#D85A30" fill-opacity="0.1" stroke="#D85A30" stroke-width="6"/>
+  <path d="M210 200 C210 168 231 148 256 148" fill="none" stroke="#D85A30" stroke-width="9" stroke-linecap="round"/>
+  <path d="M192 216 C192 160 220 126 256 126" fill="none" stroke="#D85A30" stroke-width="7" stroke-linecap="round" opacity="0.55"/>
+  <path d="M232 186 C232 174 243 162 256 162" fill="none" stroke="#D85A30" stroke-width="11" stroke-linecap="round"/>
+  <circle cx="256" cy="218" r="13" fill="#D85A30"/>
+  <path d="M256 250 L256 286" stroke="#D85A30" stroke-width="9" stroke-linecap="round"/>
+  <path d="M240 276 L256 292 L272 276" fill="none" stroke="#D85A30" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="460" text-anchor="middle" fill="#1A1A18" font-family="'DM Sans', -apple-system, 'Segoe UI', sans-serif" font-size="56" font-weight="500">Deploy<tspan fill="#D85A30">Whisper</tspan></text>
+  <text x="256" y="510" text-anchor="middle" fill="#88877F" font-family="'DM Sans', -apple-system, 'Segoe UI', sans-serif" font-size="18" letter-spacing="0.15em">PRE-DEPLOYMENT RISK INTELLIGENCE</text>
+</svg>

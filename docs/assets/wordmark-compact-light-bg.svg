@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="120" viewBox="0 0 800 120">
+  <path d="M14 12 L48 2 L82 12 L82 64 C82 92 60 108 48 118 C36 108 14 92 14 64Z" fill="#D85A30" fill-opacity="0.1" stroke="#D85A30" stroke-width="3"/>
+  <path d="M31 46 C31 32 39 24 48 24" fill="none" stroke="#D85A30" stroke-width="4" stroke-linecap="round"/>
+  <path d="M24 52 C24 30 35 18 48 18" fill="none" stroke="#D85A30" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+  <path d="M38 40 C38 34 43 28 48 28" fill="none" stroke="#D85A30" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="48" cy="52" r="5" fill="#D85A30"/>
+  <path d="M48 64 L48 80" stroke="#D85A30" stroke-width="4" stroke-linecap="round"/>
+  <path d="M42 76 L48 82 L54 76" fill="none" stroke="#D85A30" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="104" y="68" fill="#1A1A18" font-family="'DM Sans', -apple-system, 'Segoe UI', sans-serif" font-size="42" font-weight="500">Deploy</text>
+  <text x="338" y="68" fill="#D85A30" font-family="'DM Sans', -apple-system, 'Segoe UI', sans-serif" font-size="42" font-weight="500">Whisper</text>
+</svg>
