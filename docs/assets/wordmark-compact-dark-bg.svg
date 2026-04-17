@@ -6,6 +6,5 @@
   <circle cx="48" cy="52" r="5" fill="#D85A30"/>
   <path d="M48 64 L48 80" stroke="#D85A30" stroke-width="4" stroke-linecap="round"/>
   <path d="M42 76 L48 82 L54 76" fill="none" stroke="#D85A30" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="104" y="68" fill="#E8E6DF" font-family="'DM Sans', -apple-system, 'Segoe UI', sans-serif" font-size="42" font-weight="500">Deploy</text>
-  <text x="338" y="68" fill="#D85A30" font-family="'DM Sans', -apple-system, 'Segoe UI', sans-serif" font-size="42" font-weight="500">Whisper</text>
+  <text x="104" y="68" fill="#E8E6DF" font-family="'DM Sans', -apple-system, 'Segoe UI', sans-serif" font-size="42" font-weight="500">Deploy<tspan fill="#D85A30">Whisper</tspan></text>
 </svg>
