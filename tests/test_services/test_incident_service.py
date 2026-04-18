@@ -59,7 +59,10 @@ class IncidentServiceTests(unittest.TestCase):
             "plain.txt",
             "Database access widened during deployment and required emergency rollback.",
         )
-        self.assertEqual(result["title"], "Database access widened during deployment and required emergency rollback.")
+        self.assertEqual(
+            result["title"],
+            "Database access widened during deployment and required emergency rollback.",
+        )
         self.assertEqual(result["severity"], "unknown")
         self.assertIsNone(result["incident_date"])
 

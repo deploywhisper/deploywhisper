@@ -25,7 +25,10 @@ def render_risk_brief(assessment: RiskAssessment, narrative: NarrativeResult) ->
     """Render a verdict-first risk briefing block."""
     with ui.card().classes("w-full dw-panel shadow-none"):
         with ui.row().classes("items-center gap-3"):
-            render_risk_badge(assessment.severity, f"{assessment.severity.upper()} · {assessment.score}")
+            render_risk_badge(
+                assessment.severity,
+                f"{assessment.severity.upper()} · {assessment.score}",
+            )
             render_recommendation_label(assessment.recommendation)
         ui.label(narrative.opening_sentence).classes("text-xl font-medium dw-text")
         ui.label(narrative.explanation).classes("text-sm dw-muted")

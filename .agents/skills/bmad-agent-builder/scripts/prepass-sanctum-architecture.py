@@ -130,18 +130,18 @@ def extract_init_script_params(script_path: Path) -> dict:
         params["skill_name"] = match.group(1)
 
     # TEMPLATE_FILES
-    tmpl_match = re.search(
-        r"TEMPLATE_FILES\s*=\s*\[(.*?)\]", content, re.DOTALL
-    )
+    tmpl_match = re.search(r"TEMPLATE_FILES\s*=\s*\[(.*?)\]", content, re.DOTALL)
     if tmpl_match:
-        params["template_files"] = re.findall(r'["\']([^"\']+)["\']', tmpl_match.group(1))
+        params["template_files"] = re.findall(
+            r'["\']([^"\']+)["\']', tmpl_match.group(1)
+        )
 
     # SKILL_ONLY_FILES
-    only_match = re.search(
-        r"SKILL_ONLY_FILES\s*=\s*\{(.*?)\}", content, re.DOTALL
-    )
+    only_match = re.search(r"SKILL_ONLY_FILES\s*=\s*\{(.*?)\}", content, re.DOTALL)
     if only_match:
-        params["skill_only_files"] = re.findall(r'["\']([^"\']+)["\']', only_match.group(1))
+        params["skill_only_files"] = re.findall(
+            r'["\']([^"\']+)["\']', only_match.group(1)
+        )
 
     # EVOLVABLE
     ev_match = re.search(r"EVOLVABLE\s*=\s*(True|False)", content)
@@ -206,7 +206,9 @@ def main():
         template_inventory[tmpl] = {
             "exists": tmpl_path.exists(),
             "sections": extract_h2_h3_sections(tmpl_path) if tmpl_path.exists() else [],
-            "content_lines": count_content_lines(tmpl_path) if tmpl_path.exists() else 0,
+            "content_lines": count_content_lines(tmpl_path)
+            if tmpl_path.exists()
+            else 0,
         }
 
     for tmpl in OPTIONAL_TEMPLATES:
@@ -215,7 +217,9 @@ def main():
             "exists": tmpl_path.exists(),
             "optional": True,
             "sections": extract_h2_h3_sections(tmpl_path) if tmpl_path.exists() else [],
-            "content_lines": count_content_lines(tmpl_path) if tmpl_path.exists() else 0,
+            "content_lines": count_content_lines(tmpl_path)
+            if tmpl_path.exists()
+            else 0,
         }
 
     # CREED section check
@@ -227,15 +231,25 @@ def main():
 
     # First-breath analysis
     first_breath_path = references_dir / "first-breath.md"
-    fb_sections = extract_h2_h3_sections(first_breath_path) if first_breath_path.exists() else []
+    fb_sections = (
+        extract_h2_h3_sections(first_breath_path) if first_breath_path.exists() else []
+    )
 
     # Detect style: calibration has "Absorb Their Voice", configuration has "Discovery"
     is_calibration = check_section_present(fb_sections, "Absorb")
-    is_configuration = check_section_present(fb_sections, "Discovery") and not is_calibration
-    fb_style = "calibration" if is_calibration else ("configuration" if is_configuration else "unknown")
+    is_configuration = (
+        check_section_present(fb_sections, "Discovery") and not is_calibration
+    )
+    fb_style = (
+        "calibration"
+        if is_calibration
+        else ("configuration" if is_configuration else "unknown")
+    )
 
     expected_sections = (
-        FIRST_BREATH_CALIBRATION_SECTIONS if is_calibration else FIRST_BREATH_CONFIG_SECTIONS
+        FIRST_BREATH_CALIBRATION_SECTIONS
+        if is_calibration
+        else FIRST_BREATH_CONFIG_SECTIONS
     )
     fb_check = {}
     for section in expected_sections:
@@ -280,72 +294,100 @@ def main():
     init_params = extract_init_script_params(init_script_path)
 
     # Cross-check: init TEMPLATE_FILES vs actual templates
-    actual_templates = [f.name for f in assets_dir.iterdir() if f.name.endswith("-template.md")] if assets_dir.exists() else []
-    init_template_match = set(init_params.get("template_files", [])) == set(actual_templates) if init_params["exists"] else None
+    actual_templates = (
+        [f.name for f in assets_dir.iterdir() if f.name.endswith("-template.md")]
+        if assets_dir.exists()
+        else []
+    )
+    init_template_match = (
+        set(init_params.get("template_files", [])) == set(actual_templates)
+        if init_params["exists"]
+        else None
+    )
 
     # Cross-check: init SKILL_NAME vs folder name
-    skill_name_match = init_params.get("skill_name") == skill_path.name if init_params["exists"] else None
+    skill_name_match = (
+        init_params.get("skill_name") == skill_path.name
+        if init_params["exists"]
+        else None
+    )
 
     # Findings
     findings = []
 
     if skill_analysis["content_lines"] > 40:
-        findings.append({
-            "severity": "high",
-            "file": "SKILL.md",
-            "message": f"Bootloader has {skill_analysis['content_lines']} content lines (target: ~30, max: 40)",
-        })
+        findings.append(
+            {
+                "severity": "high",
+                "file": "SKILL.md",
+                "message": f"Bootloader has {skill_analysis['content_lines']} content lines (target: ~30, max: 40)",
+            }
+        )
 
     for tmpl in STANDARD_TEMPLATES:
         if not template_inventory[tmpl]["exists"]:
-            findings.append({
-                "severity": "critical",
-                "file": f"assets/{tmpl}",
-                "message": f"Missing standard template: {tmpl}",
-            })
+            findings.append(
+                {
+                    "severity": "critical",
+                    "file": f"assets/{tmpl}",
+                    "message": f"Missing standard template: {tmpl}",
+                }
+            )
 
     for section, present in creed_check.items():
         if not present:
-            findings.append({
-                "severity": "high",
-                "file": "assets/CREED-template.md",
-                "message": f"Missing required CREED section: {section}",
-            })
+            findings.append(
+                {
+                    "severity": "high",
+                    "file": "assets/CREED-template.md",
+                    "message": f"Missing required CREED section: {section}",
+                }
+            )
 
     if not first_breath_analysis["exists"]:
-        findings.append({
-            "severity": "critical",
-            "file": "references/first-breath.md",
-            "message": "Missing first-breath.md",
-        })
+        findings.append(
+            {
+                "severity": "critical",
+                "file": "references/first-breath.md",
+                "message": "Missing first-breath.md",
+            }
+        )
     else:
         for section, present in first_breath_analysis["section_checks"].items():
             if not present:
-                findings.append({
-                    "severity": "high",
-                    "file": "references/first-breath.md",
-                    "message": f"Missing First Breath section: {section}",
-                })
+                findings.append(
+                    {
+                        "severity": "high",
+                        "file": "references/first-breath.md",
+                        "message": f"Missing First Breath section: {section}",
+                    }
+                )
 
     if not init_params["exists"]:
-        findings.append({
-            "severity": "critical",
-            "file": "scripts/init-sanctum.py",
-            "message": "Missing init-sanctum.py",
-        })
-    else:
-        if skill_name_match is False:
-            findings.append({
+        findings.append(
+            {
                 "severity": "critical",
                 "file": "scripts/init-sanctum.py",
-                "message": f"SKILL_NAME mismatch: script has '{init_params['skill_name']}', folder is '{skill_path.name}'",
-            })
+                "message": "Missing init-sanctum.py",
+            }
+        )
+    else:
+        if skill_name_match is False:
+            findings.append(
+                {
+                    "severity": "critical",
+                    "file": "scripts/init-sanctum.py",
+                    "message": f"SKILL_NAME mismatch: script has '{init_params['skill_name']}', folder is '{skill_path.name}'",
+                }
+            )
         if init_template_match is False:
-            findings.append({
-                "severity": "high",
-                "file": "scripts/init-sanctum.py",
-                "message": "TEMPLATE_FILES does not match actual templates in assets/",
-            })
+            findings.append(
+                {
+                    "severity": "high",
+                    "file": "scripts/init-sanctum.py",
+                    "message": "TEMPLATE_FILES does not match actual templates in assets/",
+                }
+            )
 
     result = {
         "timestamp": datetime.now(timezone.utc).isoformat(),

@@ -23,10 +23,14 @@ pipeline {
 
         changes = parse_jenkins("Jenkinsfile", raw)
 
-        self.assertEqual([change.resource_id for change in changes], ["stage/Build", "stage/Deploy"])
+        self.assertEqual(
+            [change.resource_id for change in changes], ["stage/Build", "stage/Deploy"]
+        )
         self.assertIn("Jenkins stage Build", changes[0].summary)
 
-    def test_parse_jenkins_falls_back_to_pipeline_change_when_no_stages_found(self) -> None:
+    def test_parse_jenkins_falls_back_to_pipeline_change_when_no_stages_found(
+        self,
+    ) -> None:
         raw = b"pipeline { agent any }"
 
         changes = parse_jenkins("Jenkinsfile", raw)

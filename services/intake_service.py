@@ -57,7 +57,9 @@ def total_upload_bytes(files: Iterable[tuple[str, bytes | None]]) -> int:
     return sum(len(raw_content or b"") for _, raw_content in files)
 
 
-def build_pending_analysis(files: Iterable[tuple[str, bytes | None]]) -> PendingAnalysis:
+def build_pending_analysis(
+    files: Iterable[tuple[str, bytes | None]],
+) -> PendingAnalysis:
     normalized_files = list(files)
 
     items: list[IntakeItem] = []
@@ -92,7 +94,7 @@ def build_pending_analysis(files: Iterable[tuple[str, bytes | None]]) -> Pending
                 status="ready",
                 message=f"{tool.title()} artifact accepted for pending analysis.",
             )
-            )
+        )
 
     return PendingAnalysis(items=items)
 

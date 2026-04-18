@@ -36,7 +36,9 @@ class AnalysisArtifacts(BaseModel):
     assessment: RiskAssessment = Field(..., description="Unified risk assessment")
     blast_radius: BlastRadiusResult = Field(..., description="Blast radius result")
     rollback_plan: RollbackPlan = Field(..., description="Rollback planning result")
-    incident_matches: list[IncidentMatch] = Field(default_factory=list, description="Incident similarity matches")
+    incident_matches: list[IncidentMatch] = Field(
+        default_factory=list, description="Incident similarity matches"
+    )
     narrative: NarrativeResult = Field(..., description="Narrative briefing result")
 
 
@@ -45,26 +47,48 @@ class AnalysisRunResult(AnalysisArtifacts):
 
 
 class AdvisorySummary(BaseModel):
-    advisory_only: bool = Field(..., description="Whether the output is advisory rather than blocking")
-    should_block: bool = Field(..., description="Whether DeployWhisper itself should block deployment")
-    requires_attention: bool = Field(..., description="Whether humans should provide additional review")
+    advisory_only: bool = Field(
+        ..., description="Whether the output is advisory rather than blocking"
+    )
+    should_block: bool = Field(
+        ..., description="Whether DeployWhisper itself should block deployment"
+    )
+    requires_attention: bool = Field(
+        ..., description="Whether humans should provide additional review"
+    )
     severity: str = Field(..., description="Shared risk severity")
     recommendation: str = Field(..., description="Shared deploy recommendation")
     top_risk: str = Field(..., description="Most important shared risk summary")
-    partial_context: bool = Field(..., description="Whether parser coverage was partial")
-    narrative_degraded: bool = Field(..., description="Whether narrative generation degraded to fallback output")
-    uncertainty_flags: list[str] = Field(default_factory=list, description="Machine-readable uncertainty indicators")
+    partial_context: bool = Field(
+        ..., description="Whether parser coverage was partial"
+    )
+    narrative_degraded: bool = Field(
+        ..., description="Whether narrative generation degraded to fallback output"
+    )
+    uncertainty_flags: list[str] = Field(
+        default_factory=list, description="Machine-readable uncertainty indicators"
+    )
 
 
 class ShareSummary(BaseModel):
-    advisory_only: bool = Field(..., description="Whether the shared summary is advisory rather than blocking")
-    should_block: bool = Field(..., description="Whether DeployWhisper itself should block deployment")
+    advisory_only: bool = Field(
+        ..., description="Whether the shared summary is advisory rather than blocking"
+    )
+    should_block: bool = Field(
+        ..., description="Whether DeployWhisper itself should block deployment"
+    )
     severity: str = Field(..., description="Risk severity for the shared summary")
-    recommendation: str = Field(..., description="Deploy recommendation for the shared summary")
-    headline: str = Field(..., description="Top narrative line for PR or approval-thread use")
+    recommendation: str = Field(
+        ..., description="Deploy recommendation for the shared summary"
+    )
+    headline: str = Field(
+        ..., description="Top narrative line for PR or approval-thread use"
+    )
     blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
     rollback_summary: str = Field(..., description="Concise rollback summary")
-    uncertainty_summary: str = Field(..., description="Concise uncertainty and review note")
+    uncertainty_summary: str = Field(
+        ..., description="Concise uncertainty and review note"
+    )
     markdown: str = Field(..., description="Markdown-ready advisory summary")
     plain_text: str = Field(..., description="Plain-text advisory summary")
 
@@ -77,7 +101,9 @@ def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
     return changes
 
 
-def build_advisory_summary(assessment: RiskAssessment, narrative: NarrativeResult) -> AdvisorySummary:
+def build_advisory_summary(
+    assessment: RiskAssessment, narrative: NarrativeResult
+) -> AdvisorySummary:
     uncertainty_flags: list[str] = []
     if assessment.partial_context:
         uncertainty_flags.append("partial_context")
@@ -113,7 +139,10 @@ def build_share_summary(
     blast_radius: BlastRadiusResult,
     rollback_plan: RollbackPlan,
 ) -> ShareSummary:
-    affected_labels = ", ".join(node.label for node in blast_radius.affected[:3]) or "No mapped downstream services"
+    affected_labels = (
+        ", ".join(node.label for node in blast_radius.affected[:3])
+        or "No mapped downstream services"
+    )
     if len(blast_radius.affected) > 3:
         affected_labels += ", ..."
     blast_radius_summary = (
@@ -123,17 +152,29 @@ def build_share_summary(
     if blast_radius.warning:
         blast_radius_summary += f". Warning: {blast_radius.warning}"
 
-    first_step = rollback_plan.steps[0].title if rollback_plan.steps else "No rollback steps available"
-    rollback_summary = f"{rollback_plan.complexity.title()} complexity. First step: {first_step}."
+    first_step = (
+        rollback_plan.steps[0].title
+        if rollback_plan.steps
+        else "No rollback steps available"
+    )
+    rollback_summary = (
+        f"{rollback_plan.complexity.title()} complexity. First step: {first_step}."
+    )
     if rollback_plan.warning:
         rollback_summary += f" Warning: {rollback_plan.warning}"
 
     if advisory.requires_attention:
-        uncertainty_summary = "This result requires additional human review before release."
+        uncertainty_summary = (
+            "This result requires additional human review before release."
+        )
     else:
-        uncertainty_summary = "No additional human review is required beyond the normal approval flow."
+        uncertainty_summary = (
+            "No additional human review is required beyond the normal approval flow."
+        )
     if advisory.uncertainty_flags:
-        uncertainty_summary += " Uncertainty: " + ", ".join(advisory.uncertainty_flags) + "."
+        uncertainty_summary += (
+            " Uncertainty: " + ", ".join(advisory.uncertainty_flags) + "."
+        )
 
     markdown = "\n".join(
         [
@@ -141,7 +182,7 @@ def build_share_summary(
             f"- Summary: {narrative.opening_sentence}",
             f"- Blast radius: {blast_radius_summary}",
             f"- Rollback: {rollback_summary}",
-            f"- Advisory only: DeployWhisper does not make the final release decision or block deployment.",
+            "- Advisory only: DeployWhisper does not make the final release decision or block deployment.",
             f"- Review signal: {uncertainty_summary}",
         ]
     )
@@ -185,9 +226,15 @@ def build_analysis_artifacts(
         completion_client=completion_client,
     )
     blast_radius = compute_blast_radius(changes, topology, topology_warning)
-    rollback_plan = generate_rollback_plan(changes, partial_context=parse_batch.has_partial_context)
+    rollback_plan = generate_rollback_plan(
+        changes, partial_context=parse_batch.has_partial_context
+    )
     incident_matches = find_incident_matches(changes)
-    narrative = generate_narrative(assessment, completion_client=completion_client, raw_files={name: raw_content for name, raw_content in files})
+    narrative = generate_narrative(
+        assessment,
+        completion_client=completion_client,
+        raw_files={name: raw_content for name, raw_content in files},
+    )
     return AnalysisArtifacts(
         parse_batch=parse_batch,
         assessment=assessment,
@@ -211,4 +258,6 @@ def analyze_uploaded_files(
         artifacts.narrative,
         audit_context=audit_context,
     )
-    return AnalysisRunResult(**artifacts.model_dump(), persisted_report=persisted_report)
+    return AnalysisRunResult(
+        **artifacts.model_dump(), persisted_report=persisted_report
+    )

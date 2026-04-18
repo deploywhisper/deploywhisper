@@ -48,8 +48,12 @@ def _content_preview(content: str, *, line_limit: int = 100) -> str:
 
 def _looks_like_cloudformation_preview(content: str) -> bool:
     preview = _content_preview(content)
-    top_level_keys = re.compile(r"(?m)^(AWSTemplateFormatVersion|Resources|Parameters|Outputs)\s*:")
-    intrinsic_markers = re.compile(r"(?m)(!Ref\b|!Sub\b|!GetAtt\b|Fn::Sub\b|Fn::Join\b|Fn::GetAtt\b|AWS::)")
+    top_level_keys = re.compile(
+        r"(?m)^(AWSTemplateFormatVersion|Resources|Parameters|Outputs)\s*:"
+    )
+    intrinsic_markers = re.compile(
+        r"(?m)(!Ref\b|!Sub\b|!GetAtt\b|Fn::Sub\b|Fn::Join\b|Fn::GetAtt\b|AWS::)"
+    )
     return bool(top_level_keys.search(preview) or intrinsic_markers.search(preview))
 
 
@@ -71,7 +75,15 @@ def detect_tool_type(name: str, raw_content: bytes | None = None) -> str:
             payload = {}
         if "resource_changes" in payload:
             return "terraform"
-        if any(key in payload for key in ("AWSTemplateFormatVersion", "Resources", "Parameters", "Outputs")):
+        if any(
+            key in payload
+            for key in (
+                "AWSTemplateFormatVersion",
+                "Resources",
+                "Parameters",
+                "Outputs",
+            )
+        ):
             return "cloudformation"
 
     if path.suffix in {".yaml", ".yml"}:
@@ -79,7 +91,9 @@ def detect_tool_type(name: str, raw_content: bytes | None = None) -> str:
             return "cloudformation"
         documents = _load_yaml_documents(content)
         for document in documents:
-            if isinstance(document, dict) and {"apiVersion", "kind"} <= set(document.keys()):
+            if isinstance(document, dict) and {"apiVersion", "kind"} <= set(
+                document.keys()
+            ):
                 return "kubernetes"
         for document in documents:
             if isinstance(document, dict) and (
@@ -120,7 +134,9 @@ def parse_uploaded_files(files: list[tuple[str, bytes | None]]) -> ParseBatchRes
         try:
             changes = parser(name, raw_content)
             if not changes:
-                raise ValueError(f"No normalized changes produced for supported {tool} artifact.")
+                raise ValueError(
+                    f"No normalized changes produced for supported {tool} artifact."
+                )
             results.append(
                 ParsedFileResult(
                     file_name=name,

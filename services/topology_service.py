@@ -17,16 +17,36 @@ STALE_AFTER_DAYS = 30
 class TopologyStatus(BaseModel):
     """Summary of the active topology context."""
 
-    payload: dict | None = Field(default=None, description="Active topology payload when available")
+    payload: dict | None = Field(
+        default=None, description="Active topology payload when available"
+    )
     path: str = Field(..., description="Configured topology file path")
-    exists: bool = Field(default=False, description="Whether the configured file exists")
-    updated_at: str | None = Field(default=None, description="ISO timestamp describing the active topology recency")
-    service_count: int = Field(default=0, description="Number of services in the active topology")
-    dependency_count: int = Field(default=0, description="Number of downstream edges in the topology")
-    resource_key_count: int = Field(default=0, description="Number of mapped resource keys across services")
-    preview_services: list[str] = Field(default_factory=list, description="Short label preview for admin confirmation")
-    warnings: list[str] = Field(default_factory=list, description="Warnings describing stale or incomplete topology context")
-    blocking_errors: list[str] = Field(default_factory=list, description="Validation errors that make the topology unsafe to activate")
+    exists: bool = Field(
+        default=False, description="Whether the configured file exists"
+    )
+    updated_at: str | None = Field(
+        default=None, description="ISO timestamp describing the active topology recency"
+    )
+    service_count: int = Field(
+        default=0, description="Number of services in the active topology"
+    )
+    dependency_count: int = Field(
+        default=0, description="Number of downstream edges in the topology"
+    )
+    resource_key_count: int = Field(
+        default=0, description="Number of mapped resource keys across services"
+    )
+    preview_services: list[str] = Field(
+        default_factory=list, description="Short label preview for admin confirmation"
+    )
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Warnings describing stale or incomplete topology context",
+    )
+    blocking_errors: list[str] = Field(
+        default_factory=list,
+        description="Validation errors that make the topology unsafe to activate",
+    )
 
 
 def _topology_path() -> Path:
@@ -35,13 +55,17 @@ def _topology_path() -> Path:
 
 def _parse_updated_at(updated_at_raw: str | None, warnings: list[str]) -> str | None:
     if not updated_at_raw:
-        warnings.append("Blast radius may be incomplete — topology update timestamp is missing.")
+        warnings.append(
+            "Blast radius may be incomplete — topology update timestamp is missing."
+        )
         return None
 
     try:
         updated_at = datetime.fromisoformat(updated_at_raw.replace("Z", "+00:00"))
     except ValueError:
-        warnings.append("Blast radius may be incomplete — topology update timestamp is invalid.")
+        warnings.append(
+            "Blast radius may be incomplete — topology update timestamp is invalid."
+        )
         return None
 
     if datetime.now(UTC) - updated_at > timedelta(days=STALE_AFTER_DAYS):
@@ -84,7 +108,9 @@ def _find_cycle(service_graph: dict[str, list[str]]) -> list[str]:
     return []
 
 
-def _build_topology_status(payload: dict, *, path: Path, exists: bool) -> TopologyStatus:
+def _build_topology_status(
+    payload: dict, *, path: Path, exists: bool
+) -> TopologyStatus:
     warnings: list[str] = []
     blocking_errors: list[str] = []
     services_raw = payload.get("services", [])
@@ -102,15 +128,21 @@ def _build_topology_status(payload: dict, *, path: Path, exists: bool) -> Topolo
 
     for index, service in enumerate(services_raw, start=1):
         if not isinstance(service, dict):
-            blocking_errors.append(f"Topology validation failed — service entry {index} is not a JSON object.")
+            blocking_errors.append(
+                f"Topology validation failed — service entry {index} is not a JSON object."
+            )
             continue
 
         service_id = str(service.get("id", "")).strip()
         if not service_id:
-            blocking_errors.append(f"Topology validation failed — service entry {index} is missing an id.")
+            blocking_errors.append(
+                f"Topology validation failed — service entry {index} is missing an id."
+            )
             continue
         if service_id in seen_ids:
-            blocking_errors.append(f"Topology validation failed — duplicate service id '{service_id}' was provided.")
+            blocking_errors.append(
+                f"Topology validation failed — duplicate service id '{service_id}' was provided."
+            )
             continue
 
         seen_ids.add(service_id)
@@ -118,22 +150,37 @@ def _build_topology_status(payload: dict, *, path: Path, exists: bool) -> Topolo
 
         resource_keys = service.get("resource_keys", [])
         if not isinstance(resource_keys, list):
-            blocking_errors.append(f"Topology validation failed — service '{service_id}' has non-list resource_keys.")
+            blocking_errors.append(
+                f"Topology validation failed — service '{service_id}' has non-list resource_keys."
+            )
             resource_keys = []
-        valid_resource_keys = [str(resource_key).strip() for resource_key in resource_keys if str(resource_key).strip()]
+        valid_resource_keys = [
+            str(resource_key).strip()
+            for resource_key in resource_keys
+            if str(resource_key).strip()
+        ]
         resource_key_count += len(valid_resource_keys)
 
         downstream = service.get("downstream", [])
         if not isinstance(downstream, list):
-            blocking_errors.append(f"Topology validation failed — service '{service_id}' has non-list downstream targets.")
+            blocking_errors.append(
+                f"Topology validation failed — service '{service_id}' has non-list downstream targets."
+            )
             downstream = []
-        valid_downstream = [str(target).strip() for target in downstream if str(target).strip()]
+        valid_downstream = [
+            str(target).strip() for target in downstream if str(target).strip()
+        ]
         service_graph[service_id] = valid_downstream
         dependency_count += len(valid_downstream)
         for downstream_id in valid_downstream:
             inbound_service_ids.add(downstream_id)
 
-    missing_refs = {downstream_id for downstream in service_graph.values() for downstream_id in downstream if downstream_id not in seen_ids}
+    missing_refs = {
+        downstream_id
+        for downstream in service_graph.values()
+        for downstream_id in downstream
+        if downstream_id not in seen_ids
+    }
     if missing_refs:
         blocking_errors.append(
             "Topology validation failed — missing downstream services referenced by topology: "
@@ -144,7 +191,9 @@ def _build_topology_status(payload: dict, *, path: Path, exists: bool) -> Topolo
     orphaned = sorted(
         service_id
         for service_id, downstream in service_graph.items()
-        if len(service_graph) > 1 and not downstream and service_id not in inbound_service_ids
+        if len(service_graph) > 1
+        and not downstream
+        and service_id not in inbound_service_ids
     )
     if orphaned:
         warnings.append(
@@ -155,7 +204,11 @@ def _build_topology_status(payload: dict, *, path: Path, exists: bool) -> Topolo
 
     cycle = _find_cycle(service_graph)
     if cycle:
-        blocking_errors.append("Topology validation failed — circular dependency detected: " + " -> ".join(cycle) + ".")
+        blocking_errors.append(
+            "Topology validation failed — circular dependency detected: "
+            + " -> ".join(cycle)
+            + "."
+        )
 
     updated_at = _parse_updated_at(payload.get("updated_at"), warnings)
 
@@ -180,7 +233,9 @@ def get_topology_status() -> TopologyStatus:
         return TopologyStatus(
             path=str(topology_path),
             exists=False,
-            warnings=["Blast radius may be incomplete — service topology is not configured."],
+            warnings=[
+                "Blast radius may be incomplete — service topology is not configured."
+            ],
         )
 
     try:
@@ -189,14 +244,18 @@ def get_topology_status() -> TopologyStatus:
         return TopologyStatus(
             path=str(topology_path),
             exists=True,
-            blocking_errors=["Topology validation failed — active topology JSON is invalid."],
+            blocking_errors=[
+                "Topology validation failed — active topology JSON is invalid."
+            ],
         )
 
     if not isinstance(payload, dict):
         return TopologyStatus(
             path=str(topology_path),
             exists=True,
-            blocking_errors=["Topology validation failed — active topology must be a JSON object."],
+            blocking_errors=[
+                "Topology validation failed — active topology must be a JSON object."
+            ],
         )
     return _build_topology_status(payload, path=topology_path, exists=True)
 
@@ -212,7 +271,9 @@ def save_topology_definition(raw_text: str) -> TopologyStatus:
         raise ValueError("Topology definition must be a JSON object.")
 
     topology_path = _topology_path()
-    payload["updated_at"] = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    payload["updated_at"] = (
+        datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    )
     candidate_status = _build_topology_status(payload, path=topology_path, exists=False)
     if candidate_status.blocking_errors:
         raise ValueError(" ".join(candidate_status.blocking_errors))

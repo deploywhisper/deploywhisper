@@ -17,7 +17,9 @@ class Settings:
     llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")
     llm_model: str = os.getenv("LLM_MODEL", "ollama/llama3")
     llm_api_base: str = os.getenv("LLM_API_BASE", "http://localhost:11434")
-    topology_path: str = os.getenv("TOPOLOGY_PATH", "data/topology/service_topology.json")
+    topology_path: str = os.getenv(
+        "TOPOLOGY_PATH", "data/topology/service_topology.json"
+    )
     llm_api_key: str | None = (
         os.getenv("LLM_API_KEY")
         or os.getenv("OPENAI_API_KEY")

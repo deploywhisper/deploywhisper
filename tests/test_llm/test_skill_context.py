@@ -8,7 +8,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from llm.skill_context import build_skill_context, get_custom_skill_statuses, save_custom_skill
+from llm.skill_context import (
+    build_skill_context,
+    get_custom_skill_statuses,
+    save_custom_skill,
+)
 
 
 class SkillContextTests(unittest.TestCase):
@@ -43,9 +47,16 @@ class SkillContextTests(unittest.TestCase):
             custom_dir = skills_dir / "custom"
             skills_dir.mkdir(parents=True, exist_ok=True)
             custom_dir.mkdir(parents=True, exist_ok=True)
-            (skills_dir / "terraform.md").write_text("# Built-in\nDefault terraform guidance.", encoding="utf-8")
-            (custom_dir / "terraform.md").write_text("# Custom\nOverride terraform guidance.", encoding="utf-8")
-            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+            (skills_dir / "terraform.md").write_text(
+                "# Built-in\nDefault terraform guidance.", encoding="utf-8"
+            )
+            (custom_dir / "terraform.md").write_text(
+                "# Custom\nOverride terraform guidance.", encoding="utf-8"
+            )
+            with (
+                patch("llm.skill_context.SKILLS_DIR", skills_dir),
+                patch("llm.skill_context.CUSTOM_DIR", custom_dir),
+            ):
                 skill_context = build_skill_context(self._assessment("terraform"))
         self.assertIn("custom-override", skill_context)
         self.assertIn("Override terraform guidance.", skill_context)
@@ -57,9 +68,16 @@ class SkillContextTests(unittest.TestCase):
             custom_dir = skills_dir / "custom"
             skills_dir.mkdir(parents=True, exist_ok=True)
             custom_dir.mkdir(parents=True, exist_ok=True)
-            (skills_dir / "terraform.md").write_text("# Built-in\nDefault terraform guidance.", encoding="utf-8")
-            (custom_dir / "terraform.md").write_text("---\ntitle: empty\n---", encoding="utf-8")
-            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+            (skills_dir / "terraform.md").write_text(
+                "# Built-in\nDefault terraform guidance.", encoding="utf-8"
+            )
+            (custom_dir / "terraform.md").write_text(
+                "---\ntitle: empty\n---", encoding="utf-8"
+            )
+            with (
+                patch("llm.skill_context.SKILLS_DIR", skills_dir),
+                patch("llm.skill_context.CUSTOM_DIR", custom_dir),
+            ):
                 skill_context = build_skill_context(self._assessment("terraform"))
                 statuses = get_custom_skill_statuses()
         self.assertIn("built-in", skill_context)
@@ -73,40 +91,62 @@ class SkillContextTests(unittest.TestCase):
             custom_dir = skills_dir / "custom"
             skills_dir.mkdir(parents=True, exist_ok=True)
             custom_dir.mkdir(parents=True, exist_ok=True)
-            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+            with (
+                patch("llm.skill_context.SKILLS_DIR", skills_dir),
+                patch("llm.skill_context.CUSTOM_DIR", custom_dir),
+            ):
                 status = save_custom_skill("helm.md", "# Helm\nInternal helm guidance.")
                 statuses = get_custom_skill_statuses()
         self.assertEqual(status.mode, "new")
         self.assertTrue(status.active)
         self.assertEqual(statuses[0].name, "helm")
 
-    def test_custom_new_skill_is_included_when_analysis_context_mentions_it(self) -> None:
+    def test_custom_new_skill_is_included_when_analysis_context_mentions_it(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             skills_dir = Path(tmpdir) / "skills"
             custom_dir = skills_dir / "custom"
             skills_dir.mkdir(parents=True, exist_ok=True)
             custom_dir.mkdir(parents=True, exist_ok=True)
-            (skills_dir / "terraform.md").write_text("# Built-in\nDefault terraform guidance.", encoding="utf-8")
-            (custom_dir / "helm.md").write_text("# Helm\nInternal helm guidance.", encoding="utf-8")
-            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+            (skills_dir / "terraform.md").write_text(
+                "# Built-in\nDefault terraform guidance.", encoding="utf-8"
+            )
+            (custom_dir / "helm.md").write_text(
+                "# Helm\nInternal helm guidance.", encoding="utf-8"
+            )
+            with (
+                patch("llm.skill_context.SKILLS_DIR", skills_dir),
+                patch("llm.skill_context.CUSTOM_DIR", custom_dir),
+            ):
                 skill_context = build_skill_context(
-                    self._assessment_with_summary("terraform", "Terraform updates the helm release for the api service.")
+                    self._assessment_with_summary(
+                        "terraform",
+                        "Terraform updates the helm release for the api service.",
+                    )
                 )
         self.assertIn("custom-new", skill_context)
         self.assertIn("Internal helm guidance.", skill_context)
 
-    def test_non_matching_git_skill_is_not_loaded_for_plain_terraform_analysis(self) -> None:
+    def test_non_matching_git_skill_is_not_loaded_for_plain_terraform_analysis(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             skills_dir = Path(tmpdir) / "skills"
             custom_dir = skills_dir / "custom"
             skills_dir.mkdir(parents=True, exist_ok=True)
             custom_dir.mkdir(parents=True, exist_ok=True)
-            (skills_dir / "terraform.md").write_text("# Terraform\nTerraform guidance.", encoding="utf-8")
+            (skills_dir / "terraform.md").write_text(
+                "# Terraform\nTerraform guidance.", encoding="utf-8"
+            )
             (skills_dir / "git.md").write_text(
                 "---\nalways_load: true\n---\n# Git\nGit guidance.",
                 encoding="utf-8",
             )
-            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+            with (
+                patch("llm.skill_context.SKILLS_DIR", skills_dir),
+                patch("llm.skill_context.CUSTOM_DIR", custom_dir),
+            ):
                 skill_context = build_skill_context(self._assessment("terraform"))
         self.assertIn("Terraform guidance.", skill_context)
         self.assertNotIn("Git guidance.", skill_context)
@@ -117,20 +157,29 @@ class SkillContextTests(unittest.TestCase):
             custom_dir = skills_dir / "custom"
             skills_dir.mkdir(parents=True, exist_ok=True)
             custom_dir.mkdir(parents=True, exist_ok=True)
-            (skills_dir / "terraform.md").write_text("# Terraform\nTerraform guidance.", encoding="utf-8")
+            (skills_dir / "terraform.md").write_text(
+                "# Terraform\nTerraform guidance.", encoding="utf-8"
+            )
             (skills_dir / "docker.md").write_text(
                 "---\ntriggers: [docker-compose.yml]\ntrigger_content_patterns: [services]\n---\n# Docker\nDocker guidance.",
                 encoding="utf-8",
             )
-            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+            with (
+                patch("llm.skill_context.SKILLS_DIR", skills_dir),
+                patch("llm.skill_context.CUSTOM_DIR", custom_dir),
+            ):
                 skill_context = build_skill_context(
                     self._assessment("terraform"),
-                    raw_files={"docker-compose.yml": b"services:\n  app:\n    image: example"},
+                    raw_files={
+                        "docker-compose.yml": b"services:\n  app:\n    image: example"
+                    },
                 )
         self.assertIn("Terraform guidance.", skill_context)
         self.assertIn("Docker guidance.", skill_context)
 
-    def test_parser_family_skills_do_not_cross_match_on_shared_yaml_extension(self) -> None:
+    def test_parser_family_skills_do_not_cross_match_on_shared_yaml_extension(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             skills_dir = Path(tmpdir) / "skills"
             custom_dir = skills_dir / "custom"
@@ -149,10 +198,15 @@ class SkillContextTests(unittest.TestCase):
                 encoding="utf-8",
             )
             assessment = self._assessment("kubernetes")
-            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+            with (
+                patch("llm.skill_context.SKILLS_DIR", skills_dir),
+                patch("llm.skill_context.CUSTOM_DIR", custom_dir),
+            ):
                 skill_context = build_skill_context(
                     assessment,
-                    raw_files={"deployment.yaml": b"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\n"},
+                    raw_files={
+                        "deployment.yaml": b"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\n"
+                    },
                 )
         self.assertIn("Kubernetes guidance.", skill_context)
         self.assertNotIn("Ansible guidance.", skill_context)

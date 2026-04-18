@@ -13,9 +13,9 @@ def render_blast_radius_panel(result: BlastRadiusResult) -> None:
         ui.label(
             f"{result.direct_count} direct · {result.transitive_count} transitive affected services"
         ).classes("text-sm dw-muted")
-        ui.label("Legend: depth 0 = directly affected, depth 1+ = transitively affected.").classes(
-            "text-xs dw-muted"
-        )
+        ui.label(
+            "Legend: depth 0 = directly affected, depth 1+ = transitively affected."
+        ).classes("text-xs dw-muted")
         if result.warning:
             ui.label(result.warning).classes("text-xs dw-warning-text")
 
@@ -25,4 +25,6 @@ def render_blast_radius_panel(result: BlastRadiusResult) -> None:
 
         with ui.column().classes("w-full gap-2"):
             for node in result.affected:
-                ui.label(f"{node.label} · depth {node.depth}").classes("text-sm dw-text")
+                ui.label(f"{node.label} · depth {node.depth}").classes(
+                    "text-sm dw-text"
+                )

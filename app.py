@@ -12,7 +12,12 @@ from nicegui import ui
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import RedirectResponse
 
-from api.errors import ApiError, api_error_handler, http_error_envelope_handler, validation_error_handler
+from api.errors import (
+    ApiError,
+    api_error_handler,
+    http_error_envelope_handler,
+    validation_error_handler,
+)
 from api.routes.analyses import router as analyses_router
 from api.routes.health import router as health_router
 from config import settings

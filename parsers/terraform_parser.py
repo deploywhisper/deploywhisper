@@ -17,9 +17,15 @@ def _terraform_summary(address: str, action: str) -> str:
         return f"Security group {address} changes network access rules and should be reviewed for exposure before deploy."
     if normalized.startswith("aws_vpc."):
         return f"VPC {address} changes network boundaries and may affect connected routing or segmentation."
-    if normalized.startswith("aws_iam_role.") or normalized.startswith("aws_iam_policy.") or normalized.startswith("aws_iam_role_policy_attachment."):
+    if (
+        normalized.startswith("aws_iam_role.")
+        or normalized.startswith("aws_iam_policy.")
+        or normalized.startswith("aws_iam_role_policy_attachment.")
+    ):
         return f"IAM resource {address} changes access permissions and should be reviewed for privilege impact."
-    if normalized.startswith("aws_eks_cluster.") or normalized.startswith("aws_eks_node_group."):
+    if normalized.startswith("aws_eks_cluster.") or normalized.startswith(
+        "aws_eks_node_group."
+    ):
         return f"EKS resource {address} changes cluster or node-group behavior and may affect workload availability."
     if normalized.startswith("module."):
         return f"Terraform module {address} updated in configuration and may affect multiple downstream resources."

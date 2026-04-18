@@ -32,7 +32,9 @@ class InteractionRiskTests(unittest.TestCase):
         self.assertEqual(findings[0].key, "terraform-kubernetes")
         self.assertIn("payments", findings[0].summary.lower())
 
-    def test_detect_interaction_risk_requires_shared_context_not_just_tool_mix(self) -> None:
+    def test_detect_interaction_risk_requires_shared_context_not_just_tool_mix(
+        self,
+    ) -> None:
         changes = [
             UnifiedChange(
                 source_file="plan.json",

@@ -76,7 +76,9 @@ class AnalysesApiTests(unittest.TestCase):
             degraded=False,
             warnings=[],
         )
-        self.persisted = report_service_module.persist_analysis_report(parse_batch, assessment, narrative)
+        self.persisted = report_service_module.persist_analysis_report(
+            parse_batch, assessment, narrative
+        )
 
     @staticmethod
     def _analysis_assessment(
@@ -155,8 +157,13 @@ class AnalysesApiTests(unittest.TestCase):
         )
 
         with (
-            patch("services.analysis_service.evaluate_parse_batch", return_value=self._analysis_assessment()),
-            patch("services.analysis_service.generate_narrative", return_value=narrative),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=self._analysis_assessment(),
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
             patch("services.analysis_service.find_incident_matches", return_value=[]),
         ):
             response = self.client.post("/api/v1/analyses", files=files)
@@ -175,8 +182,12 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(payload["data"]["advisory"]["requires_attention"])
         self.assertIn("Advisory only", payload["data"]["share_summary"]["markdown"])
         self.assertEqual(payload["data"]["share_summary"]["recommendation"], "no-go")
-        self.assertEqual(payload["data"]["persisted_report"]["audit"]["source_interface"], "api")
-        self.assertEqual(payload["data"]["persisted_report"]["audit"]["trigger_type"], "api_request")
+        self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["source_interface"], "api"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["trigger_type"], "api_request"
+        )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
 
     def test_create_analysis_captures_trigger_headers_when_present(self) -> None:
@@ -204,22 +215,36 @@ class AnalysesApiTests(unittest.TestCase):
         )
 
         with (
-            patch("services.analysis_service.evaluate_parse_batch", return_value=self._analysis_assessment()),
-            patch("services.analysis_service.generate_narrative", return_value=narrative),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=self._analysis_assessment(),
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
             patch("services.analysis_service.find_incident_matches", return_value=[]),
         ):
             response = self.client.post(
                 "/api/v1/analyses",
                 files=files,
-                headers={"X-DeployWhisper-Trigger-Type": "user_session", "X-DeployWhisper-Trigger-Id": "sess-456"},
+                headers={
+                    "X-DeployWhisper-Trigger-Type": "user_session",
+                    "X-DeployWhisper-Trigger-Id": "sess-456",
+                },
             )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["data"]["persisted_report"]["audit"]["trigger_type"], "user_session")
-        self.assertEqual(payload["data"]["persisted_report"]["audit"]["trigger_id"], "sess-456")
+        self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["trigger_type"], "user_session"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["trigger_id"], "sess-456"
+        )
 
-    def test_create_analysis_preserves_distinct_artifacts_with_same_basename(self) -> None:
+    def test_create_analysis_preserves_distinct_artifacts_with_same_basename(
+        self,
+    ) -> None:
         files = [
             (
                 "files",
@@ -252,8 +277,15 @@ class AnalysesApiTests(unittest.TestCase):
         )
 
         with (
-            patch("services.analysis_service.evaluate_parse_batch", return_value=self._analysis_assessment(top_risk="Security group updates")),
-            patch("services.analysis_service.generate_narrative", return_value=narrative),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=self._analysis_assessment(
+                    top_risk="Security group updates"
+                ),
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
             patch("services.analysis_service.find_incident_matches", return_value=[]),
         ):
             response = self.client.post("/api/v1/analyses", files=files)
@@ -281,9 +313,13 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         payload = response.json()
         self.assertEqual(payload["error"]["code"], "no_supported_artifacts")
-        self.assertEqual(payload["error"]["details"]["items"][0]["status"], "unsupported")
+        self.assertEqual(
+            payload["error"]["details"]["items"][0]["status"], "unsupported"
+        )
 
-    def test_get_analysis_returns_standard_error_envelope_for_missing_report(self) -> None:
+    def test_get_analysis_returns_standard_error_envelope_for_missing_report(
+        self,
+    ) -> None:
         response = self.client.get("/api/v1/analyses/9999")
 
         self.assertEqual(response.status_code, 404)
@@ -297,7 +333,9 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         payload = response.json()
         self.assertEqual(payload["error"]["code"], "request_validation_failed")
-        self.assertEqual(payload["error"]["details"]["issues"][0]["loc"], ["path", "report_id"])
+        self.assertEqual(
+            payload["error"]["details"]["issues"][0]["loc"], ["path", "report_id"]
+        )
 
     def test_method_not_allowed_uses_standard_error_envelope(self) -> None:
         response = self.client.patch("/api/v1/analyses")
@@ -321,20 +359,29 @@ class AnalysesApiTests(unittest.TestCase):
         client = TestClient(create_app(), raise_server_exceptions=False)
 
         with (
-            patch("services.analysis_service.evaluate_parse_batch", return_value=self._analysis_assessment()),
-            patch("services.analysis_service.generate_narrative", return_value=NarrativeResult(
-                opening_sentence="CAUTION: review the security group update.",
-                explanation="The deployment widens database access and should be reviewed.",
-                guidance=["Review the security group change before deploy."],
-                degraded=False,
-                warnings=[],
-                source="llm",
-                provider="ollama",
-                model="ollama/llama3",
-                local_mode=True,
-                skills_applied=["git", "terraform"],
-            )),
-            patch("services.analysis_service.find_incident_matches", side_effect=RuntimeError("boom")),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=self._analysis_assessment(),
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="CAUTION: review the security group update.",
+                    explanation="The deployment widens database access and should be reviewed.",
+                    guidance=["Review the security group change before deploy."],
+                    degraded=False,
+                    warnings=[],
+                    source="llm",
+                    provider="ollama",
+                    model="ollama/llama3",
+                    local_mode=True,
+                    skills_applied=["git", "terraform"],
+                ),
+            ),
+            patch(
+                "services.analysis_service.find_incident_matches",
+                side_effect=RuntimeError("boom"),
+            ),
         ):
             response = client.post("/api/v1/analyses", files=files)
 
@@ -349,10 +396,14 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         schema = response.json()
         analyses_post = schema["paths"]["/api/v1/analyses"]["post"]
-        request_body_schema = analyses_post["requestBody"]["content"]["multipart/form-data"]["schema"]
+        request_body_schema = analyses_post["requestBody"]["content"][
+            "multipart/form-data"
+        ]["schema"]
         self.assertIn("$ref", request_body_schema)
         component_name = request_body_schema["$ref"].split("/")[-1]
-        self.assertEqual(schema["components"]["schemas"][component_name]["type"], "object")
+        self.assertEqual(
+            schema["components"]["schemas"][component_name]["type"], "object"
+        )
         self.assertIn("AnalysisRunResponse", str(analyses_post["responses"]["200"]))
         self.assertIn("ErrorResponse", str(analyses_post["responses"]["400"]))
         self.assertNotIn("ParseBatchResult", schema["components"]["schemas"])

@@ -39,8 +39,15 @@ INCLUDE_EXTENSIONS = {".md", ".txt", ".yaml", ".yml", ".json"}
 
 # Directories to skip when scanning folders
 SKIP_DIRS = {
-    "node_modules", ".git", "__pycache__", ".venv", "venv",
-    ".claude", "_bmad-output", ".cursor", ".vscode",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".claude",
+    "_bmad-output",
+    ".cursor",
+    ".vscode",
 }
 
 # Approximate chars per token for estimation
@@ -143,17 +150,21 @@ def suggest_groups(files: list[Path]) -> list[dict]:
                     groups[group_key] = []
                     # Add the base file if it exists
                     if base_name in file_map and base_name not in assigned:
-                        groups[group_key].append({
-                            "path": str(file_map[base_name]),
-                            "filename": base_name,
-                            "role": "primary",
-                        })
+                        groups[group_key].append(
+                            {
+                                "path": str(file_map[base_name]),
+                                "filename": base_name,
+                                "role": "primary",
+                            }
+                        )
                         assigned.add(base_name)
-                groups[group_key].append({
-                    "path": str(f),
-                    "filename": f.name,
-                    "role": "companion",
-                })
+                groups[group_key].append(
+                    {
+                        "path": str(f),
+                        "filename": f.name,
+                        "role": "companion",
+                    }
+                )
                 assigned.add(f.name)
                 matched = True
                 break
@@ -162,23 +173,35 @@ def suggest_groups(files: list[Path]) -> list[dict]:
             # Check if this file is a base that already has companions
             if f.name in groups:
                 continue  # Already added as primary
-            ungrouped.append({
-                "path": str(f),
-                "filename": f.name,
-            })
+            ungrouped.append(
+                {
+                    "path": str(f),
+                    "filename": f.name,
+                }
+            )
 
     result = []
     for group_key, members in groups.items():
-        result.append({
-            "group_key": group_key,
-            "files": members,
-        })
+        result.append(
+            {
+                "group_key": group_key,
+                "files": members,
+            }
+        )
     for ug in ungrouped:
         if ug["filename"] not in assigned:
-            result.append({
-                "group_key": ug["filename"],
-                "files": [{"path": ug["path"], "filename": ug["filename"], "role": "standalone"}],
-            })
+            result.append(
+                {
+                    "group_key": ug["filename"],
+                    "files": [
+                        {
+                            "path": ug["path"],
+                            "filename": ug["filename"],
+                            "role": "standalone",
+                        }
+                    ],
+                }
+            )
 
     return result
 
@@ -202,13 +225,15 @@ def analyze(inputs: list[str], output_path: str | None = None) -> None:
     for f in files:
         size = f.stat().st_size
         total_chars += size
-        file_details.append({
-            "path": str(f),
-            "filename": f.name,
-            "size_bytes": size,
-            "estimated_tokens": size // CHARS_PER_TOKEN,
-            "doc_type": detect_doc_type(f.name),
-        })
+        file_details.append(
+            {
+                "path": str(f),
+                "filename": f.name,
+                "size_bytes": size,
+                "estimated_tokens": size // CHARS_PER_TOKEN,
+                "doc_type": detect_doc_type(f.name),
+            }
+        )
 
     total_tokens = total_chars // CHARS_PER_TOKEN
     groups = suggest_groups(files)
@@ -229,7 +254,9 @@ def analyze(inputs: list[str], output_path: str | None = None) -> None:
         )
 
     # Split prediction
-    estimated_distillate_tokens = total_tokens // 3  # rough: distillate is ~1/3 of source
+    estimated_distillate_tokens = (
+        total_tokens // 3
+    )  # rough: distillate is ~1/3 of source
     if estimated_distillate_tokens > SINGLE_DISTILLATE_MAX_TOKENS:
         split_prediction = "likely"
         split_reason = (
@@ -288,7 +315,8 @@ def main() -> None:
         help="File paths, folder paths, or glob patterns to analyze",
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         help="Output JSON to file instead of stdout",
     )
     args = parser.parse_args()

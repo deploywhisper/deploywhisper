@@ -49,7 +49,10 @@ class SettingsServiceTests(unittest.TestCase):
         self.assertIsNone(loaded.api_key)
 
         with database_module.SessionLocal() as session:
-            keys = {record.key for record in settings_repository_module.list_settings(session)}
+            keys = {
+                record.key
+                for record in settings_repository_module.list_settings(session)
+            }
         self.assertNotIn("llm_api_key", keys)
         self.assertNotIn("llm_provider_config::openai::api_key", keys)
 
@@ -116,7 +119,9 @@ class SettingsServiceTests(unittest.TestCase):
         def broken_completion(**_: object):
             raise RuntimeError("provider offline")
 
-        result = settings_service_module.validate_provider_settings(config, completion_client=broken_completion)
+        result = settings_service_module.validate_provider_settings(
+            config, completion_client=broken_completion
+        )
         self.assertFalse(result["valid"])
         self.assertIn("provider offline", result["message"])
 
@@ -165,7 +170,9 @@ class SettingsServiceTests(unittest.TestCase):
         def broken_completion(**_: object):
             raise RuntimeError("provider offline")
 
-        readiness = settings_service_module.check_provider_readiness(completion_client=broken_completion)
+        readiness = settings_service_module.check_provider_readiness(
+            completion_client=broken_completion
+        )
 
         self.assertFalse(readiness.ready)
         self.assertTrue(readiness.has_api_key)
@@ -201,13 +208,17 @@ class SettingsServiceTests(unittest.TestCase):
             api_key="sk-test",
             source="database",
         )
-        result = settings_service_module.validate_provider_settings(config, completion_client=fake_completion)
+        result = settings_service_module.validate_provider_settings(
+            config, completion_client=fake_completion
+        )
         self.assertTrue(result["valid"])
         self.assertEqual(captured["model"], "gpt-supplied")
         self.assertEqual(captured["api_base"], "http://localhost:9998")
         self.assertEqual(captured["temperature"], "0")
 
-    def test_validate_provider_settings_uses_temperature_one_for_openai_gpt5_models(self) -> None:
+    def test_validate_provider_settings_uses_temperature_one_for_openai_gpt5_models(
+        self,
+    ) -> None:
         captured: dict[str, str] = {}
 
         def fake_completion(**kwargs: object):
@@ -235,7 +246,9 @@ class SettingsServiceTests(unittest.TestCase):
             source="database",
         )
 
-        result = settings_service_module.validate_provider_settings(config, completion_client=fake_completion)
+        result = settings_service_module.validate_provider_settings(
+            config, completion_client=fake_completion
+        )
 
         self.assertTrue(result["valid"])
         self.assertEqual(captured["temperature"], "1")
@@ -246,7 +259,11 @@ class SettingsServiceTests(unittest.TestCase):
             settings_service_module.DEFAULT_DASHBOARD_RESULT_DURATION_SECONDS,
         )
 
-        saved = settings_service_module.save_dashboard_result_display_duration_seconds(900)
+        saved = settings_service_module.save_dashboard_result_display_duration_seconds(
+            900
+        )
 
         self.assertEqual(saved, 900)
-        self.assertEqual(settings_service_module.get_dashboard_result_display_duration_seconds(), 900)
+        self.assertEqual(
+            settings_service_module.get_dashboard_result_display_duration_seconds(), 900
+        )

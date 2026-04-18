@@ -29,10 +29,15 @@ tasks:
 
         changes = parse_ansible("site.yml", raw)
 
-        self.assertEqual([change.resource_id for change in changes], ["Install packages", "Restart service"])
+        self.assertEqual(
+            [change.resource_id for change in changes],
+            ["Install packages", "Restart service"],
+        )
         self.assertTrue(all(change.tool == "ansible" for change in changes))
 
-    def test_parse_ansible_falls_back_to_indexed_task_names_for_non_mapping_tasks(self) -> None:
+    def test_parse_ansible_falls_back_to_indexed_task_names_for_non_mapping_tasks(
+        self,
+    ) -> None:
         raw = b"""hosts: app
 tasks:
   - restart nginx
@@ -42,7 +47,9 @@ tasks:
 
         changes = parse_ansible("site.yml", raw)
 
-        self.assertEqual([change.resource_id for change in changes], ["task-1", "Verify service"])
+        self.assertEqual(
+            [change.resource_id for change in changes], ["task-1", "Verify service"]
+        )
         self.assertIn("task-1", changes[0].summary)
 
 

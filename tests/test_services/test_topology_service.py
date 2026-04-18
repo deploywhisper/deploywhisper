@@ -9,7 +9,11 @@ from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
-from services.topology_service import get_topology_status, load_topology, save_topology_definition
+from services.topology_service import (
+    get_topology_status,
+    load_topology,
+    save_topology_definition,
+)
 
 
 class TopologyServiceTests(unittest.TestCase):
@@ -27,7 +31,14 @@ class TopologyServiceTests(unittest.TestCase):
                 json.dumps(
                     {
                         "updated_at": "2026-04-16T00:00:00Z",
-                        "services": [{"id": "api", "label": "API", "resource_keys": ["Deployment/api"], "downstream": []}],
+                        "services": [
+                            {
+                                "id": "api",
+                                "label": "API",
+                                "resource_keys": ["Deployment/api"],
+                                "downstream": [],
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",
@@ -45,7 +56,14 @@ class TopologyServiceTests(unittest.TestCase):
                 json.dumps(
                     {
                         "updated_at": "2025-01-01T00:00:00Z",
-                        "services": [{"id": "api", "label": "API", "resource_keys": ["Deployment/api"], "downstream": []}],
+                        "services": [
+                            {
+                                "id": "api",
+                                "label": "API",
+                                "resource_keys": ["Deployment/api"],
+                                "downstream": [],
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",
@@ -129,7 +147,9 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertIn("circular dependency detected", combined_errors)
         self.assertIn("orphaned services", combined_warnings)
 
-    def test_save_topology_definition_rejects_invalid_structure_and_keeps_previous_active_file(self) -> None:
+    def test_save_topology_definition_rejects_invalid_structure_and_keeps_previous_active_file(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "service_topology.json"
             fake_settings = SimpleNamespace(topology_path=str(path))

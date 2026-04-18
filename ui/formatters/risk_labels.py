@@ -19,7 +19,11 @@ def risk_token(level: str) -> dict[str, str]:
 
 def style_risk_badge(level: str) -> str:
     token = risk_token(level)
-    border = f"1px solid {token['bg'].replace('0.12', '0.35')}" if level.lower() != "uncertain" else "1px dashed rgba(195, 160, 74, 0.45)"
+    border = (
+        f"1px solid {token['bg'].replace('0.12', '0.35')}"
+        if level.lower() != "uncertain"
+        else "1px dashed rgba(195, 160, 74, 0.45)"
+    )
     return (
         f"background:{token['bg']};"
         f"color:{token['color']};"

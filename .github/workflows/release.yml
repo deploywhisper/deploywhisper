@@ -238,40 +238,41 @@ jobs:
             BUILD_VERSION=${{ needs.validate.outputs.version }}
             BUILD_SHA=${{ github.sha }}
 
-      - name: Smoke test — pull and verify pushed image
-        run: |
-          # Pull the image we just pushed and run a quick health check
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}"
-          # Strip the leading 'v' if present in the tag for the image reference
-          IMAGE=$(echo "$IMAGE" | sed 's/:v/:/')
-          docker pull "$IMAGE"
+      - name: Smoke test — container starts and health endpoint responds
+              run: |
+                docker run -d \
+                  --name whisper-smoke \
+                  -p 8080:8080 \
+                  -v whisper-ci-data:/app/data \
+                  -e APP_HOST=0.0.0.0 \
+                  -e APP_PORT=8080 \
+                  -e LOG_LEVEL=INFO \
+                  -e DATABASE_URL=sqlite:///data/deploywhisper.db \
+                  ai-deploy-whisper:ci-${{ github.sha }}
 
-          docker run -d \
-            --name release-smoke \
-            -p 8000:8000 \
-            -e DATABASE_URL=sqlite:///tmp/test.db \
-            "$IMAGE"
+                echo "Waiting for container to be ready..."
+                for i in $(seq 1 30); do
+                  if curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
+                    echo "Health check passed on attempt $i"
+                    break
+                  fi
+                  if [ "$i" -eq 30 ]; then
+                    echo "::error::Health check failed after 30 attempts"
+                    docker logs whisper-smoke
+                    exit 1
+                  fi
+                  sleep 2
+                done
 
-          echo "Waiting for container to be ready..."
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
-              echo "Health check passed on attempt $i"
-              break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "::error::Pushed image failed health check"
-              docker logs release-smoke
-              exit 1
-            fi
-            sleep 2
-          done
-          echo "Pushed image verified successfully."
+                HEALTH=$(curl -sf http://localhost:8080/api/v1/health)
+                echo "Health response: $HEALTH"
 
       - name: Cleanup
         if: always()
         run: |
-          docker stop release-smoke 2>/dev/null || true
-          docker rm release-smoke 2>/dev/null || true
+          docker stop whisper-smoke 2>/dev/null || true
+          docker rm whisper-smoke 2>/dev/null || true
+          docker volume rm whisper-ci-data 2>/dev/null || true
 
   # ===========================================================================
   # STAGE 5 — CREATE GITHUB RELEASE

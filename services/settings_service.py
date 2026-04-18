@@ -18,17 +18,27 @@ class ProviderSettings(BaseModel):
     model: str = Field(..., description="Configured model")
     api_base: str = Field(..., description="Configured API base")
     api_key: str | None = Field(default=None, description="Configured API key")
-    local_mode: bool = Field(default=False, description="Whether local-only mode is active")
+    local_mode: bool = Field(
+        default=False, description="Whether local-only mode is active"
+    )
     source: str = Field(..., description="Where the settings came from")
 
 
 class ProviderReadiness(BaseModel):
     provider: str = Field(..., description="Configured provider name")
     model: str = Field(..., description="Configured model")
-    local_mode: bool = Field(default=False, description="Whether local-only mode is active")
-    ready: bool = Field(..., description="Whether the provider is reachable for analysis")
-    requires_api_key: bool = Field(..., description="Whether this provider requires an API key")
-    has_api_key: bool = Field(..., description="Whether an API key is currently available")
+    local_mode: bool = Field(
+        default=False, description="Whether local-only mode is active"
+    )
+    ready: bool = Field(
+        ..., description="Whether the provider is reachable for analysis"
+    )
+    requires_api_key: bool = Field(
+        ..., description="Whether this provider requires an API key"
+    )
+    has_api_key: bool = Field(
+        ..., description="Whether an API key is currently available"
+    )
     message: str = Field(..., description="Human-readable readiness summary")
     source: str = Field(..., description="Where the settings came from")
 
@@ -100,7 +110,9 @@ PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
 
 def provider_select_options() -> dict[str, str]:
     """Return provider options for UI selection."""
-    return {provider: str(config["label"]) for provider, config in PROVIDER_CATALOG.items()}
+    return {
+        provider: str(config["label"]) for provider, config in PROVIDER_CATALOG.items()
+    }
 
 
 def provider_defaults(provider: str) -> dict[str, str | bool | None]:
@@ -133,7 +145,11 @@ def save_provider_settings(
     with SessionLocal() as session:
         upsert_setting(session, key=_provider_key(provider, "model"), value=model)
         upsert_setting(session, key=_provider_key(provider, "api_base"), value=api_base)
-        upsert_setting(session, key=_provider_key(provider, "local_mode"), value="true" if local_mode else "false")
+        upsert_setting(
+            session,
+            key=_provider_key(provider, "local_mode"),
+            value="true" if local_mode else "false",
+        )
         delete_setting(session, _provider_key(provider, "api_key"))
 
         if activate:
@@ -141,7 +157,9 @@ def save_provider_settings(
             upsert_setting(session, key="llm_provider", value=provider)
             upsert_setting(session, key="llm_model", value=model)
             upsert_setting(session, key="llm_api_base", value=api_base)
-            upsert_setting(session, key="llm_local_mode", value="true" if local_mode else "false")
+            upsert_setting(
+                session, key="llm_local_mode", value="true" if local_mode else "false"
+            )
             delete_setting(session, "llm_api_key")
 
     return ProviderSettings(
@@ -162,11 +180,19 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
             active_provider = get_setting(session, "active_llm_provider")
             legacy_provider = get_setting(session, "llm_provider")
             selected_provider = requested_provider or (
-                active_provider.value if active_provider else legacy_provider.value if legacy_provider else settings.llm_provider
+                active_provider.value
+                if active_provider
+                else legacy_provider.value
+                if legacy_provider
+                else settings.llm_provider
             )
             model = get_setting(session, _provider_key(selected_provider, "model"))
-            api_base = get_setting(session, _provider_key(selected_provider, "api_base"))
-            local_mode = get_setting(session, _provider_key(selected_provider, "local_mode"))
+            api_base = get_setting(
+                session, _provider_key(selected_provider, "api_base")
+            )
+            local_mode = get_setting(
+                session, _provider_key(selected_provider, "local_mode")
+            )
 
             if model and api_base and local_mode:
                 return ProviderSettings(
@@ -182,7 +208,12 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                 legacy_model = get_setting(session, "llm_model")
                 legacy_api_base = get_setting(session, "llm_api_base")
                 legacy_local_mode = get_setting(session, "llm_local_mode")
-                if legacy_provider and legacy_model and legacy_api_base and legacy_local_mode:
+                if (
+                    legacy_provider
+                    and legacy_model
+                    and legacy_api_base
+                    and legacy_local_mode
+                ):
                     return ProviderSettings(
                         provider=legacy_provider.value,
                         model=legacy_model.value,
@@ -200,19 +231,36 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
     env_api_key = _provider_env_api_key(selected_provider)
     return ProviderSettings(
         provider=selected_provider,
-        model=str(defaults["model"] if requested_provider else settings.llm_model or defaults["model"]),
-        api_base=str(defaults["api_base"] if requested_provider else settings.llm_api_base or defaults["api_base"]),
+        model=str(
+            defaults["model"]
+            if requested_provider
+            else settings.llm_model or defaults["model"]
+        ),
+        api_base=str(
+            defaults["api_base"]
+            if requested_provider
+            else settings.llm_api_base or defaults["api_base"]
+        ),
         api_key=None if requested_provider else env_api_key,
-        local_mode=bool(defaults["local_mode"] if requested_provider else settings.llm_provider == "ollama"),
+        local_mode=bool(
+            defaults["local_mode"]
+            if requested_provider
+            else settings.llm_provider == "ollama"
+        ),
         source="environment",
     )
 
 
-def validate_provider_settings(provider_settings: ProviderSettings, completion_client=None) -> dict:
+def validate_provider_settings(
+    provider_settings: ProviderSettings, completion_client=None
+) -> dict:
     """Validate provider configuration using the narrative provider boundary only."""
     try:
         generate_completion_with_settings(
-            messages=[{"role": "system", "content": "Return a JSON object."}, {"role": "user", "content": "{}"}],
+            messages=[
+                {"role": "system", "content": "Return a JSON object."},
+                {"role": "user", "content": "{}"},
+            ],
             provider=provider_settings.provider,
             model=provider_settings.model,
             api_base=provider_settings.api_base,
@@ -220,7 +268,10 @@ def validate_provider_settings(provider_settings: ProviderSettings, completion_c
             local_mode=provider_settings.local_mode,
             completion_client=completion_client,
         )
-        return {"valid": True, "message": "Provider configuration accepted for narrative generation."}
+        return {
+            "valid": True,
+            "message": "Provider configuration accepted for narrative generation.",
+        }
     except NarrativeProviderError as exc:
         return {"valid": False, "message": str(exc)}
 
@@ -247,7 +298,9 @@ def check_provider_readiness(completion_client=None) -> ProviderReadiness:
             source=provider_settings.source,
         )
 
-    validation = validate_provider_settings(provider_settings, completion_client=completion_client)
+    validation = validate_provider_settings(
+        provider_settings, completion_client=completion_client
+    )
     if validation["valid"]:
         return ProviderReadiness(
             provider=provider_settings.provider,
@@ -267,7 +320,8 @@ def check_provider_readiness(completion_client=None) -> ProviderReadiness:
         ready=False,
         requires_api_key=requires_api_key,
         has_api_key=has_api_key,
-        message=validation["message"] + " Analysis can continue with heuristic-only results.",
+        message=validation["message"]
+        + " Analysis can continue with heuristic-only results.",
         source=provider_settings.source,
     )
 
@@ -324,7 +378,11 @@ def get_dashboard_result_display_duration_seconds() -> int:
 def save_dashboard_result_display_duration_seconds(seconds: int) -> int:
     """Persist the dashboard result visibility duration."""
     if seconds not in DASHBOARD_RESULT_DURATION_OPTIONS:
-        raise ValueError("Dashboard result display duration must be one of the supported preset values.")
+        raise ValueError(
+            "Dashboard result display duration must be one of the supported preset values."
+        )
     with SessionLocal() as session:
-        upsert_setting(session, key="dashboard_result_display_duration_seconds", value=str(seconds))
+        upsert_setting(
+            session, key="dashboard_result_display_duration_seconds", value=str(seconds)
+        )
     return seconds

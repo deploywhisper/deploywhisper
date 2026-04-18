@@ -55,6 +55,7 @@ def load_toml(path: Path) -> dict[str, Any]:
 # Merge helpers
 # ---------------------------------------------------------------------------
 
+
 def _is_menu_array(value: Any) -> bool:
     """True when *value* is a non-empty list where ALL items are dicts with a ``code`` key."""
     return (
@@ -66,10 +67,15 @@ def _is_menu_array(value: Any) -> bool:
 
 def merge_menu(base: list[dict], override: list[dict]) -> list[dict]:
     """Merge-by-code: matching codes replace; new codes append."""
-    result_by_code: dict[str, dict] = {item["code"]: dict(item) for item in base if "code" in item}
+    result_by_code: dict[str, dict] = {
+        item["code"]: dict(item) for item in base if "code" in item
+    }
     for item in override:
         if "code" not in item:
-            print(f"warning: menu item missing 'code' key, skipping: {item}", file=sys.stderr)
+            print(
+                f"warning: menu item missing 'code' key, skipping: {item}",
+                file=sys.stderr,
+            )
             continue
         result_by_code[item["code"]] = dict(item)
     return list(result_by_code.values())
@@ -102,6 +108,7 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
 # Key extraction
 # ---------------------------------------------------------------------------
 
+
 def extract_key(data: dict[str, Any], dotted_key: str) -> Any:
     """Retrieve a value by dotted path (e.g. ``persona.displayName``)."""
     parts = dotted_key.split(".")
@@ -117,6 +124,7 @@ def extract_key(data: dict[str, Any], dotted_key: str) -> Any:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(

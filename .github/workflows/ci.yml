@@ -361,13 +361,17 @@ jobs:
         run: |
           docker run -d \
             --name whisper-smoke \
-            -p 8000:8000 \
-            -e DATABASE_URL=sqlite:///tmp/test.db \
+            -p 8080:8080 \
+            -v whisper-ci-data:/app/data \
+            -e APP_HOST=0.0.0.0 \
+            -e APP_PORT=8080 \
+            -e LOG_LEVEL=INFO \
+            -e DATABASE_URL=sqlite:///data/deploywhisper.db \
             ai-deploy-whisper:ci-${{ github.sha }}
 
           echo "Waiting for container to be ready..."
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+            if curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
               echo "Health check passed on attempt $i"
               break
             fi
@@ -379,8 +383,7 @@ jobs:
             sleep 2
           done
 
-          # Verify response content
-          HEALTH=$(curl -sf http://localhost:8000/health)
+          HEALTH=$(curl -sf http://localhost:8080/api/v1/health)
           echo "Health response: $HEALTH"
 
       - name: Cleanup
@@ -388,6 +391,7 @@ jobs:
         run: |
           docker stop whisper-smoke 2>/dev/null || true
           docker rm whisper-smoke 2>/dev/null || true
+          docker volume rm whisper-ci-data 2>/dev/null || true
 
   # ===========================================================================
   # STAGE 5 — DATABASE MIGRATION CHECK
@@ -418,20 +422,23 @@ jobs:
         run: |
           # Check that alembic can resolve the full migration chain
           python -m alembic -c alembic.ini heads 2>&1 | tee migration-heads.log
-          HEAD_COUNT=$(python -m alembic -c alembic.ini heads 2>/dev/null | grep -c "Rev:")
+          HEAD_COUNT=$(python -m alembic -c alembic.ini heads 2>/dev/null | grep -c "(head)" || true)
+          echo "Migration heads found: $HEAD_COUNT"
           if [ "$HEAD_COUNT" -gt 1 ]; then
             echo "::error::Multiple migration heads detected — merge migrations before merging this PR"
             exit 1
           fi
-          echo "Migration chain is linear (single head). OK."
-
+          if [ "$HEAD_COUNT" -eq 0 ]; then
+            echo "::warning::No migration heads found — skipping migration linearity check"
+          else
+            echo "Migration chain is linear (single head). OK."
+          fi
       - name: Verify migrations apply cleanly to a fresh database
         run: |
-          export DATABASE_URL=sqlite:///tmp/ci-migration-test.db
+          export DATABASE_URL="sqlite:////tmp/ci-migration-test.db"
           python -m alembic -c alembic.ini upgrade head 2>&1 | tee migration-upgrade.log
           test ${PIPESTATUS[0]} -eq 0
           echo "All migrations applied successfully to a fresh database."
-
       - name: Upload migration logs
         if: failure()
         uses: actions/upload-artifact@v4

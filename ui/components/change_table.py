@@ -24,8 +24,14 @@ def render_change_table(parse_batch: ParseBatchResult) -> None:
 
         with ui.column().classes("w-full gap-2"):
             for change in changes:
-                with ui.row().classes("w-full items-start justify-between gap-4 dw-panel-soft px-3 py-3"):
+                with ui.row().classes(
+                    "w-full items-start justify-between gap-4 dw-panel-soft px-3 py-3"
+                ):
                     with ui.column().classes("gap-1"):
                         ui.label(change.summary).classes("text-sm font-medium dw-text")
-                        ui.label(f"{change.source_file} · {change.resource_id}").classes("text-xs dw-muted")
-                    ui.label(f"{change.tool} · {change.action}").classes("text-xs uppercase dw-muted")
+                        ui.label(
+                            f"{change.source_file} · {change.resource_id}"
+                        ).classes("text-xs dw-muted")
+                    ui.label(f"{change.tool} · {change.action}").classes(
+                        "text-xs uppercase dw-muted"
+                    )

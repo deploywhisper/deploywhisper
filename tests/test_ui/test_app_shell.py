@@ -60,7 +60,9 @@ class DashboardShellTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Back to dashboard", response.text)
 
-    def test_dashboard_shows_persisted_result_provenance_when_active_report_exists(self) -> None:
+    def test_dashboard_shows_persisted_result_provenance_when_active_report_exists(
+        self,
+    ) -> None:
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -115,7 +117,10 @@ class DashboardShellTests(unittest.TestCase):
             parse_batch,
             assessment,
             narrative,
-            audit_context={"source_interface": "ui", "trigger_type": "dashboard_upload"},
+            audit_context={
+                "source_interface": "ui",
+                "trigger_type": "dashboard_upload",
+            },
         )
 
         response = self.client.get("/")
@@ -126,7 +131,9 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Provider: ollama / ollama/llama3", response.text)
         self.assertIn("Skills: git, terraform", response.text)
         self.assertIn("Last scan: plan.json · CRITICAL · NO-GO", response.text)
-        self.assertIn("1 saved briefing is shaping the current advisory view.", response.text)
+        self.assertIn(
+            "1 saved briefing is shaping the current advisory view.", response.text
+        )
 
     def test_dashboard_shows_llm_fallback_notice_for_active_report(self) -> None:
         parse_batch = ParseBatchResult(
@@ -164,7 +171,9 @@ class DashboardShellTests(unittest.TestCase):
             ],
             interaction_risks=[],
             partial_context=False,
-            warnings=["LLM severity assessment unavailable; falling back to heuristic matrix: provider offline"],
+            warnings=[
+                "LLM severity assessment unavailable; falling back to heuristic matrix: provider offline"
+            ],
             source="heuristic-only",
         )
         narrative = NarrativeResult(
@@ -183,7 +192,10 @@ class DashboardShellTests(unittest.TestCase):
             parse_batch,
             assessment,
             narrative,
-            audit_context={"source_interface": "ui", "trigger_type": "dashboard_upload"},
+            audit_context={
+                "source_interface": "ui",
+                "trigger_type": "dashboard_upload",
+            },
         )
 
         response = self.client.get("/")

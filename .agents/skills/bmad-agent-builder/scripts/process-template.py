@@ -19,7 +19,9 @@ import re
 import sys
 
 
-def process_conditionals(text: str, true_conditions: set[str]) -> tuple[str, list[str], list[str]]:
+def process_conditionals(
+    text: str, true_conditions: set[str]
+) -> tuple[str, list[str], list[str]]:
     """Process {if-X}...{/if-X} conditional blocks, innermost first.
 
     Returns (processed_text, conditions_true, conditions_false).
@@ -29,7 +31,7 @@ def process_conditionals(text: str, true_conditions: set[str]) -> tuple[str, lis
 
     # Process innermost blocks first to handle nesting
     pattern = re.compile(
-        r'\{if-([a-zA-Z0-9_-]+)\}(.*?)\{/if-\1\}',
+        r"\{if-([a-zA-Z0-9_-]+)\}(.*?)\{/if-\1\}",
         re.DOTALL,
     )
 
@@ -50,15 +52,15 @@ def process_conditionals(text: str, true_conditions: set[str]) -> tuple[str, lis
                     conditions_true.append(condition)
             else:
                 # Remove the entire block
-                replacement = ''
+                replacement = ""
                 if condition not in conditions_false:
                     conditions_false.append(condition)
 
-            text = text[:match.start()] + replacement + text[match.end():]
+            text = text[: match.start()] + replacement + text[match.end() :]
 
     # Clean up blank lines left by removed blocks: collapse 3+ consecutive
     # newlines down to 2 (one blank line)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
 
     return text, conditions_true, conditions_false
 
@@ -74,7 +76,7 @@ def process_variables(text: str, variables: dict[str, str]) -> tuple[str, list[s
     substituted: list[str] = []
 
     for name, value in variables.items():
-        placeholder = '{' + name + '}'
+        placeholder = "{" + name + "}"
         if placeholder in text:
             text = text.replace(placeholder, value)
             if name not in substituted:
@@ -85,50 +87,49 @@ def process_variables(text: str, variables: dict[str, str]) -> tuple[str, list[s
 
 def parse_var(s: str) -> tuple[str, str]:
     """Parse a key=value string. Raises argparse error on bad format."""
-    if '=' not in s:
+    if "=" not in s:
         raise argparse.ArgumentTypeError(
             f"Invalid variable format: '{s}' (expected key=value)"
         )
-    key, _, value = s.partition('=')
+    key, _, value = s.partition("=")
     if not key:
-        raise argparse.ArgumentTypeError(
-            f"Invalid variable format: '{s}' (empty key)"
-        )
+        raise argparse.ArgumentTypeError(f"Invalid variable format: '{s}' (empty key)")
     return key, value
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description='Process BMad agent template files with variable substitution and conditional blocks.',
+        description="Process BMad agent template files with variable substitution and conditional blocks.",
     )
     parser.add_argument(
-        'template',
-        help='Path to the template file to process',
+        "template",
+        help="Path to the template file to process",
     )
     parser.add_argument(
-        '-o', '--output',
-        help='Write processed output to file (default: stdout)',
+        "-o",
+        "--output",
+        help="Write processed output to file (default: stdout)",
     )
     parser.add_argument(
-        '--var',
-        action='append',
+        "--var",
+        action="append",
         default=[],
-        metavar='key=value',
-        help='Variable substitution (repeatable). Example: --var skillName=my-agent',
+        metavar="key=value",
+        help="Variable substitution (repeatable). Example: --var skillName=my-agent",
     )
     parser.add_argument(
-        '--true',
-        action='append',
+        "--true",
+        action="append",
         default=[],
-        dest='true_conditions',
-        metavar='CONDITION',
-        help='Condition name to treat as true (repeatable). Example: --true pulse --true evolvable',
+        dest="true_conditions",
+        metavar="CONDITION",
+        help="Condition name to treat as true (repeatable). Example: --true pulse --true evolvable",
     )
     parser.add_argument(
-        '--json',
-        action='store_true',
-        dest='json_output',
-        help='Output processing metadata as JSON to stderr',
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Output processing metadata as JSON to stderr",
     )
 
     args = parser.parse_args()
@@ -147,7 +148,7 @@ def main() -> int:
 
     # Read template
     try:
-        with open(args.template, encoding='utf-8') as f:
+        with open(args.template, encoding="utf-8") as f:
             content = f.read()
     except FileNotFoundError:
         print(f"Error: Template file not found: {args.template}", file=sys.stderr)
@@ -164,7 +165,7 @@ def main() -> int:
     output_file = args.output
     try:
         if output_file:
-            with open(output_file, 'w', encoding='utf-8') as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 f.write(content)
         else:
             sys.stdout.write(content)
@@ -175,16 +176,16 @@ def main() -> int:
     # JSON metadata to stderr
     if args.json_output:
         metadata = {
-            'processed': True,
-            'output_file': output_file or '<stdout>',
-            'vars_substituted': vars_substituted,
-            'conditions_true': conds_true,
-            'conditions_false': conds_false,
+            "processed": True,
+            "output_file": output_file or "<stdout>",
+            "vars_substituted": vars_substituted,
+            "conditions_true": conds_true,
+            "conditions_false": conds_false,
         }
         print(json.dumps(metadata, indent=2), file=sys.stderr)
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

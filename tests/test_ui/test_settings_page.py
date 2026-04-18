@@ -12,7 +12,10 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app import create_app
-from ui.routes.settings import process_custom_skill_upload_content, process_topology_upload_content
+from ui.routes.settings import (
+    process_custom_skill_upload_content,
+    process_topology_upload_content,
+)
 
 
 class SettingsPageTests(unittest.TestCase):
@@ -31,7 +34,9 @@ class SettingsPageTests(unittest.TestCase):
         self.assertIn("Topology context", response.text)
         self.assertIn("blast-radius analysis", response.text)
 
-    def test_process_topology_upload_content_reports_success_for_valid_upload(self) -> None:
+    def test_process_topology_upload_content_reports_success_for_valid_upload(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "service_topology.json"
             fake_settings = SimpleNamespace(topology_path=str(path))
@@ -54,7 +59,9 @@ class SettingsPageTests(unittest.TestCase):
         self.assertIn("Service topology updated", result["success_message"])
         self.assertEqual(result["status"].service_count, 1)
 
-    def test_process_topology_upload_content_preserves_active_topology_when_upload_is_invalid(self) -> None:
+    def test_process_topology_upload_content_preserves_active_topology_when_upload_is_invalid(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "service_topology.json"
             fake_settings = SimpleNamespace(topology_path=str(path))
@@ -90,16 +97,25 @@ class SettingsPageTests(unittest.TestCase):
         self.assertIsNone(valid_result["error_message"])
         self.assertIn("Topology update failed", invalid_result["error_message"])
         self.assertEqual(invalid_result["status"].service_count, 1)
-        self.assertEqual(invalid_result["status"].updated_at, valid_result["status"].updated_at)
+        self.assertEqual(
+            invalid_result["status"].updated_at, valid_result["status"].updated_at
+        )
 
-    def test_process_custom_skill_upload_content_reports_override_detection(self) -> None:
+    def test_process_custom_skill_upload_content_reports_override_detection(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             skills_dir = Path(tmpdir) / "skills"
             custom_dir = skills_dir / "custom"
             skills_dir.mkdir(parents=True, exist_ok=True)
             custom_dir.mkdir(parents=True, exist_ok=True)
-            (skills_dir / "terraform.md").write_text("# Built-in\nDefault terraform guidance.", encoding="utf-8")
-            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+            (skills_dir / "terraform.md").write_text(
+                "# Built-in\nDefault terraform guidance.", encoding="utf-8"
+            )
+            with (
+                patch("llm.skill_context.SKILLS_DIR", skills_dir),
+                patch("llm.skill_context.CUSTOM_DIR", custom_dir),
+            ):
                 result = process_custom_skill_upload_content(
                     "terraform.md",
                     b"# Custom\nTeam terraform guidance.",
@@ -114,7 +130,10 @@ class SettingsPageTests(unittest.TestCase):
             custom_dir = skills_dir / "custom"
             skills_dir.mkdir(parents=True, exist_ok=True)
             custom_dir.mkdir(parents=True, exist_ok=True)
-            with patch("llm.skill_context.SKILLS_DIR", skills_dir), patch("llm.skill_context.CUSTOM_DIR", custom_dir):
+            with (
+                patch("llm.skill_context.SKILLS_DIR", skills_dir),
+                patch("llm.skill_context.CUSTOM_DIR", custom_dir),
+            ):
                 result = process_custom_skill_upload_content(
                     "helm.md",
                     b"---\ntitle: empty\n---",

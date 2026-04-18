@@ -65,7 +65,9 @@ def _serialize_report(report) -> dict:
         "files_analyzed": json.loads(report.analyzed_files_json or "[]"),
         "llm_provider": report.llm_provider,
         "llm_model": report.llm_model,
-        "llm_local_mode": report.llm_local_mode == "true" if report.llm_local_mode is not None else None,
+        "llm_local_mode": report.llm_local_mode == "true"
+        if report.llm_local_mode is not None
+        else None,
         "source_interface": report.source_interface,
         "trigger_type": report.trigger_type,
         "trigger_id": report.trigger_id,
@@ -82,7 +84,9 @@ def _serialize_report(report) -> dict:
         "narrative_source": report.narrative_source,
         "narrative_provider": report.llm_provider,
         "narrative_model": report.llm_model,
-        "narrative_local_mode": report.llm_local_mode == "true" if report.llm_local_mode is not None else None,
+        "narrative_local_mode": report.llm_local_mode == "true"
+        if report.llm_local_mode is not None
+        else None,
         "skills_applied": json.loads(report.narrative_skills_json or "[]"),
         "created_at": created_at.isoformat(),
         "warnings": json.loads(report.warnings_json or "[]"),
@@ -102,8 +106,14 @@ def persist_analysis_report(
     audit = _build_audit_metadata(parse_batch, audit_context=audit_context)
     combined_warnings = list(dict.fromkeys([*assessment.warnings, *narrative.warnings]))
     dashboard_display_duration_seconds = None
-    if audit.get("source_interface") == "ui" and audit.get("trigger_type") == "dashboard_upload":
-        dashboard_display_duration_seconds = get_dashboard_result_display_duration_seconds()
+    if (
+        audit.get("source_interface") == "ui"
+        and audit.get("trigger_type") == "dashboard_upload"
+    ):
+        dashboard_display_duration_seconds = (
+            get_dashboard_result_display_duration_seconds()
+        )
+
     def operation():
         with SessionLocal() as session:
             return create_analysis_report(
@@ -116,7 +126,12 @@ def persist_analysis_report(
                 narrative_opening=narrative.opening_sentence,
                 narrative_explanation=narrative.explanation,
                 warnings_json=json.dumps(combined_warnings),
-                contributors_json=json.dumps([contributor.model_dump() for contributor in assessment.contributors]),
+                contributors_json=json.dumps(
+                    [
+                        contributor.model_dump()
+                        for contributor in assessment.contributors
+                    ]
+                ),
                 analyzed_files_json=json.dumps(audit["files_analyzed"]),
                 llm_provider=audit["llm_provider"],
                 llm_model=audit["llm_model"],
@@ -129,6 +144,7 @@ def persist_analysis_report(
                 trigger_id=audit["trigger_id"],
                 dashboard_display_duration_seconds=dashboard_display_duration_seconds,
             )
+
     report = _run_with_schema_retry(operation)
     return _serialize_report(report)
 
@@ -137,6 +153,7 @@ def fetch_analysis_report(report_id: int) -> dict | None:
     def operation():
         with SessionLocal() as session:
             return get_analysis_report(session, report_id)
+
     report = _run_with_schema_retry(operation)
     if report is None:
         return None
@@ -190,6 +207,7 @@ def fetch_filtered_analysis_history_page(
                 search=search,
             )
             return reports, total_count
+
     reports, total_count = _run_with_schema_retry(operation)
     return {
         "items": [_serialize_report(report) for report in reports],
@@ -210,8 +228,11 @@ def fetch_risk_trends() -> dict:
                 "reports": reports,
                 "total_reports": count_analysis_reports(session),
                 "severity_counts": count_analysis_reports_by_field(session, "severity"),
-                "recommendation_counts": count_analysis_reports_by_field(session, "recommendation"),
+                "recommendation_counts": count_analysis_reports_by_field(
+                    session, "recommendation"
+                ),
             }
+
     trend_data = _run_with_schema_retry(operation)
     reports = trend_data["reports"]
 
@@ -220,7 +241,9 @@ def fetch_risk_trends() -> dict:
 
     for report in reports:
         contributors = json.loads(report.contributors_json or "[]")
-        tools = sorted({contributor.get("tool", "unknown") for contributor in contributors})
+        tools = sorted(
+            {contributor.get("tool", "unknown") for contributor in contributors}
+        )
         for tool in tools:
             tool_counts[tool] += 1
         audit_rows.append(
@@ -250,9 +273,11 @@ def fetch_risk_trends() -> dict:
 
 def fetch_dashboard_stats() -> dict:
     """Return dashboard-friendly aggregate metrics for the latest persisted analyses."""
+
     def operation():
         with SessionLocal() as session:
             return list_analysis_reports(session)
+
     reports = _run_with_schema_retry(operation)
 
     severity_counts: Counter[str] = Counter()
@@ -293,11 +318,15 @@ def fetch_dashboard_briefing() -> dict[str, Any]:
     )
 
     latest_summary = "Last scan: none yet"
-    latest_report: dict[str, Any] | None = serialized_reports[0] if serialized_reports else None
+    latest_report: dict[str, Any] | None = (
+        serialized_reports[0] if serialized_reports else None
+    )
     if latest_report is not None:
         latest_files = latest_report.get("audit", {}).get("files_analyzed") or []
         latest_file = latest_files[0] if latest_files else "unknown artifact"
-        created_at = datetime.fromisoformat(latest_report["created_at"].replace("Z", "+00:00"))
+        created_at = datetime.fromisoformat(
+            latest_report["created_at"].replace("Z", "+00:00")
+        )
         elapsed_seconds = max(int((datetime.now(UTC) - created_at).total_seconds()), 0)
         if elapsed_seconds < 60:
             age_label = "just now"
@@ -328,16 +357,20 @@ def fetch_dashboard_briefing() -> dict[str, Any]:
 def fetch_active_dashboard_report(*, now: datetime | None = None) -> dict | None:
     """Return the most recent dashboard result still within its configured visibility window."""
     current_time = now or datetime.now(UTC)
+
     def operation():
         with SessionLocal() as session:
             return latest_active_dashboard_report(session, now=current_time)
+
     report = _run_with_schema_retry(operation)
     if report is None:
         return None
     payload = _serialize_report(report)
     duration = payload.get("dashboard_display_duration_seconds") or 0
     created_at = datetime.fromisoformat(payload["created_at"].replace("Z", "+00:00"))
-    remaining_seconds = max(int((created_at.timestamp() + duration) - current_time.timestamp()), 0)
+    remaining_seconds = max(
+        int((created_at.timestamp() + duration) - current_time.timestamp()), 0
+    )
     if remaining_seconds <= 0:
         return None
     payload["dashboard_remaining_seconds"] = remaining_seconds

@@ -8,7 +8,9 @@ from parsers.kubernetes_parser import parse_kubernetes
 
 
 class KubernetesParserTests(unittest.TestCase):
-    def test_parse_kubernetes_marks_standalone_manifest_as_apply_unknown_delta(self) -> None:
+    def test_parse_kubernetes_marks_standalone_manifest_as_apply_unknown_delta(
+        self,
+    ) -> None:
         raw = b"""apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
