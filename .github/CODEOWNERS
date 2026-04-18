@@ -1,0 +1,8 @@
+# Default owner for everything
+* @pramodksahoo
+
+# Critical paths need explicit review
+/parsers/       @pramodksahoo
+/llm/           @pramodksahoo
+/analysis/      @pramodksahoo
+/.github/       @pramodksahoo
