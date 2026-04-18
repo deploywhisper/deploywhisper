@@ -188,13 +188,16 @@ jobs:
   docker:
     name: "Build & Push Docker Image"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs:
       - test
       - security
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -212,13 +215,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Tag with the version: v1.0.0 → 1.0.0
             type=semver,pattern={{version}}
-            # Tag with major.minor: v1.0.0 → 1.0
             type=semver,pattern={{major}}.{{minor}}
-            # Tag with major only: v1.0.0 → 1
             type=semver,pattern={{major}}
-            # Tag as latest (only for stable releases)
             type=raw,value=latest,enable=${{ needs.validate.outputs.is_prerelease == 'false' }}
           labels: |
             org.opencontainers.image.title=DeployWhisper
@@ -230,6 +229,7 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.docker-meta.outputs.tags }}
           labels: ${{ steps.docker-meta.outputs.labels }}
           cache-from: type=gha
@@ -240,15 +240,13 @@ jobs:
 
       - name: Smoke test — pull and verify pushed image
         run: |
-          # Use the first tag from the metadata output (the full semver)
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${DOCKER_METADATA_OUTPUT_VERSION}"
-          # Strip the leading 'v' from the tag
-          IMAGE=$(echo "$IMAGE" | sed 's/:v/:/')
           echo "Pulling image: $IMAGE"
-          docker pull "$IMAGE"
+          docker pull --platform linux/amd64 "$IMAGE"
 
           docker run -d \
             --name release-smoke \
+            --platform linux/amd64 \
             -p 8080:8080 \
             -v whisper-release-data:/app/data \
             -e APP_HOST=0.0.0.0 \
