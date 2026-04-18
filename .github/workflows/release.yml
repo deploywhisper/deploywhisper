@@ -133,7 +133,7 @@ jobs:
 
       - name: Verify Alembic migrations apply cleanly
         run: |
-          export DATABASE_URL=sqlite:///tmp/release-migration-test.db
+          export DATABASE_URL=sqlite:////tmp/release-migration-test.db
           python -m alembic -c alembic.ini upgrade head
           echo "All migrations applied successfully."
 
