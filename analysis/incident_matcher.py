@@ -16,7 +16,9 @@ class IncidentMatch(BaseModel):
     title: str = Field(..., description="Incident title")
     severity: str = Field(..., description="Incident severity")
     source_file: str = Field(..., description="Incident source file")
-    incident_date: str | None = Field(default=None, description="Incident date if available")
+    incident_date: str | None = Field(
+        default=None, description="Incident date if available"
+    )
     similarity: float = Field(..., description="Similarity score between 0 and 1")
     summary: str = Field(..., description="Short operational explanation")
 
@@ -85,14 +87,17 @@ def _recency_bonus(incident_date: str | None) -> float:
     return 0.0
 
 
-def find_incident_matches(changes: list[UnifiedChange], min_similarity: float = 0.2) -> list[IncidentMatch]:
+def find_incident_matches(
+    changes: list[UnifiedChange], min_similarity: float = 0.2
+) -> list[IncidentMatch]:
     """Return incident matches ranked by simple token overlap."""
     candidates = load_incident_candidates()
     if not candidates:
         return []
 
     change_text = " ".join(
-        " ".join([change.source_file, change.tool, change.resource_id, change.summary]) for change in changes
+        " ".join([change.source_file, change.tool, change.resource_id, change.summary])
+        for change in changes
     )
     change_tokens = _tokenize(change_text)
     if not change_tokens:
@@ -116,7 +121,9 @@ def find_incident_matches(changes: list[UnifiedChange], min_similarity: float = 
         similarity = len(overlap) / max(len(union), 1)
         similarity = min(
             1.0,
-            similarity + _severity_bonus(candidate.get("severity", "unknown")) + _recency_bonus(candidate.get("incident_date")),
+            similarity
+            + _severity_bonus(candidate.get("severity", "unknown"))
+            + _recency_bonus(candidate.get("incident_date")),
         )
         if similarity < min_similarity:
             continue

@@ -50,13 +50,17 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    template_dir = Path(__file__).resolve().parent.parent / "assets" / "setup-skill-template"
+    template_dir = (
+        Path(__file__).resolve().parent.parent / "assets" / "setup-skill-template"
+    )
     setup_skill_name = f"{args.module_code}-setup"
     target = Path(args.target_dir) / setup_skill_name
 
     if not template_dir.is_dir():
         print(
-            json.dumps({"status": "error", "message": f"Template not found: {template_dir}"}),
+            json.dumps(
+                {"status": "error", "message": f"Template not found: {template_dir}"}
+            ),
             file=sys.stdout,
         )
         return 2
@@ -64,7 +68,12 @@ def main() -> int:
     for source_path in [args.module_yaml, args.module_csv]:
         if not Path(source_path).is_file():
             print(
-                json.dumps({"status": "error", "message": f"Source file not found: {source_path}"}),
+                json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Source file not found: {source_path}",
+                    }
+                ),
                 file=sys.stdout,
             )
             return 2
@@ -72,7 +81,12 @@ def main() -> int:
     target_dir = Path(args.target_dir)
     if not target_dir.is_dir():
         print(
-            json.dumps({"status": "error", "message": f"Target directory not found: {target_dir}"}),
+            json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Target directory not found: {target_dir}",
+                }
+            ),
             file=sys.stdout,
         )
         return 2

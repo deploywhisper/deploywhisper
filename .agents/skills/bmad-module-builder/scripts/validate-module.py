@@ -27,9 +27,19 @@ from pathlib import Path
 
 REQUIRED_YAML_FIELDS = {"code", "name", "description"}
 CSV_HEADER = [
-    "module", "skill", "display-name", "menu-code", "description",
-    "action", "args", "phase", "after", "before", "required",
-    "output-location", "outputs",
+    "module",
+    "skill",
+    "display-name",
+    "menu-code",
+    "description",
+    "action",
+    "args",
+    "phase",
+    "after",
+    "before",
+    "required",
+    "output-location",
+    "outputs",
 ]
 
 
@@ -53,8 +63,7 @@ def find_skill_folders(module_dir: Path, exclude_name: str = "") -> list[str]:
 def detect_standalone_module(module_dir: Path) -> Path | None:
     """Detect a standalone module: single skill folder with assets/module.yaml."""
     skill_dirs = [
-        d for d in module_dir.iterdir()
-        if d.is_dir() and (d / "SKILL.md").is_file()
+        d for d in module_dir.iterdir() if d.is_dir() and (d / "SKILL.md").is_file()
     ]
     if len(skill_dirs) == 1:
         candidate = skill_dirs[0]
@@ -91,12 +100,14 @@ def validate(module_dir: Path, verbose: bool = False) -> dict:
     info: dict = {}
 
     def finding(severity: str, category: str, message: str, detail: str = ""):
-        findings.append({
-            "severity": severity,
-            "category": category,
-            "message": message,
-            "detail": detail,
-        })
+        findings.append(
+            {
+                "severity": severity,
+                "category": category,
+                "message": message,
+                "detail": detail,
+            }
+        )
 
     # 1. Find setup skill or detect standalone module
     setup_dir = find_setup_skill(module_dir)
@@ -105,8 +116,11 @@ def validate(module_dir: Path, verbose: bool = False) -> dict:
     if not setup_dir:
         standalone_dir = detect_standalone_module(module_dir)
         if not standalone_dir:
-            finding("critical", "structure",
-                    "No setup skill found (*-setup directory) and no standalone module detected")
+            finding(
+                "critical",
+                "structure",
+                "No setup skill found (*-setup directory) and no standalone module detected",
+            )
             return {"status": "fail", "findings": findings, "info": info}
 
     # Branch: standalone vs multi-skill
@@ -159,7 +173,9 @@ def validate(module_dir: Path, verbose: bool = False) -> dict:
 
     for field in REQUIRED_YAML_FIELDS:
         if not yaml_data.get(field):
-            finding("high", "yaml", f"module.yaml missing or empty required field: {field}")
+            finding(
+                "high", "yaml", f"module.yaml missing or empty required field: {field}"
+            )
 
     # 4. Parse and validate CSV
     csv_text = (csv_dir / "assets" / "module-help.csv").read_text(encoding="utf-8")
@@ -186,8 +202,12 @@ def validate(module_dir: Path, verbose: bool = False) -> dict:
     expected_cols = len(CSV_HEADER)
     for i, row in enumerate(rows):
         if len(row) != expected_cols:
-            finding("medium", "csv-columns", f"Row {i + 2} has {len(row)} columns, expected {expected_cols}",
-                    f"skill={row.get('skill', '?')}")
+            finding(
+                "medium",
+                "csv-columns",
+                f"Row {i + 2} has {len(row)} columns, expected {expected_cols}",
+                f"skill={row.get('skill', '?')}",
+            )
 
     # 6. Collect skills from CSV and filesystem
     csv_skills = {row.get("skill", "") for row in rows}
@@ -199,7 +219,11 @@ def validate(module_dir: Path, verbose: bool = False) -> dict:
     # 7. Skills without CSV entries
     for skill in skill_folders:
         if skill not in csv_skills:
-            finding("high", "missing-entry", f"Skill '{skill}' has no capability entries in the CSV")
+            finding(
+                "high",
+                "missing-entry",
+                f"Skill '{skill}' has no capability entries in the CSV",
+            )
 
     # 8. Orphan CSV entries
     setup_name = setup_dir.name if setup_dir else ""
@@ -207,7 +231,11 @@ def validate(module_dir: Path, verbose: bool = False) -> dict:
         if skill not in skill_folders and skill != setup_name:
             # Check if it's the setup skill itself (valid)
             if not (module_dir / skill / "SKILL.md").is_file():
-                finding("high", "orphan-entry", f"CSV references skill '{skill}' which does not exist in the module folder")
+                finding(
+                    "high",
+                    "orphan-entry",
+                    f"CSV references skill '{skill}' which does not exist in the module folder",
+                )
 
     # 9. Unique menu codes
     menu_codes: dict[str, list[str]] = {}
@@ -218,7 +246,11 @@ def validate(module_dir: Path, verbose: bool = False) -> dict:
 
     for code, names in menu_codes.items():
         if len(names) > 1:
-            finding("high", "duplicate-menu-code", f"Menu code '{code}' used by multiple entries: {', '.join(names)}")
+            finding(
+                "high",
+                "duplicate-menu-code",
+                f"Menu code '{code}' used by multiple entries: {', '.join(names)}",
+            )
 
     # 10. Before/after reference validation
     # Build set of valid capability references (skill:action)
@@ -239,23 +271,34 @@ def validate(module_dir: Path, verbose: bool = False) -> dict:
             for ref in value.split(","):
                 ref = ref.strip()
                 if ref and ref not in valid_refs:
-                    finding("medium", "invalid-ref",
-                            f"'{display}' {field} references '{ref}' which is not a valid capability",
-                            "Expected format: skill-name:action-name")
+                    finding(
+                        "medium",
+                        "invalid-ref",
+                        f"'{display}' {field} references '{ref}' which is not a valid capability",
+                        "Expected format: skill-name:action-name",
+                    )
 
     # 11. Required fields in each row
     for row in rows:
         display = row.get("display-name", "?")
         for field in ("skill", "display-name", "menu-code", "description"):
             if not row.get(field, "").strip():
-                finding("high", "missing-field", f"Entry '{display}' is missing required field: {field}")
+                finding(
+                    "high",
+                    "missing-field",
+                    f"Entry '{display}' is missing required field: {field}",
+                )
 
     # Summary
     severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
     for f in findings:
         severity_counts[f["severity"]] = severity_counts.get(f["severity"], 0) + 1
 
-    status = "pass" if severity_counts["critical"] == 0 and severity_counts["high"] == 0 else "fail"
+    status = (
+        "pass"
+        if severity_counts["critical"] == 0 and severity_counts["high"] == 0
+        else "fail"
+    )
 
     return {
         "status": status,
@@ -276,12 +319,18 @@ def main() -> int:
         "module_dir",
         help="Path to the module's skills folder (containing the setup skill and other skills)",
     )
-    parser.add_argument("--verbose", action="store_true", help="Print progress to stderr")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Print progress to stderr"
+    )
     args = parser.parse_args()
 
     module_path = Path(args.module_dir)
     if not module_path.is_dir():
-        print(json.dumps({"status": "error", "message": f"Not a directory: {module_path}"}))
+        print(
+            json.dumps(
+                {"status": "error", "message": f"Not a directory: {module_path}"}
+            )
+        )
         return 2
 
     result = validate(module_path, verbose=args.verbose)

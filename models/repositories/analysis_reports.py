@@ -126,14 +126,18 @@ def count_analysis_reports(
     return int(session.execute(stmt).scalar_one())
 
 
-def count_analysis_reports_by_field(session: Session, field_name: str) -> dict[str, int]:
+def count_analysis_reports_by_field(
+    session: Session, field_name: str
+) -> dict[str, int]:
     column = getattr(AnalysisReport, field_name)
     stmt = select(column, func.count()).group_by(column)
     rows = session.execute(stmt).all()
     return {str(value): int(count) for value, count in rows if value is not None}
 
 
-def latest_active_dashboard_report(session: Session, *, now: datetime | None = None) -> AnalysisReport | None:
+def latest_active_dashboard_report(
+    session: Session, *, now: datetime | None = None
+) -> AnalysisReport | None:
     current_time = now or datetime.now(UTC)
     reports = list_analysis_reports(session)
     for report in reports:

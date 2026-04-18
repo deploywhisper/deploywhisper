@@ -5,7 +5,10 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import Any
 
-from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -19,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
-    def __init__(self, status_code: int, code: str, message: str, details: dict | None = None) -> None:
+    def __init__(
+        self, status_code: int, code: str, message: str, details: dict | None = None
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
@@ -62,7 +67,9 @@ async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
     )
 
 
-async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_error_handler(
+    _: Request, exc: RequestValidationError
+) -> JSONResponse:
     if not is_api_request(_):
         return await request_validation_exception_handler(_, exc)
 
@@ -88,11 +95,17 @@ def _http_error_code(status_code: int) -> str:
         return f"http_{status_code}"
 
 
-async def http_error_envelope_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+async def http_error_envelope_handler(
+    request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
     if not is_api_request(request):
         return await http_exception_handler(request, exc)
 
-    detail = exc.detail if isinstance(exc.detail, str) else HTTPStatus(exc.status_code).phrase
+    detail = (
+        exc.detail
+        if isinstance(exc.detail, str)
+        else HTTPStatus(exc.status_code).phrase
+    )
     details = exc.detail if isinstance(exc.detail, dict) else {}
     return build_error_response(
         status_code=exc.status_code,

@@ -157,7 +157,9 @@ cidr_blocks = ["0.0.0.0/0"]
         self.assertEqual(assessment.recommendation, "no-go")
         self.assertTrue(assessment.contributors[0].security_flags)
 
-    def test_preproduction_storage_manifest_scores_low_go_without_fake_scope(self) -> None:
+    def test_preproduction_storage_manifest_scores_low_go_without_fake_scope(
+        self,
+    ) -> None:
         assessment = score_changes(
             [
                 UnifiedChange(

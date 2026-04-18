@@ -11,7 +11,9 @@ import tempfile
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scaffold-setup-skill.py"
-TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "setup-skill-template"
+TEMPLATE_DIR = (
+    Path(__file__).resolve().parent.parent.parent / "assets" / "setup-skill-template"
+)
 
 
 def run_scaffold(tmp: Path, **kwargs) -> tuple[int, dict]:
@@ -24,23 +26,30 @@ def run_scaffold(tmp: Path, **kwargs) -> tuple[int, dict]:
 
     yaml_path = tmp / "module.yaml"
     csv_path = tmp / "module-help.csv"
-    yaml_path.write_text(kwargs.get("yaml_content", f'code: {module_code}\nname: "{module_name}"\n'))
+    yaml_path.write_text(
+        kwargs.get("yaml_content", f'code: {module_code}\nname: "{module_name}"\n')
+    )
     csv_path.write_text(
         kwargs.get(
             "csv_content",
             "module,skill,display-name,menu-code,description,action,args,phase,after,before,required,output-location,outputs\n"
-            f'{module_name},{module_code}-example,Example,EX,An example skill,do-thing,,anytime,,,false,output_folder,artifact\n',
+            f"{module_name},{module_code}-example,Example,EX,An example skill,do-thing,,anytime,,,false,output_folder,artifact\n",
         )
     )
 
     cmd = [
         sys.executable,
         str(SCRIPT),
-        "--target-dir", target_dir,
-        "--module-code", module_code,
-        "--module-name", module_name,
-        "--module-yaml", str(yaml_path),
-        "--module-csv", str(csv_path),
+        "--target-dir",
+        target_dir,
+        "--module-code",
+        module_code,
+        "--module-name",
+        module_name,
+        "--module-yaml",
+        str(yaml_path),
+        "--module-csv",
+        str(csv_path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     try:
@@ -125,7 +134,9 @@ def test_generated_files_written():
         assert "ABC Module" in yaml_content
         assert "Custom desc" in yaml_content
 
-        csv_content = (target_dir / "abc-setup" / "assets" / "module-help.csv").read_text()
+        csv_content = (
+            target_dir / "abc-setup" / "assets" / "module-help.csv"
+        ).read_text()
         assert "bmad-abc-thing" in csv_content
         assert "DT" in csv_content
 
@@ -163,11 +174,16 @@ def test_missing_target_dir():
         cmd = [
             sys.executable,
             str(SCRIPT),
-            "--target-dir", str(nonexistent),
-            "--module-code", "tst",
-            "--module-name", "Test",
-            "--module-yaml", str(yaml_path),
-            "--module-csv", str(csv_path),
+            "--target-dir",
+            str(nonexistent),
+            "--module-code",
+            "tst",
+            "--module-name",
+            "Test",
+            "--module-yaml",
+            str(yaml_path),
+            "--module-csv",
+            str(csv_path),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         assert result.returncode == 2
@@ -191,11 +207,16 @@ def test_missing_source_file():
         cmd = [
             sys.executable,
             str(SCRIPT),
-            "--target-dir", str(target_dir),
-            "--module-code", "tst",
-            "--module-name", "Test",
-            "--module-yaml", str(yaml_path),
-            "--module-csv", str(csv_path),
+            "--target-dir",
+            str(target_dir),
+            "--module-code",
+            "tst",
+            "--module-name",
+            "Test",
+            "--module-yaml",
+            str(yaml_path),
+            "--module-csv",
+            str(csv_path),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         assert result.returncode == 2

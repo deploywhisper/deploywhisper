@@ -15,8 +15,13 @@ SCRIPT = Path(__file__).resolve().parent.parent / "validate-module.py"
 CSV_HEADER = "module,skill,display-name,menu-code,description,action,args,phase,after,before,required,output-location,outputs\n"
 
 
-def create_module(tmp: Path, skills: list[str] | None = None, csv_rows: str = "",
-                  yaml_content: str = "", setup_name: str = "tst-setup") -> Path:
+def create_module(
+    tmp: Path,
+    skills: list[str] | None = None,
+    csv_rows: str = "",
+    yaml_content: str = "",
+    setup_name: str = "tst-setup",
+) -> Path:
     """Create a minimal module structure for testing."""
     module_dir = tmp / "module"
     module_dir.mkdir()
@@ -32,7 +37,7 @@ def create_module(tmp: Path, skills: list[str] | None = None, csv_rows: str = ""
     (setup / "assets" / "module-help.csv").write_text(CSV_HEADER + csv_rows)
 
     # Other skills
-    for skill in (skills or []):
+    for skill in skills or []:
         skill_dir = module_dir / skill
         skill_dir.mkdir()
         (skill_dir / "SKILL.md").write_text(f"---\nname: {skill}\n---\n# {skill}\n")
@@ -44,7 +49,8 @@ def run_validate(module_dir: Path) -> tuple[int, dict]:
     """Run the validation script and return (exit_code, parsed_json)."""
     result = subprocess.run(
         [sys.executable, str(SCRIPT), str(module_dir)],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     try:
         data = json.loads(result.stdout)
@@ -57,7 +63,7 @@ def test_valid_module():
     """A well-formed module should pass."""
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        csv_rows = 'Test Module,tst-foo,Do Foo,DF,Does the foo thing,run,,anytime,,,false,output_folder,report\n'
+        csv_rows = "Test Module,tst-foo,Do Foo,DF,Does the foo thing,run,,anytime,,,false,output_folder,report\n"
         module_dir = create_module(tmp, skills=["tst-foo"], csv_rows=csv_rows)
 
         code, data = run_validate(module_dir)
@@ -85,8 +91,11 @@ def test_missing_csv_entry():
     """Skill without a CSV entry should be flagged."""
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        module_dir = create_module(tmp, skills=["tst-foo", "tst-bar"],
-                                   csv_rows='Test Module,tst-foo,Do Foo,DF,Does foo,run,,anytime,,,false,output_folder,report\n')
+        module_dir = create_module(
+            tmp,
+            skills=["tst-foo", "tst-bar"],
+            csv_rows="Test Module,tst-foo,Do Foo,DF,Does foo,run,,anytime,,,false,output_folder,report\n",
+        )
 
         code, data = run_validate(module_dir)
         assert code == 1
@@ -99,7 +108,7 @@ def test_orphan_csv_entry():
     """CSV entry for nonexistent skill should be flagged."""
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        csv_rows = 'Test Module,tst-ghost,Ghost,GH,Does not exist,run,,anytime,,,false,output_folder,report\n'
+        csv_rows = "Test Module,tst-ghost,Ghost,GH,Does not exist,run,,anytime,,,false,output_folder,report\n"
         module_dir = create_module(tmp, skills=[], csv_rows=csv_rows)
 
         code, data = run_validate(module_dir)
@@ -113,8 +122,8 @@ def test_duplicate_menu_codes():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         csv_rows = (
-            'Test Module,tst-foo,Do Foo,DF,Does foo,run,,anytime,,,false,output_folder,report\n'
-            'Test Module,tst-foo,Also Foo,DF,Also does foo,other,,anytime,,,false,output_folder,report\n'
+            "Test Module,tst-foo,Do Foo,DF,Does foo,run,,anytime,,,false,output_folder,report\n"
+            "Test Module,tst-foo,Also Foo,DF,Also does foo,other,,anytime,,,false,output_folder,report\n"
         )
         module_dir = create_module(tmp, skills=["tst-foo"], csv_rows=csv_rows)
 
@@ -128,7 +137,7 @@ def test_invalid_before_after_ref():
     """Before/after references to nonexistent capabilities should be flagged."""
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        csv_rows = 'Test Module,tst-foo,Do Foo,DF,Does foo,run,,anytime,tst-ghost:phantom,,false,output_folder,report\n'
+        csv_rows = "Test Module,tst-foo,Do Foo,DF,Does foo,run,,anytime,tst-ghost:phantom,,false,output_folder,report\n"
         module_dir = create_module(tmp, skills=["tst-foo"], csv_rows=csv_rows)
 
         code, data = run_validate(module_dir)
@@ -141,9 +150,10 @@ def test_missing_yaml_fields():
     """module.yaml with missing required fields should be flagged."""
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        csv_rows = 'Test Module,tst-foo,Do Foo,DF,Does foo,run,,anytime,,,false,output_folder,report\n'
-        module_dir = create_module(tmp, skills=["tst-foo"], csv_rows=csv_rows,
-                                   yaml_content='code: tst\n')
+        csv_rows = "Test Module,tst-foo,Do Foo,DF,Does foo,run,,anytime,,,false,output_folder,report\n"
+        module_dir = create_module(
+            tmp, skills=["tst-foo"], csv_rows=csv_rows, yaml_content="code: tst\n"
+        )
 
         code, data = run_validate(module_dir)
         yaml_findings = [f for f in data["findings"] if f["category"] == "yaml"]
@@ -162,10 +172,14 @@ def test_empty_csv():
         assert len(empty) == 1
 
 
-def create_standalone_module(tmp: Path, skill_name: str = "my-skill",
-                             csv_rows: str = "", yaml_content: str = "",
-                             include_setup_md: bool = True,
-                             include_merge_scripts: bool = True) -> Path:
+def create_standalone_module(
+    tmp: Path,
+    skill_name: str = "my-skill",
+    csv_rows: str = "",
+    yaml_content: str = "",
+    include_setup_md: bool = True,
+    include_merge_scripts: bool = True,
+) -> Path:
     """Create a minimal standalone module structure for testing."""
     module_dir = tmp / "module"
     module_dir.mkdir()
@@ -177,14 +191,17 @@ def create_standalone_module(tmp: Path, skill_name: str = "my-skill",
     assets = skill / "assets"
     assets.mkdir()
     (assets / "module.yaml").write_text(
-        yaml_content or 'code: tst\nname: "Test Module"\ndescription: "A standalone test module"\n'
+        yaml_content
+        or 'code: tst\nname: "Test Module"\ndescription: "A standalone test module"\n'
     )
     if not csv_rows:
-        csv_rows = f'Test Module,{skill_name},Do Thing,DT,Does the thing,run,,anytime,,,false,output_folder,artifact\n'
+        csv_rows = f"Test Module,{skill_name},Do Thing,DT,Does the thing,run,,anytime,,,false,output_folder,artifact\n"
     (assets / "module-help.csv").write_text(CSV_HEADER + csv_rows)
 
     if include_setup_md:
-        (assets / "module-setup.md").write_text("# Module Setup\nStandalone registration.\n")
+        (assets / "module-setup.md").write_text(
+            "# Module Setup\nStandalone registration.\n"
+        )
 
     if include_merge_scripts:
         scripts = skill / "scripts"
@@ -216,7 +233,9 @@ def test_standalone_missing_module_setup_md():
 
         code, data = run_validate(module_dir)
         assert code == 1
-        structure_findings = [f for f in data["findings"] if f["category"] == "structure"]
+        structure_findings = [
+            f for f in data["findings"] if f["category"] == "structure"
+        ]
         assert any("module-setup.md" in f["message"] for f in structure_findings)
 
 
@@ -228,7 +247,9 @@ def test_standalone_missing_merge_scripts():
 
         code, data = run_validate(module_dir)
         assert code == 1
-        structure_findings = [f for f in data["findings"] if f["category"] == "structure"]
+        structure_findings = [
+            f for f in data["findings"] if f["category"] == "structure"
+        ]
         assert any("merge-config.py" in f["message"] for f in structure_findings)
 
 
@@ -238,8 +259,8 @@ def test_standalone_csv_validation():
         tmp = Path(tmp)
         # Duplicate menu codes
         csv_rows = (
-            'Test Module,my-skill,Do Thing,DT,Does thing,run,,anytime,,,false,output_folder,artifact\n'
-            'Test Module,my-skill,Also Thing,DT,Also does thing,other,,anytime,,,false,output_folder,report\n'
+            "Test Module,my-skill,Do Thing,DT,Does thing,run,,anytime,,,false,output_folder,artifact\n"
+            "Test Module,my-skill,Also Thing,DT,Also does thing,other,,anytime,,,false,output_folder,report\n"
         )
         module_dir = create_standalone_module(tmp, csv_rows=csv_rows)
 
@@ -261,7 +282,9 @@ def test_multi_skill_not_detected_as_standalone():
             skill.mkdir()
             (skill / "SKILL.md").write_text(f"---\nname: {name}\n---\n")
             (skill / "assets").mkdir()
-            (skill / "assets" / "module.yaml").write_text(f'code: tst\nname: "Test"\ndescription: "Test"\n')
+            (skill / "assets" / "module.yaml").write_text(
+                'code: tst\nname: "Test"\ndescription: "Test"\n'
+            )
 
         code, data = run_validate(module_dir)
         assert code == 1
@@ -273,7 +296,8 @@ def test_nonexistent_directory():
     """Nonexistent path should return error."""
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "/nonexistent/path"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 2
     data = json.loads(result.stdout)

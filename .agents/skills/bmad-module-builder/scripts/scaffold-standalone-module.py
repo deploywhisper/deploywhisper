@@ -46,44 +46,55 @@ def main() -> int:
     args = parser.parse_args()
 
     template_dir = (
-        Path(__file__).resolve().parent.parent
-        / "assets"
-        / "standalone-module-template"
+        Path(__file__).resolve().parent.parent / "assets" / "standalone-module-template"
     )
     skill_dir = Path(args.skill_dir).resolve()
     marketplace_dir = (
-        Path(args.marketplace_dir).resolve() if args.marketplace_dir else skill_dir.parent
+        Path(args.marketplace_dir).resolve()
+        if args.marketplace_dir
+        else skill_dir.parent
     )
 
     # --- Validation ---
 
     if not template_dir.is_dir():
         print(
-            json.dumps({"status": "error", "message": f"Template not found: {template_dir}"}),
+            json.dumps(
+                {"status": "error", "message": f"Template not found: {template_dir}"}
+            ),
             file=sys.stdout,
         )
         return 2
 
     if not skill_dir.is_dir():
         print(
-            json.dumps({"status": "error", "message": f"Skill directory not found: {skill_dir}"}),
+            json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Skill directory not found: {skill_dir}",
+                }
+            ),
             file=sys.stdout,
         )
         return 2
 
     if not (skill_dir / "SKILL.md").is_file():
         print(
-            json.dumps({"status": "error", "message": f"No SKILL.md found in {skill_dir}"}),
+            json.dumps(
+                {"status": "error", "message": f"No SKILL.md found in {skill_dir}"}
+            ),
             file=sys.stdout,
         )
         return 2
 
     if not (skill_dir / "assets" / "module.yaml").is_file():
         print(
-            json.dumps({
-                "status": "error",
-                "message": f"assets/module.yaml not found in {skill_dir} — the LLM must write it before running this script",
-            }),
+            json.dumps(
+                {
+                    "status": "error",
+                    "message": f"assets/module.yaml not found in {skill_dir} — the LLM must write it before running this script",
+                }
+            ),
             file=sys.stdout,
         )
         return 2
@@ -138,7 +149,9 @@ def main() -> int:
         for line in yaml_text.splitlines():
             stripped = line.strip()
             if stripped.startswith("description:"):
-                module_description = stripped.split(":", 1)[1].strip().strip('"').strip("'")
+                module_description = (
+                    stripped.split(":", 1)[1].strip().strip('"').strip("'")
+                )
             elif stripped.startswith("module_version:"):
                 module_version = stripped.split(":", 1)[1].strip().strip('"').strip("'")
     except Exception:

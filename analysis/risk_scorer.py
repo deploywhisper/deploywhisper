@@ -58,26 +58,51 @@ class RiskContributor(BaseModel):
     action: str = Field(..., description="Change action")
     contribution: int = Field(..., description="Contribution to the final score")
     summary: str = Field(..., description="Human-readable explanation")
-    normalized_action: str = Field(default="modify", description="Normalized lifecycle action")
-    resource_category: str = Field(default="generic infrastructure", description="Resource blast-radius category")
-    blast_radius: str = Field(default="unknown", description="Plain-English blast-radius summary")
-    downstream_scope: int | None = Field(default=None, description="Approximate downstream service/resource count")
-    security_flags: list[str] = Field(default_factory=list, description="Detected security-sensitive findings")
-    environment: str = Field(default="unknown", description="Inferred target environment")
-    severity: RiskSeverity = Field(default="medium", description="Per-change severity classification")
-    reasoning: str = Field(default="", description="Explicit explanation for this change score")
+    normalized_action: str = Field(
+        default="modify", description="Normalized lifecycle action"
+    )
+    resource_category: str = Field(
+        default="generic infrastructure", description="Resource blast-radius category"
+    )
+    blast_radius: str = Field(
+        default="unknown", description="Plain-English blast-radius summary"
+    )
+    downstream_scope: int | None = Field(
+        default=None, description="Approximate downstream service/resource count"
+    )
+    security_flags: list[str] = Field(
+        default_factory=list, description="Detected security-sensitive findings"
+    )
+    environment: str = Field(
+        default="unknown", description="Inferred target environment"
+    )
+    severity: RiskSeverity = Field(
+        default="medium", description="Per-change severity classification"
+    )
+    reasoning: str = Field(
+        default="", description="Explicit explanation for this change score"
+    )
 
 
 class RiskAssessment(BaseModel):
     score: int = Field(..., description="Overall bounded risk score")
     severity: RiskSeverity = Field(..., description="Severity classification")
-    recommendation: DeployRecommendation = Field(..., description="Advisory recommendation")
+    recommendation: DeployRecommendation = Field(
+        ..., description="Advisory recommendation"
+    )
     top_risk: str = Field(..., description="Most important risk summary")
-    contributors: list[RiskContributor] = Field(default_factory=list, description="Score contributors")
-    interaction_risks: list[InteractionRisk] = Field(default_factory=list, description="Cross-tool interaction findings")
+    contributors: list[RiskContributor] = Field(
+        default_factory=list, description="Score contributors"
+    )
+    interaction_risks: list[InteractionRisk] = Field(
+        default_factory=list, description="Cross-tool interaction findings"
+    )
     partial_context: bool = Field(..., description="Whether some files failed to parse")
     warnings: list[str] = Field(default_factory=list, description="Assessment warnings")
-    source: Literal["heuristic-only", "heuristic+llm"] = Field(default="heuristic-only", description="Whether the structured risk assessment was heuristic-only or LLM-assisted")
+    source: Literal["heuristic-only", "heuristic+llm"] = Field(
+        default="heuristic-only",
+        description="Whether the structured risk assessment was heuristic-only or LLM-assisted",
+    )
 
 
 def _normalize_action(action: str) -> str:
@@ -143,33 +168,97 @@ def _resource_category(change: UnifiedChange) -> str:
             "resourcequota": "workload-support",
         }
         return kind_map.get(kind, "generic infrastructure")
-    if any(token in identifier for token in ("security_group", "vpc", "subnet", "ingress", "load_balancer", "alb", "route53", "gateway")):
+    if any(
+        token in identifier
+        for token in (
+            "security_group",
+            "vpc",
+            "subnet",
+            "ingress",
+            "load_balancer",
+            "alb",
+            "route53",
+            "gateway",
+        )
+    ):
         return "networking/ingress"
     if identifier.startswith("namespace/") or " namespace " in summary:
         return "namespace"
-    if any(token in identifier for token in ("iam_", "clusterrole", "rolebinding", "serviceaccount", "rbac")):
+    if any(
+        token in identifier
+        for token in ("iam_", "clusterrole", "rolebinding", "serviceaccount", "rbac")
+    ):
         return "iam/rbac"
-    if any(token in identifier for token in ("storageclass", "persistentvolume", "persistentvolumeclaim", "db_instance", "efs", "rds", "csi")):
+    if any(
+        token in identifier
+        for token in (
+            "storageclass",
+            "persistentvolume",
+            "persistentvolumeclaim",
+            "db_instance",
+            "efs",
+            "rds",
+            "csi",
+        )
+    ):
         return "storage"
-    if any(token in identifier for token in ("configmap", "secret", "addon", "helm_release", "eks_addon")):
+    if any(
+        token in identifier
+        for token in ("configmap", "secret", "addon", "helm_release", "eks_addon")
+    ):
         return "addon/config"
     if "label" in identifier or "annotation" in identifier:
         return "labels/annotations"
-    if any(token in identifier for token in ("deployment/", "statefulset/", "daemonset/", "eks_cluster", "node_group", "ecs_service")):
+    if any(
+        token in identifier
+        for token in (
+            "deployment/",
+            "statefulset/",
+            "daemonset/",
+            "eks_cluster",
+            "node_group",
+            "ecs_service",
+        )
+    ):
         return "compute/workload"
-    if any(token in identifier for token in ("bucket", "queue", "topic", "database", "redis", "cache", "resource/")):
+    if any(
+        token in identifier
+        for token in (
+            "bucket",
+            "queue",
+            "topic",
+            "database",
+            "redis",
+            "cache",
+            "resource/",
+        )
+    ):
         return "data/service"
     if change.tool == "jenkins":
         return "pipeline/automation"
     return "generic infrastructure"
 
 
-def _environment(change: UnifiedChange, raw_files: dict[str, bytes | None] | None = None) -> str:
+def _environment(
+    change: UnifiedChange, raw_files: dict[str, bytes | None] | None = None
+) -> str:
     raw_content = raw_files.get(change.source_file) if raw_files else None
     content_text = raw_content.decode("utf-8", errors="ignore") if raw_content else ""
-    text = " ".join([change.source_file, change.resource_id, change.summary, content_text]).lower()
+    text = " ".join(
+        [change.source_file, change.resource_id, change.summary, content_text]
+    ).lower()
     ordered_patterns = [
-        ("preproduction", [r"\bpreproduction\b", r"\bpre-production\b", r"\bpreprod\b", r"\bpre-prod\b", r"\bnonprod\b", r"\bnon-prod\b"]),
+        (
+            "preproduction",
+            [
+                r"\bpreproduction\b",
+                r"\bpre-production\b",
+                r"\bpreprod\b",
+                r"\bpre-prod\b",
+                r"\bnonprod\b",
+                r"\bnon-prod\b",
+            ],
+        ),
         ("staging", [r"\bstaging\b", r"\bstg\b"]),
         ("development", [r"\bdevelopment\b", r"\bdev\b", r"\bsandbox\b", r"\btest\b"]),
         ("qa", [r"\bqa\b"]),
@@ -182,7 +271,9 @@ def _environment(change: UnifiedChange, raw_files: dict[str, bytes | None] | Non
     return "unknown"
 
 
-def _resource_to_services(topology: dict | None) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+def _resource_to_services(
+    topology: dict | None,
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     if not topology or not isinstance(topology, dict):
         return {}, {}
     services = topology.get("services", [])
@@ -194,7 +285,11 @@ def _resource_to_services(topology: dict | None) -> tuple[dict[str, list[str]], 
         service_id = str(service.get("id", "")).strip()
         if not service_id:
             continue
-        graph[service_id] = [str(target).strip() for target in service.get("downstream", []) if str(target).strip()]
+        graph[service_id] = [
+            str(target).strip()
+            for target in service.get("downstream", [])
+            if str(target).strip()
+        ]
         for resource_key in service.get("resource_keys", []):
             resource_map.setdefault(str(resource_key), []).append(service_id)
     return resource_map, graph
@@ -217,13 +312,20 @@ def _downstream_scope(change: UnifiedChange, topology: dict | None) -> int | Non
     return None
 
 
-def _security_flags(change: UnifiedChange, raw_files: dict[str, bytes | None] | None = None) -> list[str]:
+def _security_flags(
+    change: UnifiedChange, raw_files: dict[str, bytes | None] | None = None
+) -> list[str]:
     raw_content = raw_files.get(change.source_file) if raw_files else None
     text = raw_content.decode("utf-8", errors="ignore").lower() if raw_content else ""
     flags: list[str] = []
-    if "amazons3fullaccess" in text and any(token in change.resource_id.lower() for token in ("iam", "node_group", "role", "policy")):
+    if "amazons3fullaccess" in text and any(
+        token in change.resource_id.lower()
+        for token in ("iam", "node_group", "role", "policy")
+    ):
         flags.append("Overly permissive IAM policy detected (AmazonS3FullAccess).")
-    if re.search(r"(endpoint_public_access|publicaccess|public_access)\s*[:=]\s*(true|yes)", text):
+    if re.search(
+        r"(endpoint_public_access|publicaccess|public_access)\s*[:=]\s*(true|yes)", text
+    ):
         flags.append("Public endpoint access enabled.")
     if re.search(r"(kms|encryption).{0,40}(false|disabled)", text):
         flags.append("KMS encryption appears disabled.")
@@ -231,15 +333,29 @@ def _security_flags(change: UnifiedChange, raw_files: dict[str, bytes | None] | 
         flags.append("Operational logging appears disabled.")
     open_sg = (
         ("protocol" in text and "-1" in text and "0.0.0.0/0" in text)
-        or ("from_port" in text and "0" in text and "to_port" in text and "0" in text and "0.0.0.0/0" in text)
-        or ("cidrip: 0.0.0.0/0" in text and ("securitygroupingress" in text or "security group" in change.summary.lower()))
+        or (
+            "from_port" in text
+            and "0" in text
+            and "to_port" in text
+            and "0" in text
+            and "0.0.0.0/0" in text
+        )
+        or (
+            "cidrip: 0.0.0.0/0" in text
+            and (
+                "securitygroupingress" in text
+                or "security group" in change.summary.lower()
+            )
+        )
     )
     if open_sg:
         flags.append("Open security group rule detected (protocol -1 / 0.0.0.0/0).")
     return flags
 
 
-def _blast_radius_text(category: str, downstream_scope: int | None, normalized_action: str) -> str:
+def _blast_radius_text(
+    category: str, downstream_scope: int | None, normalized_action: str
+) -> str:
     if downstream_scope is None:
         if normalized_action == "apply":
             return "unknown downstream impact — standalone manifest without cluster context"
@@ -260,7 +376,9 @@ def _heuristic_reasoning(change: UnifiedChange, contributor: RiskContributor) ->
         f"targeting {contributor.environment}.",
     ]
     if contributor.downstream_scope is not None:
-        parts.append(f"It may affect {contributor.downstream_scope} downstream service(s) or resource groups.")
+        parts.append(
+            f"It may affect {contributor.downstream_scope} downstream service(s) or resource groups."
+        )
     else:
         parts.append(contributor.blast_radius + ".")
     if contributor.security_flags:
@@ -268,17 +386,27 @@ def _heuristic_reasoning(change: UnifiedChange, contributor: RiskContributor) ->
     return " ".join(parts)
 
 
-def _heuristic_severity(change: UnifiedChange, contributor: RiskContributor) -> RiskSeverity:
+def _heuristic_severity(
+    change: UnifiedChange, contributor: RiskContributor
+) -> RiskSeverity:
     if contributor.normalized_action == "apply":
         if contributor.security_flags:
             return "high" if len(contributor.security_flags) == 1 else "critical"
-        if contributor.resource_category in {"namespace", "iam/rbac"} and contributor.environment == "production":
+        if (
+            contributor.resource_category in {"namespace", "iam/rbac"}
+            and contributor.environment == "production"
+        ):
             return "medium"
-        if contributor.resource_category == "networking/ingress" and contributor.environment == "production":
+        if (
+            contributor.resource_category == "networking/ingress"
+            and contributor.environment == "production"
+        ):
             return "medium"
         return "low"
     severity = ACTION_BASE_SEVERITY[contributor.normalized_action]
-    severity = _severity_max(severity, CATEGORY_BASE_SEVERITY[contributor.resource_category])
+    severity = _severity_max(
+        severity, CATEGORY_BASE_SEVERITY[contributor.resource_category]
+    )
     if contributor.normalized_action == "destroy" and contributor.resource_category in {
         "networking/ingress",
         "namespace",
@@ -286,7 +414,10 @@ def _heuristic_severity(change: UnifiedChange, contributor: RiskContributor) -> 
         "data/service",
     }:
         severity = "critical"
-    if contributor.environment == "production" and contributor.normalized_action in {"modify", "destroy"}:
+    if contributor.environment == "production" and contributor.normalized_action in {
+        "modify",
+        "destroy",
+    }:
         severity = _raise_severity(severity)
     if contributor.downstream_scope is not None and contributor.downstream_scope >= 5:
         severity = _raise_severity(severity)
@@ -297,7 +428,12 @@ def _heuristic_severity(change: UnifiedChange, contributor: RiskContributor) -> 
     return severity
 
 
-def _build_contributor(change: UnifiedChange, *, topology: dict | None = None, raw_files: dict[str, bytes | None] | None = None) -> RiskContributor:
+def _build_contributor(
+    change: UnifiedChange,
+    *,
+    topology: dict | None = None,
+    raw_files: dict[str, bytes | None] | None = None,
+) -> RiskContributor:
     normalized_action = _normalize_action(change.action)
     resource_category = _resource_category(change)
     downstream_scope = _downstream_scope(change, topology)
@@ -312,7 +448,9 @@ def _build_contributor(change: UnifiedChange, *, topology: dict | None = None, r
         summary=change.summary,
         normalized_action=normalized_action,
         resource_category=resource_category,
-        blast_radius=_blast_radius_text(resource_category, downstream_scope, normalized_action),
+        blast_radius=_blast_radius_text(
+            resource_category, downstream_scope, normalized_action
+        ),
         downstream_scope=downstream_scope,
         security_flags=security_flags,
         environment=environment,
@@ -322,15 +460,27 @@ def _build_contributor(change: UnifiedChange, *, topology: dict | None = None, r
     draft.contribution = min(
         100,
         SEVERITY_SCORE[draft.severity]
-        + (min(draft.downstream_scope * 3, 12) if draft.downstream_scope is not None else 0)
-        + (8 if draft.environment == "production" and draft.normalized_action != "create" else 0)
+        + (
+            min(draft.downstream_scope * 3, 12)
+            if draft.downstream_scope is not None
+            else 0
+        )
+        + (
+            8
+            if draft.environment == "production" and draft.normalized_action != "create"
+            else 0
+        )
         + min(len(draft.security_flags) * 10, 20),
     )
     return draft
 
 
 def _sanitize_scope_claims(text: str, contributors: list[RiskContributor]) -> str:
-    allowed_scopes = {contributor.downstream_scope for contributor in contributors if contributor.downstream_scope is not None}
+    allowed_scopes = {
+        contributor.downstream_scope
+        for contributor in contributors
+        if contributor.downstream_scope is not None
+    }
 
     def replace_numeric_scope(match: re.Match[str]) -> str:
         number = int(match.group("count"))
@@ -357,7 +507,9 @@ def _sanitize_scope_claims(text: str, contributors: list[RiskContributor]) -> st
     return sanitized
 
 
-def _assessment_prompt_payload(contributors: list[RiskContributor], partial_context: bool) -> str:
+def _assessment_prompt_payload(
+    contributors: list[RiskContributor], partial_context: bool
+) -> str:
     payload = {
         "policy": {
             "go_rule": "GO only when every change is Low or Medium and there are no security flags.",
@@ -403,7 +555,10 @@ def _apply_llm_scores(
     try:
         prompt_messages = [
             {"role": "system", "content": _assessment_system_prompt()},
-            {"role": "user", "content": _assessment_prompt_payload(contributors, partial_context)},
+            {
+                "role": "user",
+                "content": _assessment_prompt_payload(contributors, partial_context),
+            },
         ]
         raw_response = generate_completion_with_settings(
             prompt_messages,
@@ -416,9 +571,17 @@ def _apply_llm_scores(
         )
         payload = json.loads(raw_response)
     except Exception as exc:  # noqa: BLE001
-        return contributors, f"LLM severity assessment unavailable; falling back to heuristic matrix: {exc}", False
+        return (
+            contributors,
+            f"LLM severity assessment unavailable; falling back to heuristic matrix: {exc}",
+            False,
+        )
 
-    by_key = {(item["source_file"], item["resource_id"]): item for item in payload.get("change_scores", []) if isinstance(item, dict)}
+    by_key = {
+        (item["source_file"], item["resource_id"]): item
+        for item in payload.get("change_scores", [])
+        if isinstance(item, dict)
+    }
     updated: list[RiskContributor] = []
     for contributor in contributors:
         llm_item = by_key.get((contributor.source_file, contributor.resource_id))
@@ -430,18 +593,26 @@ def _apply_llm_scores(
             updated.append(contributor)
             continue
         contributor.severity = severity  # type: ignore[assignment]
-        contributor.reasoning = _sanitize_scope_claims(str(llm_item.get("reasoning", contributor.reasoning)), [contributor])
+        contributor.reasoning = _sanitize_scope_claims(
+            str(llm_item.get("reasoning", contributor.reasoning)), [contributor]
+        )
         contributor.contribution = min(
             100,
             SEVERITY_SCORE[contributor.severity]
-            + (min(contributor.downstream_scope * 3, 12) if contributor.downstream_scope is not None else 0)
+            + (
+                min(contributor.downstream_scope * 3, 12)
+                if contributor.downstream_scope is not None
+                else 0
+            )
             + min(len(contributor.security_flags) * 10, 20),
         )
         updated.append(contributor)
     return updated, None, True
 
 
-def _build_top_risk(contributors: list[RiskContributor], interaction_risks: list[InteractionRisk]) -> str:
+def _build_top_risk(
+    contributors: list[RiskContributor], interaction_risks: list[InteractionRisk]
+) -> str:
     if interaction_risks:
         return interaction_risks[0].summary
     if not contributors:
@@ -450,17 +621,26 @@ def _build_top_risk(contributors: list[RiskContributor], interaction_risks: list
     return f"{top.severity.upper()}: {top.resource_id} — {top.reasoning}"
 
 
-def _overall_recommendation(contributors: list[RiskContributor]) -> DeployRecommendation:
+def _overall_recommendation(
+    contributors: list[RiskContributor],
+) -> DeployRecommendation:
     if any(contributor.security_flags for contributor in contributors):
         return "no-go"
-    highest = max((SEVERITY_ORDER[contributor.severity] for contributor in contributors), default=1)
+    highest = max(
+        (SEVERITY_ORDER[contributor.severity] for contributor in contributors),
+        default=1,
+    )
     return "go" if highest <= SEVERITY_ORDER["medium"] else "no-go"
 
 
-def _overall_score(contributors: list[RiskContributor], interaction_risks: list[InteractionRisk]) -> int:
+def _overall_score(
+    contributors: list[RiskContributor], interaction_risks: list[InteractionRisk]
+) -> int:
     if not contributors:
         return 0
-    ranked = sorted(contributors, key=lambda contributor: contributor.contribution, reverse=True)
+    ranked = sorted(
+        contributors, key=lambda contributor: contributor.contribution, reverse=True
+    )
     highest = ranked[0].contribution
     secondary = 0.0
     for contributor in ranked[1:]:
@@ -470,8 +650,19 @@ def _overall_score(contributors: list[RiskContributor], interaction_risks: list[
             secondary += contributor.contribution * 0.12
         else:
             secondary += contributor.contribution * 0.03
-    cascading_bonus = 12 if sum(1 for contributor in contributors if contributor.severity in {"high", "critical"}) >= 2 else 0
-    interaction_bonus = min(sum(item.contribution_bonus for item in interaction_risks), 12)
+    cascading_bonus = (
+        12
+        if sum(
+            1
+            for contributor in contributors
+            if contributor.severity in {"high", "critical"}
+        )
+        >= 2
+        else 0
+    )
+    interaction_bonus = min(
+        sum(item.contribution_bonus for item in interaction_risks), 12
+    )
     return min(100, round(highest + secondary + cascading_bonus + interaction_bonus))
 
 
@@ -492,11 +683,19 @@ def score_changes(
         partial_context=partial_context,
         completion_client=completion_client,
     )
-    contributors.sort(key=lambda contributor: (SEVERITY_ORDER[contributor.severity], contributor.contribution), reverse=True)
+    contributors.sort(
+        key=lambda contributor: (
+            SEVERITY_ORDER[contributor.severity],
+            contributor.contribution,
+        ),
+        reverse=True,
+    )
     interaction_risks = detect_interaction_risks(changes)
     warnings: list[str] = []
     if partial_context:
-        warnings.append("Analysis used partial context because one or more files failed to parse.")
+        warnings.append(
+            "Analysis used partial context because one or more files failed to parse."
+        )
     if llm_warning:
         warnings.append(llm_warning)
 

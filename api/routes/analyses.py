@@ -14,16 +14,26 @@ from api.schemas import (
     build_analysis_run_data,
     build_meta,
 )
-from services.analysis_service import analyze_uploaded_files, build_advisory_summary, build_share_summary
-from services.intake_service import MAX_TOTAL_UPLOAD_BYTES, build_pending_analysis, total_upload_bytes, uniquify_artifact_names
-from services.report_service import fetch_analysis_report, fetch_filtered_analysis_history
+from services.analysis_service import (
+    analyze_uploaded_files,
+    build_advisory_summary,
+    build_share_summary,
+)
+from services.intake_service import (
+    MAX_TOTAL_UPLOAD_BYTES,
+    build_pending_analysis,
+    uniquify_artifact_names,
+)
+from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
 
 
-async def _read_upload_files_with_limit(files: list[UploadFile]) -> list[tuple[str, bytes]]:
+async def _read_upload_files_with_limit(
+    files: list[UploadFile],
+) -> list[tuple[str, bytes]]:
     remaining = MAX_TOTAL_UPLOAD_BYTES
     buffered: list[tuple[str, bytes]] = []
 
@@ -92,8 +102,12 @@ def list_analyses(
     },
 )
 async def create_analysis(
-    files: list[UploadFile] | None = File(default=None, description="Supported deployment artifacts to analyze."),
-    trigger_type: str | None = Header(default=None, alias="X-DeployWhisper-Trigger-Type"),
+    files: list[UploadFile] | None = File(
+        default=None, description="Supported deployment artifacts to analyze."
+    ),
+    trigger_type: str | None = Header(
+        default=None, alias="X-DeployWhisper-Trigger-Type"
+    ),
     trigger_id: str | None = Header(default=None, alias="X-DeployWhisper-Trigger-Id"),
 ) -> AnalysisRunResponse:
     if not files:
@@ -157,7 +171,11 @@ async def create_analysis(
 def get_analysis(report_id: int) -> AnalysisDetailResponse:
     report = fetch_analysis_report(report_id)
     if report is None:
-        raise ApiError(status_code=404, code="analysis_not_found", message="Analysis report not found.")
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
     return AnalysisDetailResponse(
         data=AnalysisReportData(**report),
         meta=build_meta(id=report_id),

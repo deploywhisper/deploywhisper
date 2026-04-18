@@ -28,12 +28,18 @@ class ParsedFileResult(BaseModel):
     file_name: str = Field(..., description="Source file name")
     tool: str = Field(..., description="Detected tool")
     status: ParseStatus = Field(..., description="Parse outcome for this file")
-    changes: list[UnifiedChange] = Field(default_factory=list, description="Normalized changes")
-    issue: ParseIssue | None = Field(default=None, description="Failure context if parsing failed")
+    changes: list[UnifiedChange] = Field(
+        default_factory=list, description="Normalized changes"
+    )
+    issue: ParseIssue | None = Field(
+        default=None, description="Failure context if parsing failed"
+    )
 
 
 class ParseBatchResult(BaseModel):
-    files: list[ParsedFileResult] = Field(default_factory=list, description="Per-file parse results")
+    files: list[ParsedFileResult] = Field(
+        default_factory=list, description="Per-file parse results"
+    )
 
     @property
     def total_change_count(self) -> int:

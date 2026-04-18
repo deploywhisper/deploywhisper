@@ -93,7 +93,11 @@ class ReportServiceTests(unittest.TestCase):
             parse_batch,
             assessment,
             narrative,
-            audit_context={"source_interface": "api", "trigger_type": "session", "trigger_id": "sess-123"},
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "session",
+                "trigger_id": "sess-123",
+            },
         )
         self.assertIn("id", persisted)
         self.assertEqual(persisted["audit"]["source_interface"], "api")
@@ -122,7 +126,9 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(history[0]["id"], persisted["id"])
         self.assertEqual(history[0]["audit"]["llm_provider"], "ollama")
 
-    def test_persist_analysis_report_combines_assessment_and_narrative_warnings(self) -> None:
+    def test_persist_analysis_report_combines_assessment_and_narrative_warnings(
+        self,
+    ) -> None:
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -158,7 +164,9 @@ class ReportServiceTests(unittest.TestCase):
             ],
             interaction_risks=[],
             partial_context=True,
-            warnings=["LLM severity assessment unavailable; falling back to heuristic matrix: provider offline"],
+            warnings=[
+                "LLM severity assessment unavailable; falling back to heuristic matrix: provider offline"
+            ],
         )
         narrative = NarrativeResult(
             opening_sentence="CAUTION: review the deployment.",
@@ -173,12 +181,18 @@ class ReportServiceTests(unittest.TestCase):
             skills_applied=["git", "kubernetes"],
         )
 
-        persisted = report_service_module.persist_analysis_report(parse_batch, assessment, narrative)
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch, assessment, narrative
+        )
 
-        self.assertIn("LLM severity assessment unavailable", " ".join(persisted["warnings"]))
+        self.assertIn(
+            "LLM severity assessment unavailable", " ".join(persisted["warnings"])
+        )
         self.assertIn("Narrative provider unavailable", " ".join(persisted["warnings"]))
 
-    def test_fetch_active_dashboard_report_returns_recent_dashboard_upload(self) -> None:
+    def test_fetch_active_dashboard_report_returns_recent_dashboard_upload(
+        self,
+    ) -> None:
         settings_service_module.save_dashboard_result_display_duration_seconds(600)
         parse_batch = ParseBatchResult(
             files=[
@@ -236,10 +250,15 @@ class ReportServiceTests(unittest.TestCase):
             parse_batch,
             assessment,
             narrative,
-            audit_context={"source_interface": "ui", "trigger_type": "dashboard_upload"},
+            audit_context={
+                "source_interface": "ui",
+                "trigger_type": "dashboard_upload",
+            },
         )
 
-        active = report_service_module.fetch_active_dashboard_report(now=datetime.now(UTC) + timedelta(seconds=120))
+        active = report_service_module.fetch_active_dashboard_report(
+            now=datetime.now(UTC) + timedelta(seconds=120)
+        )
 
         self.assertIsNotNone(active)
         self.assertEqual(active["recommendation"], "no-go")

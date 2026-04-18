@@ -52,15 +52,23 @@ def build_dashboard() -> None:
                     with ui.column().classes("dw-preview gap-4 h-full justify-between"):
                         with ui.row().classes("items-start justify-between gap-4"):
                             with ui.column().classes("gap-2 min-w-0 flex-1"):
-                                ui.label("Deployment briefing").classes("dw-preview-kicker")
+                                ui.label("Deployment briefing").classes(
+                                    "dw-preview-kicker"
+                                )
                                 ui.label(
                                     "High-context risk analysis before infrastructure changes go live"
                                 ).classes("dw-preview-title")
-                            with ui.column().classes("dw-preview-score items-center justify-center text-center shrink-0"):
-                                ui.label(str(briefing["weighted_focus_score"])).classes("dw-preview-score-value")
+                            with ui.column().classes(
+                                "dw-preview-score items-center justify-center text-center shrink-0"
+                            ):
+                                ui.label(str(briefing["weighted_focus_score"])).classes(
+                                    "dw-preview-score-value"
+                                )
                                 ui.label("Risk focus").classes("dw-preview-score-label")
                         ui.label(
-                            _briefing_summary_line(briefing["saved_briefings"], briefing["high_focus"])
+                            _briefing_summary_line(
+                                briefing["saved_briefings"], briefing["high_focus"]
+                            )
                         ).classes("dw-preview-body")
                         with ui.row().classes("w-full gap-3 flex-wrap"):
                             for value, label in (
@@ -68,26 +76,48 @@ def build_dashboard() -> None:
                                 (str(briefing["saved_briefings"]), "Saved briefings"),
                                 (str(briefing["high_focus"]), "High focus"),
                             ):
-                                with ui.column().classes("dw-mini-stat flex-1 min-w-[92px]"):
-                                    ui.label(value).classes("font-semibold text-lg dw-text")
-                                    ui.label(label).classes("text-xs dw-muted uppercase tracking-[0.1em]")
+                                with ui.column().classes(
+                                    "dw-mini-stat flex-1 min-w-[92px]"
+                                ):
+                                    ui.label(value).classes(
+                                        "font-semibold text-lg dw-text"
+                                    )
+                                    ui.label(label).classes(
+                                        "text-xs dw-muted uppercase tracking-[0.1em]"
+                                    )
                         with ui.column().classes("gap-2"):
-                            ui.label(briefing["latest_summary"]).classes("text-sm dw-muted leading-6")
+                            ui.label(briefing["latest_summary"]).classes(
+                                "text-sm dw-muted leading-6"
+                            )
                             with ui.row().classes("w-full gap-1 items-center"):
                                 for _, value, color in segments:
-                                    width = max(8, round((value / total_reports) * 100)) if briefing["saved_briefings"] else 25
+                                    width = (
+                                        max(8, round((value / total_reports) * 100))
+                                        if briefing["saved_briefings"]
+                                        else 25
+                                    )
                                     ui.element("span").style(
                                         f"height: 10px; width: {width}%; border-radius: 999px; background: {color}; display: inline-block;"
                                     )
                             with ui.row().classes("w-full gap-3 flex-wrap"):
                                 for label, value, color_class in (
                                     ("Low", severity_counts["low"], "dw-success-text"),
-                                    ("Medium", severity_counts["medium"], "dw-warning-text"),
+                                    (
+                                        "Medium",
+                                        severity_counts["medium"],
+                                        "dw-warning-text",
+                                    ),
                                     ("High", severity_counts["high"], "dw-accent-text"),
-                                    ("Critical", severity_counts["critical"], "dw-danger-text"),
+                                    (
+                                        "Critical",
+                                        severity_counts["critical"],
+                                        "dw-danger-text",
+                                    ),
                                 ):
                                     with ui.row().classes("items-center gap-2"):
-                                        ui.label(label).classes(f"text-xs font-semibold uppercase tracking-[0.08em] {color_class}")
+                                        ui.label(label).classes(
+                                            f"text-xs font-semibold uppercase tracking-[0.08em] {color_class}"
+                                        )
                                         ui.label(str(value)).classes("text-xs dw-muted")
 
         def render_stats() -> None:
@@ -100,15 +130,33 @@ def build_dashboard() -> None:
                         metrics = [
                             ("Files scanned", stats["total_files_scanned"], "dw-text"),
                             ("Low", stats["severity_counts"]["low"], "dw-success-text"),
-                            ("Medium", stats["severity_counts"]["medium"], "dw-warning-text"),
-                            ("High", stats["severity_counts"]["high"], "dw-accent-text"),
-                            ("Critical", stats["severity_counts"]["critical"], "dw-danger-text"),
+                            (
+                                "Medium",
+                                stats["severity_counts"]["medium"],
+                                "dw-warning-text",
+                            ),
+                            (
+                                "High",
+                                stats["severity_counts"]["high"],
+                                "dw-accent-text",
+                            ),
+                            (
+                                "Critical",
+                                stats["severity_counts"]["critical"],
+                                "dw-danger-text",
+                            ),
                         ]
                         for label, value, color_class in metrics:
-                            with ui.card().classes("dw-panel-soft shadow-none min-w-[120px] flex-1"):
+                            with ui.card().classes(
+                                "dw-panel-soft shadow-none min-w-[120px] flex-1"
+                            ):
                                 with ui.column().classes("gap-1 p-3"):
-                                    ui.label(str(value)).classes(f"text-2xl font-semibold {color_class}")
-                                    ui.label(label).classes("text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted")
+                                    ui.label(str(value)).classes(
+                                        f"text-2xl font-semibold {color_class}"
+                                    )
+                                    ui.label(label).classes(
+                                        "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
+                                    )
 
         def refresh_dashboard() -> None:
             render_briefing()
@@ -117,7 +165,9 @@ def build_dashboard() -> None:
         stats_mount = ui.column().classes("w-full")
         with ui.row().classes("w-full items-stretch gap-5 flex-wrap"):
             with ui.column().classes("flex-1 min-w-[320px] gap-4 self-stretch"):
-                deploy_review_card = ui.card().classes("dw-panel dw-dashboard-hero shadow-none w-full p-6")
+                deploy_review_card = ui.card().classes(
+                    "dw-panel dw-dashboard-hero shadow-none w-full p-6"
+                )
                 with deploy_review_card:
                     ui.label("Deploy review").classes("dw-eyebrow")
                     ui.html(
@@ -130,7 +180,9 @@ def build_dashboard() -> None:
                         "Upload artifacts and generate one advisory briefing. One screen for verdict, blast radius, "
                         "rollback guidance, incident similarity, and a human-readable narrative before release."
                     ).classes("dw-body mt-4 max-w-3xl")
-            briefing_mount = ui.column().classes("w-full max-w-[390px] min-w-[320px] self-stretch")
+            briefing_mount = ui.column().classes(
+                "w-full max-w-[390px] min-w-[320px] self-stretch"
+            )
 
         result_mount = ui.column().classes("w-full gap-4")
 

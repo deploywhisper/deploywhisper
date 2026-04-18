@@ -15,8 +15,12 @@ def render_rollback_plan(plan: RollbackPlan) -> None:
             ui.label(plan.warning).classes("text-xs dw-warning-text")
         with ui.column().classes("w-full gap-3"):
             for step in plan.steps:
-                with ui.row().classes("w-full items-start gap-3 dw-panel-soft px-3 py-3"):
-                    ui.label(str(step.order)).classes("text-sm font-medium dw-accent-text")
+                with ui.row().classes(
+                    "w-full items-start gap-3 dw-panel-soft px-3 py-3"
+                ):
+                    ui.label(str(step.order)).classes(
+                        "text-sm font-medium dw-accent-text"
+                    )
                     with ui.column().classes("gap-1"):
                         title = step.title + (" · critical" if step.critical else "")
                         ui.label(title).classes("text-sm font-medium dw-text")

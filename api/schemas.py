@@ -32,7 +32,9 @@ class HealthResponse(BaseModel):
     meta: MetaPayload
 
 
-ToolType = Literal["terraform", "kubernetes", "ansible", "jenkins", "cloudformation", "unsupported"]
+ToolType = Literal[
+    "terraform", "kubernetes", "ansible", "jenkins", "cloudformation", "unsupported"
+]
 IntakeStatus = Literal["ready", "unsupported", "sensitive"]
 ParseStatus = Literal["parsed", "failed", "skipped"]
 RiskSeverity = Literal["low", "medium", "high", "critical"]
@@ -58,7 +60,9 @@ class PendingAnalysis(BaseModel):
 
 class CountMetaPayload(MetaPayload):
     count: int = Field(..., description="Count of returned items")
-    total_count: int | None = Field(default=None, description="Total number of matching items")
+    total_count: int | None = Field(
+        default=None, description="Total number of matching items"
+    )
     page: int | None = Field(default=None, description="Current results page")
     page_size: int | None = Field(default=None, description="Current results page size")
 
@@ -69,15 +73,24 @@ class ResourceMetaPayload(MetaPayload):
 
 class AnalysisRunMetaPayload(MetaPayload):
     api_version: str = Field(..., description="Versioned API contract identifier")
-    advisory_only: bool = Field(..., description="Whether the analysis is advisory rather than deployment-blocking")
-    submitted_artifact_count: int = Field(..., description="Number of uploaded artifacts received")
-    accepted_artifact_count: int = Field(..., description="Number of artifacts accepted for analysis")
+    advisory_only: bool = Field(
+        ...,
+        description="Whether the analysis is advisory rather than deployment-blocking",
+    )
+    submitted_artifact_count: int = Field(
+        ..., description="Number of uploaded artifacts received"
+    )
+    accepted_artifact_count: int = Field(
+        ..., description="Number of artifacts accepted for analysis"
+    )
 
 
 class ErrorPayload(BaseModel):
     code: str = Field(..., description="Stable machine-readable error code")
     message: str = Field(..., description="Human-readable error summary")
-    details: dict[str, Any] = Field(default_factory=dict, description="Optional machine-readable error details")
+    details: dict[str, Any] = Field(
+        default_factory=dict, description="Optional machine-readable error details"
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -85,13 +98,27 @@ class ErrorResponse(BaseModel):
 
 
 class AuditMetadataData(BaseModel):
-    files_analyzed: list[str] = Field(default_factory=list, description="Artifacts included in the persisted analysis")
-    llm_provider: str | None = Field(default=None, description="Narrative provider used for this analysis")
-    llm_model: str | None = Field(default=None, description="Narrative model used for this analysis")
-    llm_local_mode: bool | None = Field(default=None, description="Whether narrative generation used local-only mode")
-    source_interface: str | None = Field(default=None, description="Boundary surface that triggered the analysis")
-    trigger_type: str | None = Field(default=None, description="Trigger category when available")
-    trigger_id: str | None = Field(default=None, description="Trigger identifier when available")
+    files_analyzed: list[str] = Field(
+        default_factory=list, description="Artifacts included in the persisted analysis"
+    )
+    llm_provider: str | None = Field(
+        default=None, description="Narrative provider used for this analysis"
+    )
+    llm_model: str | None = Field(
+        default=None, description="Narrative model used for this analysis"
+    )
+    llm_local_mode: bool | None = Field(
+        default=None, description="Whether narrative generation used local-only mode"
+    )
+    source_interface: str | None = Field(
+        default=None, description="Boundary surface that triggered the analysis"
+    )
+    trigger_type: str | None = Field(
+        default=None, description="Trigger category when available"
+    )
+    trigger_id: str | None = Field(
+        default=None, description="Trigger identifier when available"
+    )
 
 
 class PersistedReportData(BaseModel):
@@ -102,7 +129,9 @@ class PersistedReportData(BaseModel):
     top_risk: str
     parse_summary: str
     narrative_opening: str
-    assessment_source: Literal["heuristic-only", "heuristic+llm"] | None = Field(default=None)
+    assessment_source: Literal["heuristic-only", "heuristic+llm"] | None = Field(
+        default=None
+    )
     narrative_source: Literal["llm", "fallback"] | None = Field(default=None)
     narrative_provider: str | None = Field(default=None)
     narrative_model: str | None = Field(default=None)
@@ -138,19 +167,29 @@ class ParsedArtifactData(BaseModel):
     file_name: str = Field(..., description="Source file name")
     tool: str = Field(..., description="Detected tool")
     status: ParseStatus = Field(..., description="Parse outcome for this file")
-    changes: list[ChangeData] = Field(default_factory=list, description="Normalized changes")
-    issue: ParseIssueData | None = Field(default=None, description="Failure context if parsing failed")
+    changes: list[ChangeData] = Field(
+        default_factory=list, description="Normalized changes"
+    )
+    issue: ParseIssueData | None = Field(
+        default=None, description="Failure context if parsing failed"
+    )
 
 
 class ParseBatchData(BaseModel):
-    files: list[ParsedArtifactData] = Field(default_factory=list, description="Per-file parse results")
+    files: list[ParsedArtifactData] = Field(
+        default_factory=list, description="Per-file parse results"
+    )
 
 
 class InteractionRiskData(BaseModel):
     key: str = Field(..., description="Stable identifier for the interaction pattern")
     summary: str = Field(..., description="User-facing explanation of the interaction")
-    contributing_files: list[str] = Field(default_factory=list, description="Files involved")
-    contributing_resources: list[str] = Field(default_factory=list, description="Resources involved")
+    contributing_files: list[str] = Field(
+        default_factory=list, description="Files involved"
+    )
+    contributing_resources: list[str] = Field(
+        default_factory=list, description="Resources involved"
+    )
     contribution_bonus: int = Field(..., description="Additional score contribution")
 
 
@@ -161,12 +200,22 @@ class RiskContributorData(BaseModel):
     action: str = Field(..., description="Change action")
     contribution: int = Field(..., description="Contribution to the final score")
     summary: str = Field(..., description="Human-readable explanation")
-    normalized_action: str = Field(default="modify", description="Normalized lifecycle action")
-    resource_category: str = Field(default="generic infrastructure", description="Resource blast-radius category")
+    normalized_action: str = Field(
+        default="modify", description="Normalized lifecycle action"
+    )
+    resource_category: str = Field(
+        default="generic infrastructure", description="Resource blast-radius category"
+    )
     blast_radius: str = Field(default="unknown", description="Blast-radius explanation")
-    downstream_scope: int | None = Field(default=None, description="Approximate downstream scope count")
-    security_flags: list[str] = Field(default_factory=list, description="Detected security-sensitive findings")
-    environment: str = Field(default="unknown", description="Inferred target environment")
+    downstream_scope: int | None = Field(
+        default=None, description="Approximate downstream scope count"
+    )
+    security_flags: list[str] = Field(
+        default_factory=list, description="Detected security-sensitive findings"
+    )
+    environment: str = Field(
+        default="unknown", description="Inferred target environment"
+    )
     severity: RiskSeverity = Field(..., description="Per-resource severity")
     reasoning: str = Field(default="", description="Per-resource scoring explanation")
 
@@ -174,13 +223,22 @@ class RiskContributorData(BaseModel):
 class AssessmentData(BaseModel):
     score: int = Field(..., description="Overall bounded risk score")
     severity: RiskSeverity = Field(..., description="Severity classification")
-    recommendation: DeployRecommendation = Field(..., description="Advisory recommendation")
+    recommendation: DeployRecommendation = Field(
+        ..., description="Advisory recommendation"
+    )
     top_risk: str = Field(..., description="Most important risk summary")
-    contributors: list[RiskContributorData] = Field(default_factory=list, description="Score contributors")
-    interaction_risks: list[InteractionRiskData] = Field(default_factory=list, description="Cross-tool interaction findings")
+    contributors: list[RiskContributorData] = Field(
+        default_factory=list, description="Score contributors"
+    )
+    interaction_risks: list[InteractionRiskData] = Field(
+        default_factory=list, description="Cross-tool interaction findings"
+    )
     partial_context: bool = Field(..., description="Whether some files failed to parse")
     warnings: list[str] = Field(default_factory=list, description="Assessment warnings")
-    source: Literal["heuristic-only", "heuristic+llm"] = Field(..., description="Whether structured risk scoring was heuristic-only or LLM-assisted")
+    source: Literal["heuristic-only", "heuristic+llm"] = Field(
+        ...,
+        description="Whether structured risk scoring was heuristic-only or LLM-assisted",
+    )
 
 
 class ImpactNodeData(BaseModel):
@@ -190,24 +248,40 @@ class ImpactNodeData(BaseModel):
 
 
 class BlastRadiusData(BaseModel):
-    affected: list[ImpactNodeData] = Field(default_factory=list, description="Affected services")
+    affected: list[ImpactNodeData] = Field(
+        default_factory=list, description="Affected services"
+    )
     direct_count: int = Field(..., description="Count of directly affected services")
-    transitive_count: int = Field(..., description="Count of transitively affected services")
-    warning: str | None = Field(default=None, description="Warning when impact may be incomplete")
-    unmatched_resources: list[str] = Field(default_factory=list, description="Resources not found in topology context")
+    transitive_count: int = Field(
+        ..., description="Count of transitively affected services"
+    )
+    warning: str | None = Field(
+        default=None, description="Warning when impact may be incomplete"
+    )
+    unmatched_resources: list[str] = Field(
+        default_factory=list, description="Resources not found in topology context"
+    )
 
 
 class RollbackStepData(BaseModel):
     order: int = Field(..., description="Execution order")
     title: str = Field(..., description="Short rollback step title")
     detail: str = Field(..., description="Operational rollback instruction")
-    critical: bool = Field(..., description="Whether this step is critical to safe recovery")
+    critical: bool = Field(
+        ..., description="Whether this step is critical to safe recovery"
+    )
 
 
 class RollbackPlanData(BaseModel):
-    steps: list[RollbackStepData] = Field(default_factory=list, description="Ordered rollback steps")
-    complexity: RollbackComplexity = Field(..., description="Rollback complexity classification")
-    warning: str | None = Field(default=None, description="Warning if context is incomplete")
+    steps: list[RollbackStepData] = Field(
+        default_factory=list, description="Ordered rollback steps"
+    )
+    complexity: RollbackComplexity = Field(
+        ..., description="Rollback complexity classification"
+    )
+    warning: str | None = Field(
+        default=None, description="Warning if context is incomplete"
+    )
 
 
 class IncidentMatchData(BaseModel):
@@ -215,45 +289,85 @@ class IncidentMatchData(BaseModel):
     title: str = Field(..., description="Incident title")
     severity: str = Field(..., description="Incident severity")
     source_file: str = Field(..., description="Incident source file")
-    incident_date: str | None = Field(default=None, description="Incident date if available")
+    incident_date: str | None = Field(
+        default=None, description="Incident date if available"
+    )
     similarity: float = Field(..., description="Similarity score between 0 and 1")
     summary: str = Field(..., description="Short operational explanation")
 
 
 class NarrativeData(BaseModel):
-    opening_sentence: str = Field(..., description="First-scan deploy briefing sentence")
+    opening_sentence: str = Field(
+        ..., description="First-scan deploy briefing sentence"
+    )
     explanation: str = Field(..., description="Extended plain-English explanation")
     guidance: list[str] = Field(default_factory=list, description="Actionable guidance")
     degraded: bool = Field(..., description="Whether fallback mode was used")
     warnings: list[str] = Field(default_factory=list, description="Narrative warnings")
-    source: Literal["llm", "fallback"] = Field(..., description="Whether the narrative was produced by the LLM or local fallback logic")
-    provider: str | None = Field(default=None, description="Provider used for narrative generation")
-    model: str | None = Field(default=None, description="Model used for narrative generation")
-    local_mode: bool | None = Field(default=None, description="Whether local-only mode was active for the narrative")
-    skills_applied: list[str] = Field(default_factory=list, description="Resolved skill names included in the narrative prompt")
+    source: Literal["llm", "fallback"] = Field(
+        ...,
+        description="Whether the narrative was produced by the LLM or local fallback logic",
+    )
+    provider: str | None = Field(
+        default=None, description="Provider used for narrative generation"
+    )
+    model: str | None = Field(
+        default=None, description="Model used for narrative generation"
+    )
+    local_mode: bool | None = Field(
+        default=None, description="Whether local-only mode was active for the narrative"
+    )
+    skills_applied: list[str] = Field(
+        default_factory=list,
+        description="Resolved skill names included in the narrative prompt",
+    )
 
 
 class AdvisorySummaryData(BaseModel):
-    advisory_only: bool = Field(..., description="Whether the output is advisory rather than blocking")
-    should_block: bool = Field(..., description="Whether DeployWhisper itself should block deployment")
-    requires_attention: bool = Field(..., description="Whether humans should provide additional review")
+    advisory_only: bool = Field(
+        ..., description="Whether the output is advisory rather than blocking"
+    )
+    should_block: bool = Field(
+        ..., description="Whether DeployWhisper itself should block deployment"
+    )
+    requires_attention: bool = Field(
+        ..., description="Whether humans should provide additional review"
+    )
     severity: RiskSeverity = Field(..., description="Shared risk severity")
-    recommendation: DeployRecommendation = Field(..., description="Shared deploy recommendation")
+    recommendation: DeployRecommendation = Field(
+        ..., description="Shared deploy recommendation"
+    )
     top_risk: str = Field(..., description="Most important shared risk summary")
-    partial_context: bool = Field(..., description="Whether parser coverage was partial")
-    narrative_degraded: bool = Field(..., description="Whether narrative generation degraded to fallback output")
-    uncertainty_flags: list[str] = Field(default_factory=list, description="Machine-readable uncertainty indicators")
+    partial_context: bool = Field(
+        ..., description="Whether parser coverage was partial"
+    )
+    narrative_degraded: bool = Field(
+        ..., description="Whether narrative generation degraded to fallback output"
+    )
+    uncertainty_flags: list[str] = Field(
+        default_factory=list, description="Machine-readable uncertainty indicators"
+    )
 
 
 class ShareSummaryData(BaseModel):
-    advisory_only: bool = Field(..., description="Whether the shared summary is advisory rather than blocking")
-    should_block: bool = Field(..., description="Whether DeployWhisper itself should block deployment")
-    severity: RiskSeverity = Field(..., description="Risk severity for PR or approval-thread sharing")
-    recommendation: DeployRecommendation = Field(..., description="Recommendation for PR or approval-thread sharing")
+    advisory_only: bool = Field(
+        ..., description="Whether the shared summary is advisory rather than blocking"
+    )
+    should_block: bool = Field(
+        ..., description="Whether DeployWhisper itself should block deployment"
+    )
+    severity: RiskSeverity = Field(
+        ..., description="Risk severity for PR or approval-thread sharing"
+    )
+    recommendation: DeployRecommendation = Field(
+        ..., description="Recommendation for PR or approval-thread sharing"
+    )
     headline: str = Field(..., description="Top narrative line for sharing")
     blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
     rollback_summary: str = Field(..., description="Concise rollback summary")
-    uncertainty_summary: str = Field(..., description="Concise review and uncertainty summary")
+    uncertainty_summary: str = Field(
+        ..., description="Concise review and uncertainty summary"
+    )
     markdown: str = Field(..., description="Markdown-ready advisory summary")
     plain_text: str = Field(..., description="Plain-text advisory summary")
 
@@ -316,8 +430,13 @@ def build_analysis_run_data(
                     file_name=file_result.file_name,
                     tool=file_result.tool,
                     status=file_result.status,
-                    changes=[_copy_model(change, ChangeData) for change in file_result.changes],
-                    issue=_copy_model(file_result.issue, ParseIssueData) if file_result.issue is not None else None,
+                    changes=[
+                        _copy_model(change, ChangeData)
+                        for change in file_result.changes
+                    ],
+                    issue=_copy_model(file_result.issue, ParseIssueData)
+                    if file_result.issue is not None
+                    else None,
                 )
                 for file_result in parse_batch.files
             ]
@@ -327,14 +446,22 @@ def build_analysis_run_data(
             severity=assessment.severity,
             recommendation=assessment.recommendation,
             top_risk=assessment.top_risk,
-            contributors=[_copy_model(contributor, RiskContributorData) for contributor in assessment.contributors],
-            interaction_risks=[_copy_model(interaction_risk, InteractionRiskData) for interaction_risk in assessment.interaction_risks],
+            contributors=[
+                _copy_model(contributor, RiskContributorData)
+                for contributor in assessment.contributors
+            ],
+            interaction_risks=[
+                _copy_model(interaction_risk, InteractionRiskData)
+                for interaction_risk in assessment.interaction_risks
+            ],
             partial_context=assessment.partial_context,
             warnings=list(assessment.warnings),
             source=assessment.source,
         ),
         blast_radius=BlastRadiusData(
-            affected=[_copy_model(node, ImpactNodeData) for node in blast_radius.affected],
+            affected=[
+                _copy_model(node, ImpactNodeData) for node in blast_radius.affected
+            ],
             direct_count=blast_radius.direct_count,
             transitive_count=blast_radius.transitive_count,
             warning=blast_radius.warning,
@@ -345,7 +472,9 @@ def build_analysis_run_data(
             complexity=rollback_plan.complexity,
             warning=rollback_plan.warning,
         ),
-        incident_matches=[_copy_model(match, IncidentMatchData) for match in incident_matches],
+        incident_matches=[
+            _copy_model(match, IncidentMatchData) for match in incident_matches
+        ],
         narrative=_copy_model(narrative, NarrativeData),
         advisory=_copy_model(advisory, AdvisorySummaryData),
         share_summary=_copy_model(share_summary, ShareSummaryData),

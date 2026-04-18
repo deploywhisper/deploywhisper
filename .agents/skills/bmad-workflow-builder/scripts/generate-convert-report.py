@@ -37,62 +37,63 @@ def measure_skill(skill_path: Path) -> dict:
     if skill_path.is_file():
         md_files = [skill_path]
     else:
-        md_files = sorted(skill_path.rglob('*.md'))
+        md_files = sorted(skill_path.rglob("*.md"))
 
     for f in md_files:
-        content = f.read_text(encoding='utf-8')
+        content = f.read_text(encoding="utf-8")
         lines = content.splitlines()
         total_lines += len(lines)
         total_words += sum(len(line.split()) for line in lines)
         total_chars += len(content)
-        total_sections += sum(1 for line in lines if line.startswith('## '))
+        total_sections += sum(1 for line in lines if line.startswith("## "))
         md_file_count += 1
 
     if skill_path.is_dir():
-        for f in skill_path.rglob('*'):
-            if f.is_file() and f.suffix != '.md':
+        for f in skill_path.rglob("*"):
+            if f.is_file() and f.suffix != ".md":
                 non_md_file_count += 1
 
     return {
-        'lines': total_lines,
-        'words': total_words,
-        'chars': total_chars,
-        'sections': total_sections,
-        'files': md_file_count + non_md_file_count,
-        'estimated_tokens': int(total_words * 1.3),
+        "lines": total_lines,
+        "words": total_words,
+        "chars": total_chars,
+        "sections": total_sections,
+        "files": md_file_count + non_md_file_count,
+        "estimated_tokens": int(total_words * 1.3),
     }
 
 
 def calculate_reductions(original: dict, rebuilt: dict) -> dict:
     """Calculate percentage reductions for each metric."""
     reductions = {}
-    for key in ('lines', 'words', 'chars', 'sections', 'estimated_tokens'):
+    for key in ("lines", "words", "chars", "sections", "estimated_tokens"):
         orig_val = original.get(key, 0)
         new_val = rebuilt.get(key, 0)
         if orig_val > 0:
-            reductions[key] = f'{round((1 - new_val / orig_val) * 100)}%'
+            reductions[key] = f"{round((1 - new_val / orig_val) * 100)}%"
         else:
-            reductions[key] = 'N/A'
+            reductions[key] = "N/A"
     return reductions
 
 
-def build_report_data(original_metrics: dict, rebuilt_metrics: dict,
-                      analysis: dict, reductions: dict) -> dict:
+def build_report_data(
+    original_metrics: dict, rebuilt_metrics: dict, analysis: dict, reductions: dict
+) -> dict:
     """Assemble the full report data structure."""
     return {
-        'meta': {
-            'skill_name': analysis.get('skill_name', 'Unknown'),
-            'original_source': analysis.get('original_source', ''),
-            'timestamp': datetime.now(timezone.utc).isoformat(),
+        "meta": {
+            "skill_name": analysis.get("skill_name", "Unknown"),
+            "original_source": analysis.get("original_source", ""),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
-        'metrics': {
-            'original': original_metrics,
-            'rebuilt': rebuilt_metrics,
+        "metrics": {
+            "original": original_metrics,
+            "rebuilt": rebuilt_metrics,
         },
-        'reductions': reductions,
-        'cuts': analysis.get('cuts', []),
-        'retained': analysis.get('retained', []),
-        'verdict': analysis.get('verdict', ''),
+        "reductions": reductions,
+        "cuts": analysis.get("cuts", []),
+        "retained": analysis.get("retained", []),
+        "verdict": analysis.get("verdict", ""),
     }
 
 
@@ -310,51 +311,54 @@ def generate_html(report_data: dict) -> str:
     data_json = json.dumps(report_data, indent=None, ensure_ascii=False)
     data_tag = f'<script id="report-data" type="application/json">{data_json}</script>'
     html = HTML_TEMPLATE.replace(
-        '<script>\nconst DATA',
-        f'{data_tag}\n<script>\nconst DATA',
+        "<script>\nconst DATA",
+        f"{data_tag}\n<script>\nconst DATA",
     )
-    skill_name = report_data.get('meta', {}).get('skill_name', 'Unknown')
-    html = html.replace('SKILL_NAME', html_lib.escape(skill_name))
+    skill_name = report_data.get("meta", {}).get("skill_name", "Unknown")
+    html = html.replace("SKILL_NAME", html_lib.escape(skill_name))
     return html
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description='Generate an interactive HTML skill conversion comparison report',
+        description="Generate an interactive HTML skill conversion comparison report",
     )
     parser.add_argument(
-        'original_path',
+        "original_path",
         type=Path,
-        help='Path to original skill (directory or single .md file)',
+        help="Path to original skill (directory or single .md file)",
     )
     parser.add_argument(
-        'rebuilt_path',
+        "rebuilt_path",
         type=Path,
-        help='Path to rebuilt skill directory',
+        help="Path to rebuilt skill directory",
     )
     parser.add_argument(
-        'analysis_json',
+        "analysis_json",
         type=Path,
-        help='Path to LLM-generated convert-analysis.json',
+        help="Path to LLM-generated convert-analysis.json",
     )
     parser.add_argument(
-        '--output', '-o',
+        "--output",
+        "-o",
         type=Path,
-        help='Output HTML file path (default: <analysis-dir>/convert-report.html)',
+        help="Output HTML file path (default: <analysis-dir>/convert-report.html)",
     )
     parser.add_argument(
-        '--open',
-        action='store_true',
-        help='Open the HTML report in the default browser',
+        "--open",
+        action="store_true",
+        help="Open the HTML report in the default browser",
     )
     args = parser.parse_args()
 
     # Validate inputs
-    for label, path in [('Original', args.original_path),
-                        ('Rebuilt', args.rebuilt_path),
-                        ('Analysis', args.analysis_json)]:
+    for label, path in [
+        ("Original", args.original_path),
+        ("Rebuilt", args.rebuilt_path),
+        ("Analysis", args.analysis_json),
+    ]:
         if not path.exists():
-            print(f'Error: {label} path not found: {path}', file=sys.stderr)
+            print(f"Error: {label} path not found: {path}", file=sys.stderr)
             return 2
 
     # Measure both skills
@@ -363,44 +367,51 @@ def main() -> int:
     reductions = calculate_reductions(original_metrics, rebuilt_metrics)
 
     # Load LLM analysis
-    analysis = json.loads(args.analysis_json.read_text(encoding='utf-8'))
+    analysis = json.loads(args.analysis_json.read_text(encoding="utf-8"))
 
     # Build report data
     report_data = build_report_data(
-        original_metrics, rebuilt_metrics, analysis, reductions,
+        original_metrics,
+        rebuilt_metrics,
+        analysis,
+        reductions,
     )
 
     # Save structured report data alongside analysis
-    report_data_path = args.analysis_json.parent / 'convert-report-data.json'
+    report_data_path = args.analysis_json.parent / "convert-report-data.json"
     report_data_path.write_text(
         json.dumps(report_data, indent=2, ensure_ascii=False),
-        encoding='utf-8',
+        encoding="utf-8",
     )
 
     # Generate HTML
     html = generate_html(report_data)
-    output_path = args.output or (args.analysis_json.parent / 'convert-report.html')
-    output_path.write_text(html, encoding='utf-8')
+    output_path = args.output or (args.analysis_json.parent / "convert-report.html")
+    output_path.write_text(html, encoding="utf-8")
 
     # Summary to stdout
-    print(json.dumps({
-        'html_report': str(output_path),
-        'original': original_metrics,
-        'rebuilt': rebuilt_metrics,
-        'reductions': reductions,
-    }))
+    print(
+        json.dumps(
+            {
+                "html_report": str(output_path),
+                "original": original_metrics,
+                "rebuilt": rebuilt_metrics,
+                "reductions": reductions,
+            }
+        )
+    )
 
     if args.open:
         system = platform.system()
-        if system == 'Darwin':
-            subprocess.run(['open', str(output_path)])
-        elif system == 'Linux':
-            subprocess.run(['xdg-open', str(output_path)])
-        elif system == 'Windows':
-            subprocess.run(['start', str(output_path)], shell=True)
+        if system == "Darwin":
+            subprocess.run(["open", str(output_path)])
+        elif system == "Linux":
+            subprocess.run(["xdg-open", str(output_path)])
+        elif system == "Windows":
+            subprocess.run(["start", str(output_path)], shell=True)
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

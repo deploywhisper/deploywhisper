@@ -13,8 +13,12 @@ from parsers.base import UnifiedChange
 class InteractionRisk(BaseModel):
     key: str = Field(..., description="Stable identifier for the interaction pattern")
     summary: str = Field(..., description="User-facing explanation of the interaction")
-    contributing_files: list[str] = Field(default_factory=list, description="Files involved")
-    contributing_resources: list[str] = Field(default_factory=list, description="Resources involved")
+    contributing_files: list[str] = Field(
+        default_factory=list, description="Files involved"
+    )
+    contributing_resources: list[str] = Field(
+        default_factory=list, description="Resources involved"
+    )
     contribution_bonus: int = Field(..., description="Additional score contribution")
 
 
@@ -71,9 +75,13 @@ def _collect_groups(changes: list[UnifiedChange]) -> dict[str, list[UnifiedChang
 def _tool_tokens(changes: list[UnifiedChange]) -> set[str]:
     tokens: set[str] = set()
     for change in changes:
-        blob = " ".join([change.source_file, change.resource_id, change.summary]).lower()
+        blob = " ".join(
+            [change.source_file, change.resource_id, change.summary]
+        ).lower()
         for token in TOKEN_PATTERN.findall(blob):
-            fragments = [fragment for fragment in re.split(r"[^a-z0-9]+", token) if fragment]
+            fragments = [
+                fragment for fragment in re.split(r"[^a-z0-9]+", token) if fragment
+            ]
             for fragment in fragments:
                 if len(fragment) <= 2 or fragment in STOP_WORDS:
                     continue
@@ -81,7 +89,9 @@ def _tool_tokens(changes: list[UnifiedChange]) -> set[str]:
     return tokens
 
 
-def _shared_context_tokens(grouped: dict[str, list[UnifiedChange]], tools: tuple[str, str]) -> list[str]:
+def _shared_context_tokens(
+    grouped: dict[str, list[UnifiedChange]], tools: tuple[str, str]
+) -> list[str]:
     left_tokens = _tool_tokens(grouped[tools[0]])
     right_tokens = _tool_tokens(grouped[tools[1]])
     return sorted(left_tokens & right_tokens)
@@ -117,9 +127,19 @@ def detect_interaction_risks(changes: list[UnifiedChange]) -> list[InteractionRi
                         shared_tokens=shared_tokens,
                         description="infrastructure and runtime shifts may amplify each other during deployment.",
                     ),
-                    contributing_files=sorted({change.source_file for tool in ("terraform", "kubernetes") for change in grouped[tool]}),
+                    contributing_files=sorted(
+                        {
+                            change.source_file
+                            for tool in ("terraform", "kubernetes")
+                            for change in grouped[tool]
+                        }
+                    ),
                     contributing_resources=sorted(
-                        {change.resource_id for tool in ("terraform", "kubernetes") for change in grouped[tool]}
+                        {
+                            change.resource_id
+                            for tool in ("terraform", "kubernetes")
+                            for change in grouped[tool]
+                        }
                     ),
                     contribution_bonus=12,
                 ),
@@ -137,9 +157,19 @@ def detect_interaction_risks(changes: list[UnifiedChange]) -> list[InteractionRi
                         shared_tokens=shared_tokens,
                         description="runtime and configuration drift may be happening together; validate rollout safety before shipping.",
                     ),
-                    contributing_files=sorted({change.source_file for tool in ("kubernetes", "ansible") for change in grouped[tool]}),
+                    contributing_files=sorted(
+                        {
+                            change.source_file
+                            for tool in ("kubernetes", "ansible")
+                            for change in grouped[tool]
+                        }
+                    ),
                     contributing_resources=sorted(
-                        {change.resource_id for tool in ("kubernetes", "ansible") for change in grouped[tool]}
+                        {
+                            change.resource_id
+                            for tool in ("kubernetes", "ansible")
+                            for change in grouped[tool]
+                        }
                     ),
                     contribution_bonus=10,
                 ),
@@ -157,9 +187,19 @@ def detect_interaction_risks(changes: list[UnifiedChange]) -> list[InteractionRi
                         shared_tokens=shared_tokens,
                         description="delivery controls and infrastructure exposure should be reviewed together.",
                     ),
-                    contributing_files=sorted({change.source_file for tool in ("terraform", "jenkins") for change in grouped[tool]}),
+                    contributing_files=sorted(
+                        {
+                            change.source_file
+                            for tool in ("terraform", "jenkins")
+                            for change in grouped[tool]
+                        }
+                    ),
                     contributing_resources=sorted(
-                        {change.resource_id for tool in ("terraform", "jenkins") for change in grouped[tool]}
+                        {
+                            change.resource_id
+                            for tool in ("terraform", "jenkins")
+                            for change in grouped[tool]
+                        }
                     ),
                     contribution_bonus=11,
                 ),

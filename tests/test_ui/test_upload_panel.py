@@ -13,7 +13,12 @@ class UploadPanelTests(unittest.TestCase):
 
         summary = process_uploaded_files(
             current_files,
-            [("etcd-pvc-new.yaml", b"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: etcd\n")],
+            [
+                (
+                    "etcd-pvc-new.yaml",
+                    b"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: etcd\n",
+                )
+            ],
         )
 
         self.assertEqual(summary.ready_count, 1)

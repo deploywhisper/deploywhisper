@@ -14,29 +14,47 @@ from analysis.risk_scorer import RiskAssessment
 
 SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
 CUSTOM_DIR = SKILLS_DIR / "custom"
-PRIMARY_TOOL_SKILLS = {"terraform", "kubernetes", "ansible", "jenkins", "cloudformation"}
+PRIMARY_TOOL_SKILLS = {
+    "terraform",
+    "kubernetes",
+    "ansible",
+    "jenkins",
+    "cloudformation",
+}
 
 
 class ActiveSkill(BaseModel):
     """Resolved skill definition after built-in/custom precedence is applied."""
 
     name: str = Field(..., description="Stable skill name")
-    source: Literal["built-in", "custom-override", "custom-new"] = Field(..., description="Resolved skill source")
+    source: Literal["built-in", "custom-override", "custom-new"] = Field(
+        ..., description="Resolved skill source"
+    )
     path: str = Field(..., description="Resolved markdown path")
     content: str = Field(..., description="Skill markdown without frontmatter")
-    always_load: bool = Field(default=False, description="Whether the skill should always be included")
-    triggers: list[str] = Field(default_factory=list, description="Filename or extension triggers")
-    trigger_content_patterns: list[str] = Field(default_factory=list, description="Content markers for local matching")
+    always_load: bool = Field(
+        default=False, description="Whether the skill should always be included"
+    )
+    triggers: list[str] = Field(
+        default_factory=list, description="Filename or extension triggers"
+    )
+    trigger_content_patterns: list[str] = Field(
+        default_factory=list, description="Content markers for local matching"
+    )
 
 
 class CustomSkillStatus(BaseModel):
     """Admin-facing summary of detected custom skill files."""
 
     name: str = Field(..., description="Stable skill name")
-    mode: Literal["override", "new"] = Field(..., description="Whether this custom skill overrides a built-in skill")
+    mode: Literal["override", "new"] = Field(
+        ..., description="Whether this custom skill overrides a built-in skill"
+    )
     active: bool = Field(..., description="Whether the custom skill is active")
     path: str = Field(..., description="Filesystem location")
-    warning: str | None = Field(default=None, description="Why the custom skill was ignored")
+    warning: str | None = Field(
+        default=None, description="Why the custom skill was ignored"
+    )
 
 
 def _split_frontmatter(content: str) -> tuple[dict[str, Any], str]:
@@ -96,9 +114,15 @@ def get_active_skills() -> dict[str, ActiveSkill]:
             path=str(path),
             content=content,
             always_load=bool(metadata.get("always_load", False)),
-            triggers=[str(item).strip() for item in metadata.get("triggers", []) if str(item).strip()],
+            triggers=[
+                str(item).strip()
+                for item in metadata.get("triggers", [])
+                if str(item).strip()
+            ],
             trigger_content_patterns=[
-                str(item).strip() for item in metadata.get("trigger_content_patterns", []) if str(item).strip()
+                str(item).strip()
+                for item in metadata.get("trigger_content_patterns", [])
+                if str(item).strip()
             ],
         )
 
@@ -115,9 +139,15 @@ def get_active_skills() -> dict[str, ActiveSkill]:
             path=str(path),
             content=content,
             always_load=bool(metadata.get("always_load", False)),
-            triggers=[str(item).strip() for item in metadata.get("triggers", []) if str(item).strip()],
+            triggers=[
+                str(item).strip()
+                for item in metadata.get("triggers", [])
+                if str(item).strip()
+            ],
             trigger_content_patterns=[
-                str(item).strip() for item in metadata.get("trigger_content_patterns", []) if str(item).strip()
+                str(item).strip()
+                for item in metadata.get("trigger_content_patterns", [])
+                if str(item).strip()
             ],
         )
 
@@ -145,7 +175,9 @@ def get_custom_skill_statuses() -> list[CustomSkillStatus]:
                 mode="override" if name in built_in_names else "new",
                 active=content is not None,
                 path=str(path),
-                warning=None if content else "Custom skill file is empty after frontmatter stripping.",
+                warning=None
+                if content
+                else "Custom skill file is empty after frontmatter stripping.",
             )
         )
     return statuses
@@ -198,7 +230,9 @@ def _custom_skill_applies(skill_name: str, search_blob: str) -> bool:
         return True
 
     tokens = [token for token in re.split(r"[^a-z0-9]+", normalized_name) if token]
-    if len(tokens) > 1 and all(re.search(rf"\b{re.escape(token)}\b", search_blob) for token in tokens):
+    if len(tokens) > 1 and all(
+        re.search(rf"\b{re.escape(token)}\b", search_blob) for token in tokens
+    ):
         return True
     return False
 
@@ -222,7 +256,9 @@ def _filename_matches_trigger(filename: str, trigger: str) -> bool:
     return Path(normalized_filename).name == normalized_trigger
 
 
-def _trigger_matches_raw_files(skill: ActiveSkill, raw_files: dict[str, bytes | None] | None) -> bool:
+def _trigger_matches_raw_files(
+    skill: ActiveSkill, raw_files: dict[str, bytes | None] | None
+) -> bool:
     if not raw_files:
         return False
     if any(
@@ -235,7 +271,9 @@ def _trigger_matches_raw_files(skill: ActiveSkill, raw_files: dict[str, bytes | 
     if not skill.trigger_content_patterns:
         return False
     raw_search_blob = _raw_file_search_blob(raw_files)
-    return any(pattern.lower() in raw_search_blob for pattern in skill.trigger_content_patterns)
+    return any(
+        pattern.lower() in raw_search_blob for pattern in skill.trigger_content_patterns
+    )
 
 
 def resolve_skills(
@@ -258,11 +296,15 @@ def resolve_skills(
     for skill_name, skill in active_skills.items():
         if skill_name in seen:
             continue
-        if skill_name not in PRIMARY_TOOL_SKILLS and _trigger_matches_raw_files(skill, raw_files):
+        if skill_name not in PRIMARY_TOOL_SKILLS and _trigger_matches_raw_files(
+            skill, raw_files
+        ):
             selected.append(skill)
             seen.add(skill_name)
             continue
-        if skill.source == "custom-new" and _custom_skill_applies(skill_name, search_blob):
+        if skill.source == "custom-new" and _custom_skill_applies(
+            skill_name, search_blob
+        ):
             selected.append(skill)
             seen.add(skill_name)
 

@@ -13,8 +13,16 @@ from pathlib import Path
 from api.errors import build_error
 from api.schemas import build_analysis_run_data, build_meta
 import llm.skill_context as skill_context_module
-from services.analysis_service import analyze_uploaded_files, build_advisory_summary, build_share_summary
-from services.intake_service import MAX_TOTAL_UPLOAD_BYTES, build_pending_analysis, total_upload_bytes, uniquify_artifact_names
+from services.analysis_service import (
+    analyze_uploaded_files,
+    build_advisory_summary,
+    build_share_summary,
+)
+from services.intake_service import (
+    MAX_TOTAL_UPLOAD_BYTES,
+    build_pending_analysis,
+    uniquify_artifact_names,
+)
 
 
 def _emit_json(payload: dict, *, stream) -> None:
@@ -50,7 +58,10 @@ def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
                     )
                 )
             ) from exc
-    return [(str(name), bytes(raw_content or b"")) for name, raw_content in uniquify_artifact_names(artifacts)]
+    return [
+        (str(name), bytes(raw_content or b""))
+        for name, raw_content in uniquify_artifact_names(artifacts)
+    ]
 
 
 def _run_skills() -> int:
@@ -87,7 +98,9 @@ def _run_analyze(paths: list[str]) -> int:
             build_error(
                 code="no_supported_artifacts",
                 message="At least one supported artifact is required for analysis.",
-                details={"items": [item.model_dump() for item in pending_analysis.items]},
+                details={
+                    "items": [item.model_dump() for item in pending_analysis.items]
+                },
             ),
             stream=sys.stderr,
         )
@@ -102,7 +115,9 @@ def _run_analyze(paths: list[str]) -> int:
                 raw_files,
                 audit_context={
                     "source_interface": "cli",
-                    "trigger_type": os.getenv("DEPLOYWHISPER_TRIGGER_TYPE", "cli_command"),
+                    "trigger_type": os.getenv(
+                        "DEPLOYWHISPER_TRIGGER_TYPE", "cli_command"
+                    ),
                     "trigger_id": os.getenv("DEPLOYWHISPER_TRIGGER_ID"),
                 },
             )
@@ -146,8 +161,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("skills", help="List built-in and custom AI skill statuses.")
 
-    analyze_parser = subparsers.add_parser("analyze", help="Run headless advisory analysis for one or more artifacts.")
-    analyze_parser.add_argument("paths", nargs="*", help="Artifact file paths to analyze.")
+    analyze_parser = subparsers.add_parser(
+        "analyze", help="Run headless advisory analysis for one or more artifacts."
+    )
+    analyze_parser.add_argument(
+        "paths", nargs="*", help="Artifact file paths to analyze."
+    )
 
     return parser
 

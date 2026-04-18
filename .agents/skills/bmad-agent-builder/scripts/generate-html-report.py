@@ -30,11 +30,11 @@ from pathlib import Path
 
 def load_report_data(report_dir: Path) -> dict:
     """Load report-data.json from the report directory."""
-    data_file = report_dir / 'report-data.json'
+    data_file = report_dir / "report-data.json"
     if not data_file.exists():
-        print(f'Error: {data_file} not found', file=sys.stderr)
+        print(f"Error: {data_file} not found", file=sys.stderr)
         sys.exit(2)
-    return json.loads(data_file.read_text(encoding='utf-8'))
+    return json.loads(data_file.read_text(encoding="utf-8"))
 
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
@@ -491,44 +491,56 @@ init();
 def generate_html(report_data: dict) -> str:
     data_json = json.dumps(report_data, indent=None, ensure_ascii=False)
     data_tag = f'<script id="report-data" type="application/json">{data_json}</script>'
-    html = HTML_TEMPLATE.replace('<script>\nconst RAW', f'{data_tag}\n<script>\nconst RAW')
-    html = html.replace('SKILL_NAME', report_data.get('meta', {}).get('skill_name', 'Unknown'))
+    html = HTML_TEMPLATE.replace(
+        "<script>\nconst RAW", f"{data_tag}\n<script>\nconst RAW"
+    )
+    html = html.replace(
+        "SKILL_NAME", report_data.get("meta", {}).get("skill_name", "Unknown")
+    )
     return html
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='Generate interactive HTML quality analysis report for a BMad agent')
-    parser.add_argument('report_dir', type=Path, help='Directory containing report-data.json')
-    parser.add_argument('--open', action='store_true', help='Open in default browser')
-    parser.add_argument('--output', '-o', type=Path, help='Output HTML file path')
+    parser = argparse.ArgumentParser(
+        description="Generate interactive HTML quality analysis report for a BMad agent"
+    )
+    parser.add_argument(
+        "report_dir", type=Path, help="Directory containing report-data.json"
+    )
+    parser.add_argument("--open", action="store_true", help="Open in default browser")
+    parser.add_argument("--output", "-o", type=Path, help="Output HTML file path")
     args = parser.parse_args()
 
     if not args.report_dir.is_dir():
-        print(f'Error: {args.report_dir} is not a directory', file=sys.stderr)
+        print(f"Error: {args.report_dir} is not a directory", file=sys.stderr)
         return 2
 
     report_data = load_report_data(args.report_dir)
     html = generate_html(report_data)
-    output_path = args.output or (args.report_dir / 'quality-report.html')
-    output_path.write_text(html, encoding='utf-8')
+    output_path = args.output or (args.report_dir / "quality-report.html")
+    output_path.write_text(html, encoding="utf-8")
 
-    print(json.dumps({
-        'html_report': str(output_path),
-        'grade': report_data.get('grade', 'Unknown'),
-        'opportunities': len(report_data.get('opportunities', [])),
-        'broken': len(report_data.get('broken', [])),
-    }))
+    print(
+        json.dumps(
+            {
+                "html_report": str(output_path),
+                "grade": report_data.get("grade", "Unknown"),
+                "opportunities": len(report_data.get("opportunities", [])),
+                "broken": len(report_data.get("broken", [])),
+            }
+        )
+    )
 
     if args.open:
         system = platform.system()
-        if system == 'Darwin':
-            subprocess.run(['open', str(output_path)])
-        elif system == 'Linux':
-            subprocess.run(['xdg-open', str(output_path)])
-        elif system == 'Windows':
-            subprocess.run(['start', str(output_path)], shell=True)
+        if system == "Darwin":
+            subprocess.run(["open", str(output_path)])
+        elif system == "Linux":
+            subprocess.run(["xdg-open", str(output_path)])
+        elif system == "Windows":
+            subprocess.run(["start", str(output_path)], shell=True)
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

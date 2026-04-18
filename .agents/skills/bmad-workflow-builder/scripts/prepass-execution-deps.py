@@ -76,17 +76,21 @@ def find_transitive_redundancy(graph: dict[str, list[str]]) -> list[dict]:
             for other in other_deps:
                 transitive = get_transitive(other)
                 if dep in transitive:
-                    redundancies.append({
-                        'node': node,
-                        'redundant_dep': dep,
-                        'already_via': other,
-                        'issue': f'"{node}" declares "{dep}" as dependency, but already reachable via "{other}"',
-                    })
+                    redundancies.append(
+                        {
+                            "node": node,
+                            "redundant_dep": dep,
+                            "already_via": other,
+                            "issue": f'"{node}" declares "{dep}" as dependency, but already reachable via "{other}"',
+                        }
+                    )
 
     return redundancies
 
 
-def find_parallel_groups(graph: dict[str, list[str]], all_nodes: set[str]) -> list[list[str]]:
+def find_parallel_groups(
+    graph: dict[str, list[str]], all_nodes: set[str]
+) -> list[list[str]]:
     """Find groups of nodes that have no dependencies on each other (can run in parallel)."""
     # Nodes with no incoming edges from other nodes in the set
     independent_groups = []
@@ -111,50 +115,55 @@ def find_parallel_groups(graph: dict[str, list[str]], all_nodes: set[str]) -> li
 
 def scan_sequential_patterns(filepath: Path, rel_path: str) -> list[dict]:
     """Detect sequential operation patterns that could be parallel."""
-    content = filepath.read_text(encoding='utf-8')
+    content = filepath.read_text(encoding="utf-8")
     patterns = []
 
     # Sequential numbered steps with Read/Grep/Glob
     tool_steps = re.findall(
-        r'^\s*\d+\.\s+.*?\b(Read|Grep|Glob|read|grep|glob)\b.*$',
-        content, re.MULTILINE
+        r"^\s*\d+\.\s+.*?\b(Read|Grep|Glob|read|grep|glob)\b.*$", content, re.MULTILINE
     )
     if len(tool_steps) >= 3:
-        patterns.append({
-            'file': rel_path,
-            'type': 'sequential-tool-calls',
-            'count': len(tool_steps),
-            'issue': f'{len(tool_steps)} sequential tool call steps found — check if independent calls can be parallel',
-        })
+        patterns.append(
+            {
+                "file": rel_path,
+                "type": "sequential-tool-calls",
+                "count": len(tool_steps),
+                "issue": f"{len(tool_steps)} sequential tool call steps found — check if independent calls can be parallel",
+            }
+        )
 
     # "Read all files" / "for each" loop patterns
     loop_patterns = [
-        (r'[Rr]ead all (?:files|documents|prompts)', 'read-all'),
-        (r'[Ff]or each (?:file|document|prompt|stage)', 'for-each-loop'),
-        (r'[Aa]nalyze each', 'analyze-each'),
-        (r'[Ss]can (?:through|all|each)', 'scan-all'),
-        (r'[Rr]eview (?:all|each)', 'review-all'),
+        (r"[Rr]ead all (?:files|documents|prompts)", "read-all"),
+        (r"[Ff]or each (?:file|document|prompt|stage)", "for-each-loop"),
+        (r"[Aa]nalyze each", "analyze-each"),
+        (r"[Ss]can (?:through|all|each)", "scan-all"),
+        (r"[Rr]eview (?:all|each)", "review-all"),
     ]
     for pattern, ptype in loop_patterns:
         matches = re.findall(pattern, content)
         if matches:
-            patterns.append({
-                'file': rel_path,
-                'type': ptype,
-                'count': len(matches),
-                'issue': f'"{matches[0]}" pattern found — consider parallel subagent delegation',
-            })
+            patterns.append(
+                {
+                    "file": rel_path,
+                    "type": ptype,
+                    "count": len(matches),
+                    "issue": f'"{matches[0]}" pattern found — consider parallel subagent delegation',
+                }
+            )
 
     # Subagent spawning from subagent (impossible)
-    if re.search(r'(?i)spawn.*subagent|launch.*subagent|create.*subagent', content):
+    if re.search(r"(?i)spawn.*subagent|launch.*subagent|create.*subagent", content):
         # Check if this file IS a subagent (non-SKILL.md, non-numbered prompt at root)
-        if rel_path != 'SKILL.md' and not re.match(r'^\d+-', rel_path):
-            patterns.append({
-                'file': rel_path,
-                'type': 'subagent-chain-violation',
-                'count': 1,
-                'issue': 'Subagent file references spawning other subagents — subagents cannot spawn subagents',
-            })
+        if rel_path != "SKILL.md" and not re.match(r"^\d+-", rel_path):
+            patterns.append(
+                {
+                    "file": rel_path,
+                    "type": "subagent-chain-violation",
+                    "count": 1,
+                    "issue": "Subagent file references spawning other subagents — subagents cannot spawn subagents",
+                }
+            )
 
     return patterns
 
@@ -168,7 +177,7 @@ def scan_execution_deps(skill_path: Path) -> dict:
 
     # Check for stage-level prompt files at skill root
     for f in sorted(skill_path.iterdir()):
-        if f.is_file() and f.suffix == '.md' and f.name != 'SKILL.md':
+        if f.is_file() and f.suffix == ".md" and f.name != "SKILL.md":
             all_stages.add(f.stem)
 
     # Cycle detection
@@ -183,87 +192,94 @@ def scan_execution_deps(skill_path: Path) -> dict:
     # Sequential pattern detection across all prompt and agent files at root
     sequential_patterns = []
     for f in sorted(skill_path.iterdir()):
-        if f.is_file() and f.suffix == '.md' and f.name != 'SKILL.md':
+        if f.is_file() and f.suffix == ".md" and f.name != "SKILL.md":
             patterns = scan_sequential_patterns(f, f.name)
             sequential_patterns.extend(patterns)
 
     # Also scan SKILL.md
-    skill_md = skill_path / 'SKILL.md'
+    skill_md = skill_path / "SKILL.md"
     if skill_md.exists():
-        sequential_patterns.extend(scan_sequential_patterns(skill_md, 'SKILL.md'))
+        sequential_patterns.extend(scan_sequential_patterns(skill_md, "SKILL.md"))
 
     # Build issues from deterministic findings
     issues = []
     for cycle in cycles:
-        issues.append({
-            'severity': 'critical',
-            'category': 'circular-dependency',
-            'issue': f'Circular dependency detected: {" → ".join(cycle)}',
-        })
+        issues.append(
+            {
+                "severity": "critical",
+                "category": "circular-dependency",
+                "issue": f"Circular dependency detected: {' → '.join(cycle)}",
+            }
+        )
     for r in redundancies:
-        issues.append({
-            'severity': 'medium',
-            'category': 'dependency-bloat',
-            'issue': r['issue'],
-        })
+        issues.append(
+            {
+                "severity": "medium",
+                "category": "dependency-bloat",
+                "issue": r["issue"],
+            }
+        )
     for p in sequential_patterns:
-        severity = 'critical' if p['type'] == 'subagent-chain-violation' else 'medium'
-        issues.append({
-            'file': p['file'],
-            'severity': severity,
-            'category': p['type'],
-            'issue': p['issue'],
-        })
+        severity = "critical" if p["type"] == "subagent-chain-violation" else "medium"
+        issues.append(
+            {
+                "file": p["file"],
+                "severity": severity,
+                "category": p["type"],
+                "issue": p["issue"],
+            }
+        )
 
-    by_severity = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+    by_severity = {"critical": 0, "high": 0, "medium": 0, "low": 0}
     for issue in issues:
-        sev = issue['severity']
+        sev = issue["severity"]
         if sev in by_severity:
             by_severity[sev] += 1
 
-    status = 'pass'
-    if by_severity['critical'] > 0:
-        status = 'fail'
-    elif by_severity['medium'] > 0:
-        status = 'warning'
+    status = "pass"
+    if by_severity["critical"] > 0:
+        status = "fail"
+    elif by_severity["medium"] > 0:
+        status = "warning"
 
     return {
-        'scanner': 'execution-efficiency-prepass',
-        'script': 'prepass-execution-deps.py',
-        'version': '1.0.0',
-        'skill_path': str(skill_path),
-        'timestamp': datetime.now(timezone.utc).isoformat(),
-        'status': status,
-        'dependency_graph': {
-            'stages': sorted(all_stages),
-            'hard_dependencies': dep_graph,
-            'soft_dependencies': prefer_after,
-            'cycles': cycles,
-            'transitive_redundancies': redundancies,
-            'parallel_groups': parallel_groups,
+        "scanner": "execution-efficiency-prepass",
+        "script": "prepass-execution-deps.py",
+        "version": "1.0.0",
+        "skill_path": str(skill_path),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "status": status,
+        "dependency_graph": {
+            "stages": sorted(all_stages),
+            "hard_dependencies": dep_graph,
+            "soft_dependencies": prefer_after,
+            "cycles": cycles,
+            "transitive_redundancies": redundancies,
+            "parallel_groups": parallel_groups,
         },
-        'sequential_patterns': sequential_patterns,
-        'issues': issues,
-        'summary': {
-            'total_issues': len(issues),
-            'by_severity': by_severity,
+        "sequential_patterns": sequential_patterns,
+        "issues": issues,
+        "summary": {
+            "total_issues": len(issues),
+            "by_severity": by_severity,
         },
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description='Extract execution dependency graph and patterns for LLM scanner pre-pass',
+        description="Extract execution dependency graph and patterns for LLM scanner pre-pass",
     )
     parser.add_argument(
-        'skill_path',
+        "skill_path",
         type=Path,
-        help='Path to the skill directory to scan',
+        help="Path to the skill directory to scan",
     )
     parser.add_argument(
-        '--output', '-o',
+        "--output",
+        "-o",
         type=Path,
-        help='Write JSON output to file instead of stdout',
+        help="Write JSON output to file instead of stdout",
     )
     args = parser.parse_args()
 
@@ -284,5 +300,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

@@ -10,21 +10,37 @@ from pydantic import BaseModel, Field
 
 from analysis.risk_scorer import RiskAssessment
 from llm.prompts import build_system_prompt, build_user_payload
-from llm.providers import NarrativeProviderError, generate_completion_with_settings
+from llm.providers import generate_completion_with_settings
 from llm.skill_context import build_skill_context, resolve_skills
 from services.settings_service import resolve_provider_runtime
 
+
 class NarrativeResult(BaseModel):
-    opening_sentence: str = Field(..., description="First-scan deploy briefing sentence")
+    opening_sentence: str = Field(
+        ..., description="First-scan deploy briefing sentence"
+    )
     explanation: str = Field(..., description="Extended plain-English explanation")
     guidance: list[str] = Field(default_factory=list, description="Actionable guidance")
     degraded: bool = Field(..., description="Whether fallback mode was used")
     warnings: list[str] = Field(default_factory=list, description="Narrative warnings")
-    source: Literal["llm", "fallback"] = Field(default="fallback", description="Whether the narrative came from the LLM or local fallback logic")
-    provider: str | None = Field(default=None, description="Provider used for narrative generation when applicable")
-    model: str | None = Field(default=None, description="Model used for narrative generation when applicable")
-    local_mode: bool | None = Field(default=None, description="Whether local-only mode was active for the narrative")
-    skills_applied: list[str] = Field(default_factory=list, description="Resolved skill names applied to the narrative prompt")
+    source: Literal["llm", "fallback"] = Field(
+        default="fallback",
+        description="Whether the narrative came from the LLM or local fallback logic",
+    )
+    provider: str | None = Field(
+        default=None,
+        description="Provider used for narrative generation when applicable",
+    )
+    model: str | None = Field(
+        default=None, description="Model used for narrative generation when applicable"
+    )
+    local_mode: bool | None = Field(
+        default=None, description="Whether local-only mode was active for the narrative"
+    )
+    skills_applied: list[str] = Field(
+        default_factory=list,
+        description="Resolved skill names applied to the narrative prompt",
+    )
 
 
 def _fallback_narrative(
@@ -48,7 +64,9 @@ def _fallback_narrative(
         "Inspect rollback guidance before shipping higher-risk changes.",
     ]
     if assessment.partial_context:
-        guidance.append("Investigate parser failures because the analysis used partial context.")
+        guidance.append(
+            "Investigate parser failures because the analysis used partial context."
+        )
     return NarrativeResult(
         opening_sentence=f"{assessment.recommendation.upper()}: {assessment.top_risk}",
         explanation=explanation,
@@ -69,7 +87,9 @@ def generate_narrative(
     raw_files: dict[str, bytes | None] | None = None,
 ) -> NarrativeResult:
     runtime = resolve_provider_runtime()
-    applied_skills = [skill.name for skill in resolve_skills(assessment, raw_files=raw_files)]
+    applied_skills = [
+        skill.name for skill in resolve_skills(assessment, raw_files=raw_files)
+    ]
     if not assessment.contributors:
         return _fallback_narrative(
             assessment,
@@ -96,7 +116,11 @@ def generate_narrative(
             completion_client=completion_client,
         )
         payload = json.loads(raw_content)
-        known_scopes = {contributor.downstream_scope for contributor in assessment.contributors if contributor.downstream_scope is not None}
+        known_scopes = {
+            contributor.downstream_scope
+            for contributor in assessment.contributors
+            if contributor.downstream_scope is not None
+        }
 
         def sanitize_scope_claims(text: str) -> str:
             def replace_numeric_scope(match: re.Match[str]) -> str:
@@ -126,7 +150,10 @@ def generate_narrative(
         return NarrativeResult(
             opening_sentence=sanitize_scope_claims(payload["opening_sentence"]),
             explanation=sanitize_scope_claims(payload["explanation"]),
-            guidance=[sanitize_scope_claims(item) for item in list(payload.get("guidance", []))],
+            guidance=[
+                sanitize_scope_claims(item)
+                for item in list(payload.get("guidance", []))
+            ],
             degraded=False,
             warnings=list(assessment.warnings),
             source="llm",

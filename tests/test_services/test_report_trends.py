@@ -33,7 +33,14 @@ class ReportTrendTests(unittest.TestCase):
         os.environ.pop("DATABASE_URL", None)
         self.tempdir.cleanup()
 
-    def _persist(self, *, severity: str, recommendation: str, tool: str, source_interface: str = "ui") -> None:
+    def _persist(
+        self,
+        *,
+        severity: str,
+        recommendation: str,
+        tool: str,
+        source_interface: str = "ui",
+    ) -> None:
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -98,7 +105,9 @@ class ReportTrendTests(unittest.TestCase):
 
     def test_fetch_dashboard_stats_counts_scanned_files_and_severity(self) -> None:
         self._persist(severity="low", recommendation="go", tool="terraform")
-        self._persist(severity="critical", recommendation="no-go", tool="cloudformation")
+        self._persist(
+            severity="critical", recommendation="no-go", tool="cloudformation"
+        )
 
         stats = report_service_module.fetch_dashboard_stats()
 

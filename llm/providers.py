@@ -23,7 +23,9 @@ def _supports_only_temperature_one(provider: str, model: str) -> bool:
     )
 
 
-def generate_completion(messages: list[dict[str, str]], completion_client: Callable[..., Any] | None = None) -> str:
+def generate_completion(
+    messages: list[dict[str, str]], completion_client: Callable[..., Any] | None = None
+) -> str:
     raise NarrativeProviderError(
         "generate_completion requires resolved provider settings. "
         "Use generate_completion_with_settings(...) from a service boundary."
@@ -50,7 +52,9 @@ def generate_completion_with_settings(
         "temperature": temperature,
     }
     if local_mode and provider != "ollama":
-        raise NarrativeProviderError("Local mode requires an Ollama/local provider path.")
+        raise NarrativeProviderError(
+            "Local mode requires an Ollama/local provider path."
+        )
     if api_key and not local_mode:
         kwargs["api_key"] = api_key
     try:

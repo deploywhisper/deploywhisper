@@ -603,10 +603,14 @@ def build_brand_lockup(*, href: str = "/", compact: bool = False) -> None:
             ui.html(_BRAND_MARK_SVG)
         with ui.column().classes("dw-brand-copy gap-[2px]"):
             with ui.row().classes("items-center gap-3 flex-wrap"):
-                ui.html('<span class="dw-brand-title">Deploy<span>Whisper</span></span>')
+                ui.html(
+                    '<span class="dw-brand-title">Deploy<span>Whisper</span></span>'
+                )
                 ui.html('<span class="dw-brand-tag">AI intelligence</span>')
             if not compact:
-                ui.label("Advisory deployment intelligence").classes("dw-brand-subtitle")
+                ui.label("Advisory deployment intelligence").classes(
+                    "dw-brand-subtitle"
+                )
 
 
 def build_navigation_shell(active: str) -> None:
@@ -618,19 +622,27 @@ def build_navigation_shell(active: str) -> None:
     )
 
     with ui.element("header").classes("dw-topbar"):
-        with ui.row().classes("dw-topbar-shell w-full items-center gap-4 flex-wrap justify-between"):
+        with ui.row().classes(
+            "dw-topbar-shell w-full items-center gap-4 flex-wrap justify-between"
+        ):
             build_brand_lockup(compact=True)
-            with ui.row().classes("items-center gap-1 flex-wrap grow justify-center max-md:w-full"):
+            with ui.row().classes(
+                "items-center gap-1 flex-wrap grow justify-center max-md:w-full"
+            ):
                 for label, href, key in nav_items:
                     classes = "dw-nav-link no-underline"
                     if active == key:
                         classes += " dw-nav-link-active"
                     ui.link(label, href).classes(classes)
-            with ui.row().classes("items-center gap-2 ml-auto max-md:w-full max-md:justify-end"):
+            with ui.row().classes(
+                "items-center gap-2 ml-auto max-md:w-full max-md:justify-end"
+            ):
                 ui.button(
                     "Theme",
                     icon="contrast",
-                    on_click=lambda: ui.run_javascript("window.dwToggleTheme && window.dwToggleTheme()"),
+                    on_click=lambda: ui.run_javascript(
+                        "window.dwToggleTheme && window.dwToggleTheme()"
+                    ),
                 ).props("flat no-caps").classes("dw-theme-button")
 
 
@@ -649,6 +661,6 @@ def build_page_header(
             ui.label(title).classes("text-3xl font-semibold dw-title leading-tight")
             ui.label(subtitle).classes("dw-body")
         if back_href:
-            ui.button(back_label, on_click=lambda: ui.navigate.to(back_href)).props("flat no-caps").classes(
-                "dw-header-button"
-            )
+            ui.button(back_label, on_click=lambda: ui.navigate.to(back_href)).props(
+                "flat no-caps"
+            ).classes("dw-header-button")

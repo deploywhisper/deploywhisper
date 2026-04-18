@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import re
 
-from models.database import SessionLocal, init_db
-from models.repositories.incident_records import create_incident_record, list_incident_records
+from models.database import SessionLocal
+from models.repositories.incident_records import (
+    create_incident_record,
+    list_incident_records,
+)
 
 SEVERITY_PATTERN = re.compile(r"\b(P0|P1|P2|critical|high|medium|low)\b", re.IGNORECASE)
-DATE_PATTERN = re.compile(r"\b(20\d{2}-\d{2}-\d{2}|20\d{2}/\d{2}/\d{2}|[A-Z][a-z]+ \d{1,2}, 20\d{2})\b")
+DATE_PATTERN = re.compile(
+    r"\b(20\d{2}-\d{2}-\d{2}|20\d{2}/\d{2}/\d{2}|[A-Z][a-z]+ \d{1,2}, 20\d{2})\b"
+)
 
 
 def _extract_title(content: str, source_file: str) -> str:
@@ -47,7 +51,6 @@ def _extract_incident_date(content: str) -> str | None:
 
 def ingest_incident_document(source_file: str, content: str) -> dict:
     """Normalize and persist an incident document from markdown/plain text input."""
-    init_db()
     normalized_content = content.strip()
     title = _extract_title(normalized_content, source_file)
     severity = _extract_severity(normalized_content)
@@ -72,7 +75,6 @@ def ingest_incident_document(source_file: str, content: str) -> dict:
 
 def get_incident_records() -> list[dict]:
     """Return stored incidents for later matching workflows."""
-    init_db()
     with SessionLocal() as session:
         records = list_incident_records(session)
     return [

@@ -49,7 +49,9 @@ class NarrativeTests(unittest.TestCase):
                 '"guidance":["Inspect the change table.","Verify rollback readiness."]}'
             )
 
-        narrative = generate_narrative(self._assessment(), completion_client=fake_completion)
+        narrative = generate_narrative(
+            self._assessment(), completion_client=fake_completion
+        )
         self.assertFalse(narrative.degraded)
         self.assertEqual(narrative.source, "llm")
         self.assertIn("terraform", narrative.skills_applied)
@@ -59,7 +61,9 @@ class NarrativeTests(unittest.TestCase):
         def broken_completion(**_: object):
             raise RuntimeError("provider offline")
 
-        narrative = generate_narrative(self._assessment(), completion_client=broken_completion)
+        narrative = generate_narrative(
+            self._assessment(), completion_client=broken_completion
+        )
         self.assertTrue(narrative.degraded)
         self.assertEqual(narrative.source, "fallback")
         self.assertTrue(narrative.warnings)
@@ -81,9 +85,13 @@ class NarrativeTests(unittest.TestCase):
         def fake_completion(**_: object) -> Response:
             return Response("not-json")
 
-        narrative = generate_narrative(self._assessment(), completion_client=fake_completion)
+        narrative = generate_narrative(
+            self._assessment(), completion_client=fake_completion
+        )
         self.assertTrue(narrative.degraded)
-        self.assertTrue(any("Expecting value" in warning for warning in narrative.warnings))
+        self.assertTrue(
+            any("Expecting value" in warning for warning in narrative.warnings)
+        )
 
     def test_generate_narrative_gracefully_degrades_on_missing_keys(self) -> None:
         class Message:
@@ -101,7 +109,9 @@ class NarrativeTests(unittest.TestCase):
         def fake_completion(**_: object) -> Response:
             return Response('{"opening_sentence":"ok"}')
 
-        narrative = generate_narrative(self._assessment(), completion_client=fake_completion)
+        narrative = generate_narrative(
+            self._assessment(), completion_client=fake_completion
+        )
         self.assertTrue(narrative.degraded)
         self.assertTrue(any("explanation" in warning for warning in narrative.warnings))
 
@@ -125,7 +135,9 @@ class NarrativeTests(unittest.TestCase):
                 '"guidance":["Review 6 downstream services."]}'
             )
 
-        narrative = generate_narrative(self._assessment(), completion_client=fake_completion)
+        narrative = generate_narrative(
+            self._assessment(), completion_client=fake_completion
+        )
         self.assertIn("unknown downstream impact", narrative.opening_sentence)
         self.assertIn("unknown downstream impact", narrative.explanation)
 

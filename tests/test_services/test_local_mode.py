@@ -68,7 +68,10 @@ class LocalModeTests(unittest.TestCase):
             return Response()
 
         providers_module.generate_completion_with_settings(
-            messages=[{"role": "system", "content": "Return JSON"}, {"role": "user", "content": "{}"}],
+            messages=[
+                {"role": "system", "content": "Return JSON"},
+                {"role": "user", "content": "{}"},
+            ],
             provider="ollama",
             model="ollama/llama3",
             api_base="http://localhost:11434",

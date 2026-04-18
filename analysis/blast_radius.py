@@ -16,20 +16,40 @@ class ImpactNode(BaseModel):
 
 
 class BlastRadiusResult(BaseModel):
-    affected: list[ImpactNode] = Field(default_factory=list, description="Affected services")
+    affected: list[ImpactNode] = Field(
+        default_factory=list, description="Affected services"
+    )
     direct_count: int = Field(..., description="Count of directly affected services")
-    transitive_count: int = Field(..., description="Count of transitively affected services")
-    warning: str | None = Field(default=None, description="Warning when impact may be incomplete")
-    unmatched_resources: list[str] = Field(default_factory=list, description="Resources not found in topology context")
+    transitive_count: int = Field(
+        ..., description="Count of transitively affected services"
+    )
+    warning: str | None = Field(
+        default=None, description="Warning when impact may be incomplete"
+    )
+    unmatched_resources: list[str] = Field(
+        default_factory=list, description="Resources not found in topology context"
+    )
 
 
-def compute_blast_radius(changes: list[UnifiedChange], topology: dict | None, warning: str | None = None) -> BlastRadiusResult:
+def compute_blast_radius(
+    changes: list[UnifiedChange], topology: dict | None, warning: str | None = None
+) -> BlastRadiusResult:
     if not topology:
-        return BlastRadiusResult(affected=[], direct_count=0, transitive_count=0, warning=warning or "Blast radius may be incomplete.")
+        return BlastRadiusResult(
+            affected=[],
+            direct_count=0,
+            transitive_count=0,
+            warning=warning or "Blast radius may be incomplete.",
+        )
 
     services = topology.get("services", []) if isinstance(topology, dict) else []
     if not services:
-        return BlastRadiusResult(affected=[], direct_count=0, transitive_count=0, warning=warning or "No topology services available.")
+        return BlastRadiusResult(
+            affected=[],
+            direct_count=0,
+            transitive_count=0,
+            warning=warning or "No topology services available.",
+        )
 
     resource_to_service_ids: dict[str, list[str]] = {}
     service_by_id = {service["id"]: service for service in services}

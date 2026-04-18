@@ -80,7 +80,9 @@ class IncidentMatcherTests(unittest.TestCase):
                 summary="Terraform changed a resource.",
             )
         ]
-        matches = incident_matcher_module.find_incident_matches(changes, min_similarity=0.15)
+        matches = incident_matcher_module.find_incident_matches(
+            changes, min_similarity=0.15
+        )
         self.assertEqual(matches, [])
 
     def test_find_incident_matches_ranks_more_specific_incident_higher(self) -> None:
@@ -101,11 +103,15 @@ class IncidentMatcherTests(unittest.TestCase):
                 summary="Terraform security group database exposure during deployment restart.",
             )
         ]
-        matches = incident_matcher_module.find_incident_matches(changes, min_similarity=0.1)
+        matches = incident_matcher_module.find_incident_matches(
+            changes, min_similarity=0.1
+        )
         self.assertGreaterEqual(len(matches), 1)
         self.assertEqual(matches[0].title, "Database exposure")
 
-    def test_find_incident_matches_prefers_higher_severity_and_recent_context(self) -> None:
+    def test_find_incident_matches_prefers_higher_severity_and_recent_context(
+        self,
+    ) -> None:
         incident_service_module.ingest_incident_document(
             "older.md",
             "# Similar deploy\nDate: 2024-01-01\nSeverity: low\nDatabase exposure during deploy restart.",
@@ -123,6 +129,8 @@ class IncidentMatcherTests(unittest.TestCase):
                 summary="Database exposure during deploy restart.",
             )
         ]
-        matches = incident_matcher_module.find_incident_matches(changes, min_similarity=0.1)
+        matches = incident_matcher_module.find_incident_matches(
+            changes, min_similarity=0.1
+        )
         self.assertGreaterEqual(len(matches), 2)
         self.assertEqual(matches[0].source_file, "recent.md")

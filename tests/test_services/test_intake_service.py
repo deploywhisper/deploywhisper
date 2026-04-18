@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import unittest
 
-from services.intake_service import build_pending_analysis, detect_tool_type, is_sensitive_file, uniquify_artifact_names
+from services.intake_service import (
+    build_pending_analysis,
+    detect_tool_type,
+    is_sensitive_file,
+    uniquify_artifact_names,
+)
 
 
 class IntakeServiceTests(unittest.TestCase):
@@ -16,7 +21,9 @@ class IntakeServiceTests(unittest.TestCase):
         raw = b"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\n"
         self.assertEqual(detect_tool_type("deployment.yaml", raw), "kubernetes")
 
-    def test_kubernetes_manifest_with_resources_block_is_not_misclassified(self) -> None:
+    def test_kubernetes_manifest_with_resources_block_is_not_misclassified(
+        self,
+    ) -> None:
         raw = b"""apiVersion: apps/v1
 kind: Deployment
 spec:
@@ -44,10 +51,14 @@ Outputs:
   BucketArn:
     Value: !GetAtt AppBucket.Arn
 """
-        self.assertEqual(detect_tool_type("galaxy-metl-sg-rules.yaml", raw), "cloudformation")
+        self.assertEqual(
+            detect_tool_type("galaxy-metl-sg-rules.yaml", raw), "cloudformation"
+        )
 
     def test_detect_tool_type_for_jenkinsfile(self) -> None:
-        self.assertEqual(detect_tool_type("Jenkinsfile", b"pipeline { agent any }"), "jenkins")
+        self.assertEqual(
+            detect_tool_type("Jenkinsfile", b"pipeline { agent any }"), "jenkins"
+        )
 
     def test_sensitive_file_detection(self) -> None:
         self.assertTrue(is_sensitive_file(".env"))
@@ -77,7 +88,9 @@ Outputs:
         )
         self.assertEqual([name for name, _ in files], ["plan.json", "plan#2.json"])
 
-    def test_pending_analysis_preserves_duplicate_file_names_after_uniquifying(self) -> None:
+    def test_pending_analysis_preserves_duplicate_file_names_after_uniquifying(
+        self,
+    ) -> None:
         pending = build_pending_analysis(
             uniquify_artifact_names(
                 [

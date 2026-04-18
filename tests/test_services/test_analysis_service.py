@@ -12,7 +12,9 @@ from services.analysis_service import build_advisory_summary, build_share_summar
 
 
 class AnalysisServiceTests(unittest.TestCase):
-    def test_build_advisory_summary_does_not_require_attention_for_go_with_only_narrative_warnings(self) -> None:
+    def test_build_advisory_summary_does_not_require_attention_for_go_with_only_narrative_warnings(
+        self,
+    ) -> None:
         assessment = RiskAssessment(
             score=12,
             severity="low",
@@ -46,7 +48,9 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertFalse(advisory.requires_attention)
         self.assertIn("narrative_warnings", advisory.uncertainty_flags)
 
-    def test_build_advisory_summary_requires_attention_for_partial_or_degraded_results(self) -> None:
+    def test_build_advisory_summary_requires_attention_for_partial_or_degraded_results(
+        self,
+    ) -> None:
         assessment = RiskAssessment(
             score=24,
             severity="low",
@@ -64,7 +68,9 @@ class AnalysisServiceTests(unittest.TestCase):
             ],
             interaction_risks=[],
             partial_context=True,
-            warnings=["Analysis used partial context because one or more files failed to parse."],
+            warnings=[
+                "Analysis used partial context because one or more files failed to parse."
+            ],
         )
         narrative = NarrativeResult(
             opening_sentence="GO: low risk example.",

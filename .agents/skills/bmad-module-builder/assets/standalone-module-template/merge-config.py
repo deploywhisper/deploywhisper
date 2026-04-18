@@ -138,7 +138,9 @@ def load_legacy_values(
     return legacy_core, legacy_module, files_found
 
 
-def apply_legacy_defaults(answers: dict, legacy_core: dict, legacy_module: dict) -> dict:
+def apply_legacy_defaults(
+    answers: dict, legacy_core: dict, legacy_module: dict
+) -> dict:
     """Apply legacy values as fallback defaults under the answers.
 
     Legacy values fill in any key not already present in answers.
@@ -255,17 +257,25 @@ def merge_config(
     for key in _CORE_USER_KEYS:
         if key in config:
             if verbose:
-                print(f"Removing user-only key '{key}' from config (belongs in config.user.yaml)", file=sys.stderr)
+                print(
+                    f"Removing user-only key '{key}' from config (belongs in config.user.yaml)",
+                    file=sys.stderr,
+                )
             del config[key]
 
     # Write core values at root (global properties, not nested under "core")
     # Exclude user-only keys — those belong exclusively in config.user.yaml
     core_answers = answers.get("core")
     if core_answers:
-        shared_core = {k: v for k, v in core_answers.items() if k not in _CORE_USER_KEYS}
+        shared_core = {
+            k: v for k, v in core_answers.items() if k not in _CORE_USER_KEYS
+        }
         if shared_core:
             if verbose:
-                print(f"Writing core config at root: {list(shared_core.keys())}", file=sys.stderr)
+                print(
+                    f"Writing core config at root: {list(shared_core.keys())}",
+                    file=sys.stderr,
+                )
             config.update(shared_core)
 
     # Anti-zombie: remove existing module section
@@ -345,7 +355,10 @@ def main():
     # Load inputs
     module_yaml = load_yaml_file(args.module_yaml)
     if not module_yaml:
-        print(f"Error: Could not load module.yaml from {args.module_yaml}", file=sys.stderr)
+        print(
+            f"Error: Could not load module.yaml from {args.module_yaml}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     answers = load_json_file(args.answers)

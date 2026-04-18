@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from math import ceil
 
 from nicegui import events, run, ui
 
@@ -22,7 +21,10 @@ from services.intake_service import (
     total_upload_bytes,
     uniquify_artifact_names,
 )
-from services.report_service import fetch_active_dashboard_report, persist_analysis_report
+from services.report_service import (
+    fetch_active_dashboard_report,
+    persist_analysis_report,
+)
 from services.settings_service import check_provider_readiness
 from services.topology_service import load_topology
 from ui.formatters.narrative import extract_llm_notice
@@ -46,7 +48,9 @@ def process_uploaded_files(
         uploads,
         existing_names=[name for name, _ in current_files],
     )
-    current_files.extend((name, raw_content) for name, raw_content in normalized_uploads)
+    current_files.extend(
+        (name, raw_content) for name, raw_content in normalized_uploads
+    )
     return build_pending_analysis(current_files)
 
 
@@ -131,13 +135,25 @@ def build_upload_panel(
         state["active_result"] = None
         result_mount.clear()
 
-    def render_result_card(report: dict, *, remaining_seconds: int | None = None) -> None:
+    def render_result_card(
+        report: dict, *, remaining_seconds: int | None = None
+    ) -> None:
         token = int(state["result_token"]) + 1
         state["result_token"] = token
         state["active_result"] = report
         result_mount.clear()
         countdown_label = None
-        timer_state = {"remaining": max(int(remaining_seconds or report.get("dashboard_remaining_seconds") or report.get("dashboard_display_duration_seconds") or 0), 0)}
+        timer_state = {
+            "remaining": max(
+                int(
+                    remaining_seconds
+                    or report.get("dashboard_remaining_seconds")
+                    or report.get("dashboard_display_duration_seconds")
+                    or 0
+                ),
+                0,
+            )
+        }
 
         def update_countdown() -> None:
             if token != state["result_token"]:
@@ -146,27 +162,41 @@ def build_upload_panel(
                 clear_result_if_current(token)
                 return
             if countdown_label is not None:
-                countdown_label.set_text(_format_countdown_label(timer_state["remaining"]))
+                countdown_label.set_text(
+                    _format_countdown_label(timer_state["remaining"])
+                )
             timer_state["remaining"] -= 1
 
         with result_mount:
             with ui.card().classes("w-full dw-panel shadow-none p-5"):
-                with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
+                with ui.row().classes(
+                    "w-full items-start justify-between gap-4 flex-wrap"
+                ):
                     with ui.row().classes("items-center gap-3 flex-wrap"):
                         render_risk_badge(report["severity"])
-                        render_recommendation_label(report["recommendation"], size="base")
+                        render_recommendation_label(
+                            report["recommendation"], size="base"
+                        )
                     countdown_label = ui.label("").classes("text-xs dw-muted")
-                ui.label(report["top_risk"]).classes("text-lg font-medium dw-text leading-6")
-                ui.label(report["narrative_opening"]).classes("text-sm dw-muted leading-6")
+                ui.label(report["top_risk"]).classes(
+                    "text-lg font-medium dw-text leading-6"
+                )
+                ui.label(report["narrative_opening"]).classes(
+                    "text-sm dw-muted leading-6"
+                )
                 ui.label(report["parse_summary"]).classes("text-xs dw-muted")
                 provenance_bits = [
                     f"Risk scoring: {report.get('assessment_source', 'unknown')}",
                     f"Narrative: {report.get('narrative_source', 'unknown')}",
                 ]
                 if report.get("narrative_provider") and report.get("narrative_model"):
-                    provenance_bits.append(f"Provider: {report['narrative_provider']} / {report['narrative_model']}")
+                    provenance_bits.append(
+                        f"Provider: {report['narrative_provider']} / {report['narrative_model']}"
+                    )
                 if report.get("skills_applied"):
-                    provenance_bits.append("Skills: " + ", ".join(report["skills_applied"]))
+                    provenance_bits.append(
+                        "Skills: " + ", ".join(report["skills_applied"])
+                    )
                 ui.label(" · ".join(provenance_bits)).classes("text-xs dw-muted")
                 llm_notice = extract_llm_notice(report.get("warnings", []))
                 if llm_notice:
@@ -174,12 +204,20 @@ def build_upload_panel(
                 contributors = report.get("contributors", [])
                 if contributors:
                     with ui.column().classes("mt-3 gap-2"):
-                        ui.label("Resource severity breakdown").classes("text-sm font-semibold dw-text")
+                        ui.label("Resource severity breakdown").classes(
+                            "text-sm font-semibold dw-text"
+                        )
                         for contributor in contributors[:5]:
-                            with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
+                            with ui.row().classes(
+                                "w-full items-start justify-between gap-3 flex-wrap"
+                            ):
                                 with ui.column().classes("min-w-0 flex-1 gap-1"):
-                                    ui.label(contributor["resource_id"]).classes("text-sm font-medium dw-text")
-                                    ui.label(contributor["reasoning"]).classes("text-xs dw-muted leading-5")
+                                    ui.label(contributor["resource_id"]).classes(
+                                        "text-sm font-medium dw-text"
+                                    )
+                                    ui.label(contributor["reasoning"]).classes(
+                                        "text-xs dw-muted leading-5"
+                                    )
                                 render_risk_badge(contributor["severity"])
             ui.timer(1.0, update_countdown)
         update_countdown()
@@ -195,13 +233,19 @@ def build_upload_panel(
                     progress_label = ui.label(
                         f"{int(state['progress_value'])}% · {state['progress_message']}"
                     ).classes("text-sm dw-text")
-                progress_bar = ui.linear_progress(value=float(state["progress_value"]) / 100).classes("w-full")
-                ui.label("Uploads are disabled while analysis is running.").classes("text-xs dw-muted")
+                progress_bar = ui.linear_progress(
+                    value=float(state["progress_value"]) / 100
+                ).classes("w-full")
+                ui.label("Uploads are disabled while analysis is running.").classes(
+                    "text-xs dw-muted"
+                )
                 return
 
             progress_bar = None
             progress_label = None
-            analyze_button = ui.button("Analyze", on_click=run_analysis, color="primary").props("unelevated")
+            analyze_button = ui.button(
+                "Analyze", on_click=run_analysis, color="primary"
+            ).props("unelevated")
             if summary.ready_count == 0:
                 analyze_button.disable()
 
@@ -227,11 +271,15 @@ def build_upload_panel(
 
         for item in summary.items:
             with detail_column:
-                with ui.row().classes("w-full items-center justify-between dw-panel-soft px-3 py-2"):
+                with ui.row().classes(
+                    "w-full items-center justify-between dw-panel-soft px-3 py-2"
+                ):
                     ui.label(item.name).classes("text-sm dw-text")
                     with ui.row().classes("items-center gap-3"):
                         ui.label(item.tool).classes("text-xs uppercase dw-muted")
-                        ui.label(item.status).style(STATUS_STYLES[item.status]).classes("text-xs font-medium uppercase")
+                        ui.label(item.status).style(STATUS_STYLES[item.status]).classes(
+                            "text-xs font-medium uppercase"
+                        )
                 ui.label(item.message).classes("text-xs dw-muted")
 
         render_actions()
@@ -268,13 +316,19 @@ def build_upload_panel(
                 raw_files=dict(raw_files),
             )
             update_progress(45, "Scored deployment risk with enriched context")
-            await run.io_bound(compute_blast_radius, changes, topology, topology_warning)
+            await run.io_bound(
+                compute_blast_radius, changes, topology, topology_warning
+            )
             update_progress(60, "Computed blast radius")
-            await run.io_bound(generate_rollback_plan, changes, parse_batch.has_partial_context)
+            await run.io_bound(
+                generate_rollback_plan, changes, parse_batch.has_partial_context
+            )
             update_progress(72, "Generated rollback guidance")
             await run.io_bound(find_incident_matches, changes)
             update_progress(84, "Checked similar incidents")
-            narrative = await run.io_bound(generate_narrative, assessment, raw_files=dict(raw_files))
+            narrative = await run.io_bound(
+                generate_narrative, assessment, raw_files=dict(raw_files)
+            )
             update_progress(96, "Generated advisory narrative")
 
             persisted_report = await run.io_bound(
@@ -294,7 +348,9 @@ def build_upload_panel(
 
             render_result_card(
                 display_report,
-                remaining_seconds=persisted_report.get("dashboard_display_duration_seconds"),
+                remaining_seconds=persisted_report.get(
+                    "dashboard_display_duration_seconds"
+                ),
             )
             state["files"] = []
             state["summary"] = build_pending_analysis([])
@@ -316,9 +372,14 @@ def build_upload_panel(
             result_mount.clear()
             with result_mount:
                 with ui.card().classes("w-full dw-panel shadow-none p-5"):
-                    ui.label("Analysis failed").classes("text-base font-semibold dw-danger-text")
+                    ui.label("Analysis failed").classes(
+                        "text-base font-semibold dw-danger-text"
+                    )
                     ui.label(str(exc)).classes("text-sm dw-muted")
-            ui.notify("Analysis failed. Review the dashboard error card for details.", color="negative")
+            ui.notify(
+                "Analysis failed. Review the dashboard error card for details.",
+                color="negative",
+            )
         finally:
             state["is_running"] = False
             upload_widget.enable()
@@ -352,18 +413,25 @@ def build_upload_panel(
                     dialog.close()
                     schedule_analysis_after_dialog_close()
 
-                ui.button("Continue Anyway", on_click=proceed_anyway, color="primary").props("unelevated no-caps")
+                ui.button(
+                    "Continue Anyway", on_click=proceed_anyway, color="primary"
+                ).props("unelevated no-caps")
         dialog.open()
 
     async def handle_multi_upload(event: events.MultiUploadEventArguments) -> None:
         if state["is_running"]:
-            upload_error.set_text("Wait for the current analysis to finish before uploading more artifacts.")
+            upload_error.set_text(
+                "Wait for the current analysis to finish before uploading more artifacts."
+            )
             return
         current_total = total_upload_bytes(list(state["files"]))
         uploads: list[tuple[str, bytes]] = []
         for uploaded_file in event.files:
             file_size = getattr(uploaded_file, "size", None)
-            if isinstance(file_size, int) and current_total + file_size > MAX_TOTAL_UPLOAD_BYTES:
+            if (
+                isinstance(file_size, int)
+                and current_total + file_size > MAX_TOTAL_UPLOAD_BYTES
+            ):
                 upload_error.set_text(
                     "Total upload size exceeds the 50 MB analysis-session limit. Remove some artifacts and try again."
                 )
@@ -380,21 +448,28 @@ def build_upload_panel(
         render_summary()
 
     def handle_rejected(_: events.UiEventArguments) -> None:
-        upload_error.set_text("One or more files were rejected by the uploader. Check file type or size.")
+        upload_error.set_text(
+            "One or more files were rejected by the uploader. Check file type or size."
+        )
 
     with upload_card:
-        upload_widget = ui.upload(
-            on_multi_upload=handle_multi_upload,
-            on_rejected=handle_rejected,
-            auto_upload=True,
-            multiple=True,
-            label="Select deployment artifacts",
-            max_file_size=50_000_000,
-        ).props("accept=.json,.yaml,.yml,.tf,.tfvars,.hcl,Jenkinsfile").classes(
-            "w-full"
+        upload_widget = (
+            ui.upload(
+                on_multi_upload=handle_multi_upload,
+                on_rejected=handle_rejected,
+                auto_upload=True,
+                multiple=True,
+                label="Select deployment artifacts",
+                max_file_size=50_000_000,
+            )
+            .props("accept=.json,.yaml,.yml,.tf,.tfvars,.hcl,Jenkinsfile")
+            .classes("w-full")
         )
 
     active_report = fetch_active_dashboard_report()
     if active_report is not None:
-        render_result_card(active_report, remaining_seconds=active_report["dashboard_remaining_seconds"])
+        render_result_card(
+            active_report,
+            remaining_seconds=active_report["dashboard_remaining_seconds"],
+        )
     render_summary()

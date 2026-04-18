@@ -21,7 +21,11 @@ def parse_ansible(name: str, raw_content: bytes | None) -> list[UnifiedChange]:
         for play in plays:
             tasks = play.get("tasks", []) if isinstance(play, dict) else []
             for index, task in enumerate(tasks, start=1):
-                task_name = task.get("name", f"task-{index}") if isinstance(task, dict) else f"task-{index}"
+                task_name = (
+                    task.get("name", f"task-{index}")
+                    if isinstance(task, dict)
+                    else f"task-{index}"
+                )
                 changes.append(
                     UnifiedChange(
                         source_file=name,

@@ -33,7 +33,14 @@ class ReportFilterTests(unittest.TestCase):
         os.environ.pop("DATABASE_URL", None)
         self.tempdir.cleanup()
 
-    def _persist(self, *, severity: str, recommendation: str, top_risk: str, source_interface: str = "ui") -> None:
+    def _persist(
+        self,
+        *,
+        severity: str,
+        recommendation: str,
+        top_risk: str,
+        source_interface: str = "ui",
+    ) -> None:
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -85,27 +92,42 @@ class ReportFilterTests(unittest.TestCase):
             audit_context={"source_interface": source_interface},
         )
 
-    def test_fetch_filtered_analysis_history_filters_by_severity_and_search(self) -> None:
-        self._persist(severity="high", recommendation="caution", top_risk="Database exposure risk")
+    def test_fetch_filtered_analysis_history_filters_by_severity_and_search(
+        self,
+    ) -> None:
+        self._persist(
+            severity="high", recommendation="caution", top_risk="Database exposure risk"
+        )
         self._persist(severity="low", recommendation="go", top_risk="Minor change")
 
-        high_reports = report_service_module.fetch_filtered_analysis_history(severity="high")
+        high_reports = report_service_module.fetch_filtered_analysis_history(
+            severity="high"
+        )
         self.assertEqual(len(high_reports), 1)
         self.assertEqual(high_reports[0]["severity"], "high")
 
-        search_reports = report_service_module.fetch_filtered_analysis_history(search="Database exposure")
+        search_reports = report_service_module.fetch_filtered_analysis_history(
+            search="Database exposure"
+        )
         self.assertEqual(len(search_reports), 1)
         self.assertIn("Database exposure", search_reports[0]["top_risk"])
 
     def test_fetch_filtered_analysis_history_retains_audit_metadata(self) -> None:
-        self._persist(severity="high", recommendation="caution", top_risk="Database exposure risk", source_interface="api")
+        self._persist(
+            severity="high",
+            recommendation="caution",
+            top_risk="Database exposure risk",
+            source_interface="api",
+        )
 
         reports = report_service_module.fetch_filtered_analysis_history()
 
         self.assertEqual(reports[0]["audit"]["source_interface"], "api")
         self.assertEqual(reports[0]["audit"]["llm_provider"], "ollama")
 
-    def test_fetch_filtered_analysis_history_page_limits_results_and_reports_total_count(self) -> None:
+    def test_fetch_filtered_analysis_history_page_limits_results_and_reports_total_count(
+        self,
+    ) -> None:
         for index in range(6):
             self._persist(
                 severity="high" if index % 2 == 0 else "low",
@@ -113,8 +135,12 @@ class ReportFilterTests(unittest.TestCase):
                 top_risk=f"Risk {index}",
             )
 
-        page_one = report_service_module.fetch_filtered_analysis_history_page(page=1, page_size=2)
-        page_two = report_service_module.fetch_filtered_analysis_history_page(page=2, page_size=2)
+        page_one = report_service_module.fetch_filtered_analysis_history_page(
+            page=1, page_size=2
+        )
+        page_two = report_service_module.fetch_filtered_analysis_history_page(
+            page=2, page_size=2
+        )
 
         self.assertEqual(len(page_one["items"]), 2)
         self.assertEqual(len(page_two["items"]), 2)
@@ -122,8 +148,18 @@ class ReportFilterTests(unittest.TestCase):
         self.assertEqual(page_two["page"], 2)
 
     def test_remove_analysis_reports_supports_single_and_bulk_delete(self) -> None:
-        self._persist(severity="high", recommendation="caution", top_risk="Database exposure risk", source_interface="api")
-        self._persist(severity="low", recommendation="go", top_risk="Minor change", source_interface="ui")
+        self._persist(
+            severity="high",
+            recommendation="caution",
+            top_risk="Database exposure risk",
+            source_interface="api",
+        )
+        self._persist(
+            severity="low",
+            recommendation="go",
+            top_risk="Minor change",
+            source_interface="ui",
+        )
 
         reports = report_service_module.fetch_filtered_analysis_history()
         self.assertEqual(len(reports), 2)
@@ -133,6 +169,8 @@ class ReportFilterTests(unittest.TestCase):
         reports_after_single = report_service_module.fetch_filtered_analysis_history()
         self.assertEqual(len(reports_after_single), 1)
 
-        removed_many = report_service_module.remove_analysis_reports([report["id"] for report in reports_after_single])
+        removed_many = report_service_module.remove_analysis_reports(
+            [report["id"] for report in reports_after_single]
+        )
         self.assertEqual(removed_many, 1)
         self.assertEqual(report_service_module.fetch_filtered_analysis_history(), [])

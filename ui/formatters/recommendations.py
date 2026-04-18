@@ -24,4 +24,6 @@ def recommendation_classes(value: str, *, size: str = "sm") -> str:
 
 def render_recommendation_label(value: str, *, size: str = "sm"):
     """Render a consistent deployment recommendation label."""
-    return ui.label(recommendation_text(value)).classes(recommendation_classes(value, size=size))
+    return ui.label(recommendation_text(value)).classes(
+        recommendation_classes(value, size=size)
+    )

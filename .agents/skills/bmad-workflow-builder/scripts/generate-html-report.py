@@ -31,11 +31,11 @@ from pathlib import Path
 
 def load_report_data(report_dir: Path) -> dict:
     """Load report-data.json from the report directory."""
-    data_file = report_dir / 'report-data.json'
+    data_file = report_dir / "report-data.json"
     if not data_file.exists():
-        print(f'Error: {data_file} not found', file=sys.stderr)
+        print(f"Error: {data_file} not found", file=sys.stderr)
         sys.exit(2)
-    return json.loads(data_file.read_text(encoding='utf-8'))
+    return json.loads(data_file.read_text(encoding="utf-8"))
 
 
 def build_fix_prompt(skill_path: str, theme: dict) -> str:
@@ -44,14 +44,18 @@ def build_fix_prompt(skill_path: str, theme: dict) -> str:
     prompt += f"Skill path: {skill_path}\n\n"
     prompt += f"### Problem\n{theme['description']}\n\n"
     prompt += f"### Fix\n{theme['action']}\n\n"
-    if theme.get('findings'):
+    if theme.get("findings"):
         prompt += "### Specific observations to address:\n\n"
-        for i, f in enumerate(theme['findings'], 1):
-            loc = f"{f['file']}:{f['line']}" if f.get('file') and f.get('line') else f.get('file', '')
+        for i, f in enumerate(theme["findings"], 1):
+            loc = (
+                f"{f['file']}:{f['line']}"
+                if f.get("file") and f.get("line")
+                else f.get("file", "")
+            )
             prompt += f"{i}. **{f['title']}**"
             if loc:
                 prompt += f" ({loc})"
-            if f.get('detail'):
+            if f.get("detail"):
                 prompt += f"\n   {f['detail']}"
             prompt += "\n"
     return prompt.strip()
@@ -61,13 +65,17 @@ def build_broken_prompt(skill_path: str, items: list) -> str:
     """Build a fix prompt for all broken items."""
     prompt = f"## Task: Fix Critical Issues\nSkill path: {skill_path}\n\n"
     for i, item in enumerate(items, 1):
-        loc = f"{item['file']}:{item['line']}" if item.get('file') and item.get('line') else item.get('file', '')
-        prompt += f"{i}. **[{item.get('severity','high').upper()}] {item['title']}**\n"
+        loc = (
+            f"{item['file']}:{item['line']}"
+            if item.get("file") and item.get("line")
+            else item.get("file", "")
+        )
+        prompt += f"{i}. **[{item.get('severity', 'high').upper()}] {item['title']}**\n"
         if loc:
             prompt += f"   File: {loc}\n"
-        if item.get('detail'):
+        if item.get("detail"):
             prompt += f"   Context: {item['detail']}\n"
-        if item.get('action'):
+        if item.get("action"):
             prompt += f"   Fix: {item['action']}\n"
         prompt += "\n"
     return prompt.strip()
@@ -477,63 +485,72 @@ def generate_html(report_data: dict) -> str:
     """Inject report data into the HTML template."""
     data_json = json.dumps(report_data, indent=None, ensure_ascii=False)
     data_tag = f'<script id="report-data" type="application/json">{data_json}</script>'
-    html = HTML_TEMPLATE.replace('<script>\nconst RAW', f'{data_tag}\n<script>\nconst RAW')
-    html = html.replace('SKILL_NAME', report_data.get('meta', {}).get('skill_name', 'Unknown'))
+    html = HTML_TEMPLATE.replace(
+        "<script>\nconst RAW", f"{data_tag}\n<script>\nconst RAW"
+    )
+    html = html.replace(
+        "SKILL_NAME", report_data.get("meta", {}).get("skill_name", "Unknown")
+    )
     return html
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description='Generate interactive HTML quality analysis report',
+        description="Generate interactive HTML quality analysis report",
     )
     parser.add_argument(
-        'report_dir',
+        "report_dir",
         type=Path,
-        help='Directory containing report-data.json',
+        help="Directory containing report-data.json",
     )
     parser.add_argument(
-        '--open',
-        action='store_true',
-        help='Open the HTML report in the default browser',
+        "--open",
+        action="store_true",
+        help="Open the HTML report in the default browser",
     )
     parser.add_argument(
-        '--output', '-o',
+        "--output",
+        "-o",
         type=Path,
-        help='Output HTML file path (default: {report_dir}/quality-report.html)',
+        help="Output HTML file path (default: {report_dir}/quality-report.html)",
     )
     args = parser.parse_args()
 
     if not args.report_dir.is_dir():
-        print(f'Error: {args.report_dir} is not a directory', file=sys.stderr)
+        print(f"Error: {args.report_dir} is not a directory", file=sys.stderr)
         return 2
 
     report_data = load_report_data(args.report_dir)
     html = generate_html(report_data)
 
-    output_path = args.output or (args.report_dir / 'quality-report.html')
-    output_path.write_text(html, encoding='utf-8')
+    output_path = args.output or (args.report_dir / "quality-report.html")
+    output_path.write_text(html, encoding="utf-8")
 
     # Output summary
-    opp_count = len(report_data.get('opportunities', []))
-    broken_count = len(report_data.get('broken', []))
-    print(json.dumps({
-        'html_report': str(output_path),
-        'grade': report_data.get('grade', 'Unknown'),
-        'opportunities': opp_count,
-        'broken': broken_count,
-    }))
+    opp_count = len(report_data.get("opportunities", []))
+    broken_count = len(report_data.get("broken", []))
+    print(
+        json.dumps(
+            {
+                "html_report": str(output_path),
+                "grade": report_data.get("grade", "Unknown"),
+                "opportunities": opp_count,
+                "broken": broken_count,
+            }
+        )
+    )
 
     if args.open:
         system = platform.system()
-        if system == 'Darwin':
-            subprocess.run(['open', str(output_path)])
-        elif system == 'Linux':
-            subprocess.run(['xdg-open', str(output_path)])
-        elif system == 'Windows':
-            subprocess.run(['start', str(output_path)], shell=True)
+        if system == "Darwin":
+            subprocess.run(["open", str(output_path)])
+        elif system == "Linux":
+            subprocess.run(["xdg-open", str(output_path)])
+        elif system == "Windows":
+            subprocess.run(["start", str(output_path)], shell=True)
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

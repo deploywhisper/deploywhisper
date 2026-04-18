@@ -110,7 +110,9 @@ class HistoryPageRenderingTests(unittest.TestCase):
             local_mode=True,
             skills_applied=["git", "terraform"],
         )
-        report_service_module.persist_analysis_report(parse_batch, assessment, narrative, audit_context={"source_interface": "ui"})
+        report_service_module.persist_analysis_report(
+            parse_batch, assessment, narrative, audit_context={"source_interface": "ui"}
+        )
 
     def test_history_page_renders_toolbar_and_report_actions(self) -> None:
         self._persist_report()

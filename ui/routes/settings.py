@@ -43,7 +43,9 @@ def process_topology_upload_content(raw_content: bytes) -> dict[str, Any]:
     }
 
 
-def process_custom_skill_upload_content(filename: str, raw_content: bytes) -> dict[str, Any]:
+def process_custom_skill_upload_content(
+    filename: str, raw_content: bytes
+) -> dict[str, Any]:
     """Decode and persist a custom skill file with admin-facing feedback."""
     try:
         raw_text = raw_content.decode("utf-8")
@@ -98,11 +100,20 @@ def build_settings_page() -> None:
                 label="Active Provider",
             ).classes("w-full")
             model_input = ui.input("Model", value=settings.model).classes("w-full")
-            api_base_input = ui.input("API base", value=settings.api_base).classes("w-full")
-            api_key_input = ui.input("API key", value=settings.api_key or "", password=True, password_toggle_button=True).classes("w-full")
+            api_base_input = ui.input("API base", value=settings.api_base).classes(
+                "w-full"
+            )
+            api_key_input = ui.input(
+                "API key",
+                value=settings.api_key or "",
+                password=True,
+                password_toggle_button=True,
+            ).classes("w-full")
             local_mode_toggle = ui.switch("Local-only mode", value=settings.local_mode)
             activate_toggle = ui.switch("Set as active provider", value=True)
-            feedback = ui.label(f"Current source: {settings.source} · active provider: {settings.provider}").classes("text-sm dw-muted")
+            feedback = ui.label(
+                f"Current source: {settings.source} · active provider: {settings.provider}"
+            ).classes("text-sm dw-muted")
             duration_feedback = ui.label("").classes("text-sm dw-muted")
             duration_options = {
                 60: "1 minute",
@@ -131,12 +142,18 @@ def build_settings_page() -> None:
                 if provider_name != "ollama":
                     local_mode_toggle.value = False
 
-            provider_select.on_value_change(lambda event: sync_provider_fields(str(event.value)))
+            provider_select.on_value_change(
+                lambda event: sync_provider_fields(str(event.value))
+            )
             sync_provider_fields(settings.provider)
 
             def save_settings() -> None:
                 selected_provider = str(provider_select.value)
-                local_mode = bool(local_mode_toggle.value) if selected_provider == "ollama" else False
+                local_mode = (
+                    bool(local_mode_toggle.value)
+                    if selected_provider == "ollama"
+                    else False
+                )
                 if local_mode:
                     saved = activate_local_mode(
                         model=model_input.value.strip(),
@@ -162,10 +179,14 @@ def build_settings_page() -> None:
                         f"Saved provider settings: {saved.provider} · {saved.model} · "
                         f"local_mode={saved.local_mode} · source={saved.source} · validation failed: {validation['message']}"
                     )
-                saved_duration = save_dashboard_result_display_duration_seconds(int(duration_select.value))
+                saved_duration = save_dashboard_result_display_duration_seconds(
+                    int(duration_select.value)
+                )
                 duration_feedback.text = f"Dashboard results will remain visible for {duration_options[saved_duration]}."
 
-            ui.button("Save AI settings", on_click=lambda: save_settings(), color="primary").props("unelevated")
+            ui.button(
+                "Save AI settings", on_click=lambda: save_settings(), color="primary"
+            ).props("unelevated")
             duration_feedback.text = f"Dashboard results currently remain visible for {duration_options[dashboard_duration_seconds]}."
 
         with ui.card().classes("w-full dw-panel shadow-none"):
@@ -176,7 +197,12 @@ def build_settings_page() -> None:
             ).classes("text-sm dw-muted")
             topology_feedback = ui.column().classes("w-full gap-2")
 
-            def render_topology_feedback(status, *, success_message: str | None = None, error_message: str | None = None) -> None:
+            def render_topology_feedback(
+                status,
+                *,
+                success_message: str | None = None,
+                error_message: str | None = None,
+            ) -> None:
                 topology_feedback.clear()
                 with topology_feedback:
                     if error_message:
@@ -191,13 +217,23 @@ def build_settings_page() -> None:
                             f"{status.resource_key_count} resource mappings"
                         ).classes("text-sm dw-text")
                         updated_at = status.updated_at or "timestamp unavailable"
-                        ui.label(f"Active file: {status.path}").classes("text-xs dw-muted")
-                        ui.label(f"Last updated: {updated_at}").classes("text-xs dw-muted")
+                        ui.label(f"Active file: {status.path}").classes(
+                            "text-xs dw-muted"
+                        )
+                        ui.label(f"Last updated: {updated_at}").classes(
+                            "text-xs dw-muted"
+                        )
                         if status.preview_services:
-                            ui.label("Preview: " + ", ".join(status.preview_services)).classes("text-xs dw-muted")
+                            ui.label(
+                                "Preview: " + ", ".join(status.preview_services)
+                            ).classes("text-xs dw-muted")
                     else:
-                        ui.label(f"Active file: {status.path}").classes("text-xs dw-muted")
-                        ui.label("No topology is active yet.").classes("text-sm dw-muted")
+                        ui.label(f"Active file: {status.path}").classes(
+                            "text-xs dw-muted"
+                        )
+                        ui.label("No topology is active yet.").classes(
+                            "text-sm dw-muted"
+                        )
 
                     for blocking_error in status.blocking_errors:
                         ui.label(blocking_error).classes("text-xs dw-danger-text")
@@ -243,19 +279,27 @@ def build_settings_page() -> None:
 
                     if statuses:
                         for status in statuses:
-                            mode_text = "override" if status.mode == "override" else "new"
+                            mode_text = (
+                                "override" if status.mode == "override" else "new"
+                            )
                             state_text = "detected" if status.active else "ignored"
                             ui.label(
                                 f"{status.name} · {mode_text} · {state_text}"
                             ).classes("text-sm dw-text")
                             ui.label(status.path).classes("text-xs dw-muted")
                             if status.warning:
-                                ui.label(status.warning).classes("text-xs dw-warning-text")
+                                ui.label(status.warning).classes(
+                                    "text-xs dw-warning-text"
+                                )
                     else:
-                        ui.label("No custom skills detected.").classes("text-sm dw-muted")
+                        ui.label("No custom skills detected.").classes(
+                            "text-sm dw-muted"
+                        )
 
             def handle_custom_skill_upload(event) -> None:
-                upload_result = process_custom_skill_upload_content(event.name, event.content.read())
+                upload_result = process_custom_skill_upload_content(
+                    event.name, event.content.read()
+                )
                 render_skill_feedback(
                     upload_result["statuses"],
                     success_message=upload_result["success_message"],

@@ -11,7 +11,9 @@ class TerraformParserTests(unittest.TestCase):
     def test_parse_terraform_returns_empty_list_when_content_missing(self) -> None:
         self.assertEqual(parse_terraform("plan.json", None), [])
 
-    def test_parse_terraform_plan_json_joins_actions_and_uses_resource_specific_summary(self) -> None:
+    def test_parse_terraform_plan_json_joins_actions_and_uses_resource_specific_summary(
+        self,
+    ) -> None:
         raw = b"""{
   "resource_changes": [
     {
@@ -29,7 +31,7 @@ class TerraformParserTests(unittest.TestCase):
         self.assertIn("changes access permissions", changes[0].summary)
 
     def test_parse_terraform_hcl_extracts_resource_and_module_changes(self) -> None:
-        raw = b'''
+        raw = b"""
 resource "aws_vpc" "core" {
   cidr_block = "10.0.0.0/16"
 }
@@ -37,11 +39,14 @@ resource "aws_vpc" "core" {
 module "cluster" {
   source = "./modules/cluster"
 }
-'''
+"""
 
         changes = parse_terraform("network.tf", raw)
 
-        self.assertEqual([change.resource_id for change in changes], ["aws_vpc.core", "module.cluster"])
+        self.assertEqual(
+            [change.resource_id for change in changes],
+            ["aws_vpc.core", "module.cluster"],
+        )
         self.assertIn("network boundaries", changes[0].summary)
         self.assertIn("multiple downstream resources", changes[1].summary)
 
