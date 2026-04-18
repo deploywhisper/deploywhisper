@@ -238,17 +238,24 @@ jobs:
             BUILD_VERSION=${{ needs.validate.outputs.version }}
             BUILD_SHA=${{ github.sha }}
 
-      - name: Smoke test — container starts and health endpoint responds
+      - name: Smoke test — pull and verify pushed image
         run: |
+          # Use the first tag from the metadata output (the full semver)
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}"
+          # Strip the leading 'v' from the tag
+          IMAGE=$(echo "$IMAGE" | sed 's/:v/:/')
+          echo "Pulling image: $IMAGE"
+          docker pull "$IMAGE"
+
           docker run -d \
-            --name whisper-smoke \
+            --name release-smoke \
             -p 8080:8080 \
-            -v whisper-ci-data:/app/data \
+            -v whisper-release-data:/app/data \
             -e APP_HOST=0.0.0.0 \
             -e APP_PORT=8080 \
             -e LOG_LEVEL=INFO \
             -e DATABASE_URL=sqlite:///data/deploywhisper.db \
-            ai-deploy-whisper:ci-${{ github.sha }}
+            "$IMAGE"
 
           echo "Waiting for container to be ready..."
           for i in $(seq 1 30); do
@@ -257,23 +264,20 @@ jobs:
               break
             fi
             if [ "$i" -eq 30 ]; then
-              echo "::error::Health check failed after 30 attempts"
-              docker logs whisper-smoke
+              echo "::error::Pushed image failed health check"
+              docker logs release-smoke
               exit 1
             fi
             sleep 2
           done
-
-          HEALTH=$(curl -sf http://localhost:8080/api/v1/health)
-          echo "Health response: $HEALTH"
+          echo "Pushed image verified successfully."
 
       - name: Cleanup
         if: always()
         run: |
-          docker stop whisper-smoke 2>/dev/null || true
-          docker rm whisper-smoke 2>/dev/null || true
-          docker volume rm whisper-ci-data 2>/dev/null || true
-
+          docker stop release-smoke 2>/dev/null || true
+          docker rm release-smoke 2>/dev/null || true
+          docker volume rm whisper-release-data 2>/dev/null || true
   # ===========================================================================
   # STAGE 5 — CREATE GITHUB RELEASE
   # ===========================================================================
@@ -366,11 +370,11 @@ jobs:
       - validate
       - docker
       - release
+    env:
+      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
     steps:
       - name: Notify Slack on successful release
-        if: env.SLACK_WEBHOOK != ''
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: needs.release.result == 'success' && env.SLACK_WEBHOOK != ''
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           python3 - <<'PY'
@@ -384,7 +388,7 @@ jobs:
               )
           }
           req = urllib.request.Request(
-              os.environ["SLACK_WEBHOOK_URL"],
+              os.environ["SLACK_WEBHOOK"],
               data=json.dumps(payload).encode(),
               headers={"Content-Type": "application/json"},
               method="POST",
@@ -394,9 +398,7 @@ jobs:
           PY
 
       - name: Notify on release failure
-        if: env.SLACK_WEBHOOK != ''
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: needs.release.result == 'failure' && env.SLACK_WEBHOOK != ''
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           python3 - <<'PY'
@@ -409,7 +411,7 @@ jobs:
               )
           }
           req = urllib.request.Request(
-              os.environ["SLACK_WEBHOOK_URL"],
+              os.environ["SLACK_WEBHOOK"],
               data=json.dumps(payload).encode(),
               headers={"Content-Type": "application/json"},
               method="POST",
