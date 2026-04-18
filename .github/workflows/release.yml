@@ -241,7 +241,7 @@ jobs:
       - name: Smoke test — pull and verify pushed image
         run: |
           # Use the first tag from the metadata output (the full semver)
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${DOCKER_METADATA_OUTPUT_VERSION}"
           # Strip the leading 'v' from the tag
           IMAGE=$(echo "$IMAGE" | sed 's/:v/:/')
           echo "Pulling image: $IMAGE"
