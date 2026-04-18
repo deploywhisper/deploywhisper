@@ -394,9 +394,9 @@ jobs:
           PY
 
       - name: Notify on release failure
-        if: needs.release.result == 'failure' && secrets.SLACK_WEBHOOK_URL != ''
+        if: env.SLACK_WEBHOOK != ''
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           python3 - <<'PY'
