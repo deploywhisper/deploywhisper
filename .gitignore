@@ -208,5 +208,6 @@ __marimo__/
 .omx/
 .DS_Store
 .claude/
-_bmad-output/
+# _bmad-output/
+_bmad-output/implementation-artifacts
 _bmad/

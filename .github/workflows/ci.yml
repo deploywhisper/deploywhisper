@@ -5,6 +5,9 @@ on:
     branches:
       - master
       - develop
+      - 'feature/**'
+      - 'release/**'
+      - 'hotfix/**'
   pull_request:
     branches:
       - master
@@ -203,24 +206,24 @@ jobs:
       - report
 
     steps:
-      - name: Notify Slack on failure
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          import urllib.request
+      # - name: Notify Slack on failure
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #   run: |
+      #     python - <<'PY'
+      #     import json
+      #     import os
+      #     import urllib.request
 
-          payload = {
-              "text": "DeployWhisper CI failed. Review the GitHub Actions run summary and failure artifacts."
-          }
-          request = urllib.request.Request(
-              os.environ["SLACK_WEBHOOK_URL"],
-              data=json.dumps(payload).encode("utf-8"),
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
-          with urllib.request.urlopen(request, timeout=10):
-              pass
-          PY
+      #     payload = {
+      #         "text": "DeployWhisper CI failed. Review the GitHub Actions run summary and failure artifacts."
+      #     }
+      #     request = urllib.request.Request(
+      #         os.environ["SLACK_WEBHOOK_URL"],
+      #         data=json.dumps(payload).encode("utf-8"),
+      #         headers={"Content-Type": "application/json"},
+      #         method="POST",
+      #     )
+      #     with urllib.request.urlopen(request, timeout=10):
+      #         pass
+      #     PY
