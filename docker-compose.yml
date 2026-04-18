@@ -1,5 +1,7 @@
 services:
   deploywhisper:
+    # If you want to use the already published image, uncomment the "image" section and comment out the build section.
+    # image: ghcr.io/pramodksahoo/ai-deploy-whisper:1.0.0 
     build:
       context: .
       target: runtime
