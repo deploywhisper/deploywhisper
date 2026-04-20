@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
+import json
+
 from pydantic import BaseModel, Field
 
 from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
 from analysis.incident_matcher import IncidentMatch, find_incident_matches
 from analysis.risk_engine import score_evidence
 from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
+from evidence.mappers import build_findings
 from analysis.risk_scorer import RiskAssessment
-from evidence.models import EvidenceItem
+from evidence.models import EvidenceItem, Finding
 from evidence.extractor import extract_batch_evidence
 from llm.narrator import NarrativeResult, generate_narrative
+from llm.providers import generate_completion_with_settings
 from parsers.base import ParseBatchResult, UnifiedChange
 from services.intake_service import build_parse_batch
 from services.report_service import persist_analysis_report
+from services.settings_service import resolve_provider_runtime
 from services.topology_service import load_topology
 
 
@@ -59,6 +64,10 @@ class AnalysisArtifacts(BaseModel):
     evidence_items: list[EvidenceItem] = Field(
         default_factory=list,
         description="Traceable evidence extracted from parsed changes",
+    )
+    findings: list[Finding] = Field(
+        default_factory=list,
+        description="Reviewer-facing findings with explicit confidence",
     )
     assessment: RiskAssessment = Field(..., description="Unified risk assessment")
     blast_radius: BlastRadiusResult = Field(..., description="Blast radius result")
@@ -126,6 +135,84 @@ def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
         if file_result.status == "parsed":
             changes.extend(file_result.changes)
     return changes
+
+
+def _interaction_confidence_prompt_payload(assessment: RiskAssessment) -> str:
+    payload = {
+        "instructions": {
+            "format": "Return JSON with key 'confidences' containing objects with keys 'key' and 'confidence'.",
+            "constraints": [
+                "Only use interaction keys present in the payload.",
+                "Confidence must be a number between 0 and 1.",
+                "Do not invent extra interactions.",
+            ],
+        },
+        "interactions": [
+            {
+                "key": interaction.key,
+                "summary": interaction.summary,
+                "contributing_files": interaction.contributing_files,
+                "contributing_resources": interaction.contributing_resources,
+            }
+            for interaction in assessment.interaction_risks
+        ],
+        "top_risk": assessment.top_risk,
+        "contributors": [
+            {
+                "resource_id": contributor.resource_id,
+                "severity": contributor.severity,
+                "reasoning": contributor.reasoning,
+            }
+            for contributor in assessment.contributors[:5]
+        ],
+    }
+    return json.dumps(payload, indent=2)
+
+
+def _interaction_confidence_overrides(
+    assessment: RiskAssessment, *, completion_client=None
+) -> dict[str, float]:
+    if assessment.source != "heuristic+llm" or not assessment.interaction_risks:
+        return {}
+
+    runtime = resolve_provider_runtime()
+    try:
+        raw_response = generate_completion_with_settings(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You assign confidence scores to inferred deployment findings. "
+                        "Return only JSON with key 'confidences'."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _interaction_confidence_prompt_payload(assessment),
+                },
+            ],
+            provider=runtime["provider"],
+            model=runtime["model"],
+            api_base=runtime["api_base"],
+            api_key=runtime["api_key"],
+            local_mode=runtime["local_mode"],
+            completion_client=completion_client,
+        )
+        payload = json.loads(raw_response)
+    except Exception:  # noqa: BLE001
+        return {}
+
+    overrides: dict[str, float] = {}
+    allowed_keys = {interaction.key for interaction in assessment.interaction_risks}
+    for item in payload.get("confidences", []):
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key", "")).strip()
+        confidence = item.get("confidence")
+        if key not in allowed_keys or not isinstance(confidence, (int, float)):
+            continue
+        overrides[key] = max(0.0, min(1.0, round(float(confidence), 2)))
+    return overrides
 
 
 def build_advisory_summary(
@@ -254,6 +341,13 @@ def build_analysis_artifacts(
         raw_files={name: raw_content for name, raw_content in files},
         completion_client=completion_client,
     )
+    findings = build_findings(
+        assessment=assessment,
+        evidence_items=evidence_items,
+        interaction_confidence_overrides=_interaction_confidence_overrides(
+            assessment, completion_client=completion_client
+        ),
+    )
     blast_radius = compute_blast_radius(changes, topology, topology_warning)
     rollback_plan = generate_rollback_plan(
         changes, partial_context=parse_batch.has_partial_context
@@ -267,6 +361,7 @@ def build_analysis_artifacts(
     return AnalysisArtifacts(
         parse_batch=parse_batch,
         evidence_items=evidence_items,
+        findings=findings,
         assessment=assessment,
         blast_radius=blast_radius,
         rollback_plan=rollback_plan,
@@ -286,6 +381,7 @@ def analyze_uploaded_files(
         artifacts.parse_batch,
         artifacts.assessment,
         artifacts.narrative,
+        findings=artifacts.findings,
         audit_context=audit_context,
     )
     return AnalysisRunResult(

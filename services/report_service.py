@@ -8,6 +8,7 @@ from collections import Counter
 from typing import Any
 
 from analysis.risk_scorer import RiskAssessment
+from evidence.models import Finding
 from llm.narrator import NarrativeResult
 
 from models.database import SessionLocal
@@ -95,6 +96,22 @@ def _serialize_report(report) -> dict:
         "skills_applied": json.loads(report.narrative_skills_json or "[]"),
         "created_at": created_at.isoformat(),
         "warnings": json.loads(report.warnings_json or "[]"),
+        "findings": [
+            {
+                "finding_id": finding.finding_id,
+                "analysis_id": finding.analysis_id,
+                "title": finding.title,
+                "description": finding.description,
+                "severity": finding.severity,
+                "category": finding.category,
+                "deterministic": finding.deterministic,
+                "confidence": finding.confidence,
+                "uncertainty_note": finding.uncertainty_note,
+                "evidence_refs": json.loads(finding.evidence_refs_json or "[]"),
+                "skill_id": finding.skill_id,
+            }
+            for finding in report.findings
+        ],
         "contributors": json.loads(report.contributors_json or "[]"),
         "dashboard_display_duration_seconds": report.dashboard_display_duration_seconds,
         "audit": audit,
@@ -105,6 +122,7 @@ def persist_analysis_report(
     parse_batch: ParseBatchResult,
     assessment: RiskAssessment,
     narrative: NarrativeResult,
+    findings: list[Finding] | None = None,
     audit_context: dict[str, Any] | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
@@ -149,6 +167,9 @@ def persist_analysis_report(
                 trigger_id=audit["trigger_id"],
                 dashboard_display_duration_seconds=dashboard_display_duration_seconds,
                 top_risk_contributors_json=json.dumps(assessment.top_risk_contributors),
+                findings_payload=[
+                    finding.model_dump(mode="json") for finding in (findings or [])
+                ],
             )
             return _serialize_report(report)
 

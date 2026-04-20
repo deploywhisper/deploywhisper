@@ -14,6 +14,7 @@ import models.tables as tables_module
 import services.report_service as report_service_module
 import ui.routes.history as history_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
+from evidence.models import Finding
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
@@ -111,7 +112,25 @@ class HistoryPageRenderingTests(unittest.TestCase):
             skills_applied=["git", "terraform"],
         )
         report_service_module.persist_analysis_report(
-            parse_batch, assessment, narrative, audit_context={"source_interface": "ui"}
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-001",
+                    analysis_id=0,
+                    title="CRITICAL: aws_security_group.main",
+                    description="Security group exposure risk",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-001"],
+                    skill_id=None,
+                )
+            ],
+            audit_context={"source_interface": "ui"},
         )
 
     def test_history_page_renders_toolbar_and_report_actions(self) -> None:
@@ -124,6 +143,8 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Delete selected", response.text)
         self.assertIn("Security group exposure risk", response.text)
         self.assertIn("NO-GO", response.text)
+        self.assertIn("HIGH CONFIDENCE", response.text)
+        self.assertIn('"title":"Confidence 1.00"', response.text)
         self.assertIn("Risk: heuristic+llm", response.text)
         self.assertIn("Narrative: llm", response.text)
 

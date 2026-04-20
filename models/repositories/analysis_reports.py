@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from models.tables import AnalysisReport, RiskAssessment as PersistedRiskAssessment
+from models.tables import (
+    AnalysisReport,
+    Finding as PersistedFinding,
+    RiskAssessment as PersistedRiskAssessment,
+)
 
 
 def create_analysis_report(
@@ -34,6 +40,7 @@ def create_analysis_report(
     trigger_id: str | None,
     dashboard_display_duration_seconds: int | None,
     top_risk_contributors_json: str = "[]",
+    findings_payload: list[dict[str, Any]] | None = None,
 ) -> AnalysisReport:
     report = AnalysisReport(
         risk_score=risk_score,
@@ -65,16 +72,42 @@ def create_analysis_report(
         top_risk_contributors_json=top_risk_contributors_json,
         context_completeness_json="{}",
     )
+    report.findings = [
+        PersistedFinding(
+            finding_id=str(finding["finding_id"]),
+            title=str(finding["title"]),
+            description=str(finding["description"]),
+            severity=str(finding["severity"]),
+            category=str(finding["category"]),
+            deterministic=bool(finding["deterministic"]),
+            confidence=float(finding["confidence"]),
+            uncertainty_note=(
+                str(finding["uncertainty_note"])
+                if finding.get("uncertainty_note") is not None
+                else None
+            ),
+            evidence_refs_json=json.dumps(finding.get("evidence_refs", [])),
+            skill_id=(
+                str(finding["skill_id"])
+                if finding.get("skill_id") is not None
+                else None
+            ),
+        )
+        for finding in (findings_payload or [])
+    ]
     session.add(report)
     session.commit()
-    session.refresh(report, attribute_names=["risk_assessment"])
+    session.refresh(report, attribute_names=["risk_assessment", "findings"])
     return report
 
 
 def get_analysis_report(session: Session, report_id: int) -> AnalysisReport | None:
     stmt = (
         select(AnalysisReport)
-        .options(selectinload(AnalysisReport.risk_assessment))
+        .options(
+            selectinload(AnalysisReport.risk_assessment),
+            selectinload(AnalysisReport.findings),
+        )
         .where(AnalysisReport.id == report_id)
     )
     return session.execute(stmt).scalar_one_or_none()
@@ -100,7 +133,10 @@ def list_analysis_reports(
 ) -> list[AnalysisReport]:
     stmt = (
         select(AnalysisReport)
-        .options(selectinload(AnalysisReport.risk_assessment))
+        .options(
+            selectinload(AnalysisReport.risk_assessment),
+            selectinload(AnalysisReport.findings),
+        )
         .order_by(AnalysisReport.id.desc())
     )
     if severity:

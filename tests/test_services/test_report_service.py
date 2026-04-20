@@ -17,6 +17,7 @@ import models.tables as tables_module
 import services.report_service as report_service_module
 import services.settings_service as settings_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
+from evidence.models import Finding
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 
@@ -90,11 +91,27 @@ class ReportServiceTests(unittest.TestCase):
             local_mode=True,
             skills_applied=["git", "terraform"],
         )
+        findings = [
+            Finding(
+                finding_id="finding-001",
+                analysis_id=0,
+                title="HIGH: aws_security_group.main",
+                description="Security group changes can affect production ingress.",
+                severity="high",
+                category="networking/ingress",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_refs=["ev-001"],
+                skill_id=None,
+            )
+        ]
 
         persisted = report_service_module.persist_analysis_report(
             parse_batch,
             assessment,
             narrative,
+            findings=findings,
             audit_context={
                 "source_interface": "api",
                 "trigger_type": "session",
@@ -113,6 +130,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["narrative_model"], "ollama/llama3")
         self.assertEqual(persisted["skills_applied"], ["git", "terraform"])
         self.assertEqual(persisted["top_risk_contributors"], ["ev-001"])
+        self.assertEqual(persisted["findings"][0]["confidence"], 1.0)
         self.assertEqual(persisted["contributors"][0]["evidence_id"], "ev-001")
 
         fetched = report_service_module.fetch_analysis_report(persisted["id"])
@@ -124,6 +142,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["narrative_source"], "llm")
         self.assertEqual(fetched["skills_applied"], ["git", "terraform"])
         self.assertEqual(fetched["top_risk_contributors"], ["ev-001"])
+        self.assertEqual(fetched["findings"][0]["evidence_refs"], ["ev-001"])
         self.assertEqual(fetched["contributors"][0]["evidence_id"], "ev-001")
         self.assertNotIn("prompt", json.dumps(fetched))
 
