@@ -126,6 +126,7 @@ class ReportFilterTests(unittest.TestCase):
 
         self.assertEqual(reports[0]["audit"]["source_interface"], "api")
         self.assertEqual(reports[0]["audit"]["llm_provider"], "ollama")
+        self.assertEqual(reports[0]["report_schema_version"], "v2")
 
     def test_fetch_filtered_analysis_history_page_limits_results_and_reports_total_count(
         self,

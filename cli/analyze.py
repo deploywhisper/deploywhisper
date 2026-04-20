@@ -23,6 +23,7 @@ from services.intake_service import (
     build_pending_analysis,
     uniquify_artifact_names,
 )
+from services.report_service import REPORT_SCHEMA_VERSION
 
 
 def _emit_json(payload: dict, *, stream) -> None:
@@ -145,6 +146,7 @@ def _run_analyze(paths: list[str]) -> int:
         ).model_dump(),
         "meta": build_meta(
             api_version="v1",
+            report_schema_version=REPORT_SCHEMA_VERSION,
             interface="cli",
             advisory_only=True,
             submitted_artifact_count=len(raw_files),

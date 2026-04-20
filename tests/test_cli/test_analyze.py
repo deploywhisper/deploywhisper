@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 import config as config_module
 import models.database as database_module
+import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
 import services.report_service as report_service_module
 import services.analysis_service as analysis_service_module
@@ -31,6 +32,7 @@ class AnalyzeCliTests(unittest.TestCase):
         reload(config_module)
         reload(tables_module)
         reload(database_module)
+        reload(analysis_reports_repository_module)
         reload(report_service_module)
         database_module.init_db()
 
@@ -95,6 +97,7 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["meta"]["interface"], "cli")
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
         self.assertTrue(payload["meta"]["advisory_only"])
         self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
@@ -106,6 +109,9 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertIn("Advisory only", payload["data"]["share_summary"]["plain_text"])
         self.assertEqual(payload["data"]["share_summary"]["recommendation"], "no-go")
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
+        self.assertEqual(
+            payload["data"]["persisted_report"]["report_schema_version"], "v2"
+        )
         self.assertEqual(
             payload["data"]["persisted_report"]["audit"]["source_interface"], "cli"
         )

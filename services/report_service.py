@@ -25,6 +25,9 @@ from parsers.base import ParseBatchResult
 from services.settings_service import get_dashboard_result_display_duration_seconds
 from services.settings_service import resolve_provider_runtime
 
+LEGACY_REPORT_SCHEMA_VERSION = "v1"
+REPORT_SCHEMA_VERSION = "v2"
+
 
 def _run_with_schema_retry(operation):
     """Execute one report operation without runtime schema mutation."""
@@ -63,6 +66,29 @@ def _extract_narrative_failure_notice(warnings: list[str]) -> str | None:
         if "narrative provider unavailable" in warning.lower():
             return warning
     return None
+
+
+def normalize_report_schema_version(schema_version: str | None) -> str:
+    """Return a stable schema version for stored or in-memory reports."""
+    return schema_version or LEGACY_REPORT_SCHEMA_VERSION
+
+
+def _report_schema_major(schema_version: str) -> int:
+    if not schema_version.startswith("v") or not schema_version[1:].isdigit():
+        raise ValueError(f"Unsupported report schema version: {schema_version}")
+    return int(schema_version[1:])
+
+
+def can_read_report_schema(
+    reader_schema_version: str, report_schema_version: str | None
+) -> bool:
+    """Return whether a reader contract can consume the stored report schema."""
+    try:
+        return _report_schema_major(reader_schema_version) >= _report_schema_major(
+            normalize_report_schema_version(report_schema_version)
+        )
+    except ValueError:
+        return False
 
 
 def _serialize_report(report, *, include_evidence: bool = True) -> dict:
@@ -115,6 +141,9 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "severity": report.severity,
         "recommendation": report.recommendation,
         "top_risk": report.top_risk,
+        "report_schema_version": normalize_report_schema_version(
+            getattr(report, "report_schema_version", None)
+        ),
         "top_risk_contributors": json.loads(
             report.risk_assessment.top_risk_contributors_json
             if report.risk_assessment is not None
@@ -190,6 +219,7 @@ def persist_analysis_report(
                 severity=assessment.severity,
                 recommendation=assessment.recommendation,
                 top_risk=assessment.top_risk,
+                report_schema_version=REPORT_SCHEMA_VERSION,
                 parse_summary=_build_parse_summary(parse_batch),
                 narrative_opening=narrative.opening_sentence or "",
                 narrative_explanation=narrative.explanation or "",

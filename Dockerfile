@@ -32,10 +32,12 @@ RUN groupadd --system appuser \
     && chown -R appuser:appuser /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=appuser:appuser app.py config.py logging_config.py ./
+COPY --chown=appuser:appuser app.py config.py logging_config.py alembic.ini ./
 COPY --chown=appuser:appuser api ./api
 COPY --chown=appuser:appuser analysis ./analysis
+COPY --chown=appuser:appuser evidence ./evidence
 COPY --chown=appuser:appuser llm ./llm
+COPY --chown=appuser:appuser migrations ./migrations
 COPY --chown=appuser:appuser models ./models
 COPY --chown=appuser:appuser parsers ./parsers
 COPY --chown=appuser:appuser services ./services

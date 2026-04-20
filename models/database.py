@@ -18,6 +18,7 @@ engine = create_engine(settings.database_url, future=True)
 _KNOWN_ALEMBIC_REVISIONS = {
     "0001_create_analysis_reports",
     "005_add_evidence_model",
+    "006_add_report_schema_version",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
