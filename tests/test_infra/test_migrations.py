@@ -227,9 +227,7 @@ class MigrationTests(unittest.TestCase):
         command.upgrade(self._config(), "0001_create_analysis_reports")
         sqlite_conn = sqlite3.connect(self.db_path)
         sqlite_conn.execute("DELETE FROM alembic_version")
-        sqlite_conn.execute(
-            "INSERT INTO alembic_version (version_num) VALUES ('')"
-        )
+        sqlite_conn.execute("INSERT INTO alembic_version (version_num) VALUES ('')")
         sqlite_conn.commit()
         sqlite_conn.close()
 

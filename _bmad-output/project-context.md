@@ -66,7 +66,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ### Development Workflow Rules
 
 - When instructions conflict, prefer the implemented codebase plus `README.md`, `docs/ci.md`, and current scripts over stale contributor prose.
-- Validate changes with the repo’s real commands after edits. At minimum, keep relevant `unittest` coverage green; use `bash scripts/ci-local.sh` when the touched area is broad enough.
+- Validate changes with the repo’s real commands after edits. For Python changes, run `./.venv/bin/ruff check .` and `./.venv/bin/ruff format --check .` (or the equivalent through `bash scripts/ci-local.sh`) before concluding work. At minimum, keep relevant `unittest` coverage green; use `bash scripts/ci-local.sh` when the touched area is broad enough.
 - For AI-agent story execution, follow `CONTRIBUTING.md` Git Flow: start from `develop`, create one short-lived `feature/<identifier>-<short-description>` branch per story (or `bugfix/...` for defect work), commit incrementally on that branch, and target `develop` with a PR. Do not commit directly to `main` or `develop`.
 - For AI-agent story closure, the final reviewer must verify the story is on a Git Flow-compliant short-lived branch and must push that branch to the remote before declaring the story lifecycle complete. A story reviewed on `main`, `develop`, or detached HEAD is not considered properly closed.
 - For cleanup/refactor work, write a cleanup plan first and lock behavior with regression tests before editing.

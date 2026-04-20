@@ -226,9 +226,7 @@ if "ContextSnapshot" not in globals():
             ForeignKey("analysis_reports.id", ondelete="CASCADE"),
             primary_key=True,
         )
-        topology_version: Mapped[str | None] = mapped_column(
-            String(120), nullable=True
-        )
+        topology_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
         incident_index_version: Mapped[str | None] = mapped_column(
             String(120), nullable=True
         )

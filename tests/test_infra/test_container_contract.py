@@ -22,7 +22,9 @@ class ContainerContractTests(unittest.TestCase):
         evidence_content = migrations[1].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
-        self.assertIn('down_revision = "0001_create_analysis_reports"', evidence_content)
+        self.assertIn(
+            'down_revision = "0001_create_analysis_reports"', evidence_content
+        )
         self.assertIn('"evidence_items"', evidence_content)
 
     def test_dockerfile_exists(self) -> None:

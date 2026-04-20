@@ -40,6 +40,7 @@ if _is_sqlite_url(settings.database_url):
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
+
 existing_session_local = globals().get("SessionLocal")
 
 if existing_session_local is not None:
