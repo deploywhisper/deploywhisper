@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from models.tables import AnalysisReport
+from models.tables import AnalysisReport, RiskAssessment as PersistedRiskAssessment
 
 
 def create_analysis_report(
@@ -33,6 +33,7 @@ def create_analysis_report(
     trigger_type: str | None,
     trigger_id: str | None,
     dashboard_display_duration_seconds: int | None,
+    top_risk_contributors_json: str = "[]",
 ) -> AnalysisReport:
     report = AnalysisReport(
         risk_score=risk_score,
@@ -56,14 +57,27 @@ def create_analysis_report(
         trigger_id=trigger_id,
         dashboard_display_duration_seconds=dashboard_display_duration_seconds,
     )
+    report.risk_assessment = PersistedRiskAssessment(
+        overall_severity=severity,
+        recommendation=recommendation,
+        score=risk_score,
+        confidence=1.0,
+        top_risk_contributors_json=top_risk_contributors_json,
+        context_completeness_json="{}",
+    )
     session.add(report)
     session.commit()
-    session.refresh(report)
+    session.refresh(report, attribute_names=["risk_assessment"])
     return report
 
 
 def get_analysis_report(session: Session, report_id: int) -> AnalysisReport | None:
-    return session.get(AnalysisReport, report_id)
+    stmt = (
+        select(AnalysisReport)
+        .options(selectinload(AnalysisReport.risk_assessment))
+        .where(AnalysisReport.id == report_id)
+    )
+    return session.execute(stmt).scalar_one_or_none()
 
 
 def delete_analysis_report(session: Session, report_id: int) -> bool:
@@ -84,7 +98,11 @@ def list_analysis_reports(
     limit: int | None = None,
     offset: int | None = None,
 ) -> list[AnalysisReport]:
-    stmt = select(AnalysisReport).order_by(AnalysisReport.id.desc())
+    stmt = (
+        select(AnalysisReport)
+        .options(selectinload(AnalysisReport.risk_assessment))
+        .order_by(AnalysisReport.id.desc())
+    )
     if severity:
         stmt = stmt.where(AnalysisReport.severity == severity)
     if recommendation:

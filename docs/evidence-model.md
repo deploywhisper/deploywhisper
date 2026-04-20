@@ -42,4 +42,5 @@ Relationship rules introduced in this story:
 
 - The migration is additive and preserves existing report history.
 - Existing report readers continue to work because the legacy `analysis_reports` columns are unchanged.
-- The shared analysis pipeline now extracts evidence items alongside the current parser output; later Epic 1 stories will bind those items into findings and persisted report records.
+- The shared analysis pipeline now scores extracted `EvidenceItem` objects through `analysis/risk_engine.py` while preserving the legacy report shape for UI, API, and CLI consumers.
+- `RiskAssessment.top_risk_contributors` now carries concrete evidence IDs so downstream findings and report views can trace the verdict back to specific evidence without reparsing raw artifacts.

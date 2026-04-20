@@ -78,6 +78,11 @@ def _serialize_report(report) -> dict:
         "severity": report.severity,
         "recommendation": report.recommendation,
         "top_risk": report.top_risk,
+        "top_risk_contributors": json.loads(
+            report.risk_assessment.top_risk_contributors_json
+            if report.risk_assessment is not None
+            else "[]"
+        ),
         "parse_summary": report.parse_summary,
         "narrative_opening": report.narrative_opening,
         "assessment_source": report.assessment_source,
@@ -116,7 +121,7 @@ def persist_analysis_report(
 
     def operation():
         with SessionLocal() as session:
-            return create_analysis_report(
+            report = create_analysis_report(
                 session,
                 risk_score=assessment.score,
                 severity=assessment.severity,
@@ -143,21 +148,22 @@ def persist_analysis_report(
                 trigger_type=audit["trigger_type"],
                 trigger_id=audit["trigger_id"],
                 dashboard_display_duration_seconds=dashboard_display_duration_seconds,
+                top_risk_contributors_json=json.dumps(assessment.top_risk_contributors),
             )
+            return _serialize_report(report)
 
-    report = _run_with_schema_retry(operation)
-    return _serialize_report(report)
+    return _run_with_schema_retry(operation)
 
 
 def fetch_analysis_report(report_id: int) -> dict | None:
     def operation():
         with SessionLocal() as session:
-            return get_analysis_report(session, report_id)
+            report = get_analysis_report(session, report_id)
+            if report is None:
+                return None
+            return _serialize_report(report)
 
-    report = _run_with_schema_retry(operation)
-    if report is None:
-        return None
-    return _serialize_report(report)
+    return _run_with_schema_retry(operation)
 
 
 def fetch_analysis_history() -> list[dict]:
@@ -206,11 +212,11 @@ def fetch_filtered_analysis_history_page(
                 recommendation=recommendation,
                 search=search,
             )
-            return reports, total_count
+            return [_serialize_report(report) for report in reports], total_count
 
     reports, total_count = _run_with_schema_retry(operation)
     return {
-        "items": [_serialize_report(report) for report in reports],
+        "items": reports,
         "total_count": total_count,
         "page": page,
         "page_size": page_size,
@@ -302,10 +308,11 @@ def fetch_dashboard_briefing() -> dict[str, Any]:
 
     def operation():
         with SessionLocal() as session:
-            return list_analysis_reports(session)
+            return [
+                _serialize_report(report) for report in list_analysis_reports(session)
+            ]
 
-    reports = _run_with_schema_retry(operation)
-    serialized_reports = [_serialize_report(report) for report in reports]
+    serialized_reports = _run_with_schema_retry(operation)
     stats = fetch_dashboard_stats()
     severity_counts = stats["severity_counts"]
     saved_briefings = len(serialized_reports)
@@ -360,12 +367,14 @@ def fetch_active_dashboard_report(*, now: datetime | None = None) -> dict | None
 
     def operation():
         with SessionLocal() as session:
-            return latest_active_dashboard_report(session, now=current_time)
+            report = latest_active_dashboard_report(session, now=current_time)
+            if report is None:
+                return None
+            return _serialize_report(report)
 
-    report = _run_with_schema_retry(operation)
-    if report is None:
+    payload = _run_with_schema_retry(operation)
+    if payload is None:
         return None
-    payload = _serialize_report(report)
     duration = payload.get("dashboard_display_duration_seconds") or 0
     created_at = datetime.fromisoformat(payload["created_at"].replace("Z", "+00:00"))
     remaining_seconds = max(

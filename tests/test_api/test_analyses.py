@@ -93,8 +93,10 @@ class AnalysesApiTests(unittest.TestCase):
             severity=severity,
             recommendation=recommendation,
             top_risk=top_risk,
+            top_risk_contributors=["ev-001"],
             contributors=[
                 RiskContributor(
+                    evidence_id="ev-001",
                     source_file="plan.json",
                     tool="terraform",
                     resource_id="aws_security_group.main",
@@ -175,6 +177,12 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
         self.assertEqual(payload["data"]["intake"]["items"][0]["status"], "ready")
         self.assertEqual(payload["data"]["assessment"]["source"], "heuristic+llm")
+        self.assertEqual(
+            payload["data"]["assessment"]["top_risk_contributors"], ["ev-001"]
+        )
+        self.assertEqual(
+            payload["data"]["assessment"]["contributors"][0]["evidence_id"], "ev-001"
+        )
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
         self.assertEqual(payload["data"]["narrative"]["source"], "llm")
         self.assertTrue(payload["data"]["narrative"]["skills_applied"])
@@ -187,6 +195,13 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["data"]["persisted_report"]["audit"]["trigger_type"], "api_request"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["top_risk_contributors"], ["ev-001"]
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["contributors"][0]["evidence_id"],
+            "ev-001",
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
 

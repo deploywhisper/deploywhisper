@@ -61,7 +61,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.evaluate_parse_batch",
                 return_value=assessment,
-            ),
+            ) as evaluate_mock,
             patch(
                 "services.analysis_service.compute_blast_radius",
                 return_value=blast_radius,
@@ -89,6 +89,12 @@ class AnalysisServiceTests(unittest.TestCase):
             )
 
         self.assertEqual(len(artifacts.evidence_items), 1)
+        passed_evidence_items = evaluate_mock.call_args.kwargs["evidence_items"]
+        self.assertEqual(len(passed_evidence_items), 1)
+        self.assertEqual(
+            passed_evidence_items[0].evidence_id,
+            artifacts.evidence_items[0].evidence_id,
+        )
         self.assertEqual(artifacts.evidence_items[0].source_type, "artifact")
         self.assertEqual(artifacts.evidence_items[0].severity_hint, "high")
         self.assertEqual(
