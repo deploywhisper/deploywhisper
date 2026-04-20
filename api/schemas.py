@@ -128,6 +128,9 @@ class PersistedReportData(BaseModel):
     recommendation: str
     top_risk: str
     top_risk_contributors: list[str] = Field(default_factory=list)
+    context_completeness: "ContextCompletenessData" = Field(
+        default_factory=lambda: ContextCompletenessData()
+    )
     parse_summary: str
     narrative_opening: str
     assessment_source: Literal["heuristic-only", "heuristic+llm"] | None = Field(
@@ -249,6 +252,21 @@ class FindingData(BaseModel):
     )
 
 
+class ContextCompletenessData(BaseModel):
+    topology_freshness_days: int | None = Field(
+        default=None, description="Age in days of the topology snapshot when available"
+    )
+    incident_index_size: int = Field(
+        default=0, description="Number of incidents available for similarity matching"
+    )
+    parser_success_rate: float = Field(
+        default=1.0, description="Fraction of analyzed files parsed successfully"
+    )
+    context_score: float = Field(
+        default=1.0, description="Aggregate context completeness score between 0 and 1"
+    )
+
+
 class AssessmentData(BaseModel):
     score: int = Field(..., description="Overall bounded risk score")
     severity: RiskSeverity = Field(..., description="Severity classification")
@@ -259,6 +277,10 @@ class AssessmentData(BaseModel):
     top_risk_contributors: list[str] = Field(
         default_factory=list,
         description="Evidence IDs that most influenced the final verdict",
+    )
+    context_completeness: ContextCompletenessData = Field(
+        default_factory=ContextCompletenessData,
+        description="Structured signal describing how complete the supporting context was",
     )
     contributors: list[RiskContributorData] = Field(
         default_factory=list, description="Score contributors"
@@ -482,6 +504,9 @@ def build_analysis_run_data(
             recommendation=assessment.recommendation,
             top_risk=assessment.top_risk,
             top_risk_contributors=list(assessment.top_risk_contributors),
+            context_completeness=_copy_model(
+                assessment.context_completeness, ContextCompletenessData
+            ),
             contributors=[
                 _copy_model(contributor, RiskContributorData)
                 for contributor in assessment.contributors

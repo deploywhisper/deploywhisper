@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from analysis.interaction_risk import InteractionRisk, detect_interaction_risks
+from evidence.models import ContextCompleteness
 from llm.providers import generate_completion_with_settings
 from parsers.base import ParseBatchResult, UnifiedChange
 from services.settings_service import resolve_provider_runtime
@@ -103,6 +104,10 @@ class RiskAssessment(BaseModel):
     )
     interaction_risks: list[InteractionRisk] = Field(
         default_factory=list, description="Cross-tool interaction findings"
+    )
+    context_completeness: ContextCompleteness = Field(
+        default_factory=ContextCompleteness,
+        description="Structured signal describing how complete the supporting context was",
     )
     partial_context: bool = Field(..., description="Whether some files failed to parse")
     warnings: list[str] = Field(default_factory=list, description="Assessment warnings")

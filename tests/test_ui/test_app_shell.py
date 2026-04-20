@@ -221,6 +221,81 @@ class DashboardShellTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Narrative provider unavailable: provider offline", response.text)
 
+    def test_dashboard_shows_context_warning_for_low_context_score(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group exposure risk",
+            context_completeness={
+                "topology_freshness_days": 45,
+                "incident_index_size": 0,
+                "parser_success_rate": 1.0,
+                "context_score": 0.52,
+            },
+            contributors=[
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=20,
+                    summary="Security group exposure risk",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+            source="heuristic-only",
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="The deployment widens database access and should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["git", "terraform"],
+        )
+        report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            audit_context={
+                "source_interface": "ui",
+                "trigger_type": "dashboard_upload",
+            },
+        )
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "Context warning: supporting topology or incident history may be stale.",
+            response.text,
+        )
+
     def test_dashboard_failure_does_not_return_api_error_envelope(self) -> None:
         client = TestClient(app_module.create_app(), raise_server_exceptions=False)
         with patch("app.build_dashboard", side_effect=RuntimeError("ui boom")):

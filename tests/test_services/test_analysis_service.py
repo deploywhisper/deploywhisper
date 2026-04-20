@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from analysis.interaction_risk import InteractionRisk
@@ -60,6 +61,14 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=({}, None),
             ),
             patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at=None),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates",
+                return_value=[],
+            ),
+            patch(
                 "services.analysis_service.evaluate_parse_batch",
                 return_value=assessment,
             ) as evaluate_mock,
@@ -104,6 +113,10 @@ class AnalysisServiceTests(unittest.TestCase):
         )
         self.assertEqual(len(artifacts.findings), 1)
         self.assertEqual(artifacts.findings[0].confidence, 1.0)
+        self.assertAlmostEqual(
+            artifacts.assessment.context_completeness.context_score,
+            0.45,
+        )
 
     def test_build_analysis_artifacts_builds_inferred_interaction_finding(self) -> None:
         assessment = RiskAssessment(
@@ -162,6 +175,14 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch("services.analysis_service.load_topology", return_value=({}, None)),
             patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2026-04-18T00:00:00Z"),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates",
+                return_value=[{"id": 1}, {"id": 2}, {"id": 3}],
+            ),
+            patch(
                 "services.analysis_service.evaluate_parse_batch",
                 return_value=assessment,
             ),
@@ -196,6 +217,87 @@ class AnalysisServiceTests(unittest.TestCase):
         inferred = artifacts.findings[1]
         self.assertFalse(inferred.deterministic)
         self.assertAlmostEqual(inferred.confidence, 0.73)
+        self.assertGreater(artifacts.assessment.context_completeness.context_score, 0.7)
+
+    def test_build_analysis_artifacts_reduces_context_score_for_stale_topology(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=24,
+            severity="low",
+            recommendation="go",
+            top_risk="Low risk example",
+            contributors=[
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        blast_radius = BlastRadiusResult(
+            affected=[],
+            direct_count=0,
+            transitive_count=0,
+            warning=None,
+            unmatched_resources=[],
+        )
+        rollback_plan = RollbackPlan(steps=[], complexity="low", warning=None)
+        narrative = NarrativeResult(
+            opening_sentence="GO: low risk example.",
+            explanation="All good.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch("services.analysis_service.load_topology", return_value=({}, None)),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2025-01-01T00:00:00Z"),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates",
+                return_value=[],
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.compute_blast_radius",
+                return_value=blast_radius,
+            ),
+            patch(
+                "services.analysis_service.generate_rollback_plan",
+                return_value=rollback_plan,
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=narrative,
+            ),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    )
+                ]
+            )
+
+        self.assertGreater(
+            artifacts.assessment.context_completeness.topology_freshness_days, 30
+        )
+        self.assertLess(artifacts.assessment.context_completeness.context_score, 0.7)
 
     def test_build_advisory_summary_does_not_require_attention_for_go_with_only_narrative_warnings(
         self,
@@ -271,6 +373,38 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertTrue(advisory.requires_attention)
         self.assertIn("partial_context", advisory.uncertainty_flags)
         self.assertIn("narrative_degraded", advisory.uncertainty_flags)
+
+    def test_build_advisory_summary_requires_attention_for_low_context_completeness(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=18,
+            severity="low",
+            recommendation="go",
+            top_risk="Low risk example",
+            contributors=[],
+            interaction_risks=[],
+            context_completeness={
+                "topology_freshness_days": 45,
+                "incident_index_size": 0,
+                "parser_success_rate": 1.0,
+                "context_score": 0.52,
+            },
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: low risk example.",
+            explanation="All good.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        advisory = build_advisory_summary(assessment, narrative)
+
+        self.assertTrue(advisory.requires_attention)
+        self.assertIn("low_context_completeness", advisory.uncertainty_flags)
 
     def test_build_share_summary_returns_script_friendly_thread_payload(self) -> None:
         assessment = RiskAssessment(

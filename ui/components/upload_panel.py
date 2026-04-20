@@ -6,16 +6,10 @@ from collections.abc import Callable
 
 from nicegui import events, run, ui
 
-from analysis.blast_radius import compute_blast_radius
-from analysis.incident_matcher import find_incident_matches
-from analysis.rollback_planner import generate_rollback_plan
-from llm.narrator import generate_narrative
-from parsers.base import ParseBatchResult, UnifiedChange
 from parsers.registry import detect_tool_type
-from services.analysis_service import evaluate_parse_batch
+from services.analysis_service import analyze_uploaded_files
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
-    build_parse_batch,
     build_pending_analysis,
     is_sensitive_file,
     total_upload_bytes,
@@ -23,10 +17,8 @@ from services.intake_service import (
 )
 from services.report_service import (
     fetch_active_dashboard_report,
-    persist_analysis_report,
 )
 from services.settings_service import check_provider_readiness
-from services.topology_service import load_topology
 from ui.formatters.confidence import render_confidence_badge
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
@@ -55,14 +47,6 @@ def process_uploaded_files(
     return build_pending_analysis(current_files)
 
 
-def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
-    changes: list[UnifiedChange] = []
-    for file_result in parse_batch.files:
-        if file_result.status == "parsed":
-            changes.extend(file_result.changes)
-    return changes
-
-
 def _accepted_files(files: list[tuple[str, bytes]]) -> list[tuple[str, bytes]]:
     accepted: list[tuple[str, bytes]] = []
     for name, raw_content in files:
@@ -77,6 +61,22 @@ def _accepted_files(files: list[tuple[str, bytes]]) -> list[tuple[str, bytes]]:
 def _format_countdown_label(seconds: int) -> str:
     minutes, remainder = divmod(max(seconds, 0), 60)
     return f"Disappears in {minutes}m {remainder}s"
+
+
+def run_uploaded_analysis(
+    files: list[tuple[str, bytes]],
+    *,
+    completion_client=None,
+):
+    """Run the shared upload analysis pipeline with the dashboard audit context."""
+    return analyze_uploaded_files(
+        files,
+        completion_client=completion_client,
+        audit_context={
+            "source_interface": "ui",
+            "trigger_type": "dashboard_upload",
+        },
+    )
 
 
 def build_upload_panel(
@@ -202,6 +202,15 @@ def build_upload_panel(
                 llm_notice = extract_llm_notice(report.get("warnings", []))
                 if llm_notice:
                     ui.label(llm_notice).classes("text-xs dw-warning-text leading-5")
+                context = report.get("context_completeness") or {}
+                context_score = float(context.get("context_score", 1.0))
+                if context_score < 0.7:
+                    ui.label(
+                        "Context warning: supporting topology or incident history may be stale."
+                    ).classes("text-sm dw-warning-text font-semibold leading-5")
+                    ui.label(
+                        f"Context score {context_score:.2f} · parser success {float(context.get('parser_success_rate', 1.0)):.2f}"
+                    ).classes("text-xs dw-muted leading-5")
                 findings = report.get("findings", [])
                 if findings:
                     with ui.column().classes("mt-3 gap-2"):
@@ -322,42 +331,15 @@ def build_upload_panel(
 
         try:
             raw_files = list(state["files"])
-            parse_batch = await run.io_bound(build_parse_batch, raw_files)
+            update_progress(25, "Running shared analysis pipeline")
+            result = await run.io_bound(run_uploaded_analysis, raw_files)
+            parse_batch = result.parse_batch
+            assessment = result.assessment
+            narrative = result.narrative
+            persisted_report = result.persisted_report
             update_progress(
-                30,
+                90,
                 f"Parsed {parse_batch.parsed_count} file(s), {parse_batch.failed_count} failed, {parse_batch.skipped_count} skipped",
-            )
-
-            changes = _collect_changes(parse_batch)
-            topology, topology_warning = await run.io_bound(load_topology)
-            assessment = await run.io_bound(
-                evaluate_parse_batch,
-                parse_batch,
-                topology=topology,
-                raw_files=dict(raw_files),
-            )
-            update_progress(45, "Scored deployment risk with enriched context")
-            await run.io_bound(
-                compute_blast_radius, changes, topology, topology_warning
-            )
-            update_progress(60, "Computed blast radius")
-            await run.io_bound(
-                generate_rollback_plan, changes, parse_batch.has_partial_context
-            )
-            update_progress(72, "Generated rollback guidance")
-            await run.io_bound(find_incident_matches, changes)
-            update_progress(84, "Checked similar incidents")
-            narrative = await run.io_bound(
-                generate_narrative, assessment, raw_files=dict(raw_files)
-            )
-            update_progress(96, "Generated advisory narrative")
-
-            persisted_report = await run.io_bound(
-                persist_analysis_report,
-                parse_batch,
-                assessment,
-                narrative,
-                {"source_interface": "ui", "trigger_type": "dashboard_upload"},
             )
             update_progress(100, "Saved analysis report")
             display_report = dict(persisted_report)

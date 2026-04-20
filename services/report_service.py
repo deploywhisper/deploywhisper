@@ -84,6 +84,11 @@ def _serialize_report(report) -> dict:
             if report.risk_assessment is not None
             else "[]"
         ),
+        "context_completeness": json.loads(
+            report.risk_assessment.context_completeness_json
+            if report.risk_assessment is not None
+            else "{}"
+        ),
         "parse_summary": report.parse_summary,
         "narrative_opening": report.narrative_opening,
         "assessment_source": report.assessment_source,
@@ -167,6 +172,9 @@ def persist_analysis_report(
                 trigger_id=audit["trigger_id"],
                 dashboard_display_duration_seconds=dashboard_display_duration_seconds,
                 top_risk_contributors_json=json.dumps(assessment.top_risk_contributors),
+                context_completeness_json=json.dumps(
+                    assessment.context_completeness.model_dump(mode="json")
+                ),
                 findings_payload=[
                     finding.model_dump(mode="json") for finding in (findings or [])
                 ],
