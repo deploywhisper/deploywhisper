@@ -117,7 +117,42 @@ If `{sprint_status}` file does not exist, note that story status was updated in 
 > **Deferred:** <W>
 > **Dismissed:** <R>
 
-### 7. Next steps
+### 7. Mandatory Git Flow branch / push action
+
+This section is mandatory whenever `{spec_file}` is set and the review reached a terminal story outcome.
+
+#### Git Flow verification
+
+1. Inspect the current git branch.
+2. Verify the branch is a short-lived Git Flow branch that follows `CONTRIBUTING.md`:
+   - allowed: `feature/*`, `bugfix/*`, `hotfix/*`, `release/*`
+   - forbidden for story completion: `main`, `develop`, detached HEAD, or unnamed worktree state
+3. If the branch is `main`, `develop`, detached HEAD, or otherwise not Git Flow compliant:
+   - HALT
+   - warn the user that the review cannot be considered complete
+   - instruct that the story changes must be moved to a proper short-lived branch before closure
+
+#### Remote sync requirement
+
+If the review outcome is effectively complete for the current story (`{new_status}` = `done`), the reviewer MUST treat remote sync as part of the mandatory closure path:
+
+1. Ensure all review-driven code changes are committed on the current story branch.
+2. Push the branch to the remote repository.
+3. Report the pushed branch name in the completion summary.
+
+If the story remains `in-progress`, do not claim final story completion. In that case:
+- either push the in-progress branch if review fixes were applied and the user wants the WIP backed up, or
+- explicitly state that remote push was not performed because review follow-up work remains open.
+
+#### Mandatory completion language
+
+Do not present the workflow as fully complete for a reviewed story unless you have stated one of these outcomes explicitly:
+
+- `Pushed to remote on branch <branch-name>`
+- `Blocked: branch does not follow Git Flow`
+- `Blocked: story still in-progress after review`
+
+### 8. Next steps
 
 Present the user with follow-up options:
 

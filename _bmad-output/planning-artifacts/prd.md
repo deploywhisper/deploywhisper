@@ -1,463 +1,685 @@
----
-stepsCompleted:
-  - step-01-init
-  - step-02-discovery
-  - step-02b-vision
-  - step-02c-executive-summary
-  - step-03-success
-  - step-04-journeys
-  - step-05-domain
-  - step-06-innovation
-  - step-07-project-type
-  - step-08-scoping
-  - step-09-functional
-  - step-10-nonfunctional
-  - step-11-polish
-  - step-12-complete
-inputDocuments:
-  - README.md
-  - docs_README.md
-  - DeployWhisper_PRD.docx
-  - DeployWhisper_Architecture.docx
-workflowType: 'prd'
-documentCounts:
-  briefCount: 0
-  researchCount: 0
-  brainstormingCount: 0
-  projectDocsCount: 4
-classification:
-  projectType: web_app
-  domain: general
-  subdomain: DevOps / platform engineering / developer tooling
-  complexity: medium
-  projectContext: brownfield
+# DeployWhisper Product Requirements Document
+
+**Product:** DeployWhisper
+**Document type:** Product Requirements Document
+**Version:** 1.0
+**Date:** April 2026
+**Owner:** Pramod Kumar Sahoo
+
 ---
 
-# Product Requirements Document - ai-deploy-whisper
+## 1. Executive Summary
 
-**Author:** psaho01
-**Date:** 2026-04-16
+DeployWhisper is a **local-first, evidence-backed pre-deployment intelligence platform** for infrastructure changes. It helps platform engineers, SREs, and DevOps teams answer the real pre-release question:
 
-## Executive Summary
+> **Is this deployment safe to ship, what could break, who would be affected, and what should we do before rollout?**
 
-DeployWhisper is an AI-powered pre-deployment risk intelligence platform for infrastructure and platform teams. It analyzes change sets across Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation, then converts those changes into a single decision-ready risk assessment before deployment. Instead of forcing engineers to manually interpret raw diffs, trace dependencies, and recall prior incidents under time pressure, DeployWhisper produces a plain-English risk narrative, blast radius view, rollback guidance, and deploy recommendation in seconds.
+DeployWhisper analyzes infrastructure artifacts across Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation, then produces a **single trusted deployment briefing** built from explicit evidence, confidence scoring, and uncertainty indicators — not generic AI prose.
 
-The product is designed for platform engineers, SREs, DevOps leads, engineering managers, and junior engineers participating in deployment review. Its primary value is consistency: every deployment receives the same depth of analysis regardless of who is on shift. Junior engineers get understandable explanations they can learn from, senior engineers get a second layer of operational memory and cross-checking, and managers get clearer visibility into deployment risk trends over time.
+### What's in the briefing
 
-### What Makes This Special
+- Unified risk verdict with contributor breakdown
+- Evidence-backed findings (every claim points to an artifact, topology, or incident)
+- Cross-tool interaction warnings
+- Blast radius with context-completeness indicator
+- Rollback readiness and complexity
+- Incident-memory similarity matches
+- Plain-English narrative that runs **after** scoring, never before
+- Machine-friendly summaries for PRs and approval workflows
 
-DeployWhisper solves deployment risk as a context problem rather than a single-tool problem. A Terraform change, Kubernetes manifest update, or Jenkins pipeline edit may appear safe in isolation while becoming high-risk when combined, targeted at production, or similar to a past outage. DeployWhisper addresses that gap by combining unified multi-tool parsing, tool-specific AI Skills, and incident-memory matching into a single risk narrative.
+### Category
 
-This makes the product materially different from linters, raw plan viewers, and generic LLM prompts. Linters flag isolated policy violations. Diff viewers show syntax and resource changes without operational context. Generic LLMs lack structured understanding of tool-specific failure modes, service topology, and prior incident patterns. DeployWhisper connects those signals and answers the actual deployment question: what could break, who will be affected, how risky is this change, and is it safe to ship now?
+DeployWhisper is not trying to replace CI/CD, policy engines, or static scanners. Its category is:
 
-## Release Positioning
+> **Pre-deployment intelligence for infrastructure changes**
 
-DeployWhisper v1 is a concept-complete product, not a stripped-down prototype. The first release intentionally ships the full pre-deployment intelligence loop because the product's value comes from multi-tool parsing, AI Skills, blast radius mapping, incident memory, rollback planning, and analysis history working as one system. The phased roadmap in this document describes build sequencing and expansion priorities, not a feature-stripping exercise within the core v1 thesis.
+### Five pillars of differentiation
 
-## Project Classification
+1. **Evidence-backed intelligence, not generic AI prose**
+2. **Local-first security boundary** — raw IaC never leaves the machine
+3. **Cross-tool understanding** — not single-tool analysis
+4. **Decision-ready briefing** — not raw findings
+5. **Workflow-native delivery** — PR comments and approval threads, not just dashboards
 
-DeployWhisper is a brownfield web application in the general software domain, with a specific focus on DevOps, platform engineering, and developer tooling. The project has medium complexity due to its multi-tool parsing scope, cross-system risk analysis, LLM orchestration, incident correlation, and deployment-safety requirements.
+### Strategic bet
 
-## Success Criteria
+The product wins by becoming the **most trusted intelligence layer before production**, delivered through open-source adoption, a community AI Skills marketplace, and measurable benchmark superiority over competitors.
 
-### User Success
+---
 
-DeployWhisper succeeds for platform engineers and SREs when deployment review quality no longer depends on the most senior reviewer being available. The product must catch meaningful hazards across Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation with consistent quality on every deployment. It must reduce manual review time from approximately 20 minutes to seconds while increasing reviewer confidence that obvious high-risk issues were not missed.
+## 2. Product Vision
 
-The defining user-success moment is the first time DeployWhisper identifies a real deployment risk the engineer did not connect on their own. The product must surface cross-tool interactions, blast-radius implications, and prior-incident similarity in a way that changes a deployment decision before production impact occurs.
+### Vision statement
 
-### Business Success
+Build the most trusted system for understanding infrastructure deployment risk before production.
 
-At 3 months, DeployWhisper is used on at least 90% of production deployments for the initial team. Deploy approval threads reference DeployWhisper reports as a standard decision input rather than an optional experiment. The system identifies 2 to 3 high-risk deployments per month that are either fixed before release or escalated for additional review.
+### Mission
 
-At 12 months, DeployWhisper is embedded into the delivery workflow for multiple teams and runs automatically on infrastructure-related changes. Teams maintain custom AI Skills aligned to their service topology and internal modules. The incident-history database becomes a reusable operational knowledge base, and deployment-related P1 incidents show a measurable decline.
+Help infrastructure teams make better deployment decisions by combining deterministic analysis, historical context, and grounded AI explanation into one deployment briefing.
 
-### Technical Success
+### Long-term outcome
 
-Risk-score quality and parser accuracy are the highest-priority technical success measures. The system must correctly parse and normalize changes across all five supported tools and produce risk assessments that experienced platform engineers consider credible. False positives must remain low enough that operators continue to trust the output and incorporate it into deployment decisions.
+A team should feel uncomfortable deploying critical infrastructure changes **without** a DeployWhisper report — the same way engineers today feel uncomfortable merging code without CI checks.
 
-Analysis latency must remain fast enough for real deployment workflows, with a target of under 15 seconds for standard analyses, but accuracy takes precedence over raw speed. AI Skills quality must prove the architectural differentiator by identifying tool-specific risks that generic LLM analysis would miss. Incident-similarity matching must become useful early enough to influence real review decisions rather than remain a dormant feature.
+---
 
-### Measurable Outcomes
+## 3. Competitive Landscape
 
-- 90% or greater coverage of production deployments within 3 months
-- 2 to 3 high-risk deployments per month caught before release
-- Manual deployment review time reduced from roughly 20 minutes to under 15 seconds for standard analyses
-- False-positive rate below 15%
-- Analysis latency below 15 seconds for standard multi-file reviews
-- Credible parser coverage across Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation at launch
-- Measurable reduction in deployment-related P1 incidents within 12 months
-- DeployWhisper reports used as a standard approval artifact in production deployment decisions
+### Adjacent categories and why DeployWhisper is different
 
-## Product Scope
+| Category | Example tools | What they do well | What DeployWhisper does that they don't |
+|----------|---------------|-------------------|------------------------------------------|
+| IaC security scanners | Checkov, TFLint, KICS, Terrascan, tfsec | Rule-based static analysis for single tools | Multi-tool correlation, evidence model, narrative, rollback planning, incident memory |
+| AI Kubernetes troubleshooting | K8sGPT | Plain-English K8s diagnosis with LLM backends | Multi-tool scope, pre-deploy intelligence (not runtime), evidence grounding |
+| Terraform platforms | Spacelift, env0, HCP Terraform, Atlantis | Terraform orchestration + AI-assisted review | Open-source, self-hosted, cross-tool, incident memory, Skills ecosystem |
+| Policy engines | OPA, Rego, Sentinel | Enforce known codified rules | Novel risk patterns, narrative explanation, advisory-first |
+| Cloud security posture | Wiz, Aikido, Tenable, Orca, Red Hat ACS | Enterprise-grade risk scoring, attack path graphs | Open-source, bottom-up adoption, workflow-native, 10x cheaper |
+| AI DevOps platforms | StackGen, Arnica | Commercial AI agents for infrastructure | Open-source, Skills marketplace, self-hosted, no vendor lock-in |
 
-### MVP - Minimum Viable Product
+### DeployWhisper's unique position
 
-The v1 scope includes the full pre-deployment intelligence loop that defines the product category: multi-tool parsing across Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation; AI-generated plain-English risk narrative; weighted risk scoring; blast-radius mapping; automated rollback guidance; incident-history matching; multi-LLM support; analysis history; and tool-specific AI Skills with support for team customization.
+Nobody else combines:
+- Multi-tool (5 IaC tools) + tool-specific AI Skills
+- Evidence model with deterministic + inferred separation
+- Blast radius + incident memory + rollback planning
+- Open-source + self-hosted + BYO-LLM
+- Community-driven Skills marketplace
 
-### Growth Features (Post-MVP)
+The closest single competitor is K8sGPT in terms of open-source adoption model, but they are Kubernetes-only and runtime-focused (post-deploy). DeployWhisper is multi-tool and pre-deploy. The closest in commercial space is Spacelift's Saturnhead AI, but it is proprietary, Terraform-scoped, and not community-extensible.
 
-Post-v1 scope includes official CI/CD integrations such as GitHub Action and GitLab CI plugins, Slack-based collaboration and approval workflows, polished PDF report export, multi-tenant deployment with team-level access controls, and cost-impact analysis for infrastructure changes. These features improve convenience, distribution, and enterprise readiness, but they are not required to prove the core deployment-intelligence model.
+### Competitive risks we must address
 
-### Vision (Future)
+- **K8sGPT adoption momentum** — they got into the open-source ecosystem first. Counter with multi-tool scope and Skills marketplace.
+- **Commercial platforms adding "AI" features** — Spacelift, Wiz, Aikido all shipping AI. Counter with open-source positioning and measurable benchmark superiority.
+- **"Just use ChatGPT" alternative** — teams may cobble together DIY solutions. Counter with evidence model and benchmark data showing accuracy difference.
 
-The longer-term vision is for DeployWhisper to evolve from a pre-deployment review tool into a full deployment-intelligence platform. Future scope includes real-time cloud-state introspection, automated deployment blocking and policy enforcement, model specialization on organization-specific incident history, a community marketplace for AI Skills, and post-deploy monitoring feedback that continuously improves risk prediction based on real outcomes.
+---
 
-## User Journeys
+## 4. Product Strategy
 
-### Journey 1: Platform Engineer - Core Pre-Deploy Review
+### 4.1 Category definition
 
-A platform engineer is preparing a deployment late in the day and needs confidence before release. They upload the Terraform plan, Kubernetes manifests, and any related deployment artifacts into DeployWhisper. Instead of manually scanning diffs, tracing dependencies, and recalling similar past incidents from memory, they receive a single risk narrative that explains what changed, what could break, which downstream services are affected, and how to roll back if needed.
+DeployWhisper belongs to a new-but-emerging category: **Pre-deployment intelligence for infrastructure changes**.
 
-The emotional progression moves from uncertainty and time pressure to clarity and confidence. The critical value moment is not the risk score alone, but the narrative that connects multiple changes into a decision-ready explanation. The engineer leaves the review knowing whether the deploy looks safe, what deserves further scrutiny, and what to share with the SRE lead if risk is elevated.
+This category sits between IaC scanners, CI/CD orchestration, observability-based deployment verification, and generic AI code review assistants.
 
-This journey reveals requirements for multi-file upload, parser auto-detection, unified risk narrative generation, blast radius visualization, rollback-plan generation, and risk scoring that is fast enough for daily use.
+### 4.2 Explicit non-positioning
 
-### Journey 2: Platform Engineer - Cross-Tool Edge Case and Escalation
+DeployWhisper should explicitly avoid being positioned as:
+- A Terraform runner
+- A generic PR bot
+- A policy engine
+- A post-deploy observability product
+- A generic LLM wrapper
+- An enforcement or gatekeeping tool
 
-A platform engineer submits a deployment where no single file looks alarming in isolation. Terraform includes a minor infrastructure adjustment, Kubernetes scales replicas from 3 to 10, and an Ansible change updates service configuration. DeployWhisper detects that these changes together imply a scaling event and warns that the Kubernetes resource limits have not been adjusted to match the increased replica count, creating a realistic risk of OOM kills under load.
+### 4.3 Core product thesis
 
-This is the edge-case journey that proves the product thesis. The engineer starts with confidence because each individual diff appears routine, then shifts into focused concern when DeployWhisper identifies the cross-tool interaction they did not connect on their own. They use the report to escalate the deployment to their SRE lead with evidence instead of intuition.
+Infrastructure risk is a **context problem**, not just a syntax or policy problem.
 
-This journey reveals requirements for multi-tool correlation, cross-file reasoning, explicit explanation of conflicting or interacting signals, report sharing, and clear escalation paths for HIGH or CRITICAL assessments.
+A deployment becomes risky when:
+- Multiple tools interact
+- Environment context changes the meaning of a diff
+- Blast radius is larger than it appears
+- Rollback is harder than the change seems
+- The change resembles a prior incident
+- Topology or history is incomplete but users are not told clearly
 
-### Journey 3: SRE Lead - Go/No-Go Decision Under Accountability
+DeployWhisper creates value by turning all of that into one trusted briefing with explicit evidence and uncertainty.
 
-An SRE lead is asked to approve a risky production deployment. They open the DeployWhisper report shared by the platform engineer and review the risk score, the blast radius, the incident match, and the rollback complexity. They are not looking for raw change detail alone; they are trying to decide whether this deployment is safe enough to ship with their name attached to the outcome.
+### 4.4 Strategic wedge
 
-The emotional state starts with skepticism and responsibility. The product earns trust only if the report feels like an operational cockpit rather than a generic summary. The SRE lead needs to see why the deployment is risky, which systems are exposed, whether the pattern resembles a past outage, and how difficult recovery would be if the deploy fails. The journey succeeds when the lead can make a defensible go/no-go call quickly, with evidence.
+The initial wedge is intentionally narrow:
 
-This journey reveals requirements for high-signal summary views, incident similarity presentation, blast radius depth, rollback complexity scoring, and report formats that support approval-thread decision making.
+**Infrastructure and platform teams running production changes across Terraform and Kubernetes, often with related pipeline or config changes, where a bad rollout is expensive and human review quality varies by reviewer experience.**
 
-### Journey 4: Junior Engineer - Learning Through Risk Review
+### 4.5 Non-goals
 
-A junior engineer submits an infrastructure change and receives a DeployWhisper report explaining why their modification creates risk. Instead of a cryptic lint rule or senior-reviewer comment, they see a plain-English explanation grounded in the specific tool context, such as why a broad security-group rule is dangerous, how a missing readiness probe affects rollout safety, or why an Ansible task is not idempotent.
+DeployWhisper v1 and v1.5 are explicitly **not** intended to be:
+- A deployment executor
+- A replacement for Atlantis, HCP Terraform, Spacelift, or env0
+- A full policy engine (OPA replacement)
+- A runtime remediation or auto-rollback system
+- A broad multi-tenant enterprise platform
+- A cost-optimization platform
+- A broad observability platform
+- A ticketing or incident-management system
 
-The emotional shift is from confusion and dependence on tribal knowledge to understanding and growth. The product succeeds when the junior engineer learns something actionable from the review and can correct the issue without waiting for a senior engineer to decode it for them. Over time, the system becomes a reusable training layer embedded inside normal deployment work.
+---
 
-This journey reveals requirements for plain-English explanations, tool-specific AI Skills, actionable remediation guidance, and report clarity suitable for less experienced engineers.
+## 5. Target Customers and Users
 
-### Journey 5: Engineering Manager - Deployment Safety Trends and Team Learning
+### 5.1 Ideal customer profile
 
-An engineering manager reviews deployment trends at the end of the week or sprint. They are not concerned with one deployment in isolation; they want to understand whether the team is getting safer over time, which tools generate the most high-risk changes, how often the team accepts or fixes flagged risks, and whether deployment incidents are decreasing.
+- Platform engineering and SRE teams
+- 10 to 300 engineers
+- Production infrastructure managed via IaC
+- Mixed tooling across Terraform, Kubernetes, CI/CD pipelines, and configuration automation
+- Manual pre-deploy review still depends on senior reviewer experience
+- Regulated or security-conscious enough to value self-hosting and local-first analysis
 
-The emotional state begins with ambiguity because safety is often discussed anecdotally. DeployWhisper resolves that ambiguity by turning individual analyses into a history of operational patterns. The journey succeeds when the manager can answer whether the organization is improving, where the risk is concentrated, and whether the product is creating both safer deployments and better team learning.
+### 5.2 Primary users
 
-This journey reveals requirements for analysis history, historical comparisons, trend reporting, tool-level risk breakdowns, and reporting views that summarize outcomes over time rather than per deployment.
+**Platform Engineer** — needs a fast, trustworthy deploy briefing before merge or release.
 
-### Journey 6: Platform Admin - Maintaining Operational Context
+**SRE / Production Approver** — needs enough signal to make or support a go/no-go call.
 
-A platform administrator sets up DeployWhisper for the team and keeps its operational context accurate as infrastructure evolves. They configure the LLM provider, maintain the service-topology graph used for blast radius analysis, add custom AI Skills that reflect internal modules and conventions, and ingest past incident documents so the similarity engine can match against real team history.
+**Platform Admin** — maintains topology, incidents, provider settings, and trust boundaries.
 
-The most critical part of this journey is service-topology maintenance. If the topology is stale or incorrect, blast radius analysis becomes misleading for every other user. The journey succeeds when the admin can update topology, skills, and incident memory with low friction and clear feedback about whether the system context is current.
+### 5.3 Secondary users
 
-This journey reveals requirements for provider configuration, topology import and validation, stale-context indicators, incident-ingestion workflows, custom-skill management, and lightweight operational setup.
+**Junior Engineer** — learns from grounded explanations and remediation guidance.
 
-### Journey 7: API / CI Consumer - Advisory Analysis in the Delivery Pipeline
+**Engineering Manager** — tracks whether deploy risk is improving, where risk concentrates, and whether the product is actually trusted.
 
-A CI workflow detects a pull request that changes Terraform, YAML, or Jenkins pipeline files. The workflow sends the changed artifacts to DeployWhisper's analysis API and receives a structured JSON risk report in response. A PR bot posts a summary comment showing the risk level, plain-English narrative, blast radius summary, and rollback guidance, then requests additional review if the deployment risk is elevated.
+**CI / Automation Consumer** — consumes structured output via API, CLI, or PR integration.
 
-The product remains advisory rather than blocking. Engineers and reviewers use the report to make better decisions, but the pipeline does not automatically reject the change. The journey succeeds when DeployWhisper becomes a trusted automated reviewer that runs on every relevant infrastructure change, increasing coverage without removing human judgment.
+### 5.4 Non-users (explicit)
 
-This journey reveals requirements for FastAPI analysis endpoints, machine-readable JSON output, CI-friendly request flow, PR-comment formatting support, and advisory integration patterns that avoid automated hard blocking in v1.
+- End developers submitting application code changes (DeployWhisper analyzes infrastructure)
+- Security auditors looking for compliance-only views (DeployWhisper is advisory, not audit-first)
 
-### Journey Requirements Summary
+---
 
-These journeys define the capability areas the product must support:
+## 6. Jobs To Be Done
 
-- Unified ingestion of Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation artifacts
-- Cross-tool correlation that detects risk patterns no single-tool analyzer can see
-- Plain-English narratives that explain operational consequences, not just diffs
-- Blast radius mapping tied to maintainable service-topology context
-- Incident-history matching that adds organizational memory to deployment review
-- Rollback guidance and rollback complexity scoring for go/no-go decisions
-- Analysis history and trend reporting for management visibility
-- Tool-specific AI Skills that teach as well as detect
-- Admin workflows for provider setup, topology maintenance, skill customization, and incident ingestion
-- API-first analysis for CI/CD and PR-comment automation without mandatory blocking
+### Core JTBD
+When I am preparing an infrastructure change for release, help me understand whether it is safe to deploy and what deserves more review before I ship.
 
-## Domain-Specific Requirements
+### Supporting JTBDs
+- Help me explain the risk to an approver
+- Help me see what systems or teams may be affected
+- Help me understand whether rollback is realistic
+- Help me compare this change against past failures
+- Help my team learn from deployments over time
+- Help me embed this intelligence into PR and approval workflows
+- Help me prove that our deployment review quality is getting better
 
-### Compliance & Regulatory
+---
 
-DeployWhisper v1 is a self-hosted, single-team product and is not required to achieve formal certifications such as SOC 2 at launch. However, the product must be designed so that regulated-environment review is straightforward from its architecture and data flow. The system shall maintain an audit trail for every analysis, including timestamp, triggering user or session, files analyzed, LLM provider used, and resulting risk score. This audit trail supports both post-incident investigation and internal deployment accountability.
+## 7. Product Principles
 
-The product shall document its data flow clearly enough that a security or compliance reviewer can determine what is processed locally, what is sent to external APIs, what is stored on disk, and what is written to logs. For regulated or sensitive environments, the product shall support a fully local deployment mode using Ollama so that no analysis data leaves the network boundary. Application logs shall exclude API keys, raw file contents, prompts, and model responses.
+1. **Evidence before narrative** — AI wording must never come before grounded evidence
+2. **Advisory-first** — DeployWhisper recommends; humans decide. Enforcement comes later through adapters if trust is earned
+3. **Local-first by default** — raw IaC remains local; external models only receive structured summaries
+4. **Uncertainty must be visible** — missing topology, partial artifact coverage, weak similarity matches, and low-confidence inference must be explicit
+5. **One report, many surfaces** — Web UI, API, CLI, and PR workflows all present the same underlying analysis object
+6. **Trust beats cleverness** — better to be precise and explainable than broad and impressive-looking
+7. **Workflow-native wins adoption** — if the report is not present inside PRs and approval threads, usage remains optional
+8. **Context is the moat** — parser coverage matters, but topology, incident memory, deployment history, and feedback learning matter more
+9. **Community extends the product** — AI Skills marketplace, benchmark corpus, and incident patterns are community-contributed, not vendor-locked
 
-### Technical Constraints
+---
 
-DeployWhisper shall process raw IaC artifacts locally and shall never send raw infrastructure files to external LLM providers. Parsing, risk scoring, blast radius analysis, environment detection, and incident matching shall run locally. External LLM usage is limited to generating narrative output from structured summaries derived from parsed change objects. If external LLM access is unavailable, the product shall still produce local analytical outputs including risk score, change breakdown, and blast radius data.
+## 8. What Makes DeployWhisper Different
 
-API keys shall be stored only in environment variables or in-memory session state and shall never be persisted to SQLite, logs, or generated reports. Sensitive file detection shall be always-on and shall automatically exclude dangerous files such as `.env`, `*.pem`, `*.key`, `id_rsa`, `kubeconfig`, `credentials`, and `*.tfstate` from any LLM-bound payload. When sensitive files are detected, the product shall warn the user that the content was excluded from external model transmission.
+Our message to the market is:
 
-The product shall remain advisory only. There shall be no mode in v1 where DeployWhisper can block a deployment. Human reviewers retain final authority regardless of risk score or recommendation.
+> **The local-first, evidence-backed deployment briefing for infrastructure changes.**
 
-### Integration Requirements
+The competitive edge is the combination of:
 
-The product shall accept standard engineering artifacts without requiring teams to adopt new intermediate formats. Terraform support shall prioritize `terraform plan -json` and parse provider-agnostic resource changes across AWS, GCP, Azure, and other Terraform ecosystems. Kubernetes support shall handle multi-document YAML and common manifest packaging patterns, including raw manifests and rendered outputs from Helm or Kustomize workflows.
+- Multi-artifact infrastructure review (5 tools)
+- Cross-tool reasoning
+- Evidence-backed scoring with deterministic + inferred separation
+- Confidence and uncertainty as first-class outputs
+- Blast radius with freshness and completeness indicators
+- Rollback readiness
+- Incident-memory matching
+- PR-native delivery
+- Self-hosted / BYO-LLM posture
+- Community-driven AI Skills marketplace
+- Measurable accuracy benchmarks published publicly
 
-Ansible analysis shall work with partial context, providing task-level review when only playbooks are uploaded and richer targeting analysis when inventory or variable files are included. Jenkins support shall fully analyze declarative pipelines and provide best-effort analysis for scripted pipelines where full static parsing is not feasible. Blast-radius analysis shall use a manually maintained service-topology JSON file in v1, with topology auto-discovery treated as a future enhancement. Incident-history ingestion shall accept flexible postmortem inputs such as markdown, plain text, or exported documentation rather than requiring a single canonical format.
+---
 
-### Risk Mitigations
+## 9. Problem Statement
 
-The highest-risk failure mode is false reassurance on a dangerous deployment. The system shall therefore be conservative by default and treat false negatives as more severe than false positives. Risk scoring thresholds and heuristics shall err toward escalation when uncertainty exists, with team tuning allowed only after trust is established through real usage.
+Today, teams review infrastructure changes using a fragmented set of tools:
 
-Parser correctness is a foundational trust boundary. Parsers shall be tested against real-world artifact samples and validated carefully because incorrect parsing corrupts all downstream analysis. Sensitive-data leakage is the second critical failure mode; architecture and file-detection rules shall prevent accidental transmission of secrets or raw infrastructure state to external providers.
+- Terraform plans
+- Kubernetes manifests
+- Ansible playbooks
+- Jenkins pipeline diffs
+- Scanner output
+- Tribal knowledge
+- Memory of past incidents
+- Manual judgment in chat or approval threads
 
-Risk scoring shall be explainable rather than opaque. Users shall be able to see which changes, environments, and incident signals contributed to the final score. Blast-radius results shall include uncertainty indicators when service-topology data is stale or incomplete. If referenced resources are missing from the topology graph, the system shall warn that blast-radius analysis may be incomplete instead of silently presenting false confidence.
+This creates five recurring failures:
 
-## Innovation & Novel Patterns
+1. Reviewers miss cross-tool interactions
+2. Risk quality depends on reviewer seniority
+3. Blast radius is guessed rather than shown
+4. Rollback is considered too late
+5. Teams cannot tell whether a warning is grounded or AI-generated guesswork
 
-### Detected Innovation Areas
+DeployWhisper exists to solve all five.
 
-DeployWhisper introduces a novel combination of capabilities rather than a single isolated feature. The strongest innovation signal is the AI Skills layer, which grounds a general-purpose LLM with tool-specific operational expertise across Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation. This changes the model from a generic narrator into a context-aware reviewer that can reason about provider-specific pitfalls, rollout safety issues, idempotency failures, approval-gate removal, and similar domain-specific hazards.
+---
 
-The broader innovation is the combination of four elements into one review system: multi-tool parsing, tool-specific AI Skills, incident-memory matching, and a decision-ready risk narrative. Existing deployment-review tools operate on one artifact type at a time or rely on static rule evaluation. DeployWhisper treats deployment risk as a context problem across multiple tools and uses that combined context to produce a single operational assessment.
+## 10. Success Metrics
 
-The product also challenges two common assumptions in current tooling. First, it rejects the assumption that deployment-risk tools can only reason about one artifact at a time. Second, it rejects the assumption that LLMs are too generic to be useful for infrastructure review by grounding them with AI Skills and limiting their role to informed reasoning over structured summaries.
+### 10.1 Product adoption metrics
+- 80%+ of production-relevant infrastructure changes analyzed within 90 days of team rollout
+- 60%+ of qualifying PRs show a DeployWhisper summary inside the review flow within 90 days of PR integration launch
+- 50%+ of production approvals reference a DeployWhisper report or summary within 6 months
 
-### Market Context & Competitive Landscape
+### 10.2 Trust metrics
+- Precision of high/critical warnings acceptable to senior reviewers (published benchmark precision > 80%)
+- False reassurance rate for material incidents kept below 5%
+- 70%+ of reviewers rate evidence quality as "clear enough to defend"
+- 70%+ of reviewers rate narrative as "useful but not overbearing"
+- Context completeness warnings shown whenever topology/history quality is weak
 
-The closest alternatives each cover only part of the problem space. Linters such as `tflint`, `kube-score`, and `ansible-lint` catch syntax errors and best-practice violations within a single tool, but they do not correlate changes across tools, explain blast radius, or connect current changes to past incidents. Terraform-focused platforms such as plan viewers and policy-checking systems improve Terraform review, but they stop at Terraform and do not account for the Kubernetes, Ansible, or Jenkins changes that often ship alongside infrastructure updates.
+### 10.3 Workflow metrics
+- Median time from upload/trigger to initial report under 15 seconds for standard analyses
+- PR summary generation under 5 seconds after report persistence
+- Rerun-on-commit support for GitHub-based workflows in v1.5
 
-Policy engines such as OPA, Rego, and Sentinel provide strong enforcement for known rules, but they only catch risks that have already been codified. They do not reason about novel interaction patterns that emerge across multiple artifacts. Generic LLM prompting can produce plausible review text, but it lacks consistent grounding, tool-specific expertise, blast-radius context, incident memory, and auditability. DeployWhisper differentiates itself by combining multi-tool context, grounded AI reasoning, incident-memory awareness, rollback planning, and structured deploy-review outputs in a single workflow.
+### 10.4 Business outcome metrics
+- 2-3 materially risky changes caught per month in early teams
+- Measurable reduction in deployment-related severe incidents over 6-12 months
+- Measurable reduction in senior-reviewer dependency for routine deploy reviews
+- Growing benchmark win rate against manual review and competitor tools
 
-### Validation Approach
+### 10.5 Learning metrics
+- % of reports with captured human feedback
+- % of high-risk reports later confirmed by incident or postmortem outcome
+- % of warnings later marked as false positive
+- % of reports enriched with topology, incident, and deployment-history context
 
-The AI Skills thesis should be validated directly against baseline alternatives. The first validation path is a skill-enhanced versus vanilla-LLM comparison using known risky deployment scenarios. The team should run the same scenarios through DeployWhisper with AI Skills enabled and through an ungrounded LLM prompt, then compare both outputs against senior SRE review. This validates whether the Skills layer materially improves tool-specific hazard detection.
+### 10.6 Community metrics (new)
+- Number of community-contributed AI Skills in the marketplace
+- Number of active external contributors per month
+- Number of GitHub stars
+- Number of deployed installations (opt-in telemetry)
+- CNCF Sandbox status achieved
 
-The second validation path is cross-tool detection. The team should create scenarios where risk only becomes visible when multiple tools are analyzed together, then compare DeployWhisper against individual single-tool linters and reviewers. If DeployWhisper consistently identifies cross-tool interaction risk that the single-tool alternatives miss, the multi-tool thesis is validated.
+---
 
-The third validation path is incident-memory usefulness. The team should ingest real or representative incident postmortems, generate new deployment scenarios with meaningful similarity to those incidents, and evaluate whether incident matches appear in the analysis and change reviewer behavior. Success is measured not just by similarity scoring, but by whether engineers report that the historical warning would have affected the deployment decision.
+## 11. Scope by Phase
 
-### Risk Mitigation
+### 11.1 Phase 1 — Trusted Advisory Core (Weeks 1-10)
+**Purpose:** Prove the product can create a trustworthy briefing.
 
-If the innovation thesis underperforms, the product still retains substantial value as a deployment-review system. Even without strong cross-tool reasoning or high-value incident matching, DeployWhisper still provides a useful plain-English infrastructure narrator, rollback-plan generator, blast-radius visualizer, and audit trail for deployment review. This gives the product a meaningful floor even if the more ambitious intelligence layer needs refinement.
+**Included:**
+- Multi-file artifact upload and intake
+- Parser detection and normalization for 5 IaC tools
+- **Explicit evidence model** with deterministic + inferred separation
+- Unified risk assessment with contributors breakdown
+- Cross-tool interaction detection
+- Blast radius from maintained topology
+- Rollback guidance
+- Incident matching
+- Plain-English narrative **downstream of scoring**
+- Web UI, API, CLI
+- Persisted reports and history
+- Confidence and uncertainty indicators
+- Context completeness badge
 
-To protect trust while pursuing innovation, the system must remain conservative, explainable, and advisory. Risk assessments should err toward escalation rather than false reassurance. The contribution of each detected risk should be visible to the user rather than hidden behind opaque scoring. The system should never block deployment automatically in v1, which limits the blast radius of incorrect model behavior while allowing the team to build evidence and confidence over time.
+**Excluded:**
+- Deep enterprise auth
+- Policy gating
+- Auto-remediation
+- Multi-tenancy with org hierarchy
+- Queue-based distributed workers
+- Topology auto-discovery
+- Advanced integrations beyond basic automation
 
-## Web App Specific Requirements
+### 11.2 Phase 1.5 — Workflow-Native Adoption (Weeks 9-18)
+**Purpose:** Make DeployWhisper unavoidable in real review flows.
 
-### Project-Type Overview
+**Included:**
+- GitHub Action + GitHub App
+- PR comment formatter with rerun-on-commit
+- Comparison between report revisions
+- Shareable report links (read-only mode)
+- Report status summary for approvers
+- Machine-friendly verdict payload
+- **AI Skills marketplace v1** with 20+ seed skills
+- Skills authoring toolkit + CLI installer
 
-DeployWhisper is a desktop-first internal web application for infrastructure and platform teams. The primary usage environment is an engineer's work laptop on Chrome, Edge, or Firefox using the latest stable browser versions. The application runs locally during development and behind an internal network boundary or company VPN in production. Mobile is not a target platform for v1, and tablet support is limited to readable, non-broken layouts rather than full operational optimization.
+### 11.3 Phase 2 — Context Moat (Weeks 15-24)
+**Purpose:** Become materially smarter through organizational context.
 
-The product is not a public-facing website and has no SEO requirements. It is an authenticated or internal operational tool designed for engineers performing deployment review, risk analysis, and operational decision support.
-
-### Technical Architecture Considerations
-
-The frontend architecture shall remain pure Python with zero JavaScript build tooling. The product shall not require `npm`, `webpack`, `vite`, `node_modules`, or a separate frontend build pipeline. The preferred implementation direction is a pure-Python web UI framework that supports component-level updates, asynchronous workflows, and production-grade dashboard components while remaining operable from a single Python application process.
-
-The application shall support a single-container deployment model in which the dashboard and REST API run together on one server, one process boundary, and one exposed port. The system shall support large multi-file uploads, asynchronous long-running analysis workflows, and real-time progress feedback without requiring the user to refresh the page or manually poll for results.
-
-### Browser Matrix
-
-DeployWhisper v1 shall support the latest stable releases of Chrome, Edge, and Firefox on Linux, macOS, and Windows. Safari compatibility is desirable when it works through standards-based rendering, but Safari-specific behavior is not a v1 testing target. Internet Explorer and legacy browsers are explicitly out of scope.
-
-The application is intended for desktop browser use on internal engineering workstations. No native mobile app, Electron wrapper, or dedicated mobile browser optimization is required.
-
-### Responsive Design
-
-The interface shall be optimized for desktop screens at approximately 1200 pixels and above, where multi-column layouts, risk tables, blast-radius graphs, and rollback panels can be displayed together without loss of usability. On tablet-sized screens, the application shall remain readable and structurally intact, with tables scrollable and layout blocks stacking gracefully when needed.
-
-Mobile-phone optimization is out of scope for v1. Small-screen rendering may degrade gracefully, but the product is not required to support full deployment-review workflows on narrow mobile displays.
-
-### Performance Targets
-
-Initial dashboard load time shall be under 1.5 seconds under normal internal-network conditions. Once analysis completes, time to interactive update for risk score, narrative, tables, and supporting panels shall be under 500 milliseconds so that results feel immediate.
-
-File uploads shall provide immediate visual feedback, including file names, detected tool types, and file sizes before analysis begins. Long-running analysis workflows shall provide staged progress updates for parsing, risk scoring, blast-radius computation, AI Skill loading, and narrative generation rather than relying on an undifferentiated spinner. The history interface shall remain responsive with at least 1000 reports stored, using pagination, filtering, and server-side query execution.
-
-### SEO Strategy
-
-DeployWhisper has no SEO requirements. The product is an internal operational system rather than a public marketing property. No sitemap, search-engine indexing strategy, structured metadata strategy, or crawler-specific rendering is required for v1.
-
-### Accessibility Level
-
-DeployWhisper shall meet a practical accessibility bar suitable for internal engineering tools. Risk indicators shall never rely on color alone; each severity state shall include explicit text labels or equivalent non-color cues. Core workflows including navigation, upload, configuration, and report review shall remain keyboard navigable through standard browser interaction patterns.
-
-Narrative text, change tables, and rollback plans shall be rendered using semantic HTML structures that work with screen readers. Visualizations such as gauges and network graphs shall include textual summaries or `aria` descriptions of key information, but full screen-reader operability of complex interactive graphs is not required in v1. Formal WCAG certification is out of scope, but common accessibility needs such as color-blind-safe indicators, zoom/text scaling tolerance, and keyboard preference support are required.
-
-### Implementation Considerations
-
-The application shall support multi-file drag-and-drop uploads with a configurable total payload limit of at least 50 MB. Tool detection shall occur immediately on upload, while parsing and analysis proceed asynchronously in the background. If analysis takes multiple seconds, the UI shall surface stage-based progress and status updates so that the user understands what the system is doing.
-
-Session state may be connection-scoped and transient for in-progress analysis, but completed reports shall persist in SQLite and remain available after browser refresh or reconnect. Browser-side storage shall not be used for critical operational state. API keys shall remain memory-only at the session or environment level and shall not be persisted to the browser or local database.
-
-The UI framework choice shall reinforce the product's broader architectural priorities: pure Python developer experience, real-time incremental updates, and shared runtime with the API backend. The preferred direction is a framework that can serve both dashboard and API from the same application process while avoiding separate frontend infrastructure.
-
-## Project Scoping & Phased Development
-
-### MVP Strategy & Philosophy
-
-**MVP Approach:** DeployWhisper v1 is a concept-complete product rather than a stripped-down prototype. The team deliberately chose to ship all 12 functional requirements in the first release because the product's value emerges from the interaction between multi-tool parsing, AI Skills, blast radius mapping, incident memory, rollback planning, and analysis history working as one system. Removing any one of these capabilities reduces the product to a narrower feature category that already exists elsewhere.
-
-The phased roadmap reflects a build and scaling sequence, not a feature-stripping exercise. What was excluded from v1 was already cut intentionally: official CI/CD plugins, cost impact analysis, multi-tenant support, automated blocking, and custom LLM fine-tuning.
-
-**Resource Requirements:** The minimum credible delivery team is two strong Python engineers, with three preferred. One engineer owns parsers, UnifiedChange normalization, risk scoring, and blast radius logic. A second engineer owns LLM integration, AI Skills, prompt design, and the dashboard experience. A third engineer, if available, owns Docker, API, persistence, CLI mode, test infrastructure, and CI support. With two engineers, v1 is feasible in approximately six weeks. With three, delivery compresses to roughly four weeks with better test coverage and lower context-switching overhead.
-
-### MVP Feature Set (Phase 1)
-
-**Core User Journeys Supported:**
-- Platform engineer running daily pre-deploy review
-- Platform engineer escalating cross-tool high-risk findings
-- SRE lead making go/no-go decisions
-- Junior engineer learning from plain-English review output
-- Engineering manager reviewing deployment-risk trends
-- Platform admin maintaining topology, AI Skills, and incident history
-- API/CI consumer running advisory analysis in pipeline workflows
-
-**Must-Have Capabilities:**
-- Parsing and normalization for Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation
-- Unified change schema and local-first analysis pipeline
-- AI-generated plain-English risk narrative grounded by AI Skills
-- Tool-specific AI Skills for all supported tool types
-- Risk scoring with explainable score breakdown
-- Blast radius mapping using service topology
-- Incident-history ingestion and similarity matching
-- Rollback-plan generation with complexity scoring
-- Analysis history, audit trail, and trend visibility
-- Dashboard, REST API, and CLI access modes
-- Custom AI Skill override support
-- Advisory-only workflow with no automated deployment blocking
-
-**Explicit Scope Note:** PDF export is the first non-core feature to defer if schedule pressure requires a cut. Intelligence-layer capabilities are not candidates for removal because they define the product thesis.
-
-### Post-MVP Features
-
-**Phase 2 (Post-MVP):**
-- Official CI/CD plugins for GitHub Actions, GitLab CI, and Jenkins integration
-- Slack bot with interactive collaboration workflows
+**Included:**
 - Topology auto-discovery from Terraform state
-- Side-by-side report diffing across analyses
-- Risk-threshold customization UI
-- Lightweight multi-user and team-sharing features
+- Richer incident ingestion
+- Deployment history ingestion with outcome capture
+- Environment criticality mapping
+- Service ownership mapping
+- Reviewer feedback capture
+- **Published benchmark corpus** with quarterly regression results
+- Trend and calibration dashboards
 
-**Phase 3 (Expansion):**
-- Automated deployment blocking and policy-gating integrations
-- Real-time cloud API introspection and live-state discovery
-- Custom LLM fine-tuning on team-specific incident and review data
-- Community AI Skills marketplace and distribution model
-- Post-deploy monitoring integration with feedback-loop learning
-- Cost impact analysis across cloud providers
+### 11.4 Phase 3 — Enterprise and Scale (Week 24+)
+**Purpose:** Support wider adoption without losing trust.
 
-### Risk Mitigation Strategy
+**Included:**
+- PostgreSQL migration path
+- Async workers / queue
+- RBAC / SSO
+- Stronger audit governance
+- Team and org boundaries
+- Policy export or policy adapter layer
+- Optional downstream enforcement by integration, not core product takeover
 
-**Technical Risks:** The highest technical risk is parser correctness across five tools, especially real-world edge cases such as nested Terraform modules, multi-document Kubernetes YAML, dynamic Ansible execution paths, scripted Jenkins pipelines, and conditional CloudFormation templates. Mitigation requires extensive fixture-based testing with real-world samples and treating parser crashes or silent misreads as top-priority defects. The second major technical risk is whether AI Skills materially improve LLM narrative quality, which must be validated through structured A/B comparison against ungrounded prompts.
+---
 
-**Market Risks:** The biggest adoption risk is trust failure through poor score calibration. If the system over-flags, engineers will ignore it. If it under-flags and falsely reassures on a dangerous deploy, adoption may collapse permanently. Mitigation requires conservative defaults, transparent score explainability, and calibration against real historical deployment scenarios before teams rely on the output operationally.
+## 12. Primary User Journeys
 
-**Resource Risks:** If staffing or time is reduced, the contingency is not to remove core intelligence features but to defer peripheral convenience features. The integrated nature of the product means the core feature set must remain intact for the product to make sense. Resource pressure should be absorbed by trimming polish and secondary outputs first, with PDF export the clearest early deferral candidate.
+### 12.1 Platform Engineer — Pre-Deploy Review
+A platform engineer uploads or triggers analysis for Terraform, Kubernetes, and related pipeline/config changes. They need a single verdict with top risks, evidence, blast radius, and what to verify next.
 
-## Functional Requirements
+**Success condition:** The user can decide whether to proceed, fix, or escalate in minutes, not after manual cross-tool review.
 
-### Multi-Tool Change Intake
+### 12.2 SRE Approver — Go / No-Go Decision
+An approver opens a shared report or PR summary before production rollout. They want high signal only: verdict, impact, rollback difficulty, incident similarity, and uncertainty.
 
-- FR1: Platform engineers can submit deployment artifacts from Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation for a single analysis.
-- FR2: Platform engineers can submit multiple files from multiple supported tools in one analysis session.
-- FR3: The system can identify the supported tool type of each submitted artifact without requiring manual classification from the user.
-- FR4: The system can analyze partial deployment context when only a subset of related artifacts is provided.
-- FR5: The system can detect unsupported or sensitive files in a submission and warn the user when those files are excluded from analysis or external model use.
+**Success condition:** The approver can defend a go/no-go decision using the report.
 
-### Unified Risk Analysis
+### 12.3 Junior Engineer — Learning and Remediation
+A junior engineer sees why a change is risky, what evidence caused the finding, and how to fix or verify it.
 
-- FR6: Platform engineers can receive a single risk assessment that combines findings across all submitted deployment artifacts.
-- FR7: The system can produce a deploy recommendation that indicates whether a change appears safe, needs caution, or requires escalation.
-- FR8: The system can identify cross-tool interactions where individually benign changes create elevated combined risk.
-- FR9: The system can classify risk findings by severity so that users can distinguish low, medium, high, and critical issues.
-- FR10: The system can explain which detected changes contributed to the overall risk assessment.
+**Success condition:** The report teaches without being vague or patronizing.
 
-### Narrative Guidance & Learning
+### 12.4 Platform Admin — Context Maintenance
+An admin updates topology, provider settings, incident records, and custom skills, and can tell whether context is stale.
 
-- FR11: Platform engineers can receive a plain-English narrative that explains what changed, why it matters, and what could break.
-- FR12: Junior engineers can receive tool-specific explanations that help them understand why a change is risky.
-- FR13: Users can receive actionable guidance describing what to review, change, or verify before deployment.
-- FR14: SRE leads can review a decision-ready summary that supports go or no-go deployment decisions.
-- FR15: Users can distinguish between the system's recommendation and the final human deployment decision.
+**Success condition:** The system stays trustworthy because the context it depends on is visibly current.
 
-### Blast Radius & Operational Impact
+### 12.5 PR Workflow — Automated Advisory Review
+A PR changes infrastructure artifacts. DeployWhisper posts a report summary with verdict, evidence highlights, blast radius, rollback, and uncertainty. Reviewers can rerun after fixes.
 
-- FR16: Users can view which downstream services, systems, or resources may be affected by a deployment change.
-- FR17: The system can indicate when blast-radius analysis may be incomplete because required topology context is missing or stale.
-- FR18: SRE leads can review impact information in enough detail to assess which teams or systems may need coordination before release.
-- FR19: Platform administrators can maintain the service-topology context used for impact analysis.
+**Success condition:** DeployWhisper becomes part of normal review, not a separate dashboard people forget.
 
-### Rollback & Incident Intelligence
+### 12.6 Skills Contributor — Community Extension (new)
+A platform engineer discovers DeployWhisper doesn't know about their internal tool (Helm, ArgoCD, Pulumi). They read the Skills authoring guide, write a markdown file with risk patterns, add test cases, and submit a PR.
 
-- FR20: Users can receive a rollback plan for an analyzed deployment.
-- FR21: Users can review rollback steps in an ordered sequence that reflects operational recovery flow.
-- FR22: SRE leads can review rollback complexity as part of deployment decision making.
-- FR23: Platform administrators can ingest past incident records so the system can compare new deployments against historical failures.
-- FR24: Users can see when a current deployment resembles a previously recorded incident.
+**Success condition:** Contributor can go from idea to published skill in under 2 hours. Skill passes automated test harness and is reviewed by maintainers within 1 week.
 
-### History, Audit, and Trend Review
+---
 
-- FR25: The system can retain a history of completed analyses for later review.
-- FR26: Engineering managers can review historical deployment analyses to understand risk trends over time.
-- FR27: Engineering managers can compare risk patterns across tools, time periods, and deployment outcomes.
-- FR28: Teams can use analysis history as an audit trail showing when a deployment was reviewed and what assessment was produced.
-- FR29: Users can retrieve past reports for investigation, learning, or approval-thread reference.
+## 13. Functional Requirements
 
-### Configuration & Customization
+### 13.1 Intake and classification
+- **ING-01** Accept one or more artifacts from supported toolchains in a single analysis
+- **ING-02** Auto-detect artifact type without requiring manual labeling for normal cases
+- **ING-03** Support partial analysis when not all related artifacts are available
+- **ING-04** Detect unsupported artifacts and explain why they were excluded
+- **ING-05** Detect sensitive files and block unsafe downstream handling
+- **ING-06** Preserve a submission manifest showing which artifacts were accepted, excluded, partially parsed, or failed
 
-- FR30: Platform administrators can configure which language model provider the system uses for narrative generation.
-- FR31: Platform administrators can operate the system in a fully local analysis mode when external model usage is not allowed.
-- FR32: Platform administrators can add or override team-specific AI Skills so analysis reflects internal modules, conventions, and risk patterns.
-- FR33: Platform administrators can manage the operational context required for analysis, including incident records and topology definitions.
-- FR34: Teams can use the system without enabling automated deployment blocking.
+### 13.2 Normalization and evidence
+- **EVD-01** Normalize supported artifacts into a shared internal change model
+- **EVD-02** Each finding shall reference one or more concrete evidence items
+- **EVD-03** Evidence items shall identify artifact, location, resource, change operation, or contextual source where applicable
+- **EVD-04** The report shall distinguish deterministic findings from model-inferred explanations
+- **EVD-05** The report shall surface confidence and uncertainty for key findings and overall verdict
+- **EVD-06** The report shall explain the main contributors to overall risk score
+- **EVD-07** When context is incomplete, the report shall show explicit uncertainty instead of implying certainty
+- **EVD-08** Evidence items persist with the report for audit and comparison
 
-### Interfaces & Workflow Access
+### 13.3 Risk intelligence
+- **RSK-01** Produce a unified deployment risk verdict for the whole submission
+- **RSK-02** Classify findings and verdicts by severity level
+- **RSK-03** Detect cross-tool interactions that increase risk
+- **RSK-04** Generate a reviewer-oriented explanation of why a risk matters operationally
+- **RSK-05** Generate actionable remediation or verification guidance
+- **RSK-06** Produce rollback guidance and rollback complexity score
+- **RSK-07** Distinguish between product recommendation and human decision
+- **RSK-08** Continue to return deterministic results if narrative generation fails
 
-- FR35: Platform engineers can use a web interface to submit artifacts, review findings, and access historical analyses.
-- FR36: Technical users can access analysis capabilities through an API for automation and integration workflows.
-- FR37: Technical users can trigger analysis from command-line workflows when a browser interface is not the preferred entry point.
-- FR38: CI workflows can submit deployment artifacts for advisory analysis and consume structured results.
-- FR39: Teams can share analysis outputs within deployment review workflows without requiring the system itself to make the final release decision.
+### 13.4 Context enrichment
+- **CTX-01** Compute blast radius using maintained topology context
+- **CTX-02** Indicate when topology is stale, missing, or incomplete
+- **CTX-03** Ingest incident records for similarity matching
+- **CTX-04** Surface relevant incident similarity results with match confidence
+- **CTX-05** Support service criticality and environment-aware risk context
+- **CTX-06** Store deployment history sufficient for comparison and trend analysis
+- **CTX-07** Support future topology auto-discovery and context connectors without replacing the core report format
 
-## Non-Functional Requirements
+### 13.5 Review and reporting experience
+- **REV-01** The web report shall present verdict first, then evidence, then details
+- **REV-02** The report shall show top findings, blast radius, rollback, and uncertainty above the fold
+- **REV-03** Users shall be able to inspect full findings and evidence details on demand
+- **REV-04** Users shall be able to retrieve prior reports and compare analyses over time
+- **REV-05** The system shall generate a concise share summary for PRs and approval threads
+- **REV-06** Shared summaries shall remain explicitly advisory
+- **REV-07** The report shall support both expert quick scan and detailed investigation
 
-### Performance
+### 13.6 Workflow-native delivery
+- **WRK-01** Expose a stable versioned REST API
+- **WRK-02** Expose CLI access using the same analysis core
+- **WRK-03** Support GitHub-first workflow delivery for PR review
+- **WRK-04** Post a formatted PR summary including verdict, top risks, blast radius, rollback context, and uncertainty
+- **WRK-05** Support rerun after new commits or changed artifacts
+- **WRK-06** Support report links and machine-friendly summary payloads
+- **WRK-07** Support future GitLab / Atlantis / HCP Terraform / Jenkins adapters without redesigning the core analysis object
 
-- The system shall complete a standard deployment analysis in under 15 seconds under normal operating conditions.
-- The web dashboard shall load in under 1.5 seconds on supported desktop browsers under normal internal-network conditions.
-- The UI shall update analysis results within 500 milliseconds after a completed analysis is available.
-- The analysis history interface shall remain responsive with at least 1000 stored reports using indexed and paginated retrieval.
-- The system shall support at least 3 concurrent analyses without major degradation in responsiveness or analysis completion time.
+### 13.7 History, analytics, and learning
+- **HIS-01** Persist completed reports before showing final success
+- **HIS-02** Retain audit metadata with each report
+- **HIS-03** Users shall be able to search and filter historical reports
+- **HIS-04** Managers shall be able to review risk trends over time
+- **HIS-05** Capture reviewer feedback on report quality and correctness
+- **HIS-06** Support outcome capture after deployment for later calibration
+- **HIS-07** Support benchmark and backtest workflows against historical incidents
 
-### Security
+### 13.8 Administration and customization
+- **ADM-01** Admins shall configure narrative provider settings
+- **ADM-02** Admins shall enable fully local-only operation
+- **ADM-03** Admins shall manage topology data and freshness status
+- **ADM-04** Admins shall manage incident ingestion and indexing
+- **ADM-05** Admins shall add or override custom skills and organization-specific heuristics
+- **ADM-06** Admins shall manage thresholds and reporting defaults without changing core code
+- **ADM-07** Future policy adapters shall consume report outputs without changing advisory-first core behavior
 
-- The system shall never send raw infrastructure-as-code content to external LLM providers.
-- The system shall store API keys only in memory or environment variables and shall never persist them to local databases, logs, or generated reports.
-- Sensitive-file detection shall always remain enabled and shall automatically exclude dangerous files from external model transmission.
-- The system shall support a fully offline operating mode using Ollama in which no analysis-related network calls are made outside the local environment.
-- Application logs shall exclude secrets, prompts, raw infrastructure content, and model responses, and shall contain only operational metadata such as timestamps, filenames, scores, and errors.
+### 13.9 Community ecosystem (new)
+- **COM-01** Expose a Skills registry API for listing, fetching, and installing community-contributed skills
+- **COM-02** Support versioned Skills with a formal manifest schema
+- **COM-03** Automated test harness runs on every Skill submission
+- **COM-04** Skills installer CLI: `deploywhisper skill install <name>`
+- **COM-05** Public Skills browser UI with search, filters, and ratings
+- **COM-06** Skill analytics: download counts, test pass rates, last-updated timestamps
+- **COM-07** Contribution workflow: PR template, automated linting, reviewer assignment
 
-### Reliability
+---
 
-- The product shall not depend on a formal uptime SLA for v1, but it shall fail gracefully in self-hosted environments.
-- If the configured LLM provider is unavailable, the system shall still return local analytical outputs including risk score, change breakdown, and blast radius information.
-- Parser failures shall be isolated to the affected file or artifact and shall not terminate analysis for the remaining valid inputs in the same submission.
-- Completed analysis reports shall be persisted successfully before they are presented in the dashboard or returned to the user as final output.
+## 14. Non-Functional Requirements
 
-### Accessibility
+### 14.1 Trust and security
+- **NFR-SEC-01** Raw infrastructure artifacts shall never be sent to external LLM providers
+- **NFR-SEC-02** Provider credentials shall not be persisted in the application database
+- **NFR-SEC-03** Logs shall exclude secrets, raw IaC, prompts, and raw model responses
+- **NFR-SEC-04** Sensitive-file handling shall always remain enabled
+- **NFR-SEC-05** Fully local operation shall be possible with local model execution (Ollama)
 
-- Risk severity shall never be communicated by color alone and shall always include explicit textual labels or equivalent non-color indicators.
-- Core workflows including navigation, file submission, configuration, and report review shall be keyboard navigable on supported desktop browsers.
-- Narrative content, change tables, and rollback plans shall be rendered using semantic HTML structures compatible with assistive technologies.
-- Visualizations such as risk gauges and blast-radius graphs shall include textual summaries or `aria` descriptions of their key information.
-- The product shall target practical accessibility for common engineering workflows without requiring formal WCAG certification in v1.
+### 14.2 Performance
+- **NFR-PERF-01** Standard analysis should complete in under 15 seconds for expected v1 workloads
+- **NFR-PERF-02** PR summary generation should complete in under 5 seconds
+- **NFR-PERF-03** History retrieval shall remain responsive for at least 1,000 stored reports in v1
+- **NFR-PERF-04** The system shall support small-team concurrency without severe degradation
 
-### Integration
+### 14.3 Reliability
+- **NFR-REL-01** Parser failures shall be isolated per artifact where possible
+- **NFR-REL-02** Narrative failure shall degrade gracefully to deterministic output
+- **NFR-REL-03** Completed reports shall be persisted before being presented as final
+- **NFR-REL-04** Health checks and startup validation shall make runtime issues visible early
 
-- The system shall expose a stable versioned JSON analysis API for automation and integration workflows.
-- The system shall accept standard supported artifact formats without requiring users to transform them into proprietary intermediate formats.
-- The system shall produce advisory outputs that can be consumed easily by CI workflows and scripts.
-- The system shall not require a single LLM vendor and shall allow provider substitution through configuration rather than code changes.
+### 14.4 Explainability and accessibility
+- **NFR-XAI-01** Severity must never be communicated by color alone
+- **NFR-XAI-02** Key visualizations must have textual equivalents
+- **NFR-XAI-03** Evidence and uncertainty must be readable in both UI and shared summaries
+- **NFR-XAI-04** The interface shall remain keyboard navigable for common review workflows
 
-### Scalability
+### 14.5 Operability and architecture
+- **NFR-OPS-01** Web, API, CLI, and integration outputs shall share one analysis core
+- **NFR-OPS-02** The product shall preserve a stable report schema across access surfaces
+- **NFR-OPS-03** The architecture shall support migration from SQLite to PostgreSQL without redesigning domain models
+- **NFR-OPS-04** The architecture shall support adding async workers later without breaking existing interfaces
 
-- The v1 product shall be designed for single-team deployment rather than multi-tenant organizational scale.
-- The persistence layer shall support at least 1000 historical reports without unacceptable degradation in retrieval performance.
-- The system shall support analyses containing tens of files in one submission, with a tested target of up to 30 files across supported tools.
-- The default upload limit shall be 50 MB total per analysis session, with configuration support for adjustment if needed.
-- The system shall support a small number of concurrent active users, with a target operating range of 3 to 5 simultaneous sessions.
+---
+
+## 15. Epics
+
+The product will be built through six sequential epics, with some parallelism. Details in the companion **Epic Breakdown** document.
+
+| Epic | Phase | Duration | Status |
+|------|-------|----------|--------|
+| Epic 1: Trusted Evidence Core | Phase 1 | Weeks 1-6 | Not started |
+| Epic 2: Report & Review Experience | Phase 1 | Weeks 5-10 | Not started |
+| Epic 3: GitHub-Native Delivery | Phase 1.5 | Weeks 9-14 | Not started |
+| Epic 4: AI Skills Marketplace | Phase 1.5 | Weeks 11-18 | Not started |
+| Epic 5: Context Moat | Phase 2 | Weeks 15-22 | Not started |
+| Epic 6: Benchmarks & Calibration | Phase 2 | Weeks 19-24 | Not started |
+
+---
+
+## 16. Differentiation Requirements
+
+These are requirements because they are essential to market position.
+
+- **DIF-01** Present evidence-backed findings rather than only natural-language summary
+- **DIF-02** Explicitly show uncertainty and context completeness
+- **DIF-03** Support PR-native workflow delivery as a first-class use case
+- **DIF-04** Preserve local-first analysis boundaries as a primary product promise
+- **DIF-05** Support learning loops from reviewer feedback and deployment outcomes
+- **DIF-06** Enable community extension through the AI Skills marketplace (new)
+- **DIF-07** Publish measurable benchmark results against competing approaches (new)
+
+---
+
+## 17. Release Exit Criteria
+
+### 17.1 Phase 1 exit (target: Week 10)
+- Mixed-artifact analysis works reliably
+- Reports contain evidence and uncertainty
+- Deterministic core works without narrative
+- History and audit metadata persist correctly
+- Senior reviewers consider high/critical findings credible enough to test in real workflows
+- Evidence inspector is usable in the UI
+- At least 3 internal or friendly-user teams using the product
+
+### 17.2 Phase 1.5 exit (target: Week 18)
+- GitHub workflow integration live and documented
+- PR summaries reused in real reviews
+- Rerun-on-commit works
+- Report comparison and sharing are usable
+- Deployment approvals start referencing reports regularly
+- Skills marketplace live with 20+ seed skills
+- First external Skill contribution merged
+
+### 17.3 Phase 2 exit (target: Week 24)
+- Context completeness improves materially
+- Incident similarity becomes useful in practice
+- Deployment history and outcome capture exist
+- Published benchmark corpus and quarterly results available
+- False positive/false reassurance trends are measurable and improving
+- CNCF Sandbox application submitted (or accepted)
+- GitHub stars greater than 1,000
+
+---
+
+## 18. Risks and Open Questions
+
+### Risk 1: Score credibility
+If the product over-warns or falsely reassures, adoption will fail.
+
+**Mitigation:** Conservative defaults; evidence traceability; benchmark corpus publication; feedback loop.
+
+### Risk 2: Parser coverage
+Real-world parser edge cases can destroy trust quickly.
+
+**Mitigation:** Corpus of real-world samples per parser; isolated parser failures don't crash analysis; explicit parse_status per artifact.
+
+### Risk 3: Weak evidence model
+If findings cannot be defended with evidence, the product becomes "just AI text".
+
+**Mitigation:** Evidence model is architectural, not optional. Every finding must reference evidence. Tests enforce this.
+
+### Risk 4: Context freshness
+Blast radius and incident matching are only as good as topology and history quality.
+
+**Mitigation:** Context completeness is a first-class output. Warn when stale. Future: auto-discovery.
+
+### Risk 5: Distribution delay
+If PR-native delivery is delayed too long, DeployWhisper remains an optional dashboard.
+
+**Mitigation:** Epic 3 (GitHub integration) scheduled for Week 9. Do not delay.
+
+### Risk 6: Competitive compression (new)
+K8sGPT, Spacelift, Wiz, and commercial AI DevOps tools are all moving fast.
+
+**Mitigation:** Skills marketplace (Epic 4) is the long-term moat. Benchmark corpus (Epic 6) is the proof engine. Open-source + self-hosted positioning is defensible against commercial players.
+
+### Risk 7: Community bootstrap (new)
+Skills marketplace only works if contributors participate.
+
+**Mitigation:** Seed with 20 first-party skills before launch. Active community engagement via Discord, YouTube, conferences.
+
+### Open Questions
+
+1. Should GitHub integration start as Action, App, or both?
+   - **Decision:** Both. Action for CI, App for richer interactions. Ship Action first.
+2. What is the minimum evidence standard for a "high" or "critical" finding?
+   - **Decision:** At least one deterministic evidence item per high/critical finding, defined in the spec.
+3. Which deployment history inputs should be captured first?
+   - **Decision:** Analysis ID, timestamp, deploy outcome (success/failure/rolled back), linked incidents.
+4. Which context connectors matter most after manual topology and incident ingestion?
+   - **Decision:** Terraform state (auto-topology), GitHub PR history, Slack-based postmortem ingestion.
+5. What threshold of benchmark accuracy is required before optional policy adapters are introduced?
+   - **Decision:** 85% precision on high/critical findings across the public benchmark, sustained for 3 consecutive quarterly runs.
+6. When and how do we introduce a hosted SaaS tier? (new)
+   - **Decision:** After Phase 2 (Week 24+). Open-core model: free self-hosted, paid hosted, paid enterprise.
+
+---
+
+## 19. Product Roadmap Summary
+
+### Now (Weeks 1-10) — Build trust
+- Evidence model
+- Report quality
+- Confidence and uncertainty
+- Parser hardening
+- Clean positioning and docs
+
+### Next (Weeks 9-18) — Build distribution
+- GitHub workflow integration
+- PR comments
+- Shareable reports
+- Compare-rerun flows
+- Skills marketplace
+
+### Then (Weeks 15-24) — Build moat
+- Topology auto-discovery
+- Richer incident memory
+- Deployment history
+- Feedback loop
+- Calibration dashboards
+- Benchmark corpus
+
+### Later (Post-24 weeks) — Build enterprise path
+- RBAC / SSO
+- PostgreSQL / workers
+- Audit hardening
+- Policy adapters
+- Hosted SaaS tier
+
+---
+
+## 20. Final Positioning Statement
+
+DeployWhisper is the no. 1 choice when a team says:
+
+> "We already have scanners and pipelines. We still need the most trusted pre-deployment briefing before production."
+
+The product wins through:
+- Open-source trust and distribution
+- Evidence-backed intelligence (not AI hype)
+- Community Skills marketplace (structural moat)
+- Measurable benchmark superiority (defensible claim)
+- Workflow-native delivery (unavoidable in review flows)
+
+That is the market position this PRD is designed to support.

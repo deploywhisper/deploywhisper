@@ -29,6 +29,7 @@ packages = [
   "services",
   "parsers",
   "analysis",
+  "evidence",
   "llm",
   "models",
   "ui",

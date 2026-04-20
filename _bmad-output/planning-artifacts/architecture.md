@@ -1,657 +1,1089 @@
----
-stepsCompleted:
-  - step-01-init
-  - step-02-context
-  - step-03-starter
-  - step-04-decisions
-  - step-05-patterns
-  - step-06-structure
-  - step-07-validation
-  - step-08-complete
-inputDocuments:
-  - _bmad-output/planning-artifacts/prd.md
-  - README.md
-  - DeployWhisper_PRD.docx
-  - DeployWhisper_Architecture.docx
-workflowType: 'architecture'
-lastStep: 8
-status: 'complete'
-completedAt: '2026-04-16'
-project_name: 'ai-deploy-whisper'
-user_name: 'psaho01'
-date: '2026-04-16'
+# DeployWhisper Architecture Document
+
+**Product:** DeployWhisper
+**Document type:** Architecture Decision and Target-State Design
+**Version:** 1.0
+**Date:** April 2026
+**Owner:** Pramod Kumar Sahoo
+
 ---
 
-# Architecture Decision Document
+## 1. Purpose
 
-_This document builds collaboratively through step-by-step discovery. Sections are appended as we work through each architectural decision together._
+This architecture defines how DeployWhisper evolves into the **most trusted pre-deployment intelligence layer** for infrastructure changes while preserving the strongest parts of the current implementation:
 
-## Project Context Analysis
+- Shared NiceGUI + FastAPI runtime
+- API / CLI / UI over one analysis core
+- Local-first raw IaC boundary
+- Advisory-only product posture
+- Self-hosted simplicity for early teams
 
-### Requirements Overview
+The architecture is intentionally designed in two layers:
 
-**Functional Requirements:**
-The product defines 39 functional requirements across eight capability areas: multi-tool intake, unified risk analysis, narrative guidance, blast radius analysis, rollback and incident intelligence, history and audit review, configuration and customization, and workflow access through web, CLI, and API surfaces. Architecturally, this implies a system with a central normalized change model, a reusable analysis pipeline, separate interaction surfaces, and explicit support for both human review and automation workflows.
+1. **Trusted v1 architecture** — for product-market fit and trust building
+2. **Scale-ready path** — for PR-native delivery, richer context, community ecosystem, and higher concurrency
 
-**Non-Functional Requirements:**
-The architecture is heavily shaped by security, performance, and reliability constraints. The system must keep raw IaC local, support air-gapped operation, isolate parser failures, persist completed reports before display, provide a stable API contract, and complete standard analyses within 15 seconds. These requirements make local processing, fault isolation, and strong boundary design central architectural concerns rather than implementation details.
+This version (3.0) extends v2.0 by adding **three new architectural pillars** required for market leadership:
 
-**Scale & Complexity:**
-DeployWhisper is a high-complexity internal platform tool despite its single-team scope because it combines five parser domains, a shared analysis model, blast-radius logic, incident memory, skill-grounded LLM reasoning, and multiple access modes.
+- **Skills Marketplace infrastructure** (ecosystem moat)
+- **Benchmark Corpus infrastructure** (proof engine)
+- **GitHub Adapter layer** (workflow-native adoption)
 
-- Primary domain: full-stack internal web application with analysis engine and automation API
-- Complexity level: high
-- Estimated architectural components: 8-10
+---
 
-### Technical Constraints & Dependencies
+## 2. Architecture Goals
 
-The architecture must preserve local-first processing for raw IaC artifacts and restrict external LLM usage to structured summaries only. The system must remain advisory-only, operate with multiple LLM providers including a fully offline Ollama mode, and support a pure-Python delivery model with zero JavaScript build tooling. It must also support a single-container deployment model, multi-file uploads up to bounded size, and a stable JSON API for CI integration.
+The architecture must support seven product goals:
 
-### Cross-Cutting Concerns Identified
+1. Evidence-backed risk intelligence
+2. Workflow-native delivery
+3. Local-first security
+4. Context-rich decision support
+5. Community ecosystem extensibility (new)
+6. Measurable accuracy through benchmarks (new)
+7. Clean migration path from early self-hosted deployment to broader organizational use
 
-Key cross-cutting concerns include trust and explainability in risk scoring, parser correctness across heterogeneous artifacts, asynchronous long-running workflow orchestration, persistence and auditability of all analyses, topology completeness and staleness handling, extensibility through custom AI Skills, and consistent support for web, CLI, and API access without fragmenting core business logic.
+---
 
-## Starter Template Evaluation
+## 3. Architectural Principles
 
-### Primary Technology Domain
+### 3.1 Evidence first
+Every major risk decision must be traceable to evidence objects, not only narrative text.
 
-Full-stack internal web application with an analysis engine and automation API.
+### 3.2 One analysis core
+UI, API, CLI, and PR integrations must call the same orchestration pipeline.
 
-### Starter Options Considered
+### 3.3 Advisory-first core
+The core system produces reports and recommendations. Enforcement, if ever added, should consume report output through adapters.
 
-**NiceGUI 3.10.0**
-- Strong fit for pure-Python UI development
-- Runs on a FastAPI backend and supports custom routes
-- Realtime client-server updates align well with staged analysis progress, partial UI refreshes, and shared dashboard/API runtime
-- Supports standard web UI elements, uploads, tables, notifications, and session-aware interactions without introducing JavaScript build tooling
+### 3.4 Local-first boundary
+Raw artifacts stay local. External model usage is limited to structured summaries.
 
-**Streamlit 1.55.0**
-- Strong fit for rapid Python dashboards
-- Simpler initial setup than most alternatives
-- Weaker fit for this project because the product requires a shared API/dashboard runtime, finer-grained UI updates, and a more application-like interaction model than a rerun-oriented dashboard framework naturally provides
+### 3.5 Uncertainty as first-class output
+Missing context, weak matches, low confidence, and partial coverage are not edge cases — they are product outputs.
 
-**Reflex 0.8.28.post1**
-- Viable pure-Python full-stack framework with project initialization tooling
-- Better fit than React-based stacks for a Python-heavy team
-- Weaker fit than NiceGUI for this project because it introduces a more framework-heavy application model than needed for a self-hosted internal operations tool
+### 3.6 Evolve without rewrite
+Keep current repo strengths and extend them instead of replacing the application.
 
-### Selected Starter: Custom NiceGUI + FastAPI Foundation
+### 3.7 Community extension by design (new)
+Skills, parsers, and context connectors must be extensible by community contributors without core code changes.
 
-**Rationale for Selection:**
-This option best matches the project's explicit constraints: pure Python, zero JavaScript build tooling, single-container deployment, shared dashboard and API runtime, async analysis workflow, and component-level UI updates. It also aligns with the latest architectural preference expressed during PRD creation, even though older source documents in the repository still reference Streamlit.
+### 3.8 Measurable by construction (new)
+Every risk decision must be testable against a benchmark corpus. Accuracy must be a published, tracked metric.
 
-**Initialization Command:**
+---
+
+## 4. Recommended Architecture Direction
+
+DeployWhisper uses a layered architecture:
+
+- **Access layer** — Web UI, API, CLI, PR/CI integrations
+- **Orchestration layer** — Shared analysis pipeline
+- **Intelligence layer** — parsers, evidence engine, scoring, blast radius, rollback, similarity, narrative preparation
+- **Context layer** — topology, incidents, deployment history, criticality, ownership
+- **Ecosystem layer** (new) — Skills registry, benchmark corpus, contribution workflows
+- **Persistence layer** — reports, evidence, history, settings, context, feedback
+- **Platform layer** — config, secrets boundary, logging, health, jobs, observability
+
+---
+
+## 5. System Context
+
+### Actors
+- Platform engineer
+- SRE / production approver
+- Platform admin
+- CI pipeline / PR workflow
+- Skills contributor (new)
+- Benchmark reviewer (new)
+- Local or remote LLM provider
+- Context sources (topology, incidents, deployment history, service ownership)
+
+### External Systems
+- GitHub (first-priority integration; Action + App)
+- GitLab / Jenkins / Atlantis / HCP Terraform (future adapters)
+- Ollama or external model providers
+- Optional incident or ticket sources
+- Optional Terraform state or service-catalog data sources
+- Skills registry (community contribution repository)
+- Benchmark corpus (public dataset)
+
+---
+
+## 6. High-Level Component View
+
+```
+          +---------------------+
+          |  Web UI (NiceGUI)   |
+          +----------+----------+
+                     |
+          +----------v----------+
+          |  REST API (FastAPI) |
+          +----------+----------+
+                     |
+          +----------v----------+
+          |      CLI / CI       |
+          +----------+----------+
+                     |
+          +----------v----------+
+          |   GitHub Adapter    |  <-- NEW in v3
+          +----------+----------+
+                     |
+          +----------v-------------------------------+
+          |     Shared Analysis Orchestration        |
+          | intake -> parse -> evidence -> context   |
+          | -> score -> narrate -> persist -> deliver|
+          +----------+-------------------------------+
+                     |
+     +---------------+---------------+------------------+
+     |                               |                  |
++----v-----+                  +------v------+    +------v------+
+| Parsers  |                  | Context     |    | Narrative   |
+| registry |                  | services    |    | service     |
++----+-----+                  +------+------+    +------+------+
+     |                               |                  |
++----v-----------------+      +------v------+    +------v------+
+| Evidence / Findings  |      | Topology    |    | LLM provider|
+| Risk / Rollback      |      | Incidents   |    | adapters    |
+| Similarity / Scoring |      | History     |    | (structured |
++----+-----------------+      +------+------+    |  summary    |
+     |                               |           |  only)      |
+     +---------------+---------------+           +-------------+
+                     |
+     +---------------+--------------------------+
+     |                                          |
++----v----------+                    +----------v----------+
+| Skills        |  <-- NEW in v3    | Benchmark Runner    |  <-- NEW in v3
+| Registry      |                    | + Corpus            |
++----+----------+                    +----------+----------+
+     |                                          |
+     +---------------+--------------------------+
+                     |
+             +-------v--------+
+             | Persistence    |
+             | reports        |
+             | evidence       |
+             | settings       |
+             | history        |
+             | feedback       |
+             | context        |
+             | skills cache   |
+             | benchmark runs |
+             +----------------+
+```
+
+---
+
+## 7. What We Keep From the Current Baseline
+
+The current repo already aligns with several correct decisions and those stay:
+
+- One shared analysis core across UI, API, and CLI
+- NiceGUI + FastAPI shared runtime
+- SQLite for early self-hosted simplicity
+- SQLAlchemy / Alembic / Pydantic
+- Local-first raw IaC handling
+- Advisory-only posture
+- History and audit persistence
+
+The v3 rewrite is **not** a call for a rewrite-from-scratch. It adds the missing architectural capabilities that support market leadership:
+
+- First-class evidence model (v2 + v3)
+- PR-native integration layer (v2 + v3)
+- Feedback and calibration loop (v2 + v3)
+- Context connectors (v2 + v3)
+- Skills marketplace infrastructure (v3 new)
+- Benchmark corpus infrastructure (v3 new)
+- Scale path beyond SQLite-only usage (v2 + v3)
+
+---
+
+## 8. Core Domain Model
+
+The architecture standardizes around these core domain objects. (Same as v2 — kept as-is because they are correctly specified.)
+
+### 8.1 ArtifactBundle
+Represents the user or automation submission.
+
+Fields:
+- `bundle_id`
+- `source_surface` (`web`, `api`, `cli`, `github`, etc.)
+- `trigger_context`
+- `environment`
+- `submitted_at`
+- `artifact_manifest`
+
+### 8.2 ArtifactRecord
+Represents each uploaded or referenced artifact.
+
+Fields:
+- `artifact_id`
+- `bundle_id`
+- `filename`
+- `detected_tool`
+- `classification_status`
+- `sensitivity_status`
+- `parse_status`
+- `content_hash`
+- `size_bytes`
+
+### 8.3 NormalizedChange
+Canonical internal representation of parsed change data.
+
+Fields:
+- `change_id`
+- `artifact_id`
+- `resource_type`
+- `resource_name`
+- `operation`
+- `before_summary`
+- `after_summary`
+- `environment_scope`
+- `service_scope`
+- `tags`
+
+### 8.4 EvidenceItem
+The most important missing domain object in the original planning set.
+
+Fields:
+- `evidence_id`
+- `analysis_id`
+- `source_type` (`artifact`, `topology`, `incident`, `history`, `heuristic`, `skill`)
+- `source_ref`
+- `summary`
+- `severity_hint`
+- `deterministic` (bool)
+- `confidence`
+- `related_change_ids`
+
+### 8.5 Finding
+A reviewer-facing risk observation.
+
+Fields:
+- `finding_id`
+- `analysis_id`
+- `title`
+- `description`
+- `severity`
+- `category`
+- `deterministic`
+- `confidence`
+- `uncertainty_note`
+- `evidence_refs`
+- `skill_id` (new — points to the skill that contributed this finding, if any)
+
+### 8.6 RiskAssessment
+Overall report verdict.
+
+Fields:
+- `analysis_id`
+- `overall_severity`
+- `recommendation`
+- `score`
+- `confidence`
+- `top_risk_contributors`
+- `context_completeness`
+
+### 8.7 ContextSnapshot
+Frozen contextual state used during one analysis.
+
+Fields:
+- `topology_version`
+- `incident_index_version`
+- `history_window`
+- `criticality_inputs`
+- `owner_mapping_version`
+- `skills_active` (new — list of skill IDs + versions active during analysis)
+
+### 8.8 Report
+Persisted analysis object that all surfaces render.
+
+Fields:
+- `analysis_id`
+- `summary`
+- `findings`
+- `risk_assessment`
+- `blast_radius`
+- `rollback_plan`
+- `incident_matches`
+- `share_summary`
+- `report_schema_version`
+
+### 8.9 FeedbackEvent
+Supports the learning loop.
+
+Fields:
+- `feedback_id`
+- `analysis_id`
+- `reviewer_role`
+- `useful`
+- `correctness_rating`
+- `false_positive_flag`
+- `false_negative_note`
+- `outcome_label`
+- `captured_at`
+
+### 8.10 Skill (new)
+Represents a community-contributed or first-party Skill in the registry.
+
+Fields:
+- `skill_id`
+- `name`
+- `version`
+- `author`
+- `license`
+- `tool_type` (terraform, kubernetes, ansible, jenkins, cloudformation, docker, git, custom)
+- `tags`
+- `description`
+- `manifest` (parsed frontmatter)
+- `content` (markdown body)
+- `test_suite_path`
+- `test_pass_rate`
+- `download_count`
+- `published_at`
+- `last_updated`
+
+### 8.11 BenchmarkScenario (new)
+Represents a labeled scenario in the benchmark corpus.
+
+Fields:
+- `scenario_id`
+- `title`
+- `tool_types` (list)
+- `artifacts` (list of file content + paths)
+- `expected_findings` (list with severity and title pattern)
+- `expected_verdict`
+- `rationale`
+- `annotator_credits`
+- `license`
+
+### 8.12 BenchmarkRun (new)
+Represents one execution of the benchmark corpus.
+
+Fields:
+- `run_id`
+- `deploywhisper_version`
+- `commit_hash`
+- `started_at`
+- `completed_at`
+- `corpus_version`
+- `results` (JSON array of per-scenario outcomes)
+- `metrics` (precision, recall, F1 by severity and by tool)
+
+---
+
+## 9. Service Architecture
+
+### 9.1 Intake Service
+Responsibilities:
+- Validate request surface
+- Classify and register artifacts
+- Detect sensitive/unsupported files
+- Create artifact manifest
+- Enforce raw-content security boundary
+
+### 9.2 Parser Registry
+Responsibilities:
+- Detect supported tool type
+- Dispatch to correct parser
+- Isolate parser failures
+- Return `NormalizedChange` objects and parser warnings
+
+Supported parsers: Terraform, Kubernetes, Ansible, Jenkins, CloudFormation (and Docker, Git as auxiliary).
+
+### 9.3 Evidence Engine
+Responsibilities:
+- Turn parsed changes + heuristics + context + active skills into `EvidenceItem`
+- Maintain traceability from findings to evidence
+- Separate deterministic evidence from inferred interpretation
+- Feed scoring and narrative preparation
+
+### 9.4 Risk Engine
+Responsibilities:
+- Compute severity and score
+- Detect cross-tool interactions
+- Generate risk contributors
+- Compute recommendation
+- Emit confidence and uncertainty
+
+The risk engine remains mostly deterministic in v1/v1.5. LLMs are not the primary decision-maker.
+
+### 9.5 Context Service
+Responsibilities:
+- Serve topology, incidents, deployment history, criticality, ownership
+- Expose freshness / version information per context domain
+- Feed the evidence engine and blast-radius calculator
+
+### 9.6 Narrator Service
+Responsibilities:
+- Accept frozen risk assessment + findings + evidence references
+- Produce plain-English narrative
+- Never mutate severity, findings, or evidence
+
+### 9.7 Report Service
+Responsibilities:
+- Assemble final Report from pipeline outputs
+- Persist Report with schema version
+- Serve Report to all access surfaces
+- Generate share summaries (markdown + machine-readable JSON)
+
+### 9.8 Feedback Service
+Responsibilities:
+- Capture reviewer feedback per finding and per report
+- Link deployment outcomes back to reports
+- Feed calibration dashboards
+
+### 9.9 Integration Service
+Responsibilities:
+- Orchestrate GitHub Action, App, and Check Run interactions
+- Format PR comments
+- Handle rerun-on-commit logic
+- Generate shareable report URLs
+
+### 9.10 Skills Registry Service (new)
+Responsibilities:
+- Expose Skills registry API (list, detail, versions)
+- Run Skill validators on submissions
+- Serve the Skills browser UI
+- Manage skill install/update/remove lifecycle
+- Track skill analytics (downloads, test pass rates, ratings)
+
+### 9.11 Skill Validator (new)
+Responsibilities:
+- Parse and validate skill manifests
+- Run skill test harness (known-risky-scenarios per skill)
+- Produce pass/fail report for every skill version
+
+### 9.12 Benchmark Runner (new)
+Responsibilities:
+- Load benchmark corpus
+- Execute DeployWhisper analysis per scenario
+- Compare against expected findings and verdict
+- Optionally execute comparator tools (tflint, kube-score, K8sGPT, vanilla LLM)
+- Compute precision, recall, F1 per tool and per severity
+- Publish results to dashboard
+
+---
+
+## 10. Analysis Pipeline (canonical order)
+
+Every analysis — regardless of trigger surface — flows through this pipeline:
+
+```
+1. INTAKE      Validate submission, create manifest, classify artifacts
+2. PARSE       Dispatch parsers, produce NormalizedChange list
+3. LOAD SKILLS Resolve active Skills for detected tools
+4. EVIDENCE    Extract EvidenceItem list from changes + heuristics + skills
+5. CONTEXT     Load frozen ContextSnapshot (topology, incidents, history)
+6. BLAST       Compute blast radius with completeness indicator
+7. SIMILARITY  Match against incident memory
+8. ROLLBACK    Generate rollback plan and complexity
+9. SCORE       Produce RiskAssessment with contributors
+10. NARRATE    Generate narrative from frozen verdict (LLM, optional)
+11. ASSEMBLE   Build Report with share summary
+12. PERSIST    Save report with audit metadata before returning
+13. DELIVER    Return via UI / API / CLI / PR comment
+```
+
+Key invariants:
+- Steps 1-9 are deterministic and must not depend on LLM availability.
+- Step 10 can fail or be disabled; the report still renders without narrative.
+- Step 12 must complete before step 13 — reports are never shown unless persisted.
+- Skills (step 3) are resolved once and frozen for the analysis — no mid-pipeline skill changes.
+
+---
+
+## 11. Security and Privacy Architecture
+
+### 11.1 Security principles
+- Secrets never logged
+- Raw IaC stays local
+- Sensitive-file filtering is always on
+- Provider credentials remain external to persistence
+- Report objects store metadata and structured outputs, not secrets or raw private inputs
+
+### 11.2 Shared-deployment model
+Early shared deployments may rely on network boundary / reverse-proxy controls. However, the architecture should reserve clean insertion points for:
+- SSO
+- RBAC
+- Team scoping
+- Audit access controls
+
+### 11.3 Audit model
+Every analysis captures:
+- Who or what triggered it
+- When it ran
+- Artifact manifest
+- Provider mode
+- Report schema version
+- Risk verdict
+- Context versions
+- Active skills (version hashes)
+- Feedback and later outcome where available
+
+### 11.4 Skill security (new)
+Skills are markdown files with structured frontmatter. They contain no executable code. Skill content is treated as trusted input to the LLM context but never executed. Skills are signed or hashed at registry time so installed skills can be verified against registry version.
+
+---
+
+## 12. Persistence Architecture
+
+### 12.1 v1 schema
+SQLite database with the following tables:
+
+- `artifact_bundles`
+- `artifact_records`
+- `analysis_reports`
+- `findings`
+- `evidence_items`
+- `incident_records`
+- `topology_versions`
+- `settings`
+- `feedback_events`
+- `skills` (new)
+- `skill_versions` (new)
+- `skill_test_runs` (new)
+- `benchmark_scenarios` (new)
+- `benchmark_runs` (new)
+
+### 12.2 vNext storage path
+When the product moves beyond single-team usage:
+- Migrate operational persistence to PostgreSQL
+- Keep repository interfaces stable
+- Optionally introduce object storage for large retained artifacts
+- Optionally introduce Redis / queue only when async workers become necessary
+
+The persistence abstraction is designed now to make that migration low-risk later.
+
+---
+
+## 13. Deployment Architecture
+
+### 13.1 v1 deployment
+- One application container
+- One SQLite persistent volume
+- Optional separate Ollama runtime for local model execution
+- Reverse proxy when shared internal deployment is needed
+
+This is the correct early deployment model and stays.
+
+### 13.2 vNext deployment
+When adoption grows:
+- Web/API process
+- Background worker(s)
+- PostgreSQL
+- Optional queue (Redis or similar)
+- Optional object storage
+- Observability stack
+- SSO-enabled reverse proxy or app-native auth
+
+Introduced as a migration path, not a prerequisite.
+
+---
+
+## 14. Interface Architecture
+
+### 14.1 Web UI
+Purpose:
+- Verdict-first report review
+- Admin workflows
+- History and analytics
+- Context maintenance
+- Skills browsing and management (new)
+
+Key principle:
+- Present high-signal summary first, evidence second, raw details last.
+
+### 14.2 REST API
+Purpose:
+- Programmatic analysis
+- Report retrieval
+- Context management
+- Integration surfaces
+- Skills registry access (new)
+
+Core endpoints:
+
+```
+POST   /api/v1/analyses
+GET    /api/v1/analyses
+GET    /api/v1/analyses/{analysis_id}
+POST   /api/v1/context/topology
+POST   /api/v1/context/incidents
+POST   /api/v1/feedback/{analysis_id}
+POST   /api/v1/integrations/github/summary
+
+GET    /api/v1/skills                      (new)
+GET    /api/v1/skills/{skill_id}           (new)
+GET    /api/v1/skills/{skill_id}/versions  (new)
+POST   /api/v1/skills/install              (new)
+
+GET    /api/v1/benchmarks                  (new)
+GET    /api/v1/benchmarks/runs             (new)
+GET    /api/v1/benchmarks/runs/{run_id}    (new)
+POST   /api/v1/benchmarks/run              (new; admin only)
+```
+
+### 14.3 CLI
+Purpose:
+- Local and CI usage
+- Headless testing
+- Benchmark corpus execution
+- Skill management (new)
+
+Core commands:
+
+```
+deploywhisper analyze <path>
+deploywhisper report <analysis_id>
+deploywhisper topology import --from terraform --state <uri>
+deploywhisper skill install <name>           (new)
+deploywhisper skill list                     (new)
+deploywhisper skill update <name>            (new)
+deploywhisper benchmark run                  (new)
+deploywhisper github init                    (new)
+```
+
+### 14.4 GitHub Integration (new section in v3)
+
+**GitHub Adapter layer** — first-class adoption surface after trusted core.
+
+Capabilities:
+- PR analysis trigger (GitHub Action)
+- Summary comment with verdict, top risks, blast radius, rollback, uncertainty
+- Rerun on new commit (updates existing comment, shows diff)
+- Compare old vs new report
+- Link to full report (shareable URL)
+- Check Run integration (advisory-only, never required)
+- GitHub App for richer interactions (checks API, OAuth, installation wizard)
+
+Adapter pattern:
+- Core analysis pipeline is surface-agnostic
+- GitHub adapter translates GitHub events into `ArtifactBundle` submissions
+- Comment formatter translates `Report` into GitHub-flavored markdown
+- All adapter logic lives in `integrations/github/` — no core code changes required to add GitLab, Atlantis, HCP Terraform, or Jenkins adapters later
+
+---
+
+## 15. Skills Marketplace Architecture (new in v3)
+
+### 15.1 Why this matters architecturally
+
+The Skills marketplace is DeployWhisper's **ecosystem moat**. No competitor has built this. Architecturally, it requires three components:
+
+1. **Skills Registry Service** — API, storage, versioning
+2. **Skill Validator** — manifest validation + test harness
+3. **Skill Installer** — CLI that fetches skills into `skills/custom/`
+
+### 15.2 Skill manifest schema
+
+Skills are markdown files with YAML frontmatter:
+
+```yaml
+---
+name: helm-rollout-risks
+version: 1.2.0
+author: community@example.com
+license: MIT
+tool_type: kubernetes
+tags: [helm, rollout, probes]
+description: Detects Helm chart rollout risks including missing probes and unsafe upgrade strategies
+triggers:
+  - file_glob: "**/*.yaml"
+    content_pattern: "kind: HelmRelease"
+  - file_glob: "Chart.yaml"
+token_budget: 2000
+test_suite_path: tests/scenarios/
+---
+
+# Helm Rollout Risks
+
+## Risk patterns
+...
+```
+
+### 15.3 Skill test harness
+
+Every skill ships with a test suite:
+
+```
+skills/registry/helm-rollout-risks/
+├── skill.md                    (the skill content)
+├── manifest.yaml               (parsed frontmatter, auto-generated)
+└── tests/
+    └── scenarios/
+        ├── missing-readiness-probe.yaml
+        ├── maxunavailable-100.yaml
+        └── expected.json       (expected findings for each scenario)
+```
+
+The Skill Validator runs every scenario through DeployWhisper with only that skill active, compares against expected findings, and computes a pass rate.
+
+### 15.4 Skills storage
+
+Skills are stored in three places:
+
+- **Registry (canonical)** — public Git repository at `github.com/deploywhisper/skills-registry`; each skill is a directory
+- **Cache (local)** — installed skills live in `skills/custom/` in the user's DeployWhisper install
+- **Database (metadata)** — `skills` and `skill_versions` tables hold manifest metadata, analytics, and test results
+
+### 15.5 Registry API
+
+The Skills Registry Service exposes a read API for the browser UI and the installer CLI:
+
+```
+GET /api/v1/skills                      -> list all skills with filters
+GET /api/v1/skills/{id}                 -> skill detail
+GET /api/v1/skills/{id}/versions        -> version history
+GET /api/v1/skills/{id}/content         -> raw skill markdown
+GET /api/v1/skills/{id}/test-results    -> test suite pass/fail
+POST /api/v1/skills/install             -> install request (auth required)
+```
+
+Write operations (contribute, update, remove) happen via GitHub PR to the registry repository — not via API. This keeps the contribution process transparent and auditable.
+
+### 15.6 Skill loading at analysis time
+
+During step 3 of the analysis pipeline (Load Skills):
+
+1. Inspect `NormalizedChange` list to determine detected tool types.
+2. Query local skill cache for skills matching those tools.
+3. Apply skill trigger patterns against artifact contents.
+4. Freeze the active skill set in the `ContextSnapshot`.
+5. Make skill content available to the Evidence Engine (as heuristic context) and Narrator (as LLM context).
+
+Skills do not execute code. They provide structured domain knowledge to both deterministic heuristics and the LLM narrator.
+
+---
+
+## 16. Benchmark Architecture (new in v3)
+
+### 16.1 Why this matters architecturally
+
+The benchmark corpus is DeployWhisper's **proof engine**. You cannot claim measurable accuracy without one. Architecturally it requires:
+
+1. **Corpus storage** — labeled scenarios as versioned data
+2. **Benchmark Runner** — executes corpus through DeployWhisper and comparators
+3. **Results publication** — scheduled runs published to public dashboard
+
+### 16.2 Corpus structure
+
+Benchmark corpus lives in a separate public repo: `github.com/deploywhisper/benchmark-corpus`.
+
+```
+benchmark-corpus/
+├── scenarios/
+│   ├── terraform/
+│   │   ├── sg-0000-open/
+│   │   │   ├── scenario.yaml       (metadata + expected)
+│   │   │   └── artifacts/
+│   │   │       └── main.tf
+│   │   └── iam-wildcard/...
+│   ├── kubernetes/...
+│   ├── ansible/...
+│   ├── jenkins/...
+│   └── cloudformation/...
+├── annotations/
+│   └── reviewers.yaml              (SRE reviewer credits)
+└── LICENSE
+```
+
+Each `scenario.yaml`:
+
+```yaml
+scenario_id: terraform-sg-0000-open
+title: Security group opened to 0.0.0.0/0 on port 5432
+tool_types: [terraform]
+expected_verdict: HIGH
+expected_findings:
+  - severity: HIGH
+    title_pattern: "security group.*0\\.0\\.0\\.0/0"
+    tool: terraform
+rationale: |
+  Opening a database port to the public internet is a known critical
+  misconfiguration. Any scanner or AI reviewer worth using should flag
+  this unambiguously.
+annotators: [reviewer_01, reviewer_02]
+license: MIT
+```
+
+### 16.3 Benchmark Runner
+
+The Benchmark Runner is a CLI command and an API endpoint:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install nicegui fastapi uvicorn litellm sqlalchemy pydantic pyyaml ruamel.yaml deepdiff networkx plotly python-hcl2 python-dotenv
+deploywhisper benchmark run --corpus ./benchmark-corpus --comparators tflint,kube-score
 ```
 
-**Architectural Decisions Provided by Starter:**
+Output: per-scenario pass/fail, per-tool precision/recall/F1, overall metrics.
 
-**Language & Runtime:**
-Python 3.10+ application runtime with a pure-Python UI layer and Python-first backend logic.
+Results are persisted as `BenchmarkRun` rows and published to the public dashboard at `deploywhisper.kubechat.dev/benchmarks`.
 
-**Styling Solution:**
-NiceGUI's built-in Quasar-based component system for production-grade UI primitives without custom frontend build configuration.
+### 16.4 Comparator execution
 
-**Build Tooling:**
-No npm, webpack, vite, or node_modules. Standard Python environment and dependency management only.
+For public comparison, the runner can execute other tools:
 
-**Testing Framework:**
-No starter-enforced test suite, which keeps the foundation light. Project testing remains an explicit architecture decision layered on top of the starter using Python-native tooling.
+- `tflint` — invoked via subprocess
+- `kube-score` — invoked via subprocess
+- `K8sGPT` — invoked via CLI
+- Vanilla LLM prompt — sends artifacts to configured LLM with a generic "analyze this for risk" prompt
 
-**Code Organization:**
-A thin custom foundation rather than a prescriptive scaffold. This allows the architecture to define explicit module boundaries for parsers, analysis, LLM orchestration, persistence, API, and UI without fighting starter conventions.
+Each comparator's output is mapped to a common finding format so direct comparison is possible.
 
-**Development Experience:**
-Fast local startup, browser-based UI, hot reload-friendly workflow, async request handling, and shared runtime for both operator-facing and automation-facing interfaces.
+### 16.5 Quarterly publication
 
-**Important Note:**
-This starter decision intentionally supersedes the older Streamlit-centered direction described in the existing README and legacy architecture draft. The current planning artifacts now establish NiceGUI plus FastAPI as the preferred architectural foundation.
+A scheduled job runs the corpus every quarter against:
+- Current DeployWhisper main branch
+- Previous DeployWhisper release
+- All configured comparators
 
-**Note:** Project initialization using this foundation should be the first implementation story.
+Results are published to the public dashboard with methodology, raw data download, and a version-over-version trend chart.
 
-## Core Architectural Decisions
+---
 
-### Decision Priority Analysis
+## 17. Trust Architecture
 
-**Critical Decisions (Block Implementation):**
-- SQLite as the v1 persistence store
-- SQLAlchemy 2.0.49 as the ORM and data access layer
-- Alembic 1.18.4 for schema migrations
-- Pydantic 2.12.2 for internal and API contract validation
-- FastAPI 0.135.2 with a versioned REST/JSON API under `/api/v1`
-- NiceGUI 3.10.0 as the dashboard runtime sharing the FastAPI process
-- Advisory-only product posture with no app-level deployment blocking
+This is the most important architectural section.
 
-**Important Decisions (Shape Architecture):**
-- No separate cache service in v1; content-hash caching remains inside the primary persistence layer
-- No product-level multi-user authentication or RBAC in local mode
-- Shared or internal deployments rely on network boundary or reverse-proxy authentication rather than app-native identity in Phase 1
-- Minimal client-side state; core workflow state and business logic remain server-side
-- One application container for dashboard, API, and analysis engine, with optional Ollama as a separate runtime dependency only when offline mode is enabled
+DeployWhisper wins only if trust is structurally built into the system.
 
-**Deferred Decisions (Post-MVP):**
-- App-native multi-user identity and authorization
-- Rate limiting inside the application layer
-- Separate cache or queue infrastructure
-- Automated policy gating and deployment blocking
-- Multi-tenant isolation and organizational hierarchy
+Trust requires:
 
-### Data Architecture
+1. **Evidence references** on findings
+2. **Confidence** on judgments
+3. **Uncertainty** on missing context
+4. **Deterministic core** for risk logic
+5. **Narrative as explanation, not authority**
+6. **Backtesting and calibration**
+7. **Outcome learning without silent model drift**
+8. **Published benchmark accuracy** (new in v3)
+9. **Community-auditable skills** (new in v3)
 
-- **Primary store:** SQLite for v1 operational persistence and history
-- **ORM:** SQLAlchemy 2.0.49
-- **Migrations:** Alembic 1.18.4
-- **Validation:** Pydantic 2.12.2 for request, response, and internal schema contracts
-- **Caching strategy:** no separate cache service in v1; content-hash based reuse remains in the primary datastore
+Architectural implications:
 
-**Rationale:** This keeps the system self-hostable, low-friction, auditable, and aligned with the single-team deployment model while preserving a clean migration path if the persistence layer grows later.
+- Scoring must be understandable
+- Narrative must be downstream of the report, not upstream of it
+- Report schema must preserve source traceability
+- Benchmark and feedback subsystems are not optional extras
+- Skills are transparent markdown, not black-box code
+- Accuracy is measured and published, not asserted
 
-### Authentication & Security
+---
 
-- **Authentication posture:** no app-native auth or RBAC required for local mode
-- **Shared deployment access:** externalized to network boundary or reverse proxy when needed
-- **Secrets handling:** environment variables or in-memory session state only
-- **Security boundary:** raw IaC always remains local; only structured summaries may cross to external LLM providers
-- **Sensitive file protection:** always-on detection and exclusion from model-bound payloads
+## 18. Observability and Quality
 
-**Rationale:** Security posture is driven more by data-boundary enforcement and deployment context than by internal user-management complexity in v1.
+### 18.1 Logs
+Use structured logs with:
+- Analysis ID
+- Stage
+- Duration
+- Parser outcomes
+- Provider mode
+- Severity result
+- Error metadata
+- Active skills (IDs + versions)
 
-### API & Communication Patterns
+Never log:
+- Raw IaC
+- Secrets
+- Prompts
+- Full model responses
 
-- **API style:** REST/JSON
-- **Framework:** FastAPI 0.135.2
-- **Versioning:** `/api/v1`
-- **Schema source of truth:** OpenAPI generated from the application
-- **Error model:** structured machine-readable error envelopes for automation clients
-- **Communication style:** shared service layer used by both API endpoints and dashboard actions
-- **Rate limiting:** not an application-layer v1 concern; delegated to infrastructure if needed
+### 18.2 Health and readiness
+Expose:
+- Health endpoint
+- Readiness endpoint
+- Provider mode visibility
+- Storage health
+- Migration/version health
+- Skills registry connectivity (new)
 
-**Rationale:** This gives the product a stable automation surface for CI and CLI use without fragmenting the core analysis logic across multiple interfaces.
+### 18.3 Test strategy
+Must include:
+- Parser fixture tests
+- Cross-tool interaction tests
+- Evidence traceability tests
+- Report schema tests
+- PR formatter tests
+- Benchmark corpus tests
+- Failure degradation tests
+- Persistence-before-success tests
+- Skill manifest validation tests (new)
+- Skill test-harness regression tests (new)
 
-### Frontend Architecture
+---
 
-- **UI runtime:** NiceGUI 3.10.0
-- **Interaction model:** route-based application sections for upload, review, history, settings, and admin flows
-- **State model:** server-side session state for in-progress workflows
-- **Update model:** realtime staged progress and component-level refreshes over NiceGUI's persistent connection model
-- **Client strategy:** minimal browser-held critical state
+## 19. Recommended Project Structure
 
-**Rationale:** This matches the desktop-first internal-tool requirement while supporting long-running analysis workflows more naturally than a rerun-oriented dashboard model.
+This structure extends the current repo.
 
-### Infrastructure & Deployment
-
-- **Deployment unit:** one application container for dashboard, API, and analysis engine
-- **Offline dependency:** optional Ollama runtime when air-gapped mode is required
-- **Runtime configuration:** environment-variable driven
-- **Operating context:** local workstation or internal/VPN deployment
-- **Operational visibility:** structured logs, health endpoint, and startup validation checks
-- **CI foundation:** Python-native lint, typecheck, and test execution, while official CI plugins remain a later product feature
-
-**Rationale:** This preserves low setup friction while keeping the operational surface explicit and supportable.
-
-### Decision Impact Analysis
-
-**Implementation Sequence:**
-1. Establish the NiceGUI + FastAPI shared application skeleton
-2. Define Pydantic contracts and SQLAlchemy models
-3. Wire Alembic migrations and SQLite persistence
-4. Build the shared analysis service layer consumed by UI, API, and CLI
-5. Layer security boundaries, sensitive-file filtering, and audit persistence into the workflow
-
-**Cross-Component Dependencies:**
-- The normalized data contracts drive parsers, analysis modules, persistence, API responses, and UI rendering
-- Security-boundary enforcement affects ingestion, LLM orchestration, logging, and persistence
-- Shared service-layer design is required so dashboard, API, and CLI remain behaviorally consistent
-- Persistence decisions affect audit trail, incident matching, history review, and cached re-analysis behavior
-
-## Implementation Patterns & Consistency Rules
-
-### Pattern Categories Defined
-
-**Critical Conflict Points Identified:**
-6 major areas where AI agents could make incompatible decisions: naming, structure, API/data formats, event/logging formats, error handling, and loading/degradation behavior.
-
-### Naming Patterns
-
-**Database Naming Conventions:**
-- Tables use `snake_case` plural nouns, e.g. `analysis_reports`, `incident_records`
-- Columns use `snake_case`, e.g. `risk_score`, `created_at`, `content_hash`
-- Foreign keys use `<entity>_id`, e.g. `analysis_report_id`
-- Indexes use `ix_<table>_<column>`
-
-**API Naming Conventions:**
-- REST endpoints use plural resource nouns, e.g. `/api/v1/analyses`, `/api/v1/incidents`
-- Route params use `{resource_id}` style
-- Query parameters use `snake_case`
-- JSON response fields use `snake_case` for consistency with Python and persistence models
-
-**Code Naming Conventions:**
-- Python modules and files use `snake_case`
-- Classes use `PascalCase`
-- Functions, methods, and variables use `snake_case`
-- Constants use `UPPER_SNAKE_CASE`
-
-### Structure Patterns
-
-**Project Organization:**
-- Organize core backend code by responsibility, not by framework artifact type
-- Keep top-level domains explicit: `parsers/`, `analysis/`, `llm/`, `models/`, `ui/`, `api/`
-- Place shared orchestration logic in a reusable service layer consumed by UI, API, and CLI
-- Keep custom AI Skills under `skills/custom/` and built-in skills under `skills/`
-
-**File Structure Patterns:**
-- Tests live under a top-level `tests/` tree grouped by domain (`test_parsers/`, `test_analysis/`, etc.)
-- Migration files live under a dedicated migrations directory managed by Alembic
-- Configuration definitions live in one explicit config module, with environment-specific values sourced from env vars
-- Static/demo assets remain under clearly named folders such as `samples/` and `docs/assets/`
-
-### Format Patterns
-
-**API Response Formats:**
-- Success responses use a stable envelope where appropriate for machine consumers:
-  - primary payload under `data`
-  - metadata under `meta`
-- Error responses use a standard envelope:
-  - `error.code`
-  - `error.message`
-  - optional `error.details`
-
-**Data Exchange Formats:**
-- Dates and times use ISO 8601 strings in external interfaces
-- Booleans remain native JSON booleans
-- Risk levels use explicit string enums: `low`, `medium`, `high`, `critical`
-- Missing optional values use `null`, not sentinel strings
-
-### Communication Patterns
-
-**Event and Logging Patterns:**
-- Internal analysis stages use fixed names: `intake`, `parse`, `score`, `blast_radius`, `incident_match`, `skill_load`, `narrative`, `persist`
-- Audit/log event names use `snake_case`
-- Log payloads are structured, not free-form, and must never contain secrets or raw IaC
-
-**State Management Patterns:**
-- Server-side state is the source of truth for in-progress workflows
-- UI state mirrors server workflow stages rather than inventing separate client-only process states
-- Partial failures are represented explicitly, not hidden by global failure states
-
-### Process Patterns
-
-**Error Handling Patterns:**
-- Parser failures are isolated per file
-- LLM failures degrade gracefully to non-narrative analysis output
-- User-facing errors are concise and actionable
-- Internal errors are logged with structured metadata and no sensitive content
-
-**Loading State Patterns:**
-- Long-running analysis always exposes stage-based progress
-- Loading states map directly to analysis pipeline stages
-- Completed reports are persisted before success is shown to the user
-
-### Enforcement Guidelines
-
-**All AI Agents MUST:**
-- Follow `snake_case` for Python, persistence, and JSON field naming unless an external contract forces otherwise
-- Reuse the shared analysis service layer rather than duplicating logic in UI/API/CLI surfaces
-- Preserve the standard error, audit, and progress-stage formats
-- Keep security-boundary rules intact: raw IaC local, secrets excluded, advisory-only outputs
-
-**Pattern Enforcement:**
-- Verify patterns through linting, type checks, tests, and architecture review
-- Treat deviations in naming, response format, or security boundaries as architecture defects
-- Update this document before introducing a new global convention
-
-### Pattern Examples
-
-**Good Examples:**
-- `analysis_reports.created_at`
-- `/api/v1/analyses/{analysis_id}`
-- `{ "data": {...}, "meta": {...} }`
-- `{ "error": { "code": "parser_failure", "message": "...", "details": {...} } }`
-
-**Anti-Patterns:**
-- Mixing `camelCase` API fields with `snake_case` persistence fields without a documented boundary
-- UI-only business logic that bypasses shared services
-- Free-form error payloads that differ by endpoint
-- Global failure states that hide partial parser success
-
-## Project Structure & Boundaries
-
-### Complete Project Directory Structure
-
-```text
+```
 ai-deploy-whisper/
-├── README.md
-├── pyproject.toml
-├── requirements.txt
-├── .env.example
-├── .gitignore
-├── Dockerfile
-├── docker-compose.yml
-├── alembic.ini
-├── app.py
-├── api_server.py
-├── cli.py
-├── config.py
-├── logging_config.py
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-├── migrations/
-│   ├── env.py
-│   ├── script.py.mako
-│   └── versions/
 ├── api/
-│   ├── __init__.py
-│   ├── routes/
-│   │   ├── analyses.py
-│   │   ├── incidents.py
-│   │   ├── health.py
-│   │   └── settings.py
-│   ├── dependencies.py
-│   ├── errors.py
-│   └── schemas.py
+├── ui/
+├── cli/
 ├── services/
-│   ├── __init__.py
-│   ├── analysis_service.py
+│   ├── analysis_pipeline.py
 │   ├── intake_service.py
 │   ├── report_service.py
-│   ├── incident_service.py
-│   ├── topology_service.py
-│   └── settings_service.py
+│   ├── context_service.py
+│   ├── feedback_service.py
+│   ├── integration_service.py
+│   ├── skills_registry_service.py       (new)
+│   └── benchmark_service.py             (new)
 ├── parsers/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── registry.py
-│   ├── terraform_parser.py
-│   ├── kubernetes_parser.py
-│   ├── ansible_parser.py
-│   ├── jenkins_parser.py
-│   └── cloudformation_parser.py
 ├── analysis/
-│   ├── __init__.py
-│   ├── risk_scorer.py
+│   ├── risk_engine.py
+│   ├── rollback_planner.py
 │   ├── blast_radius.py
-│   ├── env_classifier.py
 │   ├── incident_matcher.py
-│   └── rollback_planner.py
+│   └── confidence.py
+├── evidence/
+│   ├── models.py
+│   ├── extractor.py
+│   └── mappers.py
 ├── llm/
-│   ├── __init__.py
 │   ├── narrator.py
 │   ├── providers.py
-│   ├── prompts.py
-│   └── skill_context.py
-├── skills/
-│   ├── terraform.md
-│   ├── kubernetes.md
-│   ├── ansible.md
-│   ├── jenkins.md
-│   ├── cloudformation.md
-│   ├── git.md
-│   ├── docker.md
-│   └── custom/
+│   └── summary_builder.py
+├── integrations/
+│   ├── github/
+│   │   ├── action.py
+│   │   ├── app.py
+│   │   ├── comment_formatter.py
+│   │   └── check_run.py
+│   └── common/
+├── skills/                              (new layout)
+│   ├── registry_client.py
+│   ├── validator.py
+│   ├── installer.py
+│   ├── loader.py
+│   ├── custom/                          (user-installed skills)
+│   └── builtin/                         (first-party skills)
+├── benchmarks/                          (new)
+│   ├── runner.py
+│   ├── comparators.py
+│   └── results_publisher.py
 ├── models/
-│   ├── __init__.py
-│   ├── database.py
 │   ├── tables.py
 │   ├── repositories/
-│   │   ├── analysis_reports.py
-│   │   ├── incident_records.py
-│   │   └── settings.py
-│   └── types.py
-├── ui/
-│   ├── __init__.py
-│   ├── routes/
-│   │   ├── dashboard.py
-│   │   ├── history.py
-│   │   ├── settings.py
-│   │   └── incidents.py
-│   ├── components/
-│   │   ├── upload_panel.py
-│   │   ├── risk_summary.py
-│   │   ├── change_table.py
-│   │   ├── blast_radius_graph.py
-│   │   ├── rollback_plan.py
-│   │   └── progress_tracker.py
-│   ├── state/
-│   │   └── session_state.py
-│   └── formatters/
-│       ├── narrative.py
-│       └── risk_labels.py
-├── cli/
-│   ├── __init__.py
-│   └── analyze.py
-├── samples/
-│   ├── safe_deploy/
-│   ├── medium_risk/
-│   └── critical_risk/
+│   └── schemas.py
+├── analytics/
+│   ├── benchmarks.py
+│   ├── calibration.py
+│   └── trend_queries.py
 ├── data/
-│   ├── topology/
-│   │   └── service_topology.json
-│   └── incidents/
 ├── tests/
-│   ├── test_parsers/
-│   ├── test_analysis/
-│   ├── test_llm/
-│   ├── test_api/
-│   ├── test_ui/
-│   ├── test_services/
-│   ├── test_cli/
-│   └── fixtures/
 └── docs/
-    └── assets/
 ```
 
-### Architectural Boundaries
+---
 
-**API Boundaries:**
-- `api/routes/` exposes all machine-facing endpoints under `/api/v1`
-- API handlers validate input/output through shared schemas and delegate business logic to `services/`
-- API routes never call parsers, analysis modules, or repositories directly
+## 20. Architectural Decisions
 
-**Component Boundaries:**
-- `ui/routes/` defines page-level screens
-- `ui/components/` contains reusable presentation and interaction units
-- UI code delegates all domain work to `services/`
-- UI formatting helpers may shape display text, but not business decisions
+### ADR-01: Keep shared NiceGUI + FastAPI runtime in v1
+**Status:** Accepted
+**Reason:** Low friction, already aligned with repo, correct for early self-hosted product.
 
-**Service Boundaries:**
-- `services/` is the orchestration layer shared by dashboard, API, and CLI
-- `analysis_service.py` coordinates parse → score → blast radius → incident match → narrative → persist
-- Services may call `parsers/`, `analysis/`, `llm/`, and `models/repositories/`
-- Services are the only layer allowed to compose multiple domain modules in one workflow
+### ADR-02: Add explicit evidence model
+**Status:** Accepted
+**Reason:** Required for trust, differentiation, and benchmarkability.
 
-**Data Boundaries:**
-- `models/` owns persistence models and repository access
-- `analysis/` owns pure domain logic and must remain persistence-agnostic
-- `parsers/` transform raw artifacts into normalized internal models only
-- `llm/` only consumes structured summaries, never raw IaC artifacts
+### ADR-03: Keep advisory-first core
+**Status:** Accepted
+**Reason:** Enforcement too early will damage trust and positioning.
 
-### Requirements to Structure Mapping
+### ADR-04: Introduce GitHub integration as first-class adapter
+**Status:** Accepted
+**Reason:** Workflow-native adoption is required for becoming the default choice.
 
-**FR Category Mapping:**
-- Multi-tool intake → `parsers/`, `services/intake_service.py`, `ui/components/upload_panel.py`, `api/routes/analyses.py`
-- Unified risk analysis → `analysis/`, `services/analysis_service.py`
-- Narrative guidance → `llm/`, `ui/formatters/`, `ui/components/risk_summary.py`
-- Blast radius & impact → `analysis/blast_radius.py`, `services/topology_service.py`, `ui/components/blast_radius_graph.py`
-- Rollback & incident intelligence → `analysis/rollback_planner.py`, `analysis/incident_matcher.py`, `services/incident_service.py`
-- History/audit/trends → `models/repositories/analysis_reports.py`, `ui/routes/history.py`, `api/routes/incidents.py`
-- Configuration/customization → `config.py`, `services/settings_service.py`, `ui/routes/settings.py`, `skills/custom/`
-- Workflow access → `ui/`, `api/`, `cli/`
+### ADR-05: Preserve raw-local / structured-summary-only LLM boundary
+**Status:** Accepted
+**Reason:** One of the clearest product differentiators.
 
-**Cross-Cutting Concerns:**
-- Security boundary enforcement → `services/intake_service.py`, `llm/skill_context.py`, `logging_config.py`
-- Audit logging → `services/report_service.py`, `models/repositories/analysis_reports.py`
-- Session workflow tracking → `ui/state/session_state.py`, `ui/components/progress_tracker.py`
-- Standard errors → `api/errors.py`, shared service exceptions, UI-safe formatters
+### ADR-06: Design for SQLite now, PostgreSQL later
+**Status:** Accepted
+**Reason:** Current product stage favors simplicity; future stage requires scale path.
 
-### Integration Points
+### ADR-07: Add benchmark and feedback services before enterprise polish
+**Status:** Accepted
+**Reason:** Trust data is a stronger moat than early enterprise checkbox work.
 
-**Internal Communication:**
-- UI, API, and CLI all call shared services
-- Services coordinate parsers, analysis modules, repositories, and LLM logic
-- Repositories provide persistence access to services only
+### ADR-08: Skills as markdown, not executable plugins (new)
+**Status:** Accepted
+**Reason:** Markdown skills are transparent, community-auditable, and eliminate a whole class of plugin-security problems. Skills provide knowledge, not code.
 
-**External Integrations:**
-- LLM providers through `llm/providers.py`
-- Optional Ollama local runtime
-- CI systems consume `/api/v1/analyze`
-- Future Slack/CI plugins remain out-of-process consumers of the API
+### ADR-09: Skills contributed via PR to public registry repo, not via API (new)
+**Status:** Accepted
+**Reason:** Contribution process must be transparent and auditable. PR review + automated test harness is the quality gate. This mirrors the model used by Helm charts, Kubernetes Operators Hub, and VS Code extensions.
 
-**Data Flow:**
-- Raw files enter through UI/API/CLI
-- Parsers normalize artifacts into shared internal models
-- Analysis modules compute risk, blast radius, environment, rollback, and incident similarity
-- LLM layer generates narrative from structured summaries
-- Report is persisted, then returned/rendered
+### ADR-10: Benchmark corpus is public, open-source, community-extendable (new)
+**Status:** Accepted
+**Reason:** The corpus's value is its trust — if it's private or vendor-controlled, nobody will believe it. Publishing under MIT and accepting PRs for new scenarios makes it a community asset, not a marketing claim.
 
-### File Organization Patterns
+### ADR-11: GitHub adapter uses Action + App in parallel (new)
+**Status:** Accepted
+**Reason:** Action is simpler (works in any workflow) — ship it first. App enables richer interactions (check runs, PR events, OAuth) — add it second. Both are needed for full workflow-native integration.
 
-**Configuration Files:**
-- Root-level runtime config files only
-- Environment values in `.env.example` and actual env vars
-- Migration config isolated to Alembic files
+---
 
-**Source Organization:**
-- Domain logic separated by responsibility
-- No framework-specific business logic outside boundary layers
-- Shared orchestration centralized in `services/`
+## 21. Migration Plan From Current Codebase
 
-**Test Organization:**
-- Central `tests/` tree by domain
-- Real-world artifact fixtures under `tests/fixtures/`
-- Parser fixtures and regression samples kept as first-class test assets
+### Step 1
+Keep current shared runtime and service architecture.
 
-**Asset Organization:**
-- Demo/sample inputs under `samples/`
-- Operational seed data such as topology and incident imports under `data/`
-- Documentation assets under `docs/assets/`
+### Step 2
+Introduce `EvidenceItem` and `Finding` schemas as first-class persisted entities (Epic 1).
 
-### Development Workflow Integration
+### Step 3
+Refactor scoring pipeline so verdicts are assembled from evidence and context before narrative (Epic 1).
 
-**Development Server Structure:**
-- `app.py` boots the NiceGUI dashboard and shared app runtime
-- `api_server.py` mounts or exposes API entry behavior where needed
-- Local development uses one Python environment and one app runtime
+### Step 4
+Add `integrations/github/` with PR summary formatter and rerun support (Epic 3).
 
-**Build Process Structure:**
-- Docker image builds from the Python application root
-- Migrations, app runtime, and assets are packaged together
-- No frontend compilation step exists
+### Step 5
+Add Skills Registry Service, Validator, and Installer (Epic 4).
 
-**Deployment Structure:**
-- One primary app container
-- Optional separate Ollama runtime when offline mode is enabled
-- Persistent volume for SQLite database and imported operational data
+### Step 6
+Add feedback tables and benchmark harness (Epic 5 + 6).
 
-## Architecture Validation Results
+### Step 7
+Add context freshness/versioning for topology and incidents (Epic 5).
 
-### Coherence Validation ✅
+### Step 8
+Prepare repository interfaces for PostgreSQL and async-worker migration (Phase 3).
 
-**Decision Compatibility:**
-The selected stack is internally coherent. NiceGUI, FastAPI, SQLite, SQLAlchemy, Pydantic, and LiteLLM support the product's local-first, pure-Python, single-container architecture without introducing contradictory operational models or tooling requirements.
+---
 
-**Pattern Consistency:**
-Implementation patterns align with the chosen architecture. Naming conventions, API envelopes, service-layer orchestration, structured logging, and staged workflow states all reinforce compatibility across dashboard, API, and CLI access modes.
+## 22. What This Architecture Optimizes For
 
-**Structure Alignment:**
-The proposed project structure supports the documented architectural decisions. Boundary lines between UI, API, services, analysis logic, persistence, and LLM orchestration are explicit and enforceable, which reduces ambiguity for AI-assisted implementation.
+This architecture optimizes for:
 
-### Requirements Coverage Validation ✅
+- Trust
+- Adoption in real workflows
+- Local-first security
+- Maintainable evolution
+- Community extensibility (new)
+- Measurable accuracy (new)
+- Eventual enterprise path
 
-**Feature Coverage:**
-All major FR categories have explicit architectural homes: multi-tool intake, unified analysis, narrative generation, blast radius, rollback and incident intelligence, audit/history, customization, and workflow access.
+It does **not** optimize for:
 
-**Functional Requirements Coverage:**
-The architecture provides direct support for all 39 functional requirements through a combination of parser modules, analysis services, persistence, UI routes, API routes, CLI access, and customization surfaces.
+- Maximum feature breadth in v1
+- Deep multi-tenant enterprise scope on day one
+- Flashy AI behavior without evidence
+- Pipeline ownership or enforcement ownership
 
-**Non-Functional Requirements Coverage:**
-The architecture addresses the major non-functional requirements for performance, security, reliability, accessibility, integration, and bounded scalability. Local-first processing, advisory-only behavior, graceful degradation, stable API versioning, and desktop-first UX constraints are all reflected in the design.
+---
 
-### Implementation Readiness Validation ✅
+## 23. Final Recommendation
 
-**Decision Completeness:**
-Critical architectural decisions are documented with versions or explicit scope posture where relevant. The remaining ambiguities are not blockers for implementation.
+Keep the current core technical direction, but evolve the system around five missing architectural pillars:
 
-**Structure Completeness:**
-The project tree is concrete rather than placeholder-level. It defines the expected runtime entry points, service boundaries, persistence layout, migration path, skills organization, and testing structure.
+1. **Evidence-backed report objects** (Epic 1-2)
+2. **Workflow-native integration layer** (Epic 3)
+3. **Skills Marketplace infrastructure** (Epic 4) — new in v3
+4. **Feedback / calibration loop** (Epic 5)
+5. **Benchmark corpus infrastructure** (Epic 6) — new in v3
 
-**Pattern Completeness:**
-The main cross-agent conflict points are covered: naming, response formats, workflow states, error handling, logging, and shared-domain orchestration.
-
-### Gap Analysis Results
-
-**Critical Gaps:**
-- No critical gaps inside the technical architecture itself.
-
-**Important Gaps:**
-- A dedicated UX artifact does not yet exist, so interaction details and screen-level priorities are not fully specified.
-- Epics and stories do not yet exist, so implementation sequencing and requirement-to-story traceability are still missing from the broader planning chain.
-
-**Nice-to-Have Gaps:**
-- More detailed examples for API response payloads and repository interfaces could help future implementers.
-- A short architecture decision log for major trade-offs could make later revisions easier.
-
-### Validation Issues Addressed
-
-- Reconciled the older Streamlit-based draft direction with the newly selected NiceGUI + FastAPI architecture.
-- Ensured the architecture preserves the advisory-only and local-first constraints defined in the PRD.
-- Confirmed that the project structure enforces shared-service reuse rather than allowing UI/API/CLI drift.
-
-### Architecture Completeness Checklist
-
-**✅ Requirements Analysis**
-- [x] Project context thoroughly analyzed
-- [x] Scale and complexity assessed
-- [x] Technical constraints identified
-- [x] Cross-cutting concerns mapped
-
-**✅ Architectural Decisions**
-- [x] Critical decisions documented with versions
-- [x] Technology stack fully specified
-- [x] Integration patterns defined
-- [x] Performance considerations addressed
-
-**✅ Implementation Patterns**
-- [x] Naming conventions established
-- [x] Structure patterns defined
-- [x] Communication patterns specified
-- [x] Process patterns documented
-
-**✅ Project Structure**
-- [x] Complete directory structure defined
-- [x] Component boundaries established
-- [x] Integration points mapped
-- [x] Requirements to structure mapping complete
-
-### Architecture Readiness Assessment
-
-**Overall Status:** READY FOR IMPLEMENTATION
-
-**Confidence Level:** High
-
-**Key Strengths:**
-- Strong alignment between PRD constraints and technical architecture
-- Clear service boundaries for AI-assisted implementation
-- Local-first security posture preserved throughout the design
-- Single-process deployment model reduces operational complexity
-- Shared service layer prevents interface drift across dashboard, API, and CLI
-
-**Areas for Future Enhancement:**
-- Add a UX artifact to complement the technical blueprint
-- Add epics/stories for delivery sequencing and traceability
-- Expand concrete payload/interface examples during implementation planning if needed
-
-### Implementation Handoff
-
-**AI Agent Guidelines:**
-- Follow architectural decisions exactly as documented
-- Reuse shared services instead of duplicating domain logic in boundary layers
-- Keep raw IaC local and preserve structured-summary-only LLM boundaries
-- Preserve advisory-only behavior and standard error/audit/progress formats
-
-**First Implementation Priority:**
-Initialize the project using the custom NiceGUI + FastAPI foundation, then establish shared contracts, persistence, and the analysis service layer before building interface-specific features.
+That is the shortest path from "interesting open-source product" to "trusted, community-extensible, measurably-accurate pre-deployment intelligence platform".

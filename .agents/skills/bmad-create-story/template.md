@@ -14,6 +14,13 @@ so that {{benefit}}.
 
 1. [Add acceptance criteria from epics/PRD]
 
+### Requirement Traceability
+
+- Primary PRD requirements: [Add PRD requirement IDs, e.g. `EVD-02`, `REV-05`]
+- Supporting PRD / NFR / differentiation requirements: [Add supporting IDs where relevant]
+- Coverage intent: [`Baseline`, `Delta`, or `Baseline + Delta`]
+- Story alignment note: [Explain how this story maps to the current repo baseline and roadmap intent]
+
 ## Tasks / Subtasks
 
 - [ ] Task 1 (AC: #)

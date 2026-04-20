@@ -1,661 +1,816 @@
----
-stepsCompleted:
-  - step-01-validate-prerequisites
-  - step-02-design-epics
-  - step-03-create-stories
-  - step-04-final-validation
-inputDocuments:
-  - _bmad-output/planning-artifacts/prd.md
-  - _bmad-output/planning-artifacts/architecture.md
----
-
-# ai-deploy-whisper - Epic Breakdown
+# DeployWhisper — Epic Breakdown
 
 ## Overview
 
 This document provides the complete epic and story breakdown for ai-deploy-whisper, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
 
-## Requirements Inventory
-
-### Functional Requirements
-
-FR1: Platform engineers can submit deployment artifacts from Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation for a single analysis.  
-FR2: Platform engineers can submit multiple files from multiple supported tools in one analysis session.  
-FR3: The system can identify the supported tool type of each submitted artifact without requiring manual classification from the user.  
-FR4: The system can analyze partial deployment context when only a subset of related artifacts is provided.  
-FR5: The system can detect unsupported or sensitive files in a submission and warn the user when those files are excluded from analysis or external model use.  
-FR6: Platform engineers can receive a single risk assessment that combines findings across all submitted deployment artifacts.  
-FR7: The system can produce a deploy recommendation that indicates whether a change appears safe, needs caution, or requires escalation.  
-FR8: The system can identify cross-tool interactions where individually benign changes create elevated combined risk.  
-FR9: The system can classify risk findings by severity so that users can distinguish low, medium, high, and critical issues.  
-FR10: The system can explain which detected changes contributed to the overall risk assessment.  
-FR11: Platform engineers can receive a plain-English narrative that explains what changed, why it matters, and what could break.  
-FR12: Junior engineers can receive tool-specific explanations that help them understand why a change is risky.  
-FR13: Users can receive actionable guidance describing what to review, change, or verify before deployment.  
-FR14: SRE leads can review a decision-ready summary that supports go or no-go deployment decisions.  
-FR15: Users can distinguish between the system's recommendation and the final human deployment decision.  
-FR16: Users can view which downstream services, systems, or resources may be affected by a deployment change.  
-FR17: The system can indicate when blast-radius analysis may be incomplete because required topology context is missing or stale.  
-FR18: SRE leads can review impact information in enough detail to assess which teams or systems may need coordination before release.  
-FR19: Platform administrators can maintain the service-topology context used for impact analysis.  
-FR20: Users can receive a rollback plan for an analyzed deployment.  
-FR21: Users can review rollback steps in an ordered sequence that reflects operational recovery flow.  
-FR22: SRE leads can review rollback complexity as part of deployment decision making.  
-FR23: Platform administrators can ingest past incident records so the system can compare new deployments against historical failures.  
-FR24: Users can see when a current deployment resembles a previously recorded incident.  
-FR25: The system can retain a history of completed analyses for later review.  
-FR26: Engineering managers can review historical deployment analyses to understand risk trends over time.  
-FR27: Engineering managers can compare risk patterns across tools, time periods, and deployment outcomes.  
-FR28: Teams can use analysis history as an audit trail showing when a deployment was reviewed and what assessment was produced.  
-FR29: Users can retrieve past reports for investigation, learning, or approval-thread reference.  
-FR30: Platform administrators can configure which language model provider the system uses for narrative generation.  
-FR31: Platform administrators can operate the system in a fully local analysis mode when external model usage is not allowed.  
-FR32: Platform administrators can add or override team-specific AI Skills so analysis reflects internal modules, conventions, and risk patterns.  
-FR33: Platform administrators can manage the operational context required for analysis, including incident records and topology definitions.  
-FR34: Teams can use the system without enabling automated deployment blocking.  
-FR35: Platform engineers can use a web interface to submit artifacts, review findings, and access historical analyses.  
-FR36: Technical users can access analysis capabilities through an API for automation and integration workflows.  
-FR37: Technical users can trigger analysis from command-line workflows when a browser interface is not the preferred entry point.  
-FR38: CI workflows can submit deployment artifacts for advisory analysis and consume structured results.  
-FR39: Teams can share analysis outputs within deployment review workflows without requiring the system itself to make the final release decision.
-
-### NonFunctional Requirements
-
-NFR1: The system shall complete a standard deployment analysis in under 15 seconds under normal operating conditions.  
-NFR2: The web dashboard shall load in under 1.5 seconds on supported desktop browsers under normal internal-network conditions.  
-NFR3: The UI shall update analysis results within 500 milliseconds after a completed analysis is available.  
-NFR4: The analysis history interface shall remain responsive with at least 1000 stored reports using indexed and paginated retrieval.  
-NFR5: The system shall support at least 3 concurrent analyses without major degradation in responsiveness or analysis completion time.  
-NFR6: The system shall never send raw infrastructure-as-code content to external LLM providers.  
-NFR7: The system shall store API keys only in memory or environment variables and shall never persist them to local databases, logs, or generated reports.  
-NFR8: Sensitive-file detection shall always remain enabled and shall automatically exclude dangerous files from external model transmission.  
-NFR9: The system shall support a fully offline operating mode using Ollama in which no analysis-related network calls are made outside the local environment.  
-NFR10: Application logs shall exclude secrets, prompts, raw infrastructure content, and model responses, and shall contain only operational metadata such as timestamps, filenames, scores, and errors.  
-NFR11: The product shall not depend on a formal uptime SLA for v1, but it shall fail gracefully in self-hosted environments.  
-NFR12: If the configured LLM provider is unavailable, the system shall still return local analytical outputs including risk score, change breakdown, and blast radius information.  
-NFR13: Parser failures shall be isolated to the affected file or artifact and shall not terminate analysis for the remaining valid inputs in the same submission.  
-NFR14: Completed analysis reports shall be persisted successfully before they are presented in the dashboard or returned to the user as final output.  
-NFR15: Risk severity shall never be communicated by color alone and shall always include explicit textual labels or equivalent non-color indicators.  
-NFR16: Core workflows including navigation, file submission, configuration, and report review shall be keyboard navigable on supported desktop browsers.  
-NFR17: Narrative content, change tables, and rollback plans shall be rendered using semantic HTML structures compatible with assistive technologies.  
-NFR18: Visualizations such as risk gauges and blast-radius graphs shall include textual summaries or `aria` descriptions of their key information.  
-NFR19: The product shall target practical accessibility for common engineering workflows without requiring formal WCAG certification in v1.  
-NFR20: The system shall expose a stable versioned JSON analysis API for automation and integration workflows.  
-NFR21: The system shall accept standard supported artifact formats without requiring users to transform them into proprietary intermediate formats.  
-NFR22: The system shall produce advisory outputs that can be consumed easily by CI workflows and scripts.  
-NFR23: The system shall not require a single LLM vendor and shall allow provider substitution through configuration rather than code changes.  
-NFR24: The v1 product shall be designed for single-team deployment rather than multi-tenant organizational scale.  
-NFR25: The persistence layer shall support at least 1000 historical reports without unacceptable degradation in retrieval performance.  
-NFR26: The system shall support analyses containing tens of files in one submission, with a tested target of up to 30 files across supported tools.  
-NFR27: The default upload limit shall be 50 MB total per analysis session, with configuration support for adjustment if needed.  
-NFR28: The system shall support a small number of concurrent active users, with a target operating range of 3 to 5 simultaneous sessions.
-
-### Additional Requirements
-
-- Use a custom NiceGUI + FastAPI foundation as the selected architectural starter.
-- Treat project initialization with the NiceGUI + FastAPI foundation as the first implementation story.
-- Use SQLite as the v1 persistence store.
-- Use SQLAlchemy 2.0.49 as the ORM and data access layer.
-- Use Alembic 1.18.4 for schema migrations.
-- Use Pydantic 2.12.2 for internal and API contract validation.
-- Expose a versioned REST/JSON API under `/api/v1`.
-- Keep the product advisory-only; no app-level deployment blocking in v1.
-- Keep raw IaC local and restrict external LLM usage to structured summaries only.
-- Externalize shared-deployment authentication to network boundary or reverse proxy rather than app-native auth in Phase 1.
-- Use a shared service layer so dashboard, API, and CLI all reuse the same business logic.
-- Organize source code by responsibility with explicit top-level domains such as `parsers/`, `analysis/`, `llm/`, `models/`, `ui/`, and `api/`.
-- Standardize on `snake_case` for Python, persistence, and JSON field naming unless an external contract forces otherwise.
-- Use standard success and error API envelopes with `data`/`meta` and `error.code`/`error.message`/`error.details`.
-- Use fixed internal analysis stage names: `intake`, `parse`, `score`, `blast_radius`, `incident_match`, `skill_load`, `narrative`, `persist`.
-- Persist completed reports before showing success to the user.
-- Treat parser failures as isolated per-file failures and LLM failures as graceful degradation to non-narrative output.
-- Keep tests in a top-level `tests/` tree grouped by domain with real-world parser fixtures.
-- Use one primary app container for dashboard, API, and analysis engine, with optional separate Ollama runtime when offline mode is enabled.
-
-### UX Design Requirements
-
-The active UX artifact is `_bmad-output/planning-artifacts/ux-design-specification.md`. Use it alongside the PRD and architecture as the authoritative source for verdict-first information hierarchy, staged progress feedback, responsive breakpoint behavior, accessibility expectations, and admin/review flow details during implementation.
-
-### FR Coverage Map
-
-FR1: Epic 1 - Submit supported deployment artifacts for analysis  
-FR2: Epic 1 - Submit multiple files across tools  
-FR3: Epic 1 - Auto-detect tool type  
-FR4: Epic 1 - Analyze partial deployment context  
-FR5: Epic 1 - Detect unsupported or sensitive files  
-FR6: Epic 1 - Produce unified risk assessment  
-FR7: Epic 1 - Produce deploy recommendation  
-FR8: Epic 2 - Detect cross-tool interaction risk  
-FR9: Epic 1 - Classify risk severity  
-FR10: Epic 1 - Explain risk contributors  
-FR11: Epic 1 - Generate plain-English narrative  
-FR12: Epic 2 - Provide tool-specific learning explanations  
-FR13: Epic 1 - Provide actionable pre-deploy guidance  
-FR14: Epic 2 - Support SRE go/no-go review  
-FR15: Epic 1 - Distinguish advisory recommendation from human decision  
-FR16: Epic 2 - Show blast radius  
-FR17: Epic 2 - Warn when blast radius is incomplete  
-FR18: Epic 2 - Support impact review for coordination  
-FR19: Epic 4 - Maintain topology context  
-FR20: Epic 2 - Generate rollback plan  
-FR21: Epic 2 - Present ordered rollback steps  
-FR22: Epic 2 - Show rollback complexity  
-FR23: Epic 2 - Ingest incident records  
-FR24: Epic 2 - Show incident similarity matches  
-FR25: Epic 3 - Retain analysis history  
-FR26: Epic 3 - Review risk trends over time  
-FR27: Epic 3 - Compare risk patterns across tools and periods  
-FR28: Epic 3 - Use history as audit trail  
-FR29: Epic 3 - Retrieve past reports  
-FR30: Epic 4 - Configure LLM provider  
-FR31: Epic 4 - Operate in fully local mode  
-FR32: Epic 4 - Add or override AI Skills  
-FR33: Epic 4 - Manage operational context  
-FR34: Epic 4 - Operate without deployment blocking  
-FR35: Epic 1 - Use web interface  
-FR36: Epic 5 - Use API interface  
-FR37: Epic 5 - Use CLI interface  
-FR38: Epic 5 - Use CI advisory analysis  
-FR39: Epic 5 - Share outputs in deployment workflows
-
-## Epic List
-
-### Epic 1: Run a Pre-Deployment Risk Review
-Platform engineers can submit infrastructure artifacts, receive a unified risk assessment, and review a plain-English deploy recommendation before release.
-**FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR9, FR10, FR11, FR13, FR15, FR35
-
-### Epic 2: Understand Operational Impact and Recovery
-Engineers and SRE leads can understand cross-tool risk interactions, blast radius, rollback complexity, and incident similarity before approving a deployment.
-**FRs covered:** FR8, FR12, FR14, FR16, FR17, FR18, FR20, FR21, FR22, FR23, FR24
-
-### Epic 3: Review History, Audit, and Risk Trends
-Teams and engineering managers can retrieve past analyses, inspect audit history, and review deployment risk trends over time.
-**FRs covered:** FR25, FR26, FR27, FR28, FR29
-
-### Epic 4: Configure and Customize Analysis Context
-Platform administrators can configure provider behavior, maintain topology and incident context, operate in local mode, and extend the system with custom AI Skills.
-**FRs covered:** FR19, FR30, FR31, FR32, FR33, FR34
-
-### Epic 5: Use DeployWhisper in Automation Workflows
-Technical users can access the same analysis capabilities through API, CLI, and CI workflows without changing the advisory-only operating model.
-**FRs covered:** FR36, FR37, FR38, FR39
-
-## Epic 1: Run a Pre-Deployment Risk Review
-
-Platform engineers can submit infrastructure artifacts, receive a unified risk assessment, and review a plain-English deploy recommendation before release.
-
-### Story 1.1: Initialize the DeployWhisper Application Foundation
-
-As a platform engineer,  
-I want the approved NiceGUI + FastAPI foundation initialized with the core app shell,  
-So that all later analysis features are built on a consistent runtime and deployment model.
-
-**FRs implemented:** FR35
-
-**Acceptance Criteria:**
-
-**Given** a fresh repository checkout  
-**When** the application is initialized  
-**Then** the project contains the approved Python app foundation, configuration files, dependency definitions, and shared runtime entry points  
-**And** the initial structure aligns with the architecture document
-
-**Given** the initialized application  
-**When** a developer starts it locally  
-**Then** the dashboard shell and API health endpoint are both reachable from the shared application runtime  
-**And** the runtime uses the selected NiceGUI + FastAPI foundation
-
-### Story 1.2: Upload and Classify Deployment Artifacts
-
-As a platform engineer,  
-I want to submit multiple deployment artifacts in one analysis session,  
-So that I can review an entire change set instead of one file at a time.
-
-**FRs implemented:** FR1, FR2, FR3, FR5
-
-**Acceptance Criteria:**
-
-**Given** supported Terraform, Kubernetes, Ansible, Jenkins, or CloudFormation files  
-**When** I upload one or more files  
-**Then** the system accepts the files and displays them as a single pending analysis set  
-**And** the upload flow supports multi-file submission
+**Companion to:** `prd.md` v1.0 and `architecture.md` v1.0
+**Total timeline:** 24 weeks (6 epics, 2 phases)
+**Format:** Epic → Stories → Acceptance Criteria
 
-**Given** uploaded files from supported tools  
-**When** the upload completes  
-**Then** the system identifies each file's supported tool type without requiring manual classification  
-**And** detected tool types are visible to the user
+---
+
+## Table of Contents
 
-**Given** unsupported or sensitive files in the upload set  
-**When** intake validation runs  
-**Then** the system flags those files clearly  
-**And** excludes them from unsafe downstream handling
-
-### Story 1.3: Parse and Normalize Mixed Tool Inputs
-
-As a platform engineer,  
-I want uploaded artifacts converted into a common change model,  
-So that the system can analyze multi-tool deployments consistently.
-
-**FRs implemented:** FR4, FR6
-
-**Acceptance Criteria:**
-
-**Given** supported deployment artifacts  
-**When** parsing runs  
-**Then** the system produces normalized change objects in a shared internal schema  
-**And** parser output is usable by downstream analysis services
-
-**Given** a submission with only partial deployment context  
-**When** parsing completes  
-**Then** the system returns a valid partial analysis state rather than rejecting the whole submission  
-**And** clearly indicates reduced context where relevant
-
-**Given** one malformed file in a larger submission  
-**When** parsing runs  
-**Then** that file failure is isolated  
-**And** the remaining valid files continue through analysis
-
-### Story 1.4: Generate a Unified Risk Assessment
-
-As a platform engineer,  
-I want one combined risk assessment across all uploaded artifacts,  
-So that I can judge the deploy as a whole instead of reading isolated results.
-
-**FRs implemented:** FR6, FR7, FR9, FR10, FR15
-
-**Acceptance Criteria:**
-
-**Given** a normalized set of changes  
-**When** risk scoring runs  
-**Then** the system produces one overall risk assessment for the full submission  
-**And** assigns a clear severity classification
-
-**Given** the computed assessment  
-**When** results are presented  
-**Then** the system shows which changes contributed to the score  
-**And** explains the severity classification in user-facing terms
-
-**Given** the assessment is complete  
-**When** I review it  
-**Then** the system distinguishes its recommendation from the final human deployment decision  
-**And** preserves the advisory-only operating model
-
-### Story 1.5: Present a Plain-English Risk Narrative
-
-As a platform engineer,  
-I want the system to explain the deployment in plain English,  
-So that I can understand what changed, why it matters, and what to check next.
-
-**FRs implemented:** FR11, FR13
-
-**Acceptance Criteria:**
-
-**Given** a completed analysis  
-**When** narrative generation succeeds  
-**Then** the system presents a plain-English explanation of what changed, what could break, and what deserves attention  
-**And** the narrative is grounded in the structured analysis context
-
-**Given** a completed analysis  
-**When** the narrative is displayed  
-**Then** the system includes actionable guidance describing what to review, change, or verify before deployment  
-**And** the guidance is readable by both junior and senior engineers
-
-**Given** the external LLM provider is unavailable  
-**When** narrative generation cannot complete  
-**Then** the rest of the analysis results remain available  
-**And** the workflow continues without blocking the review
-
-## Epic 2: Understand Operational Impact and Recovery
-
-Engineers and SRE leads can understand cross-tool risk interactions, blast radius, rollback complexity, and incident similarity before approving a deployment.
-
-### Story 2.1: Detect Cross-Tool Interaction Risk
-
-As a platform engineer,  
-I want the system to identify risky interactions across multiple tools,  
-So that I can catch hazards that would be missed in single-tool review.
-
-**FRs implemented:** FR8
-
-**Acceptance Criteria:**
-
-**Given** a mixed-tool analysis set  
-**When** correlation logic runs  
-**Then** the system identifies cross-tool interactions where combined changes create elevated risk  
-**And** surfaces them in the overall assessment
-
-**Given** a detected interaction  
-**When** I review the result  
-**Then** the system explains the interaction in user-facing language  
-**And** ties the explanation back to the contributing artifacts
-
-### Story 2.2: Show Blast Radius and Impact Warnings
-
-As an SRE lead,  
-I want to see which downstream systems may be affected by a deployment,  
-So that I can make a defensible go/no-go decision and coordinate with the right teams.
-
-**FRs implemented:** FR16, FR17, FR18
-
-**Acceptance Criteria:**
-
-**Given** an analysis with matching topology context  
-**When** blast-radius mapping runs  
-**Then** the system shows impacted downstream services, systems, or resources  
-**And** presents them in a reviewable impact view
-
-**Given** topology data is missing or stale  
-**When** blast-radius analysis is shown  
-**Then** the system warns that impact analysis may be incomplete  
-**And** does not imply false certainty
-
-### Story 2.3: Generate Rollback Guidance and Complexity
-
-As an SRE lead,  
-I want a rollback plan and recovery complexity assessment,  
-So that I can weigh not only deployment risk but also recovery cost.
-
-**FRs implemented:** FR20, FR21, FR22
-
-**Acceptance Criteria:**
-
-**Given** a completed analysis  
-**When** rollback planning runs  
-**Then** the system produces an ordered rollback plan tied to the analyzed deployment  
-**And** the plan is reviewable in the report
-
-**Given** the rollback plan  
-**When** I review the report  
-**Then** the system shows rollback complexity in a form usable for approval decisions  
-**And** ties the complexity indicator to the analyzed change set
-
-### Story 2.4: Ingest Incident Records for Similarity Matching
-
-As a platform administrator,  
-I want to add incident records to the system,  
-So that future deployment reviews can be compared against past failures.
-
-**FRs implemented:** FR23
-
-**Acceptance Criteria:**
-
-**Given** an incident document in an accepted format  
-**When** I ingest it  
-**Then** the system stores the incident record for future similarity analysis  
-**And** preserves enough metadata for later review
-
-**Given** stored incident records  
-**When** a new deployment is analyzed  
-**Then** those records are available to the incident-matching workflow  
-**And** can influence the generated report context
-
-### Story 2.5: Show Incident Similarity in Risk Review
-
-As an SRE lead,  
-I want to know when a deployment resembles a previous incident,  
-So that historical failures can influence current deploy decisions.
-
-**FRs implemented:** FR12, FR14, FR24
-
-**Acceptance Criteria:**
-
-**Given** stored incident records and a completed deployment analysis  
-**When** similarity matching finds a relevant match  
-**Then** the report shows that the current deployment resembles a previously recorded incident  
-**And** identifies the matched incident context
-
-**Given** an incident similarity result  
-**When** it appears in the report  
-**Then** it is presented as decision-support context rather than as an automated block  
-**And** remains consistent with the advisory-only model
-
-## Epic 3: Review History, Audit, and Risk Trends
-
-Teams and engineering managers can retrieve past analyses, inspect audit history, and review deployment risk trends over time.
-
-### Story 3.1: Persist Completed Analysis Reports
-
-As a team using DeployWhisper,  
-I want completed analyses stored automatically,  
-So that reviews are auditable and can be revisited later.
-
-**FRs implemented:** FR25, FR28
-
-**Acceptance Criteria:**
-
-**Given** a completed analysis  
-**When** processing reaches the final persistence stage  
-**Then** the report is stored successfully before it is shown as complete to the user  
-**And** saved report data includes audit-relevant metadata
-
-**Given** a stored analysis  
-**When** I inspect history later  
-**Then** the report includes enough metadata to support audit and investigation workflows  
-**And** can be retrieved by supported interfaces
-
-### Story 3.2: Browse and Retrieve Historical Reports
-
-As a platform engineer,  
-I want to browse previous analysis reports,  
-So that I can review earlier deploy decisions, learn from past work, and reference them in approval discussions.
-
-**FRs implemented:** FR29
-
-**Acceptance Criteria:**
-
-**Given** stored analysis reports  
-**When** I open the history view  
-**Then** I can retrieve and inspect prior reports  
-**And** review the contents of a selected report
-
-**Given** historical reports  
-**When** I search or filter them  
-**Then** I can find relevant prior analyses without scanning the full history manually  
-**And** the retrieval remains aligned with the documented NFR bounds
-
-### Story 3.3: Review Risk Trends and Audit Signals
-
-As an engineering manager,  
-I want trend views over stored analyses,  
-So that I can understand whether deployment safety is improving over time.
-
-**FRs implemented:** FR26, FR27
-
-**Acceptance Criteria:**
-
-**Given** a history of completed analyses  
-**When** I view trend reporting  
-**Then** I can review risk patterns over time and across tools  
-**And** identify high-level changes in deployment safety
-
-**Given** historical analysis data  
-**When** I inspect audit-oriented views  
-**Then** I can see when deployments were reviewed and what assessments were produced  
-**And** use that view for management and governance review
-
-### Story 3.4: Capture Audit-Trail Metadata for Analyses
-
-As a platform administrator or compliance reviewer,  
-I want each stored analysis to retain audit-trail metadata,  
-So that post-incident investigation and deployment accountability are possible without exposing sensitive content.
-
-**FRs implemented:** FR28, FR29
-
-**Acceptance Criteria:**
-
-**Given** a completed analysis  
-**When** it is persisted  
-**Then** the stored audit trail includes timestamp, triggering user or session context when available, files analyzed, LLM provider used, and resulting risk score  
-**And** the record excludes secrets, raw IaC content, prompts, and model responses
-
-**Given** a stored analysis  
-**When** I retrieve it through supported history or report surfaces  
-**Then** the audit metadata is visible enough for investigation and governance workflows  
-**And** remains consistent across supported interfaces
-
-## Epic 4: Configure and Customize Analysis Context
-
-Platform administrators can configure provider behavior, maintain topology and incident context, operate in local mode, and extend the system with custom AI Skills.
-
-### Story 4.1: Configure Narrative Provider Settings
-
-As a platform administrator,  
-I want to configure which LLM provider is used for narrative generation,  
-So that the system fits our operational and compliance context.
-
-**FRs implemented:** FR30
-
-**Acceptance Criteria:**
-
-**Given** the settings workflow  
-**When** I choose a supported provider configuration  
-**Then** the system uses that provider for narrative generation without changing core analysis logic  
-**And** preserves compatibility with the shared service layer
-
-**Given** a valid provider configuration  
-**When** the application starts or settings are applied  
-**Then** the system validates the configuration in a way appropriate for the selected runtime mode  
-**And** reports invalid configuration safely
-
-### Story 4.2: Operate in Fully Local Mode
-
-As a platform administrator,  
-I want the system to run with local-only model execution,  
-So that no analysis-related data leaves the environment.
-
-**FRs implemented:** FR31, FR34
-
-**Acceptance Criteria:**
-
-**Given** local mode is enabled  
-**When** an analysis runs  
-**Then** the system uses the local provider path and avoids external model calls  
-**And** preserves the same advisory workflow
-
-**Given** local mode is active  
-**When** I inspect system behavior  
-**Then** the product supports the core review flow without requiring cloud LLM access  
-**And** no analysis-related outbound model traffic occurs
-
-### Story 4.3: Maintain Service Topology Context
-
-As a platform administrator,  
-I want to manage the service-topology definition used for blast-radius analysis,  
-So that impact results reflect the actual system structure.
-
-**FRs implemented:** FR19, FR33
-
-**Acceptance Criteria:**
-
-**Given** topology data management capabilities  
-**When** I update topology context  
-**Then** the system uses the updated structure for future blast-radius analysis  
-**And** stores the maintained context for later analyses
-
-**Given** topology context becomes missing or stale  
-**When** the application evaluates impact  
-**Then** the system can surface uncertainty rather than silently assuming complete coverage  
-**And** the warning is visible in the review workflow
-
-### Story 4.4: Add and Override Custom AI Skills
-
-As a platform administrator,  
-I want to add or override team-specific AI Skills,  
-So that analysis reflects our internal modules, conventions, and risk patterns.
-
-**FRs implemented:** FR32
-
-**Acceptance Criteria:**
-
-**Given** a valid custom skill file  
-**When** it is placed in the supported custom skill location  
-**Then** the system loads it in preference to the default skill when applicable  
-**And** preserves the default fallback when no custom skill exists
-
-**Given** custom skills are present  
-**When** relevant artifacts are analyzed  
-**Then** those custom skill definitions affect the structured narrative context used by the system  
-**And** the override behavior is consistent across supported interfaces
-
-## Epic 5: Use DeployWhisper in Automation Workflows
-
-Technical users can access the same analysis capabilities through API, CLI, and CI workflows without changing the advisory-only operating model.
-
-### Story 5.1: Expose a Stable Analysis API
-
-As a technical user,  
-I want a versioned analysis API,  
-So that I can automate DeployWhisper from scripts and external systems.
-
-**FRs implemented:** FR36, FR38, FR39
-
-**Acceptance Criteria:**
-
-**Given** the application is running  
-**When** a client calls the supported analysis endpoint  
-**Then** the system accepts standard artifact inputs and returns a stable structured JSON result  
-**And** the result follows the documented response envelope
-
-**Given** API consumers  
-**When** they inspect the contract  
-**Then** the versioned API surface is documented consistently with the system's response schema  
-**And** remains aligned with `/api/v1`
-
-### Story 5.2: Provide a CLI for Headless Analysis
-
-As a technical user,  
-I want to trigger analysis from the command line,  
-So that I can use DeployWhisper without opening the dashboard.
-
-**FRs implemented:** FR37
-
-**Acceptance Criteria:**
-
-**Given** the CLI entry point  
-**When** I invoke analysis with supported inputs  
-**Then** the CLI runs the same shared analysis workflow used by the web and API interfaces  
-**And** returns consistent output for the same underlying analysis
-
-**Given** a completed CLI analysis  
-**When** results are returned  
-**Then** the output remains consistent with the advisory-only product model  
-**And** can be consumed in a headless workflow
-
-### Story 5.3: Support CI-Friendly Advisory Consumption
-
-As a team integrating DeployWhisper into CI,  
-I want automation-friendly advisory outputs,  
-So that pull requests and pipelines can consume analysis results without turning the tool into an enforcement gate.
-
-**FRs implemented:** FR38, FR39
-
-**Acceptance Criteria:**
-
-**Given** a CI workflow submits deployment artifacts  
-**When** analysis completes  
-**Then** the result can be consumed programmatically by the workflow  
-**And** includes enough structured context for advisory automation
-
-**Given** a CI-integrated analysis result  
-**When** it is shared into deployment review workflows  
-**Then** the output remains advisory  
-**And** does not require the system itself to make the final release decision
-
-### Story 5.4: Format Advisory Outputs for PR and Approval Threads
-
-As a team integrating DeployWhisper into CI,  
-I want a reusable approval-thread and PR-comment summary format,  
-So that bots and scripts can share the most important advisory signals without reverse-engineering raw analysis payloads.
-
-**FRs implemented:** FR38, FR39
-
-**Acceptance Criteria:**
-
-**Given** a completed advisory analysis  
-**When** a CI workflow or bot prepares a shared summary  
-**Then** the system exposes a script-friendly summary shape or formatter for pull-request and approval-thread use  
-**And** the summary includes risk level, recommendation, top narrative signal, blast-radius context, rollback context, and uncertainty indicators
-
-**Given** a shared PR or approval-thread summary  
-**When** reviewers read it  
-**Then** the message remains explicitly advisory  
-**And** it never implies that DeployWhisper itself has made the final release decision or blocked deployment
+- [Baseline vs Roadmap](#baseline-vs-roadmap)
+- [Compact FR/NFR Traceability Matrix](#compact-frnfr-traceability-matrix)
+- [Epic 1: Trusted Evidence Core](#epic-1)
+- [Epic 2: Report & Review Experience](#epic-2)
+- [Epic 3: GitHub-Native Delivery](#epic-3)
+- [Epic 4: AI Skills Marketplace](#epic-4)
+- [Epic 5: Context Moat](#epic-5)
+- [Epic 6: Benchmarks & Calibration](#epic-6)
+
+---
+
+## Baseline vs Roadmap
+
+This epic pack should be read as a **delta roadmap over the current repository baseline**, not as a claim that the repo starts from zero.
+
+The current codebase already provides meaningful baseline capabilities:
+
+- Multi-artifact intake, classification, sensitive-file rejection, and partial analysis handling
+- Parser coverage and shared normalized change model for Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation
+- Shared analysis pipeline with risk scoring, cross-tool interaction risk, blast radius, rollback guidance, incident similarity, and narrative fallback
+- Persisted reports, audit metadata, history browsing, and basic trend summaries
+- Versioned REST API and CLI over the same analysis core
+- Provider settings, local-only mode, topology upload/validation, and custom-skill override support
+
+The six epics below focus on the **remaining roadmap delta** needed to reach the latest PRD and architecture target state:
+
+- Epic 1 upgrades the baseline into a first-class evidence model
+- Epic 2 upgrades the current report UX into the target verdict/evidence review experience
+- Epic 3 adds GitHub-native workflow delivery
+- Epic 4 expands local skill support into a public marketplace ecosystem
+- Epic 5 adds the feedback, topology automation, and deployment-outcome moat
+- Epic 6 adds the benchmark and backtesting proof engine
+
+When a PRD requirement is already partially or substantially present in the current repo, treat the relevant story as **hardening / refactoring / target-state completion**, not as permission to rebuild the baseline from scratch.
+
+---
+
+## Compact FR/NFR Traceability Matrix
+
+This matrix is intentionally compact. It maps requirement families to either:
+
+- **Baseline**: already present in the current repository and should be preserved
+- **Delta**: explicitly delivered by the refreshed roadmap
+- **Baseline + Delta**: existing capability plus roadmap expansion or re-architecture
+
+| Requirement IDs | Primary Coverage | Coverage Type | Notes |
+| --- | --- | --- | --- |
+| `ING-01..06` | Existing repo baseline; preserve during Epic 1 migration | Baseline | Intake/classification already exists and should not be accidentally reimplemented or regressed. |
+| `EVD-01` | Existing normalized change model + `E1-S2` / `E1-S3` | Baseline + Delta | Current normalization exists; Epic 1 upgrades it into evidence-first scoring. |
+| `EVD-02..08` | `E1-S1..E1-S8`, `E2-S2..E2-S4`, `E2-S7` | Delta | These are core gaps the refreshed plan is explicitly designed to close. |
+| `RSK-01..08` | Existing repo baseline + `E1-S3`, `E1-S6`, `E1-S7`, `E2-S1`, `E2-S6`, `E2-S7` | Baseline + Delta | Unified risk exists today; Epic 1/2 make it evidence-backed, confidence-aware, and review-ready. |
+| `CTX-01..07` | Existing topology / incidents baseline + `E1-S5`, `E2-S4`, `E2-S5`, `E5-S1..E5-S8` | Baseline + Delta | Current context is manual and partial; Epic 5 turns it into a moat. |
+| `REV-01..07` | Existing dashboard/history baseline + `E2-S1..E2-S8` | Baseline + Delta | The current UI supports review, but Epic 2 is the target-state UX pass. |
+| `WRK-01..02` | Existing API and CLI baseline | Baseline | Preserve shared-core API/CLI behavior while adding new workflow adapters. |
+| `WRK-03..07` | `E3-S1..E3-S8` | Delta | GitHub-native delivery is new roadmap work. |
+| `HIS-01..04` | Existing persistence/history baseline + `E5-S4`, `E5-S8` | Baseline + Delta | Persistence and history exist; Epic 5 expands them into richer learning and operations data. |
+| `HIS-05..07` | `E5-S5..E5-S8`, `E6-S1..E6-S8` | Delta | Reviewer feedback, outcomes, calibration, and backtesting are roadmap work. |
+| `ADM-01..05` | Existing settings/local-mode/topology/custom-skill baseline + `E4-S1..E4-S9`, `E5-S1..E5-S4` | Baseline + Delta | Admin basics exist now; marketplace and context automation extend them. |
+| `ADM-06..07` | Cross-cutting governance in `E1`, `E5`, and future adapter work | Delta | Threshold/default management and policy-adapter consumption need explicit follow-through during implementation. |
+| `COM-01..07` | `E4-S1..E4-S9` | Delta | Community ecosystem requirements are fully owned by Epic 4. |
+| `NFR-SEC-01..05` | Existing local-first/security baseline + Epic 1, 4, and 5 hardening | Baseline + Delta | Preserve raw-local boundaries and secret handling while expanding ecosystem and context features. |
+| `NFR-PERF-01..04` | Cross-cutting across `E1`, `E2`, `E3`, and `E5` | Delta | Performance budgets are not their own epic; they must be pulled into story ACs during implementation. |
+| `NFR-REL-01..04` | Existing degradation/persistence baseline + `E1-S7`, `E5-*` | Baseline + Delta | Reliability exists partially today; Epic 1 and 5 raise the bar. |
+| `NFR-XAI-01..04` | `E2-S1..E2-S8` | Delta | Explainability and accessibility are primarily enforced through Epic 2. |
+| `NFR-OPS-01..04` | Existing shared-core architecture + `E1-S8`, `E3-*`, `E5-*`, `E6-*` | Baseline + Delta | Architecture stability exists now; schema, adapter, and future worker migration concerns remain roadmap work. |
+
+Implementation note:
+
+- If a requirement family is marked `Baseline`, do not add replacement stories unless the capability is missing or unstable in the current repo.
+- If a requirement family is marked `Baseline + Delta`, the story intent is to extend or re-architect the existing implementation without losing current behavior.
+
+---
+
+<a id="epic-1"></a>
+## Epic 1: Trusted Evidence Core
+
+**Phase:** 1
+**Weeks:** 1-6
+**Priority:** P0 (blocks everything)
+
+### Goal
+Introduce the evidence model as first-class domain objects. Every finding must trace to evidence. Scoring must run before narrative. Confidence and uncertainty must be explicit.
+
+### Why this epic must ship first
+Without the evidence model, DeployWhisper is "AI output with extra steps". With it, the product has a defensible trust claim that differentiates us from every LLM wrapper and generic AI DevOps tool.
+
+### Stories
+
+#### E1-S1: Domain model foundations
+**As a** developer,
+**I want** `EvidenceItem`, `Finding`, `RiskAssessment`, and `ContextSnapshot` defined as Pydantic models + SQLAlchemy tables,
+**so that** all downstream logic has stable types to work with.
+
+**Acceptance:**
+- Pydantic models defined in `evidence/models.py`
+- SQLAlchemy tables defined in `models/tables.py` with foreign keys linking Finding → EvidenceItem (1:many) and Report → Finding (1:many)
+- Alembic migration `005_add_evidence_model.py` tested against clean DB and existing DB
+- Unit tests for every model (construction, serialization, validation)
+
+#### E1-S2: Evidence Extractor service
+**As a** developer,
+**I want** a service that converts parser output into EvidenceItem instances,
+**so that** every change detected by a parser generates traceable evidence.
+
+**Acceptance:**
+- `evidence/extractor.py` with one extractor method per supported tool type
+- Input: `NormalizedChange`; output: list of `EvidenceItem`
+- Each evidence item includes: source_type, source_ref, summary, severity_hint, deterministic flag, related_change_ids
+- Test coverage: 20 fixture scenarios across all 5 tools produce expected evidence
+
+#### E1-S3: Refactor risk scorer to consume evidence
+**As a** developer,
+**I want** the risk scorer to consume `EvidenceItem` lists instead of raw changes,
+**so that** the final verdict traces to concrete evidence.
+
+**Acceptance:**
+- `analysis/risk_engine.py` accepts `List[EvidenceItem]` and emits `RiskAssessment`
+- `RiskAssessment` includes `top_risk_contributors` pointing to specific evidence IDs
+- Unit tests verify that disabling any single evidence item changes the score appropriately
+
+#### E1-S4: Confidence field on every finding
+**As a** reviewer,
+**I want** each finding to show a confidence score (0-1),
+**so that** I can distinguish high-confidence deterministic findings from low-confidence inferred ones.
+
+**Acceptance:**
+- `Finding.confidence` is required, not optional
+- Deterministic findings default to 1.0
+- Inferred findings show LLM's stated confidence or a heuristic floor
+- UI displays confidence as a badge (high/medium/low) with numeric tooltip
+
+#### E1-S5: Context completeness on RiskAssessment
+**As a** reviewer,
+**I want** the report to tell me how complete the context was,
+**so that** I can discount warnings when topology or history is stale.
+
+**Acceptance:**
+- `RiskAssessment.context_completeness` is a structured object with: topology_freshness_days, incident_index_size, parser_success_rate, context_score (0-1)
+- Context score below 0.7 triggers a prominent UI warning
+- Tests verify stale topology (>30 days) reduces context_score appropriately
+
+#### E1-S6: Narrator runs after scoring
+**As a** developer,
+**I want** the LLM narrator to run as the last pipeline stage, consuming the frozen verdict,
+**so that** AI wording never influences severity.
+
+**Acceptance:**
+- Pipeline order: intake → parse → evidence → score → **narrate** → persist
+- Narrator receives: `RiskAssessment`, `List[Finding]` with evidence refs, and cannot mutate any of them
+- Test: mock narrator returns garbage; risk score is unchanged
+- Test: disable narrator entirely; report renders with deterministic summary fallback
+
+#### E1-S7: Deterministic degradation
+**As a** reviewer,
+**I want** the report to still work if the LLM fails,
+**so that** I never lose the core analysis because of a provider outage.
+
+**Acceptance:**
+- LLM timeout or exception produces a report with: all findings, all evidence, risk assessment, blast radius, rollback — just no narrative
+- A visible notice indicates narrative generation failed
+- Health check endpoint reports LLM provider status separately from core system health
+
+#### E1-S8: Report schema v2
+**As a** developer,
+**I want** the report schema to be versioned,
+**so that** API consumers and stored reports remain readable across upgrades.
+
+**Acceptance:**
+- `Report.report_schema_version` persisted on every report
+- v2 schema documented in `docs/schemas/report-v2.md`
+- API response includes schema version in envelope
+- Forward-compat guarantee: v3 clients can read v2 reports
+
+### Epic 1 Exit Criteria
+- Every finding in every report has at least one evidence item
+- Every finding has a confidence score
+- Disabling the LLM still produces a complete (minus-narrative) report
+- Score contributors visible in the UI with click-to-inspect
+- 20 known-risky test scenarios all pass with expected severity
+
+### Epic 1 Effort Estimate
+- Solo developer: 5-6 weeks
+- With 1 collaborator: 3-4 weeks
+
+### Epic 1 Key Risks
+- Schema migration breaking existing reports — accept a clean v2 break since pre-GA
+- Refactor hitting every module — introduce behind a feature flag, flip when stable
+- Confidence scores feeling arbitrary — start with three-bucket (low/med/high) before granular
+
+---
+
+<a id="epic-2"></a>
+## Epic 2: Report & Review Experience
+
+**Phase:** 1
+**Weeks:** 5-10 (overlaps with Epic 1)
+**Priority:** P0
+
+### Goal
+Build the report UI and share summary that make evidence, confidence, and uncertainty easy to scan. Verdict above the fold. One click to evidence. Context warnings always visible.
+
+### Stories
+
+#### E2-S1: Verdict card redesign
+**As a** reviewer,
+**I want** the verdict, top risk, and key signals above the fold,
+**so that** I can decide in 5 seconds whether to dig deeper.
+
+**Acceptance:**
+- Verdict card shows: risk score, GO/CAUTION/NO-GO badge, top risk one-liner, confidence badge, context completeness badge
+- Renders in the first 700px of the page at 1440×900
+- Passes a 5-second scan test with 3 test users
+
+#### E2-S2: Findings table with evidence badges
+**As a** reviewer,
+**I want** the findings table to show which are deterministic vs. inferred,
+**so that** I know which claims to trust most.
+
+**Acceptance:**
+- Column order: severity, title, tool, evidence count, confidence, actions
+- Each row has a "deterministic" or "inferred" badge
+- Clicking a row expands the evidence panel
+- Sortable by severity and confidence
+
+#### E2-S3: Evidence inspector panel
+**As a** reviewer,
+**I want** to see exactly what evidence backs a finding,
+**so that** I can defend or challenge the verdict.
+
+**Acceptance:**
+- Click a finding → panel shows each evidence item with: source_type icon, source_ref (artifact path + line number), summary, severity hint, deterministic flag
+- Link to the original artifact when source is an uploaded file
+- Evidence items from topology/incidents show source-system badge
+
+#### E2-S4: Context completeness panel
+**As a** reviewer,
+**I want** to see how complete the analysis context was,
+**so that** I understand the limits of the report.
+
+**Acceptance:**
+- Panel shows: topology freshness (age, last-import date), incident index size, parser success rate per tool
+- Warning banner when context_score < 0.7
+- Link to the admin panel to fix stale context
+
+#### E2-S5: Blast radius visualization
+**As a** reviewer,
+**I want** to see which services are affected,
+**so that** I understand the real impact.
+
+**Acceptance:**
+- Graph rendered via streamlit-agraph or Plotly
+- Directly affected services tinted by severity
+- Transitively affected services shown at lower saturation
+- Textual equivalent: "3 services directly affected, 5 transitively" for screen readers
+
+#### E2-S6: Rollback plan panel
+**As a** reviewer,
+**I want** to see a step-by-step rollback plan,
+**so that** I know the recovery path before I deploy.
+
+**Acceptance:**
+- Ordered steps with time estimate per step
+- Complexity score (1-5) with explanation
+- Critical path steps flagged
+- Copy-to-clipboard action for the full plan
+
+#### E2-S7: Share summary generator
+**As a** PR reviewer,
+**I want** a clean markdown summary I can paste into approval threads,
+**so that** I don't have to hand-write briefings.
+
+**Acceptance:**
+- Markdown summary: verdict banner, top 3 findings, evidence count, blast radius summary, rollback link, context completeness
+- Max 1,500 characters (fits GitHub PR comment)
+- Generates from the same Report object the UI renders
+- Machine-friendly JSON variant for API consumers
+
+#### E2-S8: Keyboard navigation
+**As a** reviewer,
+**I want** full keyboard access to the report,
+**so that** I can work efficiently without a mouse.
+
+**Acceptance:**
+- Tab order: verdict card → findings → evidence → context → blast radius → rollback
+- Arrow keys navigate within findings table
+- Space or Enter expands evidence inspector
+- Escape closes any modal
+- Tested with VoiceOver and NVDA
+
+### Epic 2 Exit Criteria
+- Verdict visible above the fold on 1440×900
+- Every finding has a clickable evidence inspector
+- Context completeness warning appears when stale
+- Share summary copy-pastes cleanly to GitHub PRs
+- Color is never the only severity signal
+- Full keyboard navigation
+
+### Epic 2 Effort Estimate
+- Solo: 5-6 weeks
+- With design help: 3-4 weeks
+
+---
+
+<a id="epic-3"></a>
+## Epic 3: GitHub-Native Delivery
+
+**Phase:** 1.5
+**Weeks:** 9-14
+**Priority:** P0 (biggest adoption lever)
+
+### Goal
+Ship an official GitHub Action and GitHub App so DeployWhisper reports appear inside PRs automatically, updating on every commit. This is how DeployWhisper stops being optional.
+
+### Stories
+
+#### E3-S1: GitHub Action v1
+**As a** maintainer,
+**I want** to add DeployWhisper to my CI workflow in 3 lines of YAML,
+**so that** every PR with infrastructure changes gets analyzed.
+
+**Acceptance:**
+- `deploywhisper/analyze-action@v1` in GitHub Marketplace
+- Reads changed files in the PR
+- POSTs to configured DeployWhisper API endpoint
+- Returns exit code 0 (report generated, humans decide)
+- Documented in README with copy-paste example
+
+#### E3-S2: PR comment formatter
+**As a** reviewer,
+**I want** to see the DeployWhisper verdict in the PR comments,
+**so that** I don't need to open a separate dashboard.
+
+**Acceptance:**
+- Comment includes: verdict banner, top 3 findings, evidence count, blast radius summary, rollback link, context completeness, link to full report
+- Markdown-formatted for GitHub
+- Max 2,000 characters
+- Uses collapsible sections for detail
+- Handles comment updates gracefully on re-run
+
+#### E3-S3: Rerun-on-commit
+**As a** reviewer,
+**I want** the PR comment to update when new commits are pushed,
+**so that** I always see analysis of the latest state.
+
+**Acceptance:**
+- New commit triggers new analysis
+- Existing comment is updated (not duplicated)
+- Comment shows diff from previous analysis: "Risk score changed 78 → 34, previously HIGH, now LOW"
+- Historical analyses preserved with timestamps
+
+#### E3-S4: Shareable report URLs
+**As a** reviewer,
+**I want** a public URL for any report,
+**so that** I can share it in Slack or tickets without exposing internal infra.
+
+**Acceptance:**
+- URL pattern: `https://install.example.com/reports/{analysis_id}`
+- Read-only mode for unauthenticated viewers
+- Optional password protection for sensitive reports
+- Redacts file names when sharing externally (opt-in redaction)
+
+#### E3-S5: Report comparison view
+**As a** reviewer,
+**I want** to compare analyses between commits,
+**so that** I understand what changed when a fix is pushed.
+
+**Acceptance:**
+- UI shows side-by-side diff: findings added, findings removed, severity changes
+- Risk score delta prominently displayed
+- Evidence-level changes highlighted
+- Accessible via "Compare with previous" button on the report page
+
+#### E3-S6: GitHub App
+**As a** DeployWhisper maintainer,
+**I want** a GitHub App complementing the Action,
+**so that** I can post check runs and richer interactions.
+
+**Acceptance:**
+- GitHub App published to Marketplace
+- Supports checks API (passing/neutral/failing, always advisory)
+- Handles PR events for automatic runs (opt-in via config)
+- OAuth flow for team installation
+- Docs covering Action-only, App-only, and combined modes
+
+#### E3-S7: Check run integration
+**As a** reviewer,
+**I want** a GitHub check showing DeployWhisper status,
+**so that** verdicts are visible in the PR status area.
+
+**Acceptance:**
+- Check run labeled "DeployWhisper / Risk Analysis"
+- Status: neutral for CAUTION, success for GO, failure for NO-GO — but **never required**
+- Details link opens full report
+- Never blocks merge (advisory-first principle)
+
+#### E3-S8: Installation wizard
+**As a** new user,
+**I want** to install DeployWhisper on my repo in under 5 minutes,
+**so that** the friction-to-first-value is as low as possible.
+
+**Acceptance:**
+- One-command CLI: `deploywhisper github init`
+- Asks: repo, workflow path, API endpoint
+- Commits a PR to the repo with the workflow file
+- Includes README updates and example secrets configuration
+- Links to docs for common setup questions
+
+### Epic 3 Exit Criteria
+- Install DeployWhisper on a new repo in under 5 minutes
+- PR comment posted within 30 seconds
+- Rerun updates the existing comment
+- Share link works for external viewers
+- At least 3 real teams using it in production
+
+### Epic 3 Effort Estimate
+- Solo: 5-6 weeks
+- With help: 3-4 weeks
+
+---
+
+<a id="epic-4"></a>
+## Epic 4: AI Skills Marketplace
+
+**Phase:** 1.5
+**Weeks:** 11-18 (overlaps Epic 3)
+**Priority:** P1 (long-term moat)
+
+### Goal
+Launch a community-driven Skills registry with browser UI, authoring toolkit, and curation process. Every Skill is versioned, tested, and attributable. This is DeployWhisper's structural moat — no competitor can easily replicate an open ecosystem.
+
+### Stories
+
+#### E4-S1: Skills registry API
+**As a** DeployWhisper user,
+**I want** to browse and install community Skills via API,
+**so that** I can extend the product without writing Python.
+
+**Acceptance:**
+- `GET /api/v1/skills` lists all skills with metadata
+- `GET /api/v1/skills/{id}` returns a single skill
+- `GET /api/v1/skills/{id}/versions` returns version history
+- Pagination, filters (tool, tag, author), search by keyword
+- OpenAPI documented
+
+#### E4-S2: Skills manifest spec v1
+**As a** skill author,
+**I want** a formal schema for my skill manifest,
+**so that** I know the required fields and format.
+
+**Acceptance:**
+- Frontmatter schema: name, version, author, license, triggers, token_budget, tags, description, test_suite_path
+- JSON Schema published at `/schemas/skill-manifest-v1.json`
+- Validator CLI: `deploywhisper skill lint my-skill.md`
+- Spec documented in `docs/skills/authoring-guide.md`
+
+#### E4-S3: Skill test harness
+**As a** maintainer,
+**I want** automated tests for every skill,
+**so that** quality doesn't degrade as the marketplace grows.
+
+**Acceptance:**
+- Each skill ships with test scenarios in `tests/skill-tests/<skill>/`
+- Test harness runs all scenarios and reports pass/fail
+- CI integration: every PR runs the harness for changed skills
+- Test results shown publicly per skill (e.g. "47/50 scenarios passing")
+
+#### E4-S4: Skills installer CLI
+**As a** user,
+**I want** to install a skill with one command,
+**so that** I don't hand-copy markdown files.
+
+**Acceptance:**
+- `deploywhisper skill install helm` fetches and installs
+- `deploywhisper skill list` shows installed skills
+- `deploywhisper skill update helm` upgrades to latest version
+- `deploywhisper skill remove helm` uninstalls
+- Installs to `skills/custom/` by default
+
+#### E4-S5: Skills browser UI
+**As a** potential user,
+**I want** to browse skills on the marketing website,
+**so that** I can see the ecosystem before downloading.
+
+**Acceptance:**
+- Public page at `deploywhisper.kubechat.dev/skills`
+- Search, filter by tool, filter by author, sort by popularity/recency
+- Each skill has a detail page with: description, install command, test results, version history, author, contributors
+- Download count, star count, last updated visible
+
+#### E4-S6: Contribution workflow
+**As a** would-be contributor,
+**I want** a clear path from idea to published skill,
+**so that** I'm not guessing what reviewers want.
+
+**Acceptance:**
+- PR template in `.github/PULL_REQUEST_TEMPLATE/skill.md`
+- Automated linter runs on skill PRs
+- Automated test harness runs on skill PRs
+- Reviewer assignment via CODEOWNERS
+- Merge → auto-publish to registry
+- Contribution guide at `docs/contributing/skills.md`
+
+#### E4-S7: Seed 20 community skills
+**As a** launcher,
+**I want** the marketplace to be full on day one,
+**so that** first-time visitors see an ecosystem, not an empty shelf.
+
+**Acceptance:**
+- 20 first-party skills published at launch covering: Helm, ArgoCD, Pulumi, Crossplane, Istio, Nginx Ingress, Cert-Manager, Flux, Tekton, OPA Gatekeeper, Datadog monitors, Prometheus rules, AWS CDK, Bicep, Pulumi GCP, Pulumi Azure, Kustomize, Helmfile, Tanka, Jsonnet
+- Each skill has: complete manifest, at least 3 test scenarios, working installation, documented risk patterns
+
+#### E4-S8: Skill analytics
+**As a** user choosing a skill,
+**I want** to see how popular and reliable it is,
+**so that** I pick high-quality ones.
+
+**Acceptance:**
+- Per-skill: install count, test pass rate, last updated, active issues
+- Shown on browser page and in CLI output
+- Updated daily
+
+#### E4-S9: Editorial curation
+**As a** user,
+**I want** featured and vetted skills highlighted,
+**so that** I don't have to evaluate everything myself.
+
+**Acceptance:**
+- "Official" badge for DeployWhisper-maintained skills
+- "Featured" badge for curated community skills
+- Curation guidelines in `docs/skills/curation.md`
+- Removal process for low-quality or abandoned skills
+
+### Epic 4 Exit Criteria
+- Skills browser live at /skills with 20+ published skills
+- Any user can install via `deploywhisper skill install <n>`
+- 5+ external contributors have submitted skills via PR
+- Each skill has a public test pass rate
+- Idea-to-published-skill in under 2 hours
+
+### Epic 4 Effort Estimate
+- Solo: 7-8 weeks
+- With community help: 4-6 weeks
+
+---
+
+<a id="epic-5"></a>
+## Epic 5: Context Moat
+
+**Phase:** 2
+**Weeks:** 15-22 (overlaps Epics 3-4)
+**Priority:** P1
+
+### Goal
+Automate topology discovery. Capture deployment outcomes. Build the feedback loop. This epic turns DeployWhisper from "smart on day 1" to "measurably smarter every month".
+
+### Stories
+
+#### E5-S1: Terraform state import
+**As a** admin,
+**I want** to import topology from Terraform state,
+**so that** I don't hand-maintain a JSON file.
+
+**Acceptance:**
+- CLI: `deploywhisper topology import --from terraform --state s3://my-bucket/terraform.tfstate`
+- Supports AWS, GCP, Azure Terraform providers
+- Builds service topology graph automatically
+- Reports topology diff when re-imported
+
+#### E5-S2: Topology drift detection
+**As a** admin,
+**I want** to know when topology is out of sync,
+**so that** I can trigger a re-import.
+
+**Acceptance:**
+- Scheduled drift check (configurable, default daily)
+- Alerts when >10% of resources changed since last import
+- Drift report lists added/removed/modified resources
+- Configurable via settings UI
+
+#### E5-S3: Topology freshness badge
+**As a** reviewer,
+**I want** to see how fresh the topology is in every report,
+**so that** I know when to discount blast radius.
+
+**Acceptance:**
+- Every report shows topology age prominently
+- Warning at 30+ days stale
+- Critical warning at 90+ days stale
+- Link to topology management page
+
+#### E5-S4: Deployment history capture
+**As a** engineering manager,
+**I want** every deployment and its outcome tracked,
+**so that** I can measure risk trends over time.
+
+**Acceptance:**
+- Webhook endpoint accepts deployment outcome notifications
+- Webhook payload: analysis_id, outcome (success/failure/rolled_back), deployed_at, linked_incident_id
+- CLI alternative: `deploywhisper outcome record --analysis-id X --outcome success`
+- History queryable via API
+
+#### E5-S5: Reviewer feedback capture
+**As a** reviewer,
+**I want** to rate findings as useful/false-positive/missed,
+**so that** the product learns from my expertise.
+
+**Acceptance:**
+- Thumbs up/down on each finding in the UI
+- False positive flag with optional reason
+- False negative note for missed findings
+- Feedback stored in FeedbackEvent table
+- Feedback summary visible to admins
+
+#### E5-S6: Outcome linking
+**As a** system,
+**I want** to link post-deploy incidents back to pre-deploy reports,
+**so that** I can measure predictive accuracy.
+
+**Acceptance:**
+- Incident records can reference DeployWhisper analysis IDs
+- Backtesting job runs weekly to compute: for each failed deploy, did DeployWhisper warn?
+- Results feed the calibration dashboard
+
+#### E5-S7: Calibration dashboard
+**As a** admin,
+**I want** to see our precision/recall over time,
+**so that** I can trust the product is calibrated.
+
+**Acceptance:**
+- Dashboard shows: overall precision, overall recall, precision by severity, recall by severity
+- Time window selector (7d / 30d / 90d)
+- Trend line over past 12 weeks
+- Exports for audit
+
+#### E5-S8: Trend analysis
+**As a** manager,
+**I want** to see risk trends by tool, environment, and engineer,
+**so that** I can target improvements.
+
+**Acceptance:**
+- Risk score histogram by tool
+- Risk score distribution by environment
+- Risk by engineer (opt-in, privacy-respecting)
+- Exportable as CSV
+
+### Epic 5 Exit Criteria
+- Topology auto-import works for AWS/GCP/Azure
+- Drift detection surfaces manual changes
+- At least 1 real team has >100 deployments tracked
+- Calibration dashboard shows real FP/FN rates
+- Feedback loop captures ratings on 50%+ of findings
+
+### Epic 5 Effort Estimate
+- Solo: 7-8 weeks
+- With help: 4-5 weeks
+
+---
+
+<a id="epic-6"></a>
+## Epic 6: Benchmarks & Calibration
+
+**Phase:** 2
+**Weeks:** 19-24
+**Priority:** P1 (proof engine)
+
+### Goal
+Build a public benchmark corpus. Run DeployWhisper, competitors, and generic LLMs against it. Publish results quarterly. This is how we prove the accuracy claim that wins enterprise trust.
+
+### Stories
+
+#### E6-S1: Benchmark corpus v1
+**As a** maintainer,
+**I want** 100 labeled scenarios across all 5 tools,
+**so that** we have ground truth for accuracy measurement.
+
+**Acceptance:**
+- 100 scenarios: 50 risky, 50 safe
+- Covers Terraform, Kubernetes, Ansible, Jenkins, CloudFormation (20 each)
+- Each scenario includes: artifacts, expected findings, expected severity, rationale
+- Stored in `benchmark/corpus/` as YAML or JSON
+- Open-source under MIT license
+
+#### E6-S2: Scenario annotation
+**As a** maintainer,
+**I want** senior SREs to label each scenario,
+**so that** ground truth reflects real-world expertise.
+
+**Acceptance:**
+- Each scenario has at least 2 SRE reviewers
+- Disagreements resolved with notes
+- Annotation guidelines documented
+- Reviewer credits published (with permission)
+
+#### E6-S3: Benchmark runner
+**As a** developer,
+**I want** an automated runner for the corpus,
+**so that** I can regression-test accuracy.
+
+**Acceptance:**
+- CLI: `deploywhisper benchmark run --corpus benchmark/corpus`
+- Outputs per-scenario results: expected vs. actual findings
+- Overall metrics: precision, recall, F1 by severity
+- JSON and human-readable output
+
+#### E6-S4: Comparative runner
+**As a** marketer,
+**I want** to run the same corpus through competitors,
+**so that** I can publish comparative results.
+
+**Acceptance:**
+- Runner supports: tflint, kube-score, K8sGPT, vanilla LLM prompt
+- Each competitor's output mapped to comparable finding format
+- Results table: tool X scenario matrix
+- Winner-by-scenario and overall-winner reported
+
+#### E6-S5: Published results dashboard
+**As a** potential user,
+**I want** to see comparative accuracy on the marketing site,
+**so that** I can trust the product claims.
+
+**Acceptance:**
+- Public page at `deploywhisper.kubechat.dev/benchmarks`
+- Updated quarterly
+- Shows precision/recall by tool and by competitor
+- Methodology documented publicly
+- Raw results downloadable
+
+#### E6-S6: Quarterly regression
+**As a** maintainer,
+**I want** to re-run the benchmark every quarter,
+**so that** I can show version-over-version improvement.
+
+**Acceptance:**
+- Scheduled job runs corpus every quarter
+- Results archived with version and commit hash
+- Improvement chart on results dashboard
+- Regressions flagged for investigation
+
+#### E6-S7: Open-source the corpus
+**As a** maintainer,
+**I want** the corpus publicly available,
+**so that** the community can contribute scenarios and labels.
+
+**Acceptance:**
+- Corpus in a public repo at `deploywhisper/benchmark-corpus`
+- Contribution guide for scenarios
+- Pull request template for new scenarios
+- At least 5 external contributions in first 6 months
+
+#### E6-S8: Incident backtesting
+**As a** user who experienced a P1,
+**I want** to backtest DeployWhisper against my pre-deploy state,
+**so that** I know if it would have caught my incident.
+
+**Acceptance:**
+- CLI: `deploywhisper backtest --pre-deploy-artifacts <path> --incident <incident-report>`
+- Runs DeployWhisper against the state and scores against the incident
+- Publishes anonymized case studies with permission
+- At least 1 case study published in Epic 6 timeframe
+
+### Epic 6 Exit Criteria
+- Benchmark corpus has 100+ annotated scenarios
+- DeployWhisper beats or matches comparators on 3+ of 5 tools
+- Results published quarterly
+- At least 1 anonymized incident case study published
+- CNCF Sandbox application submitted or accepted
+
+### Epic 6 Effort Estimate
+- Solo: 5-6 weeks
+- With SRE network for annotations: 3-4 weeks
+
+---
+
+## Epic sequencing and parallelism
+
+```
+Week:  1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+Epic 1: ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+Epic 2:                 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+Epic 3:                                 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+Epic 4:                                         ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+Epic 5:                                                         ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+Epic 6:                                                                         ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+```
+
+Epic 1 must finish before Epic 2 UI work on evidence. Epic 2 must finish before Epic 3 share summary work. Epic 4 can start as soon as Epic 2 is rendering the new schema. Epics 5 and 6 can run in parallel with 4 once the report schema is stable.
+
+---
+
+## Summary by effort
+
+| Epic | Solo weeks | With help weeks | Critical path |
+|------|-----------|-----------------|---------------|
+| 1 | 5-6 | 3-4 | Yes |
+| 2 | 5-6 | 3-4 | Yes |
+| 3 | 5-6 | 3-4 | Yes |
+| 4 | 7-8 | 4-6 | No (but strategic) |
+| 5 | 7-8 | 4-5 | No |
+| 6 | 5-6 | 3-4 | No |
+
+**Total critical path (solo):** 15-18 weeks for Epics 1+2+3
+**Total full plan (solo):** 24 weeks for all 6 epics

@@ -417,6 +417,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     <action>Communicate to {user_name} that story implementation is complete and ready for review</action>
     <action>Summarize key accomplishments: story ID, story key, title, key changes made, tests added, files modified</action>
     <action>Provide the story file path and current status (now "review")</action>
+    <action>Remind the user that reviewer closure is not complete until the final code-review workflow verifies Git Flow branch compliance and pushes the story branch to remote</action>
 
     <action>Based on {user_skill_level}, ask if user needs any explanations about:
       - What was implemented and how it works
@@ -436,7 +437,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
       - Review the implemented story and test the changes
       - Verify all acceptance criteria are met
       - Ensure deployment readiness if applicable
-      - Run `code-review` workflow for peer review
+      - Run `code-review` workflow for peer review and mandatory Git Flow branch/push closure
       - Optional: If Test Architect module installed, run `/bmad:tea:automate` to expand guardrail tests
     </action>
 

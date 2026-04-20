@@ -9,7 +9,7 @@ import os
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "DeployWhisper")
-    app_version: str = os.getenv("APP_VERSION", "0.1.0")
+    app_version: str = os.getenv("APP_VERSION", "1.0.0")
     app_host: str = os.getenv("APP_HOST", "127.0.0.1")
     app_port: int = int(os.getenv("APP_PORT", "8080"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")

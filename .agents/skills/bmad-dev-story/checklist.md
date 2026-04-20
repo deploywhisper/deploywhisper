@@ -62,6 +62,8 @@ validation-rules:
 - [ ] **Quality Gates Passed:** All quality checks and validations completed successfully
 - [ ] **No HALT Conditions:** No blocking issues or incomplete work remaining
 - [ ] **User Communication Ready:** Implementation summary prepared for user review
+- [ ] **Git Flow Ready For Review:** Work is on a short-lived Git Flow branch (`feature/*` or `bugfix/*` for normal story work), not on `main` or `develop`
+- [ ] **Reviewer Closure Prepared:** Reviewer will verify branch compliance and push the story branch to remote before calling the story lifecycle complete
 
 ## 🎯 Final Validation Output
 

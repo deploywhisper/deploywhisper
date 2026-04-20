@@ -9,17 +9,21 @@ import yaml
 
 
 class ContainerContractTests(unittest.TestCase):
-    def test_migration_history_is_single_baseline(self) -> None:
+    def test_migration_history_includes_evidence_foundation_upgrade(self) -> None:
         versions_dir = Path("migrations/versions")
         migrations = sorted(
             path for path in versions_dir.glob("*.py") if path.name != "__init__.py"
         )
         self.assertEqual(
-            [path.name for path in migrations], ["0001_create_analysis_reports.py"]
+            [path.name for path in migrations],
+            ["0001_create_analysis_reports.py", "005_add_evidence_model.py"],
         )
-        content = migrations[0].read_text(encoding="utf-8")
-        self.assertIn("down_revision = None", content)
-        self.assertIn('"app_settings"', content)
+        baseline_content = migrations[0].read_text(encoding="utf-8")
+        evidence_content = migrations[1].read_text(encoding="utf-8")
+        self.assertIn("down_revision = None", baseline_content)
+        self.assertIn('"app_settings"', baseline_content)
+        self.assertIn('down_revision = "0001_create_analysis_reports"', evidence_content)
+        self.assertIn('"evidence_items"', evidence_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())
