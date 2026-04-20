@@ -8,7 +8,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from config import settings
 from analysis.risk_scorer import RiskAssessment
+from evidence.models import Finding
 from llm.prompts import build_system_prompt, build_user_payload
 from llm.providers import generate_completion_with_settings
 from llm.skill_context import build_skill_context, resolve_skills
@@ -45,6 +47,7 @@ class NarrativeResult(BaseModel):
 
 def _fallback_narrative(
     assessment: RiskAssessment,
+    findings: list[Finding],
     error_message: str | None = None,
     *,
     provider: str | None = None,
@@ -59,9 +62,11 @@ def _fallback_narrative(
         f"The deployment is currently rated {assessment.severity} with a recommendation of "
         f"{assessment.recommendation}. {assessment.top_risk}"
     )
+    if findings:
+        explanation += f" {len(findings)} finding(s) are available for review."
     guidance = [
         "Review the top risk and contributor list before deployment.",
-        "Inspect rollback guidance before shipping higher-risk changes.",
+        "Inspect the finding list and rollback guidance before shipping higher-risk changes.",
     ]
     if assessment.partial_context:
         guidance.append(
@@ -83,6 +88,7 @@ def _fallback_narrative(
 
 def generate_narrative(
     assessment: RiskAssessment,
+    findings: list[Finding],
     completion_client=None,
     raw_files: dict[str, bytes | None] | None = None,
 ) -> NarrativeResult:
@@ -90,9 +96,20 @@ def generate_narrative(
     applied_skills = [
         skill.name for skill in resolve_skills(assessment, raw_files=raw_files)
     ]
+    if not settings.narrator_enabled:
+        return _fallback_narrative(
+            assessment,
+            findings,
+            "Narrator disabled by configuration.",
+            provider=runtime["provider"],
+            model=runtime["model"],
+            local_mode=runtime["local_mode"],
+            skills_applied=applied_skills,
+        )
     if not assessment.contributors:
         return _fallback_narrative(
             assessment,
+            findings,
             provider=runtime["provider"],
             model=runtime["model"],
             local_mode=runtime["local_mode"],
@@ -102,7 +119,7 @@ def generate_narrative(
     skill_context = build_skill_context(assessment, raw_files=raw_files)
     messages = [
         {"role": "system", "content": build_system_prompt(skill_context)},
-        {"role": "user", "content": build_user_payload(assessment)},
+        {"role": "user", "content": build_user_payload(assessment, findings)},
     ]
 
     try:
@@ -165,6 +182,7 @@ def generate_narrative(
     except (Exception, KeyError, json.JSONDecodeError, TypeError) as exc:
         return _fallback_narrative(
             assessment,
+            findings,
             str(exc),
             provider=runtime["provider"],
             model=runtime["model"],

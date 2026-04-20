@@ -472,6 +472,101 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertIn("Advisory only", summary.plain_text)
         self.assertFalse(summary.should_block)
 
+    def test_build_analysis_artifacts_shields_scored_assessment_from_narrator_mutation(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="Security group exposure risk",
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-001",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=20,
+                    summary="Security group exposure risk",
+                    normalized_action="modify",
+                    resource_category="networking/ingress",
+                    blast_radius="High blast radius",
+                    downstream_scope=2,
+                    security_flags=[],
+                    environment="production",
+                    severity="high",
+                    reasoning="Security group changes can affect production ingress.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        blast_radius = BlastRadiusResult(
+            affected=[],
+            direct_count=0,
+            transitive_count=0,
+            warning=None,
+            unmatched_resources=[],
+        )
+        rollback_plan = RollbackPlan(steps=[], complexity="low", warning=None)
+
+        def mutating_narrator(
+            passed_assessment, passed_findings, completion_client=None, raw_files=None
+        ):
+            passed_assessment.score = 1
+            passed_assessment.severity = "low"
+            passed_findings[0].confidence = 0.1
+            return NarrativeResult(
+                opening_sentence="NO-GO: review the security group update.",
+                explanation="The deployment widens database access and should be reviewed.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            )
+
+        with (
+            patch("services.analysis_service.load_topology", return_value=({}, None)),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2026-04-18T00:00:00Z"),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates",
+                return_value=[],
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.compute_blast_radius",
+                return_value=blast_radius,
+            ),
+            patch(
+                "services.analysis_service.generate_rollback_plan",
+                return_value=rollback_plan,
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+            patch(
+                "services.analysis_service.generate_narrative",
+                side_effect=mutating_narrator,
+            ),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    )
+                ]
+            )
+
+        self.assertEqual(artifacts.assessment.score, 72)
+        self.assertEqual(artifacts.assessment.severity, "high")
+        self.assertEqual(artifacts.findings[0].confidence, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

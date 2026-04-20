@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from analysis.risk_scorer import RiskAssessment
+from evidence.models import Finding
 
 
 def build_system_prompt(skill_context: str) -> str:
@@ -28,13 +29,14 @@ def build_system_prompt(skill_context: str) -> str:
     return "\n\n".join(sections)
 
 
-def build_user_payload(assessment: RiskAssessment) -> str:
+def build_user_payload(assessment: RiskAssessment, findings: list[Finding]) -> str:
     payload = {
         "score": assessment.score,
         "severity": assessment.severity,
         "recommendation": assessment.recommendation,
         "top_risk": assessment.top_risk,
         "top_risk_contributors": assessment.top_risk_contributors,
+        "context_completeness": assessment.context_completeness.model_dump(mode="json"),
         "partial_context": assessment.partial_context,
         "warnings": assessment.warnings,
         "interaction_risks": [
@@ -67,5 +69,6 @@ def build_user_payload(assessment: RiskAssessment) -> str:
             }
             for contributor in assessment.contributors
         ],
+        "findings": [finding.model_dump(mode="json") for finding in findings],
     }
     return json.dumps(payload, indent=2)
