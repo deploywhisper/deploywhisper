@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from parsers.base import UnifiedChange
+from parsers.base import UnifiedChange, build_change_id
 
 
 STAGE_PATTERN = re.compile(r"stage\s*\(\s*['\"]([^'\"]+)['\"]\s*\)")
@@ -19,6 +19,7 @@ def parse_jenkins(name: str, raw_content: bytes | None) -> list[UnifiedChange]:
     if not stages:
         return [
             UnifiedChange(
+                change_id=build_change_id(name, "jenkins", "pipeline", "modify", 0),
                 source_file=name,
                 tool="jenkins",
                 resource_id="pipeline",
@@ -29,11 +30,14 @@ def parse_jenkins(name: str, raw_content: bytes | None) -> list[UnifiedChange]:
 
     return [
         UnifiedChange(
+            change_id=build_change_id(
+                name, "jenkins", f"stage/{stage_name}", "modify", index
+            ),
             source_file=name,
             tool="jenkins",
             resource_id=f"stage/{stage_name}",
             action="modify",
             summary=f"Jenkins stage {stage_name} included in analysis set.",
         )
-        for stage_name in stages
+        for index, stage_name in enumerate(stages)
     ]

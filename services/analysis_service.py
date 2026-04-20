@@ -8,6 +8,8 @@ from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
 from analysis.incident_matcher import IncidentMatch, find_incident_matches
 from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
 from analysis.risk_scorer import RiskAssessment, score_parse_batch
+from evidence.models import EvidenceItem
+from evidence.extractor import extract_batch_evidence
 from llm.narrator import NarrativeResult, generate_narrative
 from parsers.base import ParseBatchResult, UnifiedChange
 from services.intake_service import build_parse_batch
@@ -33,6 +35,10 @@ def evaluate_parse_batch(
 
 class AnalysisArtifacts(BaseModel):
     parse_batch: ParseBatchResult = Field(..., description="Per-file parse results")
+    evidence_items: list[EvidenceItem] = Field(
+        default_factory=list,
+        description="Traceable evidence extracted from parsed changes",
+    )
     assessment: RiskAssessment = Field(..., description="Unified risk assessment")
     blast_radius: BlastRadiusResult = Field(..., description="Blast radius result")
     rollback_plan: RollbackPlan = Field(..., description="Rollback planning result")
@@ -217,6 +223,7 @@ def build_analysis_artifacts(
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
+    evidence_items = extract_batch_evidence(parse_batch)
     changes = _collect_changes(parse_batch)
     topology, topology_warning = load_topology()
     assessment = evaluate_parse_batch(
@@ -237,6 +244,7 @@ def build_analysis_artifacts(
     )
     return AnalysisArtifacts(
         parse_batch=parse_batch,
+        evidence_items=evidence_items,
         assessment=assessment,
         blast_radius=blast_radius,
         rollback_plan=rollback_plan,

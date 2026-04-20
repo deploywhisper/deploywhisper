@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import yaml
 
-from parsers.base import UnifiedChange
+from parsers.base import UnifiedChange, build_change_id
 
 
 class _CloudFormationLoader(yaml.SafeLoader):
@@ -37,6 +37,9 @@ def parse_cloudformation(name: str, raw_content: bytes | None) -> list[UnifiedCh
     resources = payload.get("Resources", {}) if isinstance(payload, dict) else {}
     return [
         UnifiedChange(
+            change_id=build_change_id(
+                name, "cloudformation", f"resource/{resource_name}", "apply", index
+            ),
             source_file=name,
             tool="cloudformation",
             resource_id=f"resource/{resource_name}",
@@ -46,5 +49,5 @@ def parse_cloudformation(name: str, raw_content: bytes | None) -> list[UnifiedCh
                 "previous stack state is unknown, so the delta cannot be confirmed."
             ),
         )
-        for resource_name in resources.keys()
+        for index, resource_name in enumerate(resources.keys())
     ]

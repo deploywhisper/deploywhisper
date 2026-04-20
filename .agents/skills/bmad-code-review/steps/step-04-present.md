@@ -117,7 +117,7 @@ If `{sprint_status}` file does not exist, note that story status was updated in 
 > **Deferred:** <W>
 > **Dismissed:** <R>
 
-### 7. Mandatory Git Flow branch / push action
+### 7. Mandatory Git Flow branch / push / PR action
 
 This section is mandatory whenever `{spec_file}` is set and the review reached a terminal story outcome.
 
@@ -127,29 +127,52 @@ This section is mandatory whenever `{spec_file}` is set and the review reached a
 2. Verify the branch is a short-lived Git Flow branch that follows `CONTRIBUTING.md`:
    - allowed: `feature/*`, `bugfix/*`, `hotfix/*`, `release/*`
    - forbidden for story completion: `main`, `develop`, detached HEAD, or unnamed worktree state
-3. If the branch is `main`, `develop`, detached HEAD, or otherwise not Git Flow compliant:
+3. If the branch is `develop` or `main`, do **not** stop at a warning. Instead, treat branch creation as a mandatory review action:
+   - create a Git Flow-compliant short-lived branch from the current branch state
+   - preferred naming for story work:
+     - `feature/<story_key>-<short-description>` for normal story completion
+     - `bugfix/<story_key>-<short-description>` only when the story is explicitly defect-only work
+   - use the story key and a short slug from the story title when available
+4. If the repository is in detached HEAD or an unnamed/non-recoverable state:
    - HALT
-   - warn the user that the review cannot be considered complete
-   - instruct that the story changes must be moved to a proper short-lived branch before closure
+   - warn the user that branch automation could not safely proceed
+   - explain the exact git state that prevented compliant closure
 
 #### Remote sync requirement
 
-If the review outcome is effectively complete for the current story (`{new_status}` = `done`), the reviewer MUST treat remote sync as part of the mandatory closure path:
+If the review outcome is effectively complete for the current story (`{new_status}` = `done`), the reviewer MUST treat git closure as part of the mandatory closure path:
 
 1. Ensure all review-driven code changes are committed on the current story branch.
 2. Push the branch to the remote repository.
-3. Report the pushed branch name in the completion summary.
+3. If the repository has a usable `origin` remote and PR tooling is available, open or prepare a pull request targeting `develop`.
+4. Report the pushed branch name in the completion summary.
 
 If the story remains `in-progress`, do not claim final story completion. In that case:
 - either push the in-progress branch if review fixes were applied and the user wants the WIP backed up, or
 - explicitly state that remote push was not performed because review follow-up work remains open.
 
+#### Branch creation and commit expectations
+
+- The reviewer should not leave validated story-completion work sitting on `develop`.
+- If changes are present on `develop`, the reviewer must:
+  1. create the compliant short-lived branch,
+  2. keep the working tree contents on that branch,
+  3. commit the review-complete story changes there,
+  4. push the branch,
+  5. optionally create the PR to `develop`.
+- Only block if automation fails for an operational reason such as:
+  - no remote configured,
+  - authentication failure,
+  - branch creation failure,
+  - push rejection that cannot be safely resolved in the workflow.
+
 #### Mandatory completion language
 
 Do not present the workflow as fully complete for a reviewed story unless you have stated one of these outcomes explicitly:
 
-- `Pushed to remote on branch <branch-name>`
-- `Blocked: branch does not follow Git Flow`
+- `Created branch <branch-name>, committed, and pushed to remote`
+- `Created branch <branch-name>, committed, pushed, and opened PR to develop`
+- `Blocked: could not create/push compliant Git Flow branch due to <operational reason>`
 - `Blocked: story still in-progress after review`
 
 ### 8. Next steps

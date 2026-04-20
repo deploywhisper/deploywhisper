@@ -3,15 +3,99 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from llm.narrator import NarrativeResult
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.rollback_planner import RollbackPlan, RollbackStep
-from services.analysis_service import build_advisory_summary, build_share_summary
+from llm.narrator import NarrativeResult
+from services.analysis_service import (
+    build_advisory_summary,
+    build_analysis_artifacts,
+    build_share_summary,
+)
 
 
 class AnalysisServiceTests(unittest.TestCase):
+    def test_build_analysis_artifacts_extracts_evidence_items(self) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            contributors=[
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        blast_radius = BlastRadiusResult(
+            affected=[],
+            direct_count=0,
+            transitive_count=0,
+            warning=None,
+            unmatched_resources=[],
+        )
+        rollback_plan = RollbackPlan(steps=[], complexity="low", warning=None)
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="The deployment widens database access and should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=({}, None),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.compute_blast_radius",
+                return_value=blast_radius,
+            ),
+            patch(
+                "services.analysis_service.generate_rollback_plan",
+                return_value=rollback_plan,
+            ),
+            patch(
+                "services.analysis_service.find_incident_matches",
+                return_value=[],
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=narrative,
+            ),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    )
+                ]
+            )
+
+        self.assertEqual(len(artifacts.evidence_items), 1)
+        self.assertEqual(artifacts.evidence_items[0].source_type, "artifact")
+        self.assertEqual(artifacts.evidence_items[0].severity_hint, "high")
+        self.assertEqual(
+            artifacts.evidence_items[0].related_change_ids,
+            [artifacts.parse_batch.files[0].changes[0].change_id],
+        )
+
     def test_build_advisory_summary_does_not_require_attention_for_go_with_only_narrative_warnings(
         self,
     ) -> None:

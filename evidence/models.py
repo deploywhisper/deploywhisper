@@ -51,7 +51,11 @@ class EvidenceItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     evidence_id: str = Field(..., min_length=1)
-    analysis_id: int = Field(..., ge=1)
+    analysis_id: int = Field(
+        ...,
+        ge=0,
+        description="Analysis identifier. Use 0 for pre-persistence evidence extraction.",
+    )
     finding_id: str = Field(..., min_length=1)
     source_type: EvidenceSourceType
     source_ref: str = Field(..., min_length=1)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import yaml
 
-from parsers.base import UnifiedChange
+from parsers.base import UnifiedChange, build_change_id
 
 
 def parse_ansible(name: str, raw_content: bytes | None) -> list[UnifiedChange]:
@@ -13,6 +13,7 @@ def parse_ansible(name: str, raw_content: bytes | None) -> list[UnifiedChange]:
 
     documents = [doc for doc in yaml.safe_load_all(raw_content.decode("utf-8")) if doc]
     changes: list[UnifiedChange] = []
+    occurrence = 0
     for document in documents:
         if isinstance(document, list):
             plays = document
@@ -28,6 +29,9 @@ def parse_ansible(name: str, raw_content: bytes | None) -> list[UnifiedChange]:
                 )
                 changes.append(
                     UnifiedChange(
+                        change_id=build_change_id(
+                            name, "ansible", task_name, "modify", occurrence
+                        ),
                         source_file=name,
                         tool="ansible",
                         resource_id=task_name,
@@ -35,4 +39,5 @@ def parse_ansible(name: str, raw_content: bytes | None) -> list[UnifiedChange]:
                         summary=f"Ansible task {task_name} included in analysis set.",
                     )
                 )
+                occurrence += 1
     return changes

@@ -2,17 +2,48 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+def _build_change_id(
+    source_file: str,
+    tool: str,
+    resource_id: str,
+    action: str,
+    occurrence: int = 0,
+) -> str:
+    seed = "|".join((source_file, tool, resource_id, action, str(occurrence)))
+    return f"chg-{hashlib.sha1(seed.encode('utf-8')).hexdigest()[:12]}"
 
 
 class UnifiedChange(BaseModel):
+    change_id: str = Field(
+        default="",
+        description="Stable identifier for this normalized change.",
+    )
     source_file: str = Field(..., description="Source file name")
     tool: str = Field(..., description="Source tool name")
     resource_id: str = Field(..., description="Resource identifier")
     action: str = Field(..., description="Change action")
     summary: str = Field(..., description="Human-readable summary")
+
+    @model_validator(mode="after")
+    def _populate_change_id(self) -> UnifiedChange:
+        if not self.change_id:
+            self.change_id = _build_change_id(
+                self.source_file,
+                self.tool,
+                self.resource_id,
+                self.action,
+            )
+        return self
+
+
+NormalizedChange = UnifiedChange
+build_change_id = _build_change_id
 
 
 ParseStatus = Literal["parsed", "failed", "skipped"]
