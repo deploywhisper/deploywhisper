@@ -183,6 +183,15 @@ def build_history_page() -> None:
                                 ui.label("LLM note: " + llm_notice).classes(
                                     "text-sm dw-warning-text"
                                 )
+                            context = report.get("context_completeness") or {}
+                            context_score = float(context.get("context_score", 1.0))
+                            if context_score < 0.7:
+                                ui.label(
+                                    "Context warning: supporting topology or incident history may be stale."
+                                ).classes("text-sm dw-warning-text font-semibold")
+                                ui.label(
+                                    f"Context score {context_score:.2f} · parser success {float(context.get('parser_success_rate', 1.0)):.2f}"
+                                ).classes("text-sm dw-muted")
                             if audit.get("trigger_type") or audit.get("trigger_id"):
                                 ui.label(
                                     f"Trigger: {audit.get('trigger_type') or 'unknown'}"

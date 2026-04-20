@@ -177,6 +177,7 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
         self.assertEqual(payload["data"]["intake"]["items"][0]["status"], "ready")
         self.assertEqual(payload["data"]["assessment"]["source"], "heuristic+llm")
+        self.assertIn("context_completeness", payload["data"]["assessment"])
         self.assertEqual(
             payload["data"]["assessment"]["top_risk_contributors"], ["ev-001"]
         )

@@ -40,6 +40,7 @@ def create_analysis_report(
     trigger_id: str | None,
     dashboard_display_duration_seconds: int | None,
     top_risk_contributors_json: str = "[]",
+    context_completeness_json: str = "{}",
     findings_payload: list[dict[str, Any]] | None = None,
 ) -> AnalysisReport:
     report = AnalysisReport(
@@ -70,7 +71,7 @@ def create_analysis_report(
         score=risk_score,
         confidence=1.0,
         top_risk_contributors_json=top_risk_contributors_json,
-        context_completeness_json="{}",
+        context_completeness_json=context_completeness_json,
     )
     report.findings = [
         PersistedFinding(

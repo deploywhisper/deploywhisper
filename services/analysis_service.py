@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
 from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
-from analysis.incident_matcher import IncidentMatch, find_incident_matches
+from analysis.incident_matcher import (
+    IncidentMatch,
+    find_incident_matches,
+    load_incident_candidates,
+)
 from analysis.risk_engine import score_evidence
 from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
 from evidence.mappers import build_findings
 from analysis.risk_scorer import RiskAssessment
-from evidence.models import EvidenceItem, Finding
+from evidence.models import ContextCompleteness, EvidenceItem, Finding
 from evidence.extractor import extract_batch_evidence
 from llm.narrator import NarrativeResult, generate_narrative
 from llm.providers import generate_completion_with_settings
@@ -20,7 +25,11 @@ from parsers.base import ParseBatchResult, UnifiedChange
 from services.intake_service import build_parse_batch
 from services.report_service import persist_analysis_report
 from services.settings_service import resolve_provider_runtime
-from services.topology_service import load_topology
+from services.topology_service import (
+    STALE_AFTER_DAYS,
+    get_topology_status,
+    load_topology,
+)
 
 
 def evaluate_evidence(
@@ -137,6 +146,57 @@ def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
     return changes
 
 
+def _topology_freshness_days(updated_at: str | None) -> int | None:
+    if not updated_at:
+        return None
+    try:
+        parsed = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return max((datetime.now(UTC) - parsed).days, 0)
+
+
+def _freshness_score(topology_freshness_days: int | None) -> float:
+    if topology_freshness_days is None:
+        return 0.0
+    if topology_freshness_days <= STALE_AFTER_DAYS:
+        return 1.0
+    return max(0.0, 1.0 - ((topology_freshness_days - STALE_AFTER_DAYS) / 60))
+
+
+def _incident_score(incident_index_size: int) -> float:
+    return min(incident_index_size / 10, 1.0)
+
+
+def _build_context_completeness(parse_batch: ParseBatchResult) -> ContextCompleteness:
+    topology_status = get_topology_status()
+    topology_freshness_days = _topology_freshness_days(topology_status.updated_at)
+    incident_index_size = len(load_incident_candidates())
+    parser_success_rate = round(
+        parse_batch.parsed_count / max(len(parse_batch.files), 1),
+        2,
+    )
+    context_score = round(
+        min(
+            1.0,
+            (
+                parser_success_rate * 0.45
+                + _freshness_score(topology_freshness_days) * 0.35
+                + _incident_score(incident_index_size) * 0.20
+            ),
+        ),
+        2,
+    )
+    return ContextCompleteness(
+        topology_freshness_days=topology_freshness_days,
+        incident_index_size=incident_index_size,
+        parser_success_rate=parser_success_rate,
+        context_score=context_score,
+    )
+
+
 def _interaction_confidence_prompt_payload(assessment: RiskAssessment) -> str:
     payload = {
         "instructions": {
@@ -221,6 +281,8 @@ def build_advisory_summary(
     uncertainty_flags: list[str] = []
     if assessment.partial_context:
         uncertainty_flags.append("partial_context")
+    if assessment.context_completeness.context_score < 0.7:
+        uncertainty_flags.append("low_context_completeness")
     if assessment.warnings:
         uncertainty_flags.append("assessment_warnings")
     if narrative.degraded:
@@ -234,6 +296,7 @@ def build_advisory_summary(
         requires_attention=(
             assessment.recommendation != "go"
             or assessment.partial_context
+            or assessment.context_completeness.context_score < 0.7
             or bool(assessment.warnings)
             or narrative.degraded
         ),
@@ -341,6 +404,7 @@ def build_analysis_artifacts(
         raw_files={name: raw_content for name, raw_content in files},
         completion_client=completion_client,
     )
+    assessment.context_completeness = _build_context_completeness(parse_batch)
     findings = build_findings(
         assessment=assessment,
         evidence_items=evidence_items,
