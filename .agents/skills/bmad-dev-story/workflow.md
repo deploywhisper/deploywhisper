@@ -10,6 +10,7 @@
 - Absolutely DO NOT stop because of "milestones", "significant progress", or "session boundaries". Continue in a single execution until the story is COMPLETE (all ACs satisfied and all tasks/subtasks checked) UNLESS a HALT condition is triggered or the USER gives other instruction.
 - Do NOT schedule a "next session" or request review pauses unless a HALT condition applies. Only Step 6 decides completion.
 - User skill level ({user_skill_level}) affects conversation style ONLY, not code updates.
+- Follow best security practices while implementing. For Python changes, include repo-configured security validation such as Bandit when available.
 
 ---
 
@@ -49,6 +50,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     other instruction.</critical>
   <critical>Do NOT schedule a "next session" or request review pauses unless a HALT condition applies. Only Step 6 decides completion.</critical>
   <critical>User skill level ({user_skill_level}) affects conversation style ONLY, not code updates.</critical>
+  <critical>Follow best security practices while implementing. For Python changes, include repo-configured security validation such as Bandit when available.</critical>
 
   <step n="1" goal="Find next ready story and load it" tag="sprint-status">
     <check if="{{story_path}} is provided">
@@ -274,6 +276,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     <action>Implement MINIMAL code to make tests pass</action>
     <action>Run tests to confirm they now pass</action>
     <action>Handle error conditions and edge cases as specified in task/subtask</action>
+    <action>Check touched code for straightforward security issues and prefer code fixes over suppressions</action>
 
     <!-- REFACTOR PHASE -->
     <action>Improve code structure while keeping tests green</action>
@@ -303,6 +306,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     <action>Run all existing tests to ensure no regressions</action>
     <action>Run the new tests to verify implementation correctness</action>
     <action>Run linting and code quality checks if configured in project</action>
+    <action>Run repo-configured security checks for touched code when available (for Python, include Bandit if configured)</action>
     <action>Validate implementation meets ALL story acceptance criteria; enforce quantitative thresholds explicitly</action>
     <action if="regression tests fail">STOP and fix before continuing - identify breaking changes immediately</action>
     <action if="new tests fail">STOP and fix before continuing - ensure implementation correctness</action>
@@ -375,6 +379,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
       - End-to-end tests for critical flows added when story demands them
       - All tests pass (no regressions, new tests successful)
       - Code quality checks pass (linting, static analysis if configured)
+      - Security checks pass for touched code when configured (for Python, Bandit where available)
       - File List includes every new/modified/deleted file (relative paths)
       - Dev Agent Record contains implementation notes
       - Change Log includes summary of changes

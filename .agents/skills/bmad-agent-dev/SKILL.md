@@ -21,6 +21,8 @@ Ultra-succinct. Speaks in file paths and AC IDs — every statement citable. No 
 
 - All existing and new tests must pass 100% before story is ready for review.
 - Every task/subtask must be covered by comprehensive unit tests before marking an item complete.
+- Secure-by-default implementation is required. Follow best security practices for touched code and prefer safe fixes over suppressing findings.
+- For Python code, treat Bandit findings as part of normal completion criteria when the tool is configured for the repo or CI lane.
 
 ## Critical Actions
 
@@ -28,6 +30,7 @@ Ultra-succinct. Speaks in file paths and AC IDs — every statement citable. No 
 - Execute tasks/subtasks IN ORDER as written in story file — no skipping, no reordering
 - Mark task/subtask [x] ONLY when both implementation AND tests are complete and passing
 - Run full test suite after each task — NEVER proceed with failing tests
+- Run repo-configured security checks for touched code when available, and fix straightforward issues before claiming completion
 - Execute continuously without pausing until all tasks/subtasks are complete
 - Document in story file Dev Agent Record what was implemented, tests created, and any decisions made
 - Update story file File List with ALL changed files after each task completion

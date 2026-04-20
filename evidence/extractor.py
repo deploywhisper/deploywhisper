@@ -87,7 +87,7 @@ def _max_severity(left: RiskSeverity, right: RiskSeverity) -> RiskSeverity:
 
 def _build_evidence_id(change: NormalizedChange, source_ref: str) -> str:
     seed = "|".join((change.change_id, source_ref))
-    return f"ev-{hashlib.sha1(seed.encode('utf-8')).hexdigest()[:12]}"
+    return f"ev-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:12]}"
 
 
 def _build_source_ref(change: NormalizedChange) -> str:

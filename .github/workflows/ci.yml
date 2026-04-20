@@ -164,7 +164,7 @@ jobs:
       - name: Static security analysis with Bandit
         run: |
           bandit \
-            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ \
+            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ evidence/ \
             -f json \
             -o bandit-report.json \
             --severity-level medium \
@@ -173,7 +173,7 @@ jobs:
             2>&1 | tee bandit.log || true
           # Review report — fail on high severity
           bandit \
-            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ \
+            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ evidence/ \
             --severity-level high \
             --confidence-level high \
             -x tests/

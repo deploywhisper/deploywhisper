@@ -5,6 +5,7 @@ DeployWhisper uses GitHub Actions at [.github/workflows/ci.yml](/Users/psaho01/a
 ## Stages
 
 - `quality`: installs dependencies, runs `pip check`, and bytecode-compiles project modules.
+- `security`: runs dependency audit, Bandit static analysis, and secret-pattern scanning.
 - `changed-tests`: on pull requests, runs only changed Python test modules for faster early feedback.
 - `test`: runs the full unittest suite in four logical shards with `fail-fast: false`.
 - `report`: publishes a GitHub Actions summary and downloads any failure artifacts.
@@ -19,6 +20,8 @@ Run the local CI-equivalent checks with:
 ```bash
 bash scripts/ci-local.sh
 ```
+
+For full local parity with the CI security lane, make sure `bandit` is installed in the active environment or available via `BANDIT_BIN`. When available, `scripts/ci-local.sh` runs the same two-pass Bandit gate used in CI.
 
 To run only changed tests relative to the default base branch:
 
@@ -51,6 +54,7 @@ These logs are retained for 14 days.
 ## Quality Gates
 
 - Dependency graph must pass `pip check`
+- Security scan must pass dependency audit, Bandit high/high gate, and secret-leak checks
 - Source tree must compile with `python -m compileall`
 - Every shard must pass its assigned `unittest` targets
 - Pull requests get a changed-test fast-feedback run

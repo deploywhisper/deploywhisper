@@ -16,7 +16,7 @@ def _build_change_id(
     occurrence: int = 0,
 ) -> str:
     seed = "|".join((source_file, tool, resource_id, action, str(occurrence)))
-    return f"chg-{hashlib.sha1(seed.encode('utf-8')).hexdigest()[:12]}"
+    return f"chg-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:12]}"
 
 
 class UnifiedChange(BaseModel):

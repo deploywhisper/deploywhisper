@@ -30,6 +30,8 @@ Hand `{spec_file}` to a sub-agent/task and let it implement. If no sub-agents ar
 
 **Path formatting rule:** Any markdown links written into `{spec_file}` must use paths relative to `{spec_file}`'s directory so they are clickable in VS Code. Any file paths displayed in terminal/conversation output must use CWD-relative format with `:line` notation (e.g., `src/path/file.ts:42`) for terminal clickability. No leading `/` in either case.
 
+**Security rule:** While implementing, follow secure-by-default practices for touched code. For Python work, run repo-configured security validation such as Bandit when available and fix straightforward findings in code rather than suppressing them.
+
 ### Self-Check
 
 Before leaving this step, verify every task in the `## Tasks & Acceptance` section of `{spec_file}` is complete. Mark each finished task `[x]`. If any task is not done, finish it before proceeding.
