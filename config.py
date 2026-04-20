@@ -17,6 +17,7 @@ class Settings:
     llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")
     llm_model: str = os.getenv("LLM_MODEL", "ollama/llama3")
     llm_api_base: str = os.getenv("LLM_API_BASE", "http://localhost:11434")
+    narrator_enabled: bool = os.getenv("NARRATOR_ENABLED", "true").lower() == "true"
     topology_path: str = os.getenv(
         "TOPOLOGY_PATH", "data/topology/service_topology.json"
     )

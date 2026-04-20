@@ -418,7 +418,8 @@ def build_analysis_artifacts(
     )
     incident_matches = find_incident_matches(changes)
     narrative = generate_narrative(
-        assessment,
+        assessment.model_copy(deep=True),
+        [finding.model_copy(deep=True) for finding in findings],
         completion_client=completion_client,
         raw_files={name: raw_content for name, raw_content in files},
     )
