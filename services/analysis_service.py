@@ -25,7 +25,11 @@ from parsers.base import ParseBatchResult, UnifiedChange
 from services.intake_service import build_parse_batch
 from services.report_service import persist_analysis_report
 from services.settings_service import resolve_provider_runtime
-from services.topology_service import STALE_AFTER_DAYS, get_topology_status, load_topology
+from services.topology_service import (
+    STALE_AFTER_DAYS,
+    get_topology_status,
+    load_topology,
+)
 
 
 def evaluate_evidence(

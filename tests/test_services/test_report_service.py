@@ -149,9 +149,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["narrative_source"], "llm")
         self.assertEqual(fetched["skills_applied"], ["git", "terraform"])
         self.assertEqual(fetched["top_risk_contributors"], ["ev-001"])
-        self.assertEqual(
-            fetched["context_completeness"]["topology_freshness_days"], 12
-        )
+        self.assertEqual(fetched["context_completeness"]["topology_freshness_days"], 12)
         self.assertEqual(fetched["findings"][0]["evidence_refs"], ["ev-001"])
         self.assertEqual(fetched["contributors"][0]["evidence_id"], "ev-001")
         self.assertNotIn("prompt", json.dumps(fetched))
