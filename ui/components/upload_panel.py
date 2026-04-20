@@ -27,6 +27,7 @@ from services.report_service import (
 )
 from services.settings_service import check_provider_readiness
 from services.topology_service import load_topology
+from ui.formatters.confidence import render_confidence_badge
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
@@ -201,6 +202,26 @@ def build_upload_panel(
                 llm_notice = extract_llm_notice(report.get("warnings", []))
                 if llm_notice:
                     ui.label(llm_notice).classes("text-xs dw-warning-text leading-5")
+                findings = report.get("findings", [])
+                if findings:
+                    with ui.column().classes("mt-3 gap-2"):
+                        ui.label("Findings").classes("text-sm font-semibold dw-text")
+                        for finding in findings[:5]:
+                            with ui.row().classes(
+                                "w-full items-start justify-between gap-3 flex-wrap"
+                            ):
+                                with ui.column().classes("min-w-0 flex-1 gap-1"):
+                                    ui.label(finding["title"]).classes(
+                                        "text-sm font-medium dw-text"
+                                    )
+                                    ui.label(finding["description"]).classes(
+                                        "text-xs dw-muted leading-5"
+                                    )
+                                    if finding.get("uncertainty_note"):
+                                        ui.label(finding["uncertainty_note"]).classes(
+                                            "text-xs dw-warning-text leading-5"
+                                        )
+                                render_confidence_badge(finding["confidence"])
                 contributors = report.get("contributors", [])
                 if contributors:
                     with ui.column().classes("mt-3 gap-2"):

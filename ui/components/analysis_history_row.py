@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from nicegui import ui
 
+from ui.formatters.confidence import render_confidence_badge
 from ui.formatters.datetime import format_history_timestamp
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
@@ -45,6 +46,10 @@ def render_analysis_history_row(
                 )
                 if summary:
                     ui.label(summary).classes("text-xs dw-muted leading-5")
+                findings = report.get("findings", [])
+                if findings:
+                    with ui.row().classes("w-full items-center gap-2 flex-wrap"):
+                        render_confidence_badge(findings[0]["confidence"])
                 provenance = (
                     f"Risk: {report.get('assessment_source') or 'unknown'} · "
                     f"Narrative: {report.get('narrative_source') or 'unknown'}"

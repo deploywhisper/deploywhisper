@@ -17,6 +17,7 @@ import ui.components.upload_panel as upload_panel_module
 import ui.routes.dashboard as dashboard_module
 import ui.routes.history as history_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
+from evidence.models import Finding
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
@@ -117,6 +118,21 @@ class DashboardShellTests(unittest.TestCase):
             parse_batch,
             assessment,
             narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-001",
+                    analysis_id=0,
+                    title="CRITICAL: aws_security_group.main",
+                    description="Security group exposure risk",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-001"],
+                    skill_id=None,
+                )
+            ],
             audit_context={
                 "source_interface": "ui",
                 "trigger_type": "dashboard_upload",
@@ -130,6 +146,8 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Narrative: llm", response.text)
         self.assertIn("Provider: ollama / ollama/llama3", response.text)
         self.assertIn("Skills: git, terraform", response.text)
+        self.assertIn("HIGH CONFIDENCE", response.text)
+        self.assertIn('"title":"Confidence 1.00"', response.text)
         self.assertIn("Last scan: plan.json · CRITICAL · NO-GO", response.text)
         self.assertIn(
             "1 saved briefing is shaping the current advisory view.", response.text

@@ -140,6 +140,7 @@ class PersistedReportData(BaseModel):
     skills_applied: list[str] = Field(default_factory=list)
     created_at: str
     warnings: list[str] = Field(default_factory=list)
+    findings: list["FindingData"] = Field(default_factory=list)
     contributors: list["RiskContributorData"] = Field(default_factory=list)
     dashboard_display_duration_seconds: int | None = Field(default=None)
     dashboard_remaining_seconds: int | None = Field(default=None)
@@ -222,6 +223,30 @@ class RiskContributorData(BaseModel):
     )
     severity: RiskSeverity = Field(..., description="Per-resource severity")
     reasoning: str = Field(default="", description="Per-resource scoring explanation")
+
+
+class FindingData(BaseModel):
+    finding_id: str = Field(..., description="Stable finding identifier")
+    analysis_id: int = Field(..., description="Analysis identifier")
+    title: str = Field(..., description="Reviewer-facing finding title")
+    description: str = Field(..., description="Detailed finding description")
+    severity: RiskSeverity = Field(..., description="Finding severity")
+    category: str = Field(..., description="Finding category")
+    deterministic: bool = Field(
+        ..., description="Whether the finding came from deterministic logic"
+    )
+    confidence: float = Field(..., description="Confidence score between 0 and 1")
+    uncertainty_note: str | None = Field(
+        default=None,
+        description="Explanation when confidence reflects inferred reasoning",
+    )
+    evidence_refs: list[str] = Field(
+        default_factory=list, description="Evidence IDs linked to the finding"
+    )
+    skill_id: str | None = Field(
+        default=None,
+        description="Skill identifier when a skill contributed the finding",
+    )
 
 
 class AssessmentData(BaseModel):
@@ -384,6 +409,7 @@ class AnalysisRunData(BaseModel):
     intake: PendingAnalysis
     parse_batch: ParseBatchData
     assessment: AssessmentData
+    findings: list[FindingData] = Field(default_factory=list)
     blast_radius: BlastRadiusData
     rollback_plan: RollbackPlanData
     incident_matches: list[IncidentMatchData] = Field(default_factory=list)
@@ -424,6 +450,7 @@ def build_analysis_run_data(
 ) -> AnalysisRunData:
     parse_batch = result.parse_batch
     assessment = result.assessment
+    findings = result.findings
     blast_radius = result.blast_radius
     rollback_plan = result.rollback_plan
     incident_matches = result.incident_matches
@@ -467,6 +494,7 @@ def build_analysis_run_data(
             warnings=list(assessment.warnings),
             source=assessment.source,
         ),
+        findings=[_copy_model(finding, FindingData) for finding in findings],
         blast_radius=BlastRadiusData(
             affected=[
                 _copy_model(node, ImpactNodeData) for node in blast_radius.affected

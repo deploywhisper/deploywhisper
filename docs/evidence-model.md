@@ -22,6 +22,14 @@ Story 1.2 adds `evidence/extractor.py` as the adapter between parser-normalized 
 - artifact-backed evidence uses `analysis_id=0` and `finding_id=pending:<change_id>` until later scoring and persistence stories bind the evidence to a concrete report and finding
 - `source_ref` is tool-scoped (`terraform://...`, `kubernetes://...`, etc.) so later UI and report work can render stable trace references without reparsing raw artifacts
 
+## Finding Confidence
+
+Story 1.4 adds `evidence/mappers.py` to turn scored contributors and interaction signals into reviewer-facing `Finding` objects.
+
+- deterministic evidence-backed findings default to `confidence=1.0`
+- inferred findings use a model-stated confidence when available, otherwise a heuristic floor
+- shared API, CLI, and persisted report payloads now expose findings so UI surfaces can render confidence badges consistently
+
 ## Persistence Shape
 
 The additive persistence layer extends `analysis_reports` with four new tables:

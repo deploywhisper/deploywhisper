@@ -183,6 +183,8 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["assessment"]["contributors"][0]["evidence_id"], "ev-001"
         )
+        self.assertTrue(payload["data"]["findings"])
+        self.assertEqual(payload["data"]["findings"][0]["confidence"], 1.0)
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
         self.assertEqual(payload["data"]["narrative"]["source"], "llm")
         self.assertTrue(payload["data"]["narrative"]["skills_applied"])
@@ -199,6 +201,7 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["top_risk_contributors"], ["ev-001"]
         )
+        self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertEqual(
             payload["data"]["persisted_report"]["contributors"][0]["evidence_id"],
             "ev-001",

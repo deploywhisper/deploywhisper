@@ -14,6 +14,7 @@ from services.report_service import (
     remove_analysis_reports,
 )
 from ui.components.analysis_history_row import render_analysis_history_row
+from ui.formatters.confidence import render_confidence_badge
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
@@ -197,6 +198,35 @@ def build_history_page() -> None:
                                 )
                                 for file_name in audit["files_analyzed"]:
                                     ui.label(file_name).classes("text-sm dw-muted")
+                        findings = report.get("findings", [])
+                        if findings:
+                            with ui.column().classes("gap-2 pb-2"):
+                                ui.label("Findings").classes(
+                                    "text-sm font-semibold dw-text"
+                                )
+                                for finding in findings:
+                                    with ui.card().classes(
+                                        "w-full dw-panel-soft shadow-none"
+                                    ):
+                                        with ui.row().classes(
+                                            "w-full items-start justify-between gap-3 p-3 flex-wrap"
+                                        ):
+                                            with ui.column().classes(
+                                                "min-w-0 flex-1 gap-1"
+                                            ):
+                                                ui.label(finding["title"]).classes(
+                                                    "text-sm font-medium dw-text"
+                                                )
+                                                ui.label(
+                                                    finding["description"]
+                                                ).classes("text-xs dw-muted leading-5")
+                                                if finding.get("uncertainty_note"):
+                                                    ui.label(
+                                                        finding["uncertainty_note"]
+                                                    ).classes("text-xs dw-warning-text")
+                                            render_confidence_badge(
+                                                finding["confidence"]
+                                            )
                         contributors = report.get("contributors", [])
                         if contributors:
                             with ui.column().classes("gap-2 pb-2"):

@@ -77,7 +77,11 @@ class Finding(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     finding_id: str = Field(..., min_length=1)
-    analysis_id: int = Field(..., ge=1)
+    analysis_id: int = Field(
+        ...,
+        ge=0,
+        description="Analysis identifier. Use 0 for pre-persistence finding generation.",
+    )
     title: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
     severity: RiskSeverity

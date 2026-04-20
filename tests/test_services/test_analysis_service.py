@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
+from analysis.interaction_risk import InteractionRisk
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.rollback_planner import RollbackPlan, RollbackStep
@@ -101,6 +102,100 @@ class AnalysisServiceTests(unittest.TestCase):
             artifacts.evidence_items[0].related_change_ids,
             [artifacts.parse_batch.files[0].changes[0].change_id],
         )
+        self.assertEqual(len(artifacts.findings), 1)
+        self.assertEqual(artifacts.findings[0].confidence, 1.0)
+
+    def test_build_analysis_artifacts_builds_inferred_interaction_finding(self) -> None:
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="Terraform and Kubernetes changes overlap.",
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-001",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=20,
+                    summary="Terraform changed a security group.",
+                    normalized_action="modify",
+                    resource_category="networking/ingress",
+                    blast_radius="High blast radius",
+                    downstream_scope=2,
+                    security_flags=[],
+                    environment="production",
+                    severity="high",
+                    reasoning="Security group changes can affect production ingress.",
+                )
+            ],
+            interaction_risks=[
+                InteractionRisk(
+                    key="terraform-kubernetes",
+                    summary="Terraform and Kubernetes changes overlap around payments.",
+                    contributing_files=["plan.json", "deployment.yaml"],
+                    contributing_resources=["aws_security_group.main"],
+                    contribution_bonus=12,
+                )
+            ],
+            partial_context=False,
+            warnings=[],
+            source="heuristic+llm",
+        )
+        blast_radius = BlastRadiusResult(
+            affected=[],
+            direct_count=0,
+            transitive_count=0,
+            warning=None,
+            unmatched_resources=[],
+        )
+        rollback_plan = RollbackPlan(steps=[], complexity="low", warning=None)
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: review the overlapping change set.",
+            explanation="The deployment changes overlap.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch("services.analysis_service.load_topology", return_value=({}, None)),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_completion_with_settings",
+                return_value='{"confidences":[{"key":"terraform-kubernetes","confidence":0.73}]}',
+            ),
+            patch(
+                "services.analysis_service.compute_blast_radius",
+                return_value=blast_radius,
+            ),
+            patch(
+                "services.analysis_service.generate_rollback_plan",
+                return_value=rollback_plan,
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=narrative,
+            ),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    )
+                ]
+            )
+
+        self.assertEqual(len(artifacts.findings), 2)
+        inferred = artifacts.findings[1]
+        self.assertFalse(inferred.deterministic)
+        self.assertAlmostEqual(inferred.confidence, 0.73)
 
     def test_build_advisory_summary_does_not_require_attention_for_go_with_only_narrative_warnings(
         self,

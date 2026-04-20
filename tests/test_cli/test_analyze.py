@@ -98,10 +98,13 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertTrue(payload["meta"]["advisory_only"])
         self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
+        self.assertTrue(payload["data"]["findings"])
+        self.assertEqual(payload["data"]["findings"][0]["confidence"], 1.0)
         self.assertFalse(payload["data"]["advisory"]["should_block"])
         self.assertTrue(payload["data"]["advisory"]["requires_attention"])
         self.assertIn("Advisory only", payload["data"]["share_summary"]["plain_text"])
         self.assertEqual(payload["data"]["share_summary"]["recommendation"], "no-go")
+        self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertEqual(
             payload["data"]["persisted_report"]["audit"]["source_interface"], "cli"
         )
