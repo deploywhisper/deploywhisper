@@ -10,6 +10,7 @@ from pathlib import Path
 
 import config as config_module
 import models.database as database_module
+import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
 import services.report_service as report_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
@@ -25,6 +26,7 @@ class ReportFilterTests(unittest.TestCase):
         reload(config_module)
         reload(tables_module)
         reload(database_module)
+        reload(analysis_reports_repository_module)
         reload(report_service_module)
         database_module.init_db()
 

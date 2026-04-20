@@ -179,6 +179,30 @@ class SettingsServiceTests(unittest.TestCase):
         self.assertIn("provider offline", readiness.message)
         os.environ.pop("OPENAI_API_KEY", None)
 
+    def test_get_provider_health_snapshot_does_not_probe_provider(self) -> None:
+        os.environ["OPENAI_API_KEY"] = "sk-openai-env"
+        reload(config_module)
+        reload(settings_service_module)
+        settings_service_module.save_provider_settings(
+            provider="openai",
+            model="gpt-4.1-mini",
+            api_base="https://api.openai.com/v1",
+            activate=True,
+        )
+
+        with patch(
+            "services.settings_service.validate_provider_settings",
+            side_effect=AssertionError("should not validate"),
+        ):
+            readiness = settings_service_module.get_provider_health_snapshot()
+
+        self.assertTrue(readiness.ready)
+        self.assertEqual(readiness.provider, "openai")
+        self.assertIn(
+            "Live connectivity is checked during analysis runs", readiness.message
+        )
+        os.environ.pop("OPENAI_API_KEY", None)
+
     def test_validate_provider_settings_uses_supplied_values(self) -> None:
         captured: dict[str, str] = {}
 

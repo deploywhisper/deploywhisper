@@ -182,9 +182,14 @@ def build_upload_panel(
                 ui.label(report["top_risk"]).classes(
                     "text-lg font-medium dw-text leading-6"
                 )
-                ui.label(report["narrative_opening"]).classes(
-                    "text-sm dw-muted leading-6"
-                )
+                if report.get("narrative_available", True):
+                    ui.label(report["narrative_opening"]).classes(
+                        "text-sm dw-muted leading-6"
+                    )
+                else:
+                    ui.label(
+                        "Narrative unavailable. Review the deterministic findings and evidence below."
+                    ).classes("text-sm dw-warning-text leading-6")
                 ui.label(report["parse_summary"]).classes("text-xs dw-muted")
                 provenance_bits = [
                     f"Risk scoring: {report.get('assessment_source', 'unknown')}",
@@ -199,7 +204,10 @@ def build_upload_panel(
                         "Skills: " + ", ".join(report["skills_applied"])
                     )
                 ui.label(" · ".join(provenance_bits)).classes("text-xs dw-muted")
-                llm_notice = extract_llm_notice(report.get("warnings", []))
+                llm_notice = extract_llm_notice(
+                    report.get("warnings", []),
+                    report.get("narrative_failure_notice"),
+                )
                 if llm_notice:
                     ui.label(llm_notice).classes("text-xs dw-warning-text leading-5")
                 context = report.get("context_completeness") or {}
@@ -231,6 +239,18 @@ def build_upload_panel(
                                             "text-xs dw-warning-text leading-5"
                                         )
                                 render_confidence_badge(finding["confidence"])
+                evidence_items = report.get("evidence_items", [])
+                if evidence_items:
+                    with ui.column().classes("mt-3 gap-2"):
+                        ui.label("Evidence").classes("text-sm font-semibold dw-text")
+                        for evidence_item in evidence_items[:5]:
+                            with ui.column().classes("gap-1"):
+                                ui.label(evidence_item["summary"]).classes(
+                                    "text-sm dw-text"
+                                )
+                                ui.label(evidence_item["source_ref"]).classes(
+                                    "text-xs dw-muted break-all"
+                                )
                 contributors = report.get("contributors", [])
                 if contributors:
                     with ui.column().classes("mt-3 gap-2"):

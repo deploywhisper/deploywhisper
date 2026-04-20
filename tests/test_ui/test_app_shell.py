@@ -11,6 +11,7 @@ from importlib import reload
 import app as app_module
 import config as config_module
 import models.database as database_module
+import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
 import services.report_service as report_service_module
 import ui.components.upload_panel as upload_panel_module
@@ -31,6 +32,7 @@ class DashboardShellTests(unittest.TestCase):
         reload(config_module)
         reload(tables_module)
         reload(database_module)
+        reload(analysis_reports_repository_module)
         reload(report_service_module)
         reload(upload_panel_module)
         reload(dashboard_module)
@@ -195,11 +197,13 @@ class DashboardShellTests(unittest.TestCase):
             source="heuristic-only",
         )
         narrative = NarrativeResult(
-            opening_sentence="CAUTION: review the deployment.",
-            explanation="Fallback output used.",
+            available=False,
+            opening_sentence="",
+            explanation="",
             guidance=[],
             degraded=True,
             warnings=["Narrative provider unavailable: provider offline"],
+            failure_notice="Narrative provider unavailable: provider offline",
             source="fallback",
             provider="ollama",
             model="ollama/llama3",
@@ -220,6 +224,7 @@ class DashboardShellTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Narrative provider unavailable: provider offline", response.text)
+        self.assertIn("Narrative unavailable.", response.text)
 
     def test_dashboard_shows_context_warning_for_low_context_score(self) -> None:
         parse_batch = ParseBatchResult(

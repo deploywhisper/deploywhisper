@@ -326,6 +326,42 @@ def check_provider_readiness(completion_client=None) -> ProviderReadiness:
     )
 
 
+def get_provider_health_snapshot() -> ProviderReadiness:
+    """Return config-derived LLM health data without probing the provider."""
+    provider_settings = get_provider_settings()
+    defaults = provider_defaults(provider_settings.provider)
+    requires_api_key = bool(defaults.get("requires_api_key", False))
+    has_api_key = bool(provider_settings.api_key)
+
+    if requires_api_key and not has_api_key:
+        return ProviderReadiness(
+            provider=provider_settings.provider,
+            model=provider_settings.model,
+            local_mode=provider_settings.local_mode,
+            ready=False,
+            requires_api_key=True,
+            has_api_key=False,
+            message=(
+                f"{provider_settings.provider} is selected but no API key is available in environment variables. "
+                "Analysis can continue with heuristic-only results."
+            ),
+            source=provider_settings.source,
+        )
+
+    return ProviderReadiness(
+        provider=provider_settings.provider,
+        model=provider_settings.model,
+        local_mode=provider_settings.local_mode,
+        ready=True,
+        requires_api_key=requires_api_key,
+        has_api_key=has_api_key,
+        message=(
+            "LLM provider configuration is present. Live connectivity is checked during analysis runs."
+        ),
+        source=provider_settings.source,
+    )
+
+
 def activate_local_mode(*, model: str, api_base: str) -> ProviderSettings:
     """Persist a fully local narrative provider configuration."""
     return save_provider_settings(

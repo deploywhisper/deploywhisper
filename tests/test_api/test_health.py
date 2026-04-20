@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -14,11 +15,61 @@ class HealthEndpointTests(unittest.TestCase):
         self.client = TestClient(create_app())
 
     def test_health_endpoint_returns_ok(self) -> None:
-        response = self.client.get("/api/v1/health")
+        with patch(
+            "api.routes.health.get_provider_health_snapshot",
+            return_value=type(
+                "Readiness",
+                (),
+                {
+                    "ready": True,
+                    "provider": "ollama",
+                    "model": "ollama/llama3",
+                    "local_mode": True,
+                    "requires_api_key": False,
+                    "has_api_key": False,
+                    "message": "LLM provider connection validated for analysis.",
+                    "source": "environment",
+                },
+            )(),
+        ):
+            response = self.client.get("/api/v1/health")
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(body["data"]["status"], "ok")
+        self.assertEqual(body["data"]["core_status"], "ok")
         self.assertEqual(body["data"]["mode"], "foundation")
+        self.assertEqual(body["data"]["llm"]["status"], "ok")
+        self.assertEqual(body["data"]["llm"]["provider"], "ollama")
+
+    def test_health_endpoint_reports_llm_status_separately_from_core_health(
+        self,
+    ) -> None:
+        with patch(
+            "api.routes.health.get_provider_health_snapshot",
+            return_value=type(
+                "Readiness",
+                (),
+                {
+                    "ready": False,
+                    "provider": "openai",
+                    "model": "gpt-4.1-mini",
+                    "local_mode": False,
+                    "requires_api_key": True,
+                    "has_api_key": False,
+                    "message": "openai is selected but no API key is available in environment variables. Analysis can continue with heuristic-only results.",
+                    "source": "database",
+                },
+            )(),
+        ):
+            response = self.client.get("/api/v1/health")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["data"]["status"], "ok")
+        self.assertEqual(body["data"]["core_status"], "ok")
+        self.assertEqual(body["data"]["llm"]["status"], "degraded")
+        self.assertFalse(body["data"]["llm"]["ready"])
+        self.assertTrue(body["data"]["llm"]["requires_api_key"])
 
     def test_swagger_ui_is_exposed_under_versioned_api_namespace(self) -> None:
         response = self.client.get("/api/v1/docs")

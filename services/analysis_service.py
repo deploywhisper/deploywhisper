@@ -352,11 +352,14 @@ def build_share_summary(
         uncertainty_summary += (
             " Uncertainty: " + ", ".join(advisory.uncertainty_flags) + "."
         )
+    headline = narrative.opening_sentence or (
+        f"{advisory.recommendation.upper()}: {advisory.top_risk}"
+    )
 
     markdown = "\n".join(
         [
             f"### DeployWhisper {advisory.severity.upper()} · {advisory.recommendation.upper()}",
-            f"- Summary: {narrative.opening_sentence}",
+            f"- Summary: {headline}",
             f"- Blast radius: {blast_radius_summary}",
             f"- Rollback: {rollback_summary}",
             "- Advisory only: DeployWhisper does not make the final release decision or block deployment.",
@@ -366,7 +369,7 @@ def build_share_summary(
     plain_text = " ".join(
         [
             f"DeployWhisper {advisory.severity.upper()} / {advisory.recommendation.upper()}.",
-            f"Summary: {narrative.opening_sentence}",
+            f"Summary: {headline}",
             f"Blast radius: {blast_radius_summary}",
             f"Rollback: {rollback_summary}",
             "Advisory only: DeployWhisper does not make the final release decision or block deployment.",
@@ -379,7 +382,7 @@ def build_share_summary(
         should_block=False,
         severity=advisory.severity,
         recommendation=advisory.recommendation,
-        headline=narrative.opening_sentence,
+        headline=headline,
         blast_radius_summary=blast_radius_summary,
         rollback_summary=rollback_summary,
         uncertainty_summary=uncertainty_summary,
@@ -447,6 +450,7 @@ def analyze_uploaded_files(
         artifacts.assessment,
         artifacts.narrative,
         findings=artifacts.findings,
+        evidence_items=artifacts.evidence_items,
         audit_context=audit_context,
     )
     return AnalysisRunResult(

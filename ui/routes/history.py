@@ -143,9 +143,14 @@ def build_history_page() -> None:
                             ui.label("Advisory").classes(
                                 "text-sm font-semibold dw-text"
                             )
-                            ui.label(report["narrative_opening"]).classes(
-                                "text-sm leading-6 dw-muted"
-                            )
+                            if report.get("narrative_available", True):
+                                ui.label(report["narrative_opening"]).classes(
+                                    "text-sm leading-6 dw-muted"
+                                )
+                            else:
+                                ui.label(
+                                    "Narrative unavailable. Review the deterministic analysis below."
+                                ).classes("text-sm leading-6 dw-warning-text")
                         with ui.column().classes("gap-1"):
                             ui.label("Processing summary").classes(
                                 "text-sm font-semibold dw-text"
@@ -178,7 +183,10 @@ def build_history_page() -> None:
                                     "Skills applied: "
                                     + ", ".join(report["skills_applied"])
                                 ).classes("text-sm dw-muted")
-                            llm_notice = extract_llm_notice(report.get("warnings", []))
+                            llm_notice = extract_llm_notice(
+                                report.get("warnings", []),
+                                report.get("narrative_failure_notice"),
+                            )
                             if llm_notice:
                                 ui.label("LLM note: " + llm_notice).classes(
                                     "text-sm dw-warning-text"
@@ -236,6 +244,26 @@ def build_history_page() -> None:
                                             render_confidence_badge(
                                                 finding["confidence"]
                                             )
+                        evidence_items = report.get("evidence_items", [])
+                        if evidence_items:
+                            with ui.column().classes("gap-2 pb-2"):
+                                ui.label("Evidence").classes(
+                                    "text-sm font-semibold dw-text"
+                                )
+                                for evidence_item in evidence_items:
+                                    with ui.card().classes(
+                                        "w-full dw-panel-soft shadow-none"
+                                    ):
+                                        with ui.column().classes("gap-1 p-3"):
+                                            ui.label(evidence_item["summary"]).classes(
+                                                "text-sm font-medium dw-text"
+                                            )
+                                            ui.label(
+                                                evidence_item["source_ref"]
+                                            ).classes("text-xs dw-muted break-all")
+                                            ui.label(
+                                                f"{evidence_item['source_type']} · {evidence_item['severity_hint']} · confidence {float(evidence_item['confidence']):.2f}"
+                                            ).classes("text-xs dw-muted")
                         contributors = report.get("contributors", [])
                         if contributors:
                             with ui.column().classes("gap-2 pb-2"):

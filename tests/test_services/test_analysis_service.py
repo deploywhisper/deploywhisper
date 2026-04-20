@@ -472,6 +472,47 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertIn("Advisory only", summary.plain_text)
         self.assertFalse(summary.should_block)
 
+    def test_build_share_summary_falls_back_to_deterministic_headline_without_narrative(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            available=False,
+            opening_sentence="",
+            explanation="",
+            guidance=[],
+            degraded=True,
+            warnings=["Narrative provider unavailable: provider offline"],
+            failure_notice="Narrative provider unavailable: provider offline",
+        )
+        advisory = build_advisory_summary(assessment, narrative)
+        summary = build_share_summary(
+            advisory=advisory,
+            narrative=narrative,
+            blast_radius=BlastRadiusResult(
+                affected=[],
+                direct_count=0,
+                transitive_count=0,
+                warning=None,
+                unmatched_resources=[],
+            ),
+            rollback_plan=RollbackPlan(steps=[], complexity="low", warning=None),
+        )
+
+        self.assertEqual(
+            summary.headline, "CAUTION: Terraform changed a security group."
+        )
+        self.assertIn("CAUTION: Terraform changed a security group.", summary.markdown)
+
     def test_build_analysis_artifacts_shields_scored_assessment_from_narrator_mutation(
         self,
     ) -> None:
