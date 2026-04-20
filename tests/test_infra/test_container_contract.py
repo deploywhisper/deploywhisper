@@ -16,16 +16,23 @@ class ContainerContractTests(unittest.TestCase):
         )
         self.assertEqual(
             [path.name for path in migrations],
-            ["0001_create_analysis_reports.py", "005_add_evidence_model.py"],
+            [
+                "0001_create_analysis_reports.py",
+                "005_add_evidence_model.py",
+                "006_add_report_schema_version.py",
+            ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
         evidence_content = migrations[1].read_text(encoding="utf-8")
+        schema_content = migrations[2].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
             'down_revision = "0001_create_analysis_reports"', evidence_content
         )
         self.assertIn('"evidence_items"', evidence_content)
+        self.assertIn('down_revision = "005_add_evidence_model"', schema_content)
+        self.assertIn('"report_schema_version"', schema_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())

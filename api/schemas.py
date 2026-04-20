@@ -22,6 +22,11 @@ def build_meta(**extra: Any) -> dict[str, Any]:
     }
 
 
+def build_report_meta(*, report_schema_version: str, **extra: Any) -> dict[str, Any]:
+    """Build metadata for report-bearing API responses."""
+    return build_meta(report_schema_version=report_schema_version, **extra)
+
+
 class HealthData(BaseModel):
     status: str = Field(..., description="Service health status")
     mode: str = Field(..., description="Current application mode")
@@ -81,6 +86,9 @@ class PendingAnalysis(BaseModel):
 
 
 class CountMetaPayload(MetaPayload):
+    report_schema_version: str = Field(
+        ..., description="Report schema version used by returned report payloads"
+    )
     count: int = Field(..., description="Count of returned items")
     total_count: int | None = Field(
         default=None, description="Total number of matching items"
@@ -90,11 +98,17 @@ class CountMetaPayload(MetaPayload):
 
 
 class ResourceMetaPayload(MetaPayload):
+    report_schema_version: str = Field(
+        ..., description="Report schema version used by the returned payload"
+    )
     id: int = Field(..., description="Stable resource identifier")
 
 
 class AnalysisRunMetaPayload(MetaPayload):
     api_version: str = Field(..., description="Versioned API contract identifier")
+    report_schema_version: str = Field(
+        ..., description="Report schema version used by the response payload"
+    )
     advisory_only: bool = Field(
         ...,
         description="Whether the analysis is advisory rather than deployment-blocking",
@@ -149,6 +163,9 @@ class PersistedReportData(BaseModel):
     severity: str
     recommendation: str
     top_risk: str
+    report_schema_version: str = Field(
+        ..., description="Persisted report schema version"
+    )
     top_risk_contributors: list[str] = Field(default_factory=list)
     context_completeness: "ContextCompletenessData" = Field(
         default_factory=lambda: ContextCompletenessData()

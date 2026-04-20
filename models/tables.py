@@ -50,6 +50,7 @@ if "AnalysisReport" not in globals():
         severity: Mapped[str] = mapped_column(String(20))
         recommendation: Mapped[str] = mapped_column(String(20))
         top_risk: Mapped[str] = mapped_column(Text)
+        report_schema_version: Mapped[str] = mapped_column(String(16), default="v2")
         parse_summary: Mapped[str] = mapped_column(Text)
         narrative_opening: Mapped[str] = mapped_column(Text)
         narrative_explanation: Mapped[str] = mapped_column(Text)

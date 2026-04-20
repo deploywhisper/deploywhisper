@@ -124,6 +124,7 @@ class AnalysesApiTests(unittest.TestCase):
         response = self.client.get("/api/v1/analyses")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
         self.assertEqual(payload["meta"]["count"], 1)
         self.assertEqual(payload["meta"]["total_count"], 1)
         self.assertEqual(payload["meta"]["page"], 1)
@@ -134,6 +135,8 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["data"]["id"], self.persisted["id"])
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+        self.assertEqual(payload["data"]["report_schema_version"], "v2")
         self.assertEqual(payload["data"]["audit"]["llm_provider"], "ollama")
 
     def test_create_analysis_returns_structured_result(self) -> None:
@@ -175,6 +178,7 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["meta"]["api_version"], "v1")
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
         self.assertTrue(payload["meta"]["advisory_only"])
         self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
         self.assertEqual(payload["data"]["intake"]["items"][0]["status"], "ready")
@@ -205,6 +209,9 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["data"]["persisted_report"]["top_risk_contributors"], ["ev-001"]
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["report_schema_version"], "v2"
         )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertTrue(payload["data"]["persisted_report"]["evidence_items"])

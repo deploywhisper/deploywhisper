@@ -46,6 +46,13 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
+    def _table_info(self, table_name: str) -> list[tuple]:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            return list(sqlite_conn.execute(f"PRAGMA table_info({table_name})"))
+        finally:
+            sqlite_conn.close()
+
     def test_upgrade_head_creates_evidence_schema_on_clean_database(self) -> None:
         command.upgrade(self._config(), "head")
 
@@ -53,6 +60,13 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("analysis_id", self._table_columns("findings"))
         self.assertIn("analysis_id", self._table_columns("risk_assessments"))
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
+        self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
+        report_schema_row = next(
+            row
+            for row in self._table_info("analysis_reports")
+            if row[1] == "report_schema_version"
+        )
+        self.assertIsNone(report_schema_row[4])
 
     def test_upgrade_head_preserves_existing_analysis_reports(self) -> None:
         command.upgrade(self._config(), "0001_create_analysis_reports")
@@ -118,6 +132,9 @@ class MigrationTests(unittest.TestCase):
             report_count = sqlite_conn.execute(
                 "SELECT COUNT(*) FROM analysis_reports"
             ).fetchone()[0]
+            schema_version = sqlite_conn.execute(
+                "SELECT report_schema_version FROM analysis_reports LIMIT 1"
+            ).fetchone()[0]
             finding_fks = sqlite_conn.execute(
                 "PRAGMA foreign_key_list(findings)"
             ).fetchall()
@@ -128,6 +145,7 @@ class MigrationTests(unittest.TestCase):
             sqlite_conn.close()
 
         self.assertEqual(report_count, 1)
+        self.assertEqual(schema_version, "v2")
         self.assertTrue(any(row[2] == "analysis_reports" for row in finding_fks))
         self.assertTrue(any(row[2] == "findings" for row in evidence_fks))
 
@@ -173,7 +191,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("incident_records", tables)
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "005_add_evidence_model")
+        self.assertEqual(revision, "006_add_report_schema_version")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -221,7 +239,7 @@ class MigrationTests(unittest.TestCase):
 
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "005_add_evidence_model")
+        self.assertEqual(revision, "006_add_report_schema_version")
 
     def test_init_db_repairs_empty_alembic_revision_state(self) -> None:
         command.upgrade(self._config(), "0001_create_analysis_reports")
@@ -244,7 +262,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "005_add_evidence_model")
+        self.assertEqual(revision, "006_add_report_schema_version")
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from api.schemas import (
     AnalysisRunResponse,
     ErrorResponse,
     build_analysis_run_data,
-    build_meta,
+    build_report_meta,
 )
 from services.analysis_service import (
     analyze_uploaded_files,
@@ -26,6 +26,7 @@ from services.intake_service import (
 )
 from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
+from services.report_service import REPORT_SCHEMA_VERSION
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
@@ -81,7 +82,8 @@ def list_analyses(
     )
     return AnalysisListResponse(
         data=[AnalysisReportData(**report) for report in page_payload["items"]],
-        meta=build_meta(
+        meta=build_report_meta(
+            report_schema_version=REPORT_SCHEMA_VERSION,
             count=len(page_payload["items"]),
             total_count=page_payload["total_count"],
             page=page_payload["page"],
@@ -149,8 +151,9 @@ async def create_analysis(
             advisory=advisory,
             share_summary=share_summary,
         ),
-        meta=build_meta(
+        meta=build_report_meta(
             api_version="v1",
+            report_schema_version=REPORT_SCHEMA_VERSION,
             advisory_only=True,
             submitted_artifact_count=len(raw_files),
             accepted_artifact_count=pending_analysis.ready_count,
@@ -178,5 +181,7 @@ def get_analysis(report_id: int) -> AnalysisDetailResponse:
         )
     return AnalysisDetailResponse(
         data=AnalysisReportData(**report),
-        meta=build_meta(id=report_id),
+        meta=build_report_meta(
+            id=report_id, report_schema_version=REPORT_SCHEMA_VERSION
+        ),
     )

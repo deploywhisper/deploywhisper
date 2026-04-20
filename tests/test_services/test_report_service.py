@@ -149,6 +149,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["audit"]["llm_provider"], "ollama")
         self.assertEqual(persisted["assessment_source"], "heuristic-only")
         self.assertEqual(persisted["narrative_source"], "llm")
+        self.assertEqual(persisted["report_schema_version"], "v2")
         self.assertEqual(persisted["narrative_provider"], "ollama")
         self.assertEqual(persisted["narrative_model"], "ollama/llama3")
         self.assertEqual(persisted["skills_applied"], ["git", "terraform"])
@@ -165,6 +166,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["audit"]["files_analyzed"], ["plan.json"])
         self.assertEqual(fetched["assessment_source"], "heuristic-only")
         self.assertEqual(fetched["narrative_source"], "llm")
+        self.assertEqual(fetched["report_schema_version"], "v2")
         self.assertEqual(fetched["skills_applied"], ["git", "terraform"])
         self.assertEqual(fetched["top_risk_contributors"], ["ev-001"])
         self.assertEqual(fetched["context_completeness"]["topology_freshness_days"], 12)
@@ -178,6 +180,14 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(history[0]["id"], persisted["id"])
         self.assertEqual(history[0]["audit"]["llm_provider"], "ollama")
         self.assertEqual(history[0]["top_risk_contributors"], ["ev-001"])
+        self.assertEqual(history[0]["report_schema_version"], "v2")
+
+    def test_report_schema_helpers_preserve_forward_compatibility(self) -> None:
+        self.assertEqual(
+            report_service_module.normalize_report_schema_version(None), "v1"
+        )
+        self.assertTrue(report_service_module.can_read_report_schema("v3", "v2"))
+        self.assertFalse(report_service_module.can_read_report_schema("v2", "v3"))
 
     def test_persist_analysis_report_combines_assessment_and_narrative_warnings(
         self,
@@ -325,6 +335,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(active["dashboard_display_duration_seconds"], 600)
         self.assertEqual(active["assessment_source"], "heuristic-only")
         self.assertEqual(active["narrative_source"], "llm")
+        self.assertEqual(active["report_schema_version"], "v2")
         self.assertEqual(active["skills_applied"], ["git", "terraform"])
         self.assertGreater(active["dashboard_remaining_seconds"], 0)
 
@@ -527,6 +538,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertIn("narrative_source", columns)
         self.assertIn("narrative_skills_json", columns)
         self.assertIn("dashboard_display_duration_seconds", columns)
+        self.assertIn("report_schema_version", columns)
 
 
 if __name__ == "__main__":
