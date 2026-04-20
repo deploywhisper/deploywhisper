@@ -13,11 +13,12 @@ from pathlib import Path
 
 import config as config_module
 import models.database as database_module
+import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
 import services.report_service as report_service_module
 import services.settings_service as settings_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from evidence.models import Finding
+from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 
@@ -30,6 +31,7 @@ class ReportServiceTests(unittest.TestCase):
         reload(config_module)
         reload(tables_module)
         reload(database_module)
+        reload(analysis_reports_repository_module)
         reload(settings_service_module)
         reload(report_service_module)
         database_module.init_db()
@@ -112,12 +114,27 @@ class ReportServiceTests(unittest.TestCase):
                 skill_id=None,
             )
         ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-001",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref="terraform://plan.json#aws_security_group.main?action=modify",
+                summary="Terraform changed a security group.",
+                severity_hint="high",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=["change-1"],
+            )
+        ]
 
         persisted = report_service_module.persist_analysis_report(
             parse_batch,
             assessment,
             narrative,
             findings=findings,
+            evidence_items=evidence_items,
             audit_context={
                 "source_interface": "api",
                 "trigger_type": "session",
@@ -138,6 +155,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["top_risk_contributors"], ["ev-001"])
         self.assertEqual(persisted["context_completeness"]["context_score"], 0.84)
         self.assertEqual(persisted["findings"][0]["confidence"], 1.0)
+        self.assertEqual(persisted["evidence_items"][0]["evidence_id"], "ev-001")
         self.assertEqual(persisted["contributors"][0]["evidence_id"], "ev-001")
 
         fetched = report_service_module.fetch_analysis_report(persisted["id"])
@@ -151,6 +169,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["top_risk_contributors"], ["ev-001"])
         self.assertEqual(fetched["context_completeness"]["topology_freshness_days"], 12)
         self.assertEqual(fetched["findings"][0]["evidence_refs"], ["ev-001"])
+        self.assertEqual(fetched["evidence_items"][0]["finding_id"], "finding-001")
         self.assertEqual(fetched["contributors"][0]["evidence_id"], "ev-001")
         self.assertNotIn("prompt", json.dumps(fetched))
 
@@ -203,11 +222,13 @@ class ReportServiceTests(unittest.TestCase):
             ],
         )
         narrative = NarrativeResult(
-            opening_sentence="CAUTION: review the deployment.",
-            explanation="Fallback output used.",
+            available=False,
+            opening_sentence="",
+            explanation="",
             guidance=[],
             degraded=True,
             warnings=["Narrative provider unavailable: provider offline"],
+            failure_notice="Narrative provider unavailable: provider offline",
             source="fallback",
             provider="ollama",
             model="ollama/llama3",
@@ -223,6 +244,11 @@ class ReportServiceTests(unittest.TestCase):
             "LLM severity assessment unavailable", " ".join(persisted["warnings"])
         )
         self.assertIn("Narrative provider unavailable", " ".join(persisted["warnings"]))
+        self.assertFalse(persisted["narrative_available"])
+        self.assertEqual(
+            persisted["narrative_failure_notice"],
+            "Narrative provider unavailable: provider offline",
+        )
 
     def test_fetch_active_dashboard_report_returns_recent_dashboard_upload(
         self,
@@ -302,12 +328,191 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(active["skills_applied"], ["git", "terraform"])
         self.assertGreater(active["dashboard_remaining_seconds"], 0)
 
+    def test_fetch_filtered_history_page_omits_evidence_payloads(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            top_risk_contributors=["ev-001"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-001",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            NarrativeResult(
+                opening_sentence="CAUTION: review the security group update.",
+                explanation="The deployment widens database access and should be reviewed.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            findings=[
+                Finding(
+                    finding_id="finding-001",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Security group changes can affect production ingress.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-001"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-001",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref="terraform://plan.json#aws_security_group.main?action=modify",
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        page = report_service_module.fetch_filtered_analysis_history_page(
+            page=1, page_size=5
+        )
+
+        self.assertEqual(page["items"][0]["evidence_items"], [])
+
+    def test_persist_analysis_report_raises_when_evidence_cannot_attach_to_finding(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+
+        with self.assertRaises(ValueError):
+            report_service_module.persist_analysis_report(
+                parse_batch,
+                assessment,
+                NarrativeResult(
+                    opening_sentence="CAUTION: review the security group update.",
+                    explanation="The deployment widens database access and should be reviewed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+                findings=[
+                    Finding(
+                        finding_id="finding-001",
+                        analysis_id=0,
+                        title="HIGH: aws_security_group.main",
+                        description="Security group changes can affect production ingress.",
+                        severity="high",
+                        category="networking/ingress",
+                        deterministic=True,
+                        confidence=1.0,
+                        uncertainty_note=None,
+                        evidence_refs=[],
+                        skill_id=None,
+                    ),
+                    Finding(
+                        finding_id="finding-002",
+                        analysis_id=0,
+                        title="HIGH: aws_security_group.secondary",
+                        description="A second security group also changed.",
+                        severity="high",
+                        category="networking/ingress",
+                        deterministic=True,
+                        confidence=1.0,
+                        uncertainty_note=None,
+                        evidence_refs=[],
+                        skill_id=None,
+                    ),
+                ],
+                evidence_items=[
+                    EvidenceItem(
+                        evidence_id="ev-001",
+                        analysis_id=0,
+                        finding_id="pending:change-1",
+                        source_type="artifact",
+                        source_ref="terraform://plan.json#aws_security_group.main?action=modify",
+                        summary="Terraform changed a security group.",
+                        severity_hint="high",
+                        deterministic=True,
+                        confidence=1.0,
+                        related_change_ids=["change-1"],
+                    ),
+                    EvidenceItem(
+                        evidence_id="ev-002",
+                        analysis_id=0,
+                        finding_id="pending:change-2",
+                        source_type="artifact",
+                        source_ref="terraform://plan.json#aws_security_group.secondary?action=modify",
+                        summary="Terraform changed another security group.",
+                        severity_hint="high",
+                        deterministic=True,
+                        confidence=1.0,
+                        related_change_ids=["change-2"],
+                    ),
+                ],
+            )
+
     def test_init_db_creates_current_analysis_report_schema(self) -> None:
         database_module.engine.dispose()
         if self.db_path.exists():
             self.db_path.unlink()
 
         reload(database_module)
+        reload(analysis_reports_repository_module)
         reload(report_service_module)
         database_module.init_db()
 

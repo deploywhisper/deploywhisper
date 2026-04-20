@@ -18,13 +18,22 @@ from services.settings_service import resolve_provider_runtime
 
 
 class NarrativeResult(BaseModel):
-    opening_sentence: str = Field(
-        ..., description="First-scan deploy briefing sentence"
+    available: bool = Field(
+        default=True, description="Whether narrative text is available"
     )
-    explanation: str = Field(..., description="Extended plain-English explanation")
+    opening_sentence: str = Field(
+        default="", description="First-scan deploy briefing sentence"
+    )
+    explanation: str = Field(
+        default="", description="Extended plain-English explanation"
+    )
     guidance: list[str] = Field(default_factory=list, description="Actionable guidance")
     degraded: bool = Field(..., description="Whether fallback mode was used")
     warnings: list[str] = Field(default_factory=list, description="Narrative warnings")
+    failure_notice: str | None = Field(
+        default=None,
+        description="Visible explanation when narrative generation was unavailable",
+    )
     source: Literal["llm", "fallback"] = Field(
         default="fallback",
         description="Whether the narrative came from the LLM or local fallback logic",
@@ -56,28 +65,18 @@ def _fallback_narrative(
     skills_applied: list[str] | None = None,
 ) -> NarrativeResult:
     warnings = list(assessment.warnings)
+    failure_notice = None
     if error_message:
-        warnings.append(f"Narrative provider unavailable: {error_message}")
-    explanation = (
-        f"The deployment is currently rated {assessment.severity} with a recommendation of "
-        f"{assessment.recommendation}. {assessment.top_risk}"
-    )
-    if findings:
-        explanation += f" {len(findings)} finding(s) are available for review."
-    guidance = [
-        "Review the top risk and contributor list before deployment.",
-        "Inspect the finding list and rollback guidance before shipping higher-risk changes.",
-    ]
-    if assessment.partial_context:
-        guidance.append(
-            "Investigate parser failures because the analysis used partial context."
-        )
+        failure_notice = f"Narrative provider unavailable: {error_message}"
+        warnings.append(failure_notice)
     return NarrativeResult(
-        opening_sentence=f"{assessment.recommendation.upper()}: {assessment.top_risk}",
-        explanation=explanation,
-        guidance=guidance,
+        available=False,
+        opening_sentence="",
+        explanation="",
+        guidance=[],
         degraded=True,
         warnings=warnings,
+        failure_notice=failure_notice,
         source="fallback",
         provider=provider,
         model=model,
@@ -165,6 +164,7 @@ def generate_narrative(
             return sanitized
 
         return NarrativeResult(
+            available=True,
             opening_sentence=sanitize_scope_claims(payload["opening_sentence"]),
             explanation=sanitize_scope_claims(payload["explanation"]),
             guidance=[
@@ -173,6 +173,7 @@ def generate_narrative(
             ],
             degraded=False,
             warnings=list(assessment.warnings),
+            failure_notice=None,
             source="llm",
             provider=runtime["provider"],
             model=runtime["model"],

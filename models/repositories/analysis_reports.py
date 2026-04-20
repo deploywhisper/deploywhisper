@@ -11,9 +11,19 @@ from sqlalchemy.orm import Session, selectinload
 
 from models.tables import (
     AnalysisReport,
+    EvidenceItem as PersistedEvidenceItem,
     Finding as PersistedFinding,
     RiskAssessment as PersistedRiskAssessment,
 )
+
+
+def _report_load_options(*, include_evidence: bool) -> list:
+    options = [selectinload(AnalysisReport.risk_assessment)]
+    findings_loader = selectinload(AnalysisReport.findings)
+    if include_evidence:
+        findings_loader = findings_loader.selectinload(PersistedFinding.evidence_items)
+    options.append(findings_loader)
+    return options
 
 
 def create_analysis_report(
@@ -42,6 +52,7 @@ def create_analysis_report(
     top_risk_contributors_json: str = "[]",
     context_completeness_json: str = "{}",
     findings_payload: list[dict[str, Any]] | None = None,
+    evidence_payload: list[dict[str, Any]] | None = None,
 ) -> AnalysisReport:
     report = AnalysisReport(
         risk_score=risk_score,
@@ -65,16 +76,9 @@ def create_analysis_report(
         trigger_id=trigger_id,
         dashboard_display_duration_seconds=dashboard_display_duration_seconds,
     )
-    report.risk_assessment = PersistedRiskAssessment(
-        overall_severity=severity,
-        recommendation=recommendation,
-        score=risk_score,
-        confidence=1.0,
-        top_risk_contributors_json=top_risk_contributors_json,
-        context_completeness_json=context_completeness_json,
-    )
-    report.findings = [
-        PersistedFinding(
+    finding_rows: list[tuple[PersistedFinding, list[str]]] = []
+    for finding in findings_payload or []:
+        persisted_finding = PersistedFinding(
             finding_id=str(finding["finding_id"]),
             title=str(finding["title"]),
             description=str(finding["description"]),
@@ -94,21 +98,76 @@ def create_analysis_report(
                 else None
             ),
         )
-        for finding in (findings_payload or [])
-    ]
+        finding_rows.append(
+            (
+                persisted_finding,
+                [str(ref) for ref in finding.get("evidence_refs", [])],
+            )
+        )
+
+    report.risk_assessment = PersistedRiskAssessment(
+        overall_severity=severity,
+        recommendation=recommendation,
+        score=risk_score,
+        confidence=1.0,
+        top_risk_contributors_json=top_risk_contributors_json,
+        context_completeness_json=context_completeness_json,
+    )
+    report.findings = [persisted_finding for persisted_finding, _ in finding_rows]
     session.add(report)
+    session.flush()
+
+    if evidence_payload:
+        finding_by_id = {
+            persisted_finding.finding_id: persisted_finding
+            for persisted_finding in report.findings
+        }
+        evidence_owner_by_id: dict[str, str] = {}
+        for persisted_finding, evidence_refs in finding_rows:
+            for evidence_id in evidence_refs:
+                evidence_owner_by_id.setdefault(
+                    evidence_id, persisted_finding.finding_id
+                )
+
+        fallback_owner = report.findings[0] if len(report.findings) == 1 else None
+        for evidence in evidence_payload:
+            owner_id = evidence_owner_by_id.get(str(evidence["evidence_id"]))
+            owner = (
+                finding_by_id.get(owner_id) if owner_id is not None else fallback_owner
+            )
+            if owner is None:
+                raise ValueError(
+                    "Evidence item "
+                    f"{evidence['evidence_id']} could not be attached to a persisted finding."
+                )
+            owner.evidence_items.append(
+                PersistedEvidenceItem(
+                    evidence_id=str(evidence["evidence_id"]),
+                    analysis_id=report.id,
+                    finding_id=owner.finding_id,
+                    source_type=str(evidence["source_type"]),
+                    source_ref=str(evidence["source_ref"]),
+                    summary=str(evidence["summary"]),
+                    severity_hint=str(evidence["severity_hint"]),
+                    deterministic=bool(evidence["deterministic"]),
+                    confidence=float(evidence["confidence"]),
+                    related_change_ids_json=json.dumps(
+                        evidence.get("related_change_ids", [])
+                    ),
+                )
+            )
+
     session.commit()
     session.refresh(report, attribute_names=["risk_assessment", "findings"])
     return report
 
 
-def get_analysis_report(session: Session, report_id: int) -> AnalysisReport | None:
+def get_analysis_report(
+    session: Session, report_id: int, *, include_evidence: bool = True
+) -> AnalysisReport | None:
     stmt = (
         select(AnalysisReport)
-        .options(
-            selectinload(AnalysisReport.risk_assessment),
-            selectinload(AnalysisReport.findings),
-        )
+        .options(*_report_load_options(include_evidence=include_evidence))
         .where(AnalysisReport.id == report_id)
     )
     return session.execute(stmt).scalar_one_or_none()
@@ -131,13 +190,11 @@ def list_analysis_reports(
     search: str | None = None,
     limit: int | None = None,
     offset: int | None = None,
+    include_evidence: bool = False,
 ) -> list[AnalysisReport]:
     stmt = (
         select(AnalysisReport)
-        .options(
-            selectinload(AnalysisReport.risk_assessment),
-            selectinload(AnalysisReport.findings),
-        )
+        .options(*_report_load_options(include_evidence=include_evidence))
         .order_by(AnalysisReport.id.desc())
     )
     if severity:
@@ -194,7 +251,7 @@ def latest_active_dashboard_report(
     session: Session, *, now: datetime | None = None
 ) -> AnalysisReport | None:
     current_time = now or datetime.now(UTC)
-    reports = list_analysis_reports(session)
+    reports = list_analysis_reports(session, include_evidence=False)
     for report in reports:
         duration = report.dashboard_display_duration_seconds or 0
         if duration <= 0:

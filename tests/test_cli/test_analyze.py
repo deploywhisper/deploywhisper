@@ -336,11 +336,13 @@ class AnalyzeCliTests(unittest.TestCase):
             ],
         )
         narrative = NarrativeResult(
-            opening_sentence="NO-GO: review the destructive security group update.",
-            explanation="The deployment removes a security boundary and needs manual review.",
+            available=False,
+            opening_sentence="",
+            explanation="",
             guidance=["Pause deployment until the destructive change is reviewed."],
             degraded=True,
             warnings=["Narrative provider unavailable: offline test"],
+            failure_notice="Narrative provider unavailable: offline test",
         )
         output = io.StringIO()
 
@@ -370,7 +372,9 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         self.assertEqual(payload["data"]["assessment"]["recommendation"], "no-go")
         self.assertTrue(payload["data"]["assessment"]["partial_context"])
+        self.assertFalse(payload["data"]["narrative"]["available"])
         self.assertTrue(payload["data"]["narrative"]["degraded"])
+        self.assertTrue(payload["data"]["evidence_items"])
         self.assertIn(
             "partial_context", payload["data"]["advisory"]["uncertainty_flags"]
         )

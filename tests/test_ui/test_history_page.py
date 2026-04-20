@@ -10,6 +10,7 @@ from importlib import reload
 import app as app_module
 import config as config_module
 import models.database as database_module
+import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
 import services.report_service as report_service_module
 import ui.routes.history as history_module
@@ -49,6 +50,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         reload(config_module)
         reload(tables_module)
         reload(database_module)
+        reload(analysis_reports_repository_module)
         reload(report_service_module)
         reload(history_module)
         reload(app_module)

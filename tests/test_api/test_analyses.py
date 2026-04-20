@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import config as config_module
 import models.database as database_module
+import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
 import services.report_service as report_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
@@ -28,6 +29,7 @@ class AnalysesApiTests(unittest.TestCase):
         reload(config_module)
         reload(tables_module)
         reload(database_module)
+        reload(analysis_reports_repository_module)
         reload(report_service_module)
         database_module.init_db()
         self.client = TestClient(create_app())
@@ -185,6 +187,8 @@ class AnalysesApiTests(unittest.TestCase):
             payload["data"]["assessment"]["contributors"][0]["evidence_id"], "ev-001"
         )
         self.assertTrue(payload["data"]["findings"])
+        self.assertTrue(payload["data"]["evidence_items"])
+        self.assertEqual(payload["data"]["evidence_items"][0]["analysis_id"], 0)
         self.assertEqual(payload["data"]["findings"][0]["confidence"], 1.0)
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
         self.assertEqual(payload["data"]["narrative"]["source"], "llm")
@@ -203,6 +207,7 @@ class AnalysesApiTests(unittest.TestCase):
             payload["data"]["persisted_report"]["top_risk_contributors"], ["ev-001"]
         )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
+        self.assertTrue(payload["data"]["persisted_report"]["evidence_items"])
         self.assertEqual(
             payload["data"]["persisted_report"]["contributors"][0]["evidence_id"],
             "ev-001",

@@ -8,7 +8,7 @@ from collections import Counter
 from typing import Any
 
 from analysis.risk_scorer import RiskAssessment
-from evidence.models import Finding
+from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 
 from models.database import SessionLocal
@@ -58,7 +58,14 @@ def _build_audit_metadata(
     }
 
 
-def _serialize_report(report) -> dict:
+def _extract_narrative_failure_notice(warnings: list[str]) -> str | None:
+    for warning in warnings:
+        if "narrative provider unavailable" in warning.lower():
+            return warning
+    return None
+
+
+def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     created_at = report.created_at
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=UTC)
@@ -73,6 +80,35 @@ def _serialize_report(report) -> dict:
         "trigger_type": report.trigger_type,
         "trigger_id": report.trigger_id,
     }
+    warnings = json.loads(report.warnings_json or "[]")
+    evidence_items: list[dict[str, Any]] = []
+    if include_evidence:
+        seen_evidence_ids: set[str] = set()
+        for finding in report.findings:
+            for evidence_item in finding.evidence_items:
+                if evidence_item.evidence_id in seen_evidence_ids:
+                    continue
+                seen_evidence_ids.add(evidence_item.evidence_id)
+                evidence_items.append(
+                    {
+                        "evidence_id": evidence_item.evidence_id,
+                        "analysis_id": evidence_item.analysis_id,
+                        "finding_id": evidence_item.finding_id,
+                        "source_type": evidence_item.source_type,
+                        "source_ref": evidence_item.source_ref,
+                        "summary": evidence_item.summary,
+                        "severity_hint": evidence_item.severity_hint,
+                        "deterministic": evidence_item.deterministic,
+                        "confidence": evidence_item.confidence,
+                        "related_change_ids": json.loads(
+                            evidence_item.related_change_ids_json or "[]"
+                        ),
+                    }
+                )
+    narrative_available = bool(
+        (report.narrative_opening or "").strip()
+        or (report.narrative_explanation or "").strip()
+    )
     return {
         "id": report.id,
         "risk_score": report.risk_score,
@@ -91,6 +127,8 @@ def _serialize_report(report) -> dict:
         ),
         "parse_summary": report.parse_summary,
         "narrative_opening": report.narrative_opening,
+        "narrative_available": narrative_available,
+        "narrative_failure_notice": _extract_narrative_failure_notice(warnings),
         "assessment_source": report.assessment_source,
         "narrative_source": report.narrative_source,
         "narrative_provider": report.llm_provider,
@@ -100,7 +138,7 @@ def _serialize_report(report) -> dict:
         else None,
         "skills_applied": json.loads(report.narrative_skills_json or "[]"),
         "created_at": created_at.isoformat(),
-        "warnings": json.loads(report.warnings_json or "[]"),
+        "warnings": warnings,
         "findings": [
             {
                 "finding_id": finding.finding_id,
@@ -117,6 +155,7 @@ def _serialize_report(report) -> dict:
             }
             for finding in report.findings
         ],
+        "evidence_items": evidence_items,
         "contributors": json.loads(report.contributors_json or "[]"),
         "dashboard_display_duration_seconds": report.dashboard_display_duration_seconds,
         "audit": audit,
@@ -128,6 +167,7 @@ def persist_analysis_report(
     assessment: RiskAssessment,
     narrative: NarrativeResult,
     findings: list[Finding] | None = None,
+    evidence_items: list[EvidenceItem] | None = None,
     audit_context: dict[str, Any] | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
@@ -151,8 +191,8 @@ def persist_analysis_report(
                 recommendation=assessment.recommendation,
                 top_risk=assessment.top_risk,
                 parse_summary=_build_parse_summary(parse_batch),
-                narrative_opening=narrative.opening_sentence,
-                narrative_explanation=narrative.explanation,
+                narrative_opening=narrative.opening_sentence or "",
+                narrative_explanation=narrative.explanation or "",
                 warnings_json=json.dumps(combined_warnings),
                 contributors_json=json.dumps(
                     [
@@ -178,8 +218,12 @@ def persist_analysis_report(
                 findings_payload=[
                     finding.model_dump(mode="json") for finding in (findings or [])
                 ],
+                evidence_payload=[
+                    evidence_item.model_dump(mode="json")
+                    for evidence_item in (evidence_items or [])
+                ],
             )
-            return _serialize_report(report)
+            return _serialize_report(report, include_evidence=True)
 
     return _run_with_schema_retry(operation)
 
@@ -187,10 +231,10 @@ def persist_analysis_report(
 def fetch_analysis_report(report_id: int) -> dict | None:
     def operation():
         with SessionLocal() as session:
-            report = get_analysis_report(session, report_id)
+            report = get_analysis_report(session, report_id, include_evidence=True)
             if report is None:
                 return None
-            return _serialize_report(report)
+            return _serialize_report(report, include_evidence=True)
 
     return _run_with_schema_retry(operation)
 
@@ -234,6 +278,7 @@ def fetch_filtered_analysis_history_page(
                 search=search,
                 limit=page_size,
                 offset=offset,
+                include_evidence=False,
             )
             total_count = count_analysis_reports(
                 session,
@@ -241,7 +286,9 @@ def fetch_filtered_analysis_history_page(
                 recommendation=recommendation,
                 search=search,
             )
-            return [_serialize_report(report) for report in reports], total_count
+            return [
+                _serialize_report(report, include_evidence=False) for report in reports
+            ], total_count
 
     reports, total_count = _run_with_schema_retry(operation)
     return {
@@ -258,7 +305,9 @@ def fetch_risk_trends() -> dict:
 
     def operation():
         with SessionLocal() as session:
-            reports = list_analysis_reports(session, limit=trend_sample_size)
+            reports = list_analysis_reports(
+                session, limit=trend_sample_size, include_evidence=False
+            )
             return {
                 "reports": reports,
                 "total_reports": count_analysis_reports(session),
@@ -311,7 +360,7 @@ def fetch_dashboard_stats() -> dict:
 
     def operation():
         with SessionLocal() as session:
-            return list_analysis_reports(session)
+            return list_analysis_reports(session, include_evidence=False)
 
     reports = _run_with_schema_retry(operation)
 
@@ -338,7 +387,8 @@ def fetch_dashboard_briefing() -> dict[str, Any]:
     def operation():
         with SessionLocal() as session:
             return [
-                _serialize_report(report) for report in list_analysis_reports(session)
+                _serialize_report(report, include_evidence=False)
+                for report in list_analysis_reports(session, include_evidence=False)
             ]
 
     serialized_reports = _run_with_schema_retry(operation)
@@ -399,7 +449,12 @@ def fetch_active_dashboard_report(*, now: datetime | None = None) -> dict | None
             report = latest_active_dashboard_report(session, now=current_time)
             if report is None:
                 return None
-            return _serialize_report(report)
+            detailed_report = get_analysis_report(
+                session, report.id, include_evidence=True
+            )
+            if detailed_report is None:
+                return None
+            return _serialize_report(detailed_report, include_evidence=True)
 
     payload = _run_with_schema_retry(operation)
     if payload is None:

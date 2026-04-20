@@ -84,9 +84,14 @@ class NarrativeTests(unittest.TestCase):
         narrative = generate_narrative(
             self._assessment(), self._findings(), completion_client=broken_completion
         )
+        self.assertFalse(narrative.available)
         self.assertTrue(narrative.degraded)
         self.assertEqual(narrative.source, "fallback")
         self.assertTrue(narrative.warnings)
+        self.assertEqual(narrative.opening_sentence, "")
+        self.assertEqual(narrative.explanation, "")
+        self.assertEqual(narrative.guidance, [])
+        self.assertIn("provider offline", narrative.failure_notice or "")
         self.assertIn("provider offline", narrative.warnings[-1])
 
     def test_generate_narrative_gracefully_degrades_on_invalid_json(self) -> None:
@@ -203,6 +208,7 @@ class NarrativeTests(unittest.TestCase):
 
         self.assertTrue(narrative.degraded)
         self.assertEqual(narrative.source, "fallback")
+        self.assertFalse(narrative.available)
         self.assertTrue(
             any(
                 "Narrator disabled by configuration." in warning

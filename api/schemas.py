@@ -25,11 +25,33 @@ def build_meta(**extra: Any) -> dict[str, Any]:
 class HealthData(BaseModel):
     status: str = Field(..., description="Service health status")
     mode: str = Field(..., description="Current application mode")
+    core_status: str = Field(..., description="Core system health status")
+    llm: "LlmHealthData" = Field(
+        ..., description="Narrative provider readiness reported separately from core"
+    )
 
 
 class HealthResponse(BaseModel):
     data: HealthData
     meta: MetaPayload
+
+
+class LlmHealthData(BaseModel):
+    status: Literal["ok", "degraded"] = Field(..., description="LLM readiness status")
+    ready: bool = Field(..., description="Whether the LLM provider is ready")
+    provider: str = Field(..., description="Configured LLM provider")
+    model: str = Field(..., description="Configured LLM model")
+    local_mode: bool = Field(..., description="Whether local-only mode is active")
+    requires_api_key: bool = Field(
+        ..., description="Whether the selected provider requires an API key"
+    )
+    has_api_key: bool = Field(
+        ..., description="Whether an API key is currently available"
+    )
+    message: str = Field(..., description="Human-readable readiness summary")
+    source: str = Field(
+        ..., description="Where the provider settings were resolved from"
+    )
 
 
 ToolType = Literal[
@@ -133,6 +155,13 @@ class PersistedReportData(BaseModel):
     )
     parse_summary: str
     narrative_opening: str
+    narrative_available: bool = Field(
+        default=True, description="Whether narrative text is available"
+    )
+    narrative_failure_notice: str | None = Field(
+        default=None,
+        description="Visible explanation when narrative generation was unavailable",
+    )
     assessment_source: Literal["heuristic-only", "heuristic+llm"] | None = Field(
         default=None
     )
@@ -144,6 +173,7 @@ class PersistedReportData(BaseModel):
     created_at: str
     warnings: list[str] = Field(default_factory=list)
     findings: list["FindingData"] = Field(default_factory=list)
+    evidence_items: list["EvidenceItemData"] = Field(default_factory=list)
     contributors: list["RiskContributorData"] = Field(default_factory=list)
     dashboard_display_duration_seconds: int | None = Field(default=None)
     dashboard_remaining_seconds: int | None = Field(default=None)
@@ -252,6 +282,25 @@ class FindingData(BaseModel):
     )
 
 
+class EvidenceItemData(BaseModel):
+    evidence_id: str = Field(..., description="Stable evidence identifier")
+    analysis_id: int = Field(..., description="Analysis identifier")
+    finding_id: str = Field(..., description="Owning finding identifier")
+    source_type: str = Field(..., description="Evidence source category")
+    source_ref: str = Field(..., description="Stable source reference")
+    summary: str = Field(..., description="Evidence summary")
+    severity_hint: RiskSeverity = Field(
+        ..., description="Severity hint for the evidence"
+    )
+    deterministic: bool = Field(
+        ..., description="Whether the evidence came from deterministic logic"
+    )
+    confidence: float = Field(..., description="Confidence score between 0 and 1")
+    related_change_ids: list[str] = Field(
+        default_factory=list, description="Traceable normalized change identifiers"
+    )
+
+
 class ContextCompletenessData(BaseModel):
     topology_freshness_days: int | None = Field(
         default=None, description="Age in days of the topology snapshot when available"
@@ -352,13 +401,22 @@ class IncidentMatchData(BaseModel):
 
 
 class NarrativeData(BaseModel):
-    opening_sentence: str = Field(
-        ..., description="First-scan deploy briefing sentence"
+    available: bool = Field(
+        default=True, description="Whether narrative text is available"
     )
-    explanation: str = Field(..., description="Extended plain-English explanation")
+    opening_sentence: str = Field(
+        default="", description="First-scan deploy briefing sentence"
+    )
+    explanation: str = Field(
+        default="", description="Extended plain-English explanation"
+    )
     guidance: list[str] = Field(default_factory=list, description="Actionable guidance")
     degraded: bool = Field(..., description="Whether fallback mode was used")
     warnings: list[str] = Field(default_factory=list, description="Narrative warnings")
+    failure_notice: str | None = Field(
+        default=None,
+        description="Visible explanation when narrative generation was unavailable",
+    )
     source: Literal["llm", "fallback"] = Field(
         ...,
         description="Whether the narrative was produced by the LLM or local fallback logic",
@@ -432,6 +490,7 @@ class AnalysisRunData(BaseModel):
     parse_batch: ParseBatchData
     assessment: AssessmentData
     findings: list[FindingData] = Field(default_factory=list)
+    evidence_items: list[EvidenceItemData] = Field(default_factory=list)
     blast_radius: BlastRadiusData
     rollback_plan: RollbackPlanData
     incident_matches: list[IncidentMatchData] = Field(default_factory=list)
@@ -473,6 +532,7 @@ def build_analysis_run_data(
     parse_batch = result.parse_batch
     assessment = result.assessment
     findings = result.findings
+    evidence_items = result.evidence_items
     blast_radius = result.blast_radius
     rollback_plan = result.rollback_plan
     incident_matches = result.incident_matches
@@ -520,6 +580,10 @@ def build_analysis_run_data(
             source=assessment.source,
         ),
         findings=[_copy_model(finding, FindingData) for finding in findings],
+        evidence_items=[
+            _copy_model(evidence_item, EvidenceItemData)
+            for evidence_item in evidence_items
+        ],
         blast_radius=BlastRadiusData(
             affected=[
                 _copy_model(node, ImpactNodeData) for node in blast_radius.affected

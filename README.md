@@ -215,7 +215,19 @@ Response shape:
 {
   "data": {
     "status": "ok",
-    "mode": "foundation"
+    "mode": "foundation",
+    "core_status": "ok",
+    "llm": {
+      "status": "ok",
+      "ready": true,
+      "provider": "ollama",
+      "model": "ollama/llama3",
+      "local_mode": true,
+      "requires_api_key": false,
+      "has_api_key": false,
+      "message": "LLM provider connection validated for analysis.",
+      "source": "environment"
+    }
   },
   "meta": {
     "app": "DeployWhisper",
@@ -236,7 +248,9 @@ Response includes:
 
 - intake summary
 - parse batch
+- evidence items
 - assessment
+- narrative availability/failure notice when the LLM path degrades
 - advisory summary
 - share summary
 - persisted report metadata

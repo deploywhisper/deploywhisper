@@ -50,5 +50,6 @@ Relationship rules introduced in this story:
 
 - The migration is additive and preserves existing report history.
 - Existing report readers continue to work because the legacy `analysis_reports` columns are unchanged.
-- The shared analysis pipeline now scores extracted `EvidenceItem` objects through `analysis/risk_engine.py` while preserving the legacy report shape for UI, API, and CLI consumers.
+- The shared analysis pipeline now scores extracted `EvidenceItem` objects through `analysis/risk_engine.py` and exposes persisted `evidence_items` in UI, API, and CLI report payloads.
 - `RiskAssessment.top_risk_contributors` now carries concrete evidence IDs so downstream findings and report views can trace the verdict back to specific evidence without reparsing raw artifacts.
+- When narrative generation degrades, the shared report contract now keeps deterministic analysis artifacts intact and surfaces a visible narrative failure notice instead of fabricating fallback prose.
