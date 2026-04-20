@@ -34,6 +34,7 @@ def build_user_payload(assessment: RiskAssessment) -> str:
         "severity": assessment.severity,
         "recommendation": assessment.recommendation,
         "top_risk": assessment.top_risk,
+        "top_risk_contributors": assessment.top_risk_contributors,
         "partial_context": assessment.partial_context,
         "warnings": assessment.warnings,
         "interaction_risks": [
@@ -48,6 +49,7 @@ def build_user_payload(assessment: RiskAssessment) -> str:
         ],
         "contributors": [
             {
+                "evidence_id": contributor.evidence_id,
                 "source_file": contributor.source_file,
                 "tool": contributor.tool,
                 "resource_id": contributor.resource_id,

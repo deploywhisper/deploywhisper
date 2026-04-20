@@ -6,8 +6,9 @@ from pydantic import BaseModel, Field
 
 from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
 from analysis.incident_matcher import IncidentMatch, find_incident_matches
+from analysis.risk_engine import score_evidence
 from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
-from analysis.risk_scorer import RiskAssessment, score_parse_batch
+from analysis.risk_scorer import RiskAssessment
 from evidence.models import EvidenceItem
 from evidence.extractor import extract_batch_evidence
 from llm.narrator import NarrativeResult, generate_narrative
@@ -17,16 +18,36 @@ from services.report_service import persist_analysis_report
 from services.topology_service import load_topology
 
 
-def evaluate_parse_batch(
-    batch: ParseBatchResult,
+def evaluate_evidence(
+    evidence_items: list[EvidenceItem],
     *,
+    partial_context: bool = False,
     topology: dict | None = None,
     raw_files: dict[str, bytes | None] | None = None,
     completion_client=None,
 ) -> RiskAssessment:
-    """Return a reusable unified risk assessment from parsed inputs."""
-    return score_parse_batch(
-        batch,
+    """Return a reusable unified risk assessment from evidence inputs."""
+    return score_evidence(
+        evidence_items,
+        partial_context=partial_context,
+        topology=topology,
+        raw_files=raw_files,
+        completion_client=completion_client,
+    )
+
+
+def evaluate_parse_batch(
+    batch: ParseBatchResult,
+    *,
+    evidence_items: list[EvidenceItem] | None = None,
+    topology: dict | None = None,
+    raw_files: dict[str, bytes | None] | None = None,
+    completion_client=None,
+) -> RiskAssessment:
+    """Compatibility wrapper that scores extracted evidence for a parse batch."""
+    return evaluate_evidence(
+        evidence_items or extract_batch_evidence(batch),
+        partial_context=batch.has_partial_context,
         topology=topology,
         raw_files=raw_files,
         completion_client=completion_client,
@@ -228,6 +249,7 @@ def build_analysis_artifacts(
     topology, topology_warning = load_topology()
     assessment = evaluate_parse_batch(
         parse_batch,
+        evidence_items=evidence_items,
         topology=topology,
         raw_files={name: raw_content for name, raw_content in files},
         completion_client=completion_client,

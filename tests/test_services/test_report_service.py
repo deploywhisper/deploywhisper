@@ -62,8 +62,10 @@ class ReportServiceTests(unittest.TestCase):
             severity="medium",
             recommendation="caution",
             top_risk="Terraform aws_security_group.main is the highest-impact change.",
+            top_risk_contributors=["ev-001"],
             contributors=[
                 RiskContributor(
+                    evidence_id="ev-001",
                     source_file="plan.json",
                     tool="terraform",
                     resource_id="aws_security_group.main",
@@ -110,6 +112,8 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["narrative_provider"], "ollama")
         self.assertEqual(persisted["narrative_model"], "ollama/llama3")
         self.assertEqual(persisted["skills_applied"], ["git", "terraform"])
+        self.assertEqual(persisted["top_risk_contributors"], ["ev-001"])
+        self.assertEqual(persisted["contributors"][0]["evidence_id"], "ev-001")
 
         fetched = report_service_module.fetch_analysis_report(persisted["id"])
         self.assertIsNotNone(fetched)
@@ -119,12 +123,15 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["assessment_source"], "heuristic-only")
         self.assertEqual(fetched["narrative_source"], "llm")
         self.assertEqual(fetched["skills_applied"], ["git", "terraform"])
+        self.assertEqual(fetched["top_risk_contributors"], ["ev-001"])
+        self.assertEqual(fetched["contributors"][0]["evidence_id"], "ev-001")
         self.assertNotIn("prompt", json.dumps(fetched))
 
         history = report_service_module.fetch_analysis_history()
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["id"], persisted["id"])
         self.assertEqual(history[0]["audit"]["llm_provider"], "ollama")
+        self.assertEqual(history[0]["top_risk_contributors"], ["ev-001"])
 
     def test_persist_analysis_report_combines_assessment_and_narrative_warnings(
         self,

@@ -52,6 +52,9 @@ logger = logging.getLogger(__name__)
 
 
 class RiskContributor(BaseModel):
+    evidence_id: str | None = Field(
+        default=None, description="Evidence item that produced this contributor"
+    )
     source_file: str = Field(..., description="Source file for the contributing change")
     tool: str = Field(..., description="Tool that produced the change")
     resource_id: str = Field(..., description="Resource affected by the change")
@@ -91,6 +94,10 @@ class RiskAssessment(BaseModel):
         ..., description="Advisory recommendation"
     )
     top_risk: str = Field(..., description="Most important risk summary")
+    top_risk_contributors: list[str] = Field(
+        default_factory=list,
+        description="Evidence IDs that most influenced the final verdict",
+    )
     contributors: list[RiskContributor] = Field(
         default_factory=list, description="Score contributors"
     )
@@ -709,6 +716,7 @@ def score_changes(
         severity=severity,
         recommendation=recommendation,
         top_risk=top_risk,
+        top_risk_contributors=[],
         contributors=contributors,
         interaction_risks=interaction_risks,
         partial_context=partial_context,

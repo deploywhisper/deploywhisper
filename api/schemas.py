@@ -127,6 +127,7 @@ class PersistedReportData(BaseModel):
     severity: str
     recommendation: str
     top_risk: str
+    top_risk_contributors: list[str] = Field(default_factory=list)
     parse_summary: str
     narrative_opening: str
     assessment_source: Literal["heuristic-only", "heuristic+llm"] | None = Field(
@@ -194,6 +195,9 @@ class InteractionRiskData(BaseModel):
 
 
 class RiskContributorData(BaseModel):
+    evidence_id: str | None = Field(
+        default=None, description="Evidence item that produced this contributor"
+    )
     source_file: str = Field(..., description="Source file for the contributing change")
     tool: str = Field(..., description="Tool that produced the change")
     resource_id: str = Field(..., description="Resource affected by the change")
@@ -227,6 +231,10 @@ class AssessmentData(BaseModel):
         ..., description="Advisory recommendation"
     )
     top_risk: str = Field(..., description="Most important risk summary")
+    top_risk_contributors: list[str] = Field(
+        default_factory=list,
+        description="Evidence IDs that most influenced the final verdict",
+    )
     contributors: list[RiskContributorData] = Field(
         default_factory=list, description="Score contributors"
     )
@@ -446,6 +454,7 @@ def build_analysis_run_data(
             severity=assessment.severity,
             recommendation=assessment.recommendation,
             top_risk=assessment.top_risk,
+            top_risk_contributors=list(assessment.top_risk_contributors),
             contributors=[
                 _copy_model(contributor, RiskContributorData)
                 for contributor in assessment.contributors
