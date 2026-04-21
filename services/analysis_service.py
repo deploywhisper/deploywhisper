@@ -466,6 +466,7 @@ def analyze_uploaded_files(
         artifacts.parse_batch,
         artifacts.assessment,
         artifacts.narrative,
+        blast_radius=artifacts.blast_radius,
         findings=artifacts.findings,
         evidence_items=artifacts.evidence_items,
         artifact_snapshots={name: raw_content for name, raw_content in files},

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from collections import Counter
 from typing import Any
 
+from analysis.blast_radius import BlastRadiusResult
 from analysis.risk_scorer import RiskAssessment
 from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
@@ -70,6 +71,16 @@ def _extract_narrative_failure_notice(warnings: list[str]) -> str | None:
         if "narrative provider unavailable" in warning.lower():
             return warning
     return None
+
+
+def _default_blast_radius_payload() -> dict[str, Any]:
+    return {
+        "affected": [],
+        "direct_count": 0,
+        "transitive_count": 0,
+        "warning": None,
+        "unmatched_resources": [],
+    }
 
 
 def normalize_report_schema_version(schema_version: str | None) -> str:
@@ -158,6 +169,10 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
             if report.risk_assessment is not None
             else "{}"
         ),
+        "blast_radius": (
+            json.loads(report.blast_radius_json or "{}")
+            or _default_blast_radius_payload()
+        ),
         "parse_summary": report.parse_summary,
         "narrative_opening": report.narrative_opening,
         "narrative_available": narrative_available,
@@ -199,6 +214,7 @@ def persist_analysis_report(
     parse_batch: ParseBatchResult,
     assessment: RiskAssessment,
     narrative: NarrativeResult,
+    blast_radius: BlastRadiusResult | None = None,
     findings: list[Finding] | None = None,
     evidence_items: list[EvidenceItem] | None = None,
     artifact_snapshots: dict[str, bytes | None] | None = None,
@@ -236,6 +252,11 @@ def persist_analysis_report(
                     ]
                 ),
                 analyzed_files_json=json.dumps(audit["files_analyzed"]),
+                blast_radius_json=json.dumps(
+                    blast_radius.model_dump(mode="json")
+                    if blast_radius is not None
+                    else {}
+                ),
                 llm_provider=audit["llm_provider"],
                 llm_model=audit["llm_model"],
                 llm_local_mode="true" if audit["llm_local_mode"] else "false",

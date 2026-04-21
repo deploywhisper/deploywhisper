@@ -61,6 +61,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("analysis_id", self._table_columns("risk_assessments"))
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
         self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
+        self.assertIn("blast_radius_json", self._table_columns("analysis_reports"))
         report_schema_row = next(
             row
             for row in self._table_info("analysis_reports")
@@ -191,7 +192,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("incident_records", tables)
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "006_add_report_schema_version")
+        self.assertEqual(revision, "007_add_blast_radius_payload")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -239,7 +240,35 @@ class MigrationTests(unittest.TestCase):
 
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "006_add_report_schema_version")
+        self.assertEqual(revision, "007_add_blast_radius_payload")
+
+    def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
+        command.upgrade(self._config(), "head")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+        database_module.init_db()
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            revision = sqlite_conn.execute(
+                "SELECT version_num FROM alembic_version"
+            ).fetchone()[0]
+            columns = {
+                row[1]
+                for row in sqlite_conn.execute("PRAGMA table_info(analysis_reports)")
+            }
+        finally:
+            sqlite_conn.close()
+
+        self.assertEqual(revision, "007_add_blast_radius_payload")
+        self.assertIn("report_schema_version", columns)
+        self.assertIn("blast_radius_json", columns)
 
     def test_init_db_repairs_empty_alembic_revision_state(self) -> None:
         command.upgrade(self._config(), "0001_create_analysis_reports")
@@ -262,7 +291,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "006_add_report_schema_version")
+        self.assertEqual(revision, "007_add_blast_radius_payload")
 
 
 if __name__ == "__main__":

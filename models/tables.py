@@ -57,6 +57,7 @@ if "AnalysisReport" not in globals():
         warnings_json: Mapped[str] = mapped_column(Text, default="[]")
         contributors_json: Mapped[str] = mapped_column(Text, default="[]")
         analyzed_files_json: Mapped[str] = mapped_column(Text, default="[]")
+        blast_radius_json: Mapped[str] = mapped_column(Text, default="{}")
         llm_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
         llm_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
         llm_local_mode: Mapped[str | None] = mapped_column(String(10), nullable=True)

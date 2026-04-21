@@ -17,6 +17,7 @@ import models.repositories.analysis_reports as analysis_reports_repository_modul
 import models.tables as tables_module
 import services.report_service as report_service_module
 import services.settings_service as settings_service_module
+from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
@@ -130,11 +131,22 @@ class ReportServiceTests(unittest.TestCase):
                 related_change_ids=["change-1"],
             )
         ]
+        blast_radius = BlastRadiusResult(
+            affected=[
+                ImpactNode(service_id="database", label="Database", depth=0),
+                ImpactNode(service_id="api", label="API Service", depth=1),
+            ],
+            direct_count=1,
+            transitive_count=1,
+            warning=None,
+            unmatched_resources=[],
+        )
 
         persisted = report_service_module.persist_analysis_report(
             parse_batch,
             assessment,
             narrative,
+            blast_radius=blast_radius,
             findings=findings,
             evidence_items=evidence_items,
             audit_context={
@@ -157,6 +169,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["skills_applied"], ["git", "terraform"])
         self.assertEqual(persisted["top_risk_contributors"], ["ev-001"])
         self.assertEqual(persisted["context_completeness"]["context_score"], 0.84)
+        self.assertEqual(persisted["blast_radius"]["direct_count"], 1)
         self.assertEqual(
             persisted["context_completeness"]["topology_last_imported_at"],
             "2026-04-18T11:22:33Z",
@@ -176,6 +189,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["skills_applied"], ["git", "terraform"])
         self.assertEqual(fetched["top_risk_contributors"], ["ev-001"])
         self.assertEqual(fetched["context_completeness"]["topology_freshness_days"], 12)
+        self.assertEqual(fetched["blast_radius"]["affected"][0]["label"], "Database")
         self.assertEqual(
             fetched["context_completeness"]["parser_success_by_tool"],
             {"terraform": 1.0},

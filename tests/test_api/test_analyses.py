@@ -138,6 +138,7 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["report_schema_version"], "v2")
         self.assertEqual(payload["data"]["report_schema_version"], "v2")
         self.assertEqual(payload["data"]["audit"]["llm_provider"], "ollama")
+        self.assertEqual(payload["data"]["blast_radius"]["direct_count"], 0)
 
     def test_create_analysis_returns_structured_result(self) -> None:
         files = [
@@ -213,6 +214,7 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["report_schema_version"], "v2"
         )
+        self.assertIn("blast_radius", payload["data"]["persisted_report"])
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertTrue(payload["data"]["persisted_report"]["evidence_items"])
         self.assertEqual(

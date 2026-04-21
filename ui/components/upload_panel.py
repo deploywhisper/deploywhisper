@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from nicegui import events, run, ui
 
+from analysis.blast_radius import BlastRadiusResult
 from parsers.registry import detect_tool_type
 from services.analysis_service import analyze_uploaded_files
 from services.intake_service import (
@@ -21,6 +22,7 @@ from services.report_service import (
 from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
 )
+from ui.components.blast_radius_graph import render_blast_radius_panel
 from services.settings_service import check_provider_readiness
 from ui.components.findings_table import render_findings_table
 from ui.formatters.narrative import extract_llm_notice
@@ -215,6 +217,17 @@ def build_upload_panel(
                     ui.label(llm_notice).classes("text-xs dw-warning-text leading-5")
                 context = report.get("context_completeness") or {}
                 render_context_completeness_panel(context)
+                blast_radius = report.get("blast_radius") or {}
+                if (
+                    blast_radius.get("affected")
+                    or blast_radius.get("warning")
+                    or blast_radius.get("direct_count", 0)
+                    or blast_radius.get("transitive_count", 0)
+                ):
+                    render_blast_radius_panel(
+                        BlastRadiusResult.model_validate(blast_radius),
+                        severity=str(report["severity"]),
+                    )
                 findings = report.get("findings", [])
                 evidence_items = report.get("evidence_items", [])
                 artifact_names = list(report.get("audit", {}).get("files_analyzed", []))

@@ -17,6 +17,7 @@ import services.report_service as report_service_module
 import ui.components.upload_panel as upload_panel_module
 import ui.routes.dashboard as dashboard_module
 import ui.routes.history as history_module
+from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from evidence.models import Finding
 from fastapi.testclient import TestClient
@@ -121,6 +122,24 @@ class DashboardShellTests(unittest.TestCase):
             parse_batch,
             assessment,
             narrative,
+            blast_radius=BlastRadiusResult(
+                affected=[
+                    ImpactNode(
+                        service_id="database",
+                        label="Primary Database",
+                        depth=0,
+                    ),
+                    ImpactNode(
+                        service_id="api",
+                        label="Payments API",
+                        depth=1,
+                    ),
+                ],
+                direct_count=1,
+                transitive_count=1,
+                warning=None,
+                unmatched_resources=[],
+            ),
             findings=[
                 Finding(
                     finding_id="finding-001",
@@ -166,6 +185,8 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Severity", response.text)
         self.assertIn("Evidence", response.text)
         self.assertIn("View evidence", response.text)
+        self.assertIn("Blast radius", response.text)
+        self.assertIn("1 services directly affected, 1 transitively", response.text)
 
     def test_dashboard_shows_llm_fallback_notice_for_active_report(self) -> None:
         parse_batch = ParseBatchResult(
