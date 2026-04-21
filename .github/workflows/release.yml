@@ -32,7 +32,7 @@ permissions:
 env:
   PYTHON_VERSION: "3.11"
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}  # pramodksahoo/deploywhisper
+  IMAGE_NAME: ${{ github.repository_owner }}/deploywhisper
 
 jobs:
   # ===========================================================================
