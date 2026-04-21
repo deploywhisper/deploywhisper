@@ -15,6 +15,9 @@ from services.report_service import (
     remove_analysis_reports,
 )
 from ui.components.analysis_history_row import render_analysis_history_row
+from ui.components.context_completeness_panel import (
+    render_context_completeness_panel,
+)
 from ui.components.findings_table import render_findings_table
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
@@ -193,14 +196,7 @@ def build_history_page() -> None:
                                     "text-sm dw-warning-text"
                                 )
                             context = report.get("context_completeness") or {}
-                            context_score = float(context.get("context_score", 1.0))
-                            if context_score < 0.7:
-                                ui.label(
-                                    "Context warning: supporting topology or incident history may be stale."
-                                ).classes("text-sm dw-warning-text font-semibold")
-                                ui.label(
-                                    f"Context score {context_score:.2f} · parser success {float(context.get('parser_success_rate', 1.0)):.2f}"
-                                ).classes("text-sm dw-muted")
+                            render_context_completeness_panel(context)
                             if audit.get("trigger_type") or audit.get("trigger_id"):
                                 ui.label(
                                     f"Trigger: {audit.get('trigger_type') or 'unknown'}"

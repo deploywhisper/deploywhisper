@@ -170,6 +170,21 @@ def _incident_score(incident_index_size: int) -> float:
     return min(incident_index_size / 10, 1.0)
 
 
+def _parser_success_by_tool(parse_batch: ParseBatchResult) -> dict[str, float]:
+    tool_totals: dict[str, int] = {}
+    tool_successes: dict[str, int] = {}
+    for file_result in parse_batch.files:
+        tool_name = file_result.tool.strip() or "unknown"
+        tool_totals[tool_name] = tool_totals.get(tool_name, 0) + 1
+        if file_result.status == "parsed":
+            tool_successes[tool_name] = tool_successes.get(tool_name, 0) + 1
+    return {
+        tool_name: round(tool_successes.get(tool_name, 0) / total, 2)
+        for tool_name, total in sorted(tool_totals.items())
+        if total > 0
+    }
+
+
 def _build_context_completeness(parse_batch: ParseBatchResult) -> ContextCompleteness:
     topology_status = get_topology_status()
     topology_freshness_days = _topology_freshness_days(topology_status.updated_at)
@@ -191,8 +206,10 @@ def _build_context_completeness(parse_batch: ParseBatchResult) -> ContextComplet
     )
     return ContextCompleteness(
         topology_freshness_days=topology_freshness_days,
+        topology_last_imported_at=topology_status.updated_at,
         incident_index_size=incident_index_size,
         parser_success_rate=parser_success_rate,
+        parser_success_by_tool=_parser_success_by_tool(parse_batch),
         context_score=context_score,
     )
 

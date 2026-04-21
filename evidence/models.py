@@ -31,9 +31,31 @@ class ContextCompleteness(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     topology_freshness_days: int | None = Field(default=None, ge=0)
+    topology_last_imported_at: str | None = Field(default=None, min_length=1)
     incident_index_size: int = Field(default=0, ge=0)
     parser_success_rate: float = Field(default=1.0, ge=0.0, le=1.0)
+    parser_success_by_tool: dict[str, float] = Field(default_factory=dict)
     context_score: float = Field(default=1.0, ge=0.0, le=1.0)
+
+    @field_validator("parser_success_by_tool")
+    @classmethod
+    def _validate_parser_success_by_tool(
+        cls, value: dict[str, float]
+    ) -> dict[str, float]:
+        cleaned: dict[str, float] = {}
+        for tool_name, score in value.items():
+            normalized_name = str(tool_name).strip()
+            if not normalized_name:
+                raise ValueError(
+                    "Parser success by tool requires non-empty tool names."
+                )
+            numeric_score = float(score)
+            if numeric_score < 0.0 or numeric_score > 1.0:
+                raise ValueError(
+                    "Parser success by tool scores must be between 0 and 1."
+                )
+            cleaned[normalized_name] = numeric_score
+        return cleaned
 
 
 class SkillReference(BaseModel):

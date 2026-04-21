@@ -20,8 +20,10 @@ class EvidenceModelTests(unittest.TestCase):
     def test_context_completeness_constructs_and_serializes(self) -> None:
         completeness = ContextCompleteness(
             topology_freshness_days=3,
+            topology_last_imported_at="2026-04-20T12:00:00Z",
             incident_index_size=7,
             parser_success_rate=0.75,
+            parser_success_by_tool={"terraform": 1.0, "kubernetes": 0.5},
             context_score=0.8,
         )
 
@@ -29,8 +31,10 @@ class EvidenceModelTests(unittest.TestCase):
             completeness.model_dump(mode="json"),
             {
                 "topology_freshness_days": 3,
+                "topology_last_imported_at": "2026-04-20T12:00:00Z",
                 "incident_index_size": 7,
                 "parser_success_rate": 0.75,
+                "parser_success_by_tool": {"terraform": 1.0, "kubernetes": 0.5},
                 "context_score": 0.8,
             },
         )
@@ -38,6 +42,12 @@ class EvidenceModelTests(unittest.TestCase):
     def test_context_completeness_rejects_invalid_context_score(self) -> None:
         with self.assertRaises(ValidationError):
             ContextCompleteness(context_score=1.2)
+
+    def test_context_completeness_rejects_invalid_parser_success_by_tool_values(
+        self,
+    ) -> None:
+        with self.assertRaises(ValidationError):
+            ContextCompleteness(parser_success_by_tool={"terraform": 1.2})
 
     def test_skill_reference_constructs_and_serializes(self) -> None:
         reference = SkillReference(skill_id="terraform", version="1.0.0")
