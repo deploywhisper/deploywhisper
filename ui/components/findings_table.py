@@ -165,7 +165,9 @@ def render_findings_table(
                             ui.button(
                                 button_label,
                                 on_click=lambda fid=finding_id: toggle_expanded(fid),
-                            ).props("outline dense no-caps").on("click.stop", lambda *_: None)
+                            ).props("outline dense no-caps").on(
+                                "click.stop", lambda *_: None
+                            )
                     if finding_id in expanded_ids:
                         with ui.column().classes(
                             "w-full gap-2 px-3 pb-3 pt-0 border-t border-[color:var(--dw-line)]"
