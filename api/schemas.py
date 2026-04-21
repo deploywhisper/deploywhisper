@@ -524,6 +524,43 @@ class ShareSummaryData(BaseModel):
     )
     markdown: str = Field(..., description="Markdown-ready advisory summary")
     plain_text: str = Field(..., description="Plain-text advisory summary")
+    json_payload: "ShareSummaryJsonPayloadData" = Field(
+        ..., description="Machine-friendly share-summary payload"
+    )
+
+
+class ShareSummaryFindingData(BaseModel):
+    title: str = Field(..., description="Short finding title for sharing")
+    severity: RiskSeverity = Field(..., description="Finding severity")
+    evidence_count: int = Field(..., description="Evidence count for the finding")
+    confidence: float = Field(..., description="Finding confidence score")
+
+
+class ShareSummaryContextData(BaseModel):
+    score: float = Field(..., description="Context completeness score")
+    label: str = Field(..., description="Context completeness label")
+    summary: str = Field(..., description="Short context completeness summary")
+
+
+class ShareSummaryJsonPayloadData(BaseModel):
+    version: str = Field(..., description="Share-summary payload version")
+    report_id: int | None = Field(default=None, description="Persisted report ID")
+    report_link: str | None = Field(default=None, description="Deep link to the report")
+    rollback_link: str | None = Field(
+        default=None, description="Deep link to the rollback view"
+    )
+    verdict_banner: str = Field(..., description="Verdict banner")
+    headline: str = Field(..., description="Top summary line")
+    top_findings: list[ShareSummaryFindingData] = Field(
+        default_factory=list, description="Top findings to surface"
+    )
+    evidence_count: int = Field(..., description="Total evidence-item count")
+    blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
+    rollback_summary: str = Field(..., description="Concise rollback summary")
+    context_completeness: ShareSummaryContextData = Field(
+        ..., description="Context completeness summary"
+    )
+    advisory_summary: str = Field(..., description="Advisory-only review summary")
 
 
 class AnalysisRunData(BaseModel):
