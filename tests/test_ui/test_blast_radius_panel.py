@@ -53,6 +53,8 @@ class BlastRadiusPanelRenderingTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Blast radius", response.text)
+        self.assertIn('"data-dw-review-section":"blast-radius"', response.text)
+        self.assertIn('"tabindex":"0"', response.text)
         self.assertIn("1 services directly affected, 2 transitively", response.text)
         self.assertIn("Primary Database", response.text)
         self.assertIn("Payments API", response.text)

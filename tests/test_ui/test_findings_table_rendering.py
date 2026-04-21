@@ -64,6 +64,13 @@ class FindingsTableRenderingTests(unittest.TestCase):
         self.assertIn(
             "/reports/14/artifacts?name=plan.json&amp;line=2#L2", response.text
         )
+        self.assertIn('"data-dw-findings-table":"1"', response.text)
+        self.assertIn('"data-dw-review-section":"findings"', response.text)
+        self.assertIn('"data-dw-finding-row":"1"', response.text)
+        self.assertIn('"tabindex":"0"', response.text)
+        self.assertIn('"aria-expanded":"true"', response.text)
+        self.assertIn('"aria-controls":"evidence-inspector-finding-001"', response.text)
+        self.assertIn('"data-dw-review-section":"evidence"', response.text)
         self.assertIn("SYSTEM: payments", response.text)
         self.assertIn("Artifact", response.text)
         self.assertIn("Topology", response.text)

@@ -531,6 +531,65 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
   width: 116px;
 }
 
+.dw-findings-grid {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 88px 88px 150px 116px;
+  gap: 12px;
+  align-items: start;
+}
+
+.dw-findings-header {
+  border: 1px solid var(--dw-line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--dw-surface-soft) 88%, transparent);
+}
+
+.dw-findings-header .q-btn {
+  justify-content: flex-start;
+}
+
+.dw-findings-row-card {
+  border: 1px solid var(--dw-line);
+}
+
+.dw-findings-row-base {
+  background: color-mix(in srgb, var(--dw-surface-soft) 92%, transparent);
+}
+
+.dw-findings-row-alt {
+  background: color-mix(in srgb, var(--dw-surface-soft) 74%, transparent);
+}
+
+.dw-context-progress {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--dw-pill-bg);
+  border: 1px solid var(--dw-line);
+  overflow: hidden;
+}
+
+.dw-context-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--dw-accent), var(--dw-green));
+}
+
+.dw-report-score-block {
+  min-width: 140px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  border: 1px solid var(--dw-line);
+  background: color-mix(in srgb, var(--dw-surface-soft) 90%, transparent);
+  text-align: center;
+}
+
+.dw-detail-list-row {
+  border: 1px solid var(--dw-line);
+}
+
 .dw-stat-card {
   min-height: 150px;
   padding: 24px;
@@ -630,6 +689,19 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
     width: min(100%, calc(100% - 24px));
     padding-top: 136px;
   }
+
+  .dw-findings-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .dw-findings-col {
+    width: auto !important;
+  }
+
+  .dw-findings-col-actions,
+  .dw-findings-col-confidence {
+    justify-self: start;
+  }
 }
 
 @media (max-width: 820px) {
@@ -646,6 +718,10 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
   .dw-brand-subtitle,
   .dw-brand-tag {
     display: none;
+  }
+
+  .dw-findings-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

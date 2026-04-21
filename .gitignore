@@ -215,6 +215,11 @@ __marimo__/
 .omx/
 .DS_Store
 .claude/
+node_modules/
+.playwright/
+playwright-report/
+blob-report/
+test-results/
 # _bmad-output/
 _bmad-output/implementation-artifacts
 _bmad/

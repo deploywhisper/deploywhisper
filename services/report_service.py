@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import secrets
+import hashlib
 from datetime import UTC, datetime
 from collections import Counter
 from typing import Any
@@ -94,6 +96,161 @@ def _default_rollback_plan_payload() -> dict[str, Any]:
         ),
         "warning": None,
     }
+
+
+def _artifact_signature(files_analyzed: list[str]) -> tuple[str, ...]:
+    """Normalize analyzed-file identity for history diff grouping."""
+    return tuple(sorted(str(name) for name in files_analyzed if str(name).strip()))
+
+
+def _build_previous_scan_diff(
+    current_report: dict[str, Any],
+    previous_report: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a compact diff summary against the previous scan of the same artifacts."""
+    current_score = int(current_report.get("risk_score") or 0)
+    previous_score = int(previous_report.get("risk_score") or 0)
+    score_delta = current_score - previous_score
+    if score_delta > 0:
+        score_direction = "up"
+    elif score_delta < 0:
+        score_direction = "down"
+    else:
+        score_direction = "flat"
+    return {
+        "previous_report_id": previous_report["id"],
+        "previous_created_at": previous_report["created_at"],
+        "score_delta": score_delta,
+        "score_direction": score_direction,
+        "previous_severity": previous_report["severity"],
+        "current_severity": current_report["severity"],
+        "previous_recommendation": previous_report["recommendation"],
+        "current_recommendation": current_report["recommendation"],
+    }
+
+
+def _attach_previous_scan_diffs(
+    reports: list[dict[str, Any]],
+    all_reports: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Annotate history rows with diff metadata for the previous scan of the same files."""
+    latest_by_signature: dict[tuple[str, ...], dict[str, Any]] = {}
+    previous_by_id: dict[int, dict[str, Any]] = {}
+
+    for report in reversed(all_reports):
+        signature = _artifact_signature(
+            report.get("audit", {}).get("files_analyzed") or []
+        )
+        if signature:
+            previous = latest_by_signature.get(signature)
+            if previous is not None:
+                previous_by_id[int(report["id"])] = previous
+            latest_by_signature[signature] = report
+
+    annotated: list[dict[str, Any]] = []
+    for report in reports:
+        previous = previous_by_id.get(int(report["id"]))
+        if previous is None:
+            annotated.append(report)
+            continue
+        annotated.append(
+            {
+                **report,
+                "previous_scan_diff": _build_previous_scan_diff(report, previous),
+            }
+        )
+    return annotated
+
+
+def _scoped_identifier(*, kind: str, original_id: str, scope: str) -> str:
+    """Return a per-report identifier safe for globally keyed persistence tables."""
+    digest = hashlib.sha256(f"{scope}|{original_id}".encode("utf-8")).hexdigest()[:12]
+    return f"{kind}-{digest}"
+
+
+def _scope_report_entities(
+    assessment: RiskAssessment,
+    findings: list[Finding] | None,
+    evidence_items: list[EvidenceItem] | None,
+) -> tuple[RiskAssessment, list[Finding] | None, list[EvidenceItem] | None]:
+    """Namespace finding/evidence identifiers so repeated scans can persist safely."""
+    if not findings and not evidence_items:
+        return assessment, findings, evidence_items
+
+    scope = secrets.token_hex(4)
+    finding_id_map = {
+        finding.finding_id: _scoped_identifier(
+            kind="finding",
+            original_id=finding.finding_id,
+            scope=scope,
+        )
+        for finding in findings or []
+    }
+    evidence_id_map = {
+        evidence_item.evidence_id: _scoped_identifier(
+            kind="evidence",
+            original_id=evidence_item.evidence_id,
+            scope=scope,
+        )
+        for evidence_item in evidence_items or []
+    }
+
+    scoped_findings = (
+        [
+            finding.model_copy(
+                update={
+                    "finding_id": finding_id_map[finding.finding_id],
+                    "evidence_refs": [
+                        evidence_id_map.get(evidence_ref, evidence_ref)
+                        for evidence_ref in finding.evidence_refs
+                    ],
+                }
+            )
+            for finding in findings
+        ]
+        if findings is not None
+        else None
+    )
+    scoped_evidence_items = (
+        [
+            evidence_item.model_copy(
+                update={
+                    "evidence_id": evidence_id_map[evidence_item.evidence_id],
+                    "finding_id": finding_id_map.get(
+                        evidence_item.finding_id,
+                        evidence_item.finding_id,
+                    ),
+                }
+            )
+            for evidence_item in evidence_items
+        ]
+        if evidence_items is not None
+        else None
+    )
+    scoped_assessment = assessment.model_copy(
+        update={
+            "top_risk_contributors": [
+                evidence_id_map.get(evidence_id, evidence_id)
+                for evidence_id in assessment.top_risk_contributors
+            ],
+            "contributors": [
+                contributor.model_copy(
+                    update={
+                        "evidence_id": (
+                            evidence_id_map.get(
+                                contributor.evidence_id,
+                                contributor.evidence_id,
+                            )
+                            if contributor.evidence_id is not None
+                            else None
+                        )
+                    }
+                )
+                for contributor in assessment.contributors
+            ],
+        }
+    )
+    return scoped_assessment, scoped_findings, scoped_evidence_items
 
 
 def normalize_report_schema_version(schema_version: str | None) -> str:
@@ -239,6 +396,11 @@ def persist_analysis_report(
     audit_context: dict[str, Any] | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
+    assessment, findings, evidence_items = _scope_report_entities(
+        assessment,
+        findings,
+        evidence_items,
+    )
     audit = _build_audit_metadata(parse_batch, audit_context=audit_context)
     combined_warnings = list(dict.fromkeys([*assessment.warnings, *narrative.warnings]))
     dashboard_display_duration_seconds = None
@@ -360,15 +522,24 @@ def fetch_filtered_analysis_history_page(
                 offset=offset,
                 include_evidence=False,
             )
+            all_reports = list_analysis_reports(session, include_evidence=False)
             total_count = count_analysis_reports(
                 session,
                 severity=severity,
                 recommendation=recommendation,
                 search=search,
             )
-            return [
+            serialized_reports = [
                 _serialize_report(report, include_evidence=False) for report in reports
-            ], total_count
+            ]
+            serialized_all_reports = [
+                _serialize_report(report, include_evidence=False)
+                for report in all_reports
+            ]
+            return (
+                _attach_previous_scan_diffs(serialized_reports, serialized_all_reports),
+                total_count,
+            )
 
     reports, total_count = _run_with_schema_retry(operation)
     return {

@@ -13,9 +13,9 @@ def recommendation_text(value: str) -> str:
 def recommendation_classes(value: str, *, size: str = "sm") -> str:
     """Return semantic utility classes for deployment recommendation text."""
     palette = {
-        "go": "text-green-600",
-        "no-go": "text-red-600",
-        "caution": "text-amber-600",
+        "go": "dw-success-text",
+        "no-go": "dw-danger-text",
+        "caution": "dw-warning-text",
     }
     text_size = "text-sm" if size == "sm" else "text-base"
     color_class = palette.get(value.lower(), "dw-text")

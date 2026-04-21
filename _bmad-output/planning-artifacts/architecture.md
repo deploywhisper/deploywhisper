@@ -918,7 +918,7 @@ Must include:
 This structure extends the current repo.
 
 ```
-ai-deploy-whisper/
+deploywhisper/
 ├── api/
 ├── ui/
 ├── cli/

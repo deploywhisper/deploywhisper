@@ -38,8 +38,8 @@ All contributors are expected to be respectful, constructive, and collaborative.
 
 ```bash
 # Clone the repository
-git clone https://github.com/pramodksahoo/ai-deploy-whisper.git
-cd ai-deploy-whisper
+git clone https://github.com/pramodksahoo/deploywhisper.git
+cd deploywhisper
 
 # Create a virtual environment
 python -m venv .venv
@@ -68,7 +68,7 @@ ruff check .
 pytest tests/ --cov=. -v
 
 # Docker build
-docker build -t ai-deploy-whisper:local .
+docker build -t deploywhisper:local .
 ```
 
 ---
@@ -341,7 +341,7 @@ Clients consuming this endpoint must update their parsing logic.
 1. Your branch is up to date with its base (`develop` or `main`).
 2. All tests pass locally: `pytest tests/ -v`
 3. Linting passes: `ruff check .`
-4. Docker build succeeds: `docker build -t ai-deploy-whisper:local .`
+4. Docker build succeeds: `docker build -t deploywhisper:local .`
 5. You have not committed any secrets or `.env` files.
 
 ### PR requirements

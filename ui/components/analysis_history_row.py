@@ -15,6 +15,7 @@ def render_analysis_history_row(
 ):
     """Render a compact clickable history row."""
     interface = report.get("audit", {}).get("source_interface") or "unknown"
+    previous_scan_diff = report.get("previous_scan_diff") or {}
     card_classes = "w-full dw-panel dw-history-card shadow-none cursor-pointer p-4"
     if selected:
         card_classes += " dw-history-card-selected"
@@ -46,6 +47,39 @@ def render_analysis_history_row(
                 )
                 if summary:
                     ui.label(summary).classes("text-xs dw-muted leading-5")
+                if previous_scan_diff:
+                    delta = int(previous_scan_diff.get("score_delta", 0))
+                    delta_prefix = "+" if delta > 0 else ""
+                    delta_class = (
+                        "dw-danger-text"
+                        if delta > 0
+                        else "dw-success-text"
+                        if delta < 0
+                        else "dw-muted"
+                    )
+                    severity_transition = (
+                        f"{str(previous_scan_diff.get('previous_severity', 'unknown')).upper()}"
+                        f" → {str(previous_scan_diff.get('current_severity', report['severity'])).upper()}"
+                    )
+                    recommendation_transition = (
+                        f"{str(previous_scan_diff.get('previous_recommendation', 'unknown')).upper()}"
+                        f" → {str(previous_scan_diff.get('current_recommendation', report['recommendation'])).upper()}"
+                    )
+                    with ui.row().classes(
+                        "w-full items-center gap-2 flex-wrap text-[11px] leading-5"
+                    ):
+                        ui.label("Rescan diff").classes(
+                            "font-semibold uppercase tracking-[0.08em] dw-accent-text"
+                        )
+                        ui.label(
+                            f"{delta_prefix}{delta} risk vs report #{previous_scan_diff['previous_report_id']}"
+                        ).classes(f"font-semibold {delta_class}")
+                        ui.label(severity_transition).classes("dw-muted")
+                        if (
+                            recommendation_transition.split(" → ")[0]
+                            != recommendation_transition.split(" → ")[1]
+                        ):
+                            ui.label(recommendation_transition).classes("dw-muted")
                 findings = report.get("findings", [])
                 if findings:
                     with ui.row().classes("w-full items-center gap-2 flex-wrap"):

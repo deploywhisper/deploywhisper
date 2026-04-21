@@ -65,3 +65,20 @@ fi
   config.py \
   logging_config.py
 "$PYTHON_BIN" -m unittest discover -q
+
+if [ "${RUN_UI_A11Y:-0}" = "1" ]; then
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm is required for RUN_UI_A11Y=1 but was not found." >&2
+    exit 1
+  fi
+  if [ ! -d node_modules ]; then
+    echo "node_modules is missing; run 'npm install' before RUN_UI_A11Y=1." >&2
+    exit 1
+  fi
+  npm run test:ui-review
+  if [ "$(uname -s)" = "Darwin" ]; then
+    npm run test:ui-review:voiceover
+  else
+    echo "Skipping VoiceOver lane because this host is not macOS." >&2
+  fi
+fi

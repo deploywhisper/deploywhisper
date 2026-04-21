@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlencode
 
 from nicegui import ui
 
-from analysis.blast_radius import BlastRadiusResult
-from analysis.rollback_planner import RollbackPlan
 from services.report_service import (
     fetch_analysis_report,
     fetch_filtered_analysis_history_page,
@@ -17,15 +14,11 @@ from services.report_service import (
     remove_analysis_reports,
 )
 from ui.components.analysis_history_row import render_analysis_history_row
-from ui.components.blast_radius_graph import render_blast_radius_panel
-from ui.components.context_completeness_panel import (
-    render_context_completeness_panel,
+from ui.components.report_detail_page import render_report_detail_page
+from ui.components.review_accessibility import (
+    decorate_modal_card,
+    decorate_modal_close,
 )
-from ui.components.findings_table import render_findings_table
-from ui.components.rollback_plan import render_rollback_plan
-from ui.formatters.narrative import extract_llm_notice
-from ui.formatters.recommendations import render_recommendation_label
-from ui.formatters.risk_labels import render_risk_badge
 from ui.theme import apply_theme, build_navigation_shell, build_page_header
 
 
@@ -39,7 +32,7 @@ def page_selection_state(
     return selected_on_page == len(visible_ids), selected_on_page
 
 
-def build_history_page(*, report_id: int | None = None) -> None:
+def build_history_page() -> None:
     """Render a scanable history view with direct report retrieval."""
     apply_theme()
     build_navigation_shell("history")
@@ -51,7 +44,6 @@ def build_history_page(*, report_id: int | None = None) -> None:
     page_state = {"page": 1, "page_size": 5}
     card_checkboxes: dict[int, Any] = {}
     selection_sync = {"active": False}
-    report_dialog = ui.dialog()
 
     with ui.column().classes("dw-main-content dw-shell gap-5"):
         with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
@@ -109,185 +101,7 @@ def build_history_page(*, report_id: int | None = None) -> None:
             return reports
 
         def open_report(report_id: int) -> None:
-            report = fetch_analysis_report(report_id)
-            if report is None:
-                ui.notify("Report not found", color="negative")
-                return
-            report_dialog.clear()
-            audit = report.get("audit", {})
-            with (
-                report_dialog,
-                ui.card().classes(
-                    "dw-panel shadow-none w-[min(860px,94vw)] h-[min(88vh,860px)] p-0 overflow-hidden"
-                ),
-            ):
-                with ui.column().classes("h-full gap-0"):
-                    with ui.row().classes(
-                        "w-full items-start justify-between gap-4 p-6 pb-4 shrink-0 border-b border-[color:var(--dw-line)]"
-                    ):
-                        with ui.column().classes("gap-3 min-w-0 flex-1"):
-                            with ui.row().classes("items-center gap-3 flex-wrap"):
-                                render_risk_badge(report["severity"])
-                                render_recommendation_label(
-                                    report["recommendation"], size="base"
-                                )
-                            ui.label(report["top_risk"]).classes(
-                                "text-xl font-medium dw-text leading-7"
-                            )
-                        ui.button(icon="close", on_click=report_dialog.close).props(
-                            "flat round dense"
-                        ).classes("shrink-0")
-                    with ui.column().classes(
-                        "flex-1 min-h-0 overflow-y-auto gap-4 p-6"
-                    ):
-                        with ui.column().classes("gap-1"):
-                            ui.label("Description").classes(
-                                "text-sm font-semibold dw-text"
-                            )
-                            ui.label(report["top_risk"]).classes(
-                                "text-sm leading-6 dw-text"
-                            )
-                        with ui.column().classes("gap-1"):
-                            ui.label("Advisory").classes(
-                                "text-sm font-semibold dw-text"
-                            )
-                            if report.get("narrative_available", True):
-                                ui.label(report["narrative_opening"]).classes(
-                                    "text-sm leading-6 dw-muted"
-                                )
-                            else:
-                                ui.label(
-                                    "Narrative unavailable. Review the deterministic analysis below."
-                                ).classes("text-sm leading-6 dw-warning-text")
-                        with ui.column().classes("gap-1"):
-                            ui.label("Processing summary").classes(
-                                "text-sm font-semibold dw-text"
-                            )
-                            ui.label(report["parse_summary"]).classes(
-                                "text-sm leading-6 dw-muted"
-                            )
-                        with ui.column().classes("gap-1"):
-                            ui.label("Audit metadata").classes(
-                                "text-sm font-semibold dw-text"
-                            )
-                            ui.label(
-                                f"Interface: {audit.get('source_interface') or 'unknown'} · "
-                                f"Provider: {audit.get('llm_provider') or 'unknown'}"
-                            ).classes("text-sm dw-muted")
-                            ui.label(
-                                f"Risk scoring source: {report.get('assessment_source') or 'unknown'} · "
-                                f"Narrative source: {report.get('narrative_source') or 'unknown'}"
-                            ).classes("text-sm dw-muted")
-                            if (
-                                report.get("narrative_model")
-                                or report.get("narrative_local_mode") is not None
-                            ):
-                                provider_line = f"Model: {report.get('narrative_model') or 'unknown'}"
-                                if report.get("narrative_local_mode") is not None:
-                                    provider_line += f" · local_mode={report.get('narrative_local_mode')}"
-                                ui.label(provider_line).classes("text-sm dw-muted")
-                            if report.get("skills_applied"):
-                                ui.label(
-                                    "Skills applied: "
-                                    + ", ".join(report["skills_applied"])
-                                ).classes("text-sm dw-muted")
-                            llm_notice = extract_llm_notice(
-                                report.get("warnings", []),
-                                report.get("narrative_failure_notice"),
-                            )
-                            if llm_notice:
-                                ui.label("LLM note: " + llm_notice).classes(
-                                    "text-sm dw-warning-text"
-                                )
-                            context = report.get("context_completeness") or {}
-                            render_context_completeness_panel(context)
-                            blast_radius = report.get("blast_radius") or {}
-                            if (
-                                blast_radius.get("affected")
-                                or blast_radius.get("warning")
-                                or blast_radius.get("direct_count", 0)
-                                or blast_radius.get("transitive_count", 0)
-                            ):
-                                render_blast_radius_panel(
-                                    BlastRadiusResult.model_validate(blast_radius),
-                                    severity=str(report["severity"]),
-                                )
-                            rollback_plan = report.get("rollback_plan") or {}
-                            if rollback_plan.get("steps") or rollback_plan.get(
-                                "warning"
-                            ):
-                                render_rollback_plan(
-                                    RollbackPlan.model_validate(rollback_plan)
-                                )
-                            if audit.get("trigger_type") or audit.get("trigger_id"):
-                                ui.label(
-                                    f"Trigger: {audit.get('trigger_type') or 'unknown'}"
-                                    + (
-                                        f" · {audit.get('trigger_id')}"
-                                        if audit.get("trigger_id")
-                                        else ""
-                                    )
-                                ).classes("text-sm dw-muted")
-                            if audit.get("files_analyzed"):
-                                ui.label("Files analyzed:").classes(
-                                    "text-sm font-semibold dw-text mt-1"
-                                )
-                                for file_name in audit["files_analyzed"]:
-                                    ui.link(
-                                        file_name,
-                                        f"/reports/{report['id']}/artifacts?{urlencode({'name': file_name})}",
-                                    ).classes("text-sm dw-accent-text break-all")
-                        findings = report.get("findings", [])
-                        evidence_items = report.get("evidence_items", [])
-                        artifact_names = list(audit.get("files_analyzed", []))
-                        if findings:
-                            render_findings_table(
-                                findings,
-                                evidence_items,
-                                title="Findings table",
-                                artifact_names=artifact_names,
-                                report_id=int(report["id"]),
-                            )
-                        contributors = report.get("contributors", [])
-                        if contributors:
-                            with ui.column().classes("gap-2 pb-2"):
-                                ui.label("Resource severity breakdown").classes(
-                                    "text-sm font-semibold dw-text"
-                                )
-                                for contributor in contributors:
-                                    with ui.card().classes(
-                                        "w-full dw-panel-soft shadow-none"
-                                    ):
-                                        with ui.row().classes(
-                                            "w-full items-start justify-between gap-3 p-3 flex-wrap"
-                                        ):
-                                            with ui.column().classes(
-                                                "min-w-0 flex-1 gap-1"
-                                            ):
-                                                ui.label(
-                                                    contributor["resource_id"]
-                                                ).classes("text-sm font-medium dw-text")
-                                                ui.label(
-                                                    f"{contributor['resource_category']} · {contributor['normalized_action']} · "
-                                                    f"{contributor['environment']} · scope {contributor['downstream_scope']}"
-                                                ).classes("text-xs dw-muted")
-                                                ui.label(
-                                                    contributor["reasoning"]
-                                                ).classes("text-xs dw-muted leading-5")
-                                                for security_flag in contributor.get(
-                                                    "security_flags", []
-                                                ):
-                                                    ui.label(security_flag).classes(
-                                                        "text-xs dw-danger-text"
-                                                    )
-                                            render_risk_badge(contributor["severity"])
-                    with ui.row().classes(
-                        "w-full justify-end gap-3 p-4 shrink-0 border-t border-[color:var(--dw-line)]"
-                    ):
-                        ui.button("Close", on_click=report_dialog.close).props(
-                            "outline no-caps"
-                        )
-            report_dialog.open()
+            ui.navigate.to(f"/history/{report_id}")
 
         def toggle_selection(report_id: int, selected: bool) -> None:
             if selected:
@@ -340,14 +154,20 @@ def build_history_page(*, report_id: int | None = None) -> None:
             report_label = "report" if count == 1 else "reports"
             with (
                 ui.dialog() as dialog,
-                ui.card().classes("w-[420px] dw-panel shadow-none p-6 gap-3"),
+                ui.card().classes(
+                    "w-[420px] dw-panel shadow-none p-6 gap-3"
+                ) as dialog_card,
             ):
+                decorate_modal_card(dialog_card, label="Delete analysis report")
                 ui.label(
                     f"Are you sure you want to delete {count} selected {report_label}?"
                 ).classes("text-lg font-medium dw-text")
                 ui.label("This action cannot be undone.").classes("text-sm dw-muted")
                 with ui.row().classes("w-full justify-end gap-3 mt-4"):
-                    ui.button("Cancel", on_click=dialog.close).props("outline no-caps")
+                    cancel_button = ui.button("Cancel", on_click=dialog.close).props(
+                        "outline no-caps"
+                    )
+                    decorate_modal_close(cancel_button)
                     ui.button(
                         "Confirm Delete",
                         on_click=lambda: (dialog.close(), perform_delete(report_ids)),
@@ -440,5 +260,36 @@ def build_history_page(*, report_id: int | None = None) -> None:
         search_input.on("update:model-value", lambda *_: apply_filters())
         render_history()
         render_actions()
-        if report_id is not None:
-            open_report(report_id)
+
+
+def build_history_detail_page(report_id: int) -> None:
+    """Render one persisted report on a dedicated detail page."""
+    apply_theme()
+    build_navigation_shell("history")
+    report = fetch_analysis_report(report_id)
+
+    with ui.column().classes("dw-main-content dw-shell gap-5"):
+        with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
+            if report is None:
+                build_page_header(
+                    eyebrow="History",
+                    title="Analysis report not found",
+                    subtitle="The requested report could not be loaded. It may have been deleted.",
+                    back_href="/history",
+                    back_label="Back to History",
+                )
+            else:
+                build_page_header(
+                    eyebrow="History",
+                    title="Analysis report detail",
+                    subtitle="Full-width report review with readable findings, context quality, blast radius, rollback guidance, and audit metadata.",
+                    back_href="/history",
+                    back_label="Back to History",
+                )
+        if report is None:
+            with ui.card().classes("w-full dw-panel shadow-none p-6"):
+                ui.label(
+                    "This report is unavailable. Return to history and choose another saved analysis."
+                ).classes("text-sm dw-muted")
+            return
+        render_report_detail_page(report)

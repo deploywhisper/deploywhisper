@@ -209,6 +209,13 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Copy full plan", response.text)
         self.assertIn("Critical path", response.text)
         self.assertIn("~15 min", response.text)
+        self.assertIn('"data-dw-review-section":"verdict"', response.text)
+        self.assertIn('"data-dw-review-section":"findings"', response.text)
+        self.assertIn('"data-dw-review-section":"context"', response.text)
+        self.assertIn('"data-dw-review-section":"blast-radius"', response.text)
+        self.assertIn('"data-dw-review-section":"rollback"', response.text)
+        self.assertIn('"data-dw-finding-row":"1"', response.text)
+        self.assertIn('"tabindex":"0"', response.text)
 
     def test_dashboard_shows_llm_fallback_notice_for_active_report(self) -> None:
         parse_batch = ParseBatchResult(

@@ -5,7 +5,14 @@ from __future__ import annotations
 from nicegui import ui
 
 from services.topology_service import STALE_AFTER_DAYS
-from ui.formatters.context_completeness import render_context_completeness_badge
+from ui.components.review_accessibility import (
+    decorate_review_section,
+    register_review_accessibility,
+)
+from ui.formatters.context_completeness import (
+    context_score,
+    render_context_completeness_badge,
+)
 from ui.formatters.datetime import format_history_timestamp
 
 
@@ -54,12 +61,15 @@ def render_context_completeness_panel(
     link_target: str = "/settings",
 ) -> None:
     """Render reviewer-facing context completeness details."""
+    register_review_accessibility()
     details = context or {}
     parser_success_by_tool = dict(details.get("parser_success_by_tool") or {})
     low_context = float(details.get("context_score", 1.0)) < 0.7
     stale_topology = _topology_needs_settings_fix(details)
+    score = context_score(details)
 
-    with ui.card().classes("w-full dw-panel shadow-none p-4"):
+    with ui.card().classes("w-full dw-panel shadow-none p-4") as panel:
+        decorate_review_section(panel, section="context", label="Context completeness")
         with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
             with ui.column().classes("gap-2 min-w-0 flex-1"):
                 ui.label("Context completeness").classes("text-lg font-medium dw-text")
@@ -67,6 +77,22 @@ def render_context_completeness_panel(
                     "Review how much topology, incident history, and parser coverage supported this report."
                 ).classes("text-sm dw-muted leading-6")
             render_context_completeness_badge(details)
+        with ui.card().classes("w-full dw-panel-soft shadow-none mt-3"):
+            with ui.column().classes("gap-2 p-3"):
+                with ui.row().classes("w-full items-center justify-between gap-3"):
+                    ui.label("Context score").classes("text-sm font-semibold dw-text")
+                    ui.label(f"{score:.2f} / 1.00").classes(
+                        "text-sm font-semibold dw-text"
+                    )
+                ui.html(
+                    '<div class="dw-context-progress" '
+                    f'title="Context score {score:.2f}">'
+                    f'<span style="width:{max(0.0, min(score, 1.0)) * 100:.0f}%"></span>'
+                    "</div>"
+                )
+                ui.label(
+                    "Higher scores indicate stronger topology freshness, parser coverage, and incident context."
+                ).classes("text-xs dw-muted leading-5")
 
         if low_context:
             with ui.row().classes(

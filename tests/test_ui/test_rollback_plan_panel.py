@@ -56,6 +56,8 @@ class RollbackPlanPanelRenderingTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Rollback plan", response.text)
+        self.assertIn('"data-dw-review-section":"rollback"', response.text)
+        self.assertIn('"tabindex":"0"', response.text)
         self.assertIn("Complexity: 3/5 (medium)", response.text)
         self.assertIn("Copy full plan", response.text)
         self.assertIn("Critical path", response.text)

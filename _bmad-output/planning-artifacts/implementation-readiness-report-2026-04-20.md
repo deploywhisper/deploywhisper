@@ -22,7 +22,7 @@ assessor: Codex
 # Implementation Readiness Assessment Report
 
 **Date:** 2026-04-20  
-**Project:** ai-deploy-whisper
+**Project:** deploywhisper
 
 ## Document Discovery
 
