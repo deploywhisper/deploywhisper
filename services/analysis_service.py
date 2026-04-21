@@ -375,7 +375,11 @@ def _shorten(text: str, limit: int) -> str:
 def _report_link(report_id: int | None) -> str | None:
     if report_id is None:
         return None
-    base_url = (os.getenv("APP_BASE_URL") or os.getenv("PUBLIC_APP_URL") or "").strip().rstrip("/")
+    base_url = (
+        (os.getenv("APP_BASE_URL") or os.getenv("PUBLIC_APP_URL") or "")
+        .strip()
+        .rstrip("/")
+    )
     if not base_url:
         host = os.getenv("APP_HOST", "127.0.0.1")
         if host in {"0.0.0.0", "::"}:
