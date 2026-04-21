@@ -105,7 +105,9 @@ def _repair_partial_evidence_schema(connection, tables: set[str]) -> set[str]:
 
 
 def _analysis_report_columns(connection) -> set[str]:
-    return {column["name"] for column in inspect(connection).get_columns("analysis_reports")}
+    return {
+        column["name"] for column in inspect(connection).get_columns("analysis_reports")
+    }
 
 
 def _bootstrap_brownfield_revision() -> None:
@@ -128,7 +130,9 @@ def _bootstrap_brownfield_revision() -> None:
             return
 
         report_columns = (
-            _analysis_report_columns(connection) if "analysis_reports" in tables else set()
+            _analysis_report_columns(connection)
+            if "analysis_reports" in tables
+            else set()
         )
         if {"report_schema_version", "blast_radius_json"}.issubset(report_columns):
             _write_alembic_revision(connection, "007_add_blast_radius_payload")

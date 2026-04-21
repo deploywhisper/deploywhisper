@@ -59,7 +59,9 @@ class BlastRadiusPanelRenderingTests(unittest.TestCase):
         self.assertIn("Fulfillment Worker", response.text)
         self.assertIn("plotly", response.text.lower())
 
-    def test_blast_radius_panel_uses_warning_text_for_incomplete_empty_state(self) -> None:
+    def test_blast_radius_panel_uses_warning_text_for_incomplete_empty_state(
+        self,
+    ) -> None:
         response = self.client.get("/_test/blast-radius-panel-incomplete")
 
         self.assertEqual(response.status_code, 200)
