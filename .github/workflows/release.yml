@@ -373,11 +373,12 @@ jobs:
     steps:
       - name: Notify Slack on successful release
         if: needs.release.result == 'success' && env.SLACK_WEBHOOK != ''
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          VERSION="${{ needs.validate.outputs.version }}"
           python3 - <<'PY'
           import json, os, urllib.request
-          version = os.environ.get("VERSION", "unknown")
+          version = os.environ.get("VERSION") or os.environ.get("GITHUB_REF_NAME", "unknown")
           payload = {
               "text": (
                   f":white_check_mark: *DeployWhisper {version} released!*\n"
@@ -397,11 +398,12 @@ jobs:
 
       - name: Notify on release failure
         if: needs.release.result == 'failure' && env.SLACK_WEBHOOK != ''
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          VERSION="${{ needs.validate.outputs.version }}"
           python3 - <<'PY'
           import json, os, urllib.request
-          version = os.environ.get("VERSION", "unknown")
+          version = os.environ.get("VERSION") or os.environ.get("GITHUB_REF_NAME", "unknown")
           payload = {
               "text": (
                   f":red_circle: *DeployWhisper {version} release FAILED*\n"
