@@ -18,6 +18,7 @@ import models.tables as tables_module
 import services.report_service as report_service_module
 import services.settings_service as settings_service_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
+from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
@@ -141,12 +142,28 @@ class ReportServiceTests(unittest.TestCase):
             warning=None,
             unmatched_resources=[],
         )
+        rollback_plan = RollbackPlan(
+            steps=[
+                RollbackStep(
+                    order=1,
+                    title="Revert aws_security_group.main",
+                    detail="Rollback the terraform change safely.",
+                    estimated_minutes=15,
+                    critical=True,
+                )
+            ],
+            complexity="medium",
+            complexity_score=3,
+            complexity_explanation="Score 3/5 because the plan covers 1 destructive change.",
+            warning=None,
+        )
 
         persisted = report_service_module.persist_analysis_report(
             parse_batch,
             assessment,
             narrative,
             blast_radius=blast_radius,
+            rollback_plan=rollback_plan,
             findings=findings,
             evidence_items=evidence_items,
             audit_context={
@@ -170,6 +187,10 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["top_risk_contributors"], ["ev-001"])
         self.assertEqual(persisted["context_completeness"]["context_score"], 0.84)
         self.assertEqual(persisted["blast_radius"]["direct_count"], 1)
+        self.assertEqual(persisted["rollback_plan"]["complexity_score"], 3)
+        self.assertEqual(
+            persisted["rollback_plan"]["steps"][0]["estimated_minutes"], 15
+        )
         self.assertEqual(
             persisted["context_completeness"]["topology_last_imported_at"],
             "2026-04-18T11:22:33Z",
@@ -191,6 +212,10 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["context_completeness"]["topology_freshness_days"], 12)
         self.assertEqual(fetched["blast_radius"]["affected"][0]["label"], "Database")
         self.assertEqual(
+            fetched["rollback_plan"]["steps"][0]["title"],
+            "Revert aws_security_group.main",
+        )
+        self.assertEqual(
             fetched["context_completeness"]["parser_success_by_tool"],
             {"terraform": 1.0},
         )
@@ -205,6 +230,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(history[0]["audit"]["llm_provider"], "ollama")
         self.assertEqual(history[0]["top_risk_contributors"], ["ev-001"])
         self.assertEqual(history[0]["report_schema_version"], "v2")
+        self.assertEqual(history[0]["rollback_plan"]["complexity"], "medium")
 
     def test_report_schema_helpers_preserve_forward_compatibility(self) -> None:
         self.assertEqual(

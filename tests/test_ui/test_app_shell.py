@@ -18,6 +18,7 @@ import ui.components.upload_panel as upload_panel_module
 import ui.routes.dashboard as dashboard_module
 import ui.routes.history as history_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
+from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from evidence.models import Finding
 from fastapi.testclient import TestClient
@@ -140,6 +141,23 @@ class DashboardShellTests(unittest.TestCase):
                 warning=None,
                 unmatched_resources=[],
             ),
+            rollback_plan=RollbackPlan(
+                steps=[
+                    RollbackStep(
+                        order=1,
+                        title="Revert aws_security_group.main",
+                        detail="Rollback the terraform change safely.",
+                        estimated_minutes=15,
+                        critical=True,
+                    )
+                ],
+                complexity="medium",
+                complexity_score=3,
+                complexity_explanation=(
+                    "Score 3/5 because the plan covers 1 rollback step."
+                ),
+                warning=None,
+            ),
             findings=[
                 Finding(
                     finding_id="finding-001",
@@ -187,6 +205,10 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("View evidence", response.text)
         self.assertIn("Blast radius", response.text)
         self.assertIn("1 services directly affected, 1 transitively", response.text)
+        self.assertIn("Rollback plan", response.text)
+        self.assertIn("Copy full plan", response.text)
+        self.assertIn("Critical path", response.text)
+        self.assertIn("~15 min", response.text)
 
     def test_dashboard_shows_llm_fallback_notice_for_active_report(self) -> None:
         parse_batch = ParseBatchResult(

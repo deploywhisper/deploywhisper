@@ -15,6 +15,7 @@ import models.tables as tables_module
 import services.report_service as report_service_module
 import ui.routes.history as history_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
+from analysis.rollback_planner import RollbackPlan, RollbackStep
 from evidence.models import Finding
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
@@ -117,6 +118,23 @@ class HistoryPageRenderingTests(unittest.TestCase):
             parse_batch,
             assessment,
             narrative,
+            rollback_plan=RollbackPlan(
+                steps=[
+                    RollbackStep(
+                        order=1,
+                        title="Revert aws_security_group.main",
+                        detail="Rollback the terraform change safely.",
+                        estimated_minutes=15,
+                        critical=True,
+                    )
+                ],
+                complexity="medium",
+                complexity_score=3,
+                complexity_explanation=(
+                    "Score 3/5 because the plan covers 1 rollback step."
+                ),
+                warning=None,
+            ),
             findings=[
                 Finding(
                     finding_id="finding-001",

@@ -7,6 +7,7 @@ from collections.abc import Callable
 from nicegui import events, run, ui
 
 from analysis.blast_radius import BlastRadiusResult
+from analysis.rollback_planner import RollbackPlan
 from parsers.registry import detect_tool_type
 from services.analysis_service import analyze_uploaded_files
 from services.intake_service import (
@@ -23,6 +24,7 @@ from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
 )
 from ui.components.blast_radius_graph import render_blast_radius_panel
+from ui.components.rollback_plan import render_rollback_plan
 from services.settings_service import check_provider_readiness
 from ui.components.findings_table import render_findings_table
 from ui.formatters.narrative import extract_llm_notice
@@ -228,6 +230,9 @@ def build_upload_panel(
                         BlastRadiusResult.model_validate(blast_radius),
                         severity=str(report["severity"]),
                     )
+                rollback_plan = report.get("rollback_plan") or {}
+                if rollback_plan.get("steps") or rollback_plan.get("warning"):
+                    render_rollback_plan(RollbackPlan.model_validate(rollback_plan))
                 findings = report.get("findings", [])
                 evidence_items = report.get("evidence_items", [])
                 artifact_names = list(report.get("audit", {}).get("files_analyzed", []))

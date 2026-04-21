@@ -21,12 +21,14 @@ class ContainerContractTests(unittest.TestCase):
                 "005_add_evidence_model.py",
                 "006_add_report_schema_version.py",
                 "007_add_blast_radius_payload.py",
+                "008_add_rollback_plan_payload.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
         evidence_content = migrations[1].read_text(encoding="utf-8")
         schema_content = migrations[2].read_text(encoding="utf-8")
         blast_radius_content = migrations[3].read_text(encoding="utf-8")
+        rollback_content = migrations[4].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -39,6 +41,10 @@ class ContainerContractTests(unittest.TestCase):
             'down_revision = "006_add_report_schema_version"', blast_radius_content
         )
         self.assertIn('"blast_radius_json"', blast_radius_content)
+        self.assertIn(
+            'down_revision = "007_add_blast_radius_payload"', rollback_content
+        )
+        self.assertIn('"rollback_plan_json"', rollback_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())
