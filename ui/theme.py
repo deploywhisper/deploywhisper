@@ -459,6 +459,43 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
   text-transform: uppercase;
 }
 
+.dw-verdict-card {
+  margin-top: 12px;
+  padding: 22px 24px;
+}
+
+.dw-verdict-score-block {
+  min-width: 124px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--dw-accent-line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--dw-accent) 16%, transparent), color-mix(in srgb, var(--dw-accent) 7%, transparent));
+}
+
+.dw-verdict-score-value {
+  color: var(--dw-text);
+  font-size: clamp(34px, 4vw, 46px);
+  line-height: 0.95;
+  font-weight: 800;
+  letter-spacing: -0.06em;
+}
+
+.dw-verdict-score-label {
+  color: var(--dw-accent-contrast);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dw-verdict-top-risk {
+  color: var(--dw-text);
+  font-size: clamp(20px, 2vw, 26px);
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  max-width: 18ch;
+}
+
 .dw-stat-card {
   min-height: 150px;
   padding: 24px;
