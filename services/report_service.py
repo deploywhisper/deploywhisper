@@ -22,6 +22,10 @@ from models.repositories.analysis_reports import (
     list_analysis_reports,
 )
 from parsers.base import ParseBatchResult
+from services.artifact_snapshot_service import (
+    delete_report_artifacts,
+    save_report_artifacts,
+)
 from services.settings_service import get_dashboard_result_display_duration_seconds
 from services.settings_service import resolve_provider_runtime
 
@@ -197,6 +201,7 @@ def persist_analysis_report(
     narrative: NarrativeResult,
     findings: list[Finding] | None = None,
     evidence_items: list[EvidenceItem] | None = None,
+    artifact_snapshots: dict[str, bytes | None] | None = None,
     audit_context: dict[str, Any] | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
@@ -253,6 +258,7 @@ def persist_analysis_report(
                     for evidence_item in (evidence_items or [])
                 ],
             )
+            save_report_artifacts(report.id, artifact_snapshots)
             return _serialize_report(report, include_evidence=True)
 
     return _run_with_schema_retry(operation)
@@ -502,7 +508,10 @@ def fetch_active_dashboard_report(*, now: datetime | None = None) -> dict | None
 
 def remove_analysis_report(report_id: int) -> bool:
     with SessionLocal() as session:
-        return delete_analysis_report(session, report_id)
+        removed = delete_analysis_report(session, report_id)
+    if removed:
+        delete_report_artifacts(report_id)
+    return removed
 
 
 def remove_analysis_reports(report_ids: list[int]) -> int:

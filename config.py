@@ -21,6 +21,9 @@ class Settings:
     topology_path: str = os.getenv(
         "TOPOLOGY_PATH", "data/topology/service_topology.json"
     )
+    artifact_snapshot_dir: str = os.getenv(
+        "ARTIFACT_SNAPSHOT_DIR", "data/report-artifacts"
+    )
     llm_api_key: str | None = (
         os.getenv("LLM_API_KEY")
         or os.getenv("OPENAI_API_KEY")

@@ -451,6 +451,7 @@ def analyze_uploaded_files(
         artifacts.narrative,
         findings=artifacts.findings,
         evidence_items=artifacts.evidence_items,
+        artifact_snapshots={name: raw_content for name, raw_content in files},
         audit_context=audit_context,
     )
     return AnalysisRunResult(

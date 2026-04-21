@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, unquote, urlencode, urlparse
 
 from nicegui import ui
 
@@ -11,6 +13,128 @@ from ui.formatters.determinism import render_determinism_badge
 from ui.formatters.risk_labels import render_risk_badge
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+SOURCE_TYPE_META = {
+    "artifact": {"icon": "description", "label": "Artifact"},
+    "topology": {"icon": "hub", "label": "Topology"},
+    "incident": {"icon": "history", "label": "Incident"},
+    "history": {"icon": "schedule", "label": "History"},
+    "heuristic": {"icon": "rule", "label": "Heuristic"},
+    "skill": {"icon": "psychology", "label": "Skill"},
+}
+
+
+def _parse_fragment(fragment: str) -> tuple[str, dict[str, list[str]]]:
+    if not fragment:
+        return "", {}
+    locator, separator, query_string = fragment.partition("?")
+    if separator:
+        return locator, parse_qs(query_string)
+    return fragment, {}
+
+
+def _line_from_locator(locator: str, params: dict[str, list[str]]) -> str | None:
+    for candidate in params.get("line", []):
+        if candidate.isdigit():
+            return candidate
+    normalized = locator.strip()
+    if normalized.lower().startswith("line="):
+        candidate = normalized.split("=", 1)[1]
+        if candidate.isdigit():
+            return candidate
+    if normalized.lower().startswith("l") and normalized[1:].isdigit():
+        return normalized[1:]
+    return None
+
+
+def _source_path(parsed) -> str:
+    pieces = [parsed.netloc, parsed.path.lstrip("/")]
+    return "/".join(piece for piece in pieces if piece)
+
+
+def _source_system(source_type: str, parsed) -> str | None:
+    if source_type not in {"topology", "incident"}:
+        return None
+    candidates = [
+        parsed.netloc,
+        parsed.path.strip("/").split("/", 1)[0] if parsed.path.strip("/") else "",
+    ]
+    for candidate in candidates:
+        value = unquote(candidate).strip()
+        if value:
+            return value
+    return None
+
+
+def _resolve_artifact_name(
+    source_path: str,
+    artifact_names: set[str] | None,
+) -> str | None:
+    if not artifact_names:
+        return None
+    if source_path in artifact_names:
+        return source_path
+    source_basename = Path(source_path).name
+    if not source_basename:
+        return None
+    basename_matches = [
+        artifact_name
+        for artifact_name in artifact_names
+        if Path(artifact_name).name == source_basename
+    ]
+    if len(basename_matches) == 1:
+        return basename_matches[0]
+    return None
+
+
+def _artifact_view_href(
+    report_id: int,
+    artifact_name: str,
+    line_number: str | None,
+) -> str:
+    query = {"name": artifact_name}
+    if line_number is not None:
+        query["line"] = line_number
+    href = f"/reports/{report_id}/artifacts?{urlencode(query)}"
+    if line_number is not None:
+        href += f"#L{line_number}"
+    return href
+
+
+def describe_evidence_item(
+    evidence_item: dict[str, Any],
+    *,
+    artifact_names: set[str] | None = None,
+    report_id: int | None = None,
+) -> dict[str, Any]:
+    """Build the UI-facing evidence metadata for one inspector card."""
+    source_type = str(evidence_item.get("source_type", "heuristic")).lower()
+    source_ref = str(evidence_item.get("source_ref", ""))
+    meta = SOURCE_TYPE_META.get(source_type, SOURCE_TYPE_META["heuristic"])
+    parsed = urlparse(source_ref)
+    source_path = unquote(_source_path(parsed))
+    locator, locator_params = _parse_fragment(parsed.fragment)
+    locator = unquote(locator)
+    line_number = _line_from_locator(locator, locator_params)
+    display_bits = [source_path or unquote(source_ref)]
+    if line_number is not None:
+        display_bits.append(f"line {line_number}")
+    elif locator and not locator.lower().startswith("line="):
+        display_bits.append(locator)
+    display_source_ref = " \u00b7 ".join(bit for bit in display_bits if bit)
+    artifact_href = None
+    resolved_artifact_name = _resolve_artifact_name(source_path, artifact_names)
+    if source_type == "artifact" and report_id is not None and resolved_artifact_name:
+        artifact_href = _artifact_view_href(
+            report_id, resolved_artifact_name, line_number
+        )
+    return {
+        "source_type": source_type,
+        "source_icon": meta["icon"],
+        "source_label": meta["label"],
+        "display_source_ref": display_source_ref,
+        "artifact_href": artifact_href,
+        "source_system": _source_system(source_type, parsed),
+    }
 
 
 def _evidence_for_finding(
@@ -61,11 +185,15 @@ def render_findings_table(
     evidence_items: list[dict[str, Any]],
     *,
     title: str = "Findings",
+    artifact_names: list[str] | None = None,
+    report_id: int | None = None,
+    expanded_finding_ids: set[str] | None = None,
 ) -> None:
     """Render the findings table with sortable headers and evidence drill-down."""
     sort_state = {"key": "severity"}
-    expanded_ids: set[str] = set()
+    expanded_ids: set[str] = set(expanded_finding_ids or ())
     table_mount = ui.column().classes("w-full gap-2")
+    artifact_name_set = set(artifact_names or [])
 
     def toggle_expanded(finding_id: str) -> None:
         if finding_id in expanded_ids:
@@ -180,18 +308,60 @@ def render_findings_table(
                                     "No evidence items are linked to this finding."
                                 ).classes("text-xs dw-muted")
                             for evidence_item in matched_evidence:
+                                descriptor = describe_evidence_item(
+                                    evidence_item,
+                                    artifact_names=artifact_name_set,
+                                    report_id=report_id,
+                                )
                                 with ui.card().classes(
                                     "w-full dw-panel-soft shadow-none"
                                 ):
-                                    with ui.column().classes("gap-1 p-3"):
+                                    with ui.column().classes("gap-2 p-3"):
+                                        with ui.row().classes(
+                                            "items-center gap-2 flex-wrap"
+                                        ):
+                                            ui.icon(descriptor["source_icon"]).classes(
+                                                "text-base dw-muted"
+                                            )
+                                            ui.label(
+                                                descriptor["source_label"]
+                                            ).classes(
+                                                "text-xs font-semibold uppercase tracking-[0.08em] dw-muted"
+                                            )
+                                            render_risk_badge(
+                                                evidence_item["severity_hint"],
+                                                f"{str(evidence_item['severity_hint']).upper()} HINT",
+                                            )
+                                            render_determinism_badge(
+                                                bool(evidence_item["deterministic"])
+                                            )
+                                            if descriptor["source_system"]:
+                                                ui.label(
+                                                    f"SYSTEM: {descriptor['source_system']}"
+                                                ).classes(
+                                                    "text-[11px] font-semibold uppercase tracking-[0.08em] dw-accent-text"
+                                                ).style(
+                                                    "background:var(--dw-accent-soft);"
+                                                    "border:1px solid var(--dw-accent-line);"
+                                                    "border-radius:12px;"
+                                                    "padding:4px 10px;"
+                                                )
                                         ui.label(evidence_item["summary"]).classes(
                                             "text-sm font-medium dw-text"
                                         )
-                                        ui.label(evidence_item["source_ref"]).classes(
-                                            "text-xs dw-muted break-all"
-                                        )
+                                        if descriptor["artifact_href"]:
+                                            ui.link(
+                                                descriptor["display_source_ref"],
+                                                descriptor["artifact_href"],
+                                            ).classes(
+                                                "text-xs dw-accent-text break-all"
+                                            )
+                                        else:
+                                            ui.label(
+                                                descriptor["display_source_ref"]
+                                            ).classes("text-xs dw-muted break-all")
                                         ui.label(
-                                            f"{evidence_item['source_type']} · {evidence_item['severity_hint']} · confidence {float(evidence_item['confidence']):.2f}"
+                                            f"{descriptor['source_label']} · confidence {float(evidence_item['confidence']):.2f}"
                                         ).classes("text-xs dw-muted")
 
     with ui.card().classes("w-full dw-panel shadow-none p-4"):
