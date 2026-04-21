@@ -173,6 +173,9 @@ class PersistedReportData(BaseModel):
     blast_radius: "BlastRadiusData" = Field(
         default_factory=lambda: BlastRadiusData(direct_count=0, transitive_count=0)
     )
+    rollback_plan: "RollbackPlanData" = Field(
+        default_factory=lambda: RollbackPlanData(complexity="low")
+    )
     parse_summary: str
     narrative_opening: str
     narrative_available: bool = Field(
@@ -399,6 +402,9 @@ class RollbackStepData(BaseModel):
     order: int = Field(..., description="Execution order")
     title: str = Field(..., description="Short rollback step title")
     detail: str = Field(..., description="Operational rollback instruction")
+    estimated_minutes: int = Field(
+        default=5, description="Estimated time in minutes for this rollback step"
+    )
     critical: bool = Field(
         ..., description="Whether this step is critical to safe recovery"
     )
@@ -410,6 +416,13 @@ class RollbackPlanData(BaseModel):
     )
     complexity: RollbackComplexity = Field(
         ..., description="Rollback complexity classification"
+    )
+    complexity_score: int = Field(
+        default=1, description="Rollback complexity score on a 1-5 scale"
+    )
+    complexity_explanation: str = Field(
+        default="Minimal rollback effort based on the available change set.",
+        description="Human-readable explanation for the complexity score",
     )
     warning: str | None = Field(
         default=None, description="Warning if context is incomplete"
@@ -624,6 +637,8 @@ def build_analysis_run_data(
         rollback_plan=RollbackPlanData(
             steps=[_copy_model(step, RollbackStepData) for step in rollback_plan.steps],
             complexity=rollback_plan.complexity,
+            complexity_score=rollback_plan.complexity_score,
+            complexity_explanation=rollback_plan.complexity_explanation,
             warning=rollback_plan.warning,
         ),
         incident_matches=[

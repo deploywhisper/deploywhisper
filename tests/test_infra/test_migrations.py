@@ -62,6 +62,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
         self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
         self.assertIn("blast_radius_json", self._table_columns("analysis_reports"))
+        self.assertIn("rollback_plan_json", self._table_columns("analysis_reports"))
         report_schema_row = next(
             row
             for row in self._table_info("analysis_reports")
@@ -192,7 +193,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("incident_records", tables)
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "007_add_blast_radius_payload")
+        self.assertEqual(revision, "008_add_rollback_plan_payload")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -240,7 +241,7 @@ class MigrationTests(unittest.TestCase):
 
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "007_add_blast_radius_payload")
+        self.assertEqual(revision, "008_add_rollback_plan_payload")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -266,7 +267,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "007_add_blast_radius_payload")
+        self.assertEqual(revision, "008_add_rollback_plan_payload")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
 
@@ -291,7 +292,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "007_add_blast_radius_payload")
+        self.assertEqual(revision, "008_add_rollback_plan_payload")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from collections import Counter
 from typing import Any
 
 from analysis.blast_radius import BlastRadiusResult
+from analysis.rollback_planner import RollbackPlan
 from analysis.risk_scorer import RiskAssessment
 from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
@@ -80,6 +81,18 @@ def _default_blast_radius_payload() -> dict[str, Any]:
         "transitive_count": 0,
         "warning": None,
         "unmatched_resources": [],
+    }
+
+
+def _default_rollback_plan_payload() -> dict[str, Any]:
+    return {
+        "steps": [],
+        "complexity": "low",
+        "complexity_score": 1,
+        "complexity_explanation": (
+            "Minimal rollback effort based on the available change set."
+        ),
+        "warning": None,
     }
 
 
@@ -173,6 +186,10 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
             json.loads(report.blast_radius_json or "{}")
             or _default_blast_radius_payload()
         ),
+        "rollback_plan": (
+            json.loads(getattr(report, "rollback_plan_json", "") or "{}")
+            or _default_rollback_plan_payload()
+        ),
         "parse_summary": report.parse_summary,
         "narrative_opening": report.narrative_opening,
         "narrative_available": narrative_available,
@@ -215,6 +232,7 @@ def persist_analysis_report(
     assessment: RiskAssessment,
     narrative: NarrativeResult,
     blast_radius: BlastRadiusResult | None = None,
+    rollback_plan: RollbackPlan | None = None,
     findings: list[Finding] | None = None,
     evidence_items: list[EvidenceItem] | None = None,
     artifact_snapshots: dict[str, bytes | None] | None = None,
@@ -255,6 +273,11 @@ def persist_analysis_report(
                 blast_radius_json=json.dumps(
                     blast_radius.model_dump(mode="json")
                     if blast_radius is not None
+                    else {}
+                ),
+                rollback_plan_json=json.dumps(
+                    rollback_plan.model_dump(mode="json")
+                    if rollback_plan is not None
                     else {}
                 ),
                 llm_provider=audit["llm_provider"],

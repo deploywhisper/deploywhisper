@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 from nicegui import ui
 
 from analysis.blast_radius import BlastRadiusResult
+from analysis.rollback_planner import RollbackPlan
 from services.report_service import (
     fetch_analysis_report,
     fetch_filtered_analysis_history_page,
@@ -21,6 +22,7 @@ from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
 )
 from ui.components.findings_table import render_findings_table
+from ui.components.rollback_plan import render_rollback_plan
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
@@ -209,6 +211,13 @@ def build_history_page() -> None:
                                 render_blast_radius_panel(
                                     BlastRadiusResult.model_validate(blast_radius),
                                     severity=str(report["severity"]),
+                                )
+                            rollback_plan = report.get("rollback_plan") or {}
+                            if rollback_plan.get("steps") or rollback_plan.get(
+                                "warning"
+                            ):
+                                render_rollback_plan(
+                                    RollbackPlan.model_validate(rollback_plan)
                                 )
                             if audit.get("trigger_type") or audit.get("trigger_id"):
                                 ui.label(

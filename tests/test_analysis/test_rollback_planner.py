@@ -30,6 +30,7 @@ class RollbackPlannerTests(unittest.TestCase):
         self.assertEqual(plan.steps[0].title, "Revert aws_security_group.main")
         self.assertEqual(plan.steps[1].title, "Revert Deployment/api")
         self.assertTrue(plan.steps[0].critical)
+        self.assertGreater(plan.steps[0].estimated_minutes, 0)
 
     def test_generate_rollback_plan_sets_warning_on_partial_context(self) -> None:
         changes = [
@@ -42,8 +43,10 @@ class RollbackPlannerTests(unittest.TestCase):
             )
         ]
         plan = generate_rollback_plan(changes, partial_context=True)
-        self.assertEqual(plan.complexity, "low")
+        self.assertEqual(plan.complexity, "medium")
         self.assertTrue(plan.warning)
+        self.assertEqual(plan.complexity_score, 2)
+        self.assertIn("partial parser context", plan.complexity_explanation)
 
     def test_generate_rollback_plan_detects_high_complexity(self) -> None:
         changes = [
@@ -58,3 +61,4 @@ class RollbackPlannerTests(unittest.TestCase):
         ]
         plan = generate_rollback_plan(changes)
         self.assertEqual(plan.complexity, "high")
+        self.assertEqual(plan.complexity_score, 4)
