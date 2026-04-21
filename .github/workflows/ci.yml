@@ -353,7 +353,7 @@ jobs:
           context: .
           push: false
           load: true
-          tags: ai-deploy-whisper:ci-${{ github.sha }}
+          tags: deploywhisper:ci-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -367,7 +367,7 @@ jobs:
       #       -e APP_PORT=8080 \
       #       -e LOG_LEVEL=INFO \
       #       -e DATABASE_URL=sqlite:///data/deploywhisper.db \
-      #       ai-deploy-whisper:ci-${{ github.sha }}
+      #       deploywhisper:ci-${{ github.sha }}
 
       #     echo "Waiting for container to be ready..."
       #     for i in $(seq 1 30); do

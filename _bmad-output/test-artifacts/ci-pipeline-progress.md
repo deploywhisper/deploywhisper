@@ -25,7 +25,7 @@ inputDocuments:
 ## Step 1: Preflight
 
 - Git repository: present
-- Remote: `origin git@github.com:pramodksahoo/ai-deploy-whisper.git`
+- Remote: `origin git@github.com:pramodksahoo/deploywhisper.git`
 - Detected stack: `backend`
 - Detected framework: Python `unittest` (repo convention; no pytest config present)
 - Local verification: `./.venv/bin/python -m unittest discover -q` passed

@@ -1,5 +1,5 @@
 ---
-project_name: 'ai-deploy-whisper'
+project_name: 'deploywhisper'
 user_name: 'psaho01'
 date: '2026-04-20'
 sections_completed:
@@ -67,6 +67,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 - When instructions conflict, prefer the implemented codebase plus `README.md`, `docs/ci.md`, and current scripts over stale contributor prose.
 - Validate changes with the repo’s real commands after edits. For Python changes, run `./.venv/bin/ruff check .` and `./.venv/bin/ruff format --check .` (or the equivalent through `bash scripts/ci-local.sh`) before concluding work. At minimum, keep relevant `unittest` coverage green; use `bash scripts/ci-local.sh` when the touched area is broad enough.
+- For review-flow or accessibility-sensitive UI changes, also run `npm run test:ui-review`; when working on macOS and the change affects keyboard or screen-reader semantics, run `npm run setup:ui-review` once per machine and `npm run test:ui-review:voiceover` before closing the task.
 - Treat security checks as part of normal completion criteria when they apply. Keep Bandit-compatible implementations in touched code, prefer modern hashes such as `sha256`/`blake2` over `sha1`/`md5`, and do not waive security findings when a safe fix is straightforward.
 - For AI-agent story execution, follow `CONTRIBUTING.md` Git Flow: start from `develop`, create one short-lived `feature/<identifier>-<short-description>` branch per story (or `bugfix/...` for defect work), commit incrementally on that branch, and target `develop` with a PR. Do not commit directly to `main` or `develop`.
 - For AI-agent story closure, the final reviewer must ensure the story ends on a Git Flow-compliant short-lived branch. If review happens on `develop`, the reviewer must create the proper `feature/*` or `bugfix/*` branch from that state, commit the story changes there, push it to remote, and optionally open the PR to `develop` before declaring the story lifecycle complete. A story is not properly closed if it remains only on `main`, `develop`, or detached HEAD.

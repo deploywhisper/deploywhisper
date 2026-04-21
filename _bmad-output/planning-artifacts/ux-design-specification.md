@@ -24,7 +24,7 @@ status: 'complete'
 completedAt: '2026-04-16'
 ---
 
-# UX Design Specification ai-deploy-whisper
+# UX Design Specification deploywhisper
 
 **Author:** psaho01
 **Date:** 2026-04-16

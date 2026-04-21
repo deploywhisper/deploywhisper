@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides the complete epic and story breakdown for ai-deploy-whisper, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
+This document provides the complete epic and story breakdown for deploywhisper, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
 
 **Companion to:** `prd.md` v1.0 and `architecture.md` v1.0
 **Total timeline:** 24 weeks (6 epics, 2 phases)

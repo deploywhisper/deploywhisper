@@ -9,10 +9,10 @@ An open-source pre-deployment risk intelligence platform for infrastructure chan
 DeployWhisper helps platform engineers, DevOps teams, and SREs review deployment artifacts before release. It analyzes Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation inputs, then turns those inputs into a single advisory briefing with risk scoring, blast radius context, rollback guidance, and plain-English narrative output.
 
 <p>
-  <a href="https://github.com/pramodksahoo/ai-deploy-whisper/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/pramodksahoo/ai-deploy-whisper/ci.yml?branch=develop&label=CI&style=flat-square" alt="CI"/></a>
-  <a href="https://github.com/pramodksahoo/ai-deploy-whisper/stargazers"><img src="https://img.shields.io/github/stars/pramodksahoo/ai-deploy-whisper?style=flat-square" alt="GitHub stars"/></a>
-  <a href="https://github.com/pramodksahoo/ai-deploy-whisper/network/members"><img src="https://img.shields.io/github/forks/pramodksahoo/ai-deploy-whisper?style=flat-square" alt="GitHub forks"/></a>
-  <a href="https://github.com/pramodksahoo/ai-deploy-whisper/issues"><img src="https://img.shields.io/github/issues/pramodksahoo/ai-deploy-whisper?style=flat-square" alt="GitHub issues"/></a>
+  <a href="https://github.com/pramodksahoo/deploywhisper/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/pramodksahoo/deploywhisper/ci.yml?branch=develop&label=CI&style=flat-square" alt="CI"/></a>
+  <a href="https://github.com/pramodksahoo/deploywhisper/stargazers"><img src="https://img.shields.io/github/stars/pramodksahoo/deploywhisper?style=flat-square" alt="GitHub stars"/></a>
+  <a href="https://github.com/pramodksahoo/deploywhisper/network/members"><img src="https://img.shields.io/github/forks/pramodksahoo/deploywhisper?style=flat-square" alt="GitHub forks"/></a>
+  <a href="https://github.com/pramodksahoo/deploywhisper/issues"><img src="https://img.shields.io/github/issues/pramodksahoo/deploywhisper?style=flat-square" alt="GitHub issues"/></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square" alt="Python 3.11+"/>
   <img src="https://img.shields.io/badge/runtime-NiceGUI%20%2B%20FastAPI-0f766e?style=flat-square" alt="NiceGUI plus FastAPI"/>
 </p>
@@ -420,6 +420,20 @@ Run the local CI-equivalent checks:
 bash scripts/ci-local.sh
 ```
 
+Run the browser keyboard smoke for the review flow:
+
+```bash
+npm install
+npm run test:ui-review
+```
+
+Run the real macOS VoiceOver smoke on a GUI-enabled Mac:
+
+```bash
+npm run setup:ui-review
+npm run test:ui-review:voiceover
+```
+
 ## CI
 
 GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
@@ -433,6 +447,12 @@ Current CI stages:
 - `notify-failure`
 
 The CI pipeline is backend-focused and intentionally skips frontend-style burn-in loops because the current stack is Python `unittest`, not a flaky browser E2E suite.
+
+For accessibility-sensitive UI changes, the repo also ships an opt-in macOS verification lane:
+
+- `npm run test:ui-review` exercises the seeded review flow with Playwright keyboard automation.
+- `npm run test:ui-review:voiceover` exercises the same flow with real VoiceOver on macOS after `npm run setup:ui-review`.
+- `RUN_UI_A11Y=1 bash scripts/ci-local.sh` appends both lanes locally when Node dependencies are installed. The VoiceOver step auto-skips on non-macOS hosts.
 
 ## Contributing
 
