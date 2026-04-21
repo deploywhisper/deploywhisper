@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from nicegui import ui
 
+from services.report_service import fetch_active_dashboard_report
 from ui.components.upload_panel import build_upload_panel
+from ui.components.verdict_card import render_verdict_card
 from ui.routes.history import build_history_page
 from ui.routes.settings import build_settings_page
 from services.report_service import fetch_dashboard_briefing, fetch_dashboard_stats
@@ -33,6 +35,7 @@ def build_dashboard() -> None:
         stats_mount = None
         result_mount = None
         deploy_review_card = None
+        hero_mount = None
 
         def render_briefing() -> None:
             nonlocal briefing_mount
@@ -159,8 +162,32 @@ def build_dashboard() -> None:
                                     )
 
         def refresh_dashboard() -> None:
+            render_hero()
             render_briefing()
             render_stats()
+
+        def render_hero() -> None:
+            active_report = fetch_active_dashboard_report()
+            hero_mount.clear()
+            with hero_mount:
+                if active_report is not None:
+                    render_verdict_card(active_report)
+                    ui.label(
+                        "Verdict, top risk, and trust signals stay above the detailed review sections so release decisions start with the summary."
+                    ).classes("dw-body max-w-3xl")
+                    return
+
+                ui.label("Deploy review").classes("dw-eyebrow")
+                ui.html(
+                    '<div class="dw-dashboard-headline mt-3">'
+                    '<span class="dw-gradient">Know the risk before</span><br>'
+                    '<span class="dw-gradient">you hit</span> <span class="dw-accent-text">deploy</span>'
+                    "</div>"
+                )
+                ui.label(
+                    "Upload artifacts and generate one advisory briefing. One screen for verdict, blast radius, "
+                    "rollback guidance, incident similarity, and a human-readable narrative before release."
+                ).classes("dw-body mt-4 max-w-3xl")
 
         stats_mount = ui.column().classes("w-full")
         with ui.row().classes("w-full items-stretch gap-5 flex-wrap"):
@@ -169,17 +196,7 @@ def build_dashboard() -> None:
                     "dw-panel dw-dashboard-hero shadow-none w-full p-6"
                 )
                 with deploy_review_card:
-                    ui.label("Deploy review").classes("dw-eyebrow")
-                    ui.html(
-                        '<div class="dw-dashboard-headline mt-3">'
-                        '<span class="dw-gradient">Know the risk before</span><br>'
-                        '<span class="dw-gradient">you hit</span> <span class="dw-accent-text">deploy</span>'
-                        "</div>"
-                    )
-                    ui.label(
-                        "Upload artifacts and generate one advisory briefing. One screen for verdict, blast radius, "
-                        "rollback guidance, incident similarity, and a human-readable narrative before release."
-                    ).classes("dw-body mt-4 max-w-3xl")
+                    hero_mount = ui.column().classes("w-full gap-3")
             briefing_mount = ui.column().classes(
                 "w-full max-w-[390px] min-w-[320px] self-stretch"
             )

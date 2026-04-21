@@ -57,6 +57,7 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Analysis snapshot", response.text)
         self.assertIn("Files scanned", response.text)
         self.assertNotIn("Foundation ready", response.text)
+        self.assertNotIn("5-second verdict", response.text)
 
     def test_history_page_contains_back_to_dashboard_action(self) -> None:
         response = self.client.get("/history")
@@ -144,6 +145,13 @@ class DashboardShellTests(unittest.TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn("5-second verdict", response.text)
+        self.assertIn("Risk score", response.text)
+        self.assertIn("dw-verdict-score-value", response.text)
+        self.assertIn('"text":"88"', response.text)
+        self.assertIn("STRONG CONTEXT", response.text)
+        self.assertNotIn("Know the risk before", response.text)
+        self.assertEqual(response.text.count("5-second verdict"), 1)
         self.assertIn("Risk scoring: heuristic+llm", response.text)
         self.assertIn("Narrative: llm", response.text)
         self.assertIn("Provider: ollama / ollama/llama3", response.text)
@@ -223,6 +231,7 @@ class DashboardShellTests(unittest.TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn("5-second verdict", response.text)
         self.assertIn("Narrative provider unavailable: provider offline", response.text)
         self.assertIn("Narrative unavailable.", response.text)
 
@@ -296,6 +305,7 @@ class DashboardShellTests(unittest.TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn("LIMITED CONTEXT", response.text)
         self.assertIn(
             "Context warning: supporting topology or incident history may be stale.",
             response.text,
