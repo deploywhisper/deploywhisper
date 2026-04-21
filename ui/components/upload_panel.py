@@ -221,12 +221,15 @@ def build_upload_panel(
                     ).classes("text-xs dw-muted leading-5")
                 findings = report.get("findings", [])
                 evidence_items = report.get("evidence_items", [])
+                artifact_names = list(report.get("audit", {}).get("files_analyzed", []))
                 if findings:
                     with ui.column().classes("mt-3 gap-2"):
                         render_findings_table(
                             findings,
                             evidence_items,
                             title="Findings table",
+                            artifact_names=artifact_names,
+                            report_id=int(report["id"]),
                         )
                 contributors = report.get("contributors", [])
                 if contributors:

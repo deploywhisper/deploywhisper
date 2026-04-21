@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlencode
 
 from nicegui import ui
 
@@ -214,14 +215,20 @@ def build_history_page() -> None:
                                     "text-sm font-semibold dw-text mt-1"
                                 )
                                 for file_name in audit["files_analyzed"]:
-                                    ui.label(file_name).classes("text-sm dw-muted")
+                                    ui.link(
+                                        file_name,
+                                        f"/reports/{report['id']}/artifacts?{urlencode({'name': file_name})}",
+                                    ).classes("text-sm dw-accent-text break-all")
                         findings = report.get("findings", [])
                         evidence_items = report.get("evidence_items", [])
+                        artifact_names = list(audit.get("files_analyzed", []))
                         if findings:
                             render_findings_table(
                                 findings,
                                 evidence_items,
                                 title="Findings table",
+                                artifact_names=artifact_names,
+                                report_id=int(report["id"]),
                             )
                         contributors = report.get("contributors", [])
                         if contributors:
