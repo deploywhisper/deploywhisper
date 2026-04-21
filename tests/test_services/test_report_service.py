@@ -68,8 +68,10 @@ class ReportServiceTests(unittest.TestCase):
             top_risk_contributors=["ev-001"],
             context_completeness={
                 "topology_freshness_days": 12,
+                "topology_last_imported_at": "2026-04-18T11:22:33Z",
                 "incident_index_size": 4,
                 "parser_success_rate": 1.0,
+                "parser_success_by_tool": {"terraform": 1.0},
                 "context_score": 0.84,
             },
             contributors=[
@@ -155,6 +157,10 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["skills_applied"], ["git", "terraform"])
         self.assertEqual(persisted["top_risk_contributors"], ["ev-001"])
         self.assertEqual(persisted["context_completeness"]["context_score"], 0.84)
+        self.assertEqual(
+            persisted["context_completeness"]["topology_last_imported_at"],
+            "2026-04-18T11:22:33Z",
+        )
         self.assertEqual(persisted["findings"][0]["confidence"], 1.0)
         self.assertEqual(persisted["evidence_items"][0]["evidence_id"], "ev-001")
         self.assertEqual(persisted["contributors"][0]["evidence_id"], "ev-001")
@@ -170,6 +176,10 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["skills_applied"], ["git", "terraform"])
         self.assertEqual(fetched["top_risk_contributors"], ["ev-001"])
         self.assertEqual(fetched["context_completeness"]["topology_freshness_days"], 12)
+        self.assertEqual(
+            fetched["context_completeness"]["parser_success_by_tool"],
+            {"terraform": 1.0},
+        )
         self.assertEqual(fetched["findings"][0]["evidence_refs"], ["ev-001"])
         self.assertEqual(fetched["evidence_items"][0]["finding_id"], "finding-001")
         self.assertEqual(fetched["contributors"][0]["evidence_id"], "ev-001")

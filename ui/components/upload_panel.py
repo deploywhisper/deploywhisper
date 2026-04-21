@@ -18,6 +18,9 @@ from services.intake_service import (
 from services.report_service import (
     fetch_active_dashboard_report,
 )
+from ui.components.context_completeness_panel import (
+    render_context_completeness_panel,
+)
 from services.settings_service import check_provider_readiness
 from ui.components.findings_table import render_findings_table
 from ui.formatters.narrative import extract_llm_notice
@@ -211,14 +214,7 @@ def build_upload_panel(
                 if llm_notice:
                     ui.label(llm_notice).classes("text-xs dw-warning-text leading-5")
                 context = report.get("context_completeness") or {}
-                context_score = float(context.get("context_score", 1.0))
-                if context_score < 0.7:
-                    ui.label(
-                        "Context warning: supporting topology or incident history may be stale."
-                    ).classes("text-sm dw-warning-text font-semibold leading-5")
-                    ui.label(
-                        f"Context score {context_score:.2f} · parser success {float(context.get('parser_success_rate', 1.0)):.2f}"
-                    ).classes("text-xs dw-muted leading-5")
+                render_context_completeness_panel(context)
                 findings = report.get("findings", [])
                 evidence_items = report.get("evidence_items", [])
                 artifact_names = list(report.get("audit", {}).get("files_analyzed", []))

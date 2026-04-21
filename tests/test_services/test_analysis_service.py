@@ -11,6 +11,7 @@ from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.rollback_planner import RollbackPlan, RollbackStep
 from llm.narrator import NarrativeResult
+from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 from services.analysis_service import (
     build_advisory_summary,
     build_analysis_artifacts,
@@ -116,6 +117,120 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertAlmostEqual(
             artifacts.assessment.context_completeness.context_score,
             0.45,
+        )
+        self.assertEqual(
+            artifacts.assessment.context_completeness.parser_success_by_tool,
+            {"terraform": 1.0},
+        )
+
+    def test_build_analysis_artifacts_tracks_topology_timestamp_and_tool_success_rates(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Mixed parser context needs review.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=True,
+            warnings=[],
+        )
+        blast_radius = BlastRadiusResult(
+            affected=[],
+            direct_count=0,
+            transitive_count=0,
+            warning=None,
+            unmatched_resources=[],
+        )
+        rollback_plan = RollbackPlan(steps=[], complexity="low", warning=None)
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review parser coverage.",
+            explanation="Some artifacts could not be parsed cleanly.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.build_parse_batch",
+                return_value=ParseBatchResult(
+                    files=[
+                        ParsedFileResult(
+                            file_name="plan.json",
+                            tool="terraform",
+                            status="parsed",
+                            changes=[
+                                UnifiedChange(
+                                    source_file="plan.json",
+                                    tool="terraform",
+                                    resource_id="aws_security_group.main",
+                                    action="modify",
+                                    summary="Terraform changed a security group.",
+                                )
+                            ],
+                        ),
+                        ParsedFileResult(
+                            file_name="deployment.yaml",
+                            tool="kubernetes",
+                            status="failed",
+                            changes=[],
+                        ),
+                    ]
+                ),
+            ),
+            patch(
+                "services.analysis_service.extract_batch_evidence",
+                return_value=[],
+            ),
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=({}, None),
+            ),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2026-04-18T11:22:33Z"),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates",
+                return_value=[{"id": 1}, {"id": 2}],
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.compute_blast_radius",
+                return_value=blast_radius,
+            ),
+            patch(
+                "services.analysis_service.generate_rollback_plan",
+                return_value=rollback_plan,
+            ),
+            patch(
+                "services.analysis_service.find_incident_matches",
+                return_value=[],
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=narrative,
+            ),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    ("plan.json", b"{}"),
+                    ("deployment.yaml", b"invalid"),
+                ]
+            )
+
+        self.assertEqual(
+            artifacts.assessment.context_completeness.topology_last_imported_at,
+            "2026-04-18T11:22:33Z",
+        )
+        self.assertEqual(
+            artifacts.assessment.context_completeness.parser_success_by_tool,
+            {"kubernetes": 0.0, "terraform": 1.0},
         )
 
     def test_build_analysis_artifacts_builds_inferred_interaction_finding(self) -> None:

@@ -322,11 +322,19 @@ class ContextCompletenessData(BaseModel):
     topology_freshness_days: int | None = Field(
         default=None, description="Age in days of the topology snapshot when available"
     )
+    topology_last_imported_at: str | None = Field(
+        default=None,
+        description="ISO timestamp for the last imported topology snapshot when available",
+    )
     incident_index_size: int = Field(
         default=0, description="Number of incidents available for similarity matching"
     )
     parser_success_rate: float = Field(
         default=1.0, description="Fraction of analyzed files parsed successfully"
+    )
+    parser_success_by_tool: dict[str, float] = Field(
+        default_factory=dict,
+        description="Per-tool parser success rates between 0 and 1",
     )
     context_score: float = Field(
         default=1.0, description="Aggregate context completeness score between 0 and 1"
