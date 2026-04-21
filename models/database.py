@@ -19,6 +19,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "0001_create_analysis_reports",
     "005_add_evidence_model",
     "006_add_report_schema_version",
+    "007_add_blast_radius_payload",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -103,6 +104,12 @@ def _repair_partial_evidence_schema(connection, tables: set[str]) -> set[str]:
     return refreshed_tables
 
 
+def _analysis_report_columns(connection) -> set[str]:
+    return {
+        column["name"] for column in inspect(connection).get_columns("analysis_reports")
+    }
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
@@ -120,6 +127,18 @@ def _bootstrap_brownfield_revision() -> None:
             ).scalar()
 
         if revision in _KNOWN_ALEMBIC_REVISIONS:
+            return
+
+        report_columns = (
+            _analysis_report_columns(connection)
+            if "analysis_reports" in tables
+            else set()
+        )
+        if {"report_schema_version", "blast_radius_json"}.issubset(report_columns):
+            _write_alembic_revision(connection, "007_add_blast_radius_payload")
+            return
+        if "report_schema_version" in report_columns:
+            _write_alembic_revision(connection, "006_add_report_schema_version")
             return
 
         if has_evidence_tables:

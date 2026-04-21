@@ -170,6 +170,9 @@ class PersistedReportData(BaseModel):
     context_completeness: "ContextCompletenessData" = Field(
         default_factory=lambda: ContextCompletenessData()
     )
+    blast_radius: "BlastRadiusData" = Field(
+        default_factory=lambda: BlastRadiusData(direct_count=0, transitive_count=0)
+    )
     parse_summary: str
     narrative_opening: str
     narrative_available: bool = Field(

@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from nicegui import ui
 
+from analysis.blast_radius import BlastRadiusResult
 from services.report_service import (
     fetch_analysis_report,
     fetch_filtered_analysis_history_page,
@@ -15,6 +16,7 @@ from services.report_service import (
     remove_analysis_reports,
 )
 from ui.components.analysis_history_row import render_analysis_history_row
+from ui.components.blast_radius_graph import render_blast_radius_panel
 from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
 )
@@ -197,6 +199,17 @@ def build_history_page() -> None:
                                 )
                             context = report.get("context_completeness") or {}
                             render_context_completeness_panel(context)
+                            blast_radius = report.get("blast_radius") or {}
+                            if (
+                                blast_radius.get("affected")
+                                or blast_radius.get("warning")
+                                or blast_radius.get("direct_count", 0)
+                                or blast_radius.get("transitive_count", 0)
+                            ):
+                                render_blast_radius_panel(
+                                    BlastRadiusResult.model_validate(blast_radius),
+                                    severity=str(report["severity"]),
+                                )
                             if audit.get("trigger_type") or audit.get("trigger_id"):
                                 ui.label(
                                     f"Trigger: {audit.get('trigger_type') or 'unknown'}"
