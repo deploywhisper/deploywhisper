@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from urllib.parse import urlencode
 
-import config as config_module
 from pydantic import BaseModel, Field
 
 from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
@@ -375,12 +375,13 @@ def _shorten(text: str, limit: int) -> str:
 def _report_link(report_id: int | None) -> str | None:
     if report_id is None:
         return None
-    base_url = (config_module.settings.app_base_url or "").strip().rstrip("/")
+    base_url = (os.getenv("APP_BASE_URL") or os.getenv("PUBLIC_APP_URL") or "").strip().rstrip("/")
     if not base_url:
-        host = config_module.settings.app_host
+        host = os.getenv("APP_HOST", "127.0.0.1")
         if host in {"0.0.0.0", "::"}:
             host = "localhost"
-        base_url = f"http://{host}:{config_module.settings.app_port}"
+        port = int(os.getenv("APP_PORT", "8080"))
+        base_url = f"http://{host}:{port}"
     query = urlencode({"report_id": report_id})
     return f"{base_url}/history?{query}"
 

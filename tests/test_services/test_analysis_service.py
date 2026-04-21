@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+import os
 
 from analysis.interaction_risk import InteractionRisk
 from analysis.risk_scorer import RiskAssessment, RiskContributor
@@ -594,9 +595,10 @@ class AnalysisServiceTests(unittest.TestCase):
     def test_build_share_summary_returns_thread_ready_markdown_and_json_payload(
         self,
     ) -> None:
-        with patch(
-            "services.analysis_service.config_module.settings",
-            new=SimpleNamespace(app_base_url="https://deploywhisper.example.com"),
+        with patch.dict(
+            os.environ,
+            {"APP_BASE_URL": "https://deploywhisper.example.com"},
+            clear=False,
         ):
             summary = build_share_summary(self._share_report_payload())
         self.assertEqual(summary.severity, "medium")
