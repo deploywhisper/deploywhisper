@@ -214,8 +214,8 @@ def build_dashboard() -> None:
 
 
 @ui.page("/history")
-def history_page() -> None:
-    build_history_page()
+def history_page(report_id: int | None = None) -> None:
+    build_history_page(report_id=report_id)
 
 
 @ui.page("/settings")

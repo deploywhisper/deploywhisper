@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 from analysis.interaction_risk import InteractionRisk
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from analysis.blast_radius import BlastRadiusResult, ImpactNode
-from analysis.rollback_planner import RollbackPlan, RollbackStep
+from analysis.blast_radius import BlastRadiusResult
+from analysis.rollback_planner import RollbackPlan
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 from services.analysis_service import (
@@ -20,6 +20,76 @@ from services.analysis_service import (
 
 
 class AnalysisServiceTests(unittest.TestCase):
+    def _share_report_payload(self) -> dict:
+        return {
+            "id": 17,
+            "severity": "medium",
+            "recommendation": "caution",
+            "top_risk": "Terraform changed a security group.",
+            "narrative_opening": "CAUTION: review the security group update.",
+            "narrative_available": True,
+            "warnings": [],
+            "findings": [
+                {
+                    "finding_id": "finding-001",
+                    "title": "CRITICAL: aws_security_group.main",
+                    "severity": "critical",
+                    "confidence": 1.0,
+                    "evidence_refs": ["ev-001", "ev-002"],
+                },
+                {
+                    "finding_id": "finding-002",
+                    "title": "HIGH: Deployment/api",
+                    "severity": "high",
+                    "confidence": 0.88,
+                    "evidence_refs": ["ev-003"],
+                },
+                {
+                    "finding_id": "finding-003",
+                    "title": "MEDIUM: Jenkinsfile",
+                    "severity": "medium",
+                    "confidence": 0.72,
+                    "evidence_refs": ["ev-004"],
+                },
+                {
+                    "finding_id": "finding-004",
+                    "title": "LOW: extra detail",
+                    "severity": "low",
+                    "confidence": 0.55,
+                    "evidence_refs": ["ev-005"],
+                },
+            ],
+            "evidence_items": [
+                {"finding_id": "finding-001"},
+                {"finding_id": "finding-001"},
+                {"finding_id": "finding-002"},
+                {"finding_id": "finding-003"},
+                {"finding_id": "finding-004"},
+            ],
+            "blast_radius": {
+                "affected": [
+                    {"label": "Primary Database"},
+                    {"label": "API Service"},
+                ],
+                "direct_count": 1,
+                "transitive_count": 1,
+                "warning": None,
+            },
+            "rollback_plan": {
+                "steps": [
+                    {
+                        "title": "Revert aws_security_group.main",
+                    }
+                ],
+                "complexity": "medium",
+                "complexity_score": 3,
+                "warning": None,
+            },
+            "context_completeness": {
+                "context_score": 0.84,
+            },
+        }
+
     def test_build_analysis_artifacts_extracts_evidence_items(self) -> None:
         assessment = RiskAssessment(
             score=42,
@@ -521,112 +591,86 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertTrue(advisory.requires_attention)
         self.assertIn("low_context_completeness", advisory.uncertainty_flags)
 
-    def test_build_share_summary_returns_script_friendly_thread_payload(self) -> None:
-        assessment = RiskAssessment(
-            score=42,
-            severity="medium",
-            recommendation="caution",
-            top_risk="Terraform changed a security group.",
-            contributors=[
-                RiskContributor(
-                    source_file="plan.json",
-                    tool="terraform",
-                    resource_id="aws_security_group.main",
-                    action="modify",
-                    contribution=12,
-                    summary="Terraform changed a security group.",
-                )
-            ],
-            interaction_risks=[],
-            partial_context=False,
-            warnings=[],
-        )
-        narrative = NarrativeResult(
-            opening_sentence="CAUTION: review the security group update.",
-            explanation="The deployment widens database access and should be reviewed.",
-            guidance=["Review the security group before deploy."],
-            degraded=False,
-            warnings=[],
-        )
-        advisory = build_advisory_summary(assessment, narrative)
-        blast_radius = BlastRadiusResult(
-            affected=[
-                ImpactNode(service_id="database", label="Primary Database", depth=0),
-                ImpactNode(service_id="api", label="API Service", depth=1),
-            ],
-            direct_count=1,
-            transitive_count=1,
-            warning=None,
-            unmatched_resources=[],
-        )
-        rollback_plan = RollbackPlan(
-            steps=[
-                RollbackStep(
-                    order=1,
-                    title="Revert aws_security_group.main",
-                    detail="Rollback the terraform change safely.",
-                    critical=True,
-                )
-            ],
-            complexity="medium",
-            warning=None,
-        )
-
-        summary = build_share_summary(
-            advisory=advisory,
-            narrative=narrative,
-            blast_radius=blast_radius,
-            rollback_plan=rollback_plan,
-        )
-
+    def test_build_share_summary_returns_thread_ready_markdown_and_json_payload(
+        self,
+    ) -> None:
+        with patch(
+            "services.analysis_service.config_module.settings",
+            new=SimpleNamespace(app_base_url="https://deploywhisper.example.com"),
+        ):
+            summary = build_share_summary(self._share_report_payload())
         self.assertEqual(summary.severity, "medium")
         self.assertEqual(summary.recommendation, "caution")
         self.assertIn("Primary Database", summary.blast_radius_summary)
-        self.assertIn("medium", summary.rollback_summary.lower())
+        self.assertIn("3/5", summary.rollback_summary)
         self.assertIn("Advisory only", summary.markdown)
         self.assertIn("Advisory only", summary.plain_text)
         self.assertFalse(summary.should_block)
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertEqual(summary.json_payload.report_id, 17)
+        self.assertEqual(len(summary.json_payload.top_findings), 3)
+        self.assertEqual(summary.json_payload.evidence_count, 5)
+        self.assertEqual(
+            summary.json_payload.rollback_link,
+            "https://deploywhisper.example.com/history?report_id=17",
+        )
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "STRONG CONTEXT"
+        )
 
     def test_build_share_summary_falls_back_to_deterministic_headline_without_narrative(
         self,
     ) -> None:
-        assessment = RiskAssessment(
-            score=42,
-            severity="medium",
-            recommendation="caution",
-            top_risk="Terraform changed a security group.",
-            contributors=[],
-            interaction_risks=[],
-            partial_context=False,
-            warnings=[],
-        )
-        narrative = NarrativeResult(
-            available=False,
-            opening_sentence="",
-            explanation="",
-            guidance=[],
-            degraded=True,
-            warnings=["Narrative provider unavailable: provider offline"],
-            failure_notice="Narrative provider unavailable: provider offline",
-        )
-        advisory = build_advisory_summary(assessment, narrative)
-        summary = build_share_summary(
-            advisory=advisory,
-            narrative=narrative,
-            blast_radius=BlastRadiusResult(
-                affected=[],
-                direct_count=0,
-                transitive_count=0,
-                warning=None,
-                unmatched_resources=[],
-            ),
-            rollback_plan=RollbackPlan(steps=[], complexity="low", warning=None),
-        )
+        report = self._share_report_payload()
+        report["narrative_opening"] = ""
+        report["narrative_available"] = False
+        report["warnings"] = ["Narrative provider unavailable: provider offline"]
+        report["context_completeness"] = {"context_score": 0.52}
+        summary = build_share_summary(report)
 
         self.assertEqual(
             summary.headline, "CAUTION: Terraform changed a security group."
         )
         self.assertIn("CAUTION: Terraform changed a security group.", summary.markdown)
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
+        )
+
+    def test_build_share_summary_requires_attention_for_partial_context_signal(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["warnings"] = [
+            "Analysis used partial context because one or more files failed to parse."
+        ]
+        summary = build_share_summary(report)
+
+        self.assertIn(
+            "requires additional human review",
+            summary.uncertainty_summary.lower(),
+        )
+        self.assertIn("requires additional human review", summary.plain_text.lower())
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
+        )
+
+    def test_build_share_summary_falls_back_to_local_report_link_without_public_base_url(
+        self,
+    ) -> None:
+        summary = build_share_summary(self._share_report_payload())
+
+        self.assertEqual(
+            summary.json_payload.report_link,
+            "http://127.0.0.1:8080/history?report_id=17",
+        )
+        self.assertEqual(
+            summary.json_payload.rollback_link,
+            "http://127.0.0.1:8080/history?report_id=17",
+        )
+        self.assertIn(
+            "[View rollback plan](http://127.0.0.1:8080/history?report_id=17)",
+            summary.markdown,
+        )
 
     def test_build_analysis_artifacts_shields_scored_assessment_from_narrator_mutation(
         self,

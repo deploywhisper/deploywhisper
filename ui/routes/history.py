@@ -39,7 +39,7 @@ def page_selection_state(
     return selected_on_page == len(visible_ids), selected_on_page
 
 
-def build_history_page() -> None:
+def build_history_page(*, report_id: int | None = None) -> None:
     """Render a scanable history view with direct report retrieval."""
     apply_theme()
     build_navigation_shell("history")
@@ -440,3 +440,5 @@ def build_history_page() -> None:
         search_input.on("update:model-value", lambda *_: apply_filters())
         render_history()
         render_actions()
+        if report_id is not None:
+            open_report(report_id)

@@ -168,6 +168,15 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Risk: heuristic+llm", response.text)
         self.assertIn("Narrative: llm", response.text)
 
+    def test_history_page_opens_report_from_query_parameter(self) -> None:
+        self._persist_report()
+
+        response = self.client.get("/history?report_id=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Rollback plan", response.text)
+        self.assertIn("Revert aws_security_group.main", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()

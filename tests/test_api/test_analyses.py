@@ -26,6 +26,7 @@ class AnalysesApiTests(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tempdir.name) / "reports.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
+        os.environ["APP_BASE_URL"] = "https://deploywhisper.example.com"
         reload(config_module)
         reload(tables_module)
         reload(database_module)
@@ -118,6 +119,7 @@ class AnalysesApiTests(unittest.TestCase):
     def tearDown(self) -> None:
         database_module.engine.dispose()
         os.environ.pop("DATABASE_URL", None)
+        os.environ.pop("APP_BASE_URL", None)
         self.tempdir.cleanup()
 
     def test_list_analyses_returns_persisted_reports(self) -> None:
@@ -202,6 +204,18 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(payload["data"]["advisory"]["requires_attention"])
         self.assertIn("Advisory only", payload["data"]["share_summary"]["markdown"])
         self.assertEqual(payload["data"]["share_summary"]["recommendation"], "no-go")
+        self.assertLessEqual(len(payload["data"]["share_summary"]["markdown"]), 1500)
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["version"], "v1"
+        )
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["report_id"],
+            payload["data"]["persisted_report"]["id"],
+        )
+        self.assertIn(
+            "https://deploywhisper.example.com/history?report_id=",
+            payload["data"]["share_summary"]["json_payload"]["rollback_link"],
+        )
         self.assertEqual(
             payload["data"]["persisted_report"]["audit"]["source_interface"], "api"
         )

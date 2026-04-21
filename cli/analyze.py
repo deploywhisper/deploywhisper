@@ -137,12 +137,7 @@ def _run_analyze(paths: list[str]) -> int:
             intake=pending_analysis,
             result=result,
             advisory=build_advisory_summary(result.assessment, result.narrative),
-            share_summary=build_share_summary(
-                advisory=build_advisory_summary(result.assessment, result.narrative),
-                narrative=result.narrative,
-                blast_radius=result.blast_radius,
-                rollback_plan=result.rollback_plan,
-            ),
+            share_summary=build_share_summary(result.persisted_report),
         ).model_dump(),
         "meta": build_meta(
             api_version="v1",

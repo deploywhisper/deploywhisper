@@ -138,12 +138,7 @@ async def create_analysis(
         },
     )
     advisory = build_advisory_summary(result.assessment, result.narrative)
-    share_summary = build_share_summary(
-        advisory=advisory,
-        narrative=result.narrative,
-        blast_radius=result.blast_radius,
-        rollback_plan=result.rollback_plan,
-    )
+    share_summary = build_share_summary(result.persisted_report)
     return AnalysisRunResponse(
         data=build_analysis_run_data(
             intake=pending_analysis,

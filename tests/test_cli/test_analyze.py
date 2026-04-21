@@ -29,6 +29,7 @@ class AnalyzeCliTests(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tempdir.name) / "cli.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
+        os.environ["APP_BASE_URL"] = "https://deploywhisper.example.com"
         reload(config_module)
         reload(tables_module)
         reload(database_module)
@@ -39,6 +40,7 @@ class AnalyzeCliTests(unittest.TestCase):
     def tearDown(self) -> None:
         database_module.engine.dispose()
         os.environ.pop("DATABASE_URL", None)
+        os.environ.pop("APP_BASE_URL", None)
         self.tempdir.cleanup()
 
     def test_skills_command_uses_shared_custom_skill_registry(self) -> None:
@@ -108,6 +110,14 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertTrue(payload["data"]["advisory"]["requires_attention"])
         self.assertIn("Advisory only", payload["data"]["share_summary"]["plain_text"])
         self.assertEqual(payload["data"]["share_summary"]["recommendation"], "no-go")
+        self.assertLessEqual(len(payload["data"]["share_summary"]["markdown"]), 1500)
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["version"], "v1"
+        )
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["report_id"],
+            payload["data"]["persisted_report"]["id"],
+        )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertEqual(
             payload["data"]["persisted_report"]["report_schema_version"], "v2"
@@ -375,6 +385,12 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertIn(
             "requires additional human review",
             payload["data"]["share_summary"]["plain_text"],
+        )
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["context_completeness"][
+                "label"
+            ],
+            "LIMITED CONTEXT",
         )
         self.assertEqual(payload["data"]["assessment"]["recommendation"], "no-go")
         self.assertTrue(payload["data"]["assessment"]["partial_context"])

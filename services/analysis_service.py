@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from urllib.parse import urlencode
 
+import config as config_module
 from pydantic import BaseModel, Field
 
 from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
@@ -136,6 +138,43 @@ class ShareSummary(BaseModel):
     )
     markdown: str = Field(..., description="Markdown-ready advisory summary")
     plain_text: str = Field(..., description="Plain-text advisory summary")
+    json_payload: "ShareSummaryJsonPayload" = Field(
+        ..., description="Machine-friendly share-summary payload"
+    )
+
+
+class ShareSummaryFinding(BaseModel):
+    title: str = Field(..., description="Short finding title for sharing")
+    severity: str = Field(..., description="Finding severity")
+    evidence_count: int = Field(..., description="Evidence items linked to the finding")
+    confidence: float = Field(..., description="Finding confidence score")
+
+
+class ShareSummaryContext(BaseModel):
+    score: float = Field(..., description="Context completeness score")
+    label: str = Field(..., description="Context completeness badge label")
+    summary: str = Field(..., description="Short context completeness summary")
+
+
+class ShareSummaryJsonPayload(BaseModel):
+    version: str = Field(default="v1", description="Share-summary payload version")
+    report_id: int | None = Field(default=None, description="Persisted report ID")
+    report_link: str | None = Field(default=None, description="Deep link to the report")
+    rollback_link: str | None = Field(
+        default=None, description="Deep link to the report rollback view"
+    )
+    verdict_banner: str = Field(..., description="Verdict banner for PR comments")
+    headline: str = Field(..., description="Top summary line")
+    top_findings: list[ShareSummaryFinding] = Field(
+        default_factory=list, description="Top findings to surface"
+    )
+    evidence_count: int = Field(..., description="Total evidence-item count")
+    blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
+    rollback_summary: str = Field(..., description="Concise rollback summary")
+    context_completeness: ShareSummaryContext = Field(
+        ..., description="Context completeness summary"
+    )
+    advisory_summary: str = Field(..., description="Advisory-only review summary")
 
 
 def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
@@ -326,85 +365,263 @@ def build_advisory_summary(
     )
 
 
-def build_share_summary(
-    *,
-    advisory: AdvisorySummary,
-    narrative: NarrativeResult,
-    blast_radius: BlastRadiusResult,
-    rollback_plan: RollbackPlan,
-) -> ShareSummary:
-    affected_labels = (
-        ", ".join(node.label for node in blast_radius.affected[:3])
-        or "No mapped downstream services"
+def _shorten(text: str, limit: int) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: max(limit - 1, 0)].rstrip() + "…"
+
+
+def _report_link(report_id: int | None) -> str | None:
+    if report_id is None:
+        return None
+    base_url = (config_module.settings.app_base_url or "").strip().rstrip("/")
+    if not base_url:
+        host = config_module.settings.app_host
+        if host in {"0.0.0.0", "::"}:
+            host = "localhost"
+        base_url = f"http://{host}:{config_module.settings.app_port}"
+    query = urlencode({"report_id": report_id})
+    return f"{base_url}/history?{query}"
+
+
+def _has_partial_context_signal(report: dict) -> bool:
+    context = dict(report.get("context_completeness") or {})
+    try:
+        if float(context.get("parser_success_rate", 1.0)) < 1.0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    warnings = [str(warning).lower() for warning in (report.get("warnings") or [])]
+    return any(
+        "partial context" in warning or "failed to parse" in warning
+        for warning in warnings
     )
-    if len(blast_radius.affected) > 3:
-        affected_labels += ", ..."
-    blast_radius_summary = (
-        f"{blast_radius.direct_count} direct / {blast_radius.transitive_count} transitive affected"
+
+
+def _finding_severity_rank(severity: str) -> int:
+    return {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(severity, 0)
+
+
+def _finding_evidence_count(
+    finding: dict, evidence_items: list[dict[str, object]]
+) -> int:
+    finding_id = finding.get("finding_id")
+    count = sum(1 for item in evidence_items if item.get("finding_id") == finding_id)
+    if count:
+        return count
+    return len(finding.get("evidence_refs") or [])
+
+
+def _context_summary(context: dict) -> ShareSummaryContext:
+    score = round(float(context.get("context_score", 1.0)), 2)
+    partial_context = False
+    try:
+        partial_context = float(context.get("parser_success_rate", 1.0)) < 1.0
+    except (TypeError, ValueError):
+        partial_context = False
+    label = "LIMITED CONTEXT" if score < 0.7 or partial_context else "STRONG CONTEXT"
+    summary = f"{label} ({score:.2f})" + (
+        " - one or more artifacts failed to parse cleanly."
+        if partial_context
+        else (
+            " - supporting topology or incident history may be stale."
+            if score < 0.7
+            else " - supporting topology and parser coverage look healthy."
+        )
+    )
+    return ShareSummaryContext(score=score, label=label, summary=summary)
+
+
+def _blast_radius_summary(report: dict) -> str:
+    blast_radius = dict(report.get("blast_radius") or {})
+    affected = list(blast_radius.get("affected") or [])
+    affected_labels = ", ".join(
+        _shorten(str(node.get("label", "")), 32) for node in affected[:3]
+    )
+    if not affected_labels:
+        affected_labels = "No mapped downstream services"
+    if len(affected) > 3:
+        affected_labels += ", …"
+    summary = (
+        f"{int(blast_radius.get('direct_count', 0))} direct / "
+        f"{int(blast_radius.get('transitive_count', 0))} transitive"
         f" ({affected_labels})"
     )
-    if blast_radius.warning:
-        blast_radius_summary += f". Warning: {blast_radius.warning}"
+    warning = blast_radius.get("warning")
+    if warning:
+        summary += f" Warning: {_shorten(str(warning), 80)}"
+    return summary
 
-    first_step = (
-        rollback_plan.steps[0].title
-        if rollback_plan.steps
+
+def _rollback_summary(report: dict) -> str:
+    rollback_plan = dict(report.get("rollback_plan") or {})
+    steps = list(rollback_plan.get("steps") or [])
+    first_step_title = (
+        _shorten(str(steps[0].get("title", "No rollback steps available")), 64)
+        if steps
         else "No rollback steps available"
     )
-    rollback_summary = (
-        f"{rollback_plan.complexity.title()} complexity. First step: {first_step}."
+    summary = (
+        f"{int(rollback_plan.get('complexity_score', 1))}/5 "
+        f"{str(rollback_plan.get('complexity', 'low')).upper()} · "
+        f"First step: {first_step_title}"
     )
-    if rollback_plan.warning:
-        rollback_summary += f" Warning: {rollback_plan.warning}"
+    warning = rollback_plan.get("warning")
+    if warning:
+        summary += f" Warning: {_shorten(str(warning), 72)}"
+    return summary
 
-    if advisory.requires_attention:
-        uncertainty_summary = (
-            "This result requires additional human review before release."
+
+def _share_findings(report: dict) -> list[ShareSummaryFinding]:
+    evidence_items = list(report.get("evidence_items") or [])
+    findings = list(report.get("findings") or [])
+    sorted_findings = sorted(
+        findings,
+        key=lambda item: (
+            -_finding_severity_rank(str(item.get("severity", ""))),
+            -float(item.get("confidence", 0.0)),
+            str(item.get("title", "")),
+        ),
+    )
+    return [
+        ShareSummaryFinding(
+            title=_shorten(str(finding.get("title", "")), 72),
+            severity=str(finding.get("severity", "medium")),
+            evidence_count=_finding_evidence_count(finding, evidence_items),
+            confidence=round(float(finding.get("confidence", 0.0)), 2),
         )
-    else:
-        uncertainty_summary = (
-            "No additional human review is required beyond the normal approval flow."
+        for finding in sorted_findings[:3]
+    ]
+
+
+def build_share_summary(report: dict) -> ShareSummary:
+    """Build a markdown + JSON share summary from the persisted report object."""
+    severity = str(report.get("severity", "medium"))
+    recommendation = str(report.get("recommendation", "caution"))
+    narrative_opening = str(report.get("narrative_opening") or "").strip()
+    top_risk = str(report.get("top_risk") or "")
+    headline = _shorten(
+        narrative_opening or f"{recommendation.upper()}: {top_risk}",
+        160,
+    )
+    verdict_banner = f"DeployWhisper {severity.upper()} · {recommendation.upper()}"
+    top_findings = _share_findings(report)
+    evidence_count = len(report.get("evidence_items") or [])
+    blast_radius_summary = _blast_radius_summary(report)
+    rollback_summary = _rollback_summary(report)
+    context_summary = _context_summary(dict(report.get("context_completeness") or {}))
+    report_id = int(report["id"]) if report.get("id") is not None else None
+    report_link = _report_link(report_id)
+    rollback_link = report_link
+    partial_context = _has_partial_context_signal(report)
+    if partial_context and context_summary.label != "LIMITED CONTEXT":
+        context_summary = ShareSummaryContext(
+            score=context_summary.score,
+            label="LIMITED CONTEXT",
+            summary=(
+                f"LIMITED CONTEXT ({context_summary.score:.2f})"
+                " - one or more artifacts failed to parse cleanly."
+            ),
         )
-    if advisory.uncertainty_flags:
-        uncertainty_summary += (
-            " Uncertainty: " + ", ".join(advisory.uncertainty_flags) + "."
-        )
-    headline = narrative.opening_sentence or (
-        f"{advisory.recommendation.upper()}: {advisory.top_risk}"
+    requires_attention = (
+        recommendation != "go"
+        or context_summary.score < 0.7
+        or partial_context
+        or not bool(report.get("narrative_available", True))
+        or bool(report.get("warnings"))
+    )
+    uncertainty_summary = (
+        "This result requires additional human review before release."
+        if requires_attention
+        else "Standard approval flow is sufficient."
+    )
+    json_payload = ShareSummaryJsonPayload(
+        report_id=report_id,
+        report_link=report_link,
+        rollback_link=rollback_link,
+        verdict_banner=verdict_banner,
+        headline=headline,
+        top_findings=top_findings,
+        evidence_count=evidence_count,
+        blast_radius_summary=blast_radius_summary,
+        rollback_summary=rollback_summary,
+        context_completeness=context_summary,
+        advisory_summary=uncertainty_summary,
     )
 
-    markdown = "\n".join(
+    markdown_lines = [
+        f"### {verdict_banner}",
+        f"**Summary:** {headline}",
+        f"- Findings: {len(top_findings)} shown / {len(report.get('findings') or [])} total · {evidence_count} evidence items",
+    ]
+    markdown_lines.extend(
+        f"  - {finding.severity.upper()}: {finding.title} ({finding.evidence_count} evidence)"
+        for finding in json_payload.top_findings
+    )
+    markdown_lines.extend(
         [
-            f"### DeployWhisper {advisory.severity.upper()} · {advisory.recommendation.upper()}",
-            f"- Summary: {headline}",
             f"- Blast radius: {blast_radius_summary}",
-            f"- Rollback: {rollback_summary}",
-            "- Advisory only: DeployWhisper does not make the final release decision or block deployment.",
-            f"- Review signal: {uncertainty_summary}",
+            (
+                f"- Rollback: [View rollback plan]({rollback_link}) · {rollback_summary}"
+                if rollback_link
+                else f"- Rollback: {rollback_summary}"
+            ),
+            f"- Context: {context_summary.summary}",
+            f"- Advisory only: {uncertainty_summary}",
         ]
     )
+    markdown = "\n".join(markdown_lines)
+    if len(markdown) > 1500:
+        finding_lines = [
+            f"  - {finding.severity.upper()}: {finding.title} ({finding.evidence_count} evidence)"
+            for finding in json_payload.top_findings[:2]
+        ]
+        markdown = "\n".join(
+            [
+                f"### {verdict_banner}",
+                f"**Summary:** {_shorten(headline, 120)}",
+                f"- Findings: {len(report.get('findings') or [])} total · {evidence_count} evidence items",
+                *finding_lines,
+                f"- Blast radius: {_shorten(blast_radius_summary, 120)}",
+                (
+                    f"- Rollback: [View rollback plan]({rollback_link})"
+                    if rollback_link
+                    else f"- Rollback: {_shorten(rollback_summary, 120)}"
+                ),
+                f"- Context: {context_summary.label} ({context_summary.score:.2f})",
+                f"- Advisory only: {uncertainty_summary}",
+            ]
+        )
     plain_text = " ".join(
         [
-            f"DeployWhisper {advisory.severity.upper()} / {advisory.recommendation.upper()}.",
+            verdict_banner + ".",
             f"Summary: {headline}",
-            f"Blast radius: {blast_radius_summary}",
-            f"Rollback: {rollback_summary}",
-            "Advisory only: DeployWhisper does not make the final release decision or block deployment.",
-            f"Review signal: {uncertainty_summary}",
+            f"Findings: {len(top_findings)} shown / {len(report.get('findings') or [])} total and {evidence_count} evidence items.",
+            f"Blast radius: {blast_radius_summary}.",
+            f"Rollback: {rollback_summary}.",
+            (
+                f"Rollback link: {rollback_link}."
+                if rollback_link
+                else "Rollback link unavailable."
+            ),
+            f"Context: {context_summary.summary}.",
+            f"Advisory only: {uncertainty_summary}",
         ]
     )
 
     return ShareSummary(
         advisory_only=True,
         should_block=False,
-        severity=advisory.severity,
-        recommendation=advisory.recommendation,
+        severity=severity,
+        recommendation=recommendation,
         headline=headline,
         blast_radius_summary=blast_radius_summary,
         rollback_summary=rollback_summary,
         uncertainty_summary=uncertainty_summary,
         markdown=markdown,
         plain_text=plain_text,
+        json_payload=json_payload,
     )
 
 
