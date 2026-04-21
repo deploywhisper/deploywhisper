@@ -36,6 +36,8 @@ class ContextCompletenessPanelRenderingTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Context completeness", response.text)
+        self.assertIn('"data-dw-review-section":"context"', response.text)
+        self.assertIn('"tabindex":"0"', response.text)
         self.assertIn("Last import", response.text)
         self.assertIn("2026", response.text)
         self.assertIn("Terraform", response.text)

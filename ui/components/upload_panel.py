@@ -25,6 +25,10 @@ from ui.components.context_completeness_panel import (
 )
 from ui.components.blast_radius_graph import render_blast_radius_panel
 from ui.components.rollback_plan import render_rollback_plan
+from ui.components.review_accessibility import (
+    decorate_modal_card,
+    decorate_modal_close,
+)
 from services.settings_service import check_provider_readiness
 from ui.components.findings_table import render_findings_table
 from ui.formatters.narrative import extract_llm_notice
@@ -217,6 +221,18 @@ def build_upload_panel(
                 )
                 if llm_notice:
                     ui.label(llm_notice).classes("text-xs dw-warning-text leading-5")
+                findings = report.get("findings", [])
+                evidence_items = report.get("evidence_items", [])
+                artifact_names = list(report.get("audit", {}).get("files_analyzed", []))
+                if findings:
+                    with ui.column().classes("mt-3 gap-2"):
+                        render_findings_table(
+                            findings,
+                            evidence_items,
+                            title="Findings table",
+                            artifact_names=artifact_names,
+                            report_id=int(report["id"]),
+                        )
                 context = report.get("context_completeness") or {}
                 render_context_completeness_panel(context)
                 blast_radius = report.get("blast_radius") or {}
@@ -233,18 +249,6 @@ def build_upload_panel(
                 rollback_plan = report.get("rollback_plan") or {}
                 if rollback_plan.get("steps") or rollback_plan.get("warning"):
                     render_rollback_plan(RollbackPlan.model_validate(rollback_plan))
-                findings = report.get("findings", [])
-                evidence_items = report.get("evidence_items", [])
-                artifact_names = list(report.get("audit", {}).get("files_analyzed", []))
-                if findings:
-                    with ui.column().classes("mt-3 gap-2"):
-                        render_findings_table(
-                            findings,
-                            evidence_items,
-                            title="Findings table",
-                            artifact_names=artifact_names,
-                            report_id=int(report["id"]),
-                        )
                 contributors = report.get("contributors", [])
                 if contributors:
                     with ui.column().classes("mt-3 gap-2"):
@@ -414,7 +418,13 @@ def build_upload_panel(
             return
 
         dialog = ui.dialog()
-        with dialog, ui.card().classes("w-[520px] dw-panel shadow-none p-6 gap-3"):
+        with (
+            dialog,
+            ui.card().classes(
+                "w-[520px] dw-panel shadow-none p-6 gap-3"
+            ) as dialog_card,
+        ):
+            decorate_modal_card(dialog_card, label="LLM provider not ready")
             ui.label("LLM provider not ready").classes("text-lg font-medium dw-text")
             ui.label(
                 f"Provider: {readiness.provider} · Model: {readiness.model}"
@@ -424,7 +434,10 @@ def build_upload_panel(
                 "If you continue, DeployWhisper will still parse files and produce heuristic-only analysis where LLM-assisted steps are unavailable."
             ).classes("text-sm dw-muted")
             with ui.row().classes("w-full justify-end gap-3 mt-4"):
-                ui.button("Cancel", on_click=dialog.close).props("outline no-caps")
+                cancel_button = ui.button("Cancel", on_click=dialog.close).props(
+                    "outline no-caps"
+                )
+                decorate_modal_close(cancel_button)
 
                 def proceed_anyway() -> None:
                     dialog.close()

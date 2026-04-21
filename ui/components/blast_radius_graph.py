@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from analysis.blast_radius import BlastRadiusResult
 from nicegui import ui
+from ui.components.review_accessibility import (
+    decorate_review_section,
+    register_review_accessibility,
+)
 from ui.formatters.risk_labels import risk_token
 
 
@@ -94,8 +98,10 @@ def _plotly_figure(result: BlastRadiusResult, *, severity: str) -> dict:
 
 def render_blast_radius_panel(result: BlastRadiusResult, *, severity: str) -> None:
     """Render a blast-radius graph plus textual equivalent."""
+    register_review_accessibility()
     direct_text = f"{result.direct_count} services directly affected, {result.transitive_count} transitively"
-    with ui.card().classes("w-full dw-panel shadow-none"):
+    with ui.card().classes("w-full dw-panel shadow-none") as panel:
+        decorate_review_section(panel, section="blast-radius", label="Blast radius")
         ui.label("Blast radius").classes("text-lg font-medium dw-text")
         ui.label(direct_text).classes("text-sm dw-muted")
         ui.label(

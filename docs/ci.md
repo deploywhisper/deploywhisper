@@ -1,6 +1,6 @@
 # CI Pipeline
 
-DeployWhisper uses GitHub Actions at [.github/workflows/ci.yml](/Users/psaho01/ai-deploy-whisper/.github/workflows/ci.yml).
+DeployWhisper uses GitHub Actions at [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
 ## Stages
 
@@ -13,6 +13,8 @@ DeployWhisper uses GitHub Actions at [.github/workflows/ci.yml](/Users/psaho01/a
 
 Backend burn-in is intentionally skipped by default. The current repo uses a deterministic Python `unittest` stack rather than a UI-heavy flaky E2E surface.
 
+Accessibility-focused UI verification now lives in an opt-in local lane rather than the default CI path because real VoiceOver automation requires a GUI-enabled macOS host.
+
 ## Local Parity
 
 Run the local CI-equivalent checks with:
@@ -20,6 +22,21 @@ Run the local CI-equivalent checks with:
 ```bash
 bash scripts/ci-local.sh
 ```
+
+To append the review-flow browser and VoiceOver checks locally:
+
+```bash
+npm install
+RUN_UI_A11Y=1 bash scripts/ci-local.sh
+```
+
+If the machine has not been prepared for screen-reader automation yet, run:
+
+```bash
+npm run setup:ui-review
+```
+
+The VoiceOver step runs only on macOS. Non-macOS hosts still run the keyboard Playwright smoke and skip the VoiceOver command.
 
 For full local parity with the CI security lane, make sure `bandit` is installed in the active environment or available via `BANDIT_BIN`. When available, `scripts/ci-local.sh` runs the same two-pass Bandit gate used in CI.
 
@@ -58,6 +75,7 @@ These logs are retained for 14 days.
 - Source tree must compile with `python -m compileall`
 - Every shard must pass its assigned `unittest` targets
 - Pull requests get a changed-test fast-feedback run
+- Accessibility-sensitive UI work should include the opt-in Playwright keyboard smoke locally, plus the VoiceOver lane on macOS when the change affects review semantics, tab order, or screen-reader announcements
 
 ## Notes
 

@@ -8,6 +8,10 @@ from urllib.parse import parse_qs, unquote, urlencode, urlparse
 
 from nicegui import ui
 
+from ui.components.review_accessibility import (
+    decorate_review_section,
+    register_review_accessibility,
+)
 from ui.formatters.confidence import render_confidence_badge
 from ui.formatters.determinism import render_determinism_badge
 from ui.formatters.risk_labels import render_risk_badge
@@ -190,9 +194,10 @@ def render_findings_table(
     expanded_finding_ids: set[str] | None = None,
 ) -> None:
     """Render the findings table with sortable headers and evidence drill-down."""
+    register_review_accessibility()
     sort_state = {"key": "severity"}
     expanded_ids: set[str] = set(expanded_finding_ids or ())
-    table_mount = ui.column().classes("w-full gap-2")
+    table_mount = None
     artifact_name_set = set(artifact_names or [])
 
     def toggle_expanded(finding_id: str) -> None:
@@ -207,6 +212,7 @@ def render_findings_table(
         render_rows()
 
     def render_rows() -> None:
+        assert table_mount is not None
         table_mount.clear()
         ordered = _sorted_findings(
             findings,
@@ -214,8 +220,8 @@ def render_findings_table(
             sort_key=sort_state["key"],
         )
         with table_mount:
-            with ui.row().classes(
-                "w-full items-center gap-3 flex-wrap px-3 py-2 border-b border-[color:var(--dw-line)]"
+            with ui.element("div").classes(
+                "w-full dw-findings-grid dw-findings-header px-3 py-3"
             ):
                 ui.label("Severity").classes("dw-findings-col dw-findings-col-severity")
                 ui.label("Title").classes("dw-findings-col dw-findings-col-title")
@@ -241,19 +247,37 @@ def render_findings_table(
                 ).props("flat dense no-caps").classes(
                     "dw-findings-col dw-findings-col-actions px-0 text-xs dw-muted"
                 )
+            if not ordered:
+                with ui.card().classes("w-full dw-panel-soft shadow-none"):
+                    ui.label("No findings were persisted for this report.").classes(
+                        "p-4 text-sm dw-muted"
+                    )
+                return
 
-            for finding in ordered:
+            for index, finding in enumerate(ordered):
                 finding_id = str(finding["finding_id"])
                 matched_evidence = _evidence_for_finding(finding, evidence_items)
                 tool = _tool_from_evidence(finding, evidence_items)
-                with ui.card().classes(
-                    "w-full dw-panel-soft dw-findings-row shadow-none"
-                ) as row_card:
+                evidence_panel_id = f"evidence-inspector-{finding_id}"
+                row_classes = "w-full dw-findings-row shadow-none dw-findings-row-card"
+                row_classes += (
+                    " dw-findings-row-alt" if index % 2 else " dw-findings-row-base"
+                )
+                with ui.card().classes(row_classes) as row_card:
+                    row_card.props(
+                        "tabindex=0 "
+                        'data-dw-finding-row="1" '
+                        f"aria-expanded={'true' if finding_id in expanded_ids else 'false'} "
+                        f'aria-controls={evidence_panel_id} aria-label="Finding {finding["title"]}"'
+                    )
+                    row_card.classes("dw-finding-row")
                     row_card.on(
                         "click",
                         lambda _=None, fid=finding_id: toggle_expanded(fid),
                     )
-                    with ui.row().classes("w-full items-start gap-3 p-3 flex-wrap"):
+                    with ui.element("div").classes(
+                        "w-full dw-findings-grid dw-findings-row-layout p-3"
+                    ):
                         with ui.column().classes(
                             "dw-findings-col dw-findings-col-severity gap-2"
                         ):
@@ -293,13 +317,23 @@ def render_findings_table(
                             ui.button(
                                 button_label,
                                 on_click=lambda fid=finding_id: toggle_expanded(fid),
-                            ).props("outline dense no-caps").on(
-                                "click.stop", lambda *_: None
-                            )
+                            ).props(
+                                "outline dense no-caps "
+                                f"aria-controls={evidence_panel_id} "
+                                f"aria-expanded={'true' if finding_id in expanded_ids else 'false'}"
+                            ).on("click.stop", lambda *_: None)
                     if finding_id in expanded_ids:
                         with ui.column().classes(
                             "w-full gap-2 px-3 pb-3 pt-0 border-t border-[color:var(--dw-line)]"
-                        ):
+                        ) as evidence_panel:
+                            evidence_panel.props(
+                                f'id={evidence_panel_id} data-dw-evidence-inspector="1"'
+                            )
+                            decorate_review_section(
+                                evidence_panel,
+                                section="evidence",
+                                label="Evidence inspector",
+                            )
                             ui.label("Evidence inspector").classes(
                                 "text-sm font-semibold dw-text mt-2"
                             )
@@ -364,10 +398,14 @@ def render_findings_table(
                                             f"{descriptor['source_label']} · confidence {float(evidence_item['confidence']):.2f}"
                                         ).classes("text-xs dw-muted")
 
-    with ui.card().classes("w-full dw-panel shadow-none p-4"):
+    with ui.card().classes("w-full dw-panel shadow-none p-4") as findings_card:
+        findings_card.props('data-dw-findings-table="1"')
+        decorate_review_section(findings_card, section="findings", label=title)
         with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
             ui.label(title).classes("text-lg font-medium dw-text")
             ui.label(
                 "Severity, evidence count, confidence, and deterministic status stay visible while evidence expands inline."
             ).classes("text-xs dw-muted")
+        table_mount = ui.column().classes("w-full gap-2")
+        table_mount.props('data-dw-findings-table="1"')
         render_rows()

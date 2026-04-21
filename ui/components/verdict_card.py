@@ -9,6 +9,10 @@ from ui.formatters.context_completeness import render_context_completeness_badge
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
+from ui.components.review_accessibility import (
+    decorate_review_section,
+    register_review_accessibility,
+)
 
 
 def _primary_confidence(report: dict) -> float | None:
@@ -23,13 +27,15 @@ def _primary_confidence(report: dict) -> float | None:
 
 def render_verdict_card(report: dict) -> None:
     """Render the above-the-fold verdict card for the current report."""
+    register_review_accessibility()
     context = report.get("context_completeness") or {}
     confidence = _primary_confidence(report)
     llm_notice = extract_llm_notice(
         report.get("warnings", []), report.get("narrative_failure_notice")
     )
 
-    with ui.card().classes("w-full dw-panel dw-verdict-card shadow-none"):
+    with ui.card().classes("w-full dw-panel dw-verdict-card shadow-none") as card:
+        decorate_review_section(card, section="verdict", label="Verdict card")
         with ui.row().classes("w-full items-start justify-between gap-5 flex-wrap"):
             with ui.column().classes("gap-3 min-w-0 flex-1"):
                 ui.label("5-second verdict").classes("dw-eyebrow")

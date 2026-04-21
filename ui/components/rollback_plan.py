@@ -6,6 +6,10 @@ import json
 
 from analysis.rollback_planner import RollbackPlan, build_rollback_copy_text
 from nicegui import ui
+from ui.components.review_accessibility import (
+    decorate_review_section,
+    register_review_accessibility,
+)
 
 
 async def copy_rollback_plan_to_clipboard(plan: RollbackPlan) -> None:
@@ -49,8 +53,10 @@ async def copy_rollback_plan_to_clipboard(plan: RollbackPlan) -> None:
 
 def render_rollback_plan(plan: RollbackPlan) -> None:
     """Render an ordered rollback timeline."""
+    register_review_accessibility()
 
-    with ui.card().classes("w-full dw-panel shadow-none"):
+    with ui.card().classes("w-full dw-panel shadow-none") as panel:
+        decorate_review_section(panel, section="rollback", label="Rollback plan")
         with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
             with ui.column().classes("gap-1 min-w-0 flex-1"):
                 ui.label("Rollback plan").classes("text-lg font-medium dw-text")

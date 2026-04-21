@@ -39,8 +39,8 @@ class HistoryPageHelpersTests(unittest.TestCase):
 
     def test_recommendation_helpers_preserve_semantic_go_no_go_styling(self) -> None:
         self.assertEqual(recommendation_text("no-go"), "NO-GO")
-        self.assertIn("text-red-600", recommendation_classes("no-go"))
-        self.assertIn("text-green-600", recommendation_classes("go"))
+        self.assertIn("dw-danger-text", recommendation_classes("no-go"))
+        self.assertIn("dw-success-text", recommendation_classes("go"))
 
 
 class HistoryPageRenderingTests(unittest.TestCase):
@@ -63,7 +63,15 @@ class HistoryPageRenderingTests(unittest.TestCase):
         os.environ.pop("DATABASE_URL", None)
         self.tempdir.cleanup()
 
-    def _persist_report(self) -> None:
+    def _persist_report(
+        self,
+        *,
+        score: int = 88,
+        severity: str = "critical",
+        recommendation: str = "no-go",
+        top_risk: str = "Security group exposure risk",
+        opening_sentence: str = "Ingress widens access to production resources.",
+    ) -> None:
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -83,10 +91,10 @@ class HistoryPageRenderingTests(unittest.TestCase):
             ]
         )
         assessment = RiskAssessment(
-            score=88,
-            severity="critical",
-            recommendation="no-go",
-            top_risk="Security group exposure risk",
+            score=score,
+            severity=severity,
+            recommendation=recommendation,
+            top_risk=top_risk,
             contributors=[
                 RiskContributor(
                     source_file="plan.json",
@@ -103,7 +111,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
             source="heuristic+llm",
         )
         narrative = NarrativeResult(
-            opening_sentence="Ingress widens access to production resources.",
+            opening_sentence=opening_sentence,
             explanation="Review the security group change before deployment.",
             guidance=[],
             degraded=False,
@@ -168,14 +176,56 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Risk: heuristic+llm", response.text)
         self.assertIn("Narrative: llm", response.text)
 
-    def test_history_page_opens_report_from_query_parameter(self) -> None:
+    def test_history_page_shows_diff_indicator_for_rescanned_same_artifact(
+        self,
+    ) -> None:
+        self._persist_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Initial security group review",
+            opening_sentence="Initial review of the security group change.",
+        )
+        self._persist_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Security group exposure risk",
+            opening_sentence="Ingress widens access to production resources.",
+        )
+
+        response = self.client.get("/history")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Rescan diff", response.text)
+        self.assertIn("+46 risk vs report #1", response.text)
+        self.assertIn("MEDIUM → CRITICAL", response.text)
+        self.assertIn("CAUTION → NO-GO", response.text)
+
+    def test_history_detail_route_renders_dedicated_report_page(self) -> None:
+        self._persist_report()
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Back to History", response.text)
+        self.assertIn("Analysis report detail", response.text)
+        self.assertIn("Rollback plan", response.text)
+        self.assertIn("Revert aws_security_group.main", response.text)
+        self.assertIn("Findings table", response.text)
+        self.assertIn("Context completeness", response.text)
+        self.assertIn("Blast radius", response.text)
+        self.assertIn("Audit metadata", response.text)
+        self.assertNotIn('"data-dw-modal-root":"1"', response.text)
+
+    def test_history_page_keeps_legacy_query_parameter_as_detail_fallback(self) -> None:
         self._persist_report()
 
         response = self.client.get("/history?report_id=1")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Rollback plan", response.text)
-        self.assertIn("Revert aws_security_group.main", response.text)
+        self.assertIn("Analysis report detail", response.text)
+        self.assertIn("Back to History", response.text)
 
 
 if __name__ == "__main__":

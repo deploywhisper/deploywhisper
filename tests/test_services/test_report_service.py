@@ -184,7 +184,6 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["narrative_provider"], "ollama")
         self.assertEqual(persisted["narrative_model"], "ollama/llama3")
         self.assertEqual(persisted["skills_applied"], ["git", "terraform"])
-        self.assertEqual(persisted["top_risk_contributors"], ["ev-001"])
         self.assertEqual(persisted["context_completeness"]["context_score"], 0.84)
         self.assertEqual(persisted["blast_radius"]["direct_count"], 1)
         self.assertEqual(persisted["rollback_plan"]["complexity_score"], 3)
@@ -196,8 +195,17 @@ class ReportServiceTests(unittest.TestCase):
             "2026-04-18T11:22:33Z",
         )
         self.assertEqual(persisted["findings"][0]["confidence"], 1.0)
-        self.assertEqual(persisted["evidence_items"][0]["evidence_id"], "ev-001")
-        self.assertEqual(persisted["contributors"][0]["evidence_id"], "ev-001")
+        persisted_evidence_id = persisted["evidence_items"][0]["evidence_id"]
+        persisted_finding_id = persisted["findings"][0]["finding_id"]
+        self.assertTrue(persisted_evidence_id.startswith("evidence-"))
+        self.assertTrue(persisted_finding_id.startswith("finding-"))
+        self.assertEqual(persisted["top_risk_contributors"], [persisted_evidence_id])
+        self.assertEqual(
+            persisted["findings"][0]["evidence_refs"], [persisted_evidence_id]
+        )
+        self.assertEqual(
+            persisted["contributors"][0]["evidence_id"], persisted_evidence_id
+        )
 
         fetched = report_service_module.fetch_analysis_report(persisted["id"])
         self.assertIsNotNone(fetched)
@@ -208,7 +216,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["narrative_source"], "llm")
         self.assertEqual(fetched["report_schema_version"], "v2")
         self.assertEqual(fetched["skills_applied"], ["git", "terraform"])
-        self.assertEqual(fetched["top_risk_contributors"], ["ev-001"])
+        self.assertEqual(fetched["top_risk_contributors"], [persisted_evidence_id])
         self.assertEqual(fetched["context_completeness"]["topology_freshness_days"], 12)
         self.assertEqual(fetched["blast_radius"]["affected"][0]["label"], "Database")
         self.assertEqual(
@@ -219,18 +227,135 @@ class ReportServiceTests(unittest.TestCase):
             fetched["context_completeness"]["parser_success_by_tool"],
             {"terraform": 1.0},
         )
-        self.assertEqual(fetched["findings"][0]["evidence_refs"], ["ev-001"])
-        self.assertEqual(fetched["evidence_items"][0]["finding_id"], "finding-001")
-        self.assertEqual(fetched["contributors"][0]["evidence_id"], "ev-001")
+        self.assertEqual(fetched["findings"][0]["finding_id"], persisted_finding_id)
+        self.assertEqual(
+            fetched["findings"][0]["evidence_refs"], [persisted_evidence_id]
+        )
+        self.assertEqual(
+            fetched["evidence_items"][0]["finding_id"], persisted_finding_id
+        )
+        self.assertEqual(
+            fetched["contributors"][0]["evidence_id"], persisted_evidence_id
+        )
         self.assertNotIn("prompt", json.dumps(fetched))
 
         history = report_service_module.fetch_analysis_history()
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["id"], persisted["id"])
         self.assertEqual(history[0]["audit"]["llm_provider"], "ollama")
-        self.assertEqual(history[0]["top_risk_contributors"], ["ev-001"])
+        self.assertEqual(history[0]["top_risk_contributors"], [persisted_evidence_id])
         self.assertEqual(history[0]["report_schema_version"], "v2")
         self.assertEqual(history[0]["rollback_plan"]["complexity"], "medium")
+
+    def test_persist_analysis_report_allows_repeated_scans_with_same_logical_ids(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="deployment.yaml",
+                            tool="kubernetes",
+                            resource_id="PersistentVolumeClaim/data-apisix-api-gateway-green-etcd-0",
+                            action="apply",
+                            summary="Kubernetes PVC applied for preproduction etcd storage.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="caution",
+            top_risk="PVC storage change requires review.",
+            top_risk_contributors=["ev-ea30f3b4d375"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-ea30f3b4d375",
+                    source_file="deployment.yaml",
+                    tool="kubernetes",
+                    resource_id="PersistentVolumeClaim/data-apisix-api-gateway-green-etcd-0",
+                    action="apply",
+                    contribution=12,
+                    summary="PVC storage change requires review.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-039f73a794b8",
+                analysis_id=0,
+                title="HIGH: PersistentVolumeClaim/data-apisix-api-gateway-green-etcd-0",
+                description="Kubernetes PVC apply change requires review.",
+                severity="high",
+                category="storage",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_refs=["ev-ea30f3b4d375"],
+                skill_id=None,
+            )
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-ea30f3b4d375",
+                analysis_id=0,
+                finding_id="pending:chg-001",
+                source_type="artifact",
+                source_ref="kubernetes://deployment.yaml#PersistentVolumeClaim/data-apisix-api-gateway-green-etcd-0?action=apply",
+                summary="PVC storage change requires review.",
+                severity_hint="high",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=["chg-001"],
+            )
+        ]
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the PVC update.",
+            explanation="The deployment changes persistent storage configuration.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["kubernetes"],
+        )
+
+        first = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=findings,
+            evidence_items=evidence_items,
+        )
+        second = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=findings,
+            evidence_items=evidence_items,
+        )
+
+        self.assertNotEqual(first["id"], second["id"])
+        self.assertNotEqual(
+            first["findings"][0]["finding_id"], second["findings"][0]["finding_id"]
+        )
+        self.assertNotEqual(
+            first["evidence_items"][0]["evidence_id"],
+            second["evidence_items"][0]["evidence_id"],
+        )
+        history = report_service_module.fetch_analysis_history()
+        self.assertEqual(len(history), 2)
 
     def test_report_schema_helpers_preserve_forward_compatibility(self) -> None:
         self.assertEqual(

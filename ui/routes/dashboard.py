@@ -7,7 +7,7 @@ from nicegui import ui
 from services.report_service import fetch_active_dashboard_report
 from ui.components.upload_panel import build_upload_panel
 from ui.components.verdict_card import render_verdict_card
-from ui.routes.history import build_history_page
+from ui.routes.history import build_history_detail_page, build_history_page
 from ui.routes.settings import build_settings_page
 from services.report_service import fetch_dashboard_briefing, fetch_dashboard_stats
 from ui.theme import apply_theme, build_navigation_shell
@@ -215,7 +215,15 @@ def build_dashboard() -> None:
 
 @ui.page("/history")
 def history_page(report_id: int | None = None) -> None:
-    build_history_page(report_id=report_id)
+    if report_id is not None:
+        build_history_detail_page(report_id)
+        return
+    build_history_page()
+
+
+@ui.page("/history/{report_id}")
+def history_detail_page(report_id: int) -> None:
+    build_history_detail_page(report_id)
 
 
 @ui.page("/settings")
