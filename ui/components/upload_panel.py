@@ -19,7 +19,7 @@ from services.report_service import (
     fetch_active_dashboard_report,
 )
 from services.settings_service import check_provider_readiness
-from ui.formatters.confidence import render_confidence_badge
+from ui.components.findings_table import render_findings_table
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
@@ -220,37 +220,14 @@ def build_upload_panel(
                         f"Context score {context_score:.2f} · parser success {float(context.get('parser_success_rate', 1.0)):.2f}"
                     ).classes("text-xs dw-muted leading-5")
                 findings = report.get("findings", [])
+                evidence_items = report.get("evidence_items", [])
                 if findings:
                     with ui.column().classes("mt-3 gap-2"):
-                        ui.label("Findings").classes("text-sm font-semibold dw-text")
-                        for finding in findings[:5]:
-                            with ui.row().classes(
-                                "w-full items-start justify-between gap-3 flex-wrap"
-                            ):
-                                with ui.column().classes("min-w-0 flex-1 gap-1"):
-                                    ui.label(finding["title"]).classes(
-                                        "text-sm font-medium dw-text"
-                                    )
-                                    ui.label(finding["description"]).classes(
-                                        "text-xs dw-muted leading-5"
-                                    )
-                                    if finding.get("uncertainty_note"):
-                                        ui.label(finding["uncertainty_note"]).classes(
-                                            "text-xs dw-warning-text leading-5"
-                                        )
-                                render_confidence_badge(finding["confidence"])
-                evidence_items = report.get("evidence_items", [])
-                if evidence_items:
-                    with ui.column().classes("mt-3 gap-2"):
-                        ui.label("Evidence").classes("text-sm font-semibold dw-text")
-                        for evidence_item in evidence_items[:5]:
-                            with ui.column().classes("gap-1"):
-                                ui.label(evidence_item["summary"]).classes(
-                                    "text-sm dw-text"
-                                )
-                                ui.label(evidence_item["source_ref"]).classes(
-                                    "text-xs dw-muted break-all"
-                                )
+                        render_findings_table(
+                            findings,
+                            evidence_items,
+                            title="Findings table",
+                        )
                 contributors = report.get("contributors", [])
                 if contributors:
                     with ui.column().classes("mt-3 gap-2"):

@@ -496,6 +496,41 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
   max-width: 18ch;
 }
 
+.dw-findings-row {
+  border-radius: 18px;
+}
+
+.dw-findings-col {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.dw-findings-col-severity {
+  width: 120px;
+}
+
+.dw-findings-col-title {
+  min-width: min(360px, 100%);
+}
+
+.dw-findings-col-tool {
+  width: 84px;
+}
+
+.dw-findings-col-evidence {
+  width: 84px;
+}
+
+.dw-findings-col-confidence {
+  width: 150px;
+}
+
+.dw-findings-col-actions {
+  width: 116px;
+}
+
 .dw-stat-card {
   min-height: 150px;
   padding: 24px;

@@ -162,6 +162,10 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn(
             "1 saved briefing is shaping the current advisory view.", response.text
         )
+        self.assertIn("Findings table", response.text)
+        self.assertIn("Severity", response.text)
+        self.assertIn("Evidence", response.text)
+        self.assertIn("View evidence", response.text)
 
     def test_dashboard_shows_llm_fallback_notice_for_active_report(self) -> None:
         parse_batch = ParseBatchResult(
