@@ -9,10 +9,10 @@ An open-source pre-deployment risk intelligence platform for infrastructure chan
 DeployWhisper helps platform engineers, DevOps teams, and SREs review deployment artifacts before release. It analyzes Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation inputs, then turns those inputs into a single advisory briefing with risk scoring, blast radius context, rollback guidance, and plain-English narrative output.
 
 <p>
-  <a href="https://github.com/pramodksahoo/deploywhisper/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/pramodksahoo/deploywhisper/ci.yml?branch=develop&label=CI&style=flat-square" alt="CI"/></a>
-  <a href="https://github.com/pramodksahoo/deploywhisper/stargazers"><img src="https://img.shields.io/github/stars/pramodksahoo/deploywhisper?style=flat-square" alt="GitHub stars"/></a>
-  <a href="https://github.com/pramodksahoo/deploywhisper/network/members"><img src="https://img.shields.io/github/forks/pramodksahoo/deploywhisper?style=flat-square" alt="GitHub forks"/></a>
-  <a href="https://github.com/pramodksahoo/deploywhisper/issues"><img src="https://img.shields.io/github/issues/pramodksahoo/deploywhisper?style=flat-square" alt="GitHub issues"/></a>
+  <a href="https://github.com/deploywhisper/deploywhisper/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/deploywhisper/deploywhisper/ci.yml?branch=develop&label=CI&style=flat-square" alt="CI"/></a>
+  <a href="https://github.com/deploywhisper/deploywhisper/stargazers"><img src="https://img.shields.io/github/stars/deploywhisper/deploywhisper?style=flat-square" alt="GitHub stars"/></a>
+  <a href="https://github.com/deploywhisper/deploywhisper/network/members"><img src="https://img.shields.io/github/forks/deploywhisper/deploywhisper?style=flat-square" alt="GitHub forks"/></a>
+  <a href="https://github.com/deploywhisper/deploywhisper/issues"><img src="https://img.shields.io/github/issues/deploywhisper/deploywhisper?style=flat-square" alt="GitHub issues"/></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square" alt="Python 3.11+"/>
   <img src="https://img.shields.io/badge/runtime-NiceGUI%20%2B%20FastAPI-0f766e?style=flat-square" alt="NiceGUI plus FastAPI"/>
 </p>
@@ -437,6 +437,51 @@ npm run test:ui-review:voiceover
 ## CI
 
 GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
+
+### DeployWhisper Analyze Action
+
+The published GitHub Marketplace action now lives in its own dedicated public
+repository:
+[`deploywhisper/analyze-action@v1`](https://github.com/deploywhisper/analyze-action).
+
+Typical PR usage:
+
+```yaml
+jobs:
+  deploywhisper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: deploywhisper/analyze-action@v1
+        with:
+          api-url: ${{ secrets.DEPLOYWHISPER_API_URL }}
+```
+
+What the action does:
+
+- detects changed files from the pull request diff
+- filters to supported DeployWhisper artifacts locally before upload
+- submits those artifacts to the existing `POST /api/v1/analyses` endpoint
+- exits `0` when analysis succeeds, regardless of risk verdict
+- exposes outputs for follow-on GitHub steps:
+  - `report-id`
+  - `report-link`
+  - `severity`
+  - `recommendation`
+  - `share-summary-json`
+  - `share-summary-markdown`
+
+Optional inputs:
+
+- `api-token`: bearer token for protected DeployWhisper APIs
+- `changed-files`: override auto-detected PR files with a comma or newline separated list
+- `working-directory`: repository root when the checkout is not in `.`
+
+The app repository no longer carries Marketplace action packaging files. Action
+source, release metadata, and consumer smoke verification live in the dedicated
+`deploywhisper/analyze-action` repository.
 
 Current CI stages:
 
