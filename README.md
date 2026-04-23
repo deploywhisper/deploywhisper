@@ -447,6 +447,15 @@ repository:
 Typical PR usage:
 
 ```yaml
+name: DeployWhisper
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
 jobs:
   deploywhisper:
     runs-on: ubuntu-latest
