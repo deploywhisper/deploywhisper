@@ -614,7 +614,7 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertEqual(summary.json_payload.evidence_count, 5)
         self.assertEqual(
             summary.json_payload.rollback_link,
-            "https://deploywhisper.example.com/history?report_id=17",
+            "https://deploywhisper.example.com/reports/17",
         )
         self.assertEqual(
             summary.json_payload.context_completeness.label, "STRONG CONTEXT"
@@ -663,14 +663,14 @@ class AnalysisServiceTests(unittest.TestCase):
 
         self.assertEqual(
             summary.json_payload.report_link,
-            "http://127.0.0.1:8080/history?report_id=17",
+            "http://127.0.0.1:8080/reports/17",
         )
         self.assertEqual(
             summary.json_payload.rollback_link,
-            "http://127.0.0.1:8080/history?report_id=17",
+            "http://127.0.0.1:8080/reports/17",
         )
         self.assertIn(
-            "[View rollback plan](http://127.0.0.1:8080/history?report_id=17)",
+            "[View rollback plan](http://127.0.0.1:8080/reports/17)",
             summary.markdown,
         )
 

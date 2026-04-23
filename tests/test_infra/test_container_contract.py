@@ -22,6 +22,7 @@ class ContainerContractTests(unittest.TestCase):
                 "006_add_report_schema_version.py",
                 "007_add_blast_radius_payload.py",
                 "008_add_rollback_plan_payload.py",
+                "009_add_report_share_settings.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -29,6 +30,7 @@ class ContainerContractTests(unittest.TestCase):
         schema_content = migrations[2].read_text(encoding="utf-8")
         blast_radius_content = migrations[3].read_text(encoding="utf-8")
         rollback_content = migrations[4].read_text(encoding="utf-8")
+        share_content = migrations[5].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -45,6 +47,8 @@ class ContainerContractTests(unittest.TestCase):
             'down_revision = "007_add_blast_radius_payload"', rollback_content
         )
         self.assertIn('"rollback_plan_json"', rollback_content)
+        self.assertIn('down_revision = "008_add_rollback_plan_payload"', share_content)
+        self.assertIn('"share_redact_filenames"', share_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())
@@ -79,6 +83,8 @@ class ContainerContractTests(unittest.TestCase):
         self.assertIn("8080:8080", ports)
         environment = services["deploywhisper"].get("environment", {})
         self.assertEqual(environment["APP_PORT"], 8080)
+        self.assertIn("APP_BASE_URL", environment)
+        self.assertIn("DEPLOYWHISPER_SHARE_TOKEN", environment)
         self.assertIn("LLM_API_BASE", environment)
         self.assertEqual(services["deploywhisper"]["restart"], "unless-stopped")
         self.assertIn(

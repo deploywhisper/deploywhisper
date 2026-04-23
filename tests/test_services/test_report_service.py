@@ -41,7 +41,91 @@ class ReportServiceTests(unittest.TestCase):
     def tearDown(self) -> None:
         database_module.engine.dispose()
         os.environ.pop("DATABASE_URL", None)
+        os.environ.pop("APP_BASE_URL", None)
         self.tempdir.cleanup()
+
+    def _persist_shareable_report(self) -> dict:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="prod/network/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/network/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="prod/network/plan.json changed aws_security_group.main and is the highest-impact change.",
+            contributors=[
+                RiskContributor(
+                    source_file="prod/network/plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review prod/network/plan.json before release.",
+            explanation="The deployment widens database access and should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-001",
+                analysis_id=0,
+                title="HIGH: prod/network/plan.json",
+                description="Security group changes in prod/network/plan.json can affect production ingress.",
+                severity="high",
+                category="networking/ingress",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_refs=["ev-001"],
+                skill_id=None,
+            )
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-001",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref="terraform://prod/network/plan.json#L14",
+                summary="Terraform changed a security group.",
+                severity_hint="high",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=["change-1"],
+            )
+        ]
+        return report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=findings,
+            evidence_items=evidence_items,
+            audit_context={"source_interface": "api"},
+        )
 
     def test_persist_analysis_report_stores_and_returns_metadata(self) -> None:
         parse_batch = ParseBatchResult(
@@ -356,6 +440,68 @@ class ReportServiceTests(unittest.TestCase):
         )
         history = report_service_module.fetch_analysis_history()
         self.assertEqual(len(history), 2)
+
+    def test_configure_report_share_persists_password_and_redaction_settings(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        os.environ["APP_BASE_URL"] = "https://install.example.com"
+
+        share_config = report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        self.assertEqual(
+            share_config["share_url"],
+            f"https://install.example.com/reports/{report['id']}",
+        )
+        self.assertTrue(share_config["password_protected"])
+        self.assertTrue(share_config["redact_filenames"])
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        self.assertNotIn("prod/network/plan.json", shared_report["top_risk"])
+        self.assertNotIn("prod/network/plan.json", shared_report["narrative_opening"])
+        self.assertNotIn(
+            "prod/network/plan.json", shared_report["findings"][0]["title"]
+        )
+        self.assertEqual(shared_report["audit"]["files_analyzed"], ["Artifact 1"])
+        self.assertEqual(shared_report["contributors"][0]["source_file"], "Artifact 1")
+        self.assertIn("Artifact 1", shared_report["evidence_items"][0]["source_ref"])
+        self.assertNotIn(
+            "prod/network/plan.json",
+            shared_report["evidence_items"][0]["source_ref"],
+        )
+
+    def test_fetch_shared_analysis_report_requires_password_when_configured(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=False,
+        )
+
+        self.assertIsNone(
+            report_service_module.fetch_shared_analysis_report(report["id"])
+        )
+        self.assertIsNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], password="wrong-pass"
+            )
+        )
+        self.assertIsNotNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], password="s3cret-pass"
+            )
+        )
 
     def test_report_schema_helpers_preserve_forward_compatibility(self) -> None:
         self.assertEqual(

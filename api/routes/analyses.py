@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, Header, Query, UploadFile
+import hmac
+import os
+
+from fastapi import APIRouter, Depends, File, Header, Query, UploadFile
 
 from api.errors import ApiError, ApiRoute
 from api.schemas import (
@@ -10,10 +13,14 @@ from api.schemas import (
     AnalysisListResponse,
     AnalysisReportData,
     AnalysisRunResponse,
+    AnalysisShareConfigData,
+    AnalysisShareConfigRequest,
+    AnalysisShareConfigResponse,
     ErrorResponse,
     build_analysis_run_data,
     build_report_meta,
 )
+from config import settings
 from services.analysis_service import (
     analyze_uploaded_files,
     build_advisory_summary,
@@ -26,10 +33,41 @@ from services.intake_service import (
 )
 from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
+from services.report_service import configure_report_share
 from services.report_service import REPORT_SCHEMA_VERSION
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
+
+
+def require_share_management_token(
+    share_token: str | None = Header(
+        default=None,
+        alias="X-DeployWhisper-Share-Token",
+    ),
+) -> None:
+    """Require an explicit management token before mutating share settings."""
+    configured_token = (
+        os.getenv("DEPLOYWHISPER_SHARE_TOKEN")
+        or os.getenv("APP_SHARE_MANAGEMENT_TOKEN")
+        or settings.share_management_token
+        or ""
+    ).strip()
+    if not configured_token:
+        raise ApiError(
+            status_code=405,
+            code="share_configuration_disabled",
+            message=(
+                "Share configuration API is disabled. Set "
+                "DEPLOYWHISPER_SHARE_TOKEN to enable it."
+            ),
+        )
+    if not share_token or not hmac.compare_digest(share_token, configured_token):
+        raise ApiError(
+            status_code=403,
+            code="share_configuration_forbidden",
+            message="Share configuration requires a valid management token.",
+        )
 
 
 async def _read_upload_files_with_limit(
@@ -178,5 +216,41 @@ def get_analysis(report_id: int) -> AnalysisDetailResponse:
         data=AnalysisReportData(**report),
         meta=build_report_meta(
             id=report_id, report_schema_version=REPORT_SCHEMA_VERSION
+        ),
+    )
+
+
+@router.post(
+    "/{report_id}/share",
+    response_model=AnalysisShareConfigResponse,
+    responses={
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        405: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def configure_analysis_share(
+    report_id: int,
+    payload: AnalysisShareConfigRequest,
+    _: None = Depends(require_share_management_token),
+) -> AnalysisShareConfigResponse:
+    share_config = configure_report_share(
+        report_id,
+        password=payload.password,
+        redact_filenames=payload.redact_filenames,
+    )
+    if share_config is None:
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    return AnalysisShareConfigResponse(
+        data=AnalysisShareConfigData(**share_config),
+        meta=build_report_meta(
+            id=report_id,
+            report_schema_version=REPORT_SCHEMA_VERSION,
         ),
     )

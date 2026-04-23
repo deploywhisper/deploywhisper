@@ -25,6 +25,9 @@ class Settings:
     artifact_snapshot_dir: str = os.getenv(
         "ARTIFACT_SNAPSHOT_DIR", "data/report-artifacts"
     )
+    share_management_token: str | None = os.getenv(
+        "DEPLOYWHISPER_SHARE_TOKEN"
+    ) or os.getenv("APP_SHARE_MANAGEMENT_TOKEN")
     llm_api_key: str | None = (
         os.getenv("LLM_API_KEY")
         or os.getenv("OPENAI_API_KEY")

@@ -118,6 +118,10 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["share_summary"]["json_payload"]["report_id"],
             payload["data"]["persisted_report"]["id"],
         )
+        self.assertIn(
+            "https://deploywhisper.example.com/reports/",
+            payload["data"]["share_summary"]["json_payload"]["rollback_link"],
+        )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertEqual(
             payload["data"]["persisted_report"]["report_schema_version"], "v2"

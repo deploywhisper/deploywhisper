@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import hashlib
+import hmac
 from datetime import UTC, datetime
 from collections import Counter
 from typing import Any
@@ -24,6 +26,7 @@ from models.repositories.analysis_reports import (
     get_analysis_report,
     latest_active_dashboard_report,
     list_analysis_reports,
+    update_analysis_report_share_settings,
 )
 from parsers.base import ParseBatchResult
 from services.artifact_snapshot_service import (
@@ -35,6 +38,121 @@ from services.settings_service import resolve_provider_runtime
 
 LEGACY_REPORT_SCHEMA_VERSION = "v1"
 REPORT_SCHEMA_VERSION = "v2"
+
+
+def build_share_report_link(report_id: int | None) -> str | None:
+    if report_id is None:
+        return None
+    base_url = (
+        (os.getenv("APP_BASE_URL") or os.getenv("PUBLIC_APP_URL") or "")
+        .strip()
+        .rstrip("/")
+    )
+    if not base_url:
+        host = os.getenv("APP_HOST", "127.0.0.1")
+        if host in {"0.0.0.0", "::"}:
+            host = "localhost"
+        port = int(os.getenv("APP_PORT", "8080"))
+        base_url = f"http://{host}:{port}"
+    return f"{base_url}/reports/{report_id}"
+
+
+def _hash_share_password(password: str, *, salt: str) -> str:
+    return hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+
+
+def _share_settings(report: dict[str, Any]) -> dict[str, Any]:
+    report_id = int(report["id"])
+    return {
+        "share_url": build_share_report_link(report_id),
+        "password_protected": bool(report.get("share_password_hash")),
+        "redact_filenames": bool(report.get("share_redact_filenames", False)),
+    }
+
+
+def _redaction_pairs(original_names: list[str]) -> list[tuple[str, str]]:
+    basename_counts: Counter[str] = Counter()
+    for original_name in original_names:
+        basename_counts[str(original_name).split("/")[-1]] += 1
+    pairs: list[tuple[str, str]] = []
+    for index, original_name in enumerate(original_names, start=1):
+        replacement = f"Artifact {index}"
+        pairs.append((original_name, replacement))
+        basename = str(original_name).split("/")[-1]
+        if basename and basename_counts[basename] == 1:
+            pairs.append((basename, replacement))
+    return pairs
+
+
+def _redact_text_value(value: Any, pairs: list[tuple[str, str]]) -> Any:
+    if not isinstance(value, str):
+        return value
+    redacted = value
+    for original, replacement in pairs:
+        redacted = redacted.replace(original, replacement)
+    return redacted
+
+
+def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
+    original_names = list(report.get("audit", {}).get("files_analyzed") or [])
+    if not original_names:
+        return report
+    redaction_map = {
+        original_name: f"Artifact {index}"
+        for index, original_name in enumerate(original_names, start=1)
+    }
+    pairs = _redaction_pairs(original_names)
+    redacted = {
+        **report,
+        "top_risk": _redact_text_value(report.get("top_risk"), pairs),
+        "parse_summary": _redact_text_value(report.get("parse_summary"), pairs),
+        "narrative_opening": _redact_text_value(report.get("narrative_opening"), pairs),
+        "narrative_failure_notice": _redact_text_value(
+            report.get("narrative_failure_notice"), pairs
+        ),
+        "warnings": [
+            _redact_text_value(warning, pairs)
+            for warning in (report.get("warnings") or [])
+        ],
+        "audit": {
+            **dict(report.get("audit") or {}),
+            "files_analyzed": [redaction_map[name] for name in original_names],
+        },
+        "findings": [
+            {
+                **finding,
+                "title": _redact_text_value(finding.get("title"), pairs),
+                "description": _redact_text_value(finding.get("description"), pairs),
+                "uncertainty_note": _redact_text_value(
+                    finding.get("uncertainty_note"), pairs
+                ),
+            }
+            for finding in (report.get("findings") or [])
+        ],
+        "contributors": [
+            {
+                **contributor,
+                "source_file": redaction_map.get(
+                    contributor.get("source_file"),
+                    contributor.get("source_file"),
+                ),
+                "summary": _redact_text_value(contributor.get("summary"), pairs),
+                "reasoning": _redact_text_value(contributor.get("reasoning"), pairs),
+            }
+            for contributor in (report.get("contributors") or [])
+        ],
+        "evidence_items": [
+            {
+                **evidence_item,
+                "source_ref": _redact_text_value(
+                    evidence_item.get("source_ref", ""), pairs
+                ),
+                "summary": _redact_text_value(evidence_item.get("summary"), pairs),
+            }
+            for evidence_item in (report.get("evidence_items") or [])
+        ],
+    }
+    return redacted
 
 
 def _run_with_schema_retry(operation):
@@ -380,6 +498,11 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "evidence_items": evidence_items,
         "contributors": json.loads(report.contributors_json or "[]"),
         "dashboard_display_duration_seconds": report.dashboard_display_duration_seconds,
+        "share_password_hash": getattr(report, "share_password_hash", None),
+        "share_password_salt": getattr(report, "share_password_salt", None),
+        "share_redact_filenames": bool(
+            getattr(report, "share_redact_filenames", False)
+        ),
         "audit": audit,
     }
 
@@ -479,6 +602,68 @@ def fetch_analysis_report(report_id: int) -> dict | None:
             return _serialize_report(report, include_evidence=True)
 
     return _run_with_schema_retry(operation)
+
+
+def configure_report_share(
+    report_id: int,
+    *,
+    password: str | None,
+    redact_filenames: bool,
+) -> dict | None:
+    password_value = (password or "").strip()
+    password_salt = secrets.token_hex(8) if password_value else None
+    password_hash = (
+        _hash_share_password(password_value, salt=password_salt)
+        if password_salt is not None
+        else None
+    )
+
+    def operation():
+        with SessionLocal() as session:
+            report = update_analysis_report_share_settings(
+                session,
+                report_id,
+                share_password_hash=password_hash,
+                share_password_salt=password_salt,
+                share_redact_filenames=redact_filenames,
+            )
+            if report is None:
+                return None
+            return _serialize_report(report, include_evidence=False)
+
+    payload = _run_with_schema_retry(operation)
+    if payload is None:
+        return None
+    return _share_settings(payload)
+
+
+def fetch_shared_analysis_report(
+    report_id: int,
+    *,
+    password: str | None = None,
+    bypass_password: bool = False,
+) -> dict | None:
+    report = fetch_analysis_report(report_id)
+    if report is None:
+        return None
+    password_hash = str(report.get("share_password_hash") or "")
+    password_salt = str(report.get("share_password_salt") or "")
+    if password_hash and not bypass_password:
+        candidate = (password or "").strip()
+        if not candidate or not password_salt:
+            return None
+        if not hmac.compare_digest(
+            password_hash,
+            _hash_share_password(candidate, salt=password_salt),
+        ):
+            return None
+    shared = {
+        **report,
+        "share": _share_settings(report),
+    }
+    if shared["share"]["redact_filenames"]:
+        shared = _redact_report_file_names(shared)
+    return shared
 
 
 def fetch_analysis_history() -> list[dict]:

@@ -181,6 +181,7 @@ Default container behavior:
 - Port `8080` exposed from the app container
 - SQLite database stored under `/app/data`
 - Default provider set to Ollama
+- `POST /api/v1/analyses/{id}/share` stays disabled until `DEPLOYWHISPER_SHARE_TOKEN` is set
 
 Example for local Ollama mode:
 
@@ -200,6 +201,35 @@ OPENAI_API_KEY=your-real-key
 ```
 
 Do not bake secrets into the image. Pass them at runtime through Compose, your shell environment, or your orchestration platform.
+
+If you want to enable the share-management API used to password-protect shared
+reports, set the token as an environment variable on the app container:
+
+```env
+APP_BASE_URL=https://deploywhisper.example.com
+DEPLOYWHISPER_SHARE_TOKEN=replace-with-a-long-random-secret
+```
+
+Compose example:
+
+```bash
+docker compose up -d --build
+```
+
+`docker-compose.yml` already maps `DEPLOYWHISPER_SHARE_TOKEN` from your shell or
+`.env` file, so in practice you usually put it in `.env` next to `APP_BASE_URL`.
+
+Direct `docker run` example:
+
+```bash
+docker run -d \
+  -p 8080:8080 \
+  -e APP_HOST=0.0.0.0 \
+  -e APP_PORT=8080 \
+  -e APP_BASE_URL=https://deploywhisper.example.com \
+  -e DEPLOYWHISPER_SHARE_TOKEN=replace-with-a-long-random-secret \
+  ghcr.io/pramodksahoo/deploywhisper:1.0.0
+```
 
 ## API Endpoints
 
@@ -479,7 +509,7 @@ What the action does:
 - exits `0` when analysis succeeds, regardless of risk verdict
 - exposes outputs for follow-on GitHub steps:
   - `report-id`
-  - `report-link`
+  - `report-link` (shareable `/reports/{id}` URL)
   - `severity`
   - `recommendation`
   - `share-summary-json`
@@ -493,6 +523,20 @@ Optional inputs:
 - `api-token`: bearer token for protected DeployWhisper APIs
 - `changed-files`: override auto-detected PR files with a comma or newline separated list
 - `working-directory`: repository root when the checkout is not in `.`
+
+Shared report links now resolve to `/reports/{id}` read-only pages. For sensitive
+reports, configure password protection and opt-in file-name redaction via
+`POST /api/v1/analyses/{id}/share` with the `X-DeployWhisper-Share-Token`
+header. Set `DEPLOYWHISPER_SHARE_TOKEN` before exposing that management API.
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/v1/analyses/17/share \
+  -H "Content-Type: application/json" \
+  -H "X-DeployWhisper-Share-Token: $DEPLOYWHISPER_SHARE_TOKEN" \
+  -d '{"password":"review-only","redact_filenames":true}'
+```
 
 The app repository no longer carries Marketplace action packaging files. Action
 source, release metadata, and consumer smoke verification live in the dedicated

@@ -30,7 +30,7 @@ class FindingsTableEvidenceInspectorTests(unittest.TestCase):
         )
         self.assertEqual(
             descriptor["artifact_href"],
-            "/reports/17/artifacts?name=deployments%2Fprod%2Fplan.json&line=42#L42",
+            "/history/17/artifacts?name=deployments%2Fprod%2Fplan.json&line=42#L42",
         )
         self.assertIsNone(descriptor["source_system"])
 
@@ -50,7 +50,7 @@ class FindingsTableEvidenceInspectorTests(unittest.TestCase):
 
         self.assertEqual(
             descriptor["artifact_href"],
-            "/reports/9/artifacts?name=plan.json&line=7#L7",
+            "/history/9/artifacts?name=plan.json&line=7#L7",
         )
 
     def test_describe_evidence_item_preserves_current_artifact_reference_format(

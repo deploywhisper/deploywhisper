@@ -21,6 +21,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "006_add_report_schema_version",
     "007_add_blast_radius_payload",
     "008_add_rollback_plan_payload",
+    "009_add_report_share_settings",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -135,6 +136,14 @@ def _bootstrap_brownfield_revision() -> None:
             if "analysis_reports" in tables
             else set()
         )
+        if {
+            "report_schema_version",
+            "blast_radius_json",
+            "rollback_plan_json",
+            "share_redact_filenames",
+        }.issubset(report_columns):
+            _write_alembic_revision(connection, "009_add_report_share_settings")
+            return
         if {
             "report_schema_version",
             "blast_radius_json",

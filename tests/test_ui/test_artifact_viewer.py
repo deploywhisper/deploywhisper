@@ -123,7 +123,7 @@ class ArtifactViewerRouteTests(unittest.TestCase):
             },
         )
 
-        response = self.client.get(f"/reports/{report['id']}/artifacts?name=plan.json")
+        response = self.client.get(f"/history/{report['id']}/artifacts?name=plan.json")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("plan.json", response.text)
@@ -131,7 +131,12 @@ class ArtifactViewerRouteTests(unittest.TestCase):
         self.assertIn('id="L2"', response.text)
 
     def test_artifact_viewer_returns_not_found_for_missing_snapshot(self) -> None:
-        response = self.client.get("/reports/999/artifacts?name=missing.tf")
+        response = self.client.get("/history/999/artifacts?name=missing.tf")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_public_share_artifact_route_is_not_available(self) -> None:
+        response = self.client.get("/reports/1/artifacts?name=plan.json")
 
         self.assertEqual(response.status_code, 404)
 

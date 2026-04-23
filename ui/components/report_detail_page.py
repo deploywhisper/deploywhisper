@@ -171,7 +171,7 @@ def _render_audit_metadata(report: dict[str, Any]) -> None:
                     for file_name in files_analyzed:
                         ui.link(
                             file_name,
-                            f"/reports/{report['id']}/artifacts?{urlencode({'name': file_name})}",
+                            f"/history/{report['id']}/artifacts?{urlencode({'name': file_name})}",
                         ).classes("text-sm dw-accent-text break-all")
                 else:
                     ui.label(

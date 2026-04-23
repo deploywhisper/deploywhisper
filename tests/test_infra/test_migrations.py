@@ -63,12 +63,21 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
         self.assertIn("blast_radius_json", self._table_columns("analysis_reports"))
         self.assertIn("rollback_plan_json", self._table_columns("analysis_reports"))
+        self.assertIn("share_password_hash", self._table_columns("analysis_reports"))
+        self.assertIn("share_password_salt", self._table_columns("analysis_reports"))
+        self.assertIn("share_redact_filenames", self._table_columns("analysis_reports"))
         report_schema_row = next(
             row
             for row in self._table_info("analysis_reports")
             if row[1] == "report_schema_version"
         )
         self.assertIsNone(report_schema_row[4])
+        share_redact_row = next(
+            row
+            for row in self._table_info("analysis_reports")
+            if row[1] == "share_redact_filenames"
+        )
+        self.assertIsNone(share_redact_row[4])
 
     def test_upgrade_head_preserves_existing_analysis_reports(self) -> None:
         command.upgrade(self._config(), "0001_create_analysis_reports")
@@ -137,6 +146,12 @@ class MigrationTests(unittest.TestCase):
             schema_version = sqlite_conn.execute(
                 "SELECT report_schema_version FROM analysis_reports LIMIT 1"
             ).fetchone()[0]
+            share_password_hash = sqlite_conn.execute(
+                "SELECT share_password_hash FROM analysis_reports LIMIT 1"
+            ).fetchone()[0]
+            share_redact_filenames = sqlite_conn.execute(
+                "SELECT share_redact_filenames FROM analysis_reports LIMIT 1"
+            ).fetchone()[0]
             finding_fks = sqlite_conn.execute(
                 "PRAGMA foreign_key_list(findings)"
             ).fetchall()
@@ -148,6 +163,8 @@ class MigrationTests(unittest.TestCase):
 
         self.assertEqual(report_count, 1)
         self.assertEqual(schema_version, "v2")
+        self.assertIsNone(share_password_hash)
+        self.assertEqual(share_redact_filenames, 0)
         self.assertTrue(any(row[2] == "analysis_reports" for row in finding_fks))
         self.assertTrue(any(row[2] == "findings" for row in evidence_fks))
 
@@ -193,7 +210,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("incident_records", tables)
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "008_add_rollback_plan_payload")
+        self.assertEqual(revision, "009_add_report_share_settings")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -241,7 +258,7 @@ class MigrationTests(unittest.TestCase):
 
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "008_add_rollback_plan_payload")
+        self.assertEqual(revision, "009_add_report_share_settings")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -267,7 +284,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "008_add_rollback_plan_payload")
+        self.assertEqual(revision, "009_add_report_share_settings")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
 
@@ -292,7 +309,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "008_add_rollback_plan_payload")
+        self.assertEqual(revision, "009_add_report_share_settings")
 
 
 if __name__ == "__main__":

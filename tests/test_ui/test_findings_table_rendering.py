@@ -62,7 +62,7 @@ class FindingsTableRenderingTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(
-            "/reports/14/artifacts?name=plan.json&amp;line=2#L2", response.text
+            "/history/14/artifacts?name=plan.json&amp;line=2#L2", response.text
         )
         self.assertIn('"data-dw-findings-table":"1"', response.text)
         self.assertIn('"data-dw-review-section":"findings"', response.text)
