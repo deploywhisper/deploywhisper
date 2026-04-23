@@ -23,6 +23,9 @@ dependencies = [
   "python-dotenv==1.2.2",
 ]
 
+[project.scripts]
+deploywhisper = "cli.analyze:main"
+
 [tool.hatch.build.targets.wheel]
 packages = [
   "api",
