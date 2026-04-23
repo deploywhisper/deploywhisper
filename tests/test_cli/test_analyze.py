@@ -21,6 +21,7 @@ import services.analysis_service as analysis_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from cli.analyze import main
 from importlib import reload
+from integrations.github.init_service import GitHubInitOptions, GitHubInitResult
 from llm.narrator import NarrativeResult
 
 
@@ -451,6 +452,69 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), "")
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["meta"]["interface"], "cli")
+
+    @patch("cli.analyze.run_github_init")
+    @patch("cli.analyze.collect_github_init_options")
+    def test_github_init_command_uses_shared_init_service(
+        self,
+        collect_github_init_options,
+        run_github_init,
+    ) -> None:
+        collect_github_init_options.return_value = GitHubInitOptions(
+            repo_path="/tmp/example-repo",
+            workflow_path=".github/workflows/deploywhisper.yml",
+            api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+            enable_github_app=False,
+            base_branch="develop",
+        )
+        run_github_init.return_value = GitHubInitResult(
+            repo_path="/tmp/example-repo",
+            workflow_path=".github/workflows/deploywhisper.yml",
+            readme_path="README.md",
+            github_app_notes_path=None,
+            branch_name="feature/deploywhisper-github-init",
+            base_branch="main",
+            commit_sha="abc123",
+            pr_url="https://github.com/example/repo/pull/7",
+        )
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "github",
+                    "init",
+                    "--repo",
+                    "/tmp/example-repo",
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        collect_github_init_options.assert_called_once_with(
+            repo_path="/tmp/example-repo",
+            workflow_path=None,
+            api_endpoint=None,
+            enable_github_app=None,
+            base_branch=None,
+            github_owner=None,
+            github_app_name=None,
+            github_app_slug=None,
+            public_base_url=None,
+            branch_name=None,
+        )
+        run_github_init.assert_called_once()
+        self.assertIn(
+            "Updated workflow: .github/workflows/deploywhisper.yml", output.getvalue()
+        )
+        self.assertIn(
+            "Pull request: https://github.com/example/repo/pull/7", output.getvalue()
+        )
 
 
 if __name__ == "__main__":

@@ -550,6 +550,13 @@ organization and point it at your own DeployWhisper instance. See
 Keep the `DeployWhisper / Risk Analysis` check advisory-only in GitHub branch
 protection; do not add it as a required status check.
 
+To scaffold this setup into another repository with a workflow file, README
+update, and optional self-hosted GitHub App notes, run:
+
+```bash
+deploywhisper github init
+```
+
 Example:
 
 ```bash
