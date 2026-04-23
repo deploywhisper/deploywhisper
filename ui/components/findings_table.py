@@ -98,7 +98,7 @@ def _artifact_view_href(
     query = {"name": artifact_name}
     if line_number is not None:
         query["line"] = line_number
-    href = f"/reports/{report_id}/artifacts?{urlencode(query)}"
+    href = f"/history/{report_id}/artifacts?{urlencode(query)}"
     if line_number is not None:
         href += f"#L{line_number}"
     return href

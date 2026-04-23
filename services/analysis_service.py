@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import UTC, datetime
-from urllib.parse import urlencode
-
 from pydantic import BaseModel, Field
 
 from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
@@ -27,6 +24,7 @@ from parsers.base import ParseBatchResult, UnifiedChange
 from services.intake_service import build_parse_batch
 from services.report_service import persist_analysis_report
 from services.settings_service import resolve_provider_runtime
+from services.report_service import build_share_report_link
 from services.topology_service import (
     STALE_AFTER_DAYS,
     get_topology_status,
@@ -373,21 +371,7 @@ def _shorten(text: str, limit: int) -> str:
 
 
 def _report_link(report_id: int | None) -> str | None:
-    if report_id is None:
-        return None
-    base_url = (
-        (os.getenv("APP_BASE_URL") or os.getenv("PUBLIC_APP_URL") or "")
-        .strip()
-        .rstrip("/")
-    )
-    if not base_url:
-        host = os.getenv("APP_HOST", "127.0.0.1")
-        if host in {"0.0.0.0", "::"}:
-            host = "localhost"
-        port = int(os.getenv("APP_PORT", "8080"))
-        base_url = f"http://{host}:{port}"
-    query = urlencode({"report_id": report_id})
-    return f"{base_url}/history?{query}"
+    return build_share_report_link(report_id)
 
 
 def _has_partial_context_signal(report: dict) -> bool:

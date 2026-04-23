@@ -68,6 +68,13 @@ if "AnalysisReport" not in globals():
         source_interface: Mapped[str | None] = mapped_column(String(30), nullable=True)
         trigger_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
         trigger_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+        share_password_hash: Mapped[str | None] = mapped_column(
+            String(64), nullable=True
+        )
+        share_password_salt: Mapped[str | None] = mapped_column(
+            String(32), nullable=True
+        )
+        share_redact_filenames: Mapped[bool] = mapped_column(Boolean, default=False)
         dashboard_display_duration_seconds: Mapped[int | None] = mapped_column(
             Integer, nullable=True
         )

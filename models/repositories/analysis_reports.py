@@ -179,6 +179,25 @@ def get_analysis_report(
     return session.execute(stmt).scalar_one_or_none()
 
 
+def update_analysis_report_share_settings(
+    session: Session,
+    report_id: int,
+    *,
+    share_password_hash: str | None,
+    share_password_salt: str | None,
+    share_redact_filenames: bool,
+) -> AnalysisReport | None:
+    report = session.get(AnalysisReport, report_id)
+    if report is None:
+        return None
+    report.share_password_hash = share_password_hash
+    report.share_password_salt = share_password_salt
+    report.share_redact_filenames = share_redact_filenames
+    session.commit()
+    session.refresh(report)
+    return report
+
+
 def delete_analysis_report(session: Session, report_id: int) -> bool:
     report = session.get(AnalysisReport, report_id)
     if report is None:

@@ -120,6 +120,7 @@ class AnalysesApiTests(unittest.TestCase):
         database_module.engine.dispose()
         os.environ.pop("DATABASE_URL", None)
         os.environ.pop("APP_BASE_URL", None)
+        os.environ.pop("DEPLOYWHISPER_SHARE_TOKEN", None)
         self.tempdir.cleanup()
 
     def test_list_analyses_returns_persisted_reports(self) -> None:
@@ -141,6 +142,66 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["report_schema_version"], "v2")
         self.assertEqual(payload["data"]["audit"]["llm_provider"], "ollama")
         self.assertEqual(payload["data"]["blast_radius"]["direct_count"], 0)
+
+    def test_configure_share_is_disabled_without_management_token(self) -> None:
+        response = self.client.post(
+            f"/api/v1/analyses/{self.persisted['id']}/share",
+            json={"password": "s3cret-pass", "redact_filenames": True},
+        )
+
+        self.assertEqual(response.status_code, 405)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "share_configuration_disabled")
+
+    def test_configure_share_requires_valid_management_token(self) -> None:
+        os.environ["DEPLOYWHISPER_SHARE_TOKEN"] = "review-secret"
+        self.client = TestClient(create_app())
+
+        response = self.client.post(
+            f"/api/v1/analyses/{self.persisted['id']}/share",
+            json={"password": "s3cret-pass", "redact_filenames": True},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "share_configuration_forbidden")
+
+    def test_configure_share_returns_public_report_settings(self) -> None:
+        os.environ["DEPLOYWHISPER_SHARE_TOKEN"] = "review-secret"
+        self.client = TestClient(create_app())
+
+        response = self.client.post(
+            f"/api/v1/analyses/{self.persisted['id']}/share",
+            json={"password": "s3cret-pass", "redact_filenames": True},
+            headers={"X-DeployWhisper-Share-Token": "review-secret"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            payload["data"]["share_url"],
+            f"https://deploywhisper.example.com/reports/{self.persisted['id']}",
+        )
+        self.assertTrue(payload["data"]["password_protected"])
+        self.assertTrue(payload["data"]["redact_filenames"])
+
+    def test_configure_share_rejects_unauthorized_reset_of_public_protection(
+        self,
+    ) -> None:
+        report_service_module.configure_report_share(
+            self.persisted["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        reset_response = self.client.post(
+            f"/api/v1/analyses/{self.persisted['id']}/share",
+            json={"password": "", "redact_filenames": False},
+        )
+        report_response = self.client.get(f"/reports/{self.persisted['id']}")
+
+        self.assertEqual(reset_response.status_code, 405)
+        self.assertIn("Password required", report_response.text)
 
     def test_create_analysis_returns_structured_result(self) -> None:
         files = [
@@ -213,7 +274,7 @@ class AnalysesApiTests(unittest.TestCase):
             payload["data"]["persisted_report"]["id"],
         )
         self.assertIn(
-            "https://deploywhisper.example.com/history?report_id=",
+            "https://deploywhisper.example.com/reports/",
             payload["data"]["share_summary"]["json_payload"]["rollback_link"],
         )
         self.assertEqual(

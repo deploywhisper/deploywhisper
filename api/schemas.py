@@ -593,6 +593,32 @@ class AnalysisRunResponse(BaseModel):
     meta: AnalysisRunMetaPayload
 
 
+class AnalysisShareConfigRequest(BaseModel):
+    password: str | None = Field(
+        default=None,
+        description="Optional password required before the shared report can be viewed.",
+    )
+    redact_filenames: bool = Field(
+        default=False,
+        description="Whether shared rendering should replace file names with generic labels.",
+    )
+
+
+class AnalysisShareConfigData(BaseModel):
+    share_url: str = Field(..., description="Public share URL for the report.")
+    password_protected: bool = Field(
+        ..., description="Whether the shared report currently requires a password."
+    )
+    redact_filenames: bool = Field(
+        ..., description="Whether file names are redacted in the shared view."
+    )
+
+
+class AnalysisShareConfigResponse(BaseModel):
+    data: AnalysisShareConfigData
+    meta: ResourceMetaPayload
+
+
 PersistedReportData.model_rebuild()
 
 

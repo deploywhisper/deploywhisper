@@ -60,6 +60,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         database_module.engine.dispose()
+        os.environ.pop("APP_BASE_URL", None)
         os.environ.pop("DATABASE_URL", None)
         self.tempdir.cleanup()
 
@@ -217,6 +218,60 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Blast radius", response.text)
         self.assertIn("Audit metadata", response.text)
         self.assertNotIn('"data-dw-modal-root":"1"', response.text)
+
+    def test_public_report_route_renders_read_only_share_view(self) -> None:
+        self._persist_report()
+
+        response = self.client.get("/reports/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Shared DeployWhisper report", response.text)
+        self.assertIn("Analysis report", response.text)
+        self.assertNotIn("Delete selected", response.text)
+
+    def test_public_report_route_requires_password_and_redacts_filenames(self) -> None:
+        self._persist_report()
+        report_service_module.configure_report_share(
+            1,
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        prompt_response = self.client.get("/reports/1")
+        self.assertEqual(prompt_response.status_code, 200)
+        self.assertIn("Password required", prompt_response.text)
+        self.assertIn("method='post'", prompt_response.text)
+
+        shared_response = self.client.post(
+            "/reports/1/unlock",
+            data={"password": "s3cret-pass"},
+            follow_redirects=True,
+        )
+        self.assertEqual(shared_response.status_code, 200)
+        self.assertIn("Artifact 1", shared_response.text)
+        self.assertNotIn("plan.json", shared_response.text)
+        self.assertNotIn("password=s3cret-pass", shared_response.text)
+
+    def test_public_report_unlock_sets_secure_cookie_for_https_share_urls(self) -> None:
+        os.environ["APP_BASE_URL"] = "https://install.example.com"
+        self._persist_report()
+        report_service_module.configure_report_share(
+            1,
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        response = self.client.post(
+            "/reports/1/unlock",
+            data={"password": "s3cret-pass"},
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        cookie_header = response.headers.get("set-cookie", "")
+        self.assertIn("Secure", cookie_header)
+        self.assertIn("HttpOnly", cookie_header)
+        self.assertIn("Path=/reports/1", cookie_header)
 
     def test_history_page_keeps_legacy_query_parameter_as_detail_fallback(self) -> None:
         self._persist_report()
