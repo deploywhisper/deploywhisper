@@ -356,6 +356,7 @@ def handle_github_app_webhook(
                 title=DEFAULT_CHECK_RUN_NAME,
                 summary=note,
                 details_url=None,
+                text=_check_run_text(details_url=None),
                 api_base_url=config.api_base_url,
             )
             if config.checks_enabled
@@ -372,6 +373,9 @@ def handle_github_app_webhook(
             note=note,
         )
 
+    if config.checks_enabled:
+        _require_check_run_report_url_config(config)
+
     result = analyze_uploaded_files(
         accepted_files,
         audit_context={
@@ -384,6 +388,7 @@ def handle_github_app_webhook(
     report_url = build_share_report_link(report_id)
     check_run_id = None
     if config.checks_enabled:
+        report_url = _check_run_details_url(report_id, config=config)
         check_run_id = _create_check_run(
             owner=owner,
             repo_name=repo_name,
@@ -393,6 +398,7 @@ def handle_github_app_webhook(
             title=DEFAULT_CHECK_RUN_NAME,
             summary=_check_run_summary(result.persisted_report),
             details_url=report_url,
+            text=_check_run_text(details_url=report_url),
             api_base_url=config.api_base_url,
         )
     return GitHubWebhookResult(
@@ -497,8 +503,36 @@ def _check_run_summary(report: dict[str, Any]) -> str:
         f"Severity: {severity}\n"
         f"Recommendation: {recommendation}\n"
         f"Risk score: {score}\n"
-        "DeployWhisper remains advisory-only and never blocks merge on its own."
+        "DeployWhisper remains advisory-only and never blocks merge on its own.\n"
+        "Do not configure this check as a required status check."
     )
+
+
+def _check_run_text(
+    *,
+    details_url: str | None,
+) -> str:
+    lines = ["DeployWhisper is advisory-only. Do not mark this check as required."]
+    if details_url:
+        lines.insert(0, f"[Open the full DeployWhisper report]({details_url})")
+    return "\n\n".join(lines)
+
+
+def _check_run_details_url(
+    report_id: int,
+    *,
+    config: GitHubAppConfig,
+) -> str:
+    return f"{_require_check_run_report_url_config(config)}/reports/{report_id}"
+
+
+def _require_check_run_report_url_config(config: GitHubAppConfig) -> str:
+    base_url = (config.app_base_url or "").strip().rstrip("/")
+    if not base_url:
+        raise GitHubAppConfigurationError(
+            "GitHub check runs require APP_BASE_URL or PUBLIC_APP_URL so the PR Details link opens the full DeployWhisper report."
+        )
+    return base_url
 
 
 def _create_check_run(
@@ -511,6 +545,7 @@ def _create_check_run(
     title: str,
     summary: str,
     details_url: str | None,
+    text: str | None,
     api_base_url: str,
 ) -> int | None:
     payload: dict[str, Any] = {
@@ -524,6 +559,8 @@ def _create_check_run(
             "summary": summary[:65535],
         },
     }
+    if text:
+        payload["output"]["text"] = text[:65535]
     if details_url:
         payload["details_url"] = details_url
     response = _github_api_json(

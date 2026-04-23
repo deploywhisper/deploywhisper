@@ -547,6 +547,8 @@ The recommended open-source posture is Action-first. If you want GitHub App
 capabilities, create a private/self-hosted GitHub App in your own account or
 organization and point it at your own DeployWhisper instance. See
 [`docs/github-app-self-hosted-setup.md`](./docs/github-app-self-hosted-setup.md).
+Keep the `DeployWhisper / Risk Analysis` check advisory-only in GitHub branch
+protection; do not add it as a required status check.
 
 Example:
 
