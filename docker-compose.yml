@@ -1,7 +1,7 @@
 services:
   deploywhisper:
     # If you want to use the already published image, uncomment the "image" section and comment out the build section.
-    # image: ghcr.io/pramodksahoo/deploywhisper:1.0.0
+    # image: ghcr.io/deploywhisper/deploywhisper:1.0.0
     build:
       context: .
       target: runtime
@@ -15,7 +15,7 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
       LOG_LEVEL: INFO
       DATABASE_URL: sqlite:///data/deploywhisper.db
-      DEPLOYWHISPER_SHARE_TOKEN: ${DEPLOYWHISPER_SHARE_TOKEN:-}
+      DEPLOYWHISPER_SHARE_TOKEN: ${DEPLOYWHISPER_SHARE_TOKEN:-this-is-the-test-key}
       LLM_PROVIDER: ollama
       LLM_MODEL: ollama/llama3
       LLM_API_BASE: ${LLM_API_BASE:-http://host.docker.internal:11434}
