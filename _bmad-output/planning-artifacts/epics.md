@@ -386,15 +386,15 @@ Ship an official GitHub Action and GitHub App so DeployWhisper reports appear in
 
 #### E3-S6: GitHub App
 **As a** DeployWhisper maintainer,
-**I want** a GitHub App complementing the Action,
+**I want** advanced self-hosted GitHub App support complementing the Action,
 **so that** I can post check runs and richer interactions.
 
 **Acceptance:**
-- GitHub App published to Marketplace
+- Self-hosted GitHub App runtime and operator guide are ready for installation in a team's own GitHub account or organization
 - Supports checks API (passing/neutral/failing, always advisory)
 - Handles PR events for automatic runs (opt-in via config)
 - OAuth flow for team installation
-- Docs covering Action-only, App-only, and combined modes
+- Docs covering Action-first, advanced self-hosted GitHub App mode, and combined modes
 
 #### E3-S7: Check run integration
 **As a** reviewer,

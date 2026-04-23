@@ -23,6 +23,7 @@ from api.errors import (
     validation_error_handler,
 )
 from api.routes.analyses import router as analyses_router
+from api.routes.github_app import router as github_app_router
 from api.routes.health import router as health_router
 from config import settings
 from logging_config import configure_logging
@@ -73,6 +74,7 @@ fastapi_app.add_exception_handler(RequestValidationError, validation_error_handl
 fastapi_app.add_exception_handler(StarletteHTTPException, http_error_envelope_handler)
 fastapi_app.include_router(health_router)
 fastapi_app.include_router(analyses_router)
+fastapi_app.include_router(github_app_router)
 
 
 _original_lifespan = fastapi_app.router.lifespan_context

@@ -532,6 +532,22 @@ When a prior scan exists for the same analyzed artifact set, the shared report
 page also exposes a `Compare with previous` view with risk-score, findings, and
 evidence deltas.
 
+### GitHub App Mode
+
+DeployWhisper also supports a GitHub App adapter for webhook-driven PR analysis,
+checks API publishing, and OAuth-guided installation handoff. The App adapter is
+documented in [`docs/github-app.md`](./docs/github-app.md) and is designed to
+run in three lanes:
+
+- Action-first: workflow file + Marketplace Action
+- Advanced self-hosted GitHub App: webhook, checks, and OAuth-backed installation flow against your own DeployWhisper server
+- Combined mode: Action for explicit workflow control, self-hosted GitHub App for checks and richer installation UX
+
+The recommended open-source posture is Action-first. If you want GitHub App
+capabilities, create a private/self-hosted GitHub App in your own account or
+organization and point it at your own DeployWhisper instance. See
+[`docs/github-app-self-hosted-setup.md`](./docs/github-app-self-hosted-setup.md).
+
 Example:
 
 ```bash

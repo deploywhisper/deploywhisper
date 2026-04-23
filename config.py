@@ -28,6 +28,45 @@ class Settings:
     share_management_token: str | None = os.getenv(
         "DEPLOYWHISPER_SHARE_TOKEN"
     ) or os.getenv("APP_SHARE_MANAGEMENT_TOKEN")
+    github_app_enabled: bool = (
+        os.getenv("DEPLOYWHISPER_GITHUB_APP_ENABLED", "false").lower() == "true"
+    )
+    github_app_id: str | None = os.getenv("DEPLOYWHISPER_GITHUB_APP_ID") or None
+    github_app_slug: str | None = os.getenv("DEPLOYWHISPER_GITHUB_APP_SLUG") or None
+    github_app_client_id: str | None = (
+        os.getenv("DEPLOYWHISPER_GITHUB_APP_CLIENT_ID") or None
+    )
+    github_app_client_secret: str | None = (
+        os.getenv("DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET") or None
+    )
+    github_app_webhook_secret: str | None = (
+        os.getenv("DEPLOYWHISPER_GITHUB_APP_WEBHOOK_SECRET") or None
+    )
+    github_app_private_key: str | None = (
+        os.getenv("DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY") or None
+    )
+    github_app_private_key_path: str | None = (
+        os.getenv("DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY_PATH") or None
+    )
+    github_app_api_base_url: str = os.getenv(
+        "DEPLOYWHISPER_GITHUB_APP_API_BASE_URL",
+        "https://api.github.com",
+    )
+    github_app_authorize_url: str = os.getenv(
+        "DEPLOYWHISPER_GITHUB_APP_AUTHORIZE_URL",
+        "https://github.com/login/oauth/authorize",
+    )
+    github_app_access_token_url: str = os.getenv(
+        "DEPLOYWHISPER_GITHUB_APP_ACCESS_TOKEN_URL",
+        "https://github.com/login/oauth/access_token",
+    )
+    github_app_pr_events_enabled: bool = (
+        os.getenv("DEPLOYWHISPER_GITHUB_APP_PR_EVENTS_ENABLED", "false").lower()
+        == "true"
+    )
+    github_app_checks_enabled: bool = (
+        os.getenv("DEPLOYWHISPER_GITHUB_APP_CHECKS_ENABLED", "true").lower() == "true"
+    )
     llm_api_key: str | None = (
         os.getenv("LLM_API_KEY")
         or os.getenv("OPENAI_API_KEY")
