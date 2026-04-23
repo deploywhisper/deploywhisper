@@ -28,7 +28,11 @@ from config import settings
 from logging_config import configure_logging
 from models.database import init_db
 from services.artifact_snapshot_service import load_report_artifact
-from services.report_service import fetch_analysis_report, fetch_shared_analysis_report
+from services.report_service import (
+    fetch_analysis_report,
+    fetch_shared_analysis_report,
+    fetch_shared_report_comparison,
+)
 from ui.routes.dashboard import build_dashboard
 
 configure_logging()
@@ -177,7 +181,149 @@ def _share_cookie_secure(report: dict) -> bool:
     return share_url.startswith("https://")
 
 
-def _shared_report_html(report: dict) -> str:
+def _shared_report_diff_list(
+    items: list[dict],
+    *,
+    empty_message: str,
+    include_severity: bool = True,
+) -> str:
+    if not items:
+        return f"<p class='empty'>{escape(empty_message)}</p>"
+    rows: list[str] = []
+    for item in items:
+        severity_html = ""
+        if include_severity:
+            severity_html = "<span class='diff-chip'>{severity}</span>".format(
+                severity=escape(str(item.get("severity") or "unknown").upper())
+            )
+        source_ref = str(item.get("source_ref") or "")
+        source_ref_html = f"<code>{escape(source_ref)}</code>" if source_ref else ""
+        finding_title = str(item.get("finding_title") or "")
+        finding_html = (
+            f"<p class='diff-meta'>{escape(finding_title)}</p>" if finding_title else ""
+        )
+        description = str(item.get("description") or item.get("summary") or "")
+        rows.append(
+            "<li>{severity}<strong>{title}</strong>{finding}<p>{description}</p>{source_ref}</li>".format(
+                severity=severity_html,
+                title=escape(str(item.get("title") or item.get("source_type") or "")),
+                finding=finding_html,
+                description=escape(description),
+                source_ref=source_ref_html,
+            )
+        )
+    return f"<ul class='diff-list'>{''.join(rows)}</ul>"
+
+
+def _shared_report_severity_change_list(items: list[dict]) -> str:
+    if not items:
+        return "<p class='empty'>No finding severity changed.</p>"
+    rows = []
+    for item in items:
+        transition = (
+            f"{escape(str(item.get('previous_severity') or 'unknown').upper())} → "
+            f"{escape(str(item.get('current_severity') or 'unknown').upper())}"
+        )
+        rows.append(
+            "<li><strong>{title}</strong><p>{description}</p><span class='diff-transition'>{transition}</span></li>".format(
+                title=escape(str(item.get("title") or "Untitled finding")),
+                description=escape(str(item.get("description") or "")),
+                transition=transition,
+            )
+        )
+    return f"<ul class='diff-list'>{''.join(rows)}</ul>"
+
+
+def _shared_report_comparison_html(
+    report: dict,
+    comparison: dict | None,
+    *,
+    show_comparison: bool,
+) -> str:
+    if comparison is None:
+        if not show_comparison:
+            return (
+                "<section class='panel'><div class='hero-actions'>"
+                f"<a class='button button-secondary' href='/reports/{int(report['id'])}?compare=previous#report-comparison'>Compare with previous</a>"
+                "</div></section>"
+            )
+        return (
+            "<section class='panel'><div class='hero-actions'>"
+            f"<a class='button button-secondary' href='/reports/{int(report['id'])}'>Back to report overview</a>"
+            "</div><p class='note'>The previous comparable report is not available in this shared context.</p></section>"
+        )
+
+    compare_action = (
+        f"/reports/{int(report['id'])}"
+        if show_comparison
+        else f"/reports/{int(report['id'])}?compare=previous"
+    )
+    compare_label = (
+        "Back to report overview" if show_comparison else "Compare with previous"
+    )
+    compare_controls = (
+        "<section class='panel'><div class='hero-actions'>"
+        f"<a class='button button-secondary' href='{compare_action}#report-comparison'>{compare_label}</a>"
+        "</div></section>"
+    )
+    if not show_comparison:
+        return compare_controls
+
+    score_delta = int(comparison.get("risk_score_delta") or 0)
+    score_prefix = "+" if score_delta > 0 else ""
+    delta_class = (
+        "delta-worse"
+        if score_delta > 0
+        else "delta-better"
+        if score_delta < 0
+        else "delta-flat"
+    )
+    comparison_section = (
+        "<section class='panel' id='report-comparison'>"
+        "<div class='comparison-header'>"
+        "<div>"
+        f"<div class='eyebrow'>Comparison</div><h2>Comparison with report #{int(comparison['previous_report']['id'])}</h2>"
+        "<p>Side-by-side changes against the previous scan of the same analyzed artifacts.</p>"
+        "</div>"
+        "<div class='delta-card'>"
+        "<div class='delta-label'>Risk score delta</div>"
+        f"<div class='delta-value {delta_class}'>{score_prefix}{score_delta}</div>"
+        f"<div class='delta-meta'>{int(comparison['previous_report']['risk_score'])} → {int(comparison['current_report']['risk_score'])}</div>"
+        "</div>"
+        "</div>"
+        "<div class='comparison-grid'>"
+        "<section class='comparison-column'>"
+        "<h3>Previous report</h3>"
+        f"<p class='diff-meta'>Report #{int(comparison['previous_report']['id'])} · {escape(str(comparison['previous_report']['severity']).upper())} · {escape(str(comparison['previous_report']['recommendation']).upper())}</p>"
+        "<h4>Findings removed</h4>"
+        f"{_shared_report_diff_list(comparison['findings']['removed'], empty_message='No findings were removed.')}"
+        "<h4>Evidence removed</h4>"
+        f"{_shared_report_diff_list(comparison['evidence']['removed'], empty_message='No evidence was removed.', include_severity=False)}"
+        "</section>"
+        "<section class='comparison-column'>"
+        "<h3>Current report</h3>"
+        f"<p class='diff-meta'>Report #{int(comparison['current_report']['id'])} · {escape(str(comparison['current_report']['severity']).upper())} · {escape(str(comparison['current_report']['recommendation']).upper())}</p>"
+        "<h4>Findings added</h4>"
+        f"{_shared_report_diff_list(comparison['findings']['added'], empty_message='No findings were added.')}"
+        "<h4>Evidence added</h4>"
+        f"{_shared_report_diff_list(comparison['evidence']['added'], empty_message='No evidence was added.', include_severity=False)}"
+        "</section>"
+        "</div>"
+        "<section class='comparison-severity'>"
+        "<h3>Severity changes</h3>"
+        f"{_shared_report_severity_change_list(comparison['findings']['severity_changed'])}"
+        "</section>"
+        "</section>"
+    )
+    return compare_controls + comparison_section
+
+
+def _shared_report_html(
+    report: dict,
+    *,
+    comparison: dict | None = None,
+    show_comparison: bool = False,
+) -> str:
     findings = report.get("findings") or []
     files_analyzed = report.get("audit", {}).get("files_analyzed") or []
     findings_html = (
@@ -216,6 +362,28 @@ def _shared_report_html(report: dict) -> str:
         "ul{padding-left:20px;}"
         ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;}"
         ".note{margin-top:8px;color:#8b5a2b;font-weight:600;}"
+        ".empty{margin:0;color:#7b8596;}"
+        ".hero-actions{margin-top:20px;display:flex;gap:12px;flex-wrap:wrap;}"
+        ".button{display:inline-flex;align-items:center;justify-content:center;padding:12px 16px;border-radius:12px;font-weight:700;text-decoration:none;}"
+        ".button-secondary{border:1px solid rgba(24,32,43,0.12);background:#fff7f1;color:#d96b3d;}"
+        ".button-disabled{background:#f1ede5;color:#7b8596;cursor:not-allowed;}"
+        ".comparison-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}"
+        ".comparison-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:20px;}"
+        ".comparison-column,.comparison-severity{background:#fbf8f2;border-radius:16px;padding:18px;}"
+        ".comparison-severity{margin-top:16px;}"
+        ".delta-card{min-width:180px;padding:18px;border-radius:18px;background:#18202b;color:#fff;}"
+        ".delta-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#b3bfd1;font-weight:700;}"
+        ".delta-value{font-size:42px;font-weight:800;line-height:1.1;margin-top:6px;}"
+        ".delta-meta{font-size:14px;color:#dbe6f6;margin-top:6px;}"
+        ".delta-worse{color:#ffb199;}"
+        ".delta-better{color:#9fe4b8;}"
+        ".delta-flat{color:#edf0f8;}"
+        ".diff-list{padding-left:20px;margin:12px 0 0;display:grid;gap:12px;}"
+        ".diff-list li{color:#455163;}"
+        ".diff-chip{display:inline-block;margin-right:8px;padding:4px 8px;border-radius:999px;background:#eff4fb;font-size:12px;font-weight:700;}"
+        ".diff-meta{margin:4px 0 6px;font-size:13px;color:#7b8596;}"
+        ".diff-transition{display:inline-block;margin-left:8px;font-weight:700;color:#18202b;}"
+        "code{display:inline-block;margin-top:6px;padding:4px 6px;border-radius:8px;background:#f1ede5;color:#455163;word-break:break-all;}"
         "a{color:#d96b3d;text-decoration:none;}"
         "</style></head><body><main>"
         "<section class='hero'>"
@@ -226,6 +394,7 @@ def _shared_report_html(report: dict) -> str:
         f"<span class='badge'>{escape(str(report.get('recommendation', '')).upper())}</span>"
         f"<p class='score'>{int(report.get('risk_score') or 0)}</p>"
         f"<p>{escape(str(report.get('narrative_opening') or report.get('parse_summary') or ''))}</p>"
+        f"{_shared_report_comparison_html(report, comparison, show_comparison=show_comparison)}"
         "</section>"
         "<section class='panel'><div class='grid'>"
         f"<div><strong>Created</strong><p>{escape(str(report.get('created_at') or ''))}</p></div>"
@@ -246,6 +415,7 @@ def _shared_report_html(report: dict) -> str:
 def shared_report_view(
     request: Request,
     report_id: int,
+    compare: str | None = None,
 ) -> HTMLResponse:
     """Render one report via a read-only public sharing route."""
     report = fetch_analysis_report(report_id)
@@ -265,7 +435,19 @@ def shared_report_view(
     )
     if shared_report is None:
         raise StarletteHTTPException(status_code=404, detail="Report not found")
-    return HTMLResponse(content=_shared_report_html(shared_report))
+    comparison = None
+    if compare == "previous":
+        comparison = fetch_shared_report_comparison(
+            report_id,
+            bypass_password=password_required,
+        )
+    return HTMLResponse(
+        content=_shared_report_html(
+            shared_report,
+            comparison=comparison,
+            show_comparison=compare == "previous",
+        )
+    )
 
 
 @fastapi_app.post("/reports/{report_id}/unlock", include_in_schema=False)
