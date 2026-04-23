@@ -323,7 +323,7 @@ Build the report UI and share summary that make evidence, confidence, and uncert
 **Priority:** P0 (biggest adoption lever)
 
 ### Goal
-Ship an official GitHub Action and GitHub App so DeployWhisper reports appear inside PRs automatically, updating on every commit. This is how DeployWhisper stops being optional.
+Ship an official GitHub Action plus advanced self-hosted GitHub App support so DeployWhisper reports appear inside PRs automatically, updating on every commit. This is how DeployWhisper stops being optional.
 
 ### Stories
 
