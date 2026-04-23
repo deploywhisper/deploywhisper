@@ -475,6 +475,7 @@ What the action does:
 - filters to supported DeployWhisper artifacts locally before upload
 - submits those artifacts to the existing `POST /api/v1/analyses` endpoint
 - posts a single markdown PR comment and updates that same comment on re-runs
+- compares the latest report with the previous PR scan so reruns show score and severity deltas in the refreshed comment
 - exits `0` when analysis succeeds, regardless of risk verdict
 - exposes outputs for follow-on GitHub steps:
   - `report-id`
