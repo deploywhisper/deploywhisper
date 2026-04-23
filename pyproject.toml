@@ -27,6 +27,7 @@ dependencies = [
 packages = [
   "api",
   "services",
+  "integrations",
   "parsers",
   "analysis",
   "evidence",

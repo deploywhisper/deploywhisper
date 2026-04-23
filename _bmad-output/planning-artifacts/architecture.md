@@ -655,7 +655,7 @@ Capabilities:
 - Compare old vs new report
 - Link to full report (shareable URL)
 - Check Run integration (advisory-only, never required)
-- GitHub App for richer interactions (checks API, OAuth, installation wizard)
+- Advanced self-hosted GitHub App support for richer interactions (checks API, OAuth, installation wizard)
 
 Adapter pattern:
 - Core analysis pipeline is surface-agnostic
@@ -1023,7 +1023,7 @@ deploywhisper/
 
 ### ADR-11: GitHub adapter uses Action + App in parallel (new)
 **Status:** Accepted
-**Reason:** Action is simpler (works in any workflow) — ship it first. App enables richer interactions (check runs, PR events, OAuth) — add it second. Both are needed for full workflow-native integration.
+**Reason:** Action is simpler and best aligns with the product's open-source local-first posture, so ship it first. Self-hosted GitHub App support enables richer interactions (check runs, PR events, OAuth) for teams that run their own DeployWhisper server. Defer any public hosted Marketplace app until the trust, privacy, and operating model are intentionally defined.
 
 ---
 
