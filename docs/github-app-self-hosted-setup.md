@@ -49,6 +49,10 @@ Optional:
 - `DEPLOYWHISPER_GITHUB_APP_AUTHORIZE_URL`
 - `DEPLOYWHISPER_GITHUB_APP_ACCESS_TOKEN_URL`
 
+If you enable GitHub check runs, `APP_BASE_URL` or `PUBLIC_APP_URL` must be a
+reachable DeployWhisper URL. GitHub uses that public report URL for the PR
+Details link.
+
 ## GitHub UI steps
 
 ### 1. Open GitHub App settings
@@ -141,6 +145,7 @@ Also set:
 6. Confirm a check run named `DeployWhisper / Risk Analysis` appears on the PR
 7. Confirm the check remains advisory-only and does not block merge on its own
 8. Confirm the report link opens your own DeployWhisper server
+9. Confirm branch protection does not list `DeployWhisper / Risk Analysis` as a required status check
 
 ## Action-first recommendation
 

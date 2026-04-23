@@ -63,6 +63,8 @@ Optional:
 - Pull request webhook actions `opened`, `reopened`, and `synchronize` can trigger automatic advisory analyses when PR automation is enabled
 - Supported changed artifacts are downloaded from GitHub, filtered through the shared intake rules, and sent through the existing parse/assess/persist pipeline
 - Check runs are advisory-only: `success` for `GO`, `neutral` for `CAUTION`, `failure` for `NO-GO`
+- When checks are enabled, `APP_BASE_URL` or `PUBLIC_APP_URL` must point at a reachable DeployWhisper server so the GitHub PR Details link opens the full report
+- Do not configure `DeployWhisper / Risk Analysis` as a required status check in branch protection
 - Shared report URLs remain the deep-link target for richer investigation
 
 ## OAuth and installation flow
