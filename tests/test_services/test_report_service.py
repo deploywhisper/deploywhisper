@@ -127,6 +127,69 @@ class ReportServiceTests(unittest.TestCase):
             audit_context={"source_interface": "api"},
         )
 
+    def _persist_comparison_report(
+        self,
+        *,
+        score: int,
+        severity: str,
+        recommendation: str,
+        top_risk: str,
+        findings: list[Finding],
+        evidence_items: list[EvidenceItem],
+    ) -> dict:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="prod/network/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/network/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary=top_risk,
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=score,
+            severity=severity,
+            recommendation=recommendation,
+            top_risk=top_risk,
+            contributors=[
+                RiskContributor(
+                    source_file="prod/network/plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=18,
+                    summary=top_risk,
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence=f"{severity.upper()}: {top_risk}",
+            explanation="Comparison test narrative.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        return report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=findings,
+            evidence_items=evidence_items,
+            audit_context={"source_interface": "api", "trigger_type": "pull_request"},
+        )
+
     def test_persist_analysis_report_stores_and_returns_metadata(self) -> None:
         parse_batch = ParseBatchResult(
             files=[
@@ -500,6 +563,614 @@ class ReportServiceTests(unittest.TestCase):
         self.assertIsNotNone(
             report_service_module.fetch_shared_analysis_report(
                 report["id"], password="s3cret-pass"
+            )
+        )
+
+    def test_fetch_report_comparison_returns_findings_and_evidence_deltas(self) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group review is still pending.",
+            findings=[
+                Finding(
+                    finding_id="finding-shared",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-shared", "ev-old"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-removed",
+                    analysis_id=0,
+                    title="LOW: aws_cloudwatch_log_group.api",
+                    description="Log retention is unset.",
+                    severity="low",
+                    category="observability/logging",
+                    deterministic=True,
+                    confidence=0.82,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-removed"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-old",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L22",
+                    summary="Port 22 remains reachable.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-2"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-removed",
+                    analysis_id=0,
+                    finding_id="pending:removed",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L31",
+                    summary="No retention override is configured.",
+                    severity_hint="low",
+                    deterministic=True,
+                    confidence=0.82,
+                    related_change_ids=["change-3"],
+                ),
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=71,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Security group exposure widened after the latest commit.",
+            findings=[
+                Finding(
+                    finding_id="finding-shared",
+                    analysis_id=0,
+                    title="CRITICAL: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-shared", "ev-new"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-added",
+                    analysis_id=0,
+                    title="HIGH: aws_db_instance.main",
+                    description="Storage encryption is still disabled.",
+                    severity="high",
+                    category="data/encryption",
+                    deterministic=True,
+                    confidence=0.93,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-added"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-new",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L26",
+                    summary="Port 3306 is newly reachable.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-4"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-added",
+                    analysis_id=0,
+                    finding_id="pending:added",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L40",
+                    summary="Storage encryption is set to false.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=0.93,
+                    related_change_ids=["change-5"],
+                ),
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], previous["id"])
+        self.assertEqual(comparison["current_report"]["id"], current["id"])
+        self.assertEqual(comparison["risk_score_delta"], 29)
+        self.assertEqual(
+            comparison["findings"]["added"][0]["title"], "HIGH: aws_db_instance.main"
+        )
+        self.assertEqual(
+            comparison["findings"]["removed"][0]["title"],
+            "LOW: aws_cloudwatch_log_group.api",
+        )
+        self.assertEqual(
+            comparison["findings"]["severity_changed"][0]["previous_severity"],
+            "medium",
+        )
+        self.assertEqual(
+            comparison["findings"]["severity_changed"][0]["current_severity"],
+            "critical",
+        )
+        self.assertIn(
+            "terraform://prod/network/plan.json#L26",
+            {item["source_ref"] for item in comparison["evidence"]["added"]},
+        )
+        self.assertIn(
+            "terraform://prod/network/plan.json#L22",
+            {item["source_ref"] for item in comparison["evidence"]["removed"]},
+        )
+
+    def test_fetch_report_comparison_preserves_duplicate_findings(self) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Duplicate security findings still need review.",
+            findings=[
+                Finding(
+                    finding_id="finding-dup-a",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-dup-a"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-dup-b",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-dup-b"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-dup-a",
+                    analysis_id=0,
+                    finding_id="pending:dup-a",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-dup-b",
+                    analysis_id=0,
+                    finding_id="pending:dup-b",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L22",
+                    summary="Port 22 remains reachable.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-2"],
+                ),
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=51,
+            severity="medium",
+            recommendation="caution",
+            top_risk="One duplicate finding remains after the latest commit.",
+            findings=[
+                Finding(
+                    finding_id="finding-dup-a",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-dup-a"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-dup-a",
+                    analysis_id=0,
+                    finding_id="pending:dup-a",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], previous["id"])
+        self.assertEqual(len(comparison["findings"]["removed"]), 1)
+        self.assertEqual(
+            comparison["findings"]["removed"][0]["title"],
+            "MEDIUM: aws_security_group.main",
+        )
+        self.assertIn(
+            "terraform://prod/network/plan.json#L22",
+            {item["source_ref"] for item in comparison["evidence"]["removed"]},
+        )
+
+    def test_fetch_report_comparison_is_stable_when_duplicate_finding_order_flips(
+        self,
+    ) -> None:
+        self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Duplicate findings exist in one order.",
+            findings=[
+                Finding(
+                    finding_id="finding-dup-a",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-dup-a"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-dup-b",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-dup-b"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-dup-a",
+                    analysis_id=0,
+                    finding_id="pending:dup-a",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-dup-b",
+                    analysis_id=0,
+                    finding_id="pending:dup-b",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L22",
+                    summary="Port 22 remains reachable.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-2"],
+                ),
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Duplicate findings exist in reversed order.",
+            findings=[
+                Finding(
+                    finding_id="finding-dup-b",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-dup-b"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-dup-a",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-dup-a"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-dup-b",
+                    analysis_id=0,
+                    finding_id="pending:dup-b",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L22",
+                    summary="Port 22 remains reachable.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-2"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-dup-a",
+                    analysis_id=0,
+                    finding_id="pending:dup-a",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], 1)
+        self.assertEqual(comparison["current_report"]["id"], current["id"])
+        self.assertEqual(comparison["findings"]["added"], [])
+        self.assertEqual(comparison["findings"]["removed"], [])
+        self.assertEqual(comparison["findings"]["severity_changed"], [])
+        self.assertEqual(comparison["evidence"]["added"], [])
+        self.assertEqual(comparison["evidence"]["removed"], [])
+
+    def test_fetch_shared_report_comparison_respects_filename_redaction(self) -> None:
+        self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="prod/network/plan.json still needs review.",
+            findings=[
+                Finding(
+                    finding_id="finding-shared",
+                    analysis_id=0,
+                    title="MEDIUM: prod/network/plan.json",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=71,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="prod/network/plan.json widened database access.",
+            findings=[
+                Finding(
+                    finding_id="finding-shared",
+                    analysis_id=0,
+                    title="CRITICAL: prod/network/plan.json",
+                    description="Security group ingress is broader than expected.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-new"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-new",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L26",
+                    summary="Port 3306 is newly reachable in prod/network/plan.json.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-2"],
+                )
+            ],
+        )
+        report_service_module.configure_report_share(
+            current["id"],
+            password="review-only",
+            redact_filenames=True,
+        )
+
+        comparison = report_service_module.fetch_shared_report_comparison(
+            current["id"],
+            password="review-only",
+        )
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        serialized = json.dumps(comparison)
+        self.assertNotIn("prod/network/plan.json", serialized)
+        self.assertIn("Artifact 1", serialized)
+
+    def test_fetch_shared_report_comparison_requires_previous_report_access(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Previous report is password protected.",
+            findings=[
+                Finding(
+                    finding_id="finding-shared",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=71,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Current report is shared without a password.",
+            findings=[
+                Finding(
+                    finding_id="finding-shared",
+                    analysis_id=0,
+                    title="CRITICAL: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+        report_service_module.configure_report_share(
+            previous["id"],
+            password="previous-only",
+            redact_filenames=False,
+        )
+
+        self.assertIsNone(
+            report_service_module.fetch_shared_report_comparison(current["id"])
+        )
+        self.assertIsNone(
+            report_service_module.fetch_shared_report_comparison(
+                current["id"],
+                password="wrong-pass",
+            )
+        )
+        self.assertIsNotNone(
+            report_service_module.fetch_shared_report_comparison(
+                current["id"],
+                password="previous-only",
             )
         )
 

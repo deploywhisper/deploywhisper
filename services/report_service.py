@@ -7,8 +7,9 @@ import os
 import secrets
 import hashlib
 import hmac
+import re
 from datetime import UTC, datetime
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Any
 
 from analysis.blast_radius import BlastRadiusResult
@@ -38,6 +39,10 @@ from services.settings_service import resolve_provider_runtime
 
 LEGACY_REPORT_SCHEMA_VERSION = "v1"
 REPORT_SCHEMA_VERSION = "v2"
+_SEVERITY_PREFIX_PATTERN = re.compile(
+    r"^\s*(critical|high|medium|low|info|warning|caution)\s*[:\-]\s*",
+    flags=re.IGNORECASE,
+)
 
 
 def build_share_report_link(report_id: int | None) -> str | None:
@@ -219,6 +224,437 @@ def _default_rollback_plan_payload() -> dict[str, Any]:
 def _artifact_signature(files_analyzed: list[str]) -> tuple[str, ...]:
     """Normalize analyzed-file identity for history diff grouping."""
     return tuple(sorted(str(name) for name in files_analyzed if str(name).strip()))
+
+
+def _normalize_free_text(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return " ".join(text.split())
+
+
+def _normalize_finding_text(value: Any) -> str:
+    return _normalize_free_text(_SEVERITY_PREFIX_PATTERN.sub("", str(value or "")))
+
+
+def _finding_fingerprint(finding: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            _normalize_free_text(finding.get("category")),
+            _normalize_finding_text(finding.get("title")),
+            _normalize_finding_text(finding.get("description")),
+        ]
+    )
+
+
+def _evidence_fingerprint(evidence_item: dict[str, Any]) -> str:
+    related_change_ids = ",".join(
+        sorted(
+            str(change_id)
+            for change_id in evidence_item.get("related_change_ids") or []
+        )
+    )
+    return "|".join(
+        [
+            _normalize_free_text(evidence_item.get("source_type")),
+            _normalize_free_text(evidence_item.get("source_ref")),
+            _normalize_free_text(evidence_item.get("summary")),
+            _normalize_free_text(evidence_item.get("severity_hint")),
+            related_change_ids,
+        ]
+    )
+
+
+def _comparison_report_summary(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(report["id"]),
+        "created_at": report["created_at"],
+        "risk_score": int(report.get("risk_score") or 0),
+        "severity": str(report.get("severity") or "unknown"),
+        "recommendation": str(report.get("recommendation") or "unknown"),
+        "top_risk": str(report.get("top_risk") or ""),
+    }
+
+
+def _comparison_finding_summary(
+    finding: dict[str, Any],
+    *,
+    evidence_items: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    evidence_rows = evidence_items or []
+    return {
+        "title": str(finding.get("title") or "Untitled finding"),
+        "severity": str(finding.get("severity") or "unknown"),
+        "description": str(finding.get("description") or ""),
+        "category": str(finding.get("category") or ""),
+        "evidence_count": len(evidence_rows),
+    }
+
+
+def _comparison_evidence_summary(
+    evidence_item: dict[str, Any],
+    *,
+    finding_title: str,
+) -> dict[str, Any]:
+    return {
+        "finding_title": finding_title,
+        "source_type": str(evidence_item.get("source_type") or "unknown"),
+        "source_ref": str(evidence_item.get("source_ref") or ""),
+        "summary": str(evidence_item.get("summary") or ""),
+        "severity_hint": str(evidence_item.get("severity_hint") or "unknown"),
+    }
+
+
+def _comparison_finding_sort_key(
+    finding: dict[str, Any],
+    *,
+    evidence_items: list[dict[str, Any]],
+) -> tuple[Any, ...]:
+    evidence_key = tuple(
+        sorted(_evidence_fingerprint(evidence_item) for evidence_item in evidence_items)
+    )
+    return (
+        evidence_key,
+        str(finding.get("severity") or "unknown"),
+        f"{float(finding.get('confidence') or 0.0):.6f}",
+        str(finding.get("uncertainty_note") or ""),
+        str(finding.get("skill_id") or ""),
+    )
+
+
+def _report_finding_maps(
+    report: dict[str, Any],
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]:
+    findings_by_fingerprint: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    evidence_by_finding_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for evidence_item in report.get("evidence_items") or []:
+        evidence_by_finding_id[str(evidence_item.get("finding_id") or "")].append(
+            evidence_item
+        )
+    for finding in report.get("findings") or []:
+        findings_by_fingerprint[_finding_fingerprint(finding)].append(finding)
+    return dict(findings_by_fingerprint), evidence_by_finding_id
+
+
+def _evidence_diff(
+    *,
+    previous_finding: dict[str, Any],
+    current_finding: dict[str, Any],
+    previous_evidence_items: list[dict[str, Any]],
+    current_evidence_items: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    previous_by_fingerprint = {
+        _evidence_fingerprint(evidence_item): evidence_item
+        for evidence_item in previous_evidence_items
+    }
+    current_by_fingerprint = {
+        _evidence_fingerprint(evidence_item): evidence_item
+        for evidence_item in current_evidence_items
+    }
+    added = [
+        _comparison_evidence_summary(
+            current_by_fingerprint[fingerprint],
+            finding_title=str(current_finding.get("title") or "Untitled finding"),
+        )
+        for fingerprint in sorted(
+            set(current_by_fingerprint) - set(previous_by_fingerprint)
+        )
+    ]
+    removed = [
+        _comparison_evidence_summary(
+            previous_by_fingerprint[fingerprint],
+            finding_title=str(previous_finding.get("title") or "Untitled finding"),
+        )
+        for fingerprint in sorted(
+            set(previous_by_fingerprint) - set(current_by_fingerprint)
+        )
+    ]
+    return added, removed
+
+
+def _build_report_comparison(
+    current_report: dict[str, Any],
+    previous_report: dict[str, Any],
+) -> dict[str, Any]:
+    current_findings, current_evidence_by_finding = _report_finding_maps(current_report)
+    previous_findings, previous_evidence_by_finding = _report_finding_maps(
+        previous_report
+    )
+    findings_added: list[dict[str, Any]] = []
+    findings_removed: list[dict[str, Any]] = []
+    severity_changed: list[dict[str, Any]] = []
+    evidence_added: list[dict[str, Any]] = []
+    evidence_removed: list[dict[str, Any]] = []
+
+    for fingerprint in sorted(set(previous_findings) | set(current_findings)):
+        previous_group = sorted(
+            previous_findings.get(fingerprint, []),
+            key=lambda finding: _comparison_finding_sort_key(
+                finding,
+                evidence_items=previous_evidence_by_finding.get(
+                    str(finding.get("finding_id") or ""),
+                    [],
+                ),
+            ),
+        )
+        current_group = sorted(
+            current_findings.get(fingerprint, []),
+            key=lambda finding: _comparison_finding_sort_key(
+                finding,
+                evidence_items=current_evidence_by_finding.get(
+                    str(finding.get("finding_id") or ""),
+                    [],
+                ),
+            ),
+        )
+        shared_count = min(len(previous_group), len(current_group))
+
+        for current_finding in current_group[shared_count:]:
+            current_evidence = current_evidence_by_finding.get(
+                str(current_finding.get("finding_id") or ""),
+                [],
+            )
+            findings_added.append(
+                _comparison_finding_summary(
+                    current_finding,
+                    evidence_items=current_evidence,
+                )
+            )
+            evidence_added.extend(
+                _comparison_evidence_summary(
+                    evidence_item,
+                    finding_title=str(
+                        current_finding.get("title") or "Untitled finding"
+                    ),
+                )
+                for evidence_item in current_evidence
+            )
+        for previous_finding in previous_group[shared_count:]:
+            previous_evidence = previous_evidence_by_finding.get(
+                str(previous_finding.get("finding_id") or ""),
+                [],
+            )
+            findings_removed.append(
+                _comparison_finding_summary(
+                    previous_finding,
+                    evidence_items=previous_evidence,
+                )
+            )
+            evidence_removed.extend(
+                _comparison_evidence_summary(
+                    evidence_item,
+                    finding_title=str(
+                        previous_finding.get("title") or "Untitled finding"
+                    ),
+                )
+                for evidence_item in previous_evidence
+            )
+
+        for previous_finding, current_finding in zip(
+            previous_group[:shared_count],
+            current_group[:shared_count],
+        ):
+            previous_evidence = previous_evidence_by_finding.get(
+                str(previous_finding.get("finding_id") or ""),
+                [],
+            )
+            current_evidence = current_evidence_by_finding.get(
+                str(current_finding.get("finding_id") or ""),
+                [],
+            )
+            if str(previous_finding.get("severity")) != str(
+                current_finding.get("severity")
+            ):
+                severity_changed.append(
+                    {
+                        "title": str(
+                            current_finding.get("title") or "Untitled finding"
+                        ),
+                        "description": str(
+                            current_finding.get("description")
+                            or previous_finding.get("description")
+                            or ""
+                        ),
+                        "previous_severity": str(
+                            previous_finding.get("severity") or "unknown"
+                        ),
+                        "current_severity": str(
+                            current_finding.get("severity") or "unknown"
+                        ),
+                    }
+                )
+            added, removed = _evidence_diff(
+                previous_finding=previous_finding,
+                current_finding=current_finding,
+                previous_evidence_items=previous_evidence,
+                current_evidence_items=current_evidence,
+            )
+            evidence_added.extend(added)
+            evidence_removed.extend(removed)
+
+    current_score = int(current_report.get("risk_score") or 0)
+    previous_score = int(previous_report.get("risk_score") or 0)
+    risk_score_delta = current_score - previous_score
+    if risk_score_delta > 0:
+        score_direction = "up"
+    elif risk_score_delta < 0:
+        score_direction = "down"
+    else:
+        score_direction = "flat"
+    return {
+        "previous_report": _comparison_report_summary(previous_report),
+        "current_report": _comparison_report_summary(current_report),
+        "risk_score_delta": risk_score_delta,
+        "risk_score_direction": score_direction,
+        "findings": {
+            "added": findings_added,
+            "removed": findings_removed,
+            "severity_changed": severity_changed,
+        },
+        "evidence": {
+            "added": evidence_added,
+            "removed": evidence_removed,
+        },
+        "summary": {
+            "findings_added": len(findings_added),
+            "findings_removed": len(findings_removed),
+            "severity_changes": len(severity_changed),
+            "evidence_added": len(evidence_added),
+            "evidence_removed": len(evidence_removed),
+        },
+    }
+
+
+def _find_previous_comparable_report(
+    current_report: dict[str, Any],
+    candidate_reports: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    current_signature = _artifact_signature(
+        current_report.get("audit", {}).get("files_analyzed") or []
+    )
+    if not current_signature:
+        return None
+    current_id = int(current_report["id"])
+    previous_candidates = sorted(
+        (
+            report
+            for report in candidate_reports
+            if int(report["id"]) < current_id
+            and _artifact_signature(report.get("audit", {}).get("files_analyzed") or [])
+            == current_signature
+        ),
+        key=lambda report: int(report["id"]),
+        reverse=True,
+    )
+    return previous_candidates[0] if previous_candidates else None
+
+
+def _list_serialized_reports(*, include_evidence: bool) -> list[dict[str, Any]]:
+    def operation():
+        with SessionLocal() as session:
+            reports = list_analysis_reports(session, include_evidence=include_evidence)
+            return [
+                _serialize_report(report, include_evidence=include_evidence)
+                for report in reports
+            ]
+
+    return _run_with_schema_retry(operation)
+
+
+def fetch_previous_comparable_report(
+    report_id: int,
+    *,
+    previous_report_id: int | None = None,
+) -> dict | None:
+    current_report = fetch_analysis_report(report_id)
+    if current_report is None:
+        return None
+    if previous_report_id is not None:
+        return fetch_analysis_report(previous_report_id)
+    serialized_reports = _list_serialized_reports(include_evidence=False)
+    return _find_previous_comparable_report(current_report, serialized_reports)
+
+
+def _redact_report_comparison(
+    comparison: dict[str, Any],
+    *,
+    current_report: dict[str, Any],
+    previous_report: dict[str, Any],
+) -> dict[str, Any]:
+    names: list[str] = []
+    for report in (current_report, previous_report):
+        for original_name in report.get("audit", {}).get("files_analyzed") or []:
+            if original_name not in names:
+                names.append(original_name)
+    pairs = _redaction_pairs(names)
+    redacted = {
+        **comparison,
+        "previous_report": {
+            **comparison["previous_report"],
+            "top_risk": _redact_text_value(
+                comparison["previous_report"].get("top_risk"),
+                pairs,
+            ),
+        },
+        "current_report": {
+            **comparison["current_report"],
+            "top_risk": _redact_text_value(
+                comparison["current_report"].get("top_risk"),
+                pairs,
+            ),
+        },
+        "findings": {
+            "added": [
+                {
+                    **item,
+                    "title": _redact_text_value(item.get("title"), pairs),
+                    "description": _redact_text_value(item.get("description"), pairs),
+                }
+                for item in comparison["findings"]["added"]
+            ],
+            "removed": [
+                {
+                    **item,
+                    "title": _redact_text_value(item.get("title"), pairs),
+                    "description": _redact_text_value(item.get("description"), pairs),
+                }
+                for item in comparison["findings"]["removed"]
+            ],
+            "severity_changed": [
+                {
+                    **item,
+                    "title": _redact_text_value(item.get("title"), pairs),
+                    "description": _redact_text_value(item.get("description"), pairs),
+                }
+                for item in comparison["findings"]["severity_changed"]
+            ],
+        },
+        "evidence": {
+            "added": [
+                {
+                    **item,
+                    "finding_title": _redact_text_value(
+                        item.get("finding_title"),
+                        pairs,
+                    ),
+                    "source_ref": _redact_text_value(item.get("source_ref"), pairs),
+                    "summary": _redact_text_value(item.get("summary"), pairs),
+                }
+                for item in comparison["evidence"]["added"]
+            ],
+            "removed": [
+                {
+                    **item,
+                    "finding_title": _redact_text_value(
+                        item.get("finding_title"),
+                        pairs,
+                    ),
+                    "source_ref": _redact_text_value(item.get("source_ref"), pairs),
+                    "summary": _redact_text_value(item.get("summary"), pairs),
+                }
+                for item in comparison["evidence"]["removed"]
+            ],
+        },
+    }
+    return redacted
 
 
 def _build_previous_scan_diff(
@@ -604,6 +1040,27 @@ def fetch_analysis_report(report_id: int) -> dict | None:
     return _run_with_schema_retry(operation)
 
 
+def fetch_report_comparison(
+    report_id: int,
+    *,
+    previous_report_id: int | None = None,
+) -> dict | None:
+    current_report = fetch_analysis_report(report_id)
+    if current_report is None:
+        return None
+    previous_report = fetch_previous_comparable_report(
+        report_id,
+        previous_report_id=previous_report_id,
+    )
+    if previous_report is None:
+        return None
+    if previous_report_id is None:
+        previous_report = fetch_analysis_report(int(previous_report["id"]))
+        if previous_report is None:
+            return None
+    return _build_report_comparison(current_report, previous_report)
+
+
 def configure_report_share(
     report_id: int,
     *,
@@ -664,6 +1121,46 @@ def fetch_shared_analysis_report(
     if shared["share"]["redact_filenames"]:
         shared = _redact_report_file_names(shared)
     return shared
+
+
+def fetch_shared_report_comparison(
+    report_id: int,
+    *,
+    password: str | None = None,
+    bypass_password: bool = False,
+) -> dict | None:
+    shared_current_report = fetch_shared_analysis_report(
+        report_id,
+        password=password,
+        bypass_password=bypass_password,
+    )
+    if shared_current_report is None:
+        return None
+    previous_report = fetch_previous_comparable_report(report_id)
+    if previous_report is None:
+        return None
+    shared_previous_report = fetch_shared_analysis_report(
+        int(previous_report["id"]),
+        password=password,
+        bypass_password=False,
+    )
+    if shared_previous_report is None:
+        return None
+    current_report = fetch_analysis_report(report_id)
+    previous_report = fetch_analysis_report(int(previous_report["id"]))
+    if current_report is None or previous_report is None:
+        return None
+    comparison = _build_report_comparison(current_report, previous_report)
+    if not (
+        shared_current_report["share"]["redact_filenames"]
+        or shared_previous_report["share"]["redact_filenames"]
+    ):
+        return comparison
+    return _redact_report_comparison(
+        comparison,
+        current_report=current_report,
+        previous_report=previous_report,
+    )
 
 
 def fetch_analysis_history() -> list[dict]:

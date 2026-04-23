@@ -528,6 +528,9 @@ Shared report links now resolve to `/reports/{id}` read-only pages. For sensitiv
 reports, configure password protection and opt-in file-name redaction via
 `POST /api/v1/analyses/{id}/share` with the `X-DeployWhisper-Share-Token`
 header. Set `DEPLOYWHISPER_SHARE_TOKEN` before exposing that management API.
+When a prior scan exists for the same analyzed artifact set, the shared report
+page also exposes a `Compare with previous` view with risk-score, findings, and
+evidence deltas.
 
 Example:
 

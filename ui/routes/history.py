@@ -9,6 +9,7 @@ from nicegui import ui
 from services.report_service import (
     fetch_analysis_report,
     fetch_filtered_analysis_history_page,
+    fetch_report_comparison,
     fetch_risk_trends,
     remove_analysis_report,
     remove_analysis_reports,
@@ -262,11 +263,147 @@ def build_history_page() -> None:
         render_actions()
 
 
-def build_history_detail_page(report_id: int) -> None:
+def _render_history_comparison_items(
+    heading: str,
+    items: list[dict[str, Any]],
+    *,
+    empty_message: str,
+) -> None:
+    with ui.column().classes("gap-3"):
+        ui.label(heading).classes("text-lg font-medium dw-text")
+        if not items:
+            ui.label(empty_message).classes("text-sm dw-muted")
+            return
+        for item in items:
+            with ui.card().classes("w-full dw-panel-soft shadow-none"):
+                with ui.column().classes("gap-2 p-4"):
+                    title = str(item.get("title") or item.get("source_type") or "")
+                    ui.label(title).classes("text-sm font-semibold dw-text")
+                    if item.get("finding_title"):
+                        ui.label(str(item["finding_title"])).classes("text-xs dw-muted")
+                    description = str(
+                        item.get("description") or item.get("summary") or ""
+                    )
+                    if description:
+                        ui.label(description).classes("text-sm dw-muted leading-6")
+                    if item.get("source_ref"):
+                        ui.label(str(item["source_ref"])).classes(
+                            "text-xs dw-muted break-all"
+                        )
+
+
+def _render_history_report_comparison(
+    report_id: int,
+    comparison: dict[str, Any] | None,
+) -> None:
+    with ui.card().classes("w-full dw-panel shadow-none p-5") as compare_card:
+        decorate_modal_card(compare_card, label="Report comparison")
+        with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
+            ui.label("Report comparison").classes("text-lg font-medium dw-text")
+            ui.button(
+                "Back to report overview",
+                on_click=lambda: ui.navigate.to(f"/history/{report_id}"),
+            ).props("flat no-caps").classes("dw-theme-button")
+        if comparison is None:
+            ui.label(
+                "No previous comparable report was found for this analysis yet."
+            ).classes("text-sm dw-muted")
+            return
+
+        score_delta = int(comparison.get("risk_score_delta") or 0)
+        score_prefix = "+" if score_delta > 0 else ""
+        score_class = (
+            "dw-danger-text"
+            if score_delta > 0
+            else "dw-success-text"
+            if score_delta < 0
+            else "dw-muted"
+        )
+        with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
+            with ui.column().classes("gap-1 min-w-0 flex-1"):
+                ui.label(
+                    f"Comparison with report #{int(comparison['previous_report']['id'])}"
+                ).classes("text-xl font-semibold dw-text")
+                ui.label(
+                    "Side-by-side changes against the previous saved scan of the same analyzed artifacts."
+                ).classes("text-sm dw-muted leading-6")
+            with ui.column().classes("gap-1 shrink-0"):
+                ui.label("Risk score delta").classes(
+                    "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
+                )
+                ui.label(f"{score_prefix}{score_delta}").classes(
+                    f"text-3xl font-semibold {score_class}"
+                )
+                ui.label(
+                    f"{int(comparison['previous_report']['risk_score'])} -> {int(comparison['current_report']['risk_score'])}"
+                ).classes("text-xs dw-muted")
+        with ui.row().classes("w-full gap-4 flex-wrap mt-2"):
+            with ui.card().classes("dw-panel-soft shadow-none min-w-[260px] flex-1"):
+                with ui.column().classes("gap-2 p-4"):
+                    ui.label("Previous report").classes("text-sm font-semibold dw-text")
+                    ui.label(
+                        f"#{int(comparison['previous_report']['id'])} · "
+                        f"{str(comparison['previous_report']['severity']).upper()} · "
+                        f"{str(comparison['previous_report']['recommendation']).upper()}"
+                    ).classes("text-xs dw-muted")
+                    _render_history_comparison_items(
+                        "Findings removed",
+                        comparison["findings"]["removed"],
+                        empty_message="No findings were removed.",
+                    )
+                    _render_history_comparison_items(
+                        "Evidence removed",
+                        comparison["evidence"]["removed"],
+                        empty_message="No evidence was removed.",
+                    )
+            with ui.card().classes("dw-panel-soft shadow-none min-w-[260px] flex-1"):
+                with ui.column().classes("gap-2 p-4"):
+                    ui.label("Current report").classes("text-sm font-semibold dw-text")
+                    ui.label(
+                        f"#{int(comparison['current_report']['id'])} · "
+                        f"{str(comparison['current_report']['severity']).upper()} · "
+                        f"{str(comparison['current_report']['recommendation']).upper()}"
+                    ).classes("text-xs dw-muted")
+                    _render_history_comparison_items(
+                        "Findings added",
+                        comparison["findings"]["added"],
+                        empty_message="No findings were added.",
+                    )
+                    _render_history_comparison_items(
+                        "Evidence added",
+                        comparison["evidence"]["added"],
+                        empty_message="No evidence was added.",
+                    )
+        with ui.card().classes("w-full dw-panel-soft shadow-none mt-4"):
+            with ui.column().classes("gap-3 p-4"):
+                ui.label("Severity changes").classes("text-sm font-semibold dw-text")
+                changes = comparison["findings"]["severity_changed"]
+                if not changes:
+                    ui.label("No finding severity changed.").classes("text-sm dw-muted")
+                else:
+                    for item in changes:
+                        with ui.row().classes(
+                            "w-full items-start justify-between gap-3 flex-wrap"
+                        ):
+                            with ui.column().classes("min-w-0 flex-1 gap-1"):
+                                ui.label(
+                                    str(item.get("title") or "Untitled finding")
+                                ).classes("text-sm font-semibold dw-text")
+                                ui.label(str(item.get("description") or "")).classes(
+                                    "text-sm dw-muted leading-6"
+                                )
+                            ui.label(
+                                f"{str(item.get('previous_severity') or 'unknown').upper()} → "
+                                f"{str(item.get('current_severity') or 'unknown').upper()}"
+                            ).classes("text-sm font-semibold dw-text")
+
+
+def build_history_detail_page(report_id: int, *, show_comparison: bool = False) -> None:
     """Render one persisted report on a dedicated detail page."""
     apply_theme()
     build_navigation_shell("history")
     report = fetch_analysis_report(report_id)
+    comparison = fetch_report_comparison(report_id) if show_comparison else None
 
     with ui.column().classes("dw-main-content dw-shell gap-5"):
         with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
@@ -292,4 +429,20 @@ def build_history_detail_page(report_id: int) -> None:
                     "This report is unavailable. Return to history and choose another saved analysis."
                 ).classes("text-sm dw-muted")
             return
+        with ui.card().classes("w-full dw-panel shadow-none p-4"):
+            if show_comparison:
+                _render_history_report_comparison(report_id, comparison)
+            else:
+                with ui.row().classes(
+                    "w-full items-center justify-between gap-3 flex-wrap"
+                ):
+                    ui.label(
+                        "Open a persisted diff against the previous comparable report."
+                    ).classes("text-sm dw-muted")
+                    ui.button(
+                        "Compare with previous",
+                        on_click=lambda: ui.navigate.to(
+                            f"/history/{report_id}/compare#report-comparison"
+                        ),
+                    ).props("flat no-caps").classes("dw-theme-button")
         render_report_detail_page(report)

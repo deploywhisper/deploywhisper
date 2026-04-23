@@ -226,6 +226,11 @@ def history_detail_page(report_id: int) -> None:
     build_history_detail_page(report_id)
 
 
+@ui.page("/history/{report_id}/compare")
+def history_detail_compare_page(report_id: int) -> None:
+    build_history_detail_page(report_id, show_comparison=True)
+
+
 @ui.page("/settings")
 def settings_page() -> None:
     build_settings_page()

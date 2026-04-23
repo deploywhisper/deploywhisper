@@ -72,6 +72,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         recommendation: str = "no-go",
         top_risk: str = "Security group exposure risk",
         opening_sentence: str = "Ingress widens access to production resources.",
+        finding_description: str = "Security group exposure risk",
     ) -> None:
         parse_batch = ParseBatchResult(
             files=[
@@ -148,9 +149,9 @@ class HistoryPageRenderingTests(unittest.TestCase):
                 Finding(
                     finding_id="finding-001",
                     analysis_id=0,
-                    title="CRITICAL: aws_security_group.main",
-                    description="Security group exposure risk",
-                    severity="critical",
+                    title=f"{severity.upper()}: aws_security_group.main",
+                    description=finding_description,
+                    severity=severity,
                     category="networking/ingress",
                     deterministic=True,
                     confidence=1.0,
@@ -161,6 +162,104 @@ class HistoryPageRenderingTests(unittest.TestCase):
             ],
             audit_context={"source_interface": "ui"},
         )
+
+    def test_public_report_route_shows_compare_button_and_diff_view(self) -> None:
+        self._persist_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Initial security group review",
+            opening_sentence="Initial review of the security group change.",
+            finding_description="Security group exposure risk",
+        )
+        self._persist_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Security group exposure risk",
+            opening_sentence="Ingress widens access to production resources.",
+            finding_description="Security group exposure risk",
+        )
+
+        overview_response = self.client.get("/reports/2")
+        self.assertEqual(overview_response.status_code, 200)
+        self.assertIn("Compare with previous", overview_response.text)
+
+        compare_response = self.client.get("/reports/2?compare=previous")
+
+        self.assertEqual(compare_response.status_code, 200)
+        self.assertIn("Comparison with report #1", compare_response.text)
+        self.assertIn("Risk score delta", compare_response.text)
+        self.assertIn("+46", compare_response.text)
+        self.assertIn("MEDIUM → CRITICAL", compare_response.text)
+
+    def test_history_detail_route_shows_compare_button_and_diff_view(self) -> None:
+        self._persist_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Initial security group review",
+            opening_sentence="Initial review of the security group change.",
+            finding_description="Security group exposure risk",
+        )
+        self._persist_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Security group exposure risk",
+            opening_sentence="Ingress widens access to production resources.",
+            finding_description="Security group exposure risk",
+        )
+
+        overview_response = self.client.get("/history/2")
+        self.assertEqual(overview_response.status_code, 200)
+        self.assertIn("Compare with previous", overview_response.text)
+
+        compare_response = self.client.get("/history/2/compare")
+
+        self.assertEqual(compare_response.status_code, 200)
+        self.assertIn("Comparison with report #1", compare_response.text)
+        self.assertIn("Risk score delta", compare_response.text)
+        self.assertIn("+46", compare_response.text)
+        self.assertIn("MEDIUM → CRITICAL", compare_response.text)
+
+    def test_public_report_route_blocks_compare_view_when_previous_report_is_protected(
+        self,
+    ) -> None:
+        self._persist_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Initial security group review",
+            opening_sentence="Initial review of the security group change.",
+            finding_description="Security group exposure risk",
+        )
+        report_service_module.configure_report_share(
+            1,
+            password="previous-only",
+            redact_filenames=False,
+        )
+        self._persist_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Security group exposure risk",
+            opening_sentence="Ingress widens access to production resources.",
+            finding_description="Security group exposure risk",
+        )
+
+        overview_response = self.client.get("/reports/2")
+        self.assertEqual(overview_response.status_code, 200)
+        self.assertIn("Compare with previous", overview_response.text)
+
+        compare_response = self.client.get("/reports/2?compare=previous")
+
+        self.assertEqual(compare_response.status_code, 200)
+        self.assertIn(
+            "The previous comparable report is not available in this shared context.",
+            compare_response.text,
+        )
+        self.assertNotIn("Comparison with report #1", compare_response.text)
 
     def test_history_page_renders_toolbar_and_report_actions(self) -> None:
         self._persist_report()
