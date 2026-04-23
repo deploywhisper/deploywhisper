@@ -817,7 +817,7 @@ deploywhisper benchmark run --corpus ./benchmark-corpus --comparators tflint,kub
 
 Output: per-scenario pass/fail, per-tool precision/recall/F1, overall metrics.
 
-Results are persisted as `BenchmarkRun` rows and published to the public dashboard at `deploywhisper.kubechat.dev/benchmarks`.
+Results are persisted as `BenchmarkRun` rows and published to the public dashboard at `deploywhisper.deploywhisper.dev/benchmarks`.
 
 ### 16.4 Comparator execution
 

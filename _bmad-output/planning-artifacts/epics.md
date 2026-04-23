@@ -496,7 +496,7 @@ Launch a community-driven Skills registry with browser UI, authoring toolkit, an
 **so that** I can see the ecosystem before downloading.
 
 **Acceptance:**
-- Public page at `deploywhisper.kubechat.dev/skills`
+- Public page at `deploywhisper.deploywhisper.dev/skills`
 - Search, filter by tool, filter by author, sort by popularity/recency
 - Each skill has a detail page with: description, install command, test results, version history, author, contributors
 - Download count, star count, last updated visible
@@ -733,7 +733,7 @@ Build a public benchmark corpus. Run DeployWhisper, competitors, and generic LLM
 **so that** I can trust the product claims.
 
 **Acceptance:**
-- Public page at `deploywhisper.kubechat.dev/benchmarks`
+- Public page at `deploywhisper.deploywhisper.dev/benchmarks`
 - Updated quarterly
 - Shows precision/recall by tool and by competitor
 - Methodology documented publicly
