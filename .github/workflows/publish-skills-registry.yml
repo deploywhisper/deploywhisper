@@ -57,35 +57,35 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
             python - <<'PY' >> "$GITHUB_OUTPUT"
-from scripts.publish_skills_registry import iter_built_in_skill_ids
-print("skill_ids=" + ",".join(iter_built_in_skill_ids()))
-PY
+            from scripts.publish_skills_registry import iter_built_in_skill_ids
+            print("skill_ids=" + ",".join(iter_built_in_skill_ids()))
+            PY
             exit 0
           fi
 
           python - <<'PY' >> "$GITHUB_OUTPUT"
-from pathlib import Path
-import subprocess
+          from pathlib import Path
+          import subprocess
 
-before = "${{ github.event.before }}"
-after = "${{ github.sha }}"
-diff = subprocess.run(
-    ["git", "diff", "--name-only", f"{before}...{after}"],
-    check=True,
-    capture_output=True,
-    text=True,
-).stdout.splitlines()
-skills: set[str] = set()
-for path in diff:
-    normalized = path.strip()
-    if normalized.startswith("skills/") and normalized.endswith(".md"):
-        skills.add(Path(normalized).stem.lower())
-    elif normalized.startswith("tests/skill-tests/"):
-        parts = Path(normalized).parts
-        if len(parts) >= 3:
-            skills.add(parts[2].lower())
-print("skill_ids=" + ",".join(sorted(skills)))
-PY
+          before = "${{ github.event.before }}"
+          after = "${{ github.sha }}"
+          diff = subprocess.run(
+              ["git", "diff", "--name-only", f"{before}...{after}"],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout.splitlines()
+          skills: set[str] = set()
+          for path in diff:
+              normalized = path.strip()
+              if normalized.startswith("skills/") and normalized.endswith(".md"):
+                  skills.add(Path(normalized).stem.lower())
+              elif normalized.startswith("tests/skill-tests/"):
+                  parts = Path(normalized).parts
+                  if len(parts) >= 3:
+                      skills.add(parts[2].lower())
+          print("skill_ids=" + ",".join(sorted(skills)))
+          PY
 
       - name: Stop when no skill files changed
         if: steps.config.outputs.configured == 'true' && steps.changed.outputs.skill_ids == ''
