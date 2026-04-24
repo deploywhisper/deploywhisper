@@ -19,6 +19,45 @@ from services.skill_test_harness_service import (
 SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
 CUSTOM_DIR = SKILLS_DIR / "custom"
 SkillSource = Literal["built-in", "custom-override", "custom-new"]
+SkillRegistrySort = Literal["popularity", "recency"]
+
+_SKILL_BROWSER_METADATA: dict[str, dict[str, object]] = {
+    "terraform": {
+        "download_count": 1842,
+        "star_count": 418,
+        "contributors": ["DeployWhisper"],
+    },
+    "kubernetes": {
+        "download_count": 1765,
+        "star_count": 403,
+        "contributors": ["DeployWhisper"],
+    },
+    "docker": {
+        "download_count": 1448,
+        "star_count": 332,
+        "contributors": ["DeployWhisper"],
+    },
+    "ansible": {
+        "download_count": 1320,
+        "star_count": 286,
+        "contributors": ["DeployWhisper"],
+    },
+    "git": {
+        "download_count": 1186,
+        "star_count": 267,
+        "contributors": ["DeployWhisper"],
+    },
+    "jenkins": {
+        "download_count": 1094,
+        "star_count": 241,
+        "contributors": ["DeployWhisper"],
+    },
+    "cloudformation": {
+        "download_count": 962,
+        "star_count": 228,
+        "contributors": ["DeployWhisper"],
+    },
+}
 
 
 class SkillRegistryEntry(BaseModel):
@@ -47,6 +86,18 @@ class SkillRegistryEntry(BaseModel):
     )
     trigger_content_patterns: list[str] = Field(
         default_factory=list, description="Content markers used for matching"
+    )
+    contributors: list[str] = Field(
+        default_factory=list, description="Visible contributor names for browser UI."
+    )
+    download_count: int = Field(
+        default=0, description="Current catalog download count or seeded preview value."
+    )
+    star_count: int = Field(
+        default=0, description="Current catalog star count or seeded preview value."
+    )
+    install_command: str = Field(
+        ..., description="Copy-pasteable installer command for this skill."
     )
     updated_at: str = Field(..., description="Last local update timestamp")
     available_versions: int = Field(
@@ -95,6 +146,9 @@ class _SkillRecord(BaseModel):
     test_results: SkillTestSummary | None = None
     triggers: list[str] = Field(default_factory=list)
     trigger_content_patterns: list[str] = Field(default_factory=list)
+    contributors: list[str] = Field(default_factory=list)
+    download_count: int = 0
+    star_count: int = 0
     updated_at: str
     updated_at_epoch: float
     path: Path
@@ -130,6 +184,25 @@ def _default_tool(tool: str | None, skill_id: str) -> str:
 
 def _display_name(skill_id: str) -> str:
     return skill_id.replace("-", " ").title()
+
+
+def _contributors_for(skill_id: str, author: str) -> list[str]:
+    seeded = _SKILL_BROWSER_METADATA.get(skill_id, {}).get("contributors")
+    if isinstance(seeded, list):
+        contributors = [str(item).strip() for item in seeded if str(item).strip()]
+        if contributors:
+            return contributors
+    return [author]
+
+
+def _download_count_for(skill_id: str) -> int:
+    seeded = _SKILL_BROWSER_METADATA.get(skill_id, {}).get("download_count")
+    return int(seeded) if isinstance(seeded, int) else 0
+
+
+def _star_count_for(skill_id: str) -> int:
+    seeded = _SKILL_BROWSER_METADATA.get(skill_id, {}).get("star_count")
+    return int(seeded) if isinstance(seeded, int) else 0
 
 
 def _updated_at(path: Path) -> tuple[str, float]:
@@ -177,6 +250,10 @@ def _record_to_entry(
         "test_results": record.test_results,
         "triggers": list(record.triggers),
         "trigger_content_patterns": list(record.trigger_content_patterns),
+        "contributors": list(record.contributors),
+        "download_count": record.download_count,
+        "star_count": record.star_count,
+        "install_command": f"deploywhisper skill install {record.id}",
         "updated_at": record.updated_at,
         "available_versions": available_versions,
     }
@@ -218,6 +295,12 @@ def _load_skill_record(path: Path, *, source: SkillSource) -> _SkillRecord | Non
         test_results=summarize_skill_test_suite(skill_id),
         triggers=list(parsed.manifest.triggers),
         trigger_content_patterns=list(parsed.manifest.trigger_content_patterns),
+        contributors=_contributors_for(
+            skill_id,
+            parsed.manifest.author or _default_author(source),
+        ),
+        download_count=_download_count_for(skill_id),
+        star_count=_star_count_for(skill_id),
         updated_at=updated_at,
         updated_at_epoch=updated_epoch,
         path=path,
@@ -318,6 +401,7 @@ def fetch_skill_registry_page(
     tag: str | None = None,
     author: str | None = None,
     search: str | None = None,
+    sort: SkillRegistrySort = "popularity",
     page: int = 1,
     page_size: int = 50,
 ) -> SkillRegistryPage:
@@ -331,7 +415,19 @@ def fetch_skill_registry_page(
     ]
     filtered = [
         item
-        for item in sorted(current_items, key=lambda current: current.id)
+        for item in sorted(
+            current_items,
+            key=lambda current: (
+                (
+                    -current.download_count,
+                    -current.star_count,
+                    current.id,
+                )
+                if sort == "popularity"
+                else (current.updated_at, current.id)
+            ),
+            reverse=(sort == "recency"),
+        )
         if _matches_query(
             _SkillRecord(**item.model_dump(), updated_at_epoch=0, path=Path(".")),
             tool=tool,

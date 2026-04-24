@@ -37,6 +37,7 @@ from services.report_service import (
 )
 from services.skill_manifest_service import build_skill_manifest_v1_schema
 from ui.routes.dashboard import build_dashboard
+import ui.routes.skills as skills_ui_routes  # noqa: F401
 
 configure_logging()
 
