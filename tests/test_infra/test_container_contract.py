@@ -58,6 +58,9 @@ class ContainerContractTests(unittest.TestCase):
         self.assertIn("FROM python:3.11-slim AS builder", dockerfile)
         self.assertIn("FROM python:3.11-slim AS runtime", dockerfile)
         self.assertIn("COPY --from=builder /opt/venv /opt/venv", dockerfile)
+        self.assertIn(
+            "COPY --chown=appuser:appuser integrations ./integrations", dockerfile
+        )
         self.assertIn("USER appuser", dockerfile)
         self.assertIn("HEALTHCHECK", dockerfile)
         self.assertIn('CMD ["python", "app.py"]', dockerfile)
