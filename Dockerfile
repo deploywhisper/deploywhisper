@@ -8,12 +8,17 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONUNBUFFERED=1 \
     VIRTUAL_ENV=/opt/venv
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends binutils \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN python -m venv "${VIRTUAL_ENV}"
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 COPY requirements.txt .
 RUN pip install --no-compile -r requirements.txt \
-    && python -c "import pathlib, shutil, site; site_packages=[pathlib.Path(path) for path in site.getsitepackages()]; patterns=('pip','pip-*','wheel','wheel-*'); [shutil.rmtree(path, ignore_errors=True) if path.is_dir() else path.unlink(missing_ok=True) for base in site_packages for pattern in patterns for path in base.glob(pattern)]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for path in base.rglob('__pycache__')]" \
+    && python -c "import pathlib, shutil, site; site_packages=[pathlib.Path(path) for path in site.getsitepackages()]; patterns=('pip','pip-*','wheel','wheel-*'); [shutil.rmtree(path, ignore_errors=True) if path.is_dir() else path.unlink(missing_ok=True) for base in site_packages for pattern in patterns for path in base.glob(pattern)]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for path in base.rglob('__pycache__')]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for name in ('tests','test','docs','examples') for path in base.rglob(name) if path.is_dir()]" \
+    && find "${VIRTUAL_ENV}" -type f \( -name '*.so' -o -name '*.so.*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true \
     && rm -f "${VIRTUAL_ENV}"/bin/pip "${VIRTUAL_ENV}"/bin/pip3 "${VIRTUAL_ENV}"/bin/pip3.11
 
 
