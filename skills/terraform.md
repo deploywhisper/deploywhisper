@@ -1,9 +1,13 @@
 ---
-skill: terraform
-version: 1.0
+name: terraform
+version: 1.0.0
+author: DeployWhisper
+license: MIT
 triggers: [.tf, .tfvars, .tfvars.json, terraform-plan.json, tfplan.json]
 token_budget: 1800
+tags: [terraform, iac, infrastructure]
 description: Deep Terraform risk knowledge covering provider-specific patterns, state operations, lifecycle rules, and common failure modes across AWS, GCP, and Azure.
+test_suite_path: tests/skill-tests/terraform
 ---
 
 ## Critical risk patterns

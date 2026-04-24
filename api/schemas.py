@@ -637,6 +637,10 @@ class SkillRegistryData(BaseModel):
     token_budget: int | None = Field(
         default=None, description="Suggested token budget for the skill"
     )
+    test_suite_path: str | None = Field(
+        default=None,
+        description="Repository path to the skill validation suite, when declared.",
+    )
     triggers: list[str] = Field(
         default_factory=list, description="Filename or extension triggers"
     )

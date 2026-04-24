@@ -1,0 +1,100 @@
+{
+  "$id": "/schemas/skill-manifest-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Versioned skill manifest contract.",
+  "properties": {
+    "always_load": {
+      "default": false,
+      "description": "Whether the runtime should always include this skill.",
+      "title": "Always Load",
+      "type": "boolean"
+    },
+    "author": {
+      "description": "Skill author or owner.",
+      "title": "Author",
+      "type": "string"
+    },
+    "description": {
+      "description": "Short summary of the skill.",
+      "title": "Description",
+      "type": "string"
+    },
+    "license": {
+      "description": "Distribution license identifier.",
+      "title": "License",
+      "type": "string"
+    },
+    "name": {
+      "description": "Stable lowercase skill identifier.",
+      "title": "Name",
+      "type": "string"
+    },
+    "tags": {
+      "description": "Search and categorization tags.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    },
+    "test_suite_path": {
+      "description": "Repo-relative path to the skill validation suite.",
+      "title": "Test Suite Path",
+      "type": "string"
+    },
+    "token_budget": {
+      "description": "Suggested token budget for this skill.",
+      "minimum": 1,
+      "title": "Token Budget",
+      "type": "integer"
+    },
+    "tool": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional explicit tool family for registry filtering.",
+      "title": "Tool"
+    },
+    "trigger_content_patterns": {
+      "description": "Optional content markers for trigger disambiguation.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Trigger Content Patterns",
+      "type": "array"
+    },
+    "triggers": {
+      "description": "Filename and extension triggers for loading the skill.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Triggers",
+      "type": "array"
+    },
+    "version": {
+      "description": "Semantic version for the skill.",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "version",
+    "author",
+    "license",
+    "triggers",
+    "token_budget",
+    "tags",
+    "description",
+    "test_suite_path"
+  ],
+  "title": "SkillManifestV1",
+  "type": "object"
+}

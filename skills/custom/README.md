@@ -12,10 +12,15 @@ placing a `terraform.md` here will replace the built-in Terraform skill entirely
 # Create a custom skill for your internal modules
 cat > terraform.md << 'EOF'
 ---
-skill: terraform
-version: 1.0
+name: terraform
+version: 1.0.0
+author: Platform Team
+license: Proprietary
 triggers: [.tf, .tfvars]
 token_budget: 500
+tags: [terraform, internal, platform]
+description: Internal Terraform guidance for the platform team.
+test_suite_path: tests/skill-tests/terraform
 ---
 
 ## Internal module patterns
@@ -36,10 +41,15 @@ You can create skills for tools not covered by the built-in set:
 ```bash
 cat > helm.md << 'EOF'
 ---
-skill: helm
-version: 1.0
+name: helm
+version: 1.0.0
+author: Platform Team
+license: Proprietary
 triggers: [Chart.yaml, values.yaml, .tpl]
 token_budget: 800
+tags: [helm, kubernetes, platform]
+description: Helm chart review guidance for team-owned charts.
+test_suite_path: tests/skill-tests/helm
 ---
 
 ## Helm chart risks
@@ -57,10 +67,20 @@ when matching file extensions are detected in the upload.
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `skill` | Yes | Skill identifier (lowercase, no spaces) |
+| `name` | Yes | Skill identifier (lowercase, filename stem must match) |
 | `version` | Yes | Skill version for tracking changes |
+| `author` | Yes | Owner label for registry and attribution |
+| `license` | Yes | Distribution license identifier |
 | `triggers` | Yes | File extensions or names that activate this skill |
-| `token_budget` | No | Max tokens for this skill (default: 1500) |
-| `description` | No | Human-readable description |
+| `token_budget` | Yes | Max tokens allocated to the skill |
+| `tags` | Yes | Search/filter tags |
+| `description` | Yes | Human-readable description |
+| `test_suite_path` | Yes | Repo-relative path for the skill test suite |
 | `always_load` | No | If true, loads regardless of file detection |
 | `trigger_content_patterns` | No | Strings to look for inside files for disambiguation |
+
+Validate a manifest before sharing it:
+
+```bash
+deploywhisper skill lint skills/custom/terraform.md
+```

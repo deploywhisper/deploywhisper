@@ -1,10 +1,14 @@
 ---
-skill: kubernetes
-version: 1.0
+name: kubernetes
+version: 1.0.0
+author: DeployWhisper
+license: MIT
 triggers: [.yaml, .yml]
-trigger_content_patterns: [apiVersion, kind, metadata, spec.containers, spec.replicas]
 token_budget: 1800
+tags: [kubernetes, containers, orchestration]
 description: Deep Kubernetes operational knowledge covering workload safety, rolling update risks, RBAC escalation, network policy gaps, and resource management pitfalls.
+test_suite_path: tests/skill-tests/kubernetes
+trigger_content_patterns: [apiVersion, kind, metadata, spec.containers, spec.replicas]
 ---
 
 ## Critical risk patterns
