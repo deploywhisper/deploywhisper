@@ -19,7 +19,7 @@ DeployWhisper helps platform engineers, DevOps teams, and SREs review deployment
   <img src="https://img.shields.io/badge/runtime-NiceGUI%20%2B%20FastAPI-0f766e?style=flat-square" alt="NiceGUI plus FastAPI"/>
 </p>
 
-**Quick links:** [Quick Start](#quick-start) · [API Endpoints](#api-endpoints) · [Development](#development) · [Contributing](#contributing) · [Open Source](#open-source)
+**Quick links:** [Quick Start](#quick-start) · [Skills Registry](https://deploywhisper.github.io/skills-registry/) · [API Endpoints](#api-endpoints) · [Development](#development) · [Contributing](#contributing) · [Open Source](#open-source)
 
 ## Table of Contents
 
@@ -82,6 +82,7 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 - API, CLI, and web entrypoints over one shared analysis pipeline
 - Local-first security model that keeps raw IaC local and avoids persisting API keys
 - Custom AI Skills for team-specific domain guidance
+- Public Skills Registry for published built-in skills: <https://deploywhisper.github.io/skills-registry/>
 - Analysis history and audit metadata for later review
 
 ## Screenshots And Demo
@@ -123,6 +124,7 @@ What is implemented today:
 - Multi-tool parsing and unified analysis pipeline
 - Provider settings, topology management, and custom skill management in the UI
 - Analysis persistence with audit metadata
+- Public Skills Registry site for published built-in skills: <https://deploywhisper.github.io/skills-registry/>
 - GitHub Actions CI for Python quality checks and sharded tests
 
 What is still evolving:
