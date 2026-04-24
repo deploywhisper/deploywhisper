@@ -61,6 +61,7 @@ class ContainerContractTests(unittest.TestCase):
         self.assertIn(
             "COPY --chown=appuser:appuser integrations ./integrations", dockerfile
         )
+        self.assertNotIn("tests/skill-tests", dockerfile)
         self.assertIn("USER appuser", dockerfile)
         self.assertIn("HEALTHCHECK", dockerfile)
         self.assertIn('CMD ["python", "app.py"]', dockerfile)
@@ -71,6 +72,7 @@ class ContainerContractTests(unittest.TestCase):
         content = dockerignore.read_text(encoding="utf-8")
         self.assertIn(".venv", content)
         self.assertIn("tests/", content)
+        self.assertNotIn("!tests/skill-tests/**", content)
         self.assertIn("_bmad-output/", content)
 
     def test_compose_uses_single_app_service_and_unique_port(self) -> None:

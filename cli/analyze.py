@@ -216,7 +216,7 @@ def _run_skill_catalog_list() -> int:
     for item in items:
         pass_rate = (
             f"{round(item.test_results.pass_rate * 100):.0f}%"
-            if item.test_results is not None
+            if item.test_results is not None and item.test_results.status != "missing"
             else "n/a"
         )
         print(

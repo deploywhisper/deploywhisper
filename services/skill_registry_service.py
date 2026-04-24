@@ -11,7 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from services.skill_analytics_service import fetch_skill_analytics
-from services.skill_manifest_service import REPO_ROOT, load_skill_document
+from services.skill_manifest_service import load_skill_document
 from services.skill_test_harness_service import (
     SkillTestSummary,
     summarize_skill_test_suite,
@@ -270,7 +270,7 @@ def _load_skill_record(path: Path, *, source: SkillSource) -> _SkillRecord | Non
             path,
             strict_manifest=True,
             allow_legacy_name=False,
-            project_root=REPO_ROOT,
+            project_root=None,
         )
     except ValueError:
         return None
