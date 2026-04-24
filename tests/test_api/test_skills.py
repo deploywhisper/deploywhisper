@@ -273,6 +273,46 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["summary"]["status"], "passing")
         self.assertGreaterEqual(len(payload["data"]["scenarios"]), 1)
 
+    def test_skill_test_results_route_reports_invalid_suite_as_failing_not_500(
+        self,
+    ) -> None:
+        (self.skills_dir / "terraform.md").write_text(
+            "---\n"
+            "name: terraform\n"
+            "version: 1.0.0\n"
+            "author: DeployWhisper\n"
+            "license: MIT\n"
+            "description: Built-in terraform checks.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "token_budget: 1200\n"
+            "triggers: [.tf]\n"
+            "tags: [iac]\n"
+            "---\n"
+            "# Terraform\nBuilt-in guidance.\n",
+            encoding="utf-8",
+        )
+        suite_dir = Path(self.tempdir.name) / "tests" / "skill-tests" / "terraform"
+        suite_dir.mkdir(parents=True, exist_ok=True)
+        (suite_dir / "broken.json").write_text(
+            '{"name": "", "assessment_tool": "terraform"}',
+            encoding="utf-8",
+        )
+
+        with (
+            patch(
+                "services.skill_test_harness_service.REPO_ROOT",
+                Path(self.tempdir.name),
+            ),
+            patch("services.skill_test_harness_service.SKILLS_DIR", self.skills_dir),
+        ):
+            response = self.client.get("/api/v1/skills/terraform/test-results")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["summary"]["status"], "failing")
+        self.assertEqual(payload["data"]["scenarios"][0]["name"], "suite-load-error")
+        self.assertIn("broken.json", payload["data"]["scenarios"][0]["failures"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

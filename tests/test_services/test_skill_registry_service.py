@@ -238,6 +238,49 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertIsNone(missing)
         self.assertEqual(versions, [])
 
+    def test_registry_page_reports_invalid_suite_json_as_failing_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            suite_dir = repo_root / "tests" / "skill-tests" / "terraform"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+            custom_dir.mkdir(parents=True, exist_ok=True)
+            suite_dir.mkdir(parents=True, exist_ok=True)
+            (skills_dir / "terraform.md").write_text(
+                "---\n"
+                "name: terraform\n"
+                "version: 1.0.0\n"
+                "author: DeployWhisper\n"
+                "license: MIT\n"
+                "description: Built-in terraform checks.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 1200\n"
+                "triggers: [.tf]\n"
+                "tags: [iac]\n"
+                "---\n"
+                "# Terraform\nBuilt-in guidance.\n",
+                encoding="utf-8",
+            )
+            (suite_dir / "broken.json").write_text(
+                '{"name": "", "assessment_tool": "terraform"}',
+                encoding="utf-8",
+            )
+
+            with (
+                patch("services.skill_registry_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_registry_service.CUSTOM_DIR", custom_dir),
+                patch("services.skill_test_harness_service.REPO_ROOT", repo_root),
+                patch("services.skill_test_harness_service.SKILLS_DIR", skills_dir),
+            ):
+                page = fetch_skill_registry_page()
+
+        self.assertEqual(page.total_count, 1)
+        self.assertEqual(page.items[0].id, "terraform")
+        assert page.items[0].test_results is not None
+        self.assertEqual(page.items[0].test_results.status, "failing")
+        self.assertEqual(page.items[0].test_results.failed_scenarios, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

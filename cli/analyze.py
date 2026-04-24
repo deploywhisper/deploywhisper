@@ -154,7 +154,7 @@ def _run_skill_test(skill_ids: list[str], *, emit_json: bool = False) -> int:
                 print(f"  - {scenario.name}: {'; '.join(scenario.failures)}")
     return (
         0
-        if results and all(result.summary.failed_scenarios == 0 for result in results)
+        if results and all(result.summary.status == "passing" for result in results)
         else 1
     )
 

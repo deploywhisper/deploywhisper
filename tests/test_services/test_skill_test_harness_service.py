@@ -70,6 +70,46 @@ class SkillTestHarnessServiceTests(unittest.TestCase):
         assert result is not None
         self.assertEqual(result.summary.status, "missing")
         self.assertEqual(result.summary.total_scenarios, 0)
+        self.assertEqual(result.summary.pass_rate, 0.0)
+
+    def test_invalid_scenario_json_is_reported_as_failing_suite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            suite_dir = repo_root / "tests" / "skill-tests" / "terraform"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+            suite_dir.mkdir(parents=True, exist_ok=True)
+            (skills_dir / "terraform.md").write_text(
+                "---\n"
+                "name: terraform\n"
+                "version: 1.0.0\n"
+                "author: DeployWhisper\n"
+                "license: MIT\n"
+                "triggers: [.tf]\n"
+                "token_budget: 1500\n"
+                "tags: [terraform]\n"
+                "description: Terraform guidance.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "---\n"
+                "# Terraform\nGuidance.\n",
+                encoding="utf-8",
+            )
+            (suite_dir / "broken.json").write_text(
+                '{"name": "", "assessment_tool": "terraform"}',
+                encoding="utf-8",
+            )
+
+            with (
+                patch("services.skill_test_harness_service.REPO_ROOT", repo_root),
+                patch("services.skill_test_harness_service.SKILLS_DIR", skills_dir),
+            ):
+                result = run_skill_test_suite("terraform")
+
+        assert result is not None
+        self.assertEqual(result.summary.status, "failing")
+        self.assertEqual(result.summary.failed_scenarios, 1)
+        self.assertEqual(result.scenarios[0].name, "suite-load-error")
+        self.assertIn("broken.json", result.scenarios[0].failures[0])
 
     def test_run_skill_test_suites_defaults_to_all_built_in_skills(self) -> None:
         results = run_skill_test_suites()
