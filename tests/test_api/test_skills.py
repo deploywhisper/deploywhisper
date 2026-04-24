@@ -103,6 +103,7 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(
             payload["data"][0]["test_suite_path"], "tests/skill-tests/terraform"
         )
+        self.assertEqual(payload["data"][0]["test_results"]["status"], "passing")
         self.assertEqual(payload["data"][0]["triggers"], [".tf"])
 
     def test_get_skill_and_versions_return_effective_skill_and_history(self) -> None:
@@ -155,6 +156,7 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(detail_payload["data"]["source"], "built-in")
         self.assertEqual(detail_payload["data"]["name"], "Terraform")
         self.assertEqual(detail_payload["data"]["available_versions"], 1)
+        self.assertEqual(detail_payload["data"]["test_results"]["status"], "passing")
         self.assertEqual(detail_payload["meta"]["id"], "terraform")
 
         self.assertEqual(versions_response.status_code, 200)
@@ -261,6 +263,15 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(payload["$id"], "/schemas/skill-manifest-v1.json")
         self.assertIn("name", payload["required"])
         self.assertIn("test_suite_path", payload["properties"])
+
+    def test_skill_test_results_route_returns_public_scenario_results(self) -> None:
+        response = self.client.get("/api/v1/skills/terraform/test-results")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["skill_id"], "terraform")
+        self.assertEqual(payload["data"]["summary"]["status"], "passing")
+        self.assertGreaterEqual(len(payload["data"]["scenarios"]), 1)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,13 @@
+{
+  "name": "docker-trigger-selection",
+  "description": "Loads the Docker skill via raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Infrastructure change also updates the application Dockerfile.",
+  "raw_files": {
+    "Dockerfile": "FROM python:3.11\nCOPY . .\nRUN pip install -r requirements.txt\n"
+  },
+  "expected_substrings": [
+    "No `USER` instruction in the Dockerfile = CRITICAL",
+    "`COPY . .` or `ADD . .` without `.dockerignore` = HIGH"
+  ]
+}

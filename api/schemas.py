@@ -620,6 +620,38 @@ class AnalysisShareConfigResponse(BaseModel):
 
 
 SkillRegistrySource = Literal["built-in", "custom-override", "custom-new"]
+SkillHarnessStatus = Literal["passing", "failing", "missing"]
+
+
+class SkillTestResultsSummaryData(BaseModel):
+    total_scenarios: int = Field(..., description="Total number of harness scenarios.")
+    passed_scenarios: int = Field(..., description="Number of passing scenarios.")
+    failed_scenarios: int = Field(..., description="Number of failing scenarios.")
+    pass_rate: float = Field(..., description="Fraction of scenarios that passed.")
+    status: SkillHarnessStatus = Field(
+        ..., description="High-level harness status for the skill."
+    )
+    display_text: str = Field(..., description="Human-readable pass/fail summary.")
+    generated_at: str = Field(..., description="UTC timestamp for this harness run.")
+
+
+class SkillTestScenarioResultData(BaseModel):
+    name: str = Field(..., description="Stable scenario name.")
+    description: str | None = Field(
+        default=None, description="Human-readable description of the scenario."
+    )
+    passed: bool = Field(..., description="Whether the scenario passed.")
+    failures: list[str] = Field(
+        default_factory=list,
+        description="Failure reasons when the scenario did not pass.",
+    )
+
+
+class SkillTestResultsData(BaseModel):
+    skill_id: str = Field(..., description="Stable skill identifier.")
+    version: str = Field(..., description="Skill version under test.")
+    summary: SkillTestResultsSummaryData
+    scenarios: list[SkillTestScenarioResultData] = Field(default_factory=list)
 
 
 class SkillRegistryData(BaseModel):
@@ -640,6 +672,10 @@ class SkillRegistryData(BaseModel):
     test_suite_path: str | None = Field(
         default=None,
         description="Repository path to the skill validation suite, when declared.",
+    )
+    test_results: SkillTestResultsSummaryData | None = Field(
+        default=None,
+        description="Latest deterministic harness summary for the skill.",
     )
     triggers: list[str] = Field(
         default_factory=list, description="Filename or extension triggers"
@@ -686,6 +722,11 @@ class SkillRegistryDetailResponse(BaseModel):
 
 class SkillRegistryVersionsResponse(BaseModel):
     data: list[SkillRegistryVersionData]
+    meta: SkillRegistryResourceMetaPayload
+
+
+class SkillRegistryTestResultsResponse(BaseModel):
+    data: SkillTestResultsData
     meta: SkillRegistryResourceMetaPayload
 
 

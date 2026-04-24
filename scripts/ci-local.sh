@@ -64,6 +64,7 @@ fi
   cli.py \
   config.py \
   logging_config.py
+"$PYTHON_BIN" cli.py skill test
 "$PYTHON_BIN" -m unittest discover -q
 
 if [ "${RUN_UI_A11Y:-0}" = "1" ]; then

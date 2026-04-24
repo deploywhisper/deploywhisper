@@ -1,0 +1,13 @@
+{
+  "name": "ansible-basic-selection",
+  "description": "Loads the Ansible skill for an Ansible contributor.",
+  "assessment_tool": "ansible",
+  "contributor_summary": "Ansible playbook removes old users and services.",
+  "raw_files": {
+    "playbook.yml": "- hosts: app\n  tasks:\n    - name: remove app user\n      user:\n        name: app\n        state: absent\n"
+  },
+  "expected_substrings": [
+    "Destructive modules (CRITICAL)",
+    "`shell` — same as command but through a shell interpreter"
+  ]
+}

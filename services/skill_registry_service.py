@@ -10,6 +10,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from services.skill_manifest_service import REPO_ROOT, load_skill_document
+from services.skill_test_harness_service import (
+    SkillTestSummary,
+    summarize_skill_test_suite,
+)
 
 SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
 CUSTOM_DIR = SKILLS_DIR / "custom"
@@ -33,6 +37,9 @@ class SkillRegistryEntry(BaseModel):
     )
     test_suite_path: str | None = Field(
         default=None, description="Repository path to the skill validation suite"
+    )
+    test_results: SkillTestSummary | None = Field(
+        default=None, description="Latest deterministic harness summary for the skill."
     )
     triggers: list[str] = Field(
         default_factory=list, description="Filename or extension triggers"
@@ -75,6 +82,7 @@ class _SkillRecord(BaseModel):
     tags: list[str] = Field(default_factory=list)
     token_budget: int | None = None
     test_suite_path: str | None = None
+    test_results: SkillTestSummary | None = None
     triggers: list[str] = Field(default_factory=list)
     trigger_content_patterns: list[str] = Field(default_factory=list)
     updated_at: str
@@ -155,6 +163,7 @@ def _record_to_entry(
         "tags": list(record.tags),
         "token_budget": record.token_budget,
         "test_suite_path": record.test_suite_path,
+        "test_results": record.test_results,
         "triggers": list(record.triggers),
         "trigger_content_patterns": list(record.trigger_content_patterns),
         "updated_at": record.updated_at,
@@ -195,6 +204,7 @@ def _load_skill_record(path: Path, *, source: SkillSource) -> _SkillRecord | Non
         tags=list(parsed.manifest.tags),
         token_budget=parsed.manifest.token_budget,
         test_suite_path=parsed.manifest.test_suite_path,
+        test_results=summarize_skill_test_suite(skill_id),
         triggers=list(parsed.manifest.triggers),
         trigger_content_patterns=list(parsed.manifest.trigger_content_patterns),
         updated_at=updated_at,

@@ -1,0 +1,13 @@
+{
+  "name": "terraform-basic-selection",
+  "description": "Loads the Terraform skill for a Terraform contributor.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform changes update networking and storage resources.",
+  "raw_files": {
+    "main.tf": "resource \"aws_security_group\" \"db\" {}"
+  },
+  "expected_substrings": [
+    "Security group or firewall rule with `0.0.0.0/0`",
+    "Resources with `prevent_destroy = true`"
+  ]
+}

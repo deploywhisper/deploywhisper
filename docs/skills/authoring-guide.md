@@ -63,6 +63,14 @@ Use the CLI authoring check before opening a PR or copying a local skill into
 deploywhisper skill lint path/to/my-skill.md
 ```
 
+Run the deterministic harness for built-in skills with:
+
+```bash
+deploywhisper skill test terraform
+```
+
+Scenario layout and harness behavior are documented in `docs/skills/test-harness.md`.
+
 Validation fails when:
 
 - required manifest fields are missing
