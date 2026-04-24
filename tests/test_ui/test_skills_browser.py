@@ -93,8 +93,10 @@ class SkillsBrowserPageTests(unittest.TestCase):
         self.assertIn("DeployWhisper", response.text)
         self.assertIn("skills atlas", response.text)
         self.assertIn("Search the current skills registry", response.text)
-        self.assertIn("Preview downloads", response.text)
+        self.assertIn("Catalog installs", response.text)
         self.assertIn("deploywhisper skill install terraform", response.text)
+        self.assertIn("Pass rate", response.text)
+        self.assertIn("Active issues", response.text)
         self.assertIn("Terraform", response.text)
         self.assertIn("Kubernetes", response.text)
 
@@ -148,8 +150,9 @@ class SkillsBrowserPageTests(unittest.TestCase):
         self.assertIn("deploywhisper skill install terraform", response.text)
         self.assertIn("Version history", response.text)
         self.assertIn("Contributors", response.text)
-        self.assertIn("Downloads", response.text)
-        self.assertIn("Stars", response.text)
+        self.assertIn("Installs", response.text)
+        self.assertIn("Active issues", response.text)
+        self.assertIn("Analytics refreshed", response.text)
         self.assertIn("DeployWhisper", response.text)
 
     def test_skills_browser_page_includes_items_beyond_first_catalog_page(self) -> None:

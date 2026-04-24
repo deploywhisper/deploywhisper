@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from scripts.publish_skills_registry import publish_skill
+from scripts.refresh_skill_analytics import build_snapshot, iter_built_in_skill_ids
 
 
 class SkillContributionWorkflowTests(unittest.TestCase):
@@ -45,6 +47,85 @@ class SkillContributionWorkflowTests(unittest.TestCase):
         self.assertIn("REGISTRY_REPO: deploywhisper/skills-registry", workflow)
         self.assertIn("DEPLOYWHISPER_SKILLS_REGISTRY_PUSH_TOKEN", workflow)
         self.assertIn("scripts/publish_skills_registry.py", workflow)
+
+    def test_daily_skill_analytics_refresh_workflow_exists(self) -> None:
+        workflow = Path(".github/workflows/refresh-skill-analytics.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Refresh Skill Analytics", workflow)
+        self.assertIn("schedule:", workflow)
+        self.assertIn("cron:", workflow)
+        self.assertIn("scripts/refresh_skill_analytics.py", workflow)
+        self.assertIn("issues: read", workflow)
+        self.assertIn("GITHUB_TOKEN", workflow)
+        self.assertIn("DEPLOYWHISPER_SKILL_ANALYTICS_URL", workflow)
+
+    def test_refresh_skill_analytics_updates_issue_counts_from_runtime_source(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            snapshot_path = Path(tmpdir) / "skill-analytics.json"
+            snapshot_path.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-04-24T00:00:00Z",
+                        "skills": {
+                            "terraform": {
+                                "install_count": 1842,
+                                "star_count": 418,
+                                "active_issue_count": 1,
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            payload = build_snapshot(
+                snapshot_path,
+                issue_counts={skill_id: 0 for skill_id in iter_built_in_skill_ids()}
+                | {"terraform": 7},
+                popularity_metrics={
+                    skill_id: {"install_count": 100, "star_count": 10}
+                    for skill_id in iter_built_in_skill_ids()
+                }
+                | {"terraform": {"install_count": 1900, "star_count": 430}},
+            )
+
+        self.assertEqual(payload["skills"]["terraform"]["install_count"], 1900)
+        self.assertEqual(payload["skills"]["terraform"]["star_count"], 430)
+        self.assertEqual(payload["skills"]["terraform"]["active_issue_count"], 7)
+
+    def test_refresh_skill_analytics_rejects_missing_popularity_metrics_for_skill(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            snapshot_path = Path(tmpdir) / "skill-analytics.json"
+            snapshot_path.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-04-24T00:00:00Z",
+                        "skills": {
+                            "terraform": {
+                                "install_count": 1842,
+                                "star_count": 418,
+                                "active_issue_count": 1,
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(RuntimeError) as ctx:
+                build_snapshot(
+                    snapshot_path,
+                    issue_counts={"terraform": 7},
+                    popularity_metrics={},
+                )
+
+        self.assertIn("missing popularity metrics", str(ctx.exception).lower())
 
     def test_publish_skill_writes_registry_bundle_and_removes_deleted_skill(
         self,

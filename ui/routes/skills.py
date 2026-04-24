@@ -352,14 +352,16 @@ def _render_skill_row(skill: SkillRegistryEntry) -> None:
                         ui.label(tag).classes("dw-skill-tag")
             with ui.element("div").classes("dw-skill-metrics"):
                 for value, label in (
-                    (str(skill.download_count), "Downloads"),
-                    (str(skill.star_count), "Stars"),
+                    (str(skill.install_count), "Installs"),
                     (
-                        skill.test_results.display_text
-                        if skill.test_results
-                        else "No tests",
-                        "Harness",
+                        (
+                            f"{round(skill.test_results.pass_rate * 100):.0f}%"
+                            if skill.test_results
+                            else "n/a"
+                        ),
+                        "Pass rate",
                     ),
+                    (str(skill.active_issue_count), "Active issues"),
                 ):
                     with ui.column().classes("gap-0"):
                         ui.label(value).classes("dw-skill-metric-value")
@@ -404,12 +406,12 @@ def skills_browser_page(request: Request) -> None:
                     for value, label in (
                         (str(len(catalog)), "Visible skills"),
                         (
-                            str(sum(item.download_count for item in catalog)),
-                            "Preview downloads",
+                            str(sum(item.install_count for item in catalog)),
+                            "Catalog installs",
                         ),
                         (
-                            str(sum(item.star_count for item in catalog)),
-                            "Preview stars",
+                            str(sum(item.active_issue_count for item in catalog)),
+                            "Open issues",
                         ),
                         (
                             str(
@@ -472,7 +474,10 @@ def skills_browser_page(request: Request) -> None:
             build_page_header(
                 eyebrow="Catalog",
                 title="Search the current skills registry",
-                subtitle="Popularity and recency come from the shared registry metadata used by the browser and installer surfaces.",
+                subtitle=(
+                    "Shared registry analytics are refreshed daily and exposed through "
+                    "the same metadata contract the browser and CLI consume."
+                ),
             )
 
         with ui.column().classes("dw-skills-catalog"):
@@ -510,14 +515,16 @@ def skill_detail_page(skill_id: str) -> None:
                     ui.label(skill.install_command).classes("dw-skill-command")
                     with ui.element("div").classes("dw-skills-hero-stats"):
                         for value, label in (
-                            (str(skill.download_count), "Downloads"),
-                            (str(skill.star_count), "Stars"),
+                            (str(skill.install_count), "Installs"),
+                            (str(skill.active_issue_count), "Active issues"),
                             (_format_updated_at(skill.updated_at), "Last updated"),
                             (
-                                skill.test_results.display_text
-                                if skill.test_results
-                                else "No harness",
-                                "Test results",
+                                (
+                                    f"{round(skill.test_results.pass_rate * 100):.0f}%"
+                                    if skill.test_results
+                                    else "n/a"
+                                ),
+                                "Pass rate",
                             ),
                         ):
                             with ui.element("div").classes("dw-skills-stat"):
@@ -533,6 +540,11 @@ def skill_detail_page(skill_id: str) -> None:
                             "dw-skills-stat-value text-lg"
                         )
                         ui.label("Tracked versions").classes("dw-skills-stat-label")
+                    with ui.element("div").classes("dw-skills-stat"):
+                        ui.label(
+                            _format_updated_at(skill.analytics_updated_at)
+                        ).classes("dw-skills-stat-value text-lg")
+                        ui.label("Analytics refreshed").classes("dw-skills-stat-label")
 
         with ui.element("div").classes("dw-skill-detail-grid"):
             with ui.column().classes("dw-skill-detail-stack"):
@@ -571,5 +583,5 @@ def skill_detail_page(skill_id: str) -> None:
                 with ui.card().classes("dw-panel shadow-none dw-skill-section"):
                     ui.label("Registry snapshot").classes("dw-eyebrow")
                     ui.label(
-                        "This page reflects the same source-of-truth metadata and version history used by the shared registry and installer surfaces."
+                        "This page reflects the same source-of-truth metadata, daily analytics snapshot, and version history used by the shared registry and installer surfaces."
                     ).classes("dw-skills-body")

@@ -1,0 +1,43 @@
+name: Refresh Skill Analytics
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Refresh analytics snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOYWHISPER_SKILL_ANALYTICS_URL: ${{ vars.DEPLOYWHISPER_SKILL_ANALYTICS_URL }}
+        run: |
+          python scripts/refresh_skill_analytics.py \
+            --repo "${{ github.repository }}"
+
+      - name: Commit refreshed analytics
+        run: |
+          if git diff --quiet; then
+            echo "No analytics changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/skill-analytics.json
+          git commit -m "Refresh skill analytics snapshot"
+          git push

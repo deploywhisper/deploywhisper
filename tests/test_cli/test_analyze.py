@@ -24,6 +24,7 @@ from importlib import reload
 from integrations.github.init_service import GitHubInitOptions, GitHubInitResult
 from llm.narrator import NarrativeResult
 from services.skill_installer_service import InstalledSkillEntry, SkillInstallResult
+from services.skill_registry_service import SkillRegistryEntry
 from services.skill_test_harness_service import (
     SkillTestScenarioResult,
     SkillTestSuiteResult,
@@ -363,6 +364,138 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("helm@1.2.0 [new, active]", output.getvalue())
         self.assertIn("terraform@2.0.0 [override, ignored]", output.getvalue())
+
+    def test_skill_list_catalog_command_prints_registry_analytics(self) -> None:
+        output = io.StringIO()
+        entry = SkillRegistryEntry(
+            id="terraform",
+            name="Terraform",
+            version="1.0.0",
+            source="built-in",
+            author="DeployWhisper",
+            license="MIT",
+            description="Terraform registry skill.",
+            tool="terraform",
+            tags=["iac"],
+            token_budget=1200,
+            test_suite_path="tests/skill-tests/terraform",
+            test_results=SkillTestSummary(
+                skill_id="terraform",
+                total_scenarios=3,
+                passed_scenarios=3,
+                failed_scenarios=0,
+                pass_rate=1.0,
+                status="passing",
+                display_text="3/3 scenarios passing",
+                generated_at="2026-04-25T00:00:00Z",
+            ),
+            triggers=[".tf"],
+            trigger_content_patterns=[],
+            contributors=["DeployWhisper"],
+            install_count=1842,
+            active_issue_count=1,
+            analytics_updated_at="2026-04-25T00:00:00Z",
+            download_count=1842,
+            star_count=418,
+            install_command="deploywhisper skill install terraform",
+            updated_at="2026-04-24T00:00:00Z",
+            available_versions=1,
+        )
+
+        with (
+            patch("cli.analyze.fetch_skill_registry_page") as fetch_page,
+            patch("sys.argv", ["deploywhisper", "skill", "list", "--catalog"]),
+            redirect_stdout(output),
+        ):
+            fetch_page.return_value.items = [entry]
+            fetch_page.return_value.total_count = 1
+            fetch_page.return_value.page = 1
+            fetch_page.return_value.page_size = 100
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("terraform", output.getvalue().lower())
+        self.assertIn("installs=1842", output.getvalue().lower())
+        self.assertIn("pass-rate=100%", output.getvalue().lower())
+        self.assertIn("active-issues=1", output.getvalue().lower())
+
+    def test_skill_list_catalog_command_fetches_all_registry_pages(self) -> None:
+        output = io.StringIO()
+        first = SkillRegistryEntry(
+            id="terraform",
+            name="Terraform",
+            version="1.0.0",
+            source="built-in",
+            author="DeployWhisper",
+            license="MIT",
+            description="Terraform registry skill.",
+            tool="terraform",
+            tags=["iac"],
+            token_budget=1200,
+            test_suite_path="tests/skill-tests/terraform",
+            test_results=None,
+            triggers=[".tf"],
+            trigger_content_patterns=[],
+            contributors=["DeployWhisper"],
+            install_count=1842,
+            active_issue_count=1,
+            analytics_updated_at="2026-04-25T00:00:00Z",
+            download_count=1842,
+            star_count=418,
+            install_command="deploywhisper skill install terraform",
+            updated_at="2026-04-24T00:00:00Z",
+            available_versions=1,
+        )
+        second = SkillRegistryEntry(
+            id="kubernetes",
+            name="Kubernetes",
+            version="1.0.0",
+            source="built-in",
+            author="DeployWhisper",
+            license="MIT",
+            description="Kubernetes registry skill.",
+            tool="kubernetes",
+            tags=["cluster"],
+            token_budget=1200,
+            test_suite_path="tests/skill-tests/kubernetes",
+            test_results=None,
+            triggers=[".yaml"],
+            trigger_content_patterns=[],
+            contributors=["DeployWhisper"],
+            install_count=1765,
+            active_issue_count=2,
+            analytics_updated_at="2026-04-25T00:00:00Z",
+            download_count=1765,
+            star_count=403,
+            install_command="deploywhisper skill install kubernetes",
+            updated_at="2026-04-24T00:00:00Z",
+            available_versions=1,
+        )
+
+        with (
+            patch("cli.analyze.fetch_skill_registry_page") as fetch_page,
+            patch("sys.argv", ["deploywhisper", "skill", "list", "--catalog"]),
+            redirect_stdout(output),
+        ):
+            fetch_page.side_effect = [
+                type(
+                    "Page",
+                    (),
+                    {"items": [first], "total_count": 2, "page": 1, "page_size": 100},
+                )(),
+                type(
+                    "Page",
+                    (),
+                    {"items": [second], "total_count": 2, "page": 2, "page_size": 100},
+                )(),
+            ]
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("terraform", output.getvalue().lower())
+        self.assertIn("kubernetes", output.getvalue().lower())
 
     def test_skill_update_command_reports_noop_when_latest_version_is_installed(
         self,

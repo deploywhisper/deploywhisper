@@ -103,6 +103,9 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(
             payload["data"][0]["test_suite_path"], "tests/skill-tests/terraform"
         )
+        self.assertIn("install_count", payload["data"][0])
+        self.assertIn("active_issue_count", payload["data"][0])
+        self.assertIn("analytics_updated_at", payload["data"][0])
         self.assertEqual(payload["data"][0]["test_results"]["status"], "passing")
         self.assertEqual(payload["data"][0]["triggers"], [".tf"])
 
@@ -156,6 +159,9 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(detail_payload["data"]["source"], "built-in")
         self.assertEqual(detail_payload["data"]["name"], "Terraform")
         self.assertEqual(detail_payload["data"]["available_versions"], 1)
+        self.assertIn("install_count", detail_payload["data"])
+        self.assertIn("active_issue_count", detail_payload["data"])
+        self.assertIn("analytics_updated_at", detail_payload["data"])
         self.assertEqual(detail_payload["data"]["test_results"]["status"], "passing")
         self.assertEqual(detail_payload["meta"]["id"], "terraform")
 

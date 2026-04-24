@@ -683,6 +683,22 @@ class SkillRegistryData(BaseModel):
     trigger_content_patterns: list[str] = Field(
         default_factory=list, description="Content markers used for matching"
     )
+    install_count: int = Field(
+        default=0, description="Current install count from the analytics snapshot"
+    )
+    active_issue_count: int = Field(
+        default=0, description="Current open issue count from the analytics snapshot"
+    )
+    analytics_updated_at: str = Field(
+        ..., description="When the analytics snapshot was last refreshed"
+    )
+    download_count: int = Field(
+        default=0,
+        description="Compatibility popularity metric derived from install counts.",
+    )
+    star_count: int = Field(
+        default=0, description="Current star count from the analytics snapshot"
+    )
     updated_at: str = Field(..., description="Last local update timestamp")
     available_versions: int = Field(
         ..., description="Number of versions discoverable for this skill id"
