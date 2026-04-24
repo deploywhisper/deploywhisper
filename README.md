@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="docs/assets/wordmark-stacked-light-bg.svg" alt="DeployWhisper" width="96"/>
+  <img src="docs/assets/wordmark-stacked-light-bg.svg" alt="DeployWhisper" width="250"/>
 </p>
+
+----
 
 # DeployWhisper
 
