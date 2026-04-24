@@ -31,6 +31,9 @@ LAUNCH_SKILL_IDS = {
     "tanka",
     "jsonnet",
 }
+FEATURED_COMMUNITY_SKILL_IDS = {
+    "terragrunt",
+}
 SUPPORTED_RUNTIME_TOOLS = {
     "terraform",
     "kubernetes",
@@ -65,6 +68,24 @@ class SeededCommunitySkillsTests(unittest.TestCase):
             )
             self.assertIn("## Critical risk patterns", document.body)
 
+    def test_featured_catalog_contains_real_community_skill(self) -> None:
+        for skill_id in sorted(FEATURED_COMMUNITY_SKILL_IDS):
+            document = load_skill_document(
+                REPO_ROOT / "skills" / f"{skill_id}.md",
+                strict_manifest=True,
+                allow_legacy_name=False,
+                project_root=REPO_ROOT,
+            )
+
+            assert document.manifest is not None
+            self.assertTrue(document.manifest.featured)
+            self.assertNotEqual(document.manifest.author, "DeployWhisper")
+            self.assertNotEqual(
+                document.manifest.maintainer or "",
+                "DeployWhisper",
+            )
+            self.assertIn("## Critical risk patterns", document.body)
+
     def test_launch_catalog_suites_have_three_passing_scenarios(self) -> None:
         for skill_id in sorted(LAUNCH_SKILL_IDS):
             suite_files = list(
@@ -94,6 +115,16 @@ class SeededCommunitySkillsTests(unittest.TestCase):
 
         self.assertEqual({result.skill_id for result in results}, LAUNCH_SKILL_IDS)
         for result in results:
+            self.assertEqual(result.summary.status, "passing", result.skill_id)
+            self.assertGreaterEqual(result.summary.total_scenarios, 3)
+
+        featured_results = run_skill_test_suites(sorted(FEATURED_COMMUNITY_SKILL_IDS))
+
+        self.assertEqual(
+            {result.skill_id for result in featured_results},
+            FEATURED_COMMUNITY_SKILL_IDS,
+        )
+        for result in featured_results:
             self.assertEqual(result.summary.status, "passing", result.skill_id)
             self.assertGreaterEqual(result.summary.total_scenarios, 3)
 

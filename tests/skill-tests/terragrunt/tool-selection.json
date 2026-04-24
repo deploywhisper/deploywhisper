@@ -1,0 +1,13 @@
+{
+  "name": "terragrunt-tool-selection",
+  "description": "Loads the Terragrunt skill from the contributor tool and a real Terragrunt file.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terragrunt change updates include hierarchy and dependency outputs.",
+  "raw_files": {
+    "terragrunt.hcl": "include \"root\" { path = find_in_parent_folders() }\ndependency \"network\" { config_path = \"../network\" }\n"
+  },
+  "expected_substrings": [
+    "`run-all apply` or root include changes can fan out across many stacks at once = HIGH",
+    "Dependency output contract changes can break downstream stacks even when the local diff looks small = HIGH"
+  ]
+}

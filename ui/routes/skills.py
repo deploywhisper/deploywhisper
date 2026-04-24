@@ -125,6 +125,13 @@ _BROWSER_CSS = """
   color: var(--dw-text);
 }
 
+.dw-skill-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .dw-skill-row-meta {
   display: flex;
   gap: 10px;
@@ -152,6 +159,33 @@ _BROWSER_CSS = """
   font-size: 11px;
   color: var(--dw-muted);
   background: var(--dw-pill-bg);
+}
+
+.dw-skill-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dw-skill-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dw-skill-badge-official {
+  background: color-mix(in srgb, #0f766e 18%, white);
+  color: #0f5c56;
+}
+
+.dw-skill-badge-featured {
+  background: color-mix(in srgb, #d97706 18%, white);
+  color: #8a4a05;
 }
 
 .dw-skill-metrics {
@@ -334,15 +368,32 @@ def _navigate_with_filters(
     ui.navigate.to(f"/skills{query}")
 
 
+def _render_editorial_badges(skill: SkillRegistryEntry) -> None:
+    badges: list[tuple[str, str]] = []
+    if skill.is_official:
+        badges.append(("Official", "dw-skill-badge dw-skill-badge-official"))
+    if skill.is_featured:
+        badges.append(("Featured", "dw-skill-badge dw-skill-badge-featured"))
+    if not badges:
+        return
+    with ui.element("div").classes("dw-skill-badges"):
+        for label, classes in badges:
+            ui.label(label).classes(classes)
+
+
 def _render_skill_row(skill: SkillRegistryEntry) -> None:
     with ui.element("a").props(f"href=/skills/{skill.id}").classes("no-underline"):
         with ui.element("article").classes("dw-skill-row"):
             with ui.column().classes("gap-0 min-w-0"):
-                ui.label(skill.name).classes("dw-skill-row-title")
+                with ui.element("div").classes("dw-skill-headline"):
+                    ui.label(skill.name).classes("dw-skill-row-title")
+                    _render_editorial_badges(skill)
                 ui.label(skill.description).classes("dw-skills-body")
                 with ui.element("div").classes("dw-skill-row-meta"):
                     ui.label(skill.tool)
                     ui.label(skill.author)
+                    if skill.maintainer != skill.author:
+                        ui.label(f"Maintained by {skill.maintainer}")
                     ui.label(f"Updated {_format_updated_at(skill.updated_at)}")
                     ui.label(
                         f"{skill.available_versions} version{'s' if skill.available_versions != 1 else ''}"
@@ -510,11 +561,14 @@ def skill_detail_page(skill_id: str) -> None:
                 back_href="/skills",
                 back_label="Back to skills",
             )
+            _render_editorial_badges(skill)
             with ui.element("div").classes("dw-skill-detail-grid"):
                 with ui.column().classes("dw-skill-detail-stack"):
                     ui.label(skill.install_command).classes("dw-skill-command")
                     with ui.element("div").classes("dw-skills-hero-stats"):
                         for value, label in (
+                            (skill.author, "Author"),
+                            (skill.maintainer, "Maintainer"),
                             (str(skill.install_count), "Installs"),
                             (str(skill.active_issue_count), "Active issues"),
                             (_format_updated_at(skill.updated_at), "Last updated"),
@@ -532,9 +586,6 @@ def skill_detail_page(skill_id: str) -> None:
                                 ui.label(label).classes("dw-skills-stat-label")
 
                 with ui.element("div").classes("dw-skills-hero-stats"):
-                    with ui.element("div").classes("dw-skills-stat"):
-                        ui.label(skill.author).classes("dw-skills-stat-value text-lg")
-                        ui.label("Author").classes("dw-skills-stat-label")
                     with ui.element("div").classes("dw-skills-stat"):
                         ui.label(str(skill.available_versions)).classes(
                             "dw-skills-stat-value text-lg"

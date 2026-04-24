@@ -1,0 +1,13 @@
+{
+  "name": "terragrunt-non-match",
+  "description": "Does not load the Terragrunt skill for unrelated Terraform files.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Plain Terraform resource change with no Terragrunt scaffolding.",
+  "raw_files": {
+    "main.tf": "resource \"aws_s3_bucket\" \"logs\" {}\n"
+  },
+  "expect_selected": false,
+  "expected_absent_substrings": [
+    "Dependency output contract changes can break downstream stacks even when the local diff looks small = HIGH"
+  ]
+}

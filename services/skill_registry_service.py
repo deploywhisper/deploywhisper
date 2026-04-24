@@ -33,6 +33,15 @@ class SkillRegistryEntry(BaseModel):
     version: str = Field(..., description="Current effective version")
     source: SkillSource = Field(..., description="Where the skill was resolved from")
     author: str = Field(..., description="Skill author or owner label")
+    maintainer: str = Field(..., description="Current maintainer label")
+    is_official: bool = Field(
+        default=False,
+        description="Whether the skill is officially maintained by DeployWhisper.",
+    )
+    is_featured: bool = Field(
+        default=False,
+        description="Whether the skill is a curated featured community entry.",
+    )
     license: str | None = Field(default=None, description="Declared skill license")
     description: str = Field(..., description="Skill summary")
     tool: str = Field(..., description="Primary tool family for the skill")
@@ -114,6 +123,9 @@ class _SkillRecord(BaseModel):
     version: str
     source: SkillSource
     author: str
+    maintainer: str
+    is_official: bool = False
+    is_featured: bool = False
     license: str | None = None
     description: str
     tool: str
@@ -154,6 +166,10 @@ def _default_author(source: SkillSource) -> str:
     if source == "built-in":
         return "DeployWhisper"
     return "Local custom skill"
+
+
+def _is_official_maintainer(value: str) -> bool:
+    return value.strip().lower() == "deploywhisper"
 
 
 def _default_tool(tool: str | None, skill_id: str) -> str:
@@ -221,6 +237,9 @@ def _record_to_entry(
         "version": record.version,
         "source": record.source,
         "author": record.author,
+        "maintainer": record.maintainer,
+        "is_official": record.is_official,
+        "is_featured": record.is_featured,
         "license": record.license,
         "description": record.description,
         "tool": record.tool,
@@ -270,6 +289,17 @@ def _load_skill_record(path: Path, *, source: SkillSource) -> _SkillRecord | Non
         version=parsed.manifest.version,
         source=source,
         author=parsed.manifest.author or _default_author(source),
+        maintainer=(
+            parsed.manifest.maintainer
+            or parsed.manifest.author
+            or _default_author(source)
+        ),
+        is_official=_is_official_maintainer(
+            parsed.manifest.maintainer
+            or parsed.manifest.author
+            or _default_author(source)
+        ),
+        is_featured=parsed.manifest.featured,
         license=parsed.manifest.license or None,
         description=parsed.manifest.description,
         tool=_default_tool(parsed.manifest.tool, skill_id),
@@ -370,6 +400,7 @@ def _matches_query(
                 record.name,
                 record.version,
                 record.author,
+                record.maintainer,
                 record.tool,
                 record.description,
                 *record.tags,

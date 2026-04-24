@@ -359,6 +359,64 @@ class SkillRegistryServiceTests(unittest.TestCase):
             self.assertGreaterEqual(item.test_results.pass_rate, 0.0)
             self.assertLessEqual(item.test_results.pass_rate, 1.0)
 
+    def test_registry_page_exposes_editorial_curation_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skills_dir = Path(tmpdir) / "skills"
+            custom_dir = skills_dir / "custom"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+            custom_dir.mkdir(parents=True, exist_ok=True)
+            (skills_dir / "terraform.md").write_text(
+                "---\n"
+                "name: terraform\n"
+                "version: 1.0.0\n"
+                "author: DeployWhisper\n"
+                "license: MIT\n"
+                "description: Built-in terraform checks.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 1200\n"
+                "triggers: [.tf]\n"
+                "tags: [iac]\n"
+                "---\n"
+                "# Terraform\nBuilt-in guidance.\n",
+                encoding="utf-8",
+            )
+            (skills_dir / "community-skill.md").write_text(
+                "---\n"
+                "name: community-skill\n"
+                "version: 1.0.0\n"
+                "author: Community Builder\n"
+                "maintainer: Community Curators\n"
+                "featured: true\n"
+                "license: MIT\n"
+                "description: Curated community guidance.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 900\n"
+                "triggers: [.yaml]\n"
+                "tags: [community]\n"
+                "---\n"
+                "# Community Skill\nGuidance.\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("services.skill_registry_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_registry_service.CUSTOM_DIR", custom_dir),
+            ):
+                page = fetch_skill_registry_page(sort="recency")
+                official = fetch_skill_registry_entry("terraform")
+                featured = fetch_skill_registry_entry("community-skill")
+
+        self.assertEqual(page.total_count, 2)
+        assert official is not None
+        assert featured is not None
+        self.assertTrue(official.is_official)
+        self.assertFalse(official.is_featured)
+        self.assertEqual(official.maintainer, "DeployWhisper")
+        self.assertFalse(featured.is_official)
+        self.assertTrue(featured.is_featured)
+        self.assertEqual(featured.author, "Community Builder")
+        self.assertEqual(featured.maintainer, "Community Curators")
+
 
 if __name__ == "__main__":
     unittest.main()

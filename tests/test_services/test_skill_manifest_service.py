@@ -127,6 +127,89 @@ class SkillManifestServiceTests(unittest.TestCase):
             document.manifest.test_suite_path, "tests/skill-tests/terraform"
         )
 
+    def test_strict_manifest_allows_featured_community_skill_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            (project_root / "tests/skill-tests/community-skill").mkdir(parents=True)
+            document = parse_skill_document(
+                "---\n"
+                "name: community-skill\n"
+                "version: 1.0.0\n"
+                "author: Community Builder\n"
+                "maintainer: Community Curators\n"
+                "featured: true\n"
+                "license: MIT\n"
+                "triggers: [.yaml]\n"
+                "token_budget: 1200\n"
+                "tags: [community]\n"
+                "description: Community review guidance.\n"
+                "test_suite_path: tests/skill-tests/community-skill\n"
+                "---\n"
+                "# Community Skill\nGuidance.\n",
+                expected_name="community-skill",
+                strict_manifest=True,
+                project_root=project_root,
+            )
+
+        assert document.manifest is not None
+        self.assertEqual(document.manifest.maintainer, "Community Curators")
+        self.assertTrue(document.manifest.featured)
+
+    def test_strict_manifest_rejects_featured_deploywhisper_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            (project_root / "tests/skill-tests/official-skill").mkdir(parents=True)
+            with self.assertRaises(SkillManifestValidationError) as ctx:
+                parse_skill_document(
+                    "---\n"
+                    "name: official-skill\n"
+                    "version: 1.0.0\n"
+                    "author: DeployWhisper\n"
+                    "featured: true\n"
+                    "license: MIT\n"
+                    "triggers: [.tf]\n"
+                    "token_budget: 1200\n"
+                    "tags: [official]\n"
+                    "description: First-party guidance.\n"
+                    "test_suite_path: tests/skill-tests/official-skill\n"
+                    "---\n"
+                    "# Official Skill\nGuidance.\n",
+                    expected_name="official-skill",
+                    strict_manifest=True,
+                    project_root=project_root,
+                )
+
+        self.assertIn("featured", str(ctx.exception).lower())
+
+    def test_strict_manifest_rejects_featured_skill_with_deploywhisper_author(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            (project_root / "tests/skill-tests/official-skill").mkdir(parents=True)
+            with self.assertRaises(SkillManifestValidationError) as ctx:
+                parse_skill_document(
+                    "---\n"
+                    "name: official-skill\n"
+                    "version: 1.0.0\n"
+                    "author: DeployWhisper\n"
+                    "maintainer: Community Curators\n"
+                    "featured: true\n"
+                    "license: MIT\n"
+                    "triggers: [.tf]\n"
+                    "token_budget: 1200\n"
+                    "tags: [official]\n"
+                    "description: First-party guidance.\n"
+                    "test_suite_path: tests/skill-tests/official-skill\n"
+                    "---\n"
+                    "# Official Skill\nGuidance.\n",
+                    expected_name="official-skill",
+                    strict_manifest=True,
+                    project_root=project_root,
+                )
+
+        self.assertIn("community-authored", str(ctx.exception).lower())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -48,12 +48,20 @@ class SkillsBrowserPageTests(unittest.TestCase):
         triggers: str,
         tags: str,
         suite_path: str,
+        maintainer: str | None = None,
+        featured: bool = False,
     ) -> None:
+        editorial_lines = ""
+        if maintainer:
+            editorial_lines += f"maintainer: {maintainer}\n"
+        if featured:
+            editorial_lines += "featured: true\n"
         (self.skills_dir / f"{skill_id}.md").write_text(
             "---\n"
             f"name: {skill_id}\n"
             "version: 1.0.0\n"
             f"author: {author}\n"
+            f"{editorial_lines}"
             "license: MIT\n"
             f"description: {description}\n"
             f"test_suite_path: {suite_path}\n"
@@ -99,6 +107,7 @@ class SkillsBrowserPageTests(unittest.TestCase):
         self.assertIn("Active issues", response.text)
         self.assertIn("Terraform", response.text)
         self.assertIn("Kubernetes", response.text)
+        self.assertIn("Official", response.text)
 
     def test_skills_browser_page_applies_query_filters(self) -> None:
         self._write_skill(
@@ -154,6 +163,34 @@ class SkillsBrowserPageTests(unittest.TestCase):
         self.assertIn("Active issues", response.text)
         self.assertIn("Analytics refreshed", response.text)
         self.assertIn("DeployWhisper", response.text)
+        self.assertIn("Official", response.text)
+
+    def test_skills_browser_page_renders_featured_badge_for_curated_community_skill(
+        self,
+    ) -> None:
+        self._write_skill(
+            "community-skill",
+            author="Community Builder",
+            maintainer="Community Curators",
+            featured=True,
+            description="Curated community guidance.",
+            triggers=".yaml",
+            tags="community",
+            suite_path="tests/skill-tests/terraform",
+        )
+
+        with (
+            patch("services.skill_registry_service.SKILLS_DIR", self.skills_dir),
+            patch("services.skill_registry_service.CUSTOM_DIR", self.custom_dir),
+        ):
+            list_response = self.client.get("/skills")
+            detail_response = self.client.get("/skills/community-skill")
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertIn("Featured", list_response.text)
+        self.assertIn("Community Curators", detail_response.text)
+        self.assertIn("Featured", detail_response.text)
 
     def test_skills_browser_page_includes_items_beyond_first_catalog_page(self) -> None:
         for index in range(205):
