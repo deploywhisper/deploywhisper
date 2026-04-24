@@ -35,6 +35,7 @@ from services.report_service import (
     fetch_shared_analysis_report,
     fetch_shared_report_comparison,
 )
+from services.skill_manifest_service import build_skill_manifest_v1_schema
 from ui.routes.dashboard import build_dashboard
 
 configure_logging()
@@ -127,6 +128,15 @@ def versioned_redoc_ui() -> HTMLResponse:
 def openapi_document() -> JSONResponse:
     """Expose the generated OpenAPI document for compatibility consumers."""
     return JSONResponse(content=fastapi_app.openapi())
+
+
+@fastapi_app.get("/schemas/skill-manifest-v1.json", include_in_schema=False)
+def skill_manifest_schema_document() -> JSONResponse:
+    """Publish the versioned skill manifest schema for author tooling."""
+    return JSONResponse(
+        content=build_skill_manifest_v1_schema(),
+        media_type="application/schema+json",
+    )
 
 
 def _shared_report_prompt_html(report_id: int, *, invalid_password: bool) -> str:

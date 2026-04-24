@@ -1,10 +1,14 @@
 ---
-skill: git
-version: 1.0
+name: git
+version: 1.0.0
+author: DeployWhisper
+license: MIT
 triggers: [.diff, .patch, .gitdiff]
-always_load: true
 token_budget: 1200
+tags: [git, diff, review]
 description: Git-based change context intelligence covering commit analysis, sensitive file detection, branch risk signals, author patterns, and co-change analysis. This skill is always loaded because Git context enriches every other tool's analysis.
+test_suite_path: tests/skill-tests/git
+always_load: true
 ---
 
 ## Sensitive file detection

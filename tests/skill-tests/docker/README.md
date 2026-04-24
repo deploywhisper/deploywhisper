@@ -1,0 +1,4 @@
+# Docker Skill Test Placeholder
+
+Story 4.2 reserves this path for the Docker skill harness cases that will land
+with Story 4.3.

@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
-import yaml
 
 from analysis.risk_scorer import RiskAssessment
+from services.skill_manifest_service import (
+    SkillManifestValidationError,
+    load_skill_document,
+    parse_skill_document,
+)
 
 
 SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
@@ -57,16 +61,21 @@ class CustomSkillStatus(BaseModel):
     )
 
 
-def _split_frontmatter(content: str) -> tuple[dict[str, Any], str]:
-    content = content.strip()
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) == 3:
-            frontmatter = yaml.safe_load(parts[1]) or {}
-            if not isinstance(frontmatter, dict):
-                frontmatter = {}
-            return frontmatter, parts[2].strip()
-    return {}, content.strip()
+def _metadata_list(raw_metadata: dict[str, object], key: str) -> list[str]:
+    raw_value = raw_metadata.get(key)
+    if raw_value is None:
+        return []
+    values = raw_value if isinstance(raw_value, list) else [raw_value]
+    normalized: list[str] = []
+    for value in values:
+        candidate = str(value).strip()
+        if candidate:
+            normalized.append(candidate)
+    return normalized
+
+
+def _metadata_bool(raw_metadata: dict[str, object], key: str) -> bool:
+    return bool(raw_metadata.get(key, False))
 
 
 def _skill_name_from_path(path: Path) -> str | None:
@@ -79,17 +88,15 @@ def _skill_name_from_path(path: Path) -> str | None:
 def _read_skill_file(path: Path) -> str | None:
     if not path.exists():
         return None
-    _, content = _split_frontmatter(path.read_text(encoding="utf-8"))
-    return content or None
-
-
-def _read_skill_definition(path: Path) -> tuple[dict[str, Any], str] | None:
-    if not path.exists():
+    try:
+        document = load_skill_document(
+            path,
+            strict_manifest=False,
+            allow_legacy_name=True,
+        )
+    except SkillManifestValidationError:
         return None
-    metadata, content = _split_frontmatter(path.read_text(encoding="utf-8"))
-    if not content:
-        return None
-    return metadata, content
+    return document.body
 
 
 def _iter_skill_files(directory: Path) -> list[Path]:
@@ -104,51 +111,73 @@ def get_active_skills() -> dict[str, ActiveSkill]:
 
     for path in _iter_skill_files(SKILLS_DIR):
         name = _skill_name_from_path(path)
-        definition = _read_skill_definition(path)
-        if not name or not definition:
+        if not name:
             continue
-        metadata, content = definition
+        try:
+            document = load_skill_document(
+                path,
+                strict_manifest=False,
+                allow_legacy_name=True,
+            )
+        except SkillManifestValidationError:
+            continue
+        metadata = document.manifest
         active[name] = ActiveSkill(
             name=name,
             source="built-in",
             path=str(path),
-            content=content,
-            always_load=bool(metadata.get("always_load", False)),
-            triggers=[
-                str(item).strip()
-                for item in metadata.get("triggers", [])
-                if str(item).strip()
-            ],
-            trigger_content_patterns=[
-                str(item).strip()
-                for item in metadata.get("trigger_content_patterns", [])
-                if str(item).strip()
-            ],
+            content=document.body,
+            always_load=(
+                bool(metadata.always_load)
+                if metadata
+                else _metadata_bool(document.raw_metadata, "always_load")
+            ),
+            triggers=(
+                list(metadata.triggers)
+                if metadata
+                else _metadata_list(document.raw_metadata, "triggers")
+            ),
+            trigger_content_patterns=(
+                list(metadata.trigger_content_patterns)
+                if metadata
+                else _metadata_list(document.raw_metadata, "trigger_content_patterns")
+            ),
         )
 
     for path in _iter_skill_files(CUSTOM_DIR):
         name = _skill_name_from_path(path)
-        definition = _read_skill_definition(path)
-        if not name or not definition:
+        if not name:
             continue
-        metadata, content = definition
+        try:
+            document = load_skill_document(
+                path,
+                strict_manifest=False,
+                allow_legacy_name=True,
+            )
+        except SkillManifestValidationError:
+            continue
+        metadata = document.manifest
         source = "custom-override" if name in active else "custom-new"
         active[name] = ActiveSkill(
             name=name,
             source=source,
             path=str(path),
-            content=content,
-            always_load=bool(metadata.get("always_load", False)),
-            triggers=[
-                str(item).strip()
-                for item in metadata.get("triggers", [])
-                if str(item).strip()
-            ],
-            trigger_content_patterns=[
-                str(item).strip()
-                for item in metadata.get("trigger_content_patterns", [])
-                if str(item).strip()
-            ],
+            content=document.body,
+            always_load=(
+                bool(metadata.always_load)
+                if metadata
+                else _metadata_bool(document.raw_metadata, "always_load")
+            ),
+            triggers=(
+                list(metadata.triggers)
+                if metadata
+                else _metadata_list(document.raw_metadata, "triggers")
+            ),
+            trigger_content_patterns=(
+                list(metadata.trigger_content_patterns)
+                if metadata
+                else _metadata_list(document.raw_metadata, "trigger_content_patterns")
+            ),
         )
 
     return active
@@ -168,16 +197,30 @@ def get_custom_skill_statuses() -> list[CustomSkillStatus]:
         name = _skill_name_from_path(path)
         if not name:
             continue
-        content = _read_skill_file(path)
+        warning = None
+        try:
+            document = load_skill_document(
+                path,
+                strict_manifest=False,
+                allow_legacy_name=True,
+            )
+            content = document.body
+        except SkillManifestValidationError as exc:
+            content = None
+            warning = exc.issues[0]
         statuses.append(
             CustomSkillStatus(
                 name=name,
                 mode="override" if name in built_in_names else "new",
                 active=content is not None,
                 path=str(path),
-                warning=None
-                if content
-                else "Custom skill file is empty after frontmatter stripping.",
+                warning=warning
+                if warning is not None
+                else (
+                    None
+                    if content
+                    else "Custom skill file is empty after frontmatter stripping."
+                ),
             )
         )
     return statuses
@@ -193,8 +236,16 @@ def save_custom_skill(filename: str, raw_text: str) -> CustomSkillStatus:
     if not skill_name:
         raise ValueError("Custom skill filename must include a skill name.")
 
-    _, stripped = _split_frontmatter(raw_text)
-    if not stripped:
+    try:
+        document = parse_skill_document(
+            raw_text,
+            expected_name=skill_name,
+            strict_manifest=False,
+            allow_legacy_name=True,
+        )
+    except SkillManifestValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    if not document.body:
         raise ValueError("Custom skill content cannot be empty.")
 
     CUSTOM_DIR.mkdir(parents=True, exist_ok=True)

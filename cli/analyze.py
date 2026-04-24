@@ -18,6 +18,10 @@ from integrations.github.init_service import (
     run_github_init,
 )
 import llm.skill_context as skill_context_module
+from services.skill_manifest_service import (
+    SkillManifestValidationError,
+    load_skill_document,
+)
 from services.analysis_service import (
     analyze_uploaded_files,
     build_advisory_summary,
@@ -79,6 +83,33 @@ def _run_skills() -> int:
         mode_text = "override" if status.mode == "override" else "new"
         state_text = "detected" if status.active else "ignored"
         print(f"{status.name}: {mode_text} ({state_text})")
+    return 0
+
+
+def _run_skill_lint(path_arg: str) -> int:
+    path = Path(path_arg)
+    project_root = Path.cwd().resolve()
+    try:
+        document = load_skill_document(
+            path,
+            strict_manifest=True,
+            allow_legacy_name=False,
+            project_root=project_root,
+        )
+    except FileNotFoundError:
+        sys.stderr.write(f"Skill file not found: {path}\n")
+        return 2
+    except SkillManifestValidationError as exc:
+        sys.stderr.write(f"{path}: invalid skill manifest v1\n")
+        for issue in exc.issues:
+            sys.stderr.write(f"- {issue}\n")
+        return 2
+
+    assert document.manifest is not None
+    print(
+        f"{path}: valid skill manifest v1 "
+        f"({document.manifest.name}@{document.manifest.version})"
+    )
     return 0
 
 
@@ -199,6 +230,14 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("skills", help="List built-in and custom AI skill statuses.")
+    skill_parser = subparsers.add_parser(
+        "skill", help="Authoring and package actions for individual skills."
+    )
+    skill_subparsers = skill_parser.add_subparsers(dest="skill_command")
+    skill_lint_parser = skill_subparsers.add_parser(
+        "lint", help="Validate a skill markdown file against manifest v1."
+    )
+    skill_lint_parser.add_argument("path", help="Skill markdown path to validate.")
 
     analyze_parser = subparsers.add_parser(
         "analyze", help="Run headless advisory analysis for one or more artifacts."
@@ -267,6 +306,8 @@ def main() -> None:
 
     if args.command == "skills":
         raise SystemExit(_run_skills())
+    if args.command == "skill" and args.skill_command == "lint":
+        raise SystemExit(_run_skill_lint(args.path))
     if args.command == "analyze":
         raise SystemExit(_run_analyze(args.paths))
     if args.command == "github" and args.github_command == "init":

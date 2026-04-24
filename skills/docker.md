@@ -1,9 +1,13 @@
 ---
-skill: docker
-version: 1.0
+name: docker
+version: 1.0.0
+author: DeployWhisper
+license: MIT
 triggers: [Dockerfile, dockerfile, .dockerfile, docker-compose.yml, docker-compose.yaml, compose.yml, compose.yaml]
 token_budget: 1200
+tags: [docker, containers, supply-chain]
 description: Container image and build risk knowledge covering Dockerfile security patterns, image provenance, multi-stage build risks, compose file analysis, and runtime container security.
+test_suite_path: tests/skill-tests/docker
 ---
 
 ## Dockerfile risk patterns

@@ -69,6 +69,136 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("terraform: override (detected)", output.getvalue())
 
+    def test_skill_lint_command_accepts_valid_manifest_v1(self) -> None:
+        skill_path = Path(self.tempdir.name) / "terraform.md"
+        (Path(self.tempdir.name) / "tests/skill-tests/terraform").mkdir(
+            parents=True, exist_ok=True
+        )
+        skill_path.write_text(
+            "---\n"
+            "name: terraform\n"
+            "version: 1.0.0\n"
+            "author: DeployWhisper\n"
+            "license: MIT\n"
+            "triggers: [.tf]\n"
+            "token_budget: 1500\n"
+            "tags: [terraform, iac]\n"
+            "description: Terraform review guidance.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "---\n"
+            "# Terraform\nGuidance.\n",
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "skill", "lint", str(skill_path)]),
+            patch("pathlib.Path.cwd", return_value=Path(self.tempdir.name)),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("valid skill manifest v1", output.getvalue())
+
+    def test_skill_lint_command_rejects_missing_required_manifest_fields(self) -> None:
+        skill_path = Path(self.tempdir.name) / "terraform.md"
+        skill_path.write_text(
+            "---\n"
+            "name: terraform\n"
+            "version: 1.0.0\n"
+            "author: DeployWhisper\n"
+            "license: MIT\n"
+            "triggers: [.tf]\n"
+            "token_budget: 1500\n"
+            "tags: [terraform, iac]\n"
+            "description: Terraform review guidance.\n"
+            "---\n"
+            "# Terraform\nGuidance.\n",
+            encoding="utf-8",
+        )
+        stderr = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "skill", "lint", str(skill_path)]),
+            patch("pathlib.Path.cwd", return_value=Path(self.tempdir.name)),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("invalid skill manifest v1", stderr.getvalue())
+        self.assertIn("test_suite_path", stderr.getvalue())
+
+    def test_skill_lint_command_rejects_nonexistent_test_suite_path(self) -> None:
+        skill_path = Path(self.tempdir.name) / "terraform.md"
+        skill_path.write_text(
+            "---\n"
+            "name: terraform\n"
+            "version: 1.0.0\n"
+            "author: DeployWhisper\n"
+            "license: MIT\n"
+            "triggers: [.tf]\n"
+            "token_budget: 1500\n"
+            "tags: [terraform, iac]\n"
+            "description: Terraform review guidance.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "---\n"
+            "# Terraform\nGuidance.\n",
+            encoding="utf-8",
+        )
+        stderr = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "skill", "lint", str(skill_path)]),
+            patch("pathlib.Path.cwd", return_value=Path(self.tempdir.name)),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("path does not exist", stderr.getvalue())
+
+    def test_skill_lint_command_uses_current_working_directory_as_project_root(
+        self,
+    ) -> None:
+        repo_root = Path(self.tempdir.name) / "skill-repo"
+        skill_dir = repo_root / "skills"
+        suite_dir = repo_root / "tests/skill-tests/terraform"
+        suite_dir.mkdir(parents=True, exist_ok=True)
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        skill_path = skill_dir / "terraform.md"
+        skill_path.write_text(
+            "---\n"
+            "name: terraform\n"
+            "version: 1.0.0\n"
+            "author: DeployWhisper\n"
+            "license: MIT\n"
+            "triggers: [.tf]\n"
+            "token_budget: 1500\n"
+            "tags: [terraform, iac]\n"
+            "description: Terraform review guidance.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "---\n"
+            "# Terraform\nGuidance.\n",
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "skill", "lint", str(skill_path)]),
+            patch("pathlib.Path.cwd", return_value=repo_root),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("valid skill manifest v1", output.getvalue())
+
     def test_analyze_command_runs_shared_analysis_and_prints_structured_output(
         self,
     ) -> None:

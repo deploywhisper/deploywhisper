@@ -1,10 +1,14 @@
 ---
-skill: ansible
-version: 1.0
+name: ansible
+version: 1.0.0
+author: DeployWhisper
+license: MIT
 triggers: [.yml, .yaml]
-trigger_content_patterns: [hosts, tasks, roles, become, ansible, playbook, handlers]
 token_budget: 1600
+tags: [ansible, automation, iac]
 description: Deep Ansible operational knowledge covering dangerous module classification, idempotency violations, inventory targeting risks, privilege escalation patterns, and handler ordering pitfalls.
+test_suite_path: tests/skill-tests/ansible
+trigger_content_patterns: [hosts, tasks, roles, become, ansible, playbook, handlers]
 ---
 
 ## Dangerous module classification

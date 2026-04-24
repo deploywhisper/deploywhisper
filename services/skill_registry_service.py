@@ -8,9 +8,8 @@ import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-import yaml
-from yaml import YAMLError
 
+from services.skill_manifest_service import REPO_ROOT, load_skill_document
 
 SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
 CUSTOM_DIR = SKILLS_DIR / "custom"
@@ -31,6 +30,9 @@ class SkillRegistryEntry(BaseModel):
     tags: list[str] = Field(default_factory=list, description="Searchable skill tags")
     token_budget: int | None = Field(
         default=None, description="Suggested token budget for the skill"
+    )
+    test_suite_path: str | None = Field(
+        default=None, description="Repository path to the skill validation suite"
     )
     triggers: list[str] = Field(
         default_factory=list, description="Filename or extension triggers"
@@ -72,30 +74,11 @@ class _SkillRecord(BaseModel):
     tool: str
     tags: list[str] = Field(default_factory=list)
     token_budget: int | None = None
+    test_suite_path: str | None = None
     triggers: list[str] = Field(default_factory=list)
     trigger_content_patterns: list[str] = Field(default_factory=list)
     updated_at: str
     updated_at_epoch: float
-
-
-class _ParsedSkillFile(BaseModel):
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    content: str = Field(..., description="Markdown body without frontmatter")
-
-
-def _split_frontmatter(content: str) -> _ParsedSkillFile | None:
-    stripped = content.strip()
-    if stripped.startswith("---"):
-        parts = stripped.split("---", 2)
-        if len(parts) == 3:
-            try:
-                frontmatter = yaml.safe_load(parts[1]) or {}
-            except YAMLError:
-                return None
-            if not isinstance(frontmatter, dict):
-                frontmatter = {}
-            return _ParsedSkillFile(metadata=frontmatter, content=parts[2].strip())
-    return _ParsedSkillFile(metadata={}, content=stripped)
 
 
 def _iter_skill_files(directory: Path) -> list[Path]:
@@ -114,63 +97,19 @@ def _normalize_skill_id(raw_value: str | None, path: Path) -> str:
     return normalized or path.stem.strip().lower()
 
 
-def _normalize_string_list(raw_value: Any) -> list[str]:
-    if raw_value is None:
-        return []
-    items = raw_value if isinstance(raw_value, list) else [raw_value]
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for item in items:
-        value = str(item).strip()
-        if not value:
-            continue
-        key = value.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        normalized.append(value)
-    return normalized
-
-
-def _normalize_token_budget(raw_value: Any) -> int | None:
-    if raw_value in {None, ""}:
-        return None
-    try:
-        return int(raw_value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _extract_description(metadata: dict[str, Any], content: str) -> str:
-    description = str(metadata.get("description") or "").strip()
-    if description:
-        return description
-    for line in content.splitlines():
-        candidate = line.strip()
-        if not candidate or candidate.startswith("#"):
-            continue
-        return candidate
-    return "No description provided."
-
-
 def _default_author(source: SkillSource) -> str:
     if source == "built-in":
         return "DeployWhisper"
     return "Local custom skill"
 
 
-def _default_tool(metadata: dict[str, Any], skill_id: str) -> str:
-    for key in ("tool_type", "tool"):
-        value = str(metadata.get(key) or "").strip().lower()
-        if value:
-            return value
+def _default_tool(tool: str | None, skill_id: str) -> str:
+    if tool:
+        return tool
     return skill_id
 
 
-def _display_name(metadata: dict[str, Any], skill_id: str) -> str:
-    explicit = str(metadata.get("name") or "").strip()
-    if explicit:
-        return explicit
+def _display_name(skill_id: str) -> str:
     return skill_id.replace("-", " ").title()
 
 
@@ -215,6 +154,7 @@ def _record_to_entry(
         "tool": record.tool,
         "tags": list(record.tags),
         "token_budget": record.token_budget,
+        "test_suite_path": record.test_suite_path,
         "triggers": list(record.triggers),
         "trigger_content_patterns": list(record.trigger_content_patterns),
         "updated_at": record.updated_at,
@@ -226,33 +166,37 @@ def _record_to_entry(
 
 
 def _load_skill_record(path: Path, *, source: SkillSource) -> _SkillRecord | None:
-    raw_content = path.read_text(encoding="utf-8")
-    parsed = _split_frontmatter(raw_content)
-    if parsed is None or not parsed.content:
+    try:
+        parsed = load_skill_document(
+            path,
+            strict_manifest=True,
+            allow_legacy_name=False,
+            project_root=REPO_ROOT,
+        )
+    except ValueError:
+        return None
+    if parsed.manifest is None:
         return None
 
     skill_id = _normalize_skill_id(
-        parsed.metadata.get("skill") or parsed.metadata.get("name"),
+        parsed.manifest.name,
         path,
     )
     updated_at, updated_epoch = _updated_at(path)
     return _SkillRecord(
         id=skill_id,
-        name=_display_name(parsed.metadata, skill_id),
-        version=str(parsed.metadata.get("version") or "1.0"),
+        name=_display_name(skill_id),
+        version=parsed.manifest.version,
         source=source,
-        author=str(parsed.metadata.get("author") or _default_author(source)),
-        license=str(parsed.metadata.get("license")).strip() or None
-        if parsed.metadata.get("license") is not None
-        else None,
-        description=_extract_description(parsed.metadata, parsed.content),
-        tool=_default_tool(parsed.metadata, skill_id),
-        tags=_normalize_string_list(parsed.metadata.get("tags")),
-        token_budget=_normalize_token_budget(parsed.metadata.get("token_budget")),
-        triggers=_normalize_string_list(parsed.metadata.get("triggers")),
-        trigger_content_patterns=_normalize_string_list(
-            parsed.metadata.get("trigger_content_patterns")
-        ),
+        author=parsed.manifest.author or _default_author(source),
+        license=parsed.manifest.license or None,
+        description=parsed.manifest.description,
+        tool=_default_tool(parsed.manifest.tool, skill_id),
+        tags=list(parsed.manifest.tags),
+        token_budget=parsed.manifest.token_budget,
+        test_suite_path=parsed.manifest.test_suite_path,
+        triggers=list(parsed.manifest.triggers),
+        trigger_content_patterns=list(parsed.manifest.trigger_content_patterns),
         updated_at=updated_at,
         updated_at_epoch=updated_epoch,
     )

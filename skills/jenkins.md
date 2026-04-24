@@ -1,10 +1,14 @@
 ---
-skill: jenkins
-version: 1.0
+name: jenkins
+version: 1.0.0
+author: DeployWhisper
+license: MIT
 triggers: [Jenkinsfile, .jenkinsfile, jenkins.groovy]
-trigger_content_patterns: [pipeline, stage, agent, steps, post, input, parallel]
 token_budget: 1400
+tags: [jenkins, ci-cd, pipelines]
 description: Deep Jenkins pipeline safety knowledge covering approval gate analysis, credential exposure patterns, agent security, deployment stage risks, and shared library vulnerabilities.
+test_suite_path: tests/skill-tests/jenkins
+trigger_content_patterns: [pipeline, stage, agent, steps, post, input, parallel]
 ---
 
 ## Approval gate analysis

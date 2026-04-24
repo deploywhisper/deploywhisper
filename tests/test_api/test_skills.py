@@ -41,12 +41,14 @@ class SkillsApiTests(unittest.TestCase):
     def test_list_skills_returns_paginated_filtered_metadata(self) -> None:
         (self.skills_dir / "terraform.md").write_text(
             "---\n"
-            "skill: terraform\n"
+            "name: terraform\n"
             "version: 1.0.0\n"
             "author: DeployWhisper\n"
-            "tool_type: terraform\n"
+            "license: MIT\n"
             "tags: [iac, security]\n"
             "description: Terraform registry skill.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "token_budget: 1200\n"
             "triggers: [.tf]\n"
             "---\n"
             "# Terraform\nDetails\n",
@@ -54,12 +56,15 @@ class SkillsApiTests(unittest.TestCase):
         )
         (self.skills_dir / "kubernetes.md").write_text(
             "---\n"
-            "skill: kubernetes\n"
+            "name: kubernetes\n"
             "version: 2.0.0\n"
             "author: Platform Team\n"
-            "tool_type: kubernetes\n"
+            "license: MIT\n"
             "tags: [cluster]\n"
             "description: Kubernetes rollout checks.\n"
+            "test_suite_path: tests/skill-tests/kubernetes\n"
+            "token_budget: 900\n"
+            "triggers: [.yaml]\n"
             "---\n"
             "# Kubernetes\nDetails\n",
             encoding="utf-8",
@@ -93,29 +98,40 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["total_count"], 1)
         self.assertEqual(payload["meta"]["filters"]["tool"], "terraform")
         self.assertEqual(payload["data"][0]["id"], "terraform")
+        self.assertEqual(payload["data"][0]["name"], "Terraform")
         self.assertEqual(payload["data"][0]["tool"], "terraform")
+        self.assertEqual(
+            payload["data"][0]["test_suite_path"], "tests/skill-tests/terraform"
+        )
         self.assertEqual(payload["data"][0]["triggers"], [".tf"])
 
     def test_get_skill_and_versions_return_effective_skill_and_history(self) -> None:
         (self.skills_dir / "terraform.md").write_text(
             "---\n"
-            "skill: terraform\n"
+            "name: terraform\n"
             "version: 1.0.0\n"
             "author: DeployWhisper\n"
-            "tool_type: terraform\n"
+            "license: MIT\n"
             "description: Built-in terraform checks.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "token_budget: 1200\n"
+            "triggers: [.tf]\n"
+            "tags: [iac]\n"
             "---\n"
             "# Terraform\nBuilt-in guidance.\n",
             encoding="utf-8",
         )
         (self.custom_dir / "terraform.md").write_text(
             "---\n"
-            "skill: terraform\n"
+            "name: terraform\n"
             "version: 1.3.0\n"
             "author: Team Ops\n"
-            "tool_type: terraform\n"
+            "license: Proprietary\n"
             "tags: [private]\n"
             "description: Team override.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "token_budget: 1200\n"
+            "triggers: [.tf]\n"
             "---\n"
             "# Terraform\nCustom guidance.\n",
             encoding="utf-8",
@@ -137,6 +153,7 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(detail_response.status_code, 200)
         detail_payload = detail_response.json()
         self.assertEqual(detail_payload["data"]["source"], "built-in")
+        self.assertEqual(detail_payload["data"]["name"], "Terraform")
         self.assertEqual(detail_payload["data"]["available_versions"], 1)
         self.assertEqual(detail_payload["meta"]["id"], "terraform")
 
@@ -150,22 +167,30 @@ class SkillsApiTests(unittest.TestCase):
     def test_registry_api_ignores_local_custom_cache_entries(self) -> None:
         (self.skills_dir / "terraform.md").write_text(
             "---\n"
-            "skill: terraform\n"
+            "name: terraform\n"
             "version: 1.0.0\n"
             "author: DeployWhisper\n"
-            "tool_type: terraform\n"
+            "license: MIT\n"
             "description: Built-in terraform checks.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "token_budget: 1200\n"
+            "triggers: [.tf]\n"
+            "tags: [iac]\n"
             "---\n"
             "# Terraform\nBuilt-in guidance.\n",
             encoding="utf-8",
         )
         (self.custom_dir / "terraform.md").write_text(
             "---\n"
-            "skill: terraform\n"
+            "name: terraform\n"
             "version: 9.9.9\n"
             "author: Team Ops\n"
-            "tool_type: terraform\n"
+            "license: Proprietary\n"
             "description: Local install cache override.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "token_budget: 1200\n"
+            "triggers: [.tf]\n"
+            "tags: [private]\n"
             "---\n"
             "# Terraform\nCustom guidance.\n",
             encoding="utf-8",
@@ -226,6 +251,16 @@ class SkillsApiTests(unittest.TestCase):
         self.assertIn("/api/v1/skills", payload["paths"])
         self.assertIn("/api/v1/skills/{skill_id}", payload["paths"])
         self.assertIn("/api/v1/skills/{skill_id}/versions", payload["paths"])
+
+    def test_schema_route_publishes_skill_manifest_v1(self) -> None:
+        response = self.client.get("/schemas/skill-manifest-v1.json")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["title"], "SkillManifestV1")
+        self.assertEqual(payload["$id"], "/schemas/skill-manifest-v1.json")
+        self.assertIn("name", payload["required"])
+        self.assertIn("test_suite_path", payload["properties"])
 
 
 if __name__ == "__main__":

@@ -23,12 +23,14 @@ class SkillRegistryServiceTests(unittest.TestCase):
             custom_dir.mkdir(parents=True, exist_ok=True)
             (skills_dir / "terraform.md").write_text(
                 "---\n"
-                "skill: terraform\n"
+                "name: terraform\n"
                 "version: 1.0.0\n"
                 "author: DeployWhisper\n"
-                "tool_type: terraform\n"
+                "license: MIT\n"
                 "tags: [iac, security]\n"
                 "description: Terraform registry skill.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "---\n"
                 "# Terraform\nDetails\n",
@@ -36,12 +38,15 @@ class SkillRegistryServiceTests(unittest.TestCase):
             )
             (skills_dir / "kubernetes.md").write_text(
                 "---\n"
-                "skill: kubernetes\n"
+                "name: kubernetes\n"
                 "version: 2.0.0\n"
                 "author: Platform Team\n"
-                "tool_type: kubernetes\n"
+                "license: MIT\n"
                 "tags: [cluster]\n"
                 "description: Kubernetes rollout checks.\n"
+                "test_suite_path: tests/skill-tests/kubernetes\n"
+                "token_budget: 900\n"
+                "triggers: [.yaml]\n"
                 "---\n"
                 "# Kubernetes\nDetails\n",
                 encoding="utf-8",
@@ -70,6 +75,8 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertEqual(page.total_count, 1)
         self.assertEqual(len(page.items), 1)
         self.assertEqual(page.items[0].id, "terraform")
+        self.assertEqual(page.items[0].name, "Terraform")
+        self.assertEqual(page.items[0].test_suite_path, "tests/skill-tests/terraform")
         self.assertEqual(paged.total_count, 2)
         self.assertEqual(len(paged.items), 1)
         self.assertEqual(paged.items[0].id, "terraform")
@@ -82,23 +89,30 @@ class SkillRegistryServiceTests(unittest.TestCase):
             custom_dir.mkdir(parents=True, exist_ok=True)
             (skills_dir / "terraform.md").write_text(
                 "---\n"
-                "skill: terraform\n"
+                "name: terraform\n"
                 "version: 1.0.0\n"
                 "author: DeployWhisper\n"
-                "tool_type: terraform\n"
+                "license: MIT\n"
                 "description: Built-in terraform checks.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 1200\n"
+                "triggers: [.tf]\n"
+                "tags: [iac]\n"
                 "---\n"
                 "# Terraform\nBuilt-in guidance.\n",
                 encoding="utf-8",
             )
             (custom_dir / "terraform.md").write_text(
                 "---\n"
-                "skill: terraform\n"
+                "name: terraform\n"
                 "version: 1.2.0\n"
                 "author: Team Ops\n"
-                "tool_type: terraform\n"
+                "license: Proprietary\n"
                 "tags: [private]\n"
                 "description: Team override.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 1200\n"
+                "triggers: [.tf]\n"
                 "---\n"
                 "# Terraform\nCustom guidance.\n",
                 encoding="utf-8",
@@ -124,6 +138,7 @@ class SkillRegistryServiceTests(unittest.TestCase):
         assert entry is not None
         self.assertEqual(entry.source, "built-in")
         self.assertEqual(entry.version, "1.0.0")
+        self.assertEqual(entry.name, "Terraform")
         self.assertEqual(entry.available_versions, 1)
         self.assertEqual([version.version for version in versions], ["1.0.0"])
         self.assertTrue(versions[0].is_current)
@@ -140,22 +155,30 @@ class SkillRegistryServiceTests(unittest.TestCase):
             custom_dir.mkdir(parents=True, exist_ok=True)
             (skills_dir / "terraform.md").write_text(
                 "---\n"
-                "skill: terraform\n"
+                "name: terraform\n"
                 "version: 1.0.0\n"
                 "author: DeployWhisper\n"
-                "tool_type: terraform\n"
+                "license: MIT\n"
                 "description: Built-in terraform checks.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 1200\n"
+                "triggers: [.tf]\n"
+                "tags: [iac]\n"
                 "---\n"
                 "# Terraform\nBuilt-in guidance.\n",
                 encoding="utf-8",
             )
             (custom_dir / "terraform.md").write_text(
                 "---\n"
-                "skill: terraform\n"
+                "name: terraform\n"
                 "version: 9.9.9\n"
                 "author: Team Ops\n"
-                "tool_type: terraform\n"
+                "license: Proprietary\n"
                 "description: Local install cache override.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 1200\n"
+                "triggers: [.tf]\n"
+                "tags: [private]\n"
                 "---\n"
                 "# Terraform\nCustom guidance.\n",
                 encoding="utf-8",
@@ -188,10 +211,15 @@ class SkillRegistryServiceTests(unittest.TestCase):
             )
             (skills_dir / "kubernetes.md").write_text(
                 "---\n"
-                "skill: kubernetes\n"
+                "name: kubernetes\n"
                 "version: 1.0.0\n"
-                "tool_type: kubernetes\n"
+                "author: DeployWhisper\n"
+                "license: MIT\n"
                 "description: Healthy skill.\n"
+                "test_suite_path: tests/skill-tests/kubernetes\n"
+                "token_budget: 900\n"
+                "triggers: [.yaml]\n"
+                "tags: [cluster]\n"
                 "---\n"
                 "# Kubernetes\nHealthy guidance.\n",
                 encoding="utf-8",
