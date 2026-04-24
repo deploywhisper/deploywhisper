@@ -244,7 +244,7 @@ jobs:
             test ${PIPESTATUS[0]} -eq 0
           fi
 
-      - name: Run changed skill harnesses
+      - name: Run changed skill lint and harness checks
         env:
           BASE_REF: origin/${{ github.base_ref }}
         run: |
@@ -252,7 +252,7 @@ jobs:
             bash scripts/test-changed-skills.sh 2>&1 | tee changed-skill-harness.log
             test ${PIPESTATUS[0]} -eq 0
           else
-            echo "scripts/test-changed-skills.sh not found — skipping changed skill harness"
+            echo "scripts/test-changed-skills.sh not found — skipping changed skill lint and harness checks"
           fi
 
       - name: Upload changed-test logs

@@ -1,0 +1,122 @@
+name: Publish Skills Registry
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "skills/*.md"
+      - "tests/skill-tests/**"
+      - "docs/skills/authoring-guide.md"
+      - "docs/contributing/skills.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: "Publish changed skills to registry"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify registry publish secrets are configured
+        id: config
+        env:
+          REGISTRY_REPO: ${{ secrets.DEPLOYWHISPER_SKILLS_REGISTRY_REPO }}
+          REGISTRY_TOKEN: ${{ secrets.DEPLOYWHISPER_SKILLS_REGISTRY_PUSH_TOKEN }}
+        run: |
+          if [ -z "$REGISTRY_REPO" ] || [ -z "$REGISTRY_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Skills registry publish secrets are not configured; skipping publish."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect changed skill ids
+        if: steps.config.outputs.configured == 'true'
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            python - <<'PY' >> "$GITHUB_OUTPUT"
+from scripts.publish_skills_registry import iter_built_in_skill_ids
+print("skill_ids=" + ",".join(iter_built_in_skill_ids()))
+PY
+            exit 0
+          fi
+
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+from pathlib import Path
+import subprocess
+
+before = "${{ github.event.before }}"
+after = "${{ github.sha }}"
+diff = subprocess.run(
+    ["git", "diff", "--name-only", f"{before}...{after}"],
+    check=True,
+    capture_output=True,
+    text=True,
+).stdout.splitlines()
+skills: set[str] = set()
+for path in diff:
+    normalized = path.strip()
+    if normalized.startswith("skills/") and normalized.endswith(".md"):
+        skills.add(Path(normalized).stem.lower())
+    elif normalized.startswith("tests/skill-tests/"):
+        parts = Path(normalized).parts
+        if len(parts) >= 3:
+            skills.add(parts[2].lower())
+print("skill_ids=" + ",".join(sorted(skills)))
+PY
+
+      - name: Stop when no skill files changed
+        if: steps.config.outputs.configured == 'true' && steps.changed.outputs.skill_ids == ''
+        run: echo "No skill changes detected for publish."
+
+      - name: Checkout registry repository
+        if: steps.config.outputs.configured == 'true' && steps.changed.outputs.skill_ids != ''
+        env:
+          REGISTRY_REPO: ${{ secrets.DEPLOYWHISPER_SKILLS_REGISTRY_REPO }}
+          REGISTRY_TOKEN: ${{ secrets.DEPLOYWHISPER_SKILLS_REGISTRY_PUSH_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${REGISTRY_TOKEN}@github.com/${REGISTRY_REPO}.git" /tmp/skills-registry
+
+      - name: Sync changed skills into registry checkout
+        if: steps.config.outputs.configured == 'true' && steps.changed.outputs.skill_ids != ''
+        env:
+          SKILL_IDS: ${{ steps.changed.outputs.skill_ids }}
+        run: |
+          python scripts/publish_skills_registry.py \
+            --target-repo /tmp/skills-registry \
+            ${SKILL_IDS//,/ }
+
+      - name: Commit and push registry updates
+        if: steps.config.outputs.configured == 'true' && steps.changed.outputs.skill_ids != ''
+        working-directory: /tmp/skills-registry
+        run: |
+          if git diff --quiet; then
+            echo "No registry changes to publish."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Publish skills from deploywhisper"
+          git push
