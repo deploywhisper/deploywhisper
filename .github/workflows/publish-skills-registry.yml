@@ -19,6 +19,8 @@ jobs:
     name: "Publish changed skills to registry"
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      REGISTRY_REPO: deploywhisper/skills-registry
     steps:
       - name: Checkout source repository
         uses: actions/checkout@v5
@@ -40,12 +42,11 @@ jobs:
       - name: Verify registry publish secrets are configured
         id: config
         env:
-          REGISTRY_REPO: ${{ secrets.DEPLOYWHISPER_SKILLS_REGISTRY_REPO }}
           REGISTRY_TOKEN: ${{ secrets.DEPLOYWHISPER_SKILLS_REGISTRY_PUSH_TOKEN }}
         run: |
-          if [ -z "$REGISTRY_REPO" ] || [ -z "$REGISTRY_TOKEN" ]; then
+          if [ -z "$REGISTRY_TOKEN" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Skills registry publish secrets are not configured; skipping publish."
+            echo "Skills registry push token is not configured; skipping publish."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
@@ -93,7 +94,6 @@ PY
       - name: Checkout registry repository
         if: steps.config.outputs.configured == 'true' && steps.changed.outputs.skill_ids != ''
         env:
-          REGISTRY_REPO: ${{ secrets.DEPLOYWHISPER_SKILLS_REGISTRY_REPO }}
           REGISTRY_TOKEN: ${{ secrets.DEPLOYWHISPER_SKILLS_REGISTRY_PUSH_TOKEN }}
         run: |
           git clone "https://x-access-token:${REGISTRY_TOKEN}@github.com/${REGISTRY_REPO}.git" /tmp/skills-registry
