@@ -619,6 +619,72 @@ class AnalysisShareConfigResponse(BaseModel):
     meta: ResourceMetaPayload
 
 
+SkillRegistrySource = Literal["built-in", "custom-override", "custom-new"]
+
+
+class SkillRegistryData(BaseModel):
+    id: str = Field(..., description="Stable skill identifier")
+    name: str = Field(..., description="Human-readable skill name")
+    version: str = Field(..., description="Current effective version")
+    source: SkillRegistrySource = Field(
+        ..., description="Where the skill definition currently resolves from"
+    )
+    author: str = Field(..., description="Skill author or owner label")
+    license: str | None = Field(default=None, description="Declared skill license")
+    description: str = Field(..., description="Skill summary")
+    tool: str = Field(..., description="Primary tool family for the skill")
+    tags: list[str] = Field(default_factory=list, description="Searchable skill tags")
+    token_budget: int | None = Field(
+        default=None, description="Suggested token budget for the skill"
+    )
+    triggers: list[str] = Field(
+        default_factory=list, description="Filename or extension triggers"
+    )
+    trigger_content_patterns: list[str] = Field(
+        default_factory=list, description="Content markers used for matching"
+    )
+    updated_at: str = Field(..., description="Last local update timestamp")
+    available_versions: int = Field(
+        ..., description="Number of versions discoverable for this skill id"
+    )
+
+
+class SkillRegistryVersionData(SkillRegistryData):
+    is_current: bool = Field(
+        ..., description="Whether this version is the current effective version"
+    )
+
+
+class SkillRegistryListMetaPayload(MetaPayload):
+    count: int = Field(..., description="Count of returned items")
+    total_count: int = Field(..., description="Total number of matching skills")
+    page: int = Field(..., description="Current results page")
+    page_size: int = Field(..., description="Current results page size")
+    filters: dict[str, str] = Field(
+        default_factory=dict,
+        description="Filters applied to the current registry query",
+    )
+
+
+class SkillRegistryResourceMetaPayload(MetaPayload):
+    id: str = Field(..., description="Stable skill identifier")
+
+
+class SkillRegistryListResponse(BaseModel):
+    data: list[SkillRegistryData]
+    meta: SkillRegistryListMetaPayload
+
+
+class SkillRegistryDetailResponse(BaseModel):
+    data: SkillRegistryData
+    meta: SkillRegistryResourceMetaPayload
+
+
+class SkillRegistryVersionsResponse(BaseModel):
+    data: list[SkillRegistryVersionData]
+    meta: SkillRegistryResourceMetaPayload
+
+
 PersistedReportData.model_rebuild()
 
 
