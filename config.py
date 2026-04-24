@@ -54,6 +54,10 @@ class Settings:
         or os.getenv("PUBLIC_APP_URL")
         or None
     )
+    public_skills_registry_url: str = os.getenv(
+        "DEPLOYWHISPER_PUBLIC_SKILLS_REGISTRY_URL",
+        "https://deploywhisper.github.io/skills-registry/",
+    )
     github_app_api_base_url: str = os.getenv(
         "DEPLOYWHISPER_GITHUB_APP_API_BASE_URL",
         "https://api.github.com",

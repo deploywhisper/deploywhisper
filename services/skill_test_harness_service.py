@@ -165,7 +165,7 @@ def _load_active_skill(skill_id: str) -> tuple[ActiveSkill, str, Path] | None:
         path,
         strict_manifest=True,
         allow_legacy_name=False,
-        project_root=REPO_ROOT,
+        project_root=None,
     )
     if document.manifest is None:
         return None

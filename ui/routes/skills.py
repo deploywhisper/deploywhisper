@@ -9,6 +9,7 @@ from fastapi import Request
 from nicegui import ui
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from config import settings
 from services.skill_registry_service import (
     SkillRegistryEntry,
     SkillRegistrySort,
@@ -368,6 +369,13 @@ def _navigate_with_filters(
     ui.navigate.to(f"/skills{query}")
 
 
+def _pass_rate_label(skill: SkillRegistryEntry) -> str:
+    summary = skill.test_results
+    if summary is None or summary.status == "missing":
+        return "n/a"
+    return f"{round(summary.pass_rate * 100):.0f}%"
+
+
 def _render_editorial_badges(skill: SkillRegistryEntry) -> None:
     badges: list[tuple[str, str]] = []
     if skill.is_official:
@@ -404,14 +412,7 @@ def _render_skill_row(skill: SkillRegistryEntry) -> None:
             with ui.element("div").classes("dw-skill-metrics"):
                 for value, label in (
                     (str(skill.install_count), "Installs"),
-                    (
-                        (
-                            f"{round(skill.test_results.pass_rate * 100):.0f}%"
-                            if skill.test_results
-                            else "n/a"
-                        ),
-                        "Pass rate",
-                    ),
+                    (_pass_rate_label(skill), "Pass rate"),
                     (str(skill.active_issue_count), "Active issues"),
                 ):
                     with ui.column().classes("gap-0"):
@@ -530,6 +531,9 @@ def skills_browser_page(request: Request) -> None:
                     "the same metadata contract the browser and CLI consume."
                 ),
             )
+            ui.link("Open public registry", settings.public_skills_registry_url).props(
+                'target="_blank" rel="noreferrer"'
+            ).classes("dw-link mt-4 inline-flex")
 
         with ui.column().classes("dw-skills-catalog"):
             if not catalog:
@@ -572,14 +576,7 @@ def skill_detail_page(skill_id: str) -> None:
                             (str(skill.install_count), "Installs"),
                             (str(skill.active_issue_count), "Active issues"),
                             (_format_updated_at(skill.updated_at), "Last updated"),
-                            (
-                                (
-                                    f"{round(skill.test_results.pass_rate * 100):.0f}%"
-                                    if skill.test_results
-                                    else "n/a"
-                                ),
-                                "Pass rate",
-                            ),
+                            (_pass_rate_label(skill), "Pass rate"),
                         ):
                             with ui.element("div").classes("dw-skills-stat"):
                                 ui.label(value).classes("dw-skills-stat-value")

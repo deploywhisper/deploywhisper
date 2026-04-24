@@ -417,6 +417,45 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertEqual(featured.author, "Community Builder")
         self.assertEqual(featured.maintainer, "Community Curators")
 
+    def test_registry_page_keeps_bundled_skills_visible_when_runtime_suites_are_missing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+            custom_dir.mkdir(parents=True, exist_ok=True)
+            (skills_dir / "terraform.md").write_text(
+                "---\n"
+                "name: terraform\n"
+                "version: 1.0.0\n"
+                "author: DeployWhisper\n"
+                "license: MIT\n"
+                "description: Built-in terraform checks.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 1200\n"
+                "triggers: [.tf]\n"
+                "tags: [iac]\n"
+                "---\n"
+                "# Terraform\nBuilt-in guidance.\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("services.skill_registry_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_registry_service.CUSTOM_DIR", custom_dir),
+                patch("services.skill_test_harness_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_test_harness_service.REPO_ROOT", repo_root),
+            ):
+                page = fetch_skill_registry_page()
+
+        self.assertEqual(page.total_count, 1)
+        self.assertEqual(page.items[0].id, "terraform")
+        assert page.items[0].test_results is not None
+        self.assertEqual(page.items[0].test_results.status, "missing")
+        self.assertEqual(page.items[0].test_results.total_scenarios, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
