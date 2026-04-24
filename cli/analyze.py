@@ -22,6 +22,13 @@ from services.skill_manifest_service import (
     SkillManifestValidationError,
     load_skill_document,
 )
+from services.skill_installer_service import (
+    SkillInstallerError,
+    install_skill,
+    list_installed_skills,
+    remove_skill,
+    update_skill,
+)
 from services.skill_test_harness_service import run_skill_test_suites
 from services.skill_test_harness_service import iter_built_in_skill_ids
 from services.analysis_service import (
@@ -159,6 +166,64 @@ def _run_skill_test(skill_ids: list[str], *, emit_json: bool = False) -> int:
     )
 
 
+def _run_skill_install(skill_id: str) -> int:
+    try:
+        result = install_skill(skill_id)
+    except SkillInstallerError as exc:
+        sys.stderr.write(f"{exc.message}\n")
+        return 2
+    print(
+        f"Installed {result.skill_id}@{result.version} "
+        f"to {result.destination} [{result.mode}]"
+    )
+    return 0
+
+
+def _run_skill_list() -> int:
+    installed = list_installed_skills()
+    if not installed:
+        print("No installed custom skills found.")
+        return 0
+    for item in installed:
+        version_text = item.version or "unknown"
+        state_text = "active" if item.active else "ignored"
+        line = f"{item.id}@{version_text} [{item.mode}, {state_text}]"
+        if item.warning:
+            line += f" - {item.warning}"
+        print(line)
+    return 0
+
+
+def _run_skill_update(skill_id: str) -> int:
+    try:
+        result = update_skill(skill_id)
+    except SkillInstallerError as exc:
+        sys.stderr.write(f"{exc.message}\n")
+        return 2
+    if result.action == "unchanged":
+        print(
+            f"{result.skill_id} is already up to date "
+            f"at {result.version} ({result.destination})"
+        )
+        return 0
+    print(
+        f"Updated {result.skill_id} "
+        f"{result.previous_version or 'unknown'} -> {result.version} "
+        f"at {result.destination}"
+    )
+    return 0
+
+
+def _run_skill_remove(skill_id: str) -> int:
+    try:
+        result = remove_skill(skill_id)
+    except SkillInstallerError as exc:
+        sys.stderr.write(f"{exc.message}\n")
+        return 2
+    print(f"Removed {result.skill_id} from {result.destination}")
+    return 0
+
+
 def _run_analyze(paths: list[str]) -> int:
     if not paths:
         _emit_json(
@@ -280,6 +345,13 @@ def build_parser() -> argparse.ArgumentParser:
         "skill", help="Authoring and package actions for individual skills."
     )
     skill_subparsers = skill_parser.add_subparsers(dest="skill_command")
+    skill_install_parser = skill_subparsers.add_parser(
+        "install", help="Fetch and install a registry skill into skills/custom."
+    )
+    skill_install_parser.add_argument("skill_id", help="Skill id to install.")
+    skill_subparsers.add_parser(
+        "list", help="List installed custom skills from skills/custom."
+    )
     skill_lint_parser = skill_subparsers.add_parser(
         "lint", help="Validate a skill markdown file against manifest v1."
     )
@@ -297,6 +369,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit machine-readable JSON instead of human-readable output.",
     )
+    skill_update_parser = skill_subparsers.add_parser(
+        "update", help="Refresh an installed skill to the latest registry version."
+    )
+    skill_update_parser.add_argument("skill_id", help="Installed skill id to update.")
+    skill_remove_parser = skill_subparsers.add_parser(
+        "remove", help="Uninstall a custom skill from skills/custom."
+    )
+    skill_remove_parser.add_argument("skill_id", help="Installed skill id to remove.")
 
     analyze_parser = subparsers.add_parser(
         "analyze", help="Run headless advisory analysis for one or more artifacts."
@@ -365,10 +445,18 @@ def main() -> None:
 
     if args.command == "skills":
         raise SystemExit(_run_skills())
+    if args.command == "skill" and args.skill_command == "install":
+        raise SystemExit(_run_skill_install(args.skill_id))
+    if args.command == "skill" and args.skill_command == "list":
+        raise SystemExit(_run_skill_list())
     if args.command == "skill" and args.skill_command == "lint":
         raise SystemExit(_run_skill_lint(args.path))
     if args.command == "skill" and args.skill_command == "test":
         raise SystemExit(_run_skill_test(args.skill_ids, emit_json=args.json))
+    if args.command == "skill" and args.skill_command == "update":
+        raise SystemExit(_run_skill_update(args.skill_id))
+    if args.command == "skill" and args.skill_command == "remove":
+        raise SystemExit(_run_skill_remove(args.skill_id))
     if args.command == "analyze":
         raise SystemExit(_run_analyze(args.paths))
     if args.command == "github" and args.github_command == "init":

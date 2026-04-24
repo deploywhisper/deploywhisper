@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 import re
 from typing import Any, Literal
@@ -70,6 +71,15 @@ class SkillRegistryPage(BaseModel):
     page_size: int = Field(..., description="Current result page size")
 
 
+class SkillRegistryContent(BaseModel):
+    """Raw markdown payload for an installable registry skill."""
+
+    id: str = Field(..., description="Stable skill identifier")
+    version: str = Field(..., description="Registry version for this skill")
+    content: str = Field(..., description="Raw markdown content with frontmatter")
+    sha256: str = Field(..., description="SHA-256 checksum of the content")
+
+
 class _SkillRecord(BaseModel):
     id: str
     name: str
@@ -87,6 +97,7 @@ class _SkillRecord(BaseModel):
     trigger_content_patterns: list[str] = Field(default_factory=list)
     updated_at: str
     updated_at_epoch: float
+    path: Path
 
 
 def _iter_skill_files(directory: Path) -> list[Path]:
@@ -209,6 +220,7 @@ def _load_skill_record(path: Path, *, source: SkillSource) -> _SkillRecord | Non
         trigger_content_patterns=list(parsed.manifest.trigger_content_patterns),
         updated_at=updated_at,
         updated_at_epoch=updated_epoch,
+        path=path,
     )
 
 
@@ -321,7 +333,7 @@ def fetch_skill_registry_page(
         item
         for item in sorted(current_items, key=lambda current: current.id)
         if _matches_query(
-            _SkillRecord(**item.model_dump(), updated_at_epoch=0),
+            _SkillRecord(**item.model_dump(), updated_at_epoch=0, path=Path(".")),
             tool=tool,
             tag=tag,
             author=author,
@@ -364,3 +376,34 @@ def fetch_skill_registry_versions(skill_id: str) -> list[SkillRegistryVersionEnt
         )
         for record in _sorted_versions(records)
     ]
+
+
+def fetch_skill_registry_content(
+    skill_id: str,
+    *,
+    version: str | None = None,
+) -> SkillRegistryContent | None:
+    """Return raw markdown content for a registry skill version."""
+
+    versions_by_skill = _load_versions_by_skill(include_custom=False)
+    records = versions_by_skill.get(skill_id.strip().lower())
+    if not records:
+        return None
+
+    selected = _current_record(records)
+    if version is not None:
+        normalized_version = version.strip()
+        matching = [
+            record for record in records if record.version == normalized_version
+        ]
+        if not matching:
+            return None
+        selected = _sorted_versions(matching)[0]
+
+    content = selected.path.read_text(encoding="utf-8")
+    return SkillRegistryContent(
+        id=selected.id,
+        version=selected.version,
+        content=content,
+        sha256=sha256(content.encode("utf-8")).hexdigest(),
+    )

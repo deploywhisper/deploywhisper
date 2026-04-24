@@ -7,6 +7,8 @@ from fastapi import APIRouter, Query
 from api.errors import ApiError, ApiRoute
 from api.schemas import (
     ErrorResponse,
+    SkillRegistryContentData,
+    SkillRegistryContentResponse,
     SkillRegistryData,
     SkillRegistryDetailResponse,
     SkillRegistryListMetaPayload,
@@ -19,6 +21,7 @@ from api.schemas import (
 )
 from config import settings
 from services.skill_registry_service import (
+    fetch_skill_registry_content,
     fetch_skill_registry_entry,
     fetch_skill_registry_page,
     fetch_skill_registry_versions,
@@ -140,6 +143,39 @@ def get_skill_versions(skill_id: str) -> SkillRegistryVersionsResponse:
             app=settings.app_name,
             version=settings.app_version,
             id=skill_id.strip().lower(),
+        ),
+    )
+
+
+@router.get(
+    "/{skill_id}/content",
+    response_model=SkillRegistryContentResponse,
+    responses={
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def get_skill_content(
+    skill_id: str,
+    version: str | None = Query(
+        default=None,
+        description="Optional exact version selector for install payload retrieval.",
+    ),
+) -> SkillRegistryContentResponse:
+    skill_content = fetch_skill_registry_content(skill_id, version=version)
+    if skill_content is None:
+        raise ApiError(
+            status_code=404,
+            code="skill_not_found",
+            message="Skill not found.",
+        )
+    return SkillRegistryContentResponse(
+        data=SkillRegistryContentData(**skill_content.model_dump()),
+        meta=SkillRegistryResourceMetaPayload(
+            app=settings.app_name,
+            version=settings.app_version,
+            id=skill_content.id,
         ),
     )
 
