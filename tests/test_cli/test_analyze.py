@@ -23,6 +23,12 @@ from cli.analyze import main
 from importlib import reload
 from integrations.github.init_service import GitHubInitOptions, GitHubInitResult
 from llm.narrator import NarrativeResult
+from services.skill_installer_service import InstalledSkillEntry, SkillInstallResult
+from services.skill_test_harness_service import (
+    SkillTestScenarioResult,
+    SkillTestSuiteResult,
+    SkillTestSummary,
+)
 
 
 class AnalyzeCliTests(unittest.TestCase):
@@ -266,6 +272,151 @@ class AnalyzeCliTests(unittest.TestCase):
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "skill_not_found")
         self.assertEqual(payload["error"]["details"]["skill_ids"], ["missing-skill"])
+
+    def test_skill_test_command_returns_nonzero_for_missing_suite_status(self) -> None:
+        output = io.StringIO()
+        missing_result = SkillTestSuiteResult(
+            skill_id="terraform",
+            version="1.0.0",
+            summary=SkillTestSummary(
+                skill_id="terraform",
+                total_scenarios=0,
+                passed_scenarios=0,
+                failed_scenarios=0,
+                pass_rate=0.0,
+                status="missing",
+                display_text="0/0 scenarios passing",
+                generated_at="2026-04-24T00:00:00Z",
+            ),
+            scenarios=[SkillTestScenarioResult(name="suite-missing", passed=False)],
+        )
+
+        with (
+            patch("cli.analyze.run_skill_test_suites", return_value=[missing_result]),
+            patch("sys.argv", ["deploywhisper", "skill", "test", "terraform"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn("[missing]", output.getvalue())
+
+    def test_skill_install_command_reports_install_location(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "cli.analyze.install_skill",
+                return_value=SkillInstallResult(
+                    action="installed",
+                    skill_id="helm",
+                    version="1.2.0",
+                    previous_version=None,
+                    destination="skills/custom/helm.md",
+                    mode="new",
+                    sha256="abc",
+                    source_url="https://registry.example.com/api/v1/skills/helm/content",
+                ),
+            ),
+            patch("sys.argv", ["deploywhisper", "skill", "install", "helm"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("Installed helm@1.2.0", output.getvalue())
+        self.assertIn("skills/custom/helm.md", output.getvalue())
+
+    def test_skill_list_command_prints_installed_skill_inventory(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "cli.analyze.list_installed_skills",
+                return_value=[
+                    InstalledSkillEntry(
+                        id="helm",
+                        version="1.2.0",
+                        mode="new",
+                        active=True,
+                        path="skills/custom/helm.md",
+                        description="Helm rollout checks.",
+                    ),
+                    InstalledSkillEntry(
+                        id="terraform",
+                        version="2.0.0",
+                        mode="override",
+                        active=False,
+                        path="skills/custom/terraform.md",
+                        warning="invalid frontmatter",
+                    ),
+                ],
+            ),
+            patch("sys.argv", ["deploywhisper", "skill", "list"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("helm@1.2.0 [new, active]", output.getvalue())
+        self.assertIn("terraform@2.0.0 [override, ignored]", output.getvalue())
+
+    def test_skill_update_command_reports_noop_when_latest_version_is_installed(
+        self,
+    ) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "cli.analyze.update_skill",
+                return_value=SkillInstallResult(
+                    action="unchanged",
+                    skill_id="helm",
+                    version="1.2.0",
+                    previous_version="1.2.0",
+                    destination="skills/custom/helm.md",
+                    mode="new",
+                    sha256="abc",
+                    source_url="https://registry.example.com/api/v1/skills/helm/content",
+                ),
+            ),
+            patch("sys.argv", ["deploywhisper", "skill", "update", "helm"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("already up to date", output.getvalue())
+        self.assertIn("1.2.0", output.getvalue())
+
+    def test_skill_remove_command_reports_deleted_custom_skill(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "cli.analyze.remove_skill",
+                return_value=SkillInstallResult(
+                    action="removed",
+                    skill_id="helm",
+                    version=None,
+                    previous_version="1.2.0",
+                    destination="skills/custom/helm.md",
+                    mode="new",
+                ),
+            ),
+            patch("sys.argv", ["deploywhisper", "skill", "remove", "helm"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("Removed helm", output.getvalue())
+        self.assertIn("skills/custom/helm.md", output.getvalue())
 
     def test_analyze_command_runs_shared_analysis_and_prints_structured_output(
         self,

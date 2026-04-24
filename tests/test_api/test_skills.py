@@ -166,6 +166,36 @@ class SkillsApiTests(unittest.TestCase):
         self.assertTrue(versions_payload["data"][0]["is_current"])
         self.assertEqual(versions_payload["data"][0]["source"], "built-in")
 
+    def test_get_skill_content_returns_raw_markdown_payload(self) -> None:
+        content = (
+            "---\n"
+            "name: terraform\n"
+            "version: 1.0.0\n"
+            "author: DeployWhisper\n"
+            "license: MIT\n"
+            "description: Built-in terraform checks.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "token_budget: 1200\n"
+            "triggers: [.tf]\n"
+            "tags: [iac]\n"
+            "---\n"
+            "# Terraform\nBuilt-in guidance.\n"
+        )
+        (self.skills_dir / "terraform.md").write_text(content, encoding="utf-8")
+
+        with (
+            patch("services.skill_registry_service.SKILLS_DIR", self.skills_dir),
+            patch("services.skill_registry_service.CUSTOM_DIR", self.custom_dir),
+        ):
+            response = self.client.get("/api/v1/skills/terraform/content")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["id"], "terraform")
+        self.assertEqual(payload["data"]["version"], "1.0.0")
+        self.assertEqual(payload["data"]["content"], content)
+        self.assertEqual(len(payload["data"]["sha256"]), 64)
+
     def test_registry_api_ignores_local_custom_cache_entries(self) -> None:
         (self.skills_dir / "terraform.md").write_text(
             "---\n"
@@ -252,6 +282,7 @@ class SkillsApiTests(unittest.TestCase):
         payload = response.json()
         self.assertIn("/api/v1/skills", payload["paths"])
         self.assertIn("/api/v1/skills/{skill_id}", payload["paths"])
+        self.assertIn("/api/v1/skills/{skill_id}/content", payload["paths"])
         self.assertIn("/api/v1/skills/{skill_id}/versions", payload["paths"])
 
     def test_schema_route_publishes_skill_manifest_v1(self) -> None:

@@ -695,6 +695,16 @@ class SkillRegistryVersionData(SkillRegistryData):
     )
 
 
+class SkillRegistryContentData(BaseModel):
+    id: str = Field(..., description="Stable skill identifier")
+    version: str = Field(..., description="Registry version for the returned skill")
+    content: str = Field(
+        ...,
+        description="Raw markdown payload including frontmatter for installation.",
+    )
+    sha256: str = Field(..., description="SHA-256 checksum for the payload")
+
+
 class SkillRegistryListMetaPayload(MetaPayload):
     count: int = Field(..., description="Count of returned items")
     total_count: int = Field(..., description="Total number of matching skills")
@@ -722,6 +732,11 @@ class SkillRegistryDetailResponse(BaseModel):
 
 class SkillRegistryVersionsResponse(BaseModel):
     data: list[SkillRegistryVersionData]
+    meta: SkillRegistryResourceMetaPayload
+
+
+class SkillRegistryContentResponse(BaseModel):
+    data: SkillRegistryContentData
     meta: SkillRegistryResourceMetaPayload
 
 

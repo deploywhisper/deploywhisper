@@ -48,6 +48,12 @@ class Settings:
     github_app_private_key_path: str | None = (
         os.getenv("DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY_PATH") or None
     )
+    skills_registry_base_url: str | None = (
+        os.getenv("DEPLOYWHISPER_SKILLS_REGISTRY_URL")
+        or os.getenv("APP_BASE_URL")
+        or os.getenv("PUBLIC_APP_URL")
+        or None
+    )
     github_app_api_base_url: str = os.getenv(
         "DEPLOYWHISPER_GITHUB_APP_API_BASE_URL",
         "https://api.github.com",

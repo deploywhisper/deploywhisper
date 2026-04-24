@@ -11,6 +11,9 @@ contract.
   `tool`, `tag`, `author`, and `search` filters.
 - `GET /api/v1/skills/{id}`
   Returns the current effective record for a single skill id.
+- `GET /api/v1/skills/{id}/content`
+  Returns the raw markdown payload, manifest version, and SHA-256 checksum used
+  by the installer CLI.
 - `GET /api/v1/skills/{id}/versions`
   Returns the discoverable bundled-catalog version history for a single skill
   id.
@@ -22,6 +25,9 @@ contract.
 - Installed or team-local cache files under `skills/custom/*.md` are excluded
   from this API so the browser and installer surfaces do not drift per
   instance.
+- The content endpoint returns the exact markdown payload with frontmatter so
+  installer clients can validate and cache the same artifact the registry
+  publishes.
 - Skills with invalid YAML frontmatter are skipped instead of failing the
   registry endpoints.
 - The API contract is intentionally manifest-shaped so later stories can add the
