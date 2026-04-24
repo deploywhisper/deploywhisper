@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from llm.skill_context import ActiveSkill, build_skill_context_from_active_skills
@@ -97,6 +97,15 @@ class SkillTestSuiteResult(BaseModel):
     scenarios: list[SkillTestScenarioResult] = Field(default_factory=list)
 
 
+class SkillScenarioLoadError(ValueError):
+    """Raised when a scenario definition cannot be loaded safely."""
+
+    def __init__(self, path: Path, message: str) -> None:
+        self.path = path
+        self.message = message
+        super().__init__(message)
+
+
 def _timestamp() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
 
@@ -115,7 +124,7 @@ def _build_summary(
         status = "failing"
     else:
         status = "passing"
-    pass_rate = 1.0 if total == 0 else passed / total
+    pass_rate = 0.0 if total == 0 else passed / total
     return SkillTestSummary(
         skill_id=skill_id,
         total_scenarios=total,
@@ -135,12 +144,17 @@ def _scenario_files(suite_dir: Path) -> list[Path]:
 
 
 def _load_scenarios(suite_dir: Path) -> list[SkillTestScenarioDefinition]:
-    return [
-        SkillTestScenarioDefinition.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
-        for path in _scenario_files(suite_dir)
-    ]
+    scenarios: list[SkillTestScenarioDefinition] = []
+    for path in _scenario_files(suite_dir):
+        try:
+            scenarios.append(
+                SkillTestScenarioDefinition.model_validate_json(
+                    path.read_text(encoding="utf-8")
+                )
+            )
+        except (OSError, ValidationError, ValueError) as exc:
+            raise SkillScenarioLoadError(path, str(exc)) from exc
+    return scenarios
 
 
 def _load_active_skill(skill_id: str) -> tuple[ActiveSkill, str, Path] | None:
@@ -237,9 +251,26 @@ def run_skill_test_suite(skill_id: str) -> SkillTestSuiteResult | None:
     if loaded is None:
         return None
     active_skill, version, suite_dir = loaded
+    try:
+        loaded_scenarios = _load_scenarios(suite_dir)
+    except SkillScenarioLoadError as exc:
+        scenario_results = [
+            SkillTestScenarioResult(
+                name="suite-load-error",
+                description=f"Failed to load {exc.path.name}.",
+                passed=False,
+                failures=[f"{exc.path.name}: {exc.message}"],
+            )
+        ]
+        return SkillTestSuiteResult(
+            skill_id=skill_id,
+            version=version,
+            summary=_build_summary(skill_id, scenario_results),
+            scenarios=scenario_results,
+        )
+
     scenario_results = [
-        _run_scenario(skill_id, active_skill, scenario)
-        for scenario in _load_scenarios(suite_dir)
+        _run_scenario(skill_id, active_skill, scenario) for scenario in loaded_scenarios
     ]
     return SkillTestSuiteResult(
         skill_id=skill_id,

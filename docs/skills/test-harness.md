@@ -8,6 +8,12 @@ behavior that exists today:
 - trigger-based skills load from representative raw files
 - the emitted skill context contains required guidance snippets
 
+Harness summary states:
+
+- `passing`: every scenario passed
+- `failing`: one or more scenarios failed, including malformed scenario JSON
+- `missing`: the suite path resolved but no scenario files were present; CLI and CI treat this as non-passing
+
 ## Scenario layout
 
 Each built-in skill keeps scenarios under the manifest path declared by
