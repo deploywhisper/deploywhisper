@@ -42,7 +42,8 @@ class SkillContributionWorkflowTests(unittest.TestCase):
         self.assertIn("branches:", workflow)
         self.assertIn("- main", workflow)
         self.assertIn("skills/*.md", workflow)
-        self.assertIn("DEPLOYWHISPER_SKILLS_REGISTRY_REPO", workflow)
+        self.assertIn("REGISTRY_REPO: deploywhisper/skills-registry", workflow)
+        self.assertIn("DEPLOYWHISPER_SKILLS_REGISTRY_PUSH_TOKEN", workflow)
         self.assertIn("scripts/publish_skills_registry.py", workflow)
 
     def test_publish_skill_writes_registry_bundle_and_removes_deleted_skill(
