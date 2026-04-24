@@ -52,6 +52,9 @@ GitHub can assign the maintainer review path for:
 - `.github/PULL_REQUEST_TEMPLATE/skill.md`
 - `docs/contributing/skills.md`
 
+Marketplace curation rules for badges and delisting live in
+`docs/skills/curation.md`.
+
 ## Merge and publish
 
 After a skill change merges to `main`, the `Publish Skills Registry` workflow

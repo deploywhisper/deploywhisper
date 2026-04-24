@@ -662,6 +662,15 @@ class SkillRegistryData(BaseModel):
         ..., description="Where the skill definition currently resolves from"
     )
     author: str = Field(..., description="Skill author or owner label")
+    maintainer: str = Field(..., description="Current maintainer label")
+    is_official: bool = Field(
+        default=False,
+        description="Whether the skill is officially maintained by DeployWhisper.",
+    )
+    is_featured: bool = Field(
+        default=False,
+        description="Whether the skill is a curated featured community entry.",
+    )
     license: str | None = Field(default=None, description="Declared skill license")
     description: str = Field(..., description="Skill summary")
     tool: str = Field(..., description="Primary tool family for the skill")

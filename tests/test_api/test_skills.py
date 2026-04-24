@@ -310,6 +310,44 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["summary"]["status"], "passing")
         self.assertGreaterEqual(len(payload["data"]["scenarios"]), 1)
 
+    def test_skill_api_exposes_editorial_curation_metadata(self) -> None:
+        (self.skills_dir / "community-skill.md").write_text(
+            "---\n"
+            "name: community-skill\n"
+            "version: 1.0.0\n"
+            "author: Community Builder\n"
+            "maintainer: Community Curators\n"
+            "featured: true\n"
+            "license: MIT\n"
+            "description: Curated community guidance.\n"
+            "test_suite_path: tests/skill-tests/terraform\n"
+            "token_budget: 900\n"
+            "triggers: [.yaml]\n"
+            "tags: [community]\n"
+            "---\n"
+            "# Community Skill\nGuidance.\n",
+            encoding="utf-8",
+        )
+
+        with (
+            patch("services.skill_registry_service.SKILLS_DIR", self.skills_dir),
+            patch("services.skill_registry_service.CUSTOM_DIR", self.custom_dir),
+        ):
+            list_response = self.client.get("/api/v1/skills")
+            detail_response = self.client.get("/api/v1/skills/community-skill")
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+        list_payload = list_response.json()
+        detail_payload = detail_response.json()
+        self.assertEqual(list_payload["data"][0]["maintainer"], "Community Curators")
+        self.assertFalse(list_payload["data"][0]["is_official"])
+        self.assertTrue(list_payload["data"][0]["is_featured"])
+        self.assertEqual(detail_payload["data"]["author"], "Community Builder")
+        self.assertEqual(detail_payload["data"]["maintainer"], "Community Curators")
+        self.assertFalse(detail_payload["data"]["is_official"])
+        self.assertTrue(detail_payload["data"]["is_featured"])
+
     def test_skill_test_results_route_reports_invalid_suite_as_failing_not_500(
         self,
     ) -> None:

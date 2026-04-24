@@ -6,13 +6,24 @@ from pathlib import Path
 import re
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 import yaml
 from yaml import YAMLError
 
 
 _SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def _is_deploywhisper_label(value: str | None) -> bool:
+    return str(value or "").strip().lower() == "deploywhisper"
 
 
 class SkillManifestValidationError(ValueError):
@@ -31,6 +42,10 @@ class SkillManifestV1(BaseModel):
     name: str = Field(..., description="Stable lowercase skill identifier.")
     version: str = Field(..., description="Semantic version for the skill.")
     author: str = Field(..., description="Skill author or owner.")
+    maintainer: str | None = Field(
+        default=None,
+        description="Optional current maintainer label when it differs from author.",
+    )
     license: str = Field(..., description="Distribution license identifier.")
     triggers: list[str] = Field(
         ...,
@@ -56,6 +71,10 @@ class SkillManifestV1(BaseModel):
         default_factory=list,
         description="Optional content markers for trigger disambiguation.",
     )
+    featured: bool = Field(
+        default=False,
+        description="Whether this is a curated featured community skill.",
+    )
 
     @field_validator("name")
     @classmethod
@@ -73,9 +92,13 @@ class SkillManifestV1(BaseModel):
             raise ValueError("must use semantic version format (for example 1.0.0)")
         return normalized
 
-    @field_validator("author", "license", "description", "test_suite_path")
+    @field_validator(
+        "author", "license", "description", "test_suite_path", "maintainer"
+    )
     @classmethod
-    def _validate_non_empty_string(cls, value: str) -> str:
+    def _validate_non_empty_string(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         normalized = value.strip()
         if not normalized:
             raise ValueError("must not be empty")
@@ -122,6 +145,18 @@ class SkillManifestV1(BaseModel):
             return None
         normalized = value.strip().lower()
         return normalized or None
+
+    @model_validator(mode="after")
+    def _validate_editorial_flags(self) -> "SkillManifestV1":
+        effective_maintainer = self.maintainer or self.author
+        if self.featured and (
+            _is_deploywhisper_label(self.author)
+            or _is_deploywhisper_label(effective_maintainer)
+        ):
+            raise ValueError(
+                "featured skills must remain community-authored and community-maintained rather than DeployWhisper-owned"
+            )
+        return self
 
 
 class SkillDocument(BaseModel):

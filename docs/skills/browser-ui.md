@@ -23,15 +23,20 @@ same NiceGUI runtime:
 Each skill detail page surfaces:
 
 - description
+- editorial badges for `Official` and curated-community `Featured` states
 - install command
 - latest harness summary and pass rate
 - version history
 - author
+- maintainer
 - contributors
 - install count
 - active issue count
 - last updated timestamp
 - analytics refresh timestamp
+
+The shipped catalog now includes at least one real featured community skill so
+the badge state is visible in the live browser, not only in synthetic tests.
 
 ## Analytics note
 

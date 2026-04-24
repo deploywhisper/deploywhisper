@@ -25,6 +25,14 @@ Story 4.7 seeds the public marketplace with 20 DeployWhisper-maintained launch s
 - `tanka` — Tanka environment fan-out, cluster targeting, and apply semantics
 - `jsonnet` — Jsonnet import graph drift, hidden defaults, and rendered secret leakage
 
+## Featured community entry
+
+Story 4.9 adds one curated featured community skill alongside the launch-day
+first-party set:
+
+- `terragrunt` — community-authored Terragrunt guidance covering include
+  hierarchy drift, dependency output coupling, and run-all blast radius
+
 ## Launch verification
 
 Every seeded skill ships with:

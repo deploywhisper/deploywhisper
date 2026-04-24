@@ -32,6 +32,12 @@ Optional extension fields supported today:
   `name`.
 - `trigger_content_patterns`: content markers for disambiguating shared
   extensions such as `.yaml`.
+- `maintainer`: optional current maintainer label when stewardship differs from
+  the original `author`.
+- `featured`: marks a curated community skill for the marketplace featured
+  badge. Featured skills must stay community-authored and community-maintained;
+  DeployWhisper-owned skills should rely on the automatic `Official` badge
+  instead of `featured: true`.
 
 ## Example
 

@@ -1,0 +1,13 @@
+{
+  "name": "terragrunt-trigger-selection",
+  "description": "Loads the Terragrunt skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates shared Terragrunt scaffolding.",
+  "raw_files": {
+    "terragrunt.hcl": "remote_state { backend = \"s3\" }\ngenerate \"provider\" { path = \"provider.tf\" }\n"
+  },
+  "expected_substrings": [
+    "Backend, remote state, or generate block changes can orphan state or rewrite provider configuration = CRITICAL",
+    "Deep include hierarchy overrides can silently change locals, inputs, or hooks for every child module = HIGH"
+  ]
+}
