@@ -55,10 +55,9 @@ GitHub can assign the maintainer review path for:
 ## Merge and publish
 
 After a skill change merges to `main`, the `Publish Skills Registry` workflow
-syncs changed skills into the external registry repository when these secrets
-are configured:
+syncs changed skills into `deploywhisper/skills-registry` when this secret is
+configured:
 
-- `DEPLOYWHISPER_SKILLS_REGISTRY_REPO`
 - `DEPLOYWHISPER_SKILLS_REGISTRY_PUSH_TOKEN`
 
 The publish job exports each changed built-in skill into the registry checkout
@@ -68,7 +67,7 @@ under `skills/<skill>/` with:
 - `manifest.json`
 - `tests/scenarios/`
 
-If the secrets are not configured, the workflow exits cleanly with a notice
+If the token is not configured, the workflow exits cleanly with a notice
 instead of failing unrelated merges.
 
 ## Contribution rules
