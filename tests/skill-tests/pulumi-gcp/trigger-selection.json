@@ -1,0 +1,13 @@
+{
+  "name": "pulumi-gcp-trigger-selection",
+  "description": "Loads the Pulumi GCP skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Pulumi GCP program code.",
+  "raw_files": {
+    "pulumi-gcp.ts": "import * as gcp from \"@pulumi/gcp\";\n"
+  },
+  "expected_substrings": [
+    "Cloud SQL or GKE replacements from region or name drift introduce avoidable downtime = HIGH",
+    "Project or folder target changes move blast radius to the wrong tenant = CRITICAL"
+  ]
+}

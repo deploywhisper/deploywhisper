@@ -1,0 +1,13 @@
+{
+  "name": "crossplane-tool-selection",
+  "description": "Loads the Crossplane skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Crossplane composition changes touch shared database and networking patches.",
+  "raw_files": {
+    "composition.yaml": "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n"
+  },
+  "expected_substrings": [
+    "Composition patch changes on network or database fields can fan out to every bound claim = CRITICAL",
+    "Removing fields from an XRD schema breaks existing claims and composition compatibility = HIGH"
+  ]
+}

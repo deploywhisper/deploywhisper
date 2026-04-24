@@ -1,0 +1,13 @@
+{
+  "name": "tanka-tool-selection",
+  "description": "Loads the Tanka skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Tanka environment update changes render targets and apply behavior.",
+  "raw_files": {
+    "spec.json": "{\"apiVersion\": \"tanka.dev/v1alpha1\"}\n"
+  },
+  "expected_substrings": [
+    "Environment-level library changes fan out to every rendered object = HIGH",
+    "Server-side apply or force behavior can overwrite fields owned by other controllers = HIGH"
+  ]
+}

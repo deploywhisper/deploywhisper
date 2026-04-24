@@ -1,0 +1,13 @@
+{
+  "name": "aws-cdk-tool-selection",
+  "description": "Loads the AWS CDK skill from the contributor tool.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "AWS CDK change updates synthesized resources and removal policy behavior.",
+  "raw_files": {
+    "cdk.json": "{\"app\": \"npx ts-node bin/app.ts\"}\n"
+  },
+  "expected_substrings": [
+    "Logical ID changes force CloudFormation replacement even when code edits look cosmetic = HIGH",
+    "`RemovalPolicy.DESTROY` on stateful constructs risks permanent data loss = CRITICAL"
+  ]
+}

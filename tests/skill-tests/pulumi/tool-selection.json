@@ -1,0 +1,13 @@
+{
+  "name": "pulumi-tool-selection",
+  "description": "Loads the Pulumi skill from the contributor tool.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Pulumi stack update renames resources and changes protection settings.",
+  "raw_files": {
+    "Pulumi.yaml": "name: platform\nruntime: nodejs\n"
+  },
+  "expected_substrings": [
+    "Resource renames without aliases force replacements and can recreate live infrastructure unexpectedly = HIGH",
+    "Turning `protect` off on databases, buckets, or queues removes a key deletion backstop = HIGH"
+  ]
+}

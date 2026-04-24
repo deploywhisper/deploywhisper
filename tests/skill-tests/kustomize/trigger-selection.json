@@ -1,0 +1,13 @@
+{
+  "name": "kustomize-trigger-selection",
+  "description": "Loads the Kustomize skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Kustomize overlay files.",
+  "raw_files": {
+    "kustomization.yml": "namespace: platform\npatches: []\n"
+  },
+  "expected_substrings": [
+    "Broad strategic merge or JSON patches can mutate unintended resources = HIGH",
+    "Image tag swaps without digest pinning reintroduce unreviewed drift = MEDIUM"
+  ]
+}

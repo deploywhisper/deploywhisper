@@ -304,6 +304,8 @@ def _filename_matches_trigger(filename: str, trigger: str) -> bool:
     normalized_trigger = trigger.lower()
     if normalized_trigger.startswith("."):
         return normalized_filename.endswith(normalized_trigger)
+    if normalized_filename == normalized_trigger:
+        return True
     return Path(normalized_filename).name == normalized_trigger
 
 

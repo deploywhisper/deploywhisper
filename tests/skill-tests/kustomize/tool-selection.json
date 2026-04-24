@@ -1,0 +1,13 @@
+{
+  "name": "kustomize-tool-selection",
+  "description": "Loads the Kustomize skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Kustomize overlay change updates image tags and name transforms.",
+  "raw_files": {
+    "kustomization.yaml": "resources:\n  - deployment.yaml\nimages: []\n"
+  },
+  "expected_substrings": [
+    "NamePrefix or NameSuffix changes rewrite object identities and can break references = HIGH",
+    "Broad strategic merge or JSON patches can mutate unintended resources = HIGH"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "opa-gatekeeper-tool-selection",
+  "description": "Loads the OPA Gatekeeper skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "OPA Gatekeeper policy update changes deny logic and match scope.",
+  "raw_files": {
+    "constrainttemplate.yaml": "apiVersion: templates.gatekeeper.sh/v1\nkind: ConstraintTemplate\n"
+  },
+  "expected_substrings": [
+    "ConstraintTemplate or rego errors can remove enforcement when audit failures are ignored = HIGH",
+    "Broad match exclusions take critical namespaces out of policy coverage = HIGH"
+  ]
+}

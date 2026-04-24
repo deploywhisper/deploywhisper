@@ -1,0 +1,13 @@
+{
+  "name": "flux-tool-selection",
+  "description": "Loads the Flux skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Flux sync settings change reconciliation and pruning behavior.",
+  "raw_files": {
+    "gotk-sync.yaml": "apiVersion: source.toolkit.fluxcd.io/v1\nkind: GitRepository\n"
+  },
+  "expected_substrings": [
+    "Flux Kustomization `prune: true` can delete manually-created but still-needed resources = HIGH",
+    "Suspending or resuming the wrong source blocks reconciliation across multiple environments = HIGH"
+  ]
+}

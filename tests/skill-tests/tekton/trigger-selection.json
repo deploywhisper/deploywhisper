@@ -1,0 +1,13 @@
+{
+  "name": "tekton-trigger-selection",
+  "description": "Loads the Tekton skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Tekton task definitions.",
+  "raw_files": {
+    "task.yaml": "apiVersion: tekton.dev/v1\nkind: Task\n"
+  },
+  "expected_substrings": [
+    "Changes to `finally` tasks can skip cleanup, approval, or promotion gates = HIGH",
+    "Shared PVC workspaces across concurrent runs create artifact races and nondeterministic builds = MEDIUM"
+  ]
+}

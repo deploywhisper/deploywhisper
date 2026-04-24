@@ -1,0 +1,13 @@
+{
+  "name": "opa-gatekeeper-trigger-selection",
+  "description": "Loads the OPA Gatekeeper skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Gatekeeper constraint policy.",
+  "raw_files": {
+    "gatekeeper-policy.yaml": "apiVersion: constraints.gatekeeper.sh/v1beta1\nkind: K8sRequiredLabels\n"
+  },
+  "expected_substrings": [
+    "Broad match exclusions take critical namespaces out of policy coverage = HIGH",
+    "Rolling out deny policies without dry-run validation can block deployments cluster-wide = CRITICAL"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "istio-tool-selection",
+  "description": "Loads the Istio skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Istio rollout updates mesh routing and mTLS policy.",
+  "raw_files": {
+    "virtualservice.yaml": "apiVersion: networking.istio.io/v1beta1\nkind: VirtualService\n"
+  },
+  "expected_substrings": [
+    "VirtualService host, match, or gateway rewrites can blackhole traffic across multiple services = CRITICAL",
+    "DestinationRule TLS mode mismatches commonly surface as cascading 503 errors = HIGH"
+  ]
+}

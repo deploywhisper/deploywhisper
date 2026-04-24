@@ -1,0 +1,13 @@
+{
+  "name": "crossplane-trigger-selection",
+  "description": "Loads the Crossplane skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Crossplane platform definitions.",
+  "raw_files": {
+    "xrd.yaml": "apiVersion: apiextensions.crossplane.io/v1\nkind: CompositeResourceDefinition\n"
+  },
+  "expected_substrings": [
+    "Removing fields from an XRD schema breaks existing claims and composition compatibility = HIGH",
+    "ProviderConfig credential-source changes can orphan reconciles or point resources at the wrong account = HIGH"
+  ]
+}

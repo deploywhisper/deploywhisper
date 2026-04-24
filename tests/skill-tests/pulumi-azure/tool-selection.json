@@ -1,0 +1,13 @@
+{
+  "name": "pulumi-azure-tool-selection",
+  "description": "Loads the Pulumi Azure skill from the contributor tool.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Pulumi Azure stack update changes identity and regional deployment settings.",
+  "raw_files": {
+    "Pulumi.azure.yaml": "config:\n  azure-native:location: eastus\n"
+  },
+  "expected_substrings": [
+    "Resource group replacement cascades to every contained Azure resource = CRITICAL",
+    "Managed identity or role-assignment drift can break runtime access immediately = HIGH"
+  ]
+}

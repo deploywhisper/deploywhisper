@@ -11,6 +11,7 @@ from analysis.risk_scorer import RiskAssessment, RiskContributor
 from llm.skill_context import (
     build_skill_context,
     get_custom_skill_statuses,
+    resolve_skills,
     save_custom_skill,
 )
 
@@ -211,6 +212,68 @@ class SkillContextTests(unittest.TestCase):
         self.assertIn("Kubernetes guidance.", skill_context)
         self.assertNotIn("Ansible guidance.", skill_context)
         self.assertNotIn("CloudFormation guidance.", skill_context)
+
+    def test_seeded_jsonnet_skill_does_not_match_generic_python_tokens(self) -> None:
+        selected = resolve_skills(
+            self._assessment("terraform"),
+            raw_files={"app.py": b"import os\nlocal = 1\n"},
+        )
+
+        self.assertNotIn("jsonnet", [skill.name for skill in selected])
+
+    def test_seeded_prometheus_skill_does_not_match_generic_yaml_groups(self) -> None:
+        selected = resolve_skills(
+            self._assessment("terraform"),
+            raw_files={
+                "deployment.yaml": (
+                    b"apiVersion: v1\nkind: ConfigMap\nmetadata:\n"
+                    b"  name: test\nspec:\n  groups:\n    - default\n"
+                )
+            },
+        )
+
+        self.assertNotIn("prometheus-rules", [skill.name for skill in selected])
+
+    def test_seeded_kustomize_skill_does_not_match_generic_yaml_patch_words(
+        self,
+    ) -> None:
+        selected = resolve_skills(
+            self._assessment("terraform"),
+            raw_files={"config.yaml": b"images:\n  - name: app\npatches: []\n"},
+        )
+
+        self.assertNotIn("kustomize", [skill.name for skill in selected])
+
+    def test_seeded_helmfile_skill_does_not_match_generic_yaml_environment_key(
+        self,
+    ) -> None:
+        selected = resolve_skills(
+            self._assessment("terraform"),
+            raw_files={"config.yaml": b"environments:\n  prod:\n    values: []\n"},
+        )
+
+        self.assertNotIn("helmfile", [skill.name for skill in selected])
+
+    def test_seeded_bicep_skill_matches_bicep_extension(self) -> None:
+        selected = resolve_skills(
+            self._assessment("terraform"),
+            raw_files={
+                "service.bicep": (
+                    b"param location string\nresource app "
+                    b'"Microsoft.Web/sites@2023-01-01" = {}\n'
+                )
+            },
+        )
+
+        self.assertIn("bicep", [skill.name for skill in selected])
+
+    def test_seeded_jsonnet_skill_matches_jsonnet_extension(self) -> None:
+        selected = resolve_skills(
+            self._assessment("terraform"),
+            raw_files={"dashboard.jsonnet": b"local app = { name: 'api' };\napp\n"},
+        )
+
+        self.assertIn("jsonnet", [skill.name for skill in selected])
 
 
 if __name__ == "__main__":

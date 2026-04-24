@@ -1,0 +1,13 @@
+{
+  "name": "tekton-tool-selection",
+  "description": "Loads the Tekton skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Tekton pipeline update changes cleanup and credential behavior.",
+  "raw_files": {
+    "pipeline.yaml": "apiVersion: tekton.dev/v1\nkind: Pipeline\n"
+  },
+  "expected_substrings": [
+    "Mounting shared credentials into every task leaks secrets far beyond the intended build step = HIGH",
+    "Changes to `finally` tasks can skip cleanup, approval, or promotion gates = HIGH"
+  ]
+}

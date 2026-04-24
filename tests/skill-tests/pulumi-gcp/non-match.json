@@ -1,0 +1,13 @@
+{
+  "name": "pulumi-gcp-non-match",
+  "description": "Does not load the Pulumi GCP skill for unrelated files.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Plain Terraform change with no related skill artifacts.",
+  "raw_files": {
+    "main.tf": "resource \"aws_s3_bucket\" \"logs\" {}\n"
+  },
+  "expect_selected": false,
+  "expected_absent_substrings": [
+    "Authoritative IAM bindings can remove required members and lock out workloads or operators = HIGH"
+  ]
+}

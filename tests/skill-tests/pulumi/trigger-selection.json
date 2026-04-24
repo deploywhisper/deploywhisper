@@ -1,0 +1,13 @@
+{
+  "name": "pulumi-trigger-selection",
+  "description": "Loads the Pulumi skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also touches a Pulumi stack definition.",
+  "raw_files": {
+    "Pulumi.dev.yaml": "config:\n  app:domain: api.internal\n"
+  },
+  "expected_substrings": [
+    "Turning `protect` off on databases, buckets, or queues removes a key deletion backstop = HIGH",
+    "Promoting secret config into plain-text stack values leaks sensitive data into state and logs = CRITICAL"
+  ]
+}
