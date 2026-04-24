@@ -230,7 +230,7 @@ docker run -d \
   -e APP_PORT=8080 \
   -e APP_BASE_URL=https://deploywhisper.example.com \
   -e DEPLOYWHISPER_SHARE_TOKEN=replace-with-a-long-random-secret \
-  ghcr.io/pramodksahoo/deploywhisper:1.0.0
+  ghcr.io/deploywhisper/deploywhisper:1.0.0
 ```
 
 ## API Endpoints
