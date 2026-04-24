@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -77,9 +78,15 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertEqual(page.items[0].id, "terraform")
         self.assertEqual(page.items[0].name, "Terraform")
         self.assertEqual(page.items[0].test_suite_path, "tests/skill-tests/terraform")
+        self.assertEqual(
+            page.items[0].install_command, "deploywhisper skill install terraform"
+        )
+        self.assertGreater(page.items[0].download_count, 0)
+        self.assertGreater(page.items[0].star_count, 0)
+        self.assertEqual(page.items[0].contributors, ["DeployWhisper"])
         self.assertEqual(paged.total_count, 2)
         self.assertEqual(len(paged.items), 1)
-        self.assertEqual(paged.items[0].id, "terraform")
+        self.assertEqual(paged.items[0].id, "kubernetes")
 
     def test_registry_entry_returns_bundled_catalog_version_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -140,6 +147,8 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertEqual(entry.version, "1.0.0")
         self.assertEqual(entry.name, "Terraform")
         self.assertEqual(entry.available_versions, 1)
+        self.assertEqual(entry.install_command, "deploywhisper skill install terraform")
+        self.assertEqual(entry.contributors, ["DeployWhisper"])
         self.assertEqual([version.version for version in versions], ["1.0.0"])
         self.assertTrue(versions[0].is_current)
         self.assertEqual(versions[0].author, "DeployWhisper")
@@ -280,6 +289,55 @@ class SkillRegistryServiceTests(unittest.TestCase):
         assert page.items[0].test_results is not None
         self.assertEqual(page.items[0].test_results.status, "failing")
         self.assertEqual(page.items[0].test_results.failed_scenarios, 1)
+
+    def test_registry_page_supports_recency_sort(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skills_dir = Path(tmpdir) / "skills"
+            custom_dir = skills_dir / "custom"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+            custom_dir.mkdir(parents=True, exist_ok=True)
+            terraform_path = skills_dir / "terraform.md"
+            kubernetes_path = skills_dir / "kubernetes.md"
+            terraform_path.write_text(
+                "---\n"
+                "name: terraform\n"
+                "version: 1.0.0\n"
+                "author: DeployWhisper\n"
+                "license: MIT\n"
+                "description: Built-in terraform checks.\n"
+                "test_suite_path: tests/skill-tests/terraform\n"
+                "token_budget: 1200\n"
+                "triggers: [.tf]\n"
+                "tags: [iac]\n"
+                "---\n"
+                "# Terraform\nBuilt-in guidance.\n",
+                encoding="utf-8",
+            )
+            kubernetes_path.write_text(
+                "---\n"
+                "name: kubernetes\n"
+                "version: 1.0.0\n"
+                "author: DeployWhisper\n"
+                "license: MIT\n"
+                "description: Built-in kubernetes checks.\n"
+                "test_suite_path: tests/skill-tests/kubernetes\n"
+                "token_budget: 900\n"
+                "triggers: [.yaml]\n"
+                "tags: [cluster]\n"
+                "---\n"
+                "# Kubernetes\nBuilt-in guidance.\n",
+                encoding="utf-8",
+            )
+            os.utime(terraform_path, (1000, 1000))
+            os.utime(kubernetes_path, (2000, 2000))
+
+            with (
+                patch("services.skill_registry_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_registry_service.CUSTOM_DIR", custom_dir),
+            ):
+                page = fetch_skill_registry_page(sort="recency")
+
+        self.assertEqual([item.id for item in page.items], ["kubernetes", "terraform"])
 
 
 if __name__ == "__main__":

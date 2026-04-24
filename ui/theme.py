@@ -765,6 +765,7 @@ def build_navigation_shell(active: str) -> None:
     """Render the shared top navigation shell."""
     nav_items = (
         ("Dashboard", "/", "dashboard"),
+        ("Skills", "/skills", "skills"),
         ("History", "/history", "history"),
         ("Settings", "/settings", "settings"),
     )
