@@ -27,12 +27,15 @@ for path in "${CHANGED_PATHS[@]}"; do
 done
 
 if [ "${#SKILLS[@]}" -eq 0 ]; then
-  echo "No changed built-in skill suites detected relative to $BASE_REF."
+  echo "No changed built-in skills detected relative to $BASE_REF."
   exit 0
 fi
 
 mapfile -t UNIQUE_SKILLS < <(printf '%s\n' "${SKILLS[@]}" | sort -u)
 
-echo "Running changed skill harnesses relative to $BASE_REF:"
+echo "Running changed skill lint and harness checks relative to $BASE_REF:"
 printf ' - %s\n' "${UNIQUE_SKILLS[@]}"
+for skill in "${UNIQUE_SKILLS[@]}"; do
+  "$PYTHON_BIN" cli.py skill lint "skills/${skill}.md"
+done
 "$PYTHON_BIN" cli.py skill test "${UNIQUE_SKILLS[@]}"
