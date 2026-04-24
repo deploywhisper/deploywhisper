@@ -29,6 +29,7 @@ from services.skill_installer_service import (
     remove_skill,
     update_skill,
 )
+from services.skill_registry_service import fetch_skill_registry_page
 from services.skill_test_harness_service import run_skill_test_suites
 from services.skill_test_harness_service import iter_built_in_skill_ids
 from services.analysis_service import (
@@ -194,6 +195,40 @@ def _run_skill_list() -> int:
     return 0
 
 
+def _run_skill_catalog_list() -> int:
+    items = []
+    page_number = 1
+    page_size = 100
+    total_count = 0
+
+    while True:
+        page = fetch_skill_registry_page(page=page_number, page_size=page_size)
+        if page_number == 1:
+            total_count = page.total_count
+        items.extend(page.items)
+        if len(items) >= total_count or not page.items:
+            break
+        page_number += 1
+
+    if not items:
+        print("No registry skills found.")
+        return 0
+    for item in items:
+        pass_rate = (
+            f"{round(item.test_results.pass_rate * 100):.0f}%"
+            if item.test_results is not None
+            else "n/a"
+        )
+        print(
+            f"{item.id} installs={item.install_count} "
+            f"pass-rate={pass_rate} "
+            f"active-issues={item.active_issue_count} "
+            f"updated={item.updated_at[:10]} "
+            f"analytics={item.analytics_updated_at[:10]}"
+        )
+    return 0
+
+
 def _run_skill_update(skill_id: str) -> int:
     try:
         result = update_skill(skill_id)
@@ -349,8 +384,13 @@ def build_parser() -> argparse.ArgumentParser:
         "install", help="Fetch and install a registry skill into skills/custom."
     )
     skill_install_parser.add_argument("skill_id", help="Skill id to install.")
-    skill_subparsers.add_parser(
+    skill_list_parser = skill_subparsers.add_parser(
         "list", help="List installed custom skills from skills/custom."
+    )
+    skill_list_parser.add_argument(
+        "--catalog",
+        action="store_true",
+        help="Show registry catalog analytics instead of installed custom skills.",
     )
     skill_lint_parser = skill_subparsers.add_parser(
         "lint", help="Validate a skill markdown file against manifest v1."
@@ -448,7 +488,11 @@ def main() -> None:
     if args.command == "skill" and args.skill_command == "install":
         raise SystemExit(_run_skill_install(args.skill_id))
     if args.command == "skill" and args.skill_command == "list":
-        raise SystemExit(_run_skill_list())
+        raise SystemExit(
+            _run_skill_catalog_list()
+            if getattr(args, "catalog", False)
+            else _run_skill_list()
+        )
     if args.command == "skill" and args.skill_command == "lint":
         raise SystemExit(_run_skill_lint(args.path))
     if args.command == "skill" and args.skill_command == "test":

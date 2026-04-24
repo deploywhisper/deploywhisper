@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from services.skill_analytics_service import fetch_skill_analytics
 from services.skill_manifest_service import REPO_ROOT, load_skill_document
 from services.skill_test_harness_service import (
     SkillTestSummary,
@@ -21,43 +22,7 @@ CUSTOM_DIR = SKILLS_DIR / "custom"
 SkillSource = Literal["built-in", "custom-override", "custom-new"]
 SkillRegistrySort = Literal["popularity", "recency"]
 
-_SKILL_BROWSER_METADATA: dict[str, dict[str, object]] = {
-    "terraform": {
-        "download_count": 1842,
-        "star_count": 418,
-        "contributors": ["DeployWhisper"],
-    },
-    "kubernetes": {
-        "download_count": 1765,
-        "star_count": 403,
-        "contributors": ["DeployWhisper"],
-    },
-    "docker": {
-        "download_count": 1448,
-        "star_count": 332,
-        "contributors": ["DeployWhisper"],
-    },
-    "ansible": {
-        "download_count": 1320,
-        "star_count": 286,
-        "contributors": ["DeployWhisper"],
-    },
-    "git": {
-        "download_count": 1186,
-        "star_count": 267,
-        "contributors": ["DeployWhisper"],
-    },
-    "jenkins": {
-        "download_count": 1094,
-        "star_count": 241,
-        "contributors": ["DeployWhisper"],
-    },
-    "cloudformation": {
-        "download_count": 962,
-        "star_count": 228,
-        "contributors": ["DeployWhisper"],
-    },
-}
+_SKILL_BROWSER_METADATA: dict[str, dict[str, object]] = {}
 
 
 class SkillRegistryEntry(BaseModel):
@@ -89,6 +54,18 @@ class SkillRegistryEntry(BaseModel):
     )
     contributors: list[str] = Field(
         default_factory=list, description="Visible contributor names for browser UI."
+    )
+    install_count: int = Field(
+        default=0,
+        description="Current install count from the shared analytics snapshot.",
+    )
+    active_issue_count: int = Field(
+        default=0,
+        description="Open issue count from the shared analytics snapshot.",
+    )
+    analytics_updated_at: str = Field(
+        ...,
+        description="When the analytics snapshot used for this record was last refreshed.",
     )
     download_count: int = Field(
         default=0, description="Current catalog download count or seeded preview value."
@@ -147,6 +124,9 @@ class _SkillRecord(BaseModel):
     triggers: list[str] = Field(default_factory=list)
     trigger_content_patterns: list[str] = Field(default_factory=list)
     contributors: list[str] = Field(default_factory=list)
+    install_count: int = 0
+    active_issue_count: int = 0
+    analytics_updated_at: str
     download_count: int = 0
     star_count: int = 0
     updated_at: str
@@ -251,6 +231,9 @@ def _record_to_entry(
         "triggers": list(record.triggers),
         "trigger_content_patterns": list(record.trigger_content_patterns),
         "contributors": list(record.contributors),
+        "install_count": record.install_count,
+        "active_issue_count": record.active_issue_count,
+        "analytics_updated_at": record.analytics_updated_at,
         "download_count": record.download_count,
         "star_count": record.star_count,
         "install_command": f"deploywhisper skill install {record.id}",
@@ -279,6 +262,7 @@ def _load_skill_record(path: Path, *, source: SkillSource) -> _SkillRecord | Non
         parsed.manifest.name,
         path,
     )
+    analytics, analytics_updated_at = fetch_skill_analytics(skill_id)
     updated_at, updated_epoch = _updated_at(path)
     return _SkillRecord(
         id=skill_id,
@@ -299,8 +283,11 @@ def _load_skill_record(path: Path, *, source: SkillSource) -> _SkillRecord | Non
             skill_id,
             parsed.manifest.author or _default_author(source),
         ),
-        download_count=_download_count_for(skill_id),
-        star_count=_star_count_for(skill_id),
+        install_count=analytics.install_count,
+        active_issue_count=analytics.active_issue_count,
+        analytics_updated_at=analytics_updated_at,
+        download_count=analytics.install_count or _download_count_for(skill_id),
+        star_count=analytics.star_count or _star_count_for(skill_id),
         updated_at=updated_at,
         updated_at_epoch=updated_epoch,
         path=path,
@@ -419,7 +406,7 @@ def fetch_skill_registry_page(
             current_items,
             key=lambda current: (
                 (
-                    -current.download_count,
+                    -current.install_count,
                     -current.star_count,
                     current.id,
                 )

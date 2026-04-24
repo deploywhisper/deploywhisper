@@ -18,6 +18,12 @@ List currently installed custom skills:
 deploywhisper skill list
 ```
 
+List the shared registry catalog with analytics signals:
+
+```bash
+deploywhisper skill list --catalog
+```
+
 Update an installed custom skill to the latest registry version:
 
 ```bash
@@ -61,3 +67,16 @@ configuration error instead of guessing a remote endpoint.
 - The installer verifies the registry-provided SHA-256 checksum before saving
 - `deploywhisper skill list` reports both active installed skills and ignored
   files when a custom manifest is invalid
+- `deploywhisper skill list --catalog` shows registry analytics including
+  install count, harness pass rate, last updated, and active issues using the
+  same shared registry metadata exposed by the browser
+
+## Daily analytics snapshot
+
+- Registry analytics live in `data/skill-analytics.json`
+- `.github/workflows/refresh-skill-analytics.yml` refreshes the snapshot daily
+- `scripts/refresh_skill_analytics.py` refreshes active issue counts from
+  GitHub issue search and requires `DEPLOYWHISPER_SKILL_ANALYTICS_URL` for the
+  install/star popularity feed
+- the refresh job fails explicitly if the popularity feed is missing or omits a
+  built-in skill, rather than silently carrying stale metrics forward

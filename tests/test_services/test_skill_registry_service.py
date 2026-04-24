@@ -81,6 +81,9 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertEqual(
             page.items[0].install_command, "deploywhisper skill install terraform"
         )
+        self.assertGreater(page.items[0].install_count, 0)
+        self.assertGreaterEqual(page.items[0].active_issue_count, 0)
+        self.assertIsNotNone(page.items[0].analytics_updated_at)
         self.assertGreater(page.items[0].download_count, 0)
         self.assertGreater(page.items[0].star_count, 0)
         self.assertEqual(page.items[0].contributors, ["DeployWhisper"])
@@ -148,6 +151,9 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertEqual(entry.name, "Terraform")
         self.assertEqual(entry.available_versions, 1)
         self.assertEqual(entry.install_command, "deploywhisper skill install terraform")
+        self.assertGreater(entry.install_count, 0)
+        self.assertGreaterEqual(entry.active_issue_count, 0)
+        self.assertIsNotNone(entry.analytics_updated_at)
         self.assertEqual(entry.contributors, ["DeployWhisper"])
         self.assertEqual([version.version for version in versions], ["1.0.0"])
         self.assertTrue(versions[0].is_current)
@@ -338,6 +344,20 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 page = fetch_skill_registry_page(sort="recency")
 
         self.assertEqual([item.id for item in page.items], ["kubernetes", "terraform"])
+
+    def test_registry_page_exposes_analytics_fields_for_browser_and_cli(self) -> None:
+        page = fetch_skill_registry_page(page_size=5)
+
+        self.assertGreater(page.total_count, 0)
+        item = page.items[0]
+        self.assertIsInstance(item.install_count, int)
+        self.assertGreaterEqual(item.install_count, 0)
+        self.assertIsInstance(item.active_issue_count, int)
+        self.assertGreaterEqual(item.active_issue_count, 0)
+        self.assertIsInstance(item.analytics_updated_at, str)
+        if item.test_results is not None:
+            self.assertGreaterEqual(item.test_results.pass_rate, 0.0)
+            self.assertLessEqual(item.test_results.pass_rate, 1.0)
 
 
 if __name__ == "__main__":

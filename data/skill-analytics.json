@@ -1,0 +1,140 @@
+{
+  "generated_at": "2026-04-25T00:00:00Z",
+  "skills": {
+    "ansible": {
+      "active_issue_count": 2,
+      "install_count": 1320,
+      "star_count": 286
+    },
+    "argocd": {
+      "active_issue_count": 3,
+      "install_count": 921,
+      "star_count": 207
+    },
+    "aws-cdk": {
+      "active_issue_count": 4,
+      "install_count": 748,
+      "star_count": 156
+    },
+    "bicep": {
+      "active_issue_count": 2,
+      "install_count": 734,
+      "star_count": 151
+    },
+    "cert-manager": {
+      "active_issue_count": 1,
+      "install_count": 832,
+      "star_count": 181
+    },
+    "cloudformation": {
+      "active_issue_count": 2,
+      "install_count": 962,
+      "star_count": 228
+    },
+    "crossplane": {
+      "active_issue_count": 2,
+      "install_count": 876,
+      "star_count": 198
+    },
+    "datadog-monitors": {
+      "active_issue_count": 3,
+      "install_count": 775,
+      "star_count": 164
+    },
+    "docker": {
+      "active_issue_count": 1,
+      "install_count": 1448,
+      "star_count": 332
+    },
+    "flux": {
+      "active_issue_count": 2,
+      "install_count": 819,
+      "star_count": 176
+    },
+    "git": {
+      "active_issue_count": 1,
+      "install_count": 1186,
+      "star_count": 267
+    },
+    "helm": {
+      "active_issue_count": 2,
+      "install_count": 938,
+      "star_count": 214
+    },
+    "helmfile": {
+      "active_issue_count": 2,
+      "install_count": 672,
+      "star_count": 135
+    },
+    "istio": {
+      "active_issue_count": 5,
+      "install_count": 861,
+      "star_count": 192
+    },
+    "jenkins": {
+      "active_issue_count": 4,
+      "install_count": 1094,
+      "star_count": 241
+    },
+    "jsonnet": {
+      "active_issue_count": 1,
+      "install_count": 641,
+      "star_count": 128
+    },
+    "kubernetes": {
+      "active_issue_count": 3,
+      "install_count": 1765,
+      "star_count": 403
+    },
+    "kustomize": {
+      "active_issue_count": 1,
+      "install_count": 688,
+      "star_count": 139
+    },
+    "nginx-ingress": {
+      "active_issue_count": 2,
+      "install_count": 846,
+      "star_count": 188
+    },
+    "opa-gatekeeper": {
+      "active_issue_count": 2,
+      "install_count": 789,
+      "star_count": 168
+    },
+    "prometheus-rules": {
+      "active_issue_count": 2,
+      "install_count": 761,
+      "star_count": 159
+    },
+    "pulumi": {
+      "active_issue_count": 4,
+      "install_count": 904,
+      "star_count": 203
+    },
+    "pulumi-azure": {
+      "active_issue_count": 3,
+      "install_count": 703,
+      "star_count": 144
+    },
+    "pulumi-gcp": {
+      "active_issue_count": 3,
+      "install_count": 719,
+      "star_count": 147
+    },
+    "tanka": {
+      "active_issue_count": 2,
+      "install_count": 655,
+      "star_count": 131
+    },
+    "tekton": {
+      "active_issue_count": 3,
+      "install_count": 804,
+      "star_count": 172
+    },
+    "terraform": {
+      "active_issue_count": 2,
+      "install_count": 1842,
+      "star_count": 418
+    }
+  }
+}

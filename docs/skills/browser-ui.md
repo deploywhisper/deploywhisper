@@ -24,16 +24,23 @@ Each skill detail page surfaces:
 
 - description
 - install command
-- latest harness summary
+- latest harness summary and pass rate
 - version history
 - author
 - contributors
-- download count
-- star count
+- install count
+- active issue count
 - last updated timestamp
+- analytics refresh timestamp
 
 ## Analytics note
 
-The current browser page uses seeded preview download/star counts from the
-shared registry service so the public UI can present sort and comparison
-signals before Story 4.8 introduces live daily-updated analytics.
+Story 4.8 upgrades the browser to use the shared analytics snapshot in
+`data/skill-analytics.json`. The browser now shows:
+
+- install counts
+- harness pass rate
+- active issue count
+- the daily snapshot refresh timestamp
+
+The snapshot is refreshed by `.github/workflows/refresh-skill-analytics.yml`.
