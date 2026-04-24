@@ -1,0 +1,13 @@
+{
+  "name": "cloudformation-basic-selection",
+  "description": "Loads the CloudFormation skill for a CloudFormation contributor.",
+  "assessment_tool": "cloudformation",
+  "contributor_summary": "CloudFormation template changes replace stateful infrastructure.",
+  "raw_files": {
+    "stack.yaml": "AWSTemplateFormatVersion: '2010-09-09'\nResources:\n  ApiBucket:\n    Type: AWS::S3::Bucket\n"
+  },
+  "expected_substrings": [
+    "Any resource change that triggers `Replacement` instead of `Update` = CRITICAL",
+    "RDS `MultiAZ` change = triggers brief failover"
+  ]
+}

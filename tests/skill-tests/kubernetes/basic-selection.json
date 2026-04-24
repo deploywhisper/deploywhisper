@@ -1,0 +1,13 @@
+{
+  "name": "kubernetes-basic-selection",
+  "description": "Loads the Kubernetes skill for a Kubernetes contributor.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Kubernetes deployment rollout updates application pods.",
+  "raw_files": {
+    "deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\nspec:\n  template:\n    spec:\n      containers:\n        - name: api\n          image: example/api:latest\n"
+  },
+  "expected_substrings": [
+    "Container running as root",
+    "No `resources.limits.memory` set"
+  ]
+}

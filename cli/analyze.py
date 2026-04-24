@@ -22,6 +22,8 @@ from services.skill_manifest_service import (
     SkillManifestValidationError,
     load_skill_document,
 )
+from services.skill_test_harness_service import run_skill_test_suites
+from services.skill_test_harness_service import iter_built_in_skill_ids
 from services.analysis_service import (
     analyze_uploaded_files,
     build_advisory_summary,
@@ -111,6 +113,50 @@ def _run_skill_lint(path_arg: str) -> int:
         f"({document.manifest.name}@{document.manifest.version})"
     )
     return 0
+
+
+def _run_skill_test(skill_ids: list[str], *, emit_json: bool = False) -> int:
+    normalized_ids = [
+        skill_id.strip().lower() for skill_id in skill_ids if skill_id.strip()
+    ]
+    known_ids = set(iter_built_in_skill_ids())
+    missing_ids = [skill_id for skill_id in normalized_ids if skill_id not in known_ids]
+    if missing_ids:
+        if emit_json:
+            _emit_json(
+                build_error(
+                    code="skill_not_found",
+                    message="One or more skills were not found.",
+                    details={"skill_ids": missing_ids},
+                ),
+                stream=sys.stderr,
+            )
+        else:
+            sys.stderr.write("Unknown skill ids: " + ", ".join(missing_ids) + "\n")
+        return 2
+
+    results = run_skill_test_suites(normalized_ids)
+    if emit_json:
+        _emit_json(
+            {"data": [result.model_dump() for result in results]},
+            stream=sys.stdout,
+        )
+    else:
+        if not results:
+            print("No skill test suites found.")
+            return 1
+        for result in results:
+            summary = result.summary
+            print(f"{result.skill_id}: {summary.display_text} [{summary.status}]")
+            for scenario in result.scenarios:
+                if scenario.passed:
+                    continue
+                print(f"  - {scenario.name}: {'; '.join(scenario.failures)}")
+    return (
+        0
+        if results and all(result.summary.failed_scenarios == 0 for result in results)
+        else 1
+    )
 
 
 def _run_analyze(paths: list[str]) -> int:
@@ -238,6 +284,19 @@ def build_parser() -> argparse.ArgumentParser:
         "lint", help="Validate a skill markdown file against manifest v1."
     )
     skill_lint_parser.add_argument("path", help="Skill markdown path to validate.")
+    skill_test_parser = skill_subparsers.add_parser(
+        "test", help="Run deterministic harness scenarios for one or more skills."
+    )
+    skill_test_parser.add_argument(
+        "skill_ids",
+        nargs="*",
+        help="Optional skill ids to test. Defaults to all built-in skills.",
+    )
+    skill_test_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of human-readable output.",
+    )
 
     analyze_parser = subparsers.add_parser(
         "analyze", help="Run headless advisory analysis for one or more artifacts."
@@ -308,6 +367,8 @@ def main() -> None:
         raise SystemExit(_run_skills())
     if args.command == "skill" and args.skill_command == "lint":
         raise SystemExit(_run_skill_lint(args.path))
+    if args.command == "skill" and args.skill_command == "test":
+        raise SystemExit(_run_skill_test(args.skill_ids, emit_json=args.json))
     if args.command == "analyze":
         raise SystemExit(_run_analyze(args.paths))
     if args.command == "github" and args.github_command == "init":

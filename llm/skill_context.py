@@ -327,12 +327,12 @@ def _trigger_matches_raw_files(
     )
 
 
-def resolve_skills(
+def resolve_skills_from_active_skills(
+    active_skills: dict[str, ActiveSkill],
     assessment: RiskAssessment,
     raw_files: dict[str, bytes | None] | None = None,
 ) -> list[ActiveSkill]:
-    """Resolve the effective skills that should be included for this analysis."""
-    active_skills = get_active_skills()
+    """Resolve skills from an explicit active-skill map."""
     seen: set[str] = set()
     selected: list[ActiveSkill] = []
     search_blob = _assessment_search_blob(assessment)
@@ -362,6 +362,18 @@ def resolve_skills(
     return selected
 
 
+def resolve_skills(
+    assessment: RiskAssessment,
+    raw_files: dict[str, bytes | None] | None = None,
+) -> list[ActiveSkill]:
+    """Resolve the effective skills that should be included for this analysis."""
+    return resolve_skills_from_active_skills(
+        get_active_skills(),
+        assessment,
+        raw_files=raw_files,
+    )
+
+
 def build_skill_context(
     assessment: RiskAssessment,
     raw_files: dict[str, bytes | None] | None = None,
@@ -369,5 +381,22 @@ def build_skill_context(
     sections = [
         f"## {skill.name.upper()} SKILL ({skill.source})\n{skill.content}"
         for skill in resolve_skills(assessment, raw_files=raw_files)
+    ]
+    return "\n\n".join(sections)
+
+
+def build_skill_context_from_active_skills(
+    active_skills: dict[str, ActiveSkill],
+    assessment: RiskAssessment,
+    raw_files: dict[str, bytes | None] | None = None,
+) -> str:
+    """Build skill context from an explicit active-skill map."""
+    sections = [
+        f"## {skill.name.upper()} SKILL ({skill.source})\n{skill.content}"
+        for skill in resolve_skills_from_active_skills(
+            active_skills,
+            assessment,
+            raw_files=raw_files,
+        )
     ]
     return "\n\n".join(sections)

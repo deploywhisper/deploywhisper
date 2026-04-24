@@ -199,6 +199,74 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("valid skill manifest v1", output.getvalue())
 
+    def test_skill_test_command_reports_success_for_requested_skill(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "skill", "test", "terraform"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("terraform:", output.getvalue())
+        self.assertIn("scenarios passing", output.getvalue())
+
+    def test_skill_test_command_emits_json(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                ["deploywhisper", "skill", "test", "terraform", "--json"],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["data"][0]["skill_id"], "terraform")
+        self.assertEqual(payload["data"][0]["summary"]["status"], "passing")
+
+    def test_skill_test_command_rejects_unknown_skill_id(self) -> None:
+        stderr = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "skill", "test", "missing-skill"]),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("Unknown skill ids: missing-skill", stderr.getvalue())
+
+    def test_skill_test_command_emits_structured_error_for_unknown_skill_in_json_mode(
+        self,
+    ) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                ["deploywhisper", "skill", "test", "missing-skill", "--json"],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "skill_not_found")
+        self.assertEqual(payload["error"]["details"]["skill_ids"], ["missing-skill"])
+
     def test_analyze_command_runs_shared_analysis_and_prints_structured_output(
         self,
     ) -> None:

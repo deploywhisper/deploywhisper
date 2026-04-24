@@ -1,0 +1,13 @@
+{
+  "name": "git-trigger-selection",
+  "description": "Loads the Git skill from diff-file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Pull request includes a Git diff artifact for review.",
+  "raw_files": {
+    "changes.diff": "diff --git a/main.tf b/main.tf\nindex 1111111..2222222 100644\n--- a/main.tf\n+++ b/main.tf\n@@ -1 +1 @@\n-resource \"aws_s3_bucket\" \"old\" {}\n+resource \"aws_s3_bucket\" \"new\" {}\n"
+  },
+  "expected_substrings": [
+    "These file patterns must NEVER be sent to external LLM providers.",
+    "`.env`, `.env.local`, `.env.production`, `.env.*`"
+  ]
+}

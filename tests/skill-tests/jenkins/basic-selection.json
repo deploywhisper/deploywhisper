@@ -1,0 +1,13 @@
+{
+  "name": "jenkins-basic-selection",
+  "description": "Loads the Jenkins skill for a Jenkins contributor.",
+  "assessment_tool": "jenkins",
+  "contributor_summary": "Jenkins pipeline changes affect deploy approvals.",
+  "raw_files": {
+    "Jenkinsfile": "pipeline {\n  agent any\n  stages {\n    stage('Deploy') {\n      steps {\n        input 'Deploy to production?'\n      }\n    }\n  }\n}\n"
+  },
+  "expected_substrings": [
+    "`input` step removed from before a production deploy stage = CRITICAL",
+    "`when` condition removed entirely from deploy stage = CRITICAL"
+  ]
+}

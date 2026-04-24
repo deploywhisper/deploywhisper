@@ -244,12 +244,25 @@ jobs:
             test ${PIPESTATUS[0]} -eq 0
           fi
 
+      - name: Run changed skill harnesses
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          if [ -f scripts/test-changed-skills.sh ]; then
+            bash scripts/test-changed-skills.sh 2>&1 | tee changed-skill-harness.log
+            test ${PIPESTATUS[0]} -eq 0
+          else
+            echo "scripts/test-changed-skills.sh not found — skipping changed skill harness"
+          fi
+
       - name: Upload changed-test logs
         if: failure()
         uses: actions/upload-artifact@v5
         with:
           name: changed-tests-log
-          path: changed-tests.log
+          path: |
+            changed-tests.log
+            changed-skill-harness.log
           retention-days: 14
 
   # ===========================================================================

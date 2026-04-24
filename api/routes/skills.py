@@ -12,8 +12,10 @@ from api.schemas import (
     SkillRegistryListMetaPayload,
     SkillRegistryListResponse,
     SkillRegistryResourceMetaPayload,
+    SkillRegistryTestResultsResponse,
     SkillRegistryVersionData,
     SkillRegistryVersionsResponse,
+    SkillTestResultsData,
 )
 from config import settings
 from services.skill_registry_service import (
@@ -21,6 +23,7 @@ from services.skill_registry_service import (
     fetch_skill_registry_page,
     fetch_skill_registry_versions,
 )
+from services.skill_test_harness_service import run_skill_test_suite
 
 router = APIRouter(prefix="/api/v1/skills", tags=["skills"], route_class=ApiRoute)
 
@@ -137,5 +140,32 @@ def get_skill_versions(skill_id: str) -> SkillRegistryVersionsResponse:
             app=settings.app_name,
             version=settings.app_version,
             id=skill_id.strip().lower(),
+        ),
+    )
+
+
+@router.get(
+    "/{skill_id}/test-results",
+    response_model=SkillRegistryTestResultsResponse,
+    responses={
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def get_skill_test_results(skill_id: str) -> SkillRegistryTestResultsResponse:
+    suite_result = run_skill_test_suite(skill_id.strip().lower())
+    if suite_result is None:
+        raise ApiError(
+            status_code=404,
+            code="skill_not_found",
+            message="Skill not found.",
+        )
+    return SkillRegistryTestResultsResponse(
+        data=SkillTestResultsData(**suite_result.model_dump()),
+        meta=SkillRegistryResourceMetaPayload(
+            app=settings.app_name,
+            version=settings.app_version,
+            id=suite_result.skill_id,
         ),
     )
