@@ -1,0 +1,13 @@
+{
+  "name": "argocd-tool-selection",
+  "description": "Loads the ArgoCD skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "ArgoCD application automation is being expanded for a shared cluster.",
+  "raw_files": {
+    "argocd-application.yaml": "apiVersion: argoproj.io/v1alpha1\nkind: Application\n"
+  },
+  "expected_substrings": [
+    "`syncPolicy.automated.prune: true` in shared namespaces can delete resources outside the immediate change set = HIGH",
+    "`selfHeal: true` can instantly revert emergency hotfixes and confuse incident response = MEDIUM"
+  ]
+}

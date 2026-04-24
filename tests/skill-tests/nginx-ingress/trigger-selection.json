@@ -1,0 +1,13 @@
+{
+  "name": "nginx-ingress-trigger-selection",
+  "description": "Loads the Nginx Ingress skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates ingress controller annotations.",
+  "raw_files": {
+    "ingress-nginx.yaml": "metadata:\n  annotations:\n    nginx.ingress.kubernetes.io/configuration-snippet: more_set_headers\n"
+  },
+  "expected_substrings": [
+    "Path regex or default-backend rewrites can shadow unrelated routes and break many services = HIGH",
+    "Missing body-size or timeout tuning on large uploads creates production-only failures = MEDIUM"
+  ]
+}

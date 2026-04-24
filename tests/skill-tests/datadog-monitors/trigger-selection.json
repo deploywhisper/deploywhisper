@@ -1,0 +1,13 @@
+{
+  "name": "datadog-monitors-trigger-selection",
+  "description": "Loads the Datadog monitors skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Datadog monitor definitions.",
+  "raw_files": {
+    "datadog-monitor.yaml": "name: api latency\nnotify_no_data: false\nrenotify_interval: 0\n"
+  },
+  "expected_substrings": [
+    "Disabling `notify_no_data` on heartbeat-style monitors hides telemetry loss = HIGH",
+    "Removing renotify behavior on sev1 services lengthens incident response = MEDIUM"
+  ]
+}

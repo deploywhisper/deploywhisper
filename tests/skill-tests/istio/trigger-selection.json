@@ -1,0 +1,13 @@
+{
+  "name": "istio-trigger-selection",
+  "description": "Loads the Istio skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Istio access policy manifests.",
+  "raw_files": {
+    "authorizationpolicy.yaml": "apiVersion: security.istio.io/v1beta1\nkind: AuthorizationPolicy\n"
+  },
+  "expected_substrings": [
+    "DestinationRule TLS mode mismatches commonly surface as cascading 503 errors = HIGH",
+    "AuthorizationPolicy allow rules with broad principals or namespaces expand lateral access = HIGH"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "aws-cdk-trigger-selection",
+  "description": "Loads the AWS CDK skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates AWS CDK synth context.",
+  "raw_files": {
+    "cdk.context.json": "{\"availability-zones:account=123:region=us-east-1\": [\"us-east-1a\"]}\n"
+  },
+  "expected_substrings": [
+    "`RemovalPolicy.DESTROY` on stateful constructs risks permanent data loss = CRITICAL",
+    "Context lookups can differ between synth environments and change plans unexpectedly = MEDIUM"
+  ]
+}

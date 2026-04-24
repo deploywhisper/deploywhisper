@@ -1,0 +1,13 @@
+{
+  "name": "prometheus-rules-tool-selection",
+  "description": "Loads the Prometheus rules skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Prometheus rules update changes alert windows and recording names.",
+  "raw_files": {
+    "prometheus-rules.yaml": "kind: PrometheusRule\nspec:\n  groups: []\n"
+  },
+  "expected_substrings": [
+    "Extending alert `for:` windows delays paging and can hide fast-burning incidents = HIGH",
+    "Recording rule renames break downstream dashboards, alerts, and SLO calculations = MEDIUM"
+  ]
+}

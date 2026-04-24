@@ -1,0 +1,13 @@
+{
+  "name": "bicep-tool-selection",
+  "description": "Loads the Bicep skill from the contributor tool.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Bicep deployment changes target scope and resource identity.",
+  "raw_files": {
+    "main.bicep": "targetScope = \"resourceGroup\"\nresource stg \"Microsoft.Storage/storageAccounts@2023-01-01\" = {}\n"
+  },
+  "expected_substrings": [
+    "Resource or module renames can change deployment identity and trigger destructive replacement = HIGH",
+    "`existing` resources pointed at the wrong subscription or resource group create broken references = HIGH"
+  ]
+}

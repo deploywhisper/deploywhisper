@@ -1,0 +1,13 @@
+{
+  "name": "tanka-trigger-selection",
+  "description": "Loads the Tanka skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Tanka Jsonnet environments.",
+  "raw_files": {
+    "main.jsonnet": "local env = import \"tk.libsonnet\";\n"
+  },
+  "expected_substrings": [
+    "Server-side apply or force behavior can overwrite fields owned by other controllers = HIGH",
+    "Namespace or environment target drift deploys to the wrong cluster = CRITICAL"
+  ]
+}

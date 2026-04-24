@@ -1,0 +1,13 @@
+{
+  "name": "cert-manager-tool-selection",
+  "description": "Loads the Cert-Manager skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Cert-manager update rotates issuers and challenge solver settings.",
+  "raw_files": {
+    "clusterissuer.yaml": "apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\n"
+  },
+  "expected_substrings": [
+    "Replacing a ClusterIssuer can break renewals for every dependent certificate = CRITICAL",
+    "DNS01 or HTTP01 solver changes can stall issuance and leave certificates to expire = HIGH"
+  ]
+}

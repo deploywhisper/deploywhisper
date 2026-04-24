@@ -1,0 +1,13 @@
+{
+  "name": "datadog-monitors-tool-selection",
+  "description": "Loads the Datadog monitors skill from the contributor tool.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Datadog monitor update changes thresholds and paging behavior.",
+  "raw_files": {
+    "datadog-monitor.json": "{\"name\": \"api latency\", \"notify_no_data\": true}\n"
+  },
+  "expected_substrings": [
+    "Loosening alert thresholds or evaluation windows can suppress paging on real incidents = HIGH",
+    "Disabling `notify_no_data` on heartbeat-style monitors hides telemetry loss = HIGH"
+  ]
+}

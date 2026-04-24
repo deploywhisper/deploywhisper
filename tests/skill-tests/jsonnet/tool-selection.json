@@ -1,0 +1,13 @@
+{
+  "name": "jsonnet-tool-selection",
+  "description": "Loads the Jsonnet skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Jsonnet template update changes imports and generated manifests.",
+  "raw_files": {
+    "config.jsonnet": "local app = { name: \"api\" };\napp\n"
+  },
+  "expected_substrings": [
+    "Import graph changes can rewrite many generated manifests indirectly = HIGH",
+    "Hidden fields or local mixins can mask production-only config drift = MEDIUM"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "pulumi-azure-trigger-selection",
+  "description": "Loads the Pulumi Azure skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Pulumi Azure program code.",
+  "raw_files": {
+    "pulumi-azure.ts": "import * as azure from \"@pulumi/azure-native\";\n"
+  },
+  "expected_substrings": [
+    "Managed identity or role-assignment drift can break runtime access immediately = HIGH",
+    "Key Vault soft-delete or purge-protection changes alter recovery guarantees = HIGH"
+  ]
+}

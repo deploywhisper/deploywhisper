@@ -1,0 +1,13 @@
+{
+  "name": "jsonnet-trigger-selection",
+  "description": "Loads the Jsonnet skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Jsonnet dependency definitions.",
+  "raw_files": {
+    "jsonnetfile.json": "{\"dependencies\": []}\n"
+  },
+  "expected_substrings": [
+    "Hidden fields or local mixins can mask production-only config drift = MEDIUM",
+    "Evaluated secret literals leak directly into rendered output and review artifacts = CRITICAL"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "pulumi-azure-non-match",
+  "description": "Does not load the Pulumi Azure skill for unrelated files.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Plain Terraform change with no related skill artifacts.",
+  "raw_files": {
+    "main.tf": "resource \"aws_s3_bucket\" \"logs\" {}\n"
+  },
+  "expect_selected": false,
+  "expected_absent_substrings": [
+    "Resource group replacement cascades to every contained Azure resource = CRITICAL"
+  ]
+}

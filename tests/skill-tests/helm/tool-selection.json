@@ -1,0 +1,13 @@
+{
+  "name": "helm-tool-selection",
+  "description": "Loads the Helm skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Helm release updates the api chart and production values.",
+  "raw_files": {
+    "Chart.yaml": "apiVersion: v2\nname: api\ndependencies:\n  - name: redis\n"
+  },
+  "expected_substrings": [
+    "`post-install` or `pre-upgrade` hooks that mutate shared databases can turn a chart upgrade into a production outage = HIGH",
+    "Service selector or immutable field changes force resource replacement and can strand live traffic = HIGH"
+  ]
+}

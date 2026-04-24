@@ -1,0 +1,13 @@
+{
+  "name": "cert-manager-trigger-selection",
+  "description": "Loads the Cert-Manager skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates cert-manager certificate resources.",
+  "raw_files": {
+    "cert-manager-certificate.yaml": "apiVersion: cert-manager.io/v1\nkind: Certificate\n"
+  },
+  "expected_substrings": [
+    "DNS01 or HTTP01 solver changes can stall issuance and leave certificates to expire = HIGH",
+    "Secret name rotation without workload coordination causes immediate TLS outages = HIGH"
+  ]
+}

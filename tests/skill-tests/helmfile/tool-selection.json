@@ -1,0 +1,13 @@
+{
+  "name": "helmfile-tool-selection",
+  "description": "Loads the Helmfile skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Helmfile update changes environment inheritance and release selection.",
+  "raw_files": {
+    "helmfile.yaml": "environments:\n  prod: {}\nreleases: []\n"
+  },
+  "expected_substrings": [
+    "Environment value inheritance can change many releases at once = HIGH",
+    "`helmDefaults.atomic: false` leaves partial failed rollouts behind = MEDIUM"
+  ]
+}

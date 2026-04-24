@@ -1,0 +1,13 @@
+{
+  "name": "bicep-trigger-selection",
+  "description": "Loads the Bicep skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Bicep deployment files.",
+  "raw_files": {
+    "infra.bicep": "output connectionString string = \"secret\"\n"
+  },
+  "expected_substrings": [
+    "`existing` resources pointed at the wrong subscription or resource group create broken references = HIGH",
+    "Key Vault secrets or sensitive outputs emitted as plain strings leak credentials = CRITICAL"
+  ]
+}

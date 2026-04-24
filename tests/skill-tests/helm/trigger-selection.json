@@ -1,0 +1,13 @@
+{
+  "name": "helm-trigger-selection",
+  "description": "Loads the Helm skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Helm production values.",
+  "raw_files": {
+    "values-production.yaml": "image:\n  tag: latest\nreplicaCount: 0\n"
+  },
+  "expected_substrings": [
+    "Service selector or immutable field changes force resource replacement and can strand live traffic = HIGH",
+    "Floating chart dependencies or `image.tag: latest` break reproducibility between environments = MEDIUM"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "prometheus-rules-non-match",
+  "description": "Does not load the Prometheus rules skill for unrelated files.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Plain Terraform change with no related skill artifacts.",
+  "raw_files": {
+    "main.tf": "resource \"aws_s3_bucket\" \"logs\" {}\n"
+  },
+  "expect_selected": false,
+  "expected_absent_substrings": [
+    "Extending alert `for:` windows delays paging and can hide fast-burning incidents = HIGH"
+  ]
+}

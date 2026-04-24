@@ -1,0 +1,13 @@
+{
+  "name": "argocd-trigger-selection",
+  "description": "Loads the ArgoCD skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates ArgoCD application definitions.",
+  "raw_files": {
+    "app-of-apps.yaml": "apiVersion: argoproj.io/v1alpha1\nkind: ApplicationSet\n"
+  },
+  "expected_substrings": [
+    "`selfHeal: true` can instantly revert emergency hotfixes and confuse incident response = MEDIUM",
+    "ApplicationSet generator changes fan out to every generated application and can widen blast radius cluster-wide = CRITICAL"
+  ]
+}

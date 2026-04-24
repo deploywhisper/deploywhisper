@@ -1,0 +1,13 @@
+{
+  "name": "flux-trigger-selection",
+  "description": "Loads the Flux skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Flux-managed Helm releases.",
+  "raw_files": {
+    "helmrelease.yaml": "apiVersion: helm.toolkit.fluxcd.io/v2\nkind: HelmRelease\n"
+  },
+  "expected_substrings": [
+    "Suspending or resuming the wrong source blocks reconciliation across multiple environments = HIGH",
+    "HelmRelease `valuesFrom` changes can silently swap runtime configuration = MEDIUM"
+  ]
+}

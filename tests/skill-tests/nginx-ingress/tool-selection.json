@@ -1,0 +1,13 @@
+{
+  "name": "nginx-ingress-tool-selection",
+  "description": "Loads the Nginx Ingress skill from the contributor tool.",
+  "assessment_tool": "kubernetes",
+  "contributor_summary": "Nginx ingress change updates annotations and route handling.",
+  "raw_files": {
+    "nginx-ingress.yaml": "metadata:\n  annotations:\n    nginx.ingress.kubernetes.io/rewrite-target: /\n"
+  },
+  "expected_substrings": [
+    "`nginx.ingress.kubernetes.io/configuration-snippet` can inject unsafe directives and bypass shared controls = HIGH",
+    "Path regex or default-backend rewrites can shadow unrelated routes and break many services = HIGH"
+  ]
+}

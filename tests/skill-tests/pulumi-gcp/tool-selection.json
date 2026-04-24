@@ -1,0 +1,13 @@
+{
+  "name": "pulumi-gcp-tool-selection",
+  "description": "Loads the Pulumi GCP skill from the contributor tool.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Pulumi GCP stack update changes IAM and project targeting.",
+  "raw_files": {
+    "Pulumi.gcp.yaml": "config:\n  gcp:project: prod-platform\n"
+  },
+  "expected_substrings": [
+    "Authoritative IAM bindings can remove required members and lock out workloads or operators = HIGH",
+    "Cloud SQL or GKE replacements from region or name drift introduce avoidable downtime = HIGH"
+  ]
+}

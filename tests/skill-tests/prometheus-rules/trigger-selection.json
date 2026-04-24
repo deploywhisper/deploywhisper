@@ -1,0 +1,13 @@
+{
+  "name": "prometheus-rules-trigger-selection",
+  "description": "Loads the Prometheus rules skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Prometheus alert rules.",
+  "raw_files": {
+    "alerting-rules.yaml": "kind: PrometheusRule\nspec:\n  groups:\n    - name: api\n"
+  },
+  "expected_substrings": [
+    "Recording rule renames break downstream dashboards, alerts, and SLO calculations = MEDIUM",
+    "Unbounded joins or label expansions can overload Prometheus and remote-write pipelines = HIGH"
+  ]
+}

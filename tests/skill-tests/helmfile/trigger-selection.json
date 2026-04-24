@@ -1,0 +1,13 @@
+{
+  "name": "helmfile-trigger-selection",
+  "description": "Loads the Helmfile skill from raw file triggers.",
+  "assessment_tool": "terraform",
+  "contributor_summary": "Terraform change also updates Helmfile rollout definitions.",
+  "raw_files": {
+    "helmfile.yml": "helmDefaults:\n  atomic: false\n"
+  },
+  "expected_substrings": [
+    "`helmDefaults.atomic: false` leaves partial failed rollouts behind = MEDIUM",
+    "Release selector or ordering changes can affect unintended workloads = HIGH"
+  ]
+}
