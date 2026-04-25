@@ -14,6 +14,7 @@ This document provides the complete epic and story breakdown for deploywhisper, 
 
 - [Baseline vs Roadmap](#baseline-vs-roadmap)
 - [Compact FR/NFR Traceability Matrix](#compact-frnfr-traceability-matrix)
+- [Brownfield Hardening Track](#brownfield-hardening-track)
 - [Epic 1: Trusted Evidence Core](#epic-1)
 - [Epic 2: Report & Review Experience](#epic-2)
 - [Epic 3: GitHub-Native Delivery](#epic-3)
@@ -35,6 +36,12 @@ The current codebase already provides meaningful baseline capabilities:
 - Persisted reports, audit metadata, history browsing, and basic trend summaries
 - Versioned REST API and CLI over the same analysis core
 - Provider settings, local-only mode, topology upload/validation, and custom-skill override support
+
+The current baseline should also be read carefully in one provider-specific area:
+
+- provider settings and local-only operation are part of the supported baseline
+- the previous meta-provider-backed implementation is **not** a permanent architecture constraint
+- brownfield hardening may replace the provider abstraction layer as long as shared-core behavior, degraded fallback, local-first guarantees, and persisted report contracts remain stable
 
 The six epics below focus on the **remaining roadmap delta** needed to reach the latest PRD and architecture target state:
 
@@ -69,19 +76,103 @@ This matrix is intentionally compact. It maps requirement families to either:
 | `WRK-03..07` | `E3-S1..E3-S8` | Delta | GitHub-native delivery is new roadmap work. |
 | `HIS-01..04` | Existing persistence/history baseline + `E5-S4`, `E5-S8` | Baseline + Delta | Persistence and history exist; Epic 5 expands them into richer learning and operations data. |
 | `HIS-05..07` | `E5-S5..E5-S8`, `E6-S1..E6-S8` | Delta | Reviewer feedback, outcomes, calibration, and backtesting are roadmap work. |
-| `ADM-01..05` | Existing settings/local-mode/topology/custom-skill baseline + `E4-S1..E4-S9`, `E5-S1..E5-S4` | Baseline + Delta | Admin basics exist now; marketplace and context automation extend them. |
+| `ADM-01..05` | Existing settings/local-mode/topology/custom-skill baseline + `BH-S1..BH-S5` + `E4-S1..E4-S9`, `E5-S1..E5-S4` | Baseline + Delta | Admin basics exist now; marketplace and context automation extend them, and the brownfield provider track hardens the provider boundary. |
 | `ADM-06..07` | Cross-cutting governance in `E1`, `E5`, and future adapter work | Delta | Threshold/default management and policy-adapter consumption need explicit follow-through during implementation. |
 | `COM-01..07` | `E4-S1..E4-S9` | Delta | Community ecosystem requirements are fully owned by Epic 4. |
-| `NFR-SEC-01..05` | Existing local-first/security baseline + Epic 1, 4, and 5 hardening | Baseline + Delta | Preserve raw-local boundaries and secret handling while expanding ecosystem and context features. |
+| `NFR-SEC-01..06` | Existing local-first/security baseline + `BH-S1..BH-S5` + Epic 1, 4, and 5 hardening | Baseline + Delta | Preserve raw-local boundaries and secret handling while expanding ecosystem and context features and reducing provider-path dependency surface. |
 | `NFR-PERF-01..04` | Cross-cutting across `E1`, `E2`, `E3`, and `E5` | Delta | Performance budgets are not their own epic; they must be pulled into story ACs during implementation. |
 | `NFR-REL-01..04` | Existing degradation/persistence baseline + `E1-S7`, `E5-*` | Baseline + Delta | Reliability exists partially today; Epic 1 and 5 raise the bar. |
 | `NFR-XAI-01..04` | `E2-S1..E2-S8` | Delta | Explainability and accessibility are primarily enforced through Epic 2. |
-| `NFR-OPS-01..04` | Existing shared-core architecture + `E1-S8`, `E3-*`, `E5-*`, `E6-*` | Baseline + Delta | Architecture stability exists now; schema, adapter, and future worker migration concerns remain roadmap work. |
+| `NFR-OPS-01..05` | Existing shared-core architecture + `BH-S1..BH-S5` + `E1-S8`, `E3-*`, `E5-*`, `E6-*` | Baseline + Delta | Architecture stability exists now; schema, adapter, and future worker migration concerns remain roadmap work, with the brownfield track owning provider-interface hardening. |
 
 Implementation note:
 
 - If a requirement family is marked `Baseline`, do not add replacement stories unless the capability is missing or unstable in the current repo.
 - If a requirement family is marked `Baseline + Delta`, the story intent is to extend or re-architect the existing implementation without losing current behavior.
+
+---
+
+<a id="brownfield-hardening-track"></a>
+## Brownfield Hardening Track
+
+This track is intentionally separate from the six main epics.
+
+Its purpose is to harden already-shipped or already-planned behavior without pretending the repo starts from zero again. The current provider settings and local-only operation remain valid baseline capabilities; this track updates the implementation boundary behind them.
+
+### Goal
+
+Replace the previous meta-provider-centered abstraction with a DeployWhisper-owned adapter boundary while preserving:
+
+- local-first raw-artifact handling
+- narrative-after-scoring sequencing
+- deterministic degradation behavior
+- shared UI/API/CLI/report behavior
+- persisted provider/model audit metadata
+
+### Stories
+
+#### BH-S1: Lock provider-boundary behavior with regression tests
+**As a** maintainer,
+**I want** current provider resolution, validation, degraded fallback, and persisted metadata behavior locked with tests,
+**so that** the migration does not silently change user-visible semantics.
+
+**Acceptance:**
+- Tests cover provider resolution across environment and persisted settings
+- Tests cover readiness validation behavior for local and hosted modes
+- Tests cover narrative JSON parsing and deterministic fallback behavior
+- Tests verify persisted report metadata still records provider, model, and local-mode fields
+
+#### BH-S2: Introduce provider adapter contract and registry
+**As a** developer,
+**I want** a repo-owned provider adapter interface and registry,
+**so that** callers keep one stable boundary while provider implementations change underneath.
+
+**Acceptance:**
+- `llm/providers.py` becomes a facade over an internal adapter registry
+- Adapter interface defines completion, validation, and capability reporting semantics
+- `llm/narrator.py` caller behavior remains unchanged
+- API/UI/CLI do not gain provider-specific branching
+
+#### BH-S3: Migrate OpenAI, Anthropic, Gemini, and Ollama to direct SDK adapters
+**As a** platform admin,
+**I want** first-class providers to run through direct SDK adapters,
+**so that** DeployWhisper reduces dependency surface while preserving supported provider choice.
+
+**Acceptance:**
+- OpenAI uses the official `openai` SDK
+- Anthropic uses the official `anthropic` SDK
+- Gemini uses the official `google-genai` SDK
+- Ollama uses a direct local adapter path
+- Existing provider settings UX and API contracts stay stable
+
+#### BH-S4: Migrate OpenRouter, Groq, and xAI to a compatibility adapter and remove the legacy meta-provider dependency
+**As a** maintainer,
+**I want** lower-priority providers preserved through a compatibility path,
+**so that** DeployWhisper keeps current breadth without keeping the legacy meta-provider dependency in the runtime path.
+
+**Acceptance:**
+- OpenRouter, Groq, and xAI remain selectable providers
+- Compatibility-provider behavior is implemented through one explicit compatibility adapter
+- The legacy meta-provider package is removed from runtime dependencies after parity is verified
+- README and provider docs no longer describe an external meta-provider as the core abstraction
+
+#### BH-S5: Add provider capability metadata and MCP readiness hooks
+**As a** future integrator,
+**I want** provider capabilities modeled explicitly,
+**so that** MCP and tool-integration work can be planned intentionally instead of being hidden in provider-specific codepaths.
+
+**Acceptance:**
+- Provider metadata includes structured output, local-only, remote MCP, local MCP, and tool-approval capability flags
+- Settings and validation logic can surface capability differences without changing report semantics
+- MCP readiness remains optional and does not block legacy dependency removal
+
+### Exit Criteria
+
+- The legacy meta-provider package is removed from the runtime dependency path
+- Tier 1 providers run through direct adapters
+- Tier 2 providers run through an explicit compatibility adapter
+- Degraded fallback and report contracts remain stable
+- Planning docs and generated project context reflect the repo-owned provider boundary
 
 ---
 

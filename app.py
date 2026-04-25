@@ -54,6 +54,7 @@ def _ensure_nicegui_config_defaults() -> None:
         "dark": False,
         "language": "en-US",
         "endpoint_documentation": "none",
+        "markdown": False,
         "message_history_length": 1000,
         "quasar_config": {},
         "reconnect_timeout": 5.0,

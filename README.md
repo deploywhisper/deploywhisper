@@ -54,7 +54,7 @@ The current implementation is built as a pure-Python application with:
 - NiceGUI for the operator-facing web UI
 - FastAPI for the versioned API surface
 - SQLAlchemy and SQLite for persistence
-- Litellm-backed narrative generation with local-only Ollama support
+- Direct SDK adapters for OpenAI, Anthropic, Gemini, and local Ollama narrative generation
 
 ## How It Works
 
@@ -146,7 +146,16 @@ Planning and design artifacts live under [`_bmad-output/planning-artifacts/`](./
   - Ollama for fully local mode
   - or OpenAI / Anthropic / Gemini / OpenRouter / Groq / xAI credentials via environment variables
 
-For local-only narrative generation, Ollama is the intended path.
+Tier-1 providers use direct adapters:
+
+- OpenAI via the official `openai` SDK
+- Anthropic via the official `anthropic` SDK
+- Gemini via the official `google-genai` SDK
+- Ollama via the local HTTP adapter
+
+OpenRouter, Groq, and xAI remain on the compatibility path through one explicit OpenAI-compatible adapter. For local-only narrative generation, Ollama is the intended path.
+
+Provider settings and health surfaces also expose explicit capability metadata for structured output, local-only mode, remote MCP, local MCP, and tool approval. These MCP-related flags are planning metadata only for now; DeployWhisper does not execute MCP tools in the current narrative flow.
 
 ## Quick Start
 
@@ -171,6 +180,19 @@ The app starts on:
 ```bash
 ./.venv/bin/python -m unittest discover -q
 ```
+
+Credentialed provider smoke tests are opt-in so the default suite remains offline:
+
+```bash
+DEPLOYWHISPER_LIVE_PROVIDER_SMOKE=1 \
+  DEPLOYWHISPER_LIVE_PROVIDER_SMOKE_PROVIDERS=openai \
+  ./.venv/bin/python -m unittest tests.test_llm.test_live_provider_smoke -q
+```
+
+The smoke test loads provider keys from environment variables or `.env` and only
+runs providers with usable keys. Provider-specific model and API-base overrides
+use `DEPLOYWHISPER_LIVE_<PROVIDER>_MODEL` and
+`DEPLOYWHISPER_LIVE_<PROVIDER>_API_BASE`.
 
 ## Docker Deployment
 

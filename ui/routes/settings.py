@@ -94,6 +94,14 @@ def build_settings_page() -> None:
                 ui.label(
                     "Provider selection, model, and API base can be persisted. API keys are not stored in the app database and must come from environment variables or runtime secrets."
                 ).classes("text-sm dw-muted")
+            with ui.column().classes("w-full gap-1 rounded-lg dw-panel-soft px-4 py-3"):
+                ui.label("Provider capabilities").classes(
+                    "text-sm font-semibold dw-text"
+                )
+                ui.label(
+                    "MCP readiness remains optional and future-facing. Current narrative flows still use structured summaries only."
+                ).classes("text-sm dw-muted")
+                capability_summary = ui.label("").classes("text-sm dw-muted")
             provider_select = ui.select(
                 options=provider_options,
                 value=settings.provider,
@@ -135,11 +143,24 @@ def build_settings_page() -> None:
                 api_base_input.value = selected.api_base or str(defaults["api_base"])
                 api_key_input.value = selected.api_key or ""
                 local_mode_toggle.value = selected.local_mode
-                if provider_name == "ollama":
+                capabilities = selected.capabilities
+                capability_summary.text = (
+                    "Structured output: "
+                    f"{'yes' if capabilities.supports_structured_output else 'no'} · "
+                    "Local-only: "
+                    f"{'yes' if capabilities.supports_local_only_mode else 'no'} · "
+                    "Remote MCP: "
+                    f"{'yes' if capabilities.supports_remote_mcp else 'no'} · "
+                    "Local MCP: "
+                    f"{'yes' if capabilities.supports_local_mcp else 'no'} · "
+                    "Tool approval: "
+                    f"{'yes' if capabilities.supports_tool_approval else 'no'}"
+                )
+                if capabilities.supports_local_only_mode:
                     local_mode_toggle.enable()
                 else:
                     local_mode_toggle.disable()
-                if provider_name != "ollama":
+                if not capabilities.supports_local_only_mode:
                     local_mode_toggle.value = False
 
             provider_select.on_value_change(

@@ -103,6 +103,7 @@ DeployWhisper uses a layered architecture:
 - GitHub (first-priority integration; Action + App)
 - GitLab / Jenkins / Atlantis / HCP Terraform (future adapters)
 - Ollama or external model providers
+- Direct provider SDKs for first-class narrative integrations
 - Optional incident or ticket sources
 - Optional Terraform state or service-catalog data sources
 - Skills registry (community contribution repository)
@@ -171,6 +172,35 @@ DeployWhisper uses a layered architecture:
              | benchmark runs |
              +----------------+
 ```
+
+---
+
+## 6.1 Narrative Provider Integration Model
+
+DeployWhisper treats provider independence as a **repo-owned architectural boundary**, not as a permanent commitment to any single third-party multi-provider SDK.
+
+The narrative path stays intentionally narrow:
+
+- providers receive structured summaries only
+- provider calls happen after deterministic scoring
+- provider failure degrades to deterministic output
+- provider/model metadata remains audit-visible across UI, API, CLI, and persisted reports
+
+Provider support is tiered:
+
+- **Tier 1 direct adapters**: Ollama, OpenAI, Anthropic, Gemini
+- **Tier 2 compatibility adapters**: OpenRouter, Groq, xAI
+- **Tier 3 future adapters**: only add when a clear product or operational need exists
+
+Future MCP and tool-integration work should be represented through provider capability metadata rather than hidden provider-specific branching:
+
+- `supports_structured_output`
+- `supports_remote_mcp`
+- `supports_local_mcp`
+- `supports_tool_approval`
+- `supports_local_only_mode`
+
+This keeps the local-first trust boundary stable while allowing provider-native features to evolve without leaking provider-specific logic across the rest of the codebase.
 
 ---
 
@@ -945,6 +975,14 @@ deploywhisper/
 ├── llm/
 │   ├── narrator.py
 │   ├── providers.py
+│   ├── adapters/
+│   │   ├── base.py
+│   │   ├── registry.py
+│   │   ├── openai_adapter.py
+│   │   ├── anthropic_adapter.py
+│   │   ├── gemini_adapter.py
+│   │   ├── ollama_adapter.py
+│   │   └── openai_compatible_adapter.py
 │   └── summary_builder.py
 ├── integrations/
 │   ├── github/
@@ -1024,6 +1062,10 @@ deploywhisper/
 ### ADR-11: GitHub adapter uses Action + App in parallel (new)
 **Status:** Accepted
 **Reason:** Action is simpler and best aligns with the product's open-source local-first posture, so ship it first. Self-hosted GitHub App support enables richer interactions (check runs, PR events, OAuth) for teams that run their own DeployWhisper server. Defer any public hosted Marketplace app until the trust, privacy, and operating model are intentionally defined.
+
+### ADR-12: Prefer direct provider SDKs over external meta-provider abstractions for the narrative path
+**Status:** Accepted
+**Reason:** DeployWhisper's provider use case is narrow enough that a repo-owned adapter layer gives better control over dependency risk, resolver stability, and future provider-native MCP or tool divergence than a multi-provider meta-abstraction.
 
 ---
 

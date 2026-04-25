@@ -468,7 +468,7 @@ A platform engineer discovers DeployWhisper doesn't know about their internal to
 - **HIS-07** Support benchmark and backtest workflows against historical incidents
 
 ### 13.8 Administration and customization
-- **ADM-01** Admins shall configure narrative provider settings
+- **ADM-01** Admins shall configure narrative provider settings through a DeployWhisper-owned provider adapter boundary that preserves shared UI/API/CLI behavior and keeps provider secrets out of persistence
 - **ADM-02** Admins shall enable fully local-only operation
 - **ADM-03** Admins shall manage topology data and freshness status
 - **ADM-04** Admins shall manage incident ingestion and indexing
@@ -495,6 +495,7 @@ A platform engineer discovers DeployWhisper doesn't know about their internal to
 - **NFR-SEC-03** Logs shall exclude secrets, raw IaC, prompts, and raw model responses
 - **NFR-SEC-04** Sensitive-file handling shall always remain enabled
 - **NFR-SEC-05** Fully local operation shall be possible with local model execution (Ollama)
+- **NFR-SEC-06** The narrative-provider integration path shall minimize unnecessary dependency and supply-chain surface when direct provider SDKs satisfy the required capability more safely than a multi-provider meta-abstraction
 
 ### 14.2 Performance
 - **NFR-PERF-01** Standard analysis should complete in under 15 seconds for expected v1 workloads
@@ -519,6 +520,7 @@ A platform engineer discovers DeployWhisper doesn't know about their internal to
 - **NFR-OPS-02** The product shall preserve a stable report schema across access surfaces
 - **NFR-OPS-03** The architecture shall support migration from SQLite to PostgreSQL without redesigning domain models
 - **NFR-OPS-04** The architecture shall support adding async workers later without breaking existing interfaces
+- **NFR-OPS-05** Narrative provider integrations shall be isolated behind an internal adapter interface so providers can be added, removed, upgraded, or capability-scoped without rewriting UI, API, CLI, or report persistence flows
 
 ---
 

@@ -107,6 +107,58 @@ class SettingsServiceTests(unittest.TestCase):
         os.environ.pop("OPENAI_API_KEY", None)
         os.environ.pop("ANTHROPIC_API_KEY", None)
 
+    def test_provider_select_options_keep_compatibility_providers_available(
+        self,
+    ) -> None:
+        options = settings_service_module.provider_select_options()
+
+        self.assertIn("openrouter", options)
+        self.assertIn("groq", options)
+        self.assertIn("xai", options)
+
+    def test_get_provider_settings_includes_capability_metadata(self) -> None:
+        loaded = settings_service_module.get_provider_settings("ollama")
+
+        self.assertTrue(loaded.capabilities.supports_structured_output)
+        self.assertTrue(loaded.capabilities.supports_local_only_mode)
+        self.assertFalse(loaded.capabilities.supports_remote_mcp)
+        self.assertFalse(loaded.capabilities.supports_local_mcp)
+        self.assertFalse(loaded.capabilities.supports_tool_approval)
+
+    def test_get_provider_settings_survives_unsupported_provider_capabilities(
+        self,
+    ) -> None:
+        loaded = settings_service_module.get_provider_settings("unknown-provider")
+
+        self.assertEqual(loaded.provider, "unknown-provider")
+        self.assertTrue(loaded.capabilities.supports_structured_output)
+        self.assertFalse(loaded.capabilities.supports_local_only_mode)
+
+    def test_get_provider_settings_can_resolve_from_environment_without_db_rows(
+        self,
+    ) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "gemini",
+                "LLM_MODEL": "gemini/gemini-2.0-flash",
+                "LLM_API_BASE": "https://generativelanguage.googleapis.com",
+                "GEMINI_API_KEY": "gm-env-test",
+            },
+            clear=False,
+        ):
+            reload(config_module)
+            reload(settings_service_module)
+
+            loaded = settings_service_module.get_provider_settings()
+
+        self.assertEqual(loaded.provider, "gemini")
+        self.assertEqual(loaded.model, "gemini/gemini-2.0-flash")
+        self.assertEqual(loaded.api_base, "https://generativelanguage.googleapis.com")
+        self.assertEqual(loaded.api_key, "gm-env-test")
+        self.assertFalse(loaded.local_mode)
+        self.assertEqual(loaded.source, "environment")
+
     def test_validate_provider_settings_returns_failure_message(self) -> None:
         config = settings_service_module.ProviderSettings(
             provider="openai",
@@ -179,6 +231,43 @@ class SettingsServiceTests(unittest.TestCase):
         self.assertIn("provider offline", readiness.message)
         os.environ.pop("OPENAI_API_KEY", None)
 
+    def test_check_provider_readiness_validates_local_mode_without_api_key(
+        self,
+    ) -> None:
+        settings_service_module.activate_local_mode(
+            model="ollama/llama3",
+            api_base="http://localhost:11434",
+        )
+
+        def fake_completion(**_: object):
+            class Message:
+                def __init__(self, content: str) -> None:
+                    self.content = content
+
+            class Choice:
+                def __init__(self, content: str) -> None:
+                    self.message = Message(content)
+
+            class Response:
+                def __init__(self) -> None:
+                    self.choices = [Choice("{}")]
+
+            return Response()
+
+        readiness = settings_service_module.check_provider_readiness(
+            completion_client=fake_completion
+        )
+
+        self.assertTrue(readiness.ready)
+        self.assertEqual(readiness.provider, "ollama")
+        self.assertEqual(readiness.model, "ollama/llama3")
+        self.assertTrue(readiness.local_mode)
+        self.assertFalse(readiness.requires_api_key)
+        self.assertFalse(readiness.has_api_key)
+        self.assertEqual(
+            readiness.message, "LLM provider connection validated for analysis."
+        )
+
     def test_get_provider_health_snapshot_does_not_probe_provider(self) -> None:
         os.environ["OPENAI_API_KEY"] = "sk-openai-env"
         reload(config_module)
@@ -198,6 +287,9 @@ class SettingsServiceTests(unittest.TestCase):
 
         self.assertTrue(readiness.ready)
         self.assertEqual(readiness.provider, "openai")
+        self.assertTrue(readiness.capabilities.supports_structured_output)
+        self.assertFalse(readiness.capabilities.supports_local_only_mode)
+        self.assertFalse(readiness.capabilities.supports_remote_mcp)
         self.assertIn(
             "Live connectivity is checked during analysis runs", readiness.message
         )

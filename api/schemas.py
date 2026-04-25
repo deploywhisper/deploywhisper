@@ -57,6 +57,27 @@ class LlmHealthData(BaseModel):
     source: str = Field(
         ..., description="Where the provider settings were resolved from"
     )
+    capabilities: "ProviderCapabilityData" = Field(
+        ..., description="Explicit capability metadata for the selected provider"
+    )
+
+
+class ProviderCapabilityData(BaseModel):
+    supports_structured_output: bool = Field(
+        ..., description="Whether the provider supports structured JSON responses"
+    )
+    supports_remote_mcp: bool = Field(
+        ..., description="Whether the provider supports future remote MCP execution"
+    )
+    supports_local_mcp: bool = Field(
+        ..., description="Whether the provider supports future local MCP execution"
+    )
+    supports_tool_approval: bool = Field(
+        ..., description="Whether the provider supports explicit tool approval flows"
+    )
+    supports_local_only_mode: bool = Field(
+        ..., description="Whether the provider supports fully local-only operation"
+    )
 
 
 ToolType = Literal[

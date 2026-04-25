@@ -1,11 +1,11 @@
 ---
 project_name: 'deploywhisper'
 user_name: 'psaho01'
-date: '2026-04-20'
+date: '2026-04-25'
 sections_completed:
   ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
 status: 'complete'
-rule_count: 32
+rule_count: 34
 optimized_for_llm: true
 ---
 
@@ -21,7 +21,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Web runtime: NiceGUI `3.10.0` and FastAPI `0.135.2` share one app in `app.py`.
 - Persistence: SQLAlchemy `2.0.49`, Alembic `1.18.4`, default SQLite database at `data/deploywhisper.db`.
 - Data contracts: Pydantic `2.12.2` models and `Field(...)` metadata.
-- LLM layer: LiteLLM `1.83.0`; default local mode is Ollama via `config.Settings`.
+- LLM layer: repo-owned provider boundary in `llm/providers.py`; OpenAI, Anthropic, Gemini, and Ollama run through direct adapters under `llm/adapters/`, while OpenRouter, Groq, and xAI use one explicit OpenAI-compatible adapter. The old meta-provider runtime dependency has been removed.
 - Infra parsing: `python-hcl2`, `ruamel.yaml`, `pyyaml`, `deepdiff`; supported tools are Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation.
 - Delivery surfaces: shared UI, REST API, and CLI all sit over the same analysis services.
 - Validation path: repository tests are standard-library `unittest`; local CI helper lives in `scripts/ci-local.sh`.
@@ -42,6 +42,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Treat `app.py` as the canonical runtime entrypoint: NiceGUI pages, FastAPI routes, OpenAPI docs, and DB startup are composed there.
 - Keep the pipeline ordering intact: intake/parse -> assess -> blast radius -> rollback -> incident match -> narrative -> persist.
 - Narrative generation is downstream of scoring. If the LLM path fails, degrade gracefully and preserve deterministic report output instead of failing the analysis.
+- Treat provider independence as a DeployWhisper-owned boundary. Keep provider-specific behavior behind `llm/providers.py` and future `llm/adapters/*` modules instead of leaking it into services, API routes, CLI commands, or UI code.
 - Preserve the advisory-only product contract. Current summaries intentionally set `should_block=False`; do not introduce blocking enforcement behavior unless product requirements explicitly change.
 - Preserve the local-first boundary: raw IaC/artifact content stays local; external model calls should only receive structured summaries, never raw uploads.
 - Skill resolution is filename-based: built-in skills live in `skills/`, custom overrides/new skills live in `skills/custom/`, and frontmatter is stripped before runtime use.
@@ -54,6 +55,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - For persistence-related tests, use `tempfile.TemporaryDirectory()`, override `DATABASE_URL`, and initialize a fresh database for isolation.
 - Patch unstable boundaries such as LLM generation, incident matching, or filesystem-dependent helpers so tests stay deterministic and local.
 - When fixing behavior, add or update a regression test in the matching layer before broad refactors.
+- For provider-boundary work, lock current provider resolution, validation, degraded fallback, and persisted provider metadata with regression tests before changing dependencies or adapter implementations.
 
 ### Code Quality & Style Rules
 
@@ -62,6 +64,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Preserve separation by layer: parsers normalize input, analysis modules score/derive risk, services orchestrate, API/UI/CLI adapt outputs.
 - Use the shared schema helpers (`build_meta`, response models, formatter helpers) for external surfaces instead of inventing one-off payload shapes.
 - Do not hardcode secrets or provider credentials. Read them through environment-backed settings only.
+- Prefer first-class direct provider SDKs for primary providers when the repo's own adapter layer can keep behavior stable with less dependency risk than a meta-provider SDK.
 
 ### Development Workflow Rules
 
@@ -100,4 +103,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Update it when tooling, validation commands, or architecture boundaries materially change.
 - Remove rules that become obsolete or are contradicted by the current codebase.
 
-Last Updated: 2026-04-20
+Last Updated: 2026-04-25

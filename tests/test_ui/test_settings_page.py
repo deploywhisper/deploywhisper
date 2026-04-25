@@ -30,6 +30,8 @@ class SettingsPageTests(unittest.TestCase):
         self.assertIn("Secrets", response.text)
         self.assertIn("API keys are not stored in the app database", response.text)
         self.assertIn("API key", response.text)
+        self.assertIn("Provider capabilities", response.text)
+        self.assertIn("MCP readiness remains optional", response.text)
         self.assertIn("Dashboard Result Display Duration", response.text)
         self.assertIn("Topology context", response.text)
         self.assertIn("blast-radius analysis", response.text)

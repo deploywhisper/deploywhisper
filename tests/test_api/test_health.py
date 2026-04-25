@@ -25,6 +25,17 @@ class HealthEndpointTests(unittest.TestCase):
                     "provider": "ollama",
                     "model": "ollama/llama3",
                     "local_mode": True,
+                    "capabilities": type(
+                        "Capabilities",
+                        (),
+                        {
+                            "supports_structured_output": True,
+                            "supports_remote_mcp": False,
+                            "supports_local_mcp": False,
+                            "supports_tool_approval": False,
+                            "supports_local_only_mode": True,
+                        },
+                    )(),
                     "requires_api_key": False,
                     "has_api_key": False,
                     "message": "LLM provider connection validated for analysis.",
@@ -40,6 +51,7 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(body["data"]["mode"], "foundation")
         self.assertEqual(body["data"]["llm"]["status"], "ok")
         self.assertEqual(body["data"]["llm"]["provider"], "ollama")
+        self.assertTrue(body["data"]["llm"]["capabilities"]["supports_local_only_mode"])
 
     def test_health_endpoint_reports_llm_status_separately_from_core_health(
         self,
@@ -54,6 +66,17 @@ class HealthEndpointTests(unittest.TestCase):
                     "provider": "openai",
                     "model": "gpt-4.1-mini",
                     "local_mode": False,
+                    "capabilities": type(
+                        "Capabilities",
+                        (),
+                        {
+                            "supports_structured_output": True,
+                            "supports_remote_mcp": False,
+                            "supports_local_mcp": False,
+                            "supports_tool_approval": False,
+                            "supports_local_only_mode": False,
+                        },
+                    )(),
                     "requires_api_key": True,
                     "has_api_key": False,
                     "message": "openai is selected but no API key is available in environment variables. Analysis can continue with heuristic-only results.",
@@ -70,6 +93,9 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(body["data"]["llm"]["status"], "degraded")
         self.assertFalse(body["data"]["llm"]["ready"])
         self.assertTrue(body["data"]["llm"]["requires_api_key"])
+        self.assertFalse(
+            body["data"]["llm"]["capabilities"]["supports_local_only_mode"]
+        )
 
     def test_swagger_ui_is_exposed_under_versioned_api_namespace(self) -> None:
         response = self.client.get("/api/v1/docs")
