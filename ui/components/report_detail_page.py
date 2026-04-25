@@ -71,6 +71,162 @@ def _render_summary_and_advisory(report: dict[str, Any]) -> None:
                     )
 
 
+def _primary_contributor(report: dict[str, Any]) -> dict[str, Any] | None:
+    contributors = [
+        contributor
+        for contributor in report.get("contributors", [])
+        if isinstance(contributor, dict)
+    ]
+    if not contributors:
+        return None
+    return max(
+        contributors,
+        key=lambda contributor: (
+            int(contributor.get("contribution") or 0),
+            str(contributor.get("resource_id") or ""),
+        ),
+    )
+
+
+def _primary_finding(report: dict[str, Any]) -> dict[str, Any] | None:
+    findings = [
+        finding for finding in report.get("findings", []) if isinstance(finding, dict)
+    ]
+    if not findings:
+        return None
+    severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    return max(
+        findings,
+        key=lambda finding: (
+            severity_order.get(str(finding.get("severity") or "").lower(), 0),
+            float(finding.get("confidence") or 0.0),
+            str(finding.get("title") or ""),
+        ),
+    )
+
+
+def _evidence_for_finding(
+    report: dict[str, Any], finding: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    evidence_items = [
+        item for item in report.get("evidence_items", []) if isinstance(item, dict)
+    ]
+    if not evidence_items:
+        return None
+    evidence_refs = set(finding.get("evidence_refs") or []) if finding else set()
+    if evidence_refs:
+        for item in evidence_items:
+            if item.get("evidence_id") in evidence_refs:
+                return item
+    return evidence_items[0]
+
+
+def _tool_label(value: object) -> str:
+    text = str(value or "deployment artifact").strip()
+    return text.upper() if len(text) <= 4 else text.title()
+
+
+def _operational_narrative_items(report: dict[str, Any]) -> list[tuple[str, str]]:
+    contributor = _primary_contributor(report)
+    finding = _primary_finding(report)
+    evidence = _evidence_for_finding(report, finding)
+    rollback_plan = report.get("rollback_plan") or {}
+    rollback_steps = [
+        step for step in rollback_plan.get("steps", []) if isinstance(step, dict)
+    ]
+    critical_step = next(
+        (step for step in rollback_steps if step.get("critical")),
+        rollback_steps[0] if rollback_steps else None,
+    )
+
+    if contributor:
+        resource_id = str(contributor.get("resource_id") or "unknown resource")
+        source_file = str(contributor.get("source_file") or "unknown file")
+        action = str(
+            contributor.get("normalized_action")
+            or contributor.get("action")
+            or "change"
+        )
+        what_changed = (
+            f"{_tool_label(contributor.get('tool'))} {action} on {resource_id} "
+            f"from {source_file}: {contributor.get('summary') or report['top_risk']}"
+        )
+        exact_resource = (
+            f"Resource {resource_id} in {source_file}; category "
+            f"{contributor.get('resource_category') or 'unknown'}."
+        )
+        if evidence and evidence.get("source_ref"):
+            exact_resource += f" Evidence reference: {evidence['source_ref']}."
+    else:
+        what_changed = str(report.get("parse_summary") or report.get("top_risk") or "")
+        exact_resource = "Review the findings table for the exact parsed resource and artifact references."
+
+    why_risky = (
+        str(report.get("narrative_explanation") or "").strip()
+        or str(contributor.get("reasoning") if contributor else "").strip()
+        or str(finding.get("description") if finding else "").strip()
+        or str(report.get("top_risk") or "")
+    )
+
+    security_flags = (
+        list(contributor.get("security_flags") or []) if contributor else []
+    )
+    if security_flags:
+        verify_before_deploy = "Verify before deploy: " + "; ".join(
+            str(flag) for flag in security_flags[:2]
+        )
+    elif evidence:
+        verify_before_deploy = (
+            f"Verify before deploy: confirm {evidence.get('summary') or 'the top evidence item'} "
+            "is expected and approved."
+        )
+    elif finding:
+        verify_before_deploy = (
+            f"Verify before deploy: review {finding.get('title') or 'the top finding'} "
+            "with the owning engineer."
+        )
+    else:
+        verify_before_deploy = "Verify before deploy: confirm the parsed change list matches the intended release."
+
+    if rollback_plan.get("warning"):
+        rollback_concern = str(rollback_plan["warning"])
+    elif critical_step:
+        rollback_concern = (
+            f"{rollback_plan.get('complexity_score', 1)}/5 "
+            f"{str(rollback_plan.get('complexity', 'low')).upper()} rollback. "
+            f"First concern: {critical_step.get('title') or 'rollback step'} - "
+            f"{critical_step.get('detail') or 'verify the prior stable state can be restored.'}"
+        )
+    else:
+        rollback_concern = "No rollback concern was generated for this report."
+
+    return [
+        ("What changed?", what_changed),
+        ("Why is it risky?", why_risky),
+        ("Exact resource/file", exact_resource),
+        ("Verify before deploying", verify_before_deploy),
+        ("Rollback concern", rollback_concern),
+    ]
+
+
+def _render_operational_narrative(report: dict[str, Any]) -> None:
+    with ui.card().classes("w-full dw-panel shadow-none p-5"):
+        with ui.column().classes("gap-4"):
+            with ui.column().classes("gap-1"):
+                ui.label("Operational narrative").classes("text-lg font-medium dw-text")
+                ui.label(
+                    "A release-review view of the LLM briefing, grounded in the parsed evidence and rollback plan."
+                ).classes("text-sm dw-muted leading-6")
+            for label, value in _operational_narrative_items(report):
+                with ui.element("div").classes(
+                    "w-full border-t border-[color:var(--dw-border)] pt-3"
+                ):
+                    ui.label(label).classes(
+                        "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
+                    )
+                    ui.label(value).classes("mt-1 text-sm dw-text leading-6")
+
+
 def _render_resource_breakdown(report: dict[str, Any]) -> None:
     contributors = report.get("contributors", [])
     with ui.card().classes("w-full dw-panel shadow-none p-5"):
@@ -236,6 +392,7 @@ def render_report_detail_page(report: dict[str, Any]) -> None:
                 )
 
     _render_summary_and_advisory(report)
+    _render_operational_narrative(report)
     render_findings_table(
         findings,
         evidence_items,

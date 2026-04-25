@@ -903,6 +903,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         ),
         "parse_summary": report.parse_summary,
         "narrative_opening": report.narrative_opening,
+        "narrative_explanation": report.narrative_explanation,
         "narrative_available": narrative_available,
         "narrative_failure_notice": _extract_narrative_failure_notice(warnings),
         "assessment_source": report.assessment_source,

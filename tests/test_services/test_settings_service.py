@@ -107,6 +107,36 @@ class SettingsServiceTests(unittest.TestCase):
         os.environ.pop("OPENAI_API_KEY", None)
         os.environ.pop("ANTHROPIC_API_KEY", None)
 
+    def test_requested_provider_profile_uses_provider_specific_env_key(self) -> None:
+        with patch.dict(os.environ, {"GROQ_API_KEY": "gsk-groq-env"}, clear=False):
+            reload(config_module)
+            reload(settings_service_module)
+            loaded = settings_service_module.get_provider_settings("groq")
+
+        self.assertEqual(loaded.provider, "groq")
+        self.assertEqual(loaded.api_key, "gsk-groq-env")
+        self.assertEqual(loaded.source, "environment")
+
+    def test_saving_provider_as_active_switches_single_active_provider(self) -> None:
+        settings_service_module.save_provider_settings(
+            provider="openai",
+            model="gpt-4.1-mini",
+            api_base="https://api.openai.com/v1",
+            activate=True,
+        )
+        settings_service_module.save_provider_settings(
+            provider="groq",
+            model="groq/qwen/qwen3-32b",
+            api_base="https://api.groq.com/openai/v1",
+            activate=True,
+        )
+
+        active = settings_service_module.get_provider_settings()
+
+        self.assertEqual(active.provider, "groq")
+        self.assertEqual(active.model, "groq/qwen/qwen3-32b")
+        self.assertEqual(active.api_base, "https://api.groq.com/openai/v1")
+
     def test_provider_select_options_keep_compatibility_providers_available(
         self,
     ) -> None:

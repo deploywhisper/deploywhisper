@@ -359,6 +359,10 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["risk_score"], 42)
         self.assertEqual(fetched["audit"]["source_interface"], "api")
         self.assertEqual(fetched["audit"]["files_analyzed"], ["plan.json"])
+        self.assertEqual(
+            fetched["narrative_explanation"],
+            "The deployment widens database access and should be reviewed.",
+        )
         self.assertEqual(fetched["assessment_source"], "heuristic-only")
         self.assertEqual(fetched["narrative_source"], "llm")
         self.assertEqual(fetched["report_schema_version"], "v2")

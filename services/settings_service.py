@@ -301,7 +301,7 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
             if requested_provider
             else settings.llm_api_base or defaults["api_base"]
         ),
-        api_key=None if requested_provider else env_api_key,
+        api_key=env_api_key,
         local_mode=bool(
             defaults["local_mode"]
             if requested_provider

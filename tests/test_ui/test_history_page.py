@@ -223,6 +223,24 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("+46", compare_response.text)
         self.assertIn("MEDIUM → CRITICAL", compare_response.text)
 
+    def test_history_detail_route_shows_operational_narrative(self) -> None:
+        self._persist_report()
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Operational narrative", response.text)
+        self.assertIn("What changed?", response.text)
+        self.assertIn("Why is it risky?", response.text)
+        self.assertIn("Exact resource/file", response.text)
+        self.assertIn("Verify before deploying", response.text)
+        self.assertIn("Rollback concern", response.text)
+        self.assertIn("aws_security_group.main", response.text)
+        self.assertIn("plan.json", response.text)
+        self.assertIn(
+            "Review the security group change before deployment.", response.text
+        )
+
     def test_public_report_route_blocks_compare_view_when_previous_report_is_protected(
         self,
     ) -> None:

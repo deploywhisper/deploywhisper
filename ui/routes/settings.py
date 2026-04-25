@@ -118,7 +118,6 @@ def build_settings_page() -> None:
                 password_toggle_button=True,
             ).classes("w-full")
             local_mode_toggle = ui.switch("Local-only mode", value=settings.local_mode)
-            activate_toggle = ui.switch("Set as active provider", value=True)
             feedback = ui.label(
                 f"Current source: {settings.source} · active provider: {settings.provider}"
             ).classes("text-sm dw-muted")
@@ -187,7 +186,7 @@ def build_settings_page() -> None:
                         api_base=api_base_input.value.strip(),
                         api_key=api_key_input.value.strip() or None,
                         local_mode=local_mode,
-                        activate=bool(activate_toggle.value),
+                        activate=True,
                     )
                 validation = validate_provider_settings(saved)
                 if validation["valid"]:
