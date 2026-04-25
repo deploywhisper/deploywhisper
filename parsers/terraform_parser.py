@@ -11,6 +11,14 @@ import hcl2
 from parsers.base import UnifiedChange, build_change_id
 
 
+def _normalize_hcl_label(label: object) -> str:
+    """Return Terraform block labels without parser-preserved quote delimiters."""
+    normalized = str(label)
+    if len(normalized) >= 2 and normalized[0] == normalized[-1] == '"':
+        return normalized[1:-1]
+    return normalized
+
+
 def _terraform_summary(address: str, action: str) -> str:
     normalized = address.lower()
     if normalized.startswith("aws_security_group."):
@@ -62,7 +70,10 @@ def _parse_terraform_hcl(name: str, raw_content: bytes) -> list[UnifiedChange]:
     for resource_block in payload.get("resource", []):
         for resource_type, resources in resource_block.items():
             for resource_name in resources.keys():
-                address = f"{resource_type}.{resource_name}"
+                address = (
+                    f"{_normalize_hcl_label(resource_type)}."
+                    f"{_normalize_hcl_label(resource_name)}"
+                )
                 changes.append(
                     UnifiedChange(
                         change_id=build_change_id(
@@ -79,7 +90,7 @@ def _parse_terraform_hcl(name: str, raw_content: bytes) -> list[UnifiedChange]:
 
     for module_block in payload.get("module", []):
         for module_name in module_block.keys():
-            address = f"module.{module_name}"
+            address = f"module.{_normalize_hcl_label(module_name)}"
             changes.append(
                 UnifiedChange(
                     change_id=build_change_id(
