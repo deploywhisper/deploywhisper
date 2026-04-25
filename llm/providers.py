@@ -2,25 +2,36 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Callable
 
-from litellm import completion
+from llm.adapters.base import (
+    NarrativeProviderError,
+    ProviderCapabilities,
+    ProviderRuntimeConfig,
+)
+from llm.adapters.anthropic_adapter import AnthropicProviderAdapter
+from llm.adapters.gemini_adapter import GeminiProviderAdapter
+from llm.adapters.ollama_adapter import OllamaProviderAdapter
+from llm.adapters.openai_compatible_adapter import OpenAICompatibleProviderAdapter
+from llm.adapters.openai_adapter import OpenAIProviderAdapter
+from llm.adapters.registry import ProviderAdapterRegistry
 
-logger = logging.getLogger(__name__)
+_provider_registry = ProviderAdapterRegistry()
+_provider_registry.register(OllamaProviderAdapter())
+_provider_registry.register(OpenAIProviderAdapter())
+_provider_registry.register(AnthropicProviderAdapter())
+_provider_registry.register(GeminiProviderAdapter())
+_provider_registry.register(OpenAICompatibleProviderAdapter())
 
 
-class NarrativeProviderError(RuntimeError):
-    """Raised when the configured narrative provider cannot be used."""
+def get_provider_registry() -> ProviderAdapterRegistry:
+    """Return the provider adapter registry."""
+    return _provider_registry
 
 
-def _supports_only_temperature_one(provider: str, model: str) -> bool:
-    normalized_provider = provider.lower()
-    normalized_model = model.lower()
-    return normalized_provider == "openai" and (
-        normalized_model.startswith("gpt-5")
-        or normalized_model.startswith("openai/gpt-5")
-    )
+def get_provider_adapter(provider: str):
+    """Resolve the adapter responsible for the given provider."""
+    return _provider_registry.resolve(provider)
 
 
 def generate_completion(
@@ -42,31 +53,43 @@ def generate_completion_with_settings(
     local_mode: bool = False,
     completion_client: Callable[..., Any] | None = None,
 ) -> str:
-    client = completion_client or completion
-    temperature = 1 if _supports_only_temperature_one(provider, model) else 0
-    kwargs: dict[str, Any] = {
-        "model": model,
-        "api_base": api_base,
-        "messages": messages,
-        "response_format": {"type": "json_object"},
-        "temperature": temperature,
-    }
-    if local_mode and provider != "ollama":
-        raise NarrativeProviderError(
-            "Local mode requires an Ollama/local provider path."
-        )
-    if api_key and not local_mode:
-        kwargs["api_key"] = api_key
-    try:
-        logger.info(
-            "llm_completion_request provider=%s model=%s local_mode=%s message_count=%s",
-            provider,
-            model,
-            local_mode,
-            len(messages),
-        )
-        response = client(**kwargs)
-    except Exception as exc:  # noqa: BLE001
-        raise NarrativeProviderError(str(exc)) from exc
+    runtime = ProviderRuntimeConfig(
+        provider=provider,
+        model=model,
+        api_base=api_base,
+        api_key=api_key,
+        local_mode=local_mode,
+    )
+    adapter = get_provider_adapter(provider)
+    return adapter.generate_completion(
+        messages,
+        runtime=runtime,
+        completion_client=completion_client,
+    )
 
-    return response.choices[0].message.content
+
+def validate_provider_configuration(
+    *,
+    provider: str,
+    model: str,
+    api_base: str,
+    api_key: str | None = None,
+    local_mode: bool = False,
+    completion_client: Callable[..., Any] | None = None,
+) -> None:
+    """Validate provider runtime settings through the adapter contract."""
+    runtime = ProviderRuntimeConfig(
+        provider=provider,
+        model=model,
+        api_base=api_base,
+        api_key=api_key,
+        local_mode=local_mode,
+    )
+    adapter = get_provider_adapter(provider)
+    adapter.validate_configuration(runtime=runtime, completion_client=completion_client)
+
+
+def get_provider_capabilities(provider: str) -> ProviderCapabilities:
+    """Return capability metadata for the requested provider."""
+    adapter = get_provider_adapter(provider)
+    return adapter.capabilities_for(provider)

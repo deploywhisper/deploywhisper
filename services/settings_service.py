@@ -8,9 +8,42 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import OperationalError
 
 from config import settings
-from llm.providers import NarrativeProviderError, generate_completion_with_settings
+from llm.providers import (
+    NarrativeProviderError,
+    get_provider_capabilities,
+    validate_provider_configuration,
+)
 from models.database import SessionLocal
 from models.repositories.settings import delete_setting, get_setting, upsert_setting
+
+
+class ProviderCapabilitySummary(BaseModel):
+    supports_structured_output: bool = Field(
+        ..., description="Whether the provider supports structured JSON responses"
+    )
+    supports_remote_mcp: bool = Field(
+        ..., description="Whether the provider supports future remote MCP execution"
+    )
+    supports_local_mcp: bool = Field(
+        ..., description="Whether the provider supports future local MCP execution"
+    )
+    supports_tool_approval: bool = Field(
+        ..., description="Whether the provider supports explicit tool approval flows"
+    )
+    supports_local_only_mode: bool = Field(
+        ..., description="Whether the provider supports fully local-only operation"
+    )
+
+
+def _default_provider_capability_summary() -> ProviderCapabilitySummary:
+    """Provide a conservative default for compatibility with direct model construction."""
+    return ProviderCapabilitySummary(
+        supports_structured_output=True,
+        supports_remote_mcp=False,
+        supports_local_mcp=False,
+        supports_tool_approval=False,
+        supports_local_only_mode=False,
+    )
 
 
 class ProviderSettings(BaseModel):
@@ -21,6 +54,10 @@ class ProviderSettings(BaseModel):
     local_mode: bool = Field(
         default=False, description="Whether local-only mode is active"
     )
+    capabilities: ProviderCapabilitySummary = Field(
+        default_factory=_default_provider_capability_summary,
+        description="Capability metadata for the selected provider",
+    )
     source: str = Field(..., description="Where the settings came from")
 
 
@@ -29,6 +66,10 @@ class ProviderReadiness(BaseModel):
     model: str = Field(..., description="Configured model")
     local_mode: bool = Field(
         default=False, description="Whether local-only mode is active"
+    )
+    capabilities: ProviderCapabilitySummary = Field(
+        default_factory=_default_provider_capability_summary,
+        description="Capability metadata for the selected provider",
     )
     ready: bool = Field(
         ..., description="Whether the provider is reachable for analysis"
@@ -132,6 +173,20 @@ def _provider_key(provider: str, field: str) -> str:
     return f"llm_provider_config::{provider}::{field}"
 
 
+def _provider_capability_summary(provider: str) -> ProviderCapabilitySummary:
+    try:
+        capabilities = get_provider_capabilities(provider)
+    except NarrativeProviderError:
+        return _default_provider_capability_summary()
+    return ProviderCapabilitySummary(
+        supports_structured_output=capabilities.supports_structured_output,
+        supports_remote_mcp=capabilities.supports_remote_mcp,
+        supports_local_mcp=capabilities.supports_local_mcp,
+        supports_tool_approval=capabilities.supports_tool_approval,
+        supports_local_only_mode=capabilities.supports_local_only_mode,
+    )
+
+
 def save_provider_settings(
     *,
     provider: str,
@@ -168,6 +223,7 @@ def save_provider_settings(
         api_base=api_base,
         api_key=api_key,
         local_mode=local_mode,
+        capabilities=_provider_capability_summary(provider),
         source="database",
     )
 
@@ -201,6 +257,7 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                     api_base=api_base.value,
                     api_key=_provider_env_api_key(selected_provider),
                     local_mode=local_mode.value == "true",
+                    capabilities=_provider_capability_summary(selected_provider),
                     source="database",
                 )
 
@@ -220,6 +277,9 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                         api_base=legacy_api_base.value,
                         api_key=_provider_env_api_key(legacy_provider.value),
                         local_mode=legacy_local_mode.value == "true",
+                        capabilities=_provider_capability_summary(
+                            legacy_provider.value
+                        ),
                         source="database",
                     )
     except OperationalError:
@@ -247,6 +307,7 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
             if requested_provider
             else settings.llm_provider == "ollama"
         ),
+        capabilities=_provider_capability_summary(selected_provider),
         source="environment",
     )
 
@@ -256,11 +317,7 @@ def validate_provider_settings(
 ) -> dict:
     """Validate provider configuration using the narrative provider boundary only."""
     try:
-        generate_completion_with_settings(
-            messages=[
-                {"role": "system", "content": "Return a JSON object."},
-                {"role": "user", "content": "{}"},
-            ],
+        validate_provider_configuration(
             provider=provider_settings.provider,
             model=provider_settings.model,
             api_base=provider_settings.api_base,
@@ -288,6 +345,7 @@ def check_provider_readiness(completion_client=None) -> ProviderReadiness:
             provider=provider_settings.provider,
             model=provider_settings.model,
             local_mode=provider_settings.local_mode,
+            capabilities=provider_settings.capabilities,
             ready=False,
             requires_api_key=True,
             has_api_key=False,
@@ -306,6 +364,7 @@ def check_provider_readiness(completion_client=None) -> ProviderReadiness:
             provider=provider_settings.provider,
             model=provider_settings.model,
             local_mode=provider_settings.local_mode,
+            capabilities=provider_settings.capabilities,
             ready=True,
             requires_api_key=requires_api_key,
             has_api_key=has_api_key,
@@ -317,6 +376,7 @@ def check_provider_readiness(completion_client=None) -> ProviderReadiness:
         provider=provider_settings.provider,
         model=provider_settings.model,
         local_mode=provider_settings.local_mode,
+        capabilities=provider_settings.capabilities,
         ready=False,
         requires_api_key=requires_api_key,
         has_api_key=has_api_key,
@@ -338,6 +398,7 @@ def get_provider_health_snapshot() -> ProviderReadiness:
             provider=provider_settings.provider,
             model=provider_settings.model,
             local_mode=provider_settings.local_mode,
+            capabilities=provider_settings.capabilities,
             ready=False,
             requires_api_key=True,
             has_api_key=False,
@@ -352,6 +413,7 @@ def get_provider_health_snapshot() -> ProviderReadiness:
         provider=provider_settings.provider,
         model=provider_settings.model,
         local_mode=provider_settings.local_mode,
+        capabilities=provider_settings.capabilities,
         ready=True,
         requires_api_key=requires_api_key,
         has_api_key=has_api_key,

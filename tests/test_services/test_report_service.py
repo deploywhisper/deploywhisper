@@ -1247,6 +1247,13 @@ class ReportServiceTests(unittest.TestCase):
         )
         self.assertIn("Narrative provider unavailable", " ".join(persisted["warnings"]))
         self.assertFalse(persisted["narrative_available"])
+        self.assertEqual(persisted["narrative_source"], "fallback")
+        self.assertEqual(persisted["audit"]["llm_provider"], "ollama")
+        self.assertEqual(persisted["audit"]["llm_model"], "ollama/llama3")
+        self.assertTrue(persisted["audit"]["llm_local_mode"])
+        self.assertEqual(persisted["narrative_provider"], "ollama")
+        self.assertEqual(persisted["narrative_model"], "ollama/llama3")
+        self.assertTrue(persisted["narrative_local_mode"])
         self.assertEqual(
             persisted["narrative_failure_notice"],
             "Narrative provider unavailable: provider offline",
