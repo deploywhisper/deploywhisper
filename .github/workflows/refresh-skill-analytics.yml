@@ -25,7 +25,7 @@ jobs:
       - name: Refresh analytics snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEPLOYWHISPER_SKILL_ANALYTICS_URL: ${{ vars.DEPLOYWHISPER_SKILL_ANALYTICS_URL }}
+          DEPLOYWHISPER_SKILL_ANALYTICS_URL: ${{ vars.DEPLOYWHISPER_SKILL_ANALYTICS_URL || 'https://deploywhisper.github.io/skills-registry/skill-popularity.json' }}
         run: |
           python scripts/refresh_skill_analytics.py \
             --repo "${{ github.repository }}"

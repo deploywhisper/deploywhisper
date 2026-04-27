@@ -135,6 +135,11 @@
       "active_issue_count": 2,
       "install_count": 1842,
       "star_count": 418
+    },
+    "terragrunt": {
+      "active_issue_count": 0,
+      "install_count": 0,
+      "star_count": 0
     }
   }
 }

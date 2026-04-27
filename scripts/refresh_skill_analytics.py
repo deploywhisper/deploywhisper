@@ -15,6 +15,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
 DEFAULT_OUTPUT = REPO_ROOT / "data" / "skill-analytics.json"
 DEFAULT_REPOSITORY = "deploywhisper/deploywhisper"
+DEFAULT_METRICS_URL = (
+    "https://deploywhisper.github.io/skills-registry/skill-popularity.json"
+)
 GITHUB_API_BASE = "https://api.github.com"
 
 _SEEDED_ANALYTICS: dict[str, dict[str, int]] = {
@@ -73,6 +76,7 @@ _SEEDED_ANALYTICS: dict[str, dict[str, int]] = {
     "helmfile": {"install_count": 672, "star_count": 135, "active_issue_count": 2},
     "tanka": {"install_count": 655, "star_count": 131, "active_issue_count": 2},
     "jsonnet": {"install_count": 641, "star_count": 128, "active_issue_count": 1},
+    "terragrunt": {"install_count": 0, "star_count": 0, "active_issue_count": 0},
 }
 
 
@@ -173,6 +177,16 @@ def fetch_popularity_metrics(
     return metrics
 
 
+def resolve_metrics_url(cli_value: str = "") -> str:
+    """Resolve the popularity metrics source used by the refresh job."""
+
+    return (
+        cli_value.strip()
+        or os.environ.get("DEPLOYWHISPER_SKILL_ANALYTICS_URL", "").strip()
+        or DEFAULT_METRICS_URL
+    )
+
+
 def build_snapshot(
     path: Path,
     *,
@@ -230,20 +244,16 @@ def main() -> None:
     parser.add_argument(
         "--metrics-url",
         default="",
-        help="JSON source containing per-skill install_count and star_count values.",
+        help=(
+            "JSON source containing per-skill install_count and star_count values. "
+            f"Defaults to {DEFAULT_METRICS_URL}."
+        ),
     )
     args = parser.parse_args()
 
     output_path = Path(args.output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics_url = (
-        args.metrics_url.strip()
-        or os.environ.get("DEPLOYWHISPER_SKILL_ANALYTICS_URL", "").strip()
-    )
-    if not metrics_url:
-        raise RuntimeError(
-            "Skill analytics refresh requires DEPLOYWHISPER_SKILL_ANALYTICS_URL or --metrics-url."
-        )
+    metrics_url = resolve_metrics_url(args.metrics_url)
     auth_token = os.environ.get("DEPLOYWHISPER_ANALYTICS_TOKEN") or os.environ.get(
         "GITHUB_TOKEN"
     )

@@ -32,11 +32,15 @@ Daily refresh is handled by:
 
 The refresh workflow now combines two runtime sources:
 
-- install and star metrics from `DEPLOYWHISPER_SKILL_ANALYTICS_URL`
+- install and star metrics from `DEPLOYWHISPER_SKILL_ANALYTICS_URL`, or from
+  the default public registry feed at
+  `https://deploywhisper.github.io/skills-registry/skill-popularity.json`
 - active issue counts from GitHub issue search
 
-The refresh script refuses to run without the metrics URL so the job does not
-silently republish stale install/star values with a fresh timestamp.
+`DEPLOYWHISPER_SKILL_ANALYTICS_URL` is optional and should only be configured
+when the workflow needs to read a different metrics feed. The metrics feed must
+contain a top-level `skills` object with every built-in skill id and
+`install_count` / `star_count` values.
 
 ## Surfaces
 
