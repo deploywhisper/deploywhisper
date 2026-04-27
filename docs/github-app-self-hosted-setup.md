@@ -9,7 +9,7 @@ This is the recommended GitHub App model for the open-source product.
 Use this guide if you want:
 
 - Action-first as the default integration mode
-- GitHub check runs, webhook-driven PR analysis, and OAuth-backed install flow
+- GitHub check runs and webhook-driven PR analysis
 - your own DeployWhisper server to receive and analyze PR artifacts
 - no dependency on a public hosted DeployWhisper GitHub App
 
@@ -20,6 +20,7 @@ Use this guide if you want:
 - Your own DeployWhisper server fetches changed PR artifacts
 - Your own DeployWhisper server creates advisory check runs and report links
 - The app does not need to be public or listed on GitHub Marketplace
+- App creation, account or organization selection, and repository selection happen in GitHub's own Developer Settings and Install App UI
 
 ## Prerequisites
 
@@ -35,14 +36,13 @@ Set these on your DeployWhisper server:
 - `DEPLOYWHISPER_GITHUB_APP_ENABLED=true`
 - `DEPLOYWHISPER_GITHUB_APP_ID`
 - `DEPLOYWHISPER_GITHUB_APP_SLUG`
-- `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID`
-- `DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET`
 - `DEPLOYWHISPER_GITHUB_APP_WEBHOOK_SECRET`
 - `DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY` or `DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY_PATH`
 - `APP_BASE_URL` or `PUBLIC_APP_URL`
 
 Optional:
 
+- `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID` and `DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET` if you intentionally enable the optional OAuth helper route
 - `DEPLOYWHISPER_GITHUB_APP_PR_EVENTS_ENABLED=true`
 - `DEPLOYWHISPER_GITHUB_APP_CHECKS_ENABLED=true`
 - `DEPLOYWHISPER_GITHUB_APP_API_BASE_URL`
@@ -75,6 +75,7 @@ Recommended values:
   `https://<your-deploywhisper-base-url>`
 - Callback URL:
   `https://<your-deploywhisper-base-url>/api/v1/github/app/oauth/callback`
+- If you are not using the optional OAuth helper route, leave user authorization disabled or treat this callback URL as optional setup metadata. The normal self-hosted setup path does not require OAuth.
 - Setup URL:
   Leave blank unless you later build a dedicated install UI
 - Webhook URL:
@@ -153,14 +154,14 @@ For most teams, the recommended rollout order is:
 
 1. Start with the DeployWhisper GitHub Action
 2. Confirm your DeployWhisper instance and report links are working
-3. Add the self-hosted GitHub App only if you want richer GitHub-native checks and install flow
+3. Add the self-hosted GitHub App only if you want richer GitHub-native checks and webhook automation
 
 ## Combined mode
 
 Combined mode means:
 
 - Action handles explicit workflow execution and PR comments
-- Self-hosted GitHub App handles checks API, webhook automation, and installation UX
+- Self-hosted GitHub App handles checks API and webhook automation after installation from GitHub's UI
 
 Both still point at your own DeployWhisper server.
 
@@ -173,3 +174,15 @@ This guide does not cover:
 - a SaaS trust model where other users send PR data to a third-party hosted DeployWhisper service
 
 Those are separate product decisions and are intentionally deferred from the current open-source self-hosted deployment model.
+
+## Optional OAuth helper route
+
+The repository includes OAuth start/callback endpoints for advanced setups, but they are not required for the standard self-hosted GitHub App path. The standard path is:
+
+1. Create the GitHub App in GitHub Developer Settings
+2. Configure webhook, permissions, events, and private key
+3. Install the app from GitHub's own `Install App` UI
+4. Configure DeployWhisper environment variables
+5. Verify webhook delivery and advisory check runs
+
+Do not store GitHub client secrets, webhook secrets, private keys, or user access tokens in the application database.

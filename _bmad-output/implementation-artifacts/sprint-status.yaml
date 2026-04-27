@@ -1,0 +1,131 @@
+# generated: 2026-04-27
+# last_updated: 2026-04-27
+# project: deploywhisper
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+#
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created (via create-story)
+#   - in-progress -> done: Manually when all stories reach done status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in implementation-artifacts
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to in-progress automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is done to incorporate learnings
+# - Dev moves story to review, then runs code-review
+
+generated: 2026-04-27
+last_updated: 2026-04-27
+project: deploywhisper
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-domain-model-foundations: done
+  1-2-evidence-extractor-service: in-progress
+  1-3-refactor-risk-scorer-to-consume-evidence: review
+  1-4-confidence-field-on-every-finding: review
+  1-5-context-completeness-on-riskassessment: review
+  1-6-narrator-runs-after-scoring: review
+  1-7-deterministic-degradation: review
+  1-8-report-schema-v2: review
+  epic-1-retrospective: optional
+
+  epic-2: in-progress
+  2-1-verdict-card-redesign: review
+  2-2-findings-table-with-evidence-badges: ready-for-dev
+  2-3-evidence-inspector-panel: review
+  2-4-context-completeness-panel: review
+  2-5-blast-radius-visualization: review
+  2-6-rollback-plan-panel: review
+  2-7-share-summary-generator: review
+  2-8-keyboard-navigation: in-progress
+  epic-2-retrospective: optional
+
+  epic-3: in-progress
+  3-1-github-action-v1: review
+  3-2-pr-comment-formatter: review
+  3-3-rerun-on-commit: review
+  3-4-shareable-report-urls: review
+  3-5-report-comparison-view: review
+  3-6-github-app: in-progress
+  3-7-check-run-integration: review
+  3-8-installation-wizard: review
+  3-9-self-hosted-github-app-setup-documentation: ready-for-dev
+  3-10-github-delivery-mode-documentation: backlog
+  3-11-advisory-policy-adapter-output-contract: backlog
+  epic-3-retrospective: optional
+
+  epic-4: in-progress
+  4-1-skills-registry-api: done
+  4-2-skills-manifest-spec-v1: review
+  4-3-skill-test-harness: review
+  4-4-skills-installer-cli: review
+  4-5-skills-browser-ui: review
+  4-6-contribution-workflow: review
+  4-7-seed-20-community-skills: done
+  4-8-skill-analytics: done
+  4-9-editorial-curation: done
+  4-10-seed-marketplace-catalog-batch-2: backlog
+  4-11-seed-marketplace-catalog-batch-3: backlog
+  4-12-seed-marketplace-catalog-batch-4: backlog
+  epic-4-retrospective: optional
+
+  epic-5: in-progress
+  5-1-terraform-state-import: ready-for-dev
+  5-2-topology-drift-detection: ready-for-dev
+  5-3-topology-freshness-badge: ready-for-dev
+  5-4-deployment-history-capture: ready-for-dev
+  5-5-reviewer-feedback-capture: ready-for-dev
+  5-6-outcome-linking: ready-for-dev
+  5-7-calibration-dashboard: ready-for-dev
+  5-8-trend-analysis: ready-for-dev
+  5-9-gcp-terraform-state-import: backlog
+  5-10-azure-terraform-state-import: backlog
+  5-11-threshold-and-reporting-defaults-management: backlog
+  5-12-policy-adapter-consumption-boundary: backlog
+  epic-5-retrospective: optional
+
+  epic-6: in-progress
+  6-1-benchmark-corpus-v1: ready-for-dev
+  6-2-scenario-annotation: ready-for-dev
+  6-3-benchmark-runner: ready-for-dev
+  6-4-comparative-runner: ready-for-dev
+  6-5-published-results-dashboard: ready-for-dev
+  6-6-quarterly-regression: ready-for-dev
+  6-7-open-source-the-corpus: ready-for-dev
+  6-8-incident-backtesting: ready-for-dev
+  6-9-benchmark-corpus-expansion-batch: backlog
+  6-10-benchmark-corpus-completion-and-quality-gate: backlog
+  6-11-hosted-and-llm-comparator-adapters: backlog
+  6-12-comparative-result-normalization-and-reporting: backlog
+  epic-6-retrospective: optional
+
+  brownfield-hardening: in-progress
+  bh-s1-lock-provider-boundary-behavior-with-regression-tests: ready-for-dev
+  bh-s2-introduce-provider-adapter-contract-and-registry: ready-for-dev
+  bh-s3-migrate-openai-anthropic-gemini-and-ollama-to-direct-sdk-adapters: ready-for-dev
+  bh-s4-migrate-openrouter-groq-and-xai-to-a-compatibility-adapter-and-remove-the-legacy-meta-provider-dependency: ready-for-dev
+  bh-s5-add-provider-capability-metadata-and-mcp-readiness-hooks: ready-for-dev

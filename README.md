@@ -632,13 +632,13 @@ evidence deltas.
 ### GitHub App Mode
 
 DeployWhisper also supports a GitHub App adapter for webhook-driven PR analysis,
-checks API publishing, and OAuth-guided installation handoff. The App adapter is
+checks API publishing, and self-hosted app setup. The App adapter is
 documented in [`docs/github-app.md`](./docs/github-app.md) and is designed to
 run in three lanes:
 
 - Action-first: workflow file + Marketplace Action
-- Advanced self-hosted GitHub App: webhook, checks, and OAuth-backed installation flow against your own DeployWhisper server
-- Combined mode: Action for explicit workflow control, self-hosted GitHub App for checks and richer installation UX
+- Advanced self-hosted GitHub App: webhook and checks against your own DeployWhisper server, with app creation and installation handled in GitHub's UI
+- Combined mode: Action for explicit workflow control, self-hosted GitHub App for checks and webhook automation
 
 The recommended open-source posture is Action-first. If you want GitHub App
 capabilities, create a private/self-hosted GitHub App in your own account or

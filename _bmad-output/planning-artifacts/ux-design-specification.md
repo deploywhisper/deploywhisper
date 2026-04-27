@@ -757,6 +757,54 @@ flowchart TD
 
 A secondary admin validation pattern should apply to custom AI Skills as well: when overrides or new skills are detected, the system should confirm exactly what it found and how it will be used.
 
+### Public Skills Marketplace Browse Flow
+
+The public Skills marketplace must support fast discovery and credibility assessment without turning the product into a generic app store. The primary user goal is to decide whether a skill is relevant, safe enough to install, and actively maintained.
+
+```mermaid
+flowchart TD
+    A[Open Skills marketplace] --> B[Search or filter by tool, risk category, official status, rating, and last updated]
+    B --> C[Scan skill cards with name, tool, official/community badge, rating, install count, and test pass rate]
+    C --> D[Open skill detail]
+    D --> E[Review manifest summary, risk patterns, test scenarios, analytics, and maintainer notes]
+    E --> F{Decision}
+    F -->|Install| G[Copy or run deploywhisper skill install command]
+    F -->|Evaluate later| H[Return to filtered results]
+    F -->|Report concern| I[Open contribution or issue workflow]
+```
+
+Marketplace browse surfaces should keep evidence of trust visible on every repeated item: official/community status, test pass rate, last updated timestamp, install count, and rating. Search and filters should use compact controls above the list, not a landing-page layout. Skill detail pages should lead with the skill's operational purpose and compatibility, then show manifest fields, test results, analytics, examples, and contribution metadata.
+
+### Reviewer Feedback and Calibration Flow
+
+Reviewer feedback is part of the learning loop, not a decorative reaction control. Feedback controls must appear where the user is already evaluating findings, and calibration views must explain whether DeployWhisper is becoming more or less reliable over time.
+
+```mermaid
+flowchart TD
+    A[Reviewer inspects finding] --> B[Mark useful, false positive, or missed risk]
+    B --> C[Optional reason captures context without blocking review]
+    C --> D[Feedback event is saved with finding, report, user, timestamp, and reason]
+    D --> E[Admin opens calibration dashboard]
+    E --> F[Review precision, recall, severity trends, and recent false positives or misses]
+    F --> G[Adjust thresholds or investigate skills and parser gaps]
+```
+
+Feedback controls should be compact and per-finding. The UI should not interrupt the review flow with a modal unless the user chooses to add detail. Calibration dashboards should use summary metrics first, then drill-down tables for false positives, false negatives, and severity changes. Trend views must be filterable by time window, tool, environment, and severity.
+
+### Benchmark Results Dashboard Flow
+
+Benchmark pages are proof surfaces. They should prioritize methodology, repeatability, and comparison clarity over marketing ornament.
+
+```mermaid
+flowchart TD
+    A[Open benchmark results] --> B[See latest run summary with corpus version, run date, and methodology link]
+    B --> C[Compare precision, recall, and F1 by tool and severity]
+    C --> D[Inspect comparator results and scenario-level outcomes]
+    D --> E[Download raw results or open corpus reference]
+```
+
+The benchmark dashboard should show the latest published results, corpus version, DeployWhisper version, comparator versions, and run timestamp near the top. Tables should support filters by tool, severity, comparator, and scenario outcome. Scenario detail rows should expose expected findings, actual findings, reviewer rationale, and whether the result matched ground truth. Raw result downloads and methodology links must be visible from the first viewport.
+
 ### Journey Patterns
 
 Across these flows, the product should standardize these interaction patterns:
@@ -802,13 +850,13 @@ Custom components should exist only where the product has unique operational sem
 
 #### VerdictCard
 
-**Purpose:**  
+**Purpose:**
 Provide the primary above-the-fold deploy verdict and establish the answer hierarchy for the entire page.
 
-**Usage:**  
+**Usage:**
 Always appears at the top of an analysis result. It is the first thing the user sees after analysis completes.
 
-**Anatomy:**  
+**Anatomy:**
 - risk gauge
 - GO / CAUTION / NO-GO badge
 - score value
@@ -816,36 +864,36 @@ Always appears at the top of an analysis result. It is the first thing the user 
 - top risk summary
 - persistent secondary actions such as share / re-run
 
-**States:**  
+**States:**
 - loading
 - low / medium / high / critical
 - uncertain / degraded analysis
 - re-analysis result state
 
-**Accessibility:**  
+**Accessibility:**
 - status never conveyed by color alone
 - verdict text always explicit
 - gauge must expose textual equivalent
 - actions keyboard reachable
 
-**Interaction Behavior:**  
+**Interaction Behavior:**
 Acts as the anchor for the review page. It should never disappear from the user’s understanding, even when they drill deeper into evidence.
 
 #### TopRiskCallout
 
-**Purpose:**  
+**Purpose:**
 State the most important risk in one sentence.
 
-**Usage:**  
+**Usage:**
 Directly below or adjacent to the VerdictCard.
 
-**Anatomy:**  
+**Anatomy:**
 - label
 - concise risk statement
 - optional supporting context
 - severity styling
 
-**States:**  
+**States:**
 - low-risk informational
 - elevated-risk warning
 - critical-risk alert
@@ -853,18 +901,18 @@ Directly below or adjacent to the VerdictCard.
 
 #### ParserCoverageRow
 
-**Purpose:**  
+**Purpose:**
 Show what the system actually analyzed and where uncertainty exists.
 
-**Usage:**  
+**Usage:**
 Compact summary directly under the VerdictCard, with deeper detail reflected in lower evidence sections.
 
-**Anatomy:**  
+**Anatomy:**
 - one compact status item per tool
 - analyzed / warning / failure states
 - file count and change count summary
 
-**States:**  
+**States:**
 - success
 - partial
 - failed
@@ -872,38 +920,38 @@ Compact summary directly under the VerdictCard, with deeper detail reflected in 
 
 #### ChangeRiskTable
 
-**Purpose:**  
+**Purpose:**
 Present resource-level change evidence with risk cues.
 
-**Implementation Strategy:**  
+**Implementation Strategy:**
 Custom wrapper around Quasar `q-table`, not a bespoke table implementation.
 
-**Custom additions:**  
+**Custom additions:**
 - risk-weight visual treatment
 - tool icon badge
 - action-type pill
 - monospace resource-name styling
 - grouped or filterable evidence views
 
-**Reason:**  
+**Reason:**
 Quasar already solves table mechanics; DeployWhisper adds domain-specific evidence semantics.
 
 #### BlastRadiusPanel
 
-**Purpose:**  
+**Purpose:**
 Present downstream impact in a trustworthy, readable way.
 
-**Implementation Strategy:**  
+**Implementation Strategy:**
 Panel shell plus separate graph subcomponent.
 
-**Panel shell responsibilities:**  
+**Panel shell responsibilities:**
 - title and section framing
 - legend
 - topology staleness warning
 - empty state
 - loading state
 
-**Graph subcomponent responsibilities:**  
+**Graph subcomponent responsibilities:**
 - node and edge rendering
 - impact depth display
 - zoom/pan behavior if needed
@@ -913,52 +961,124 @@ This separation preserves flexibility if the underlying graph renderer changes l
 
 #### RollbackTimeline
 
-**Purpose:**  
+**Purpose:**
 Show recovery as a sequential operational plan rather than a paragraph.
 
-**Anatomy:**  
+**Anatomy:**
 - ordered step list
 - effort or complexity indicator
 - optional timing cues
 - dependency or critical-step highlighting
 
-**States:**  
+**States:**
 - standard
 - high-complexity
 - incomplete / degraded
 
 #### IncidentMatchCard
 
-**Purpose:**  
+**Purpose:**
 Present historical incident similarity as operational context.
 
-**Anatomy:**  
+**Anatomy:**
 - incident title
 - date
 - severity
 - similarity score
 - short explanation of why the match matters
 
-**Interaction Behavior:**  
+**Interaction Behavior:**
 Should feel like a regression or prior-incident signal, not a raw database lookup.
 
 #### AnalysisHistoryRow
 
-**Purpose:**  
+**Purpose:**
 Make history scannable at speed.
 
-**Usage:**  
+**Usage:**
 Primary repeated unit in the history page.
 
-**Anatomy:**  
+**Anatomy:**
 - timestamp first
 - prominent risk badge
 - compact tool icons
 - one-line top-risk summary
 - fully clickable row behavior
 
-**Priority:**  
+**Priority:**
 Scanability first, risk badge prominence second, detail only as needed.
+
+#### SkillMarketplaceCard
+
+**Purpose:**
+Make skills easy to compare by relevance and trust signals.
+
+**Usage:**
+Repeated unit in the Skills marketplace browse page.
+
+**Anatomy:**
+- skill name and short purpose
+- tool or domain badge
+- official/community/featured status
+- rating, install count, test pass rate, and last updated
+- primary install or detail action
+
+**Interaction Behavior:**
+The entire card opens the detail page. Install remains a distinct action so users do not accidentally install while browsing.
+
+#### SkillDetailPanel
+
+**Purpose:**
+Show the information needed to decide whether a skill is relevant and safe to install.
+
+**Anatomy:**
+- manifest summary
+- compatible DeployWhisper version
+- risk patterns detected by the skill
+- test scenarios and latest pass rate
+- analytics such as installs and last updated
+- maintainer, contribution, and issue links
+
+#### FindingFeedbackControl
+
+**Purpose:**
+Capture reviewer judgment on individual findings without disrupting review.
+
+**Anatomy:**
+- useful / false positive / missed risk controls
+- optional reason selector
+- optional free-text note
+- saved-state indicator
+
+**Interaction Behavior:**
+Feedback submission should be inline and reversible where possible. Detailed reason entry should be optional and should not block the main deploy decision.
+
+#### CalibrationMetricPanel
+
+**Purpose:**
+Show admins whether DeployWhisper is calibrated over time.
+
+**Anatomy:**
+- precision, recall, and F1 summary
+- severity breakdown
+- false positive and false negative trend
+- time-window selector
+- drill-down link to feedback events and deployment outcomes
+
+#### BenchmarkResultsTable
+
+**Purpose:**
+Present public benchmark outcomes with enough context to audit product claims.
+
+**Anatomy:**
+- corpus version, run date, DeployWhisper version, comparator versions
+- precision, recall, and F1 by tool and severity
+- scenario-level expected versus actual results
+- raw result download action
+- methodology link
+
+**Interaction Behavior:**
+Filters should support tool, severity, comparator, and scenario outcome. Scenario rows expand in place to show reviewer rationale and matched or missed findings.
 
 ### Component Implementation Strategy
 

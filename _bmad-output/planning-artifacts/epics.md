@@ -70,15 +70,16 @@ This matrix is intentionally compact. It maps requirement families to either:
 | `EVD-01` | Existing normalized change model + `E1-S2` / `E1-S3` | Baseline + Delta | Current normalization exists; Epic 1 upgrades it into evidence-first scoring. |
 | `EVD-02..08` | `E1-S1..E1-S8`, `E2-S2..E2-S4`, `E2-S7` | Delta | These are core gaps the refreshed plan is explicitly designed to close. |
 | `RSK-01..08` | Existing repo baseline + `E1-S3`, `E1-S6`, `E1-S7`, `E2-S1`, `E2-S6`, `E2-S7` | Baseline + Delta | Unified risk exists today; Epic 1/2 make it evidence-backed, confidence-aware, and review-ready. |
-| `CTX-01..07` | Existing topology / incidents baseline + `E1-S5`, `E2-S4`, `E2-S5`, `E5-S1..E5-S8` | Baseline + Delta | Current context is manual and partial; Epic 5 turns it into a moat. |
+| `CTX-01..07` | Existing topology / incidents baseline + `E1-S5`, `E2-S4`, `E2-S5`, `E5-S1..E5-S12` | Baseline + Delta | Current context is manual and partial; Epic 5 turns it into a moat. |
 | `REV-01..07` | Existing dashboard/history baseline + `E2-S1..E2-S8` | Baseline + Delta | The current UI supports review, but Epic 2 is the target-state UX pass. |
 | `WRK-01..02` | Existing API and CLI baseline | Baseline | Preserve shared-core API/CLI behavior while adding new workflow adapters. |
-| `WRK-03..07` | `E3-S1..E3-S8` | Delta | GitHub-native delivery is new roadmap work. |
+| `WRK-03..07` | `E3-S1..E3-S11` | Delta | GitHub-native delivery is new roadmap work. |
 | `HIS-01..04` | Existing persistence/history baseline + `E5-S4`, `E5-S8` | Baseline + Delta | Persistence and history exist; Epic 5 expands them into richer learning and operations data. |
-| `HIS-05..07` | `E5-S5..E5-S8`, `E6-S1..E6-S8` | Delta | Reviewer feedback, outcomes, calibration, and backtesting are roadmap work. |
-| `ADM-01..05` | Existing settings/local-mode/topology/custom-skill baseline + `BH-S1..BH-S5` + `E4-S1..E4-S9`, `E5-S1..E5-S4` | Baseline + Delta | Admin basics exist now; marketplace and context automation extend them, and the brownfield provider track hardens the provider boundary. |
-| `ADM-06..07` | Cross-cutting governance in `E1`, `E5`, and future adapter work | Delta | Threshold/default management and policy-adapter consumption need explicit follow-through during implementation. |
-| `COM-01..07` | `E4-S1..E4-S9` | Delta | Community ecosystem requirements are fully owned by Epic 4. |
+| `HIS-05..07` | `E5-S5..E5-S8`, `E6-S1..E6-S12` | Delta | Reviewer feedback, outcomes, calibration, and backtesting are roadmap work. |
+| `ADM-01..05` | Existing settings/local-mode/topology/custom-skill baseline + `BH-S1..BH-S5` + `E4-S1..E4-S12`, `E5-S1..E5-S4` | Baseline + Delta | Admin basics exist now; marketplace and context automation extend them, and the brownfield provider track hardens the provider boundary. |
+| `ADM-06` | `E5-S11` | Delta | Threshold and reporting-default management has explicit admin story ownership. |
+| `ADM-07` | `E5-S12` | Delta | Policy adapter consumption has explicit output-contract story ownership while preserving advisory-first behavior. |
+| `COM-01..07` | `E4-S1..E4-S12` | Delta | Community ecosystem requirements are fully owned by Epic 4. |
 | `NFR-SEC-01..06` | Existing local-first/security baseline + `BH-S1..BH-S5` + Epic 1, 4, and 5 hardening | Baseline + Delta | Preserve raw-local boundaries and secret handling while expanding ecosystem and context features and reducing provider-path dependency surface. |
 | `NFR-PERF-01..04` | Cross-cutting across `E1`, `E2`, `E3`, and `E5` | Delta | Performance budgets are not their own epic; they must be pulled into story ACs during implementation. |
 | `NFR-REL-01..04` | Existing degradation/persistence baseline + `E1-S7`, `E5-*` | Baseline + Delta | Reliability exists partially today; Epic 1 and 5 raise the bar. |
@@ -477,15 +478,15 @@ Ship an official GitHub Action plus advanced self-hosted GitHub App support so D
 
 #### E3-S6: GitHub App
 **As a** DeployWhisper maintainer,
-**I want** advanced self-hosted GitHub App support complementing the Action,
-**so that** I can post check runs and richer interactions.
+**I want** a minimal self-hosted GitHub App runtime that complements the Action,
+**so that** advanced teams can install the app without mixing all GitHub capabilities into one oversized story.
 
 **Acceptance:**
-- Self-hosted GitHub App runtime and operator guide are ready for installation in a team's own GitHub account or organization
-- Supports checks API (passing/neutral/failing, always advisory)
-- Handles PR events for automatic runs (opt-in via config)
-- OAuth flow for team installation
-- Docs covering Action-first, advanced self-hosted GitHub App mode, and combined modes
+- App runtime can receive and validate GitHub webhook events in a self-hosted deployment
+- Installation configuration supports repository and organization scope
+- Operator guide documents required GitHub App permissions and local-first deployment assumptions
+- Runtime can enqueue or trigger DeployWhisper analysis for configured PR events
+- Check-run posting, manual setup verification, and combined-mode docs are handled by follow-on stories
 
 #### E3-S7: Check run integration
 **As a** reviewer,
@@ -509,6 +510,42 @@ Ship an official GitHub Action plus advanced self-hosted GitHub App support so D
 - Commits a PR to the repo with the workflow file
 - Includes README updates and example secrets configuration
 - Links to docs for common setup questions
+
+#### E3-S9: Self-hosted GitHub App setup documentation
+**As a** team admin,
+**I want** clear instructions for creating and installing the GitHub App from GitHub Developer Settings,
+**so that** my team can run GitHub App mode without relying on a DeployWhisper-hosted SaaS app.
+
+**Acceptance:**
+- Operator docs walk through GitHub Developer Settings → GitHub Apps → New GitHub App
+- Docs specify webhook URL, optional callback URL, required permissions, pull request events, and app visibility settings
+- Docs explain how users install the app into their own account or organization and select repositories from GitHub's UI
+- Secrets and private keys remain environment-backed and are not persisted in application tables
+- Verification checklist covers webhook delivery, PR artifact analysis, advisory check-run creation, and report-link behavior
+- Troubleshooting covers missing permissions, revoked installation, unreachable webhook URL, invalid signature, and required status-check misconfiguration
+
+#### E3-S10: GitHub delivery mode documentation
+**As a** platform maintainer,
+**I want** Action-first, App-only, and combined-mode setup documented clearly,
+**so that** teams can choose the least complex delivery path for their environment.
+
+**Acceptance:**
+- Documentation explains when to use the GitHub Action, self-hosted GitHub App, or both
+- Example workflows include secrets configuration and advisory-only behavior
+- Operator guide covers webhook URL, permissions, private key management, and local-first data boundaries
+- Troubleshooting section covers missed events, duplicate comments, missing check runs, and rerun behavior
+
+#### E3-S11: Advisory policy adapter output contract
+**As a** CI/CD integrator,
+**I want** a stable advisory report output contract for future policy adapters,
+**so that** policy engines can consume DeployWhisper results without changing core advisory behavior.
+
+**Acceptance:**
+- JSON contract exposes verdict, risk score, findings, evidence counts, confidence, context completeness, and advisory flags
+- Contract explicitly sets merge-blocking or enforcement decisions outside DeployWhisper core behavior
+- API and CLI can emit the same policy-adapter payload
+- Contract is documented with examples for GitHub checks and future CI adapters
+- Tests verify that NO-GO output remains advisory and does not mutate `should_block` semantics
 
 ### Epic 3 Exit Criteria
 - Install DeployWhisper on a new repo in under 5 minutes
@@ -607,12 +644,13 @@ Launch a community-driven Skills registry with browser UI, authoring toolkit, an
 
 #### E4-S7: Seed 20 community skills
 **As a** launcher,
-**I want** the marketplace to be full on day one,
-**so that** first-time visitors see an ecosystem, not an empty shelf.
+**I want** an initial first-party seed batch published,
+**so that** the marketplace has useful launch content before the full catalog is complete.
 
 **Acceptance:**
-- 20 first-party skills published at launch covering: Helm, ArgoCD, Pulumi, Crossplane, Istio, Nginx Ingress, Cert-Manager, Flux, Tekton, OPA Gatekeeper, Datadog monitors, Prometheus rules, AWS CDK, Bicep, Pulumi GCP, Pulumi Azure, Kustomize, Helmfile, Tanka, Jsonnet
+- 5 first-party skills published at launch covering a representative Terraform/Kubernetes/GitHub Actions mix
 - Each skill has: complete manifest, at least 3 test scenarios, working installation, documented risk patterns
+- Seed skill publishing process is documented so later batches use the same manifest, test, and review standards
 
 #### E4-S8: Skill analytics
 **As a** user choosing a skill,
@@ -634,6 +672,39 @@ Launch a community-driven Skills registry with browser UI, authoring toolkit, an
 - "Featured" badge for curated community skills
 - Curation guidelines in `docs/skills/curation.md`
 - Removal process for low-quality or abandoned skills
+
+#### E4-S10: Seed marketplace catalog batch 2
+**As a** launcher,
+**I want** the second seed batch to add GitOps and policy skills,
+**so that** early users see credible coverage beyond the core launch tools.
+
+**Acceptance:**
+- 5 additional first-party skills published for GitOps, ingress, certificate, and policy use cases
+- Each skill has complete manifest metadata, at least 3 test scenarios, working installation, and documented risk patterns
+- Registry browser clearly labels official seed skills versus community submissions
+- Test harness passes for all batch 2 skills in CI
+
+#### E4-S11: Seed marketplace catalog batch 3
+**As a** launcher,
+**I want** the third seed batch to cover observability and cloud-IaC skills,
+**so that** the marketplace supports realistic platform review scenarios.
+
+**Acceptance:**
+- 5 additional first-party skills published for observability and cloud-IaC review patterns
+- Each skill has complete manifest metadata, at least 3 test scenarios, working installation, and documented risk patterns
+- Skill detail pages show last updated, test pass rate, and official-maintainer status for the batch
+- Test harness passes for all batch 3 skills in CI
+
+#### E4-S12: Seed marketplace catalog batch 4
+**As a** launcher,
+**I want** the final seed batch to bring the launch catalog to 20 skills,
+**so that** first-time visitors see an ecosystem without one oversized delivery story.
+
+**Acceptance:**
+- 5 additional first-party skills published, bringing the total official seed catalog to 20
+- Coverage includes Helm, ArgoCD, Pulumi, Crossplane, Istio, Nginx Ingress, Cert-Manager, Flux, Tekton, OPA Gatekeeper, Datadog monitors, Prometheus rules, AWS CDK, Bicep, Pulumi GCP, Pulumi Azure, Kustomize, Helmfile, Tanka, and Jsonnet across the full seed set
+- All 20 skills have complete manifests, at least 3 test scenarios, working installation, and documented risk patterns
+- Registry analytics and curation surfaces can distinguish seed batch, official status, and test reliability
 
 ### Epic 4 Exit Criteria
 - Skills browser live at /skills with 20+ published skills
@@ -662,14 +733,15 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 
 #### E5-S1: Terraform state import
 **As a** admin,
-**I want** to import topology from Terraform state,
-**so that** I don't hand-maintain a JSON file.
+**I want** to import AWS topology from Terraform state,
+**so that** I can stop hand-maintaining the most common topology source first.
 
 **Acceptance:**
 - CLI: `deploywhisper topology import --from terraform --state s3://my-bucket/terraform.tfstate`
-- Supports AWS, GCP, Azure Terraform providers
-- Builds service topology graph automatically
+- Supports AWS Terraform provider resources needed for the initial topology graph
+- Builds service topology graph automatically for supported AWS resources
 - Reports topology diff when re-imported
+- Unsupported providers are skipped with explicit warnings instead of failing the whole import
 
 #### E5-S2: Topology drift detection
 **As a** admin,
@@ -748,6 +820,54 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - Risk by engineer (opt-in, privacy-respecting)
 - Exportable as CSV
 
+#### E5-S9: GCP Terraform state import
+**As a** admin,
+**I want** to import GCP topology from Terraform state,
+**so that** GCP-backed services improve blast-radius accuracy without manual topology files.
+
+**Acceptance:**
+- CLI supports GCP Terraform provider resources through the existing topology import command
+- Builds service topology graph for supported GCP resources
+- Reports unsupported GCP resources in an import warning summary
+- Re-import produces a topology diff consistent with the AWS import behavior
+- Tests cover representative GCP state fixtures and partial unsupported-resource handling
+
+#### E5-S10: Azure Terraform state import
+**As a** admin,
+**I want** to import Azure topology from Terraform state,
+**so that** Azure-backed services improve blast-radius accuracy without manual topology files.
+
+**Acceptance:**
+- CLI supports Azure Terraform provider resources through the existing topology import command
+- Builds service topology graph for supported Azure resources
+- Reports unsupported Azure resources in an import warning summary
+- Re-import produces a topology diff consistent with AWS and GCP import behavior
+- Tests cover representative Azure state fixtures and partial unsupported-resource handling
+
+#### E5-S11: Threshold and reporting defaults management
+**As a** admin,
+**I want** to manage risk thresholds and report defaults without changing core code,
+**so that** teams can tune DeployWhisper behavior while preserving stable analysis semantics.
+
+**Acceptance:**
+- Settings surface exposes threshold bands, context warning defaults, and report display defaults
+- API and CLI can read the same defaults through shared configuration services
+- Changes are audit logged with actor, timestamp, and previous/new values
+- Defaults never disable sensitive-file handling or local-first protections
+- Tests verify threshold/default changes affect presentation or classification only through the approved shared boundary
+
+#### E5-S12: Policy adapter consumption boundary
+**As a** platform integrator,
+**I want** future policy adapters to consume DeployWhisper report outputs through a stable boundary,
+**so that** integrations can evaluate reports without changing the advisory-first core.
+
+**Acceptance:**
+- Shared service emits a policy-consumption payload from persisted Report data
+- Payload includes advisory verdict, evidence references, confidence, uncertainty, and recommended next actions
+- Payload excludes raw uploaded artifacts, prompts, raw model responses, and provider secrets
+- Documentation states that external policy adapters own enforcement decisions
+- Tests verify adapter payload generation does not change report persistence, UI/API/CLI semantics, or advisory-only defaults
+
 ### Epic 5 Exit Criteria
 - Topology auto-import works for AWS/GCP/Azure
 - Drift detection surfaces manual changes
@@ -775,13 +895,15 @@ Build a public benchmark corpus. Run DeployWhisper, competitors, and generic LLM
 
 #### E6-S1: Benchmark corpus v1
 **As a** maintainer,
-**I want** 100 labeled scenarios across all 5 tools,
-**so that** we have ground truth for accuracy measurement.
+**I want** the corpus schema and first labeled scenario batch,
+**so that** benchmark work starts with a reviewable foundation instead of one oversized corpus story.
 
 **Acceptance:**
-- 100 scenarios: 50 risky, 50 safe
-- Covers Terraform, Kubernetes, Ansible, Jenkins, CloudFormation (20 each)
-- Each scenario includes: artifacts, expected findings, expected severity, rationale
+- Corpus schema supports artifacts, expected findings, expected severity, rationale, reviewer labels, and tool category
+- First 20 scenarios include a balanced safe/risky mix across Terraform and Kubernetes
+- Scenario fixtures are stored in `benchmark/corpus/` as YAML or JSON
+- Validation command checks schema completeness and duplicate IDs
+- Expansion to 100 scenarios is handled by follow-on corpus batch stories
 - Stored in `benchmark/corpus/` as YAML or JSON
 - Open-source under MIT license
 
@@ -809,14 +931,15 @@ Build a public benchmark corpus. Run DeployWhisper, competitors, and generic LLM
 
 #### E6-S4: Comparative runner
 **As a** marketer,
-**I want** to run the same corpus through competitors,
-**so that** I can publish comparative results.
+**I want** the comparative runner to support local/open-source comparators first,
+**so that** the result format is proven before adding every external comparator.
 
 **Acceptance:**
-- Runner supports: tflint, kube-score, K8sGPT, vanilla LLM prompt
+- Runner supports at least tflint and kube-score through explicit comparator adapters
 - Each competitor's output mapped to comparable finding format
 - Results table: tool X scenario matrix
 - Winner-by-scenario and overall-winner reported
+- Additional comparator adapters are handled by follow-on stories
 
 #### E6-S5: Published results dashboard
 **As a** potential user,
@@ -862,6 +985,54 @@ Build a public benchmark corpus. Run DeployWhisper, competitors, and generic LLM
 - Runs DeployWhisper against the state and scores against the incident
 - Publishes anonymized case studies with permission
 - At least 1 case study published in Epic 6 timeframe
+
+#### E6-S9: Benchmark corpus expansion batch
+**As a** maintainer,
+**I want** to expand the benchmark corpus across all supported tool types,
+**so that** the corpus reaches meaningful cross-tool coverage in reviewable increments.
+
+**Acceptance:**
+- Adds at least 40 scenarios beyond the initial corpus batch
+- Covers Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation with at least 8 scenarios each across the expanded set
+- Maintains safe/risky balance and expected severity labels
+- Validation command passes for all new scenarios
+- Review notes capture assumptions for ambiguous scenarios
+
+#### E6-S10: Benchmark corpus completion and quality gate
+**As a** maintainer,
+**I want** the corpus to reach 100 labeled scenarios with quality checks,
+**so that** published results have defensible ground truth.
+
+**Acceptance:**
+- Corpus reaches at least 100 scenarios: 50 risky and 50 safe
+- Each supported tool has at least 20 scenarios
+- Every scenario includes artifacts, expected findings, expected severity, rationale, and reviewer label metadata
+- Quality gate rejects unlabeled scenarios, duplicate IDs, missing expected findings, and invalid severity values
+- Corpus summary report documents tool coverage and risk distribution
+
+#### E6-S11: Hosted and LLM comparator adapters
+**As a** marketer,
+**I want** comparative runner adapters for K8sGPT and a vanilla LLM prompt,
+**so that** public comparisons include both deterministic tools and AI baselines.
+
+**Acceptance:**
+- Runner supports K8sGPT through an explicit adapter with documented setup assumptions
+- Runner supports a vanilla LLM prompt baseline without sending raw sensitive production artifacts
+- Adapter outputs map into the same comparable finding format as local comparators
+- Failure or missing credentials for hosted/LLM comparators does not fail local comparator runs
+- Tests cover adapter output normalization and degraded comparator availability
+
+#### E6-S12: Comparative result normalization and reporting
+**As a** maintainer,
+**I want** normalized comparator results and repeatable reports,
+**so that** published benchmark claims can be audited.
+
+**Acceptance:**
+- Results table records per-tool, per-scenario, and overall metrics for DeployWhisper and comparators
+- Winner-by-scenario and overall-winner logic is deterministic and documented
+- JSON and human-readable reports include corpus version, DeployWhisper version, comparator versions, and run timestamp
+- Published dashboard can consume the normalized result artifact without re-running the benchmark
+- Tests cover metric calculation, tie handling, and missing comparator outputs
 
 ### Epic 6 Exit Criteria
 - Benchmark corpus has 100+ annotated scenarios
