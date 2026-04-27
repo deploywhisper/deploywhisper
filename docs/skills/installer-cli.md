@@ -76,7 +76,8 @@ configuration error instead of guessing a remote endpoint.
 - Registry analytics live in `data/skill-analytics.json`
 - `.github/workflows/refresh-skill-analytics.yml` refreshes the snapshot daily
 - `scripts/refresh_skill_analytics.py` refreshes active issue counts from
-  GitHub issue search and requires `DEPLOYWHISPER_SKILL_ANALYTICS_URL` for the
-  install/star popularity feed
+  GitHub issue search and reads install/star popularity from
+  `DEPLOYWHISPER_SKILL_ANALYTICS_URL`, or from the default public feed at
+  `https://deploywhisper.github.io/skills-registry/skill-popularity.json`
 - the refresh job fails explicitly if the popularity feed is missing or omits a
   built-in skill, rather than silently carrying stale metrics forward

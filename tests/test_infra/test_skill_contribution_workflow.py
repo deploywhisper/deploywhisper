@@ -6,9 +6,15 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.publish_skills_registry import publish_skill
-from scripts.refresh_skill_analytics import build_snapshot, iter_built_in_skill_ids
+from scripts.refresh_skill_analytics import (
+    DEFAULT_METRICS_URL,
+    build_snapshot,
+    iter_built_in_skill_ids,
+    resolve_metrics_url,
+)
 
 
 class SkillContributionWorkflowTests(unittest.TestCase):
@@ -60,6 +66,11 @@ class SkillContributionWorkflowTests(unittest.TestCase):
         self.assertIn("issues: read", workflow)
         self.assertIn("GITHUB_TOKEN", workflow)
         self.assertIn("DEPLOYWHISPER_SKILL_ANALYTICS_URL", workflow)
+        self.assertIn(DEFAULT_METRICS_URL, workflow)
+
+    def test_refresh_skill_analytics_defaults_to_public_registry_feed(self) -> None:
+        with patch.dict("os.environ", {"DEPLOYWHISPER_SKILL_ANALYTICS_URL": ""}):
+            self.assertEqual(resolve_metrics_url(), DEFAULT_METRICS_URL)
 
     def test_refresh_skill_analytics_updates_issue_counts_from_runtime_source(
         self,
