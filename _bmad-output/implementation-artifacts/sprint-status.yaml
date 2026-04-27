@@ -73,7 +73,7 @@ development_status:
   3-6-github-app: in-progress
   3-7-check-run-integration: review
   3-8-installation-wizard: review
-  3-9-self-hosted-github-app-setup-documentation: ready-for-dev
+  3-9-self-hosted-github-app-setup-documentation: done
   3-10-github-delivery-mode-documentation: backlog
   3-11-advisory-policy-adapter-output-contract: backlog
   epic-3-retrospective: optional

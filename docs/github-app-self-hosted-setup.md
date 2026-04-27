@@ -109,24 +109,27 @@ Enable:
 After creating the app:
 
 1. Copy the GitHub App `App ID`
-2. Copy the `Client ID`
-3. Generate a `Client secret`
-4. Generate a private key and download the `.pem`
+2. Generate a private key and download the `.pem`
+3. Copy the app slug from the GitHub App URL
 
 Map them into DeployWhisper:
 
 - `DEPLOYWHISPER_GITHUB_APP_ID=<App ID>`
-- `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID=<Client ID>`
-- `DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET=<Client secret>`
+- `DEPLOYWHISPER_GITHUB_APP_SLUG=<your app slug>`
+- `DEPLOYWHISPER_GITHUB_APP_WEBHOOK_SECRET=<same webhook secret configured in GitHub>`
 - `DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY_PATH=<path to pem>`
   or
 - `DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY=<pem contents>`
+- `APP_BASE_URL=https://<your-deploywhisper-base-url>`
 
 Also set:
 
-- `DEPLOYWHISPER_GITHUB_APP_SLUG=<your app slug>`
 - `DEPLOYWHISPER_GITHUB_APP_PR_EVENTS_ENABLED=true`
 - `DEPLOYWHISPER_GITHUB_APP_CHECKS_ENABLED=true`
+
+Only set `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID` and
+`DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET` when you intentionally enable the
+optional OAuth helper route. They are not required for the manual setup path.
 
 ## Installation steps
 
@@ -147,6 +150,49 @@ Also set:
 7. Confirm the check remains advisory-only and does not block merge on its own
 8. Confirm the report link opens your own DeployWhisper server
 9. Confirm branch protection does not list `DeployWhisper / Risk Analysis` as a required status check
+
+## Troubleshooting
+
+### GitHub does not deliver webhooks
+
+- Confirm the app is installed on the repository or organization that owns the PR
+- Confirm the app subscribes to the `Pull request` event
+- Confirm the webhook URL is reachable from GitHub
+- Confirm `DEPLOYWHISPER_GITHUB_APP_ENABLED=true`
+
+### Webhook signature verification fails
+
+- Confirm the GitHub webhook secret exactly matches `DEPLOYWHISPER_GITHUB_APP_WEBHOOK_SECRET`
+- Confirm GitHub is sending the `X-Hub-Signature-256` header
+- Rotate the webhook secret in both GitHub and DeployWhisper if the value may have leaked
+
+### Check run is not created
+
+- Confirm repository permission `Checks` is set to `Read and write`
+- Confirm `DEPLOYWHISPER_GITHUB_APP_CHECKS_ENABLED=true`
+- Confirm `APP_BASE_URL` or `PUBLIC_APP_URL` points at the reachable DeployWhisper base URL
+- Confirm the app installation still has access to the repository
+
+### Pull request files are not analyzed
+
+- Confirm repository permissions include `Pull requests: Read-only` and `Contents: Read-only`
+- Confirm the PR changes supported deployment artifacts
+- Confirm the changed artifacts stay within the shared 50 MB analysis-session limit
+- Check DeployWhisper logs for unsupported file-type or sensitive-file rejection messages
+
+### Installation was revoked or repository access changed
+
+- Re-open the GitHub App settings page
+- Click `Install App`
+- Confirm the account or organization and selected repositories are still correct
+- Reinstall or update repository access from GitHub's UI
+
+### Branch protection blocks merge on DeployWhisper
+
+DeployWhisper is advisory-only. Remove `DeployWhisper / Risk Analysis` from
+required status checks in GitHub branch protection. Teams can still read the
+check result, but DeployWhisper should not be configured as the component that
+blocks merges.
 
 ## Action-first recommendation
 

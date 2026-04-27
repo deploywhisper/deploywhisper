@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import hashlib
 import os
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -292,4 +293,25 @@ class GitHubAppServiceTests(unittest.TestCase):
         self.assertEqual(
             body["output"]["text"],
             "[Open the full DeployWhisper report](https://deploywhisper.example.com/reports/17)",
+        )
+
+    def test_self_hosted_setup_docs_keep_oauth_optional(self) -> None:
+        docs = Path("docs/github-app-self-hosted-setup.md").read_text(encoding="utf-8")
+        main_settings = docs.split("## GitHub UI steps", maxsplit=1)[0]
+
+        self.assertIn("no dependency on a public hosted DeployWhisper GitHub App", docs)
+        self.assertIn("GitHub's own Developer Settings and Install App UI", docs)
+        self.assertIn(
+            "`DEPLOYWHISPER_GITHUB_APP_CLIENT_ID` and "
+            "`DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET` if you intentionally enable "
+            "the optional OAuth helper route",
+            main_settings,
+        )
+        self.assertNotIn(
+            "`DEPLOYWHISPER_GITHUB_APP_CLIENT_ID`\n",
+            main_settings,
+        )
+        self.assertNotIn(
+            "`DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET`\n",
+            main_settings,
         )
