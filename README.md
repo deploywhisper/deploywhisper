@@ -92,7 +92,7 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 ![DeployWhisper dashboard](docs/assets/demo-dashboard.png)
 
 `Saved analyses, filters, and audit metadata`
-![DeployWhisper dashboard](docs/assets/demo-history1.png) 
+![DeployWhisper dashboard](docs/assets/demo-history.png) 
 
 `Provider config, topology upload, and custom skills`
 ![DeployWhisper dashboard](docs/assets/demo-settings.png)
