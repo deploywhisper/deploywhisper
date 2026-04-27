@@ -1,6 +1,6 @@
 # Story 3.9: Self-Hosted GitHub App Setup Documentation
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -29,31 +29,31 @@ so that my team can run GitHub App mode without relying on a DeployWhisper-hoste
 
 ## Tasks / Subtasks
 
-- [ ] Align GitHub App docs with the self-hosted product decision. (AC: 1)
-  - [ ] State clearly that DeployWhisper will not provide or require a SaaS-hosted GitHub App for this roadmap.
-  - [ ] Position the GitHub App as an advanced self-hosted option; keep GitHub Action as the default/recommended path.
-  - [ ] Remove wording that implies DeployWhisper must own a public hosted GitHub App or hosted installation flow.
-- [ ] Document GitHub Developer Settings setup. (AC: 1, 2)
-  - [ ] Walk through GitHub UI path: Settings or organization settings → Developer settings → GitHub Apps → New GitHub App.
-  - [ ] Document recommended app name, homepage URL, webhook URL, webhook secret, and app visibility.
-  - [ ] Document optional callback URL only as an optional helper if the existing OAuth route remains enabled; do not make OAuth required for normal setup.
-  - [ ] Document required repository permissions: checks read/write, pull requests read, contents read, metadata default.
-  - [ ] Document required event subscription: pull request.
-- [ ] Document DeployWhisper environment configuration. (AC: 3)
-  - [ ] Map App ID, app slug, webhook secret, private key, public base URL, PR events flag, and checks flag to the existing environment variables.
-  - [ ] Mark `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID` and `DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET` as optional OAuth-helper settings, not required for manual setup.
-  - [ ] State that private keys, webhook secrets, and client secrets must remain outside the database and should be supplied through environment or secret manager configuration.
-- [ ] Document installation and repository selection from GitHub UI. (AC: 4)
-  - [ ] Explain Install App flow from the GitHub App settings page.
-  - [ ] Explain account/organization selection and repository selection.
-  - [ ] Explain that only selected repositories send eligible webhooks and receive check runs.
-- [ ] Add troubleshooting and verification guidance. (AC: 5, 6)
-  - [ ] Cover missing permissions, revoked installation, unreachable webhook URL, invalid `X-Hub-Signature-256`, missing `APP_BASE_URL` / `PUBLIC_APP_URL`, and required-status-check misconfiguration.
-  - [ ] Include verification checklist for webhook delivery, supported-artifact analysis, persisted report, check run, report link, advisory-only behavior, and 50 MB intake limit.
-- [ ] Preserve and validate existing runtime behavior. (AC: 7)
-  - [ ] Run existing GitHub App service/API tests after documentation edits.
-  - [ ] Add lightweight docs/example validation if the repo already has a suitable documentation test pattern.
-  - [ ] Do not add new product flows, hosted-app assumptions, persistent GitHub credential storage, or a tenant model.
+- [x] Align GitHub App docs with the self-hosted product decision. (AC: 1)
+  - [x] State clearly that DeployWhisper will not provide or require a SaaS-hosted GitHub App for this roadmap.
+  - [x] Position the GitHub App as an advanced self-hosted option; keep GitHub Action as the default/recommended path.
+  - [x] Remove wording that implies DeployWhisper must own a public hosted GitHub App or hosted installation flow.
+- [x] Document GitHub Developer Settings setup. (AC: 1, 2)
+  - [x] Walk through GitHub UI path: Settings or organization settings → Developer settings → GitHub Apps → New GitHub App.
+  - [x] Document recommended app name, homepage URL, webhook URL, webhook secret, and app visibility.
+  - [x] Document optional callback URL only as an optional helper if the existing OAuth route remains enabled; do not make OAuth required for normal setup.
+  - [x] Document required repository permissions: checks read/write, pull requests read, contents read, metadata default.
+  - [x] Document required event subscription: pull request.
+- [x] Document DeployWhisper environment configuration. (AC: 3)
+  - [x] Map App ID, app slug, webhook secret, private key, public base URL, PR events flag, and checks flag to the existing environment variables.
+  - [x] Mark `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID` and `DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET` as optional OAuth-helper settings, not required for manual setup.
+  - [x] State that private keys, webhook secrets, and client secrets must remain outside the database and should be supplied through environment or secret manager configuration.
+- [x] Document installation and repository selection from GitHub UI. (AC: 4)
+  - [x] Explain Install App flow from the GitHub App settings page.
+  - [x] Explain account/organization selection and repository selection.
+  - [x] Explain that only selected repositories send eligible webhooks and receive check runs.
+- [x] Add troubleshooting and verification guidance. (AC: 5, 6)
+  - [x] Cover missing permissions, revoked installation, unreachable webhook URL, invalid `X-Hub-Signature-256`, missing `APP_BASE_URL` / `PUBLIC_APP_URL`, and required-status-check misconfiguration.
+  - [x] Include verification checklist for webhook delivery, supported-artifact analysis, persisted report, check run, report link, advisory-only behavior, and 50 MB intake limit.
+- [x] Preserve and validate existing runtime behavior. (AC: 7)
+  - [x] Run existing GitHub App service/API tests after documentation edits.
+  - [x] Add lightweight docs/example validation if the repo already has a suitable documentation test pattern.
+  - [x] Do not add new product flows, hosted-app assumptions, persistent GitHub credential storage, or a tenant model.
 
 ## Dev Notes
 
@@ -101,8 +101,28 @@ so that my team can run GitHub App mode without relying on a DeployWhisper-hoste
 
 ### Debug Log References
 
+- 2026-04-27: Loaded Story 3.9, project context, sprint status, and existing GitHub App docs/runtime tests on branch `feature/3-9-self-hosted-github-app-docs`.
+- 2026-04-27: Updated sprint status to `in-progress` before implementation.
+- 2026-04-27: Tightened self-hosted GitHub App docs so normal setup uses GitHub Developer Settings and Install App UI, while OAuth routes are documented as optional helpers only.
+- 2026-04-27: Added a regression test that guards the docs contract: client ID/client secret remain optional OAuth-helper settings, and the self-hosted docs keep the GitHub UI setup posture.
+- 2026-04-27: Validation commands run: `./.venv/bin/python -m unittest tests.test_services.test_github_app_service tests.test_api.test_github_app -q`, `./.venv/bin/python -m unittest discover -q`, `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, `git diff --check`. Bandit was checked but is not installed in this environment.
+
 ### Completion Notes List
 
 - Story corrected after product decision clarification: GitHub App mode is self-hosted/manual setup documentation, not an OAuth-backed hosted installation product.
+- Implemented Story 3.9 as documentation and verification hardening only; no hosted-app flow, tenant model, database persistence, or runtime GitHub integration changes were introduced.
+- `docs/github-app.md` now describes manual self-hosted GitHub App setup, Action-first default posture, optional OAuth helper behavior, and the deferred public-hosted mode boundary.
+- `docs/github-app-self-hosted-setup.md` now maps required environment variables, keeps OAuth client credentials optional, documents GitHub Developer Settings and Install App UI steps, and adds troubleshooting for webhook/check-run/setup failures.
+- Added `test_self_hosted_setup_docs_keep_oauth_optional` to keep the docs aligned with the self-hosted/manual setup decision.
 
 ### File List
+
+- `docs/github-app.md`
+- `docs/github-app-self-hosted-setup.md`
+- `tests/test_services/test_github_app_service.py`
+- `_bmad-output/implementation-artifacts/3-9-self-hosted-github-app-setup-documentation.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+### Change Log
+
+- 2026-04-27: Implemented Story 3.9 self-hosted GitHub App setup documentation, added docs contract regression coverage, and marked the story ready for review.

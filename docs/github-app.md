@@ -82,11 +82,10 @@ The optional OAuth start/callback routes are helper endpoints only. They are not
 Use the detailed operator runbook in [`docs/github-app-self-hosted-setup.md`](./github-app-self-hosted-setup.md) to:
 
 1. Create a private/self-hosted GitHub App in your own account or organization
-2. Configure callback URL(s) to your DeployWhisper instance
-3. Configure webhook URL and secret
-4. Request repository permissions for `checks`, `pull_requests`, and `contents`
-5. Subscribe to `pull_request` webhooks
-6. Install the app only into the repositories or organizations you control
+2. Configure webhook URL and secret
+3. Request repository permissions for `checks`, `pull_requests`, and `contents`
+4. Subscribe to `pull_request` webhooks
+5. Install the app only into the repositories or organizations you control
 
 ## Deferred hosted mode
 
