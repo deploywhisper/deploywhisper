@@ -5,8 +5,8 @@ DeployWhisper now supports an advanced self-hosted GitHub App adapter alongside 
 ## Why this exists
 
 - Action-first mode keeps repository-local workflow ownership simple and best matches the project's local-first trust posture.
-- Advanced self-hosted GitHub App mode adds richer GitHub-native capabilities like checks, webhook-driven PR automation, and OAuth-based team installation.
-- Combined mode lets teams keep the Action for explicit workflow control while enabling their own self-hosted GitHub App for checks and installation UX.
+- Advanced self-hosted GitHub App mode adds richer GitHub-native capabilities like checks and webhook-driven PR automation while letting each team create its own GitHub App in GitHub Developer Settings.
+- Combined mode lets teams keep the Action for explicit workflow control while enabling their own self-hosted GitHub App for checks and webhook automation.
 
 ## Modes
 
@@ -19,15 +19,16 @@ DeployWhisper now supports an advanced self-hosted GitHub App adapter alongside 
 ### Advanced self-hosted GitHub App
 
 - Create a private or internal GitHub App in your own GitHub account or organization
-- Point its webhook and OAuth callback URLs at your own DeployWhisper server
+- Point its webhook URL at your own DeployWhisper server
+- Configure an OAuth callback URL only if you intentionally enable the optional OAuth helper route
 - Enable PR automation with `DEPLOYWHISPER_GITHUB_APP_PR_EVENTS_ENABLED=true`
-- Use `/api/v1/github/app/oauth/start` to begin the user authorization flow
+- Install the app into your own account or organization from GitHub's `Install App` UI
 - Follow the operator guide in [`docs/github-app-self-hosted-setup.md`](./github-app-self-hosted-setup.md)
 
 ### Combined mode
 
 - Keep the Action for explicit workflow dispatch and PR comments
-- Install your own self-hosted GitHub App for checks API integration and richer installation/auth flows
+- Install your own self-hosted GitHub App for checks API integration and webhook automation
 - Both paths still use the same DeployWhisper analysis core and persisted report/share contracts
 
 ## Positioning
@@ -43,14 +44,13 @@ The current open-source product is intentionally not positioned around a public 
 - `DEPLOYWHISPER_GITHUB_APP_ENABLED=true`
 - `DEPLOYWHISPER_GITHUB_APP_ID`
 - `DEPLOYWHISPER_GITHUB_APP_SLUG`
-- `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID`
-- `DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET`
 - `DEPLOYWHISPER_GITHUB_APP_WEBHOOK_SECRET`
 - `DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY` or `DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY_PATH`
 - `APP_BASE_URL` or `PUBLIC_APP_URL`
 
 Optional:
 
+- `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID` and `DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET` if you intentionally enable the optional OAuth helper route
 - `DEPLOYWHISPER_GITHUB_APP_PR_EVENTS_ENABLED=true`
 - `DEPLOYWHISPER_GITHUB_APP_CHECKS_ENABLED=true`
 - `DEPLOYWHISPER_GITHUB_APP_API_BASE_URL`
@@ -67,12 +67,15 @@ Optional:
 - Do not configure `DeployWhisper / Risk Analysis` as a required status check in branch protection
 - Shared report URLs remain the deep-link target for richer investigation
 
-## OAuth and installation flow
+## Manual installation flow
 
-1. Start the user authorization flow at `/api/v1/github/app/oauth/start`
-2. GitHub redirects back to `/api/v1/github/app/oauth/callback`
-3. DeployWhisper exchanges the code for a GitHub App user access token
-4. The callback page hands the maintainer off to the GitHub App installation URL
+1. Create the GitHub App from GitHub Developer Settings in your own account or organization
+2. Configure the webhook URL and secret to point at your own DeployWhisper server
+3. Configure the required repository permissions and pull request event subscription
+4. Generate the app private key and set the DeployWhisper environment variables
+5. Install the app from GitHub's `Install App` UI and choose the repositories it can access
+
+The optional OAuth start/callback routes are helper endpoints only. They are not required for the normal self-hosted setup path and should not be treated as a DeployWhisper-hosted app installation product.
 
 ## Operator guide
 
