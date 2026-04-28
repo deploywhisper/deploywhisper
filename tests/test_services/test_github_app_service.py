@@ -5,17 +5,26 @@ from __future__ import annotations
 import hmac
 import hashlib
 import os
+import tempfile
+from importlib import reload
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
+import config as config_module
+import models.database as database_module
+import models.tables as tables_module
+import services.project_service as project_service_module
 from integrations.github import app_service
 
 
 class GitHubAppServiceTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.tempdir.name) / "github-app.db"
         self.env_keys = [
+            "DATABASE_URL",
             "APP_BASE_URL",
             "DEPLOYWHISPER_GITHUB_APP_ENABLED",
             "DEPLOYWHISPER_GITHUB_APP_ID",
@@ -27,8 +36,10 @@ class GitHubAppServiceTests(unittest.TestCase):
             "DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY_PATH",
             "DEPLOYWHISPER_GITHUB_APP_PR_EVENTS_ENABLED",
             "DEPLOYWHISPER_GITHUB_APP_CHECKS_ENABLED",
+            "DEPLOYWHISPER_GITHUB_PROJECT_KEY",
         ]
         self.original_env = {key: os.environ.get(key) for key in self.env_keys}
+        os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
         os.environ["APP_BASE_URL"] = "https://deploywhisper.example.com"
         os.environ["DEPLOYWHISPER_GITHUB_APP_ENABLED"] = "true"
         os.environ["DEPLOYWHISPER_GITHUB_APP_ID"] = "12345"
@@ -41,13 +52,20 @@ class GitHubAppServiceTests(unittest.TestCase):
         )
         os.environ["DEPLOYWHISPER_GITHUB_APP_PR_EVENTS_ENABLED"] = "true"
         os.environ["DEPLOYWHISPER_GITHUB_APP_CHECKS_ENABLED"] = "true"
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+        reload(project_service_module)
+        database_module.init_db()
 
     def tearDown(self) -> None:
+        database_module.engine.dispose()
         for key, value in self.original_env.items():
             if value is None:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+        self.tempdir.cleanup()
 
     def test_verify_github_webhook_signature_accepts_valid_sha256(self) -> None:
         payload = b'{"zen":"ship it"}'
@@ -164,6 +182,58 @@ class GitHubAppServiceTests(unittest.TestCase):
         )
         self.assertIn("advisory-only", call["summary"])
         self.assertIn("Open the full DeployWhisper report", call["text"])
+        self.assertEqual(
+            analyze_uploaded_files.call_args.kwargs["project_key"],
+            "deploywhisper-deploywhisper",
+        )
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_prefers_explicit_project_key_override(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        os.environ["DEPLOYWHISPER_GITHUB_PROJECT_KEY"] = "platform-core"
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.return_value = type(
+            "Result",
+            (),
+            {
+                "assessment": type("Assessment", (), {"recommendation": "caution"})(),
+                "persisted_report": {"id": 18},
+            },
+        )()
+        create_check_run.return_value = 992
+
+        try:
+            app_service.handle_github_app_webhook(
+                event_name="pull_request",
+                payload={
+                    "action": "opened",
+                    "number": 3,
+                    "installation": {"id": 42},
+                    "repository": {
+                        "name": "deploywhisper",
+                        "owner": {"login": "deploywhisper"},
+                    },
+                    "pull_request": {
+                        "number": 3,
+                        "head": {"sha": "abc123"},
+                    },
+                },
+            )
+        finally:
+            os.environ.pop("DEPLOYWHISPER_GITHUB_PROJECT_KEY", None)
+
+        self.assertEqual(
+            analyze_uploaded_files.call_args.kwargs["project_key"], "platform-core"
+        )
 
     @patch("integrations.github.app_service.analyze_uploaded_files")
     @patch("integrations.github.app_service._load_pull_request_artifacts")

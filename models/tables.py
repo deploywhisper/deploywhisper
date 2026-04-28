@@ -38,6 +38,38 @@ if "IncidentRecord" not in globals():
         )
 
 
+if "Project" not in globals():
+
+    class Project(Base):
+        """Lightweight project/workspace scope for reports and context."""
+
+        __tablename__ = "projects"
+        __table_args__ = (
+            UniqueConstraint("project_key", name="uq_projects_project_key"),
+        )
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        project_key: Mapped[str] = mapped_column(String(120), index=True)
+        display_name: Mapped[str] = mapped_column(String(255))
+        description: Mapped[str | None] = mapped_column(Text, nullable=True)
+        repository_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+        default_branch: Mapped[str | None] = mapped_column(String(120), nullable=True)
+        is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True),
+            default=lambda: datetime.now(UTC),
+            onupdate=lambda: datetime.now(UTC),
+        )
+        reports: Mapped[list["AnalysisReport"]] = relationship(back_populates="project")
+        topology_versions: Mapped[list["TopologyVersion"]] = relationship(
+            back_populates="project",
+            cascade="all, delete-orphan",
+        )
+
+
 if "AnalysisReport" not in globals():
 
     class AnalysisReport(Base):
@@ -46,6 +78,10 @@ if "AnalysisReport" not in globals():
         __tablename__ = "analysis_reports"
 
         id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="RESTRICT"),
+            index=True,
+        )
         risk_score: Mapped[int] = mapped_column(Integer)
         severity: Mapped[str] = mapped_column(String(20))
         recommendation: Mapped[str] = mapped_column(String(20))
@@ -92,6 +128,7 @@ if "AnalysisReport" not in globals():
             cascade="all, delete-orphan",
             uselist=False,
         )
+        project: Mapped["Project"] = relationship(back_populates="reports")
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
         )
@@ -251,4 +288,75 @@ if "ContextSnapshot" not in globals():
         )
         report: Mapped["AnalysisReport"] = relationship(
             back_populates="context_snapshot"
+        )
+
+
+if "TopologyVersion" not in globals():
+
+    class TopologyVersion(Base):
+        """Persisted topology snapshot scoped to one project."""
+
+        __tablename__ = "topology_versions"
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        source_type: Mapped[str] = mapped_column(String(30), default="manual")
+        payload_json: Mapped[str] = mapped_column(Text, default="{}")
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
+        project: Mapped["Project"] = relationship(back_populates="topology_versions")
+
+
+if "DeploymentOutcome" not in globals():
+
+    class DeploymentOutcome(Base):
+        """Persisted deployment outcome scoped to one project."""
+
+        __tablename__ = "deployment_outcomes"
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        analysis_id: Mapped[int | None] = mapped_column(
+            ForeignKey("analysis_reports.id", ondelete="SET NULL"),
+            nullable=True,
+        )
+        environment: Mapped[str | None] = mapped_column(String(80), nullable=True)
+        outcome_label: Mapped[str] = mapped_column(String(40), default="unknown")
+        summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
+
+
+if "FeedbackEvent" not in globals():
+
+    class FeedbackEvent(Base):
+        """Persisted reviewer feedback event scoped to one project."""
+
+        __tablename__ = "feedback_events"
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        analysis_id: Mapped[int | None] = mapped_column(
+            ForeignKey("analysis_reports.id", ondelete="SET NULL"),
+            nullable=True,
+        )
+        reviewer_role: Mapped[str | None] = mapped_column(String(80), nullable=True)
+        useful: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+        correctness_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+        false_positive_flag: Mapped[bool] = mapped_column(Boolean, default=False)
+        false_negative_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+        outcome_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), default=lambda: datetime.now(UTC)
         )

@@ -60,6 +60,9 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("analysis_id", self._table_columns("findings"))
         self.assertIn("analysis_id", self._table_columns("risk_assessments"))
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
+        self.assertIn("project_id", self._table_columns("analysis_reports"))
+        self.assertIn("project_key", self._table_columns("projects"))
+        self.assertIn("payload_json", self._table_columns("topology_versions"))
         self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
         self.assertIn("blast_radius_json", self._table_columns("analysis_reports"))
         self.assertIn("rollback_plan_json", self._table_columns("analysis_reports"))
@@ -152,6 +155,14 @@ class MigrationTests(unittest.TestCase):
             share_redact_filenames = sqlite_conn.execute(
                 "SELECT share_redact_filenames FROM analysis_reports LIMIT 1"
             ).fetchone()[0]
+            project_key = sqlite_conn.execute(
+                """
+                SELECT projects.project_key
+                FROM analysis_reports
+                JOIN projects ON projects.id = analysis_reports.project_id
+                LIMIT 1
+                """
+            ).fetchone()[0]
             finding_fks = sqlite_conn.execute(
                 "PRAGMA foreign_key_list(findings)"
             ).fetchall()
@@ -165,6 +176,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(schema_version, "v2")
         self.assertIsNone(share_password_hash)
         self.assertEqual(share_redact_filenames, 0)
+        self.assertEqual(project_key, "unassigned")
         self.assertTrue(any(row[2] == "analysis_reports" for row in finding_fks))
         self.assertTrue(any(row[2] == "findings" for row in evidence_fks))
 
@@ -210,7 +222,9 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("incident_records", tables)
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "009_add_report_share_settings")
+        self.assertIn("projects", tables)
+        self.assertIn("topology_versions", tables)
+        self.assertEqual(revision, "010_add_project_workspaces")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -258,7 +272,8 @@ class MigrationTests(unittest.TestCase):
 
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
-        self.assertEqual(revision, "009_add_report_share_settings")
+        self.assertIn("projects", tables)
+        self.assertEqual(revision, "010_add_project_workspaces")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -284,9 +299,10 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "009_add_report_share_settings")
+        self.assertEqual(revision, "010_add_project_workspaces")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
+        self.assertIn("project_id", columns)
 
     def test_init_db_repairs_empty_alembic_revision_state(self) -> None:
         command.upgrade(self._config(), "0001_create_analysis_reports")
@@ -309,7 +325,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "009_add_report_share_settings")
+        self.assertEqual(revision, "010_add_project_workspaces")
 
 
 if __name__ == "__main__":

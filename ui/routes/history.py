@@ -6,6 +6,7 @@ from typing import Any
 
 from nicegui import ui
 
+from services.project_service import get_active_project
 from services.report_service import (
     fetch_analysis_report,
     fetch_filtered_analysis_history_page,
@@ -37,10 +38,16 @@ def build_history_page() -> None:
     """Render a scanable history view with direct report retrieval."""
     apply_theme()
     build_navigation_shell("history")
-    reports_page = fetch_filtered_analysis_history_page(page=1, page_size=5)
+    active_project = get_active_project()
+    active_project_id = active_project.id if active_project is not None else None
+    reports_page = fetch_filtered_analysis_history_page(
+        project_id=active_project_id,
+        page=1,
+        page_size=5,
+    )
     reports = reports_page["items"]
     total_report_count = reports_page["total_count"]
-    trends = fetch_risk_trends()
+    trends = fetch_risk_trends(project_id=active_project_id)
     selected_ids: set[int] = set()
     page_state = {"page": 1, "page_size": 5}
     card_checkboxes: dict[int, Any] = {}
@@ -51,7 +58,11 @@ def build_history_page() -> None:
             build_page_header(
                 eyebrow="History",
                 title="Analysis history",
-                subtitle="Review earlier deploy briefings, audit metadata, and risk trends.",
+                subtitle=(
+                    "Review earlier deploy briefings, audit metadata, and risk trends."
+                    if active_project is None
+                    else f"Project-scoped history for {active_project.display_name} ({active_project.project_key})."
+                ),
                 back_href="/",
                 back_label="Back to dashboard",
             )
@@ -87,13 +98,14 @@ def build_history_page() -> None:
         def refresh_data(query: str | None = None) -> list[dict]:
             nonlocal reports, trends, total_report_count
             page_payload = fetch_filtered_analysis_history_page(
+                project_id=active_project_id,
                 search=query,
                 page=page_state["page"],
                 page_size=page_state["page_size"],
             )
             reports = page_payload["items"]
             total_report_count = page_payload["total_count"]
-            trends = fetch_risk_trends()
+            trends = fetch_risk_trends(project_id=active_project_id)
             max_page = max(1, (total_report_count - 1) // page_state["page_size"] + 1)
             page_state["page"] = min(page_state["page"], max_page)
             return reports
@@ -402,8 +414,14 @@ def build_history_detail_page(report_id: int, *, show_comparison: bool = False) 
     """Render one persisted report on a dedicated detail page."""
     apply_theme()
     build_navigation_shell("history")
-    report = fetch_analysis_report(report_id)
-    comparison = fetch_report_comparison(report_id) if show_comparison else None
+    active_project = get_active_project()
+    active_project_id = active_project.id if active_project is not None else None
+    report = fetch_analysis_report(report_id, project_id=active_project_id)
+    comparison = (
+        fetch_report_comparison(report_id, project_id=active_project_id)
+        if show_comparison
+        else None
+    )
 
     with ui.column().classes("dw-main-content dw-shell gap-5"):
         with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):

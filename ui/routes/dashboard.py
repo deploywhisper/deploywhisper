@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from nicegui import ui
 
+from services.project_service import get_active_project
 from services.report_service import fetch_active_dashboard_report
 from ui.components.upload_panel import build_upload_panel
 from ui.components.verdict_card import render_verdict_card
@@ -30,6 +31,13 @@ def build_dashboard() -> None:
     apply_theme()
     build_navigation_shell("dashboard")
 
+    def current_project():
+        return get_active_project()
+
+    def current_project_id() -> int | None:
+        project = current_project()
+        return project.id if project is not None else None
+
     with ui.column().classes("dw-main-content dw-shell gap-5"):
         briefing_mount = None
         stats_mount = None
@@ -39,7 +47,7 @@ def build_dashboard() -> None:
 
         def render_briefing() -> None:
             nonlocal briefing_mount
-            briefing = fetch_dashboard_briefing()
+            briefing = fetch_dashboard_briefing(project_id=current_project_id())
             severity_counts = briefing["severity_counts"]
             total_reports = max(briefing["saved_briefings"], 1)
             segments = (
@@ -124,7 +132,7 @@ def build_dashboard() -> None:
                                         ui.label(str(value)).classes("text-xs dw-muted")
 
         def render_stats() -> None:
-            stats = fetch_dashboard_stats()
+            stats = fetch_dashboard_stats(project_id=current_project_id())
             stats_mount.clear()
             with stats_mount:
                 with ui.card().classes("w-full dw-panel shadow-none p-4"):
@@ -167,7 +175,9 @@ def build_dashboard() -> None:
             render_stats()
 
         def render_hero() -> None:
-            active_report = fetch_active_dashboard_report()
+            active_report = fetch_active_dashboard_report(
+                project_id=current_project_id()
+            )
             hero_mount.clear()
             with hero_mount:
                 if active_report is not None:
@@ -178,6 +188,13 @@ def build_dashboard() -> None:
                     return
 
                 ui.label("Deploy review").classes("dw-eyebrow")
+                active_project = current_project()
+                if active_project is not None:
+                    ui.label(
+                        f"Current project: {active_project.display_name} ({active_project.project_key})"
+                    ).classes(
+                        "text-xs font-semibold uppercase tracking-[0.08em] dw-muted"
+                    )
                 ui.html(
                     '<div class="dw-dashboard-headline mt-3">'
                     '<span class="dw-gradient">Know the risk before</span><br>'

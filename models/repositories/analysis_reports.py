@@ -18,7 +18,10 @@ from models.tables import (
 
 
 def _report_load_options(*, include_evidence: bool) -> list:
-    options = [selectinload(AnalysisReport.risk_assessment)]
+    options = [
+        selectinload(AnalysisReport.risk_assessment),
+        selectinload(AnalysisReport.project),
+    ]
     findings_loader = selectinload(AnalysisReport.findings)
     if include_evidence:
         findings_loader = findings_loader.selectinload(PersistedFinding.evidence_items)
@@ -29,6 +32,7 @@ def _report_load_options(*, include_evidence: bool) -> list:
 def create_analysis_report(
     session: Session,
     *,
+    project_id: int,
     risk_score: int,
     severity: str,
     recommendation: str,
@@ -58,6 +62,7 @@ def create_analysis_report(
     evidence_payload: list[dict[str, Any]] | None = None,
 ) -> AnalysisReport:
     report = AnalysisReport(
+        project_id=project_id,
         risk_score=risk_score,
         severity=severity,
         recommendation=recommendation,
@@ -210,6 +215,7 @@ def delete_analysis_report(session: Session, report_id: int) -> bool:
 def list_analysis_reports(
     session: Session,
     *,
+    project_id: int | None = None,
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
@@ -222,6 +228,8 @@ def list_analysis_reports(
         .options(*_report_load_options(include_evidence=include_evidence))
         .order_by(AnalysisReport.id.desc())
     )
+    if project_id is not None:
+        stmt = stmt.where(AnalysisReport.project_id == project_id)
     if severity:
         stmt = stmt.where(AnalysisReport.severity == severity)
     if recommendation:
@@ -244,11 +252,14 @@ def list_analysis_reports(
 def count_analysis_reports(
     session: Session,
     *,
+    project_id: int | None = None,
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
 ) -> int:
     stmt = select(func.count()).select_from(AnalysisReport)
+    if project_id is not None:
+        stmt = stmt.where(AnalysisReport.project_id == project_id)
     if severity:
         stmt = stmt.where(AnalysisReport.severity == severity)
     if recommendation:
@@ -264,19 +275,31 @@ def count_analysis_reports(
 
 
 def count_analysis_reports_by_field(
-    session: Session, field_name: str
+    session: Session,
+    field_name: str,
+    *,
+    project_id: int | None = None,
 ) -> dict[str, int]:
     column = getattr(AnalysisReport, field_name)
     stmt = select(column, func.count()).group_by(column)
+    if project_id is not None:
+        stmt = stmt.where(AnalysisReport.project_id == project_id)
     rows = session.execute(stmt).all()
     return {str(value): int(count) for value, count in rows if value is not None}
 
 
 def latest_active_dashboard_report(
-    session: Session, *, now: datetime | None = None
+    session: Session,
+    *,
+    now: datetime | None = None,
+    project_id: int | None = None,
 ) -> AnalysisReport | None:
     current_time = now or datetime.now(UTC)
-    reports = list_analysis_reports(session, include_evidence=False)
+    reports = list_analysis_reports(
+        session,
+        project_id=project_id,
+        include_evidence=False,
+    )
     for report in reports:
         duration = report.dashboard_display_duration_seconds or 0
         if duration <= 0:

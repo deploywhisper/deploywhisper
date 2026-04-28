@@ -18,6 +18,7 @@ from typing import Any
 from urllib import error, parse, request
 
 from config import settings
+from services.project_service import ProjectResolutionError, resolve_project_reference
 from services.analysis_service import analyze_uploaded_files
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
@@ -376,8 +377,23 @@ def handle_github_app_webhook(
     if config.checks_enabled:
         _require_check_run_report_url_config(config)
 
+    explicit_project_key = (
+        os.getenv("DEPLOYWHISPER_GITHUB_PROJECT_KEY") or ""
+    ).strip() or None
+    try:
+        project = resolve_project_reference(
+            project_key=explicit_project_key,
+            repository_name=f"{owner}/{repo_name}"
+            if explicit_project_key is None
+            else None,
+            allow_create=True,
+        )
+    except ProjectResolutionError as exc:
+        raise GitHubAppConfigurationError(str(exc)) from exc
+
     result = analyze_uploaded_files(
         accepted_files,
+        project_key=project.project_key,
         audit_context={
             "source_interface": "github_app",
             "trigger_type": "github_app_pull_request",

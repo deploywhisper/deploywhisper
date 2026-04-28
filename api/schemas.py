@@ -125,6 +125,14 @@ class ResourceMetaPayload(MetaPayload):
     id: int = Field(..., description="Stable resource identifier")
 
 
+class ListMetaPayload(MetaPayload):
+    count: int = Field(..., description="Count of returned items")
+
+
+class ResourceOnlyMetaPayload(MetaPayload):
+    id: int = Field(..., description="Stable resource identifier")
+
+
 class AnalysisRunMetaPayload(MetaPayload):
     api_version: str = Field(..., description="Versioned API contract identifier")
     report_schema_version: str = Field(
@@ -178,8 +186,27 @@ class AuditMetadataData(BaseModel):
     )
 
 
+class ProjectData(BaseModel):
+    id: int = Field(..., description="Stable project/workspace identifier")
+    project_key: str = Field(..., description="Stable project/workspace key")
+    display_name: str = Field(..., description="Human-readable project name")
+    description: str | None = Field(default=None, description="Optional description")
+    repository_url: str | None = Field(
+        default=None, description="Optional repository URL"
+    )
+    default_branch: str | None = Field(
+        default=None, description="Optional default branch"
+    )
+    is_default: bool = Field(
+        default=False, description="Whether this is the legacy default workspace"
+    )
+    created_at: str = Field(..., description="Creation timestamp")
+    updated_at: str = Field(..., description="Last update timestamp")
+
+
 class PersistedReportData(BaseModel):
     id: int
+    project: ProjectData = Field(..., description="Owning project/workspace")
     risk_score: int
     severity: str
     recommendation: str
@@ -226,6 +253,68 @@ class PersistedReportData(BaseModel):
 
 class AnalysisReportData(PersistedReportData):
     pass
+
+
+class ProjectCreateRequest(BaseModel):
+    project_key: str = Field(..., description="Stable project/workspace key")
+    display_name: str = Field(..., description="Human-readable project name")
+    description: str | None = Field(default=None, description="Optional description")
+    repository_url: str | None = Field(
+        default=None, description="Optional repository URL"
+    )
+    default_branch: str | None = Field(
+        default=None, description="Optional default branch"
+    )
+
+
+class ProjectListResponse(BaseModel):
+    data: list[ProjectData]
+    meta: ListMetaPayload
+
+
+class ProjectResponse(BaseModel):
+    data: ProjectData
+    meta: ResourceOnlyMetaPayload
+
+
+class TopologyStatusData(BaseModel):
+    path: str = Field(..., description="Logical or file path for the topology source")
+    exists: bool = Field(..., description="Whether an active topology exists")
+    updated_at: str | None = Field(
+        default=None, description="Last update timestamp when available"
+    )
+    service_count: int = Field(default=0, description="Number of services")
+    dependency_count: int = Field(default=0, description="Number of dependencies")
+    resource_key_count: int = Field(
+        default=0, description="Number of resource mappings"
+    )
+    preview_services: list[str] = Field(
+        default_factory=list, description="Preview of service labels"
+    )
+    warnings: list[str] = Field(default_factory=list, description="Topology warnings")
+    blocking_errors: list[str] = Field(
+        default_factory=list, description="Blocking validation errors"
+    )
+
+
+class TopologyContextRequest(BaseModel):
+    topology: dict[str, Any] = Field(..., description="Topology JSON payload")
+    project_id: int | None = Field(
+        default=None, description="Optional numeric project identifier"
+    )
+    project_key: str | None = Field(
+        default=None, description="Optional stable project key"
+    )
+
+
+class TopologyContextData(BaseModel):
+    project: ProjectData = Field(..., description="Owning project/workspace")
+    topology: TopologyStatusData = Field(..., description="Topology status payload")
+
+
+class TopologyContextResponse(BaseModel):
+    data: TopologyContextData
+    meta: MetaPayload
 
 
 class ChangeData(BaseModel):

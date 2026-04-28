@@ -10,6 +10,9 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from config import settings
+from models.database import SessionLocal
+from models.tables import TopologyVersion
+from services.project_service import build_project_payload, resolve_project_reference
 
 STALE_AFTER_DAYS = 30
 
@@ -51,6 +54,87 @@ class TopologyStatus(BaseModel):
 
 def _topology_path() -> Path:
     return Path(settings.topology_path)
+
+
+def _topology_scope_path(project: dict) -> Path:
+    return Path(f"project://{project['project_key']}/topology/latest")
+
+
+def _invalid_stored_topology_status(path: Path, message: str) -> TopologyStatus:
+    return TopologyStatus(
+        path=str(path),
+        exists=True,
+        blocking_errors=[message],
+    )
+
+
+def _load_latest_topology_payload(
+    project: dict,
+) -> tuple[dict | None, Path, TopologyStatus | None]:
+    topology_path = _topology_scope_path(project)
+    with SessionLocal() as session:
+        record = (
+            session.query(TopologyVersion)
+            .filter(TopologyVersion.project_id == int(project["id"]))
+            .order_by(TopologyVersion.id.desc())
+            .first()
+        )
+        if record is None:
+            if bool(project.get("is_default")):
+                legacy_status = _read_legacy_topology_status()
+                if legacy_status is not None:
+                    return (
+                        legacy_status.payload,
+                        Path(legacy_status.path),
+                        legacy_status,
+                    )
+            return None, topology_path, None
+        try:
+            payload = json.loads(record.payload_json or "{}")
+        except JSONDecodeError:
+            return (
+                None,
+                topology_path,
+                _invalid_stored_topology_status(
+                    topology_path,
+                    "Topology validation failed — stored topology JSON is invalid.",
+                ),
+            )
+        if not isinstance(payload, dict):
+            return (
+                None,
+                topology_path,
+                _invalid_stored_topology_status(
+                    topology_path,
+                    "Topology validation failed — stored topology must be a JSON object.",
+                ),
+            )
+        return payload, topology_path, None
+
+
+def _read_legacy_topology_status() -> TopologyStatus | None:
+    legacy_path = _topology_path()
+    if not legacy_path.exists():
+        return None
+    try:
+        payload = json.loads(legacy_path.read_text(encoding="utf-8"))
+    except (OSError, JSONDecodeError):
+        return TopologyStatus(
+            path=str(legacy_path),
+            exists=legacy_path.exists(),
+            blocking_errors=[
+                "Topology validation failed — active topology JSON is invalid."
+            ],
+        )
+    if not isinstance(payload, dict):
+        return TopologyStatus(
+            path=str(legacy_path),
+            exists=True,
+            blocking_errors=[
+                "Topology validation failed — active topology must be a JSON object."
+            ],
+        )
+    return _build_topology_status(payload, path=legacy_path, exists=True)
 
 
 def _parse_updated_at(updated_at_raw: str | None, warnings: list[str]) -> str | None:
@@ -226,10 +310,23 @@ def _build_topology_status(
     )
 
 
-def get_topology_status() -> TopologyStatus:
+def get_topology_status(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> TopologyStatus:
     """Return the active topology context with validation details for admin workflows."""
-    topology_path = _topology_path()
-    if not topology_path.exists():
+    project = build_project_payload(
+        resolve_project_reference(project_id=project_id, project_key=project_key)
+    )
+    payload, topology_path, status_override = _load_latest_topology_payload(project)
+    if status_override is not None and payload is None:
+        return status_override
+    if payload is None:
+        if bool(project.get("is_default")):
+            legacy_status = _read_legacy_topology_status()
+            if legacy_status is not None:
+                return legacy_status
         return TopologyStatus(
             path=str(topology_path),
             exists=False,
@@ -237,30 +334,15 @@ def get_topology_status() -> TopologyStatus:
                 "Blast radius may be incomplete — service topology is not configured."
             ],
         )
-
-    try:
-        payload = json.loads(topology_path.read_text(encoding="utf-8"))
-    except JSONDecodeError:
-        return TopologyStatus(
-            path=str(topology_path),
-            exists=True,
-            blocking_errors=[
-                "Topology validation failed — active topology JSON is invalid."
-            ],
-        )
-
-    if not isinstance(payload, dict):
-        return TopologyStatus(
-            path=str(topology_path),
-            exists=True,
-            blocking_errors=[
-                "Topology validation failed — active topology must be a JSON object."
-            ],
-        )
     return _build_topology_status(payload, path=topology_path, exists=True)
 
 
-def save_topology_definition(raw_text: str) -> TopologyStatus:
+def save_topology_definition(
+    raw_text: str,
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> TopologyStatus:
     """Persist topology input as the active blast-radius context and return validation feedback."""
     try:
         payload = json.loads(raw_text)
@@ -270,16 +352,35 @@ def save_topology_definition(raw_text: str) -> TopologyStatus:
     if not isinstance(payload, dict):
         raise ValueError("Topology definition must be a JSON object.")
 
-    topology_path = _topology_path()
+    project = build_project_payload(
+        resolve_project_reference(project_id=project_id, project_key=project_key)
+    )
+    topology_path = _topology_scope_path(project)
     payload["updated_at"] = (
         datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     )
     candidate_status = _build_topology_status(payload, path=topology_path, exists=False)
     if candidate_status.blocking_errors:
         raise ValueError(" ".join(candidate_status.blocking_errors))
-    topology_path.parent.mkdir(parents=True, exist_ok=True)
-    topology_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    return get_topology_status()
+    with SessionLocal() as session:
+        if bool(project.get("is_default")):
+            legacy_path = _topology_path()
+            try:
+                legacy_path.parent.mkdir(parents=True, exist_ok=True)
+                legacy_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            except OSError as exc:
+                raise ValueError(
+                    "Topology definition could not be mirrored to the legacy topology file."
+                ) from exc
+        session.add(
+            TopologyVersion(
+                project_id=int(project["id"]),
+                source_type="manual",
+                payload_json=json.dumps(payload),
+            )
+        )
+        session.commit()
+    return get_topology_status(project_id=int(project["id"]))
 
 
 def _join_warnings(warnings: list[str]) -> str | None:
@@ -288,8 +389,12 @@ def _join_warnings(warnings: list[str]) -> str | None:
     return " ".join(warnings)
 
 
-def load_topology() -> tuple[dict | None, str | None]:
+def load_topology(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> tuple[dict | None, str | None]:
     """Load topology context and return an optional warning."""
-    status = get_topology_status()
+    status = get_topology_status(project_id=project_id, project_key=project_key)
     messages = status.blocking_errors + status.warnings
     return status.payload, _join_warnings(messages)

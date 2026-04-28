@@ -13,6 +13,7 @@ import config as config_module
 import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
+import services.project_service as project_service_module
 import services.report_service as report_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from app import create_app
@@ -31,6 +32,7 @@ class AnalysesApiTests(unittest.TestCase):
         reload(tables_module)
         reload(database_module)
         reload(analysis_reports_repository_module)
+        reload(project_service_module)
         reload(report_service_module)
         database_module.init_db()
         self.client = TestClient(create_app())
@@ -133,6 +135,50 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["page"], 1)
         self.assertEqual(payload["meta"]["page_size"], 50)
 
+    def test_list_analyses_defaults_to_unassigned_scope(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=15,
+                severity="low",
+                recommendation="go",
+                top_risk="Scoped project report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: scoped project report.",
+                explanation="Scoped report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        response = self.client.get("/api/v1/analyses")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["count"], 1)
+        self.assertEqual(payload["data"][0]["project"]["project_key"], "unassigned")
+
     def test_get_analysis_returns_single_report(self) -> None:
         response = self.client.get(f"/api/v1/analyses/{self.persisted['id']}")
         self.assertEqual(response.status_code, 200)
@@ -142,6 +188,57 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["report_schema_version"], "v2")
         self.assertEqual(payload["data"]["audit"]["llm_provider"], "ollama")
         self.assertEqual(payload["data"]["blast_radius"]["direct_count"], 0)
+
+    def test_get_analysis_rejects_unknown_project_reference(self) -> None:
+        response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}",
+            params={"project_key": "missing"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "project_not_found")
+
+    def test_get_analysis_defaults_to_unassigned_scope(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        scoped = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=15,
+                severity="low",
+                recommendation="go",
+                top_risk="Low-risk payments change.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: low-risk payments change.",
+                explanation="Scoped report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        response = self.client.get(f"/api/v1/analyses/{scoped['id']}")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "analysis_not_found")
 
     def test_configure_share_is_disabled_without_management_token(self) -> None:
         response = self.client.post(
@@ -204,6 +301,10 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertIn("Password required", report_response.text)
 
     def test_create_analysis_returns_structured_result(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         files = [
             (
                 "files",
@@ -237,7 +338,11 @@ class AnalysesApiTests(unittest.TestCase):
             ),
             patch("services.analysis_service.find_incident_matches", return_value=[]),
         ):
-            response = self.client.post("/api/v1/analyses", files=files)
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "payments"},
+            )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -250,6 +355,9 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertIn("context_completeness", payload["data"]["assessment"])
         self.assertEqual(
             payload["data"]["assessment"]["top_risk_contributors"], ["ev-001"]
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["project"]["project_key"], "payments"
         )
         self.assertEqual(
             payload["data"]["assessment"]["contributors"][0]["evidence_id"], "ev-001"
@@ -297,6 +405,68 @@ class AnalysesApiTests(unittest.TestCase):
             "ev-001",
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
+
+    def test_create_analysis_rejects_unknown_project_reference(self) -> None:
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    "application/json",
+                ),
+            )
+        ]
+
+        response = self.client.post(
+            "/api/v1/analyses",
+            files=files,
+            data={"project_key": "missing"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "project_not_found")
+
+    def test_list_analyses_rejects_unknown_project_reference(self) -> None:
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={"project_key": "missing"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "project_not_found")
+
+    def test_create_analysis_rejects_conflicting_project_reference(self) -> None:
+        first = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        second = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    "application/json",
+                ),
+            )
+        ]
+
+        response = self.client.post(
+            "/api/v1/analyses",
+            files=files,
+            data={"project_id": str(first.id), "project_key": second.project_key},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"]["code"],
+            "conflicting_project_reference",
+        )
 
     def test_create_analysis_captures_trigger_headers_when_present(self) -> None:
         files = [

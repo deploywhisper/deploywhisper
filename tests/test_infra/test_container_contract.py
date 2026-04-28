@@ -23,6 +23,7 @@ class ContainerContractTests(unittest.TestCase):
                 "007_add_blast_radius_payload.py",
                 "008_add_rollback_plan_payload.py",
                 "009_add_report_share_settings.py",
+                "010_add_project_workspaces.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -31,6 +32,7 @@ class ContainerContractTests(unittest.TestCase):
         blast_radius_content = migrations[3].read_text(encoding="utf-8")
         rollback_content = migrations[4].read_text(encoding="utf-8")
         share_content = migrations[5].read_text(encoding="utf-8")
+        project_content = migrations[6].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -49,6 +51,11 @@ class ContainerContractTests(unittest.TestCase):
         self.assertIn('"rollback_plan_json"', rollback_content)
         self.assertIn('down_revision = "008_add_rollback_plan_payload"', share_content)
         self.assertIn('"share_redact_filenames"', share_content)
+        self.assertIn(
+            'down_revision = "009_add_report_share_settings"', project_content
+        )
+        self.assertIn('"projects"', project_content)
+        self.assertIn('"project_id"', project_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())
