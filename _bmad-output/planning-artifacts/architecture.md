@@ -539,8 +539,11 @@ Early shared deployments may rely on network boundary / reverse-proxy controls. 
 - Team scoping
 - Audit access controls
 
+For v1 and Epic 5 scope, use lightweight project/workspace isolation inside the existing single-team deployment model rather than introducing authn/authz or multi-tenant boundaries.
+
 ### 11.3 Audit model
 Every analysis captures:
+- Project/workspace identity
 - Who or what triggered it
 - When it ran
 - Artifact manifest
@@ -561,6 +564,7 @@ Skills are markdown files with structured frontmatter. They contain no executabl
 ### 12.1 v1 schema
 SQLite database with the following tables:
 
+- `projects`
 - `artifact_bundles`
 - `artifact_records`
 - `analysis_reports`
@@ -635,6 +639,8 @@ Purpose:
 Core endpoints:
 
 ```
+GET    /api/v1/projects
+POST   /api/v1/projects
 POST   /api/v1/analyses
 GET    /api/v1/analyses
 GET    /api/v1/analyses/{analysis_id}
@@ -664,9 +670,14 @@ Purpose:
 Core commands:
 
 ```
-deploywhisper analyze <path>
+deploywhisper project create <key>
+deploywhisper analyze --project <key> <path>
 deploywhisper report <analysis_id>
-deploywhisper topology import --from terraform --state <uri>
+deploywhisper topology import --from <source> --source <uri-or-path>
+deploywhisper topology import --from terraform --source s3://my-bucket/terraform.tfstate
+deploywhisper topology import --from cloudformation --source stack-template.yaml
+deploywhisper topology import --from kubernetes --source manifests/
+deploywhisper topology import --from ansible --source inventory.yaml
 deploywhisper skill install <name>           (new)
 deploywhisper skill list                     (new)
 deploywhisper skill update <name>            (new)
@@ -679,6 +690,7 @@ deploywhisper github init                    (new)
 **GitHub Adapter layer** — first-class adoption surface after trusted core.
 
 Capabilities:
+- Project-aware PR analysis with optional explicit project key and repository-derived default
 - PR analysis trigger (GitHub Action)
 - Summary comment with verdict, top risks, blast radius, rollback, uncertainty
 - Rerun on new commit (updates existing comment, shows diff)

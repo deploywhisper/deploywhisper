@@ -94,18 +94,22 @@ development_status:
   epic-4-retrospective: optional
 
   epic-5: in-progress
-  5-1-terraform-state-import: ready-for-dev
-  5-2-topology-drift-detection: ready-for-dev
-  5-3-topology-freshness-badge: ready-for-dev
-  5-4-deployment-history-capture: ready-for-dev
-  5-5-reviewer-feedback-capture: ready-for-dev
-  5-6-outcome-linking: ready-for-dev
-  5-7-calibration-dashboard: ready-for-dev
-  5-8-trend-analysis: ready-for-dev
-  5-9-gcp-terraform-state-import: backlog
-  5-10-azure-terraform-state-import: backlog
-  5-11-threshold-and-reporting-defaults-management: backlog
-  5-12-policy-adapter-consumption-boundary: backlog
+  5-1-project-workspace-foundation: ready-for-dev
+  5-2-topology-import-foundation: ready-for-dev
+  5-3-topology-drift-detection: ready-for-dev
+  5-4-topology-freshness-badge: ready-for-dev
+  5-5-deployment-history-capture: ready-for-dev
+  5-6-reviewer-feedback-capture: ready-for-dev
+  5-7-outcome-linking: ready-for-dev
+  5-8-calibration-dashboard: ready-for-dev
+  5-9-trend-analysis: ready-for-dev
+  5-10-terraform-state-topology-source: ready-for-dev
+  5-11-cloudformation-topology-source: ready-for-dev
+  5-12-threshold-and-reporting-defaults-management: ready-for-dev
+  5-13-policy-adapter-consumption-boundary: ready-for-dev
+  5-14-kubernetes-manifest-topology-source: ready-for-dev
+  5-15-ansible-topology-source: ready-for-dev
+  5-16-custom-topology-source-boundary: ready-for-dev
   epic-5-retrospective: optional
 
   epic-6: in-progress

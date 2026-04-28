@@ -344,7 +344,8 @@ DeployWhisper exists to solve all five.
 **Purpose:** Become materially smarter through organizational context.
 
 **Included:**
-- Topology auto-discovery from Terraform state
+- Lightweight project/workspace scoping for analyses, topology, history, and feedback
+- Topology auto-discovery from Terraform state, CloudFormation, Kubernetes manifests, Ansible inventory/playbooks, and extensible source connectors
 - Richer incident ingestion
 - Deployment history ingestion with outcome capture
 - Environment criticality mapping
@@ -370,7 +371,7 @@ DeployWhisper exists to solve all five.
 ## 12. Primary User Journeys
 
 ### 12.1 Platform Engineer — Pre-Deploy Review
-A platform engineer uploads or triggers analysis for Terraform, Kubernetes, and related pipeline/config changes. They need a single verdict with top risks, evidence, blast radius, and what to verify next.
+A platform engineer creates or selects a lightweight project workspace, then uploads or triggers analysis for Terraform, Kubernetes, and related pipeline/config changes. In GitHub-first flows, the repository name can supply the default project key automatically. They need a single verdict with top risks, evidence, blast radius, and what to verify next.
 
 **Success condition:** The user can decide whether to proceed, fix, or escalate in minutes, not after manual cross-tool review.
 
@@ -466,6 +467,7 @@ A platform engineer discovers DeployWhisper doesn't know about their internal to
 - **HIS-05** Capture reviewer feedback on report quality and correctness
 - **HIS-06** Support outcome capture after deployment for later calibration
 - **HIS-07** Support benchmark and backtest workflows against historical incidents
+- **HIS-08** Reports, topology context, deployment outcomes, and reviewer feedback shall be scoped to a lightweight project/workspace
 
 ### 13.8 Administration and customization
 - **ADM-01** Admins shall configure narrative provider settings through a DeployWhisper-owned provider adapter boundary that preserves shared UI/API/CLI behavior and keeps provider secrets out of persistence
@@ -475,8 +477,12 @@ A platform engineer discovers DeployWhisper doesn't know about their internal to
 - **ADM-05** Admins shall add or override custom skills and organization-specific heuristics
 - **ADM-06** Admins shall manage thresholds and reporting defaults without changing core code
 - **ADM-07** Future policy adapters shall consume report outputs without changing advisory-first core behavior
+- **ADM-08** Admins shall create and manage lightweight project/workspace records used to isolate analyses and context without introducing RBAC, SSO, org hierarchy, or hosted SaaS scoping
 
-### 13.9 Community ecosystem (new)
+### 13.9 Workflow scoping
+- **WRK-08** CLI and integration flows shall accept a project key or project ID for new analyses; GitHub repository flows may derive a default project key from the repository name when one is not provided
+
+### 13.10 Community ecosystem (new)
 - **COM-01** Expose a Skills registry API for listing, fetching, and installing community-contributed skills
 - **COM-02** Support versioned Skills with a formal manifest schema
 - **COM-03** Automated test harness runs on every Skill submission
@@ -629,11 +635,13 @@ Skills marketplace only works if contributors participate.
    - **Decision:** At least one deterministic evidence item per high/critical finding, defined in the spec.
 3. Which deployment history inputs should be captured first?
    - **Decision:** Analysis ID, timestamp, deploy outcome (success/failure/rolled back), linked incidents.
-4. Which context connectors matter most after manual topology and incident ingestion?
-   - **Decision:** Terraform state (auto-topology), GitHub PR history, Slack-based postmortem ingestion.
-5. What threshold of benchmark accuracy is required before optional policy adapters are introduced?
+4. What is the minimum isolation model needed before teams can trust saved reports and context?
+   - **Decision:** Introduce a lightweight project/workspace model keyed by project key/name or repository-derived default before topology automation expands. This scopes analyses, topology, history, and feedback without adding RBAC, SSO, org hierarchy, or hosted SaaS behavior.
+5. Which context connectors matter most after manual topology and incident ingestion?
+   - **Decision:** Multi-source topology connectors for Terraform state, CloudFormation, Kubernetes manifests, and Ansible inventory/playbooks; GitHub PR history; Slack-based postmortem ingestion.
+6. What threshold of benchmark accuracy is required before optional policy adapters are introduced?
    - **Decision:** 85% precision on high/critical findings across the public benchmark, sustained for 3 consecutive quarterly runs.
-6. When and how do we introduce a hosted SaaS tier? (new)
+7. When and how do we introduce a hosted SaaS tier? (new)
    - **Decision:** After Phase 2 (Week 24+). Open-core model: free self-hosted, paid hosted, paid enterprise.
 
 ---

@@ -746,8 +746,8 @@ This is the most important admin flow because topology accuracy directly affects
 ```mermaid
 flowchart TD
     A[Open admin/settings area] --> B[Open topology management]
-    B --> C[Upload or replace topology definition]
-    C --> D[System validates topology]
+    B --> C[Upload topology definition or import from Terraform, CloudFormation, Kubernetes, or Ansible source]
+    C --> D[System validates topology and reports imported, skipped, and unsupported resources]
     D --> E{Validation result}
     E -->|Valid| F[Show success summary: services, dependencies, updated timestamp]
     E -->|Warnings| G[Show orphaned nodes, missing services, or circular dependency warnings]
@@ -756,6 +756,23 @@ flowchart TD
 ```
 
 A secondary admin validation pattern should apply to custom AI Skills as well: when overrides or new skills are detected, the system should confirm exactly what it found and how it will be used.
+
+### Project Workspace Selection Flow
+
+Before upload or repository-triggered analysis becomes routine across multiple teams, the user needs one stable container that answers: which project does this report belong to? The product should solve that with a lightweight project/workspace flow, not enterprise tenancy.
+
+```mermaid
+flowchart TD
+    A[Open dashboard or trigger GitHub analysis] --> B{Project already selected or derivable?}
+    B -->|No| C[Create project with key, name, optional repo URL and description]
+    B -->|Yes| D[Reuse existing project context]
+    C --> E[Project becomes active workspace]
+    D --> E
+    E --> F[Upload files or submit repository-triggered analysis]
+    F --> G[Report, topology, history, feedback, and outcomes are stored under that project]
+```
+
+This flow should feel closer to SonarQube's project key model than to an enterprise org/admin setup. The user should not have to think about RBAC, SSO, team hierarchy, or hosted SaaS boundaries to isolate reports cleanly.
 
 ### Public Skills Marketplace Browse Flow
 

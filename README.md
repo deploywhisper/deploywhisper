@@ -119,7 +119,7 @@ What users can use today:
 - **Evidence-backed confidence**: trace the report back to findings, resource-level contributors, uploaded artifact references, parser coverage, topology freshness, and warning signals when context is limited.
 - **Blast-radius and rollback context**: use service-topology input to explain likely downstream impact and generate rollback steps with complexity scoring.
 - **Analysis history**: review saved reports later, filter previous analyses, inspect audit metadata, and compare repeated scans of the same artifact set.
-- **Provider and team settings UI**: configure LLM provider metadata, upload topology context, manage custom AI Skills, and see provider readiness before running analysis.
+- **Provider and admin settings UI**: configure LLM provider metadata, upload topology context, manage custom AI Skills, and see provider readiness before running analysis.
 - **REST API and CLI access**: run the same analysis pipeline from `/api/v1` endpoints or the headless CLI for local automation and CI workflows.
 - **Shareable reports**: create read-only report links, optionally protect sensitive shared reports with a password, redact filenames, and compare shared reruns when previous scans exist.
 - **Published Skills Registry**: browse published built-in skills at <https://deploywhisper.github.io/skills-registry/> and extend guidance with custom skills.
@@ -137,6 +137,7 @@ Why this gives users value:
 What is still evolving:
 
 - Production-grade authn/authz for shared deployments
+- Lightweight project/workspace scoping for cleaner multi-repository history isolation
 - Richer incident ingestion workflows
 - Broader deployment integrations and release automation
 - More complete NFR hardening for shared or internet-facing environments

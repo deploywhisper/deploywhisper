@@ -70,15 +70,17 @@ This matrix is intentionally compact. It maps requirement families to either:
 | `EVD-01` | Existing normalized change model + `E1-S2` / `E1-S3` | Baseline + Delta | Current normalization exists; Epic 1 upgrades it into evidence-first scoring. |
 | `EVD-02..08` | `E1-S1..E1-S8`, `E2-S2..E2-S4`, `E2-S7` | Delta | These are core gaps the refreshed plan is explicitly designed to close. |
 | `RSK-01..08` | Existing repo baseline + `E1-S3`, `E1-S6`, `E1-S7`, `E2-S1`, `E2-S6`, `E2-S7` | Baseline + Delta | Unified risk exists today; Epic 1/2 make it evidence-backed, confidence-aware, and review-ready. |
-| `CTX-01..07` | Existing topology / incidents baseline + `E1-S5`, `E2-S4`, `E2-S5`, `E5-S1..E5-S12` | Baseline + Delta | Current context is manual and partial; Epic 5 turns it into a moat. |
+| `CTX-01..07` | Existing topology / incidents baseline + `E1-S5`, `E2-S4`, `E2-S5`, `E5-S1..E5-S16` | Baseline + Delta | Current context is manual and partial; Epic 5 turns it into a moat with project/workspace isolation first. |
 | `REV-01..07` | Existing dashboard/history baseline + `E2-S1..E2-S8` | Baseline + Delta | The current UI supports review, but Epic 2 is the target-state UX pass. |
 | `WRK-01..02` | Existing API and CLI baseline | Baseline | Preserve shared-core API/CLI behavior while adding new workflow adapters. |
 | `WRK-03..07` | `E3-S1..E3-S11` | Delta | GitHub-native delivery is new roadmap work. |
-| `HIS-01..04` | Existing persistence/history baseline + `E5-S4`, `E5-S8` | Baseline + Delta | Persistence and history exist; Epic 5 expands them into richer learning and operations data. |
-| `HIS-05..07` | `E5-S5..E5-S8`, `E6-S1..E6-S12` | Delta | Reviewer feedback, outcomes, calibration, and backtesting are roadmap work. |
-| `ADM-01..05` | Existing settings/local-mode/topology/custom-skill baseline + `BH-S1..BH-S5` + `E4-S1..E4-S12`, `E5-S1..E5-S4` | Baseline + Delta | Admin basics exist now; marketplace and context automation extend them, and the brownfield provider track hardens the provider boundary. |
-| `ADM-06` | `E5-S11` | Delta | Threshold and reporting-default management has explicit admin story ownership. |
-| `ADM-07` | `E5-S12` | Delta | Policy adapter consumption has explicit output-contract story ownership while preserving advisory-first behavior. |
+| `WRK-08` | `E5-S1` | Delta | Project-aware analysis submission and repository-derived defaults are introduced in Epic 5 before topology automation expands. |
+| `HIS-01..04` | Existing persistence/history baseline + `E5-S1`, `E5-S5`, `E5-S9` | Baseline + Delta | Persistence and history exist; Epic 5 adds project/workspace isolation, richer outcome capture, and trend analysis. |
+| `HIS-05..08` | `E5-S1`, `E5-S6..E5-S9`, `E6-S1..E6-S12` | Delta | Reviewer feedback, outcomes, calibration, backtesting, and project-scoped history are roadmap work. |
+| `ADM-01..05` | Existing settings/local-mode/topology/custom-skill baseline + `BH-S1..BH-S5` + `E4-S1..E4-S12`, `E5-S1..E5-S5` | Baseline + Delta | Admin basics exist now; marketplace, project/workspace isolation, and context automation extend them, and the brownfield provider track hardens the provider boundary. |
+| `ADM-06` | `E5-S12` | Delta | Threshold and reporting-default management has explicit admin story ownership. |
+| `ADM-07` | `E5-S13` | Delta | Policy adapter consumption has explicit output-contract story ownership while preserving advisory-first behavior. |
+| `ADM-08` | `E5-S1` | Delta | Lightweight project/workspace records are introduced without enterprise auth or tenancy scope. |
 | `COM-01..07` | `E4-S1..E4-S12` | Delta | Community ecosystem requirements are fully owned by Epic 4. |
 | `NFR-SEC-01..06` | Existing local-first/security baseline + `BH-S1..BH-S5` + Epic 1, 4, and 5 hardening | Baseline + Delta | Preserve raw-local boundaries and secret handling while expanding ecosystem and context features and reducing provider-path dependency surface. |
 | `NFR-PERF-01..04` | Cross-cutting across `E1`, `E2`, `E3`, and `E5` | Delta | Performance budgets are not their own epic; they must be pulled into story ACs during implementation. |
@@ -727,23 +729,38 @@ Launch a community-driven Skills registry with browser UI, authoring toolkit, an
 **Priority:** P1
 
 ### Goal
-Automate topology discovery. Capture deployment outcomes. Build the feedback loop. This epic turns DeployWhisper from "smart on day 1" to "measurably smarter every month".
+Add lightweight project/workspace isolation, automate topology discovery across supported infrastructure sources, capture deployment outcomes, and build the feedback loop. This epic turns DeployWhisper from "smart on day 1" to "measurably smarter every month" without expanding into enterprise auth or multi-tenant scope.
 
 ### Stories
 
-#### E5-S1: Terraform state import
-**As a** admin,
-**I want** to import AWS topology from Terraform state,
-**so that** I can stop hand-maintaining the most common topology source first.
+#### E5-S1: Project workspace foundation
+**As a** platform admin,
+**I want** to create or select a lightweight project workspace before analysis,
+**so that** reports, topology, history, and feedback stay isolated by project or repository instead of becoming a flat global pile.
 
 **Acceptance:**
-- CLI: `deploywhisper topology import --from terraform --state s3://my-bucket/terraform.tfstate`
-- Supports AWS Terraform provider resources needed for the initial topology graph
-- Builds service topology graph automatically for supported AWS resources
-- Reports topology diff when re-imported
-- Unsupported providers are skipped with explicit warnings instead of failing the whole import
+- Users can create a project/workspace with project key, display name, and optional description, repository URL, and default branch
+- Web UI requires selecting or creating a project before new manual analysis uploads
+- API and CLI accept `project_key` or `project_id` for new analyses and project-scoped context operations
+- GitHub integrations can accept an explicit project key and otherwise derive a stable default from repository name
+- Analysis reports, topology imports, deployment outcomes, and reviewer feedback are scoped to a project/workspace
+- Existing installations can map legacy records into a default/unassigned project without losing history
+- Scope explicitly excludes RBAC, SSO, org hierarchy, hosted SaaS scoping, and deep multi-tenant behavior
 
-#### E5-S2: Topology drift detection
+#### E5-S2: Topology import foundation and source registry
+**As a** admin,
+**I want** one topology import framework for supported source types,
+**so that** Terraform, CloudFormation, Kubernetes, Ansible, and future connectors can enrich blast-radius context consistently.
+
+**Acceptance:**
+- CLI: `deploywhisper topology import --from <source> --source <uri-or-path>` routes through a shared source registry
+- Supported source identifiers include `terraform`, `cloudformation`, `kubernetes`, `ansible`, and `custom`
+- Import result records accepted, skipped, partially parsed, and unsupported resources without storing raw source artifacts
+- Builds or updates the service topology graph through one normalized topology-change contract
+- Re-import reports topology diff consistently across source types
+- Unsupported source types or resources produce explicit warnings instead of failing the whole import
+
+#### E5-S3: Topology drift detection
 **As a** admin,
 **I want** to know when topology is out of sync,
 **so that** I can trigger a re-import.
@@ -754,7 +771,7 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - Drift report lists added/removed/modified resources
 - Configurable via settings UI
 
-#### E5-S3: Topology freshness badge
+#### E5-S4: Topology freshness badge
 **As a** reviewer,
 **I want** to see how fresh the topology is in every report,
 **so that** I know when to discount blast radius.
@@ -765,7 +782,7 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - Critical warning at 90+ days stale
 - Link to topology management page
 
-#### E5-S4: Deployment history capture
+#### E5-S5: Deployment history capture
 **As a** engineering manager,
 **I want** every deployment and its outcome tracked,
 **so that** I can measure risk trends over time.
@@ -776,7 +793,7 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - CLI alternative: `deploywhisper outcome record --analysis-id X --outcome success`
 - History queryable via API
 
-#### E5-S5: Reviewer feedback capture
+#### E5-S6: Reviewer feedback capture
 **As a** reviewer,
 **I want** to rate findings as useful/false-positive/missed,
 **so that** the product learns from my expertise.
@@ -788,7 +805,7 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - Feedback stored in FeedbackEvent table
 - Feedback summary visible to admins
 
-#### E5-S6: Outcome linking
+#### E5-S7: Outcome linking
 **As a** system,
 **I want** to link post-deploy incidents back to pre-deploy reports,
 **so that** I can measure predictive accuracy.
@@ -798,7 +815,7 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - Backtesting job runs weekly to compute: for each failed deploy, did DeployWhisper warn?
 - Results feed the calibration dashboard
 
-#### E5-S7: Calibration dashboard
+#### E5-S8: Calibration dashboard
 **As a** admin,
 **I want** to see our precision/recall over time,
 **so that** I can trust the product is calibrated.
@@ -809,7 +826,7 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - Trend line over past 12 weeks
 - Exports for audit
 
-#### E5-S8: Trend analysis
+#### E5-S9: Trend analysis
 **As a** manager,
 **I want** to see risk trends by tool, environment, and engineer,
 **so that** I can target improvements.
@@ -820,31 +837,33 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - Risk by engineer (opt-in, privacy-respecting)
 - Exportable as CSV
 
-#### E5-S9: GCP Terraform state import
+#### E5-S10: Terraform state topology source
 **As a** admin,
-**I want** to import GCP topology from Terraform state,
-**so that** GCP-backed services improve blast-radius accuracy without manual topology files.
+**I want** to import topology from Terraform state across major providers,
+**so that** Terraform-backed services improve blast-radius accuracy without manual topology files.
 
 **Acceptance:**
-- CLI supports GCP Terraform provider resources through the existing topology import command
-- Builds service topology graph for supported GCP resources
-- Reports unsupported GCP resources in an import warning summary
-- Re-import produces a topology diff consistent with the AWS import behavior
-- Tests cover representative GCP state fixtures and partial unsupported-resource handling
+- CLI supports Terraform state through the shared topology import command
+- Supports representative AWS, GCP, and Azure Terraform provider resources needed for the initial topology graph
+- Builds service topology graph for supported Terraform resources
+- Reports unsupported providers/resources in an import warning summary
+- Re-import produces a topology diff consistent with other topology sources
+- Tests cover representative AWS, GCP, and Azure state fixtures plus partial unsupported-resource handling
 
-#### E5-S10: Azure Terraform state import
+#### E5-S11: CloudFormation topology source
 **As a** admin,
-**I want** to import Azure topology from Terraform state,
-**so that** Azure-backed services improve blast-radius accuracy without manual topology files.
+**I want** to import topology from CloudFormation templates or stack exports,
+**so that** AWS teams using CloudFormation get the same blast-radius context as Terraform teams.
 
 **Acceptance:**
-- CLI supports Azure Terraform provider resources through the existing topology import command
-- Builds service topology graph for supported Azure resources
-- Reports unsupported Azure resources in an import warning summary
-- Re-import produces a topology diff consistent with AWS and GCP import behavior
-- Tests cover representative Azure state fixtures and partial unsupported-resource handling
+- CLI supports CloudFormation through the shared topology import command
+- Parses representative stack resources and relationships needed for topology context
+- Builds service topology graph for supported CloudFormation resources
+- Reports unsupported intrinsic functions, resources, or unresolved references in an import warning summary
+- Re-import produces a topology diff consistent with Terraform import behavior
+- Tests cover representative CloudFormation fixtures and partial unsupported-resource handling
 
-#### E5-S11: Threshold and reporting defaults management
+#### E5-S12: Threshold and reporting defaults management
 **As a** admin,
 **I want** to manage risk thresholds and report defaults without changing core code,
 **so that** teams can tune DeployWhisper behavior while preserving stable analysis semantics.
@@ -856,7 +875,7 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - Defaults never disable sensitive-file handling or local-first protections
 - Tests verify threshold/default changes affect presentation or classification only through the approved shared boundary
 
-#### E5-S12: Policy adapter consumption boundary
+#### E5-S13: Policy adapter consumption boundary
 **As a** platform integrator,
 **I want** future policy adapters to consume DeployWhisper report outputs through a stable boundary,
 **so that** integrations can evaluate reports without changing the advisory-first core.
@@ -868,16 +887,55 @@ Automate topology discovery. Capture deployment outcomes. Build the feedback loo
 - Documentation states that external policy adapters own enforcement decisions
 - Tests verify adapter payload generation does not change report persistence, UI/API/CLI semantics, or advisory-only defaults
 
+#### E5-S14: Kubernetes manifest topology source
+**As a** platform engineer,
+**I want** to import topology from Kubernetes manifests,
+**so that** service, workload, ingress, namespace, and dependency context improves blast-radius accuracy for cluster changes.
+
+**Acceptance:**
+- CLI supports Kubernetes manifests/directories through the shared topology import command
+- Parses representative Service, Deployment, StatefulSet, Ingress, Namespace, ConfigMap, and Secret references without storing raw manifests
+- Builds service topology graph for supported Kubernetes resources and relationships
+- Reports unsupported resource kinds or incomplete relationship data in an import warning summary
+- Re-import produces a topology diff consistent with other topology sources
+- Tests cover representative multi-document manifest fixtures and partial unsupported-resource handling
+
+#### E5-S15: Ansible inventory and playbook topology source
+**As a** platform engineer,
+**I want** to import topology from Ansible inventory and playbook metadata,
+**so that** host groups, services, and deployment targets enrich risk context for configuration automation changes.
+
+**Acceptance:**
+- CLI supports Ansible inventory and playbook inputs through the shared topology import command
+- Parses representative host groups, variables, roles, and targeted services without storing raw playbooks
+- Builds service topology graph for supported Ansible inventory/playbook relationships
+- Reports unsupported modules, dynamic inventory gaps, or unresolved hosts in an import warning summary
+- Re-import produces a topology diff consistent with other topology sources
+- Tests cover representative inventory and playbook fixtures plus partial unsupported-resource handling
+
+#### E5-S16: Custom topology source boundary
+**As a** platform integrator,
+**I want** a documented custom topology source boundary,
+**so that** teams can add other infrastructure sources without changing the core report format.
+
+**Acceptance:**
+- Custom source input contract is documented with normalized topology node, edge, source, freshness, and warning fields
+- API/CLI can ingest a normalized custom topology payload through the same topology service boundary
+- Payload validation rejects raw secrets and reports schema errors without partial persistence
+- Custom imports participate in freshness, drift, and topology diff behavior
+- Tests verify custom-source ingestion does not bypass local-first protections or advisory-only report semantics
+
 ### Epic 5 Exit Criteria
-- Topology auto-import works for AWS/GCP/Azure
+- Every new analysis is scoped to a lightweight project/workspace
+- Topology auto-import works for Terraform, CloudFormation, Kubernetes manifests, Ansible inventory/playbooks, and one documented custom-source boundary
 - Drift detection surfaces manual changes
 - At least 1 real team has >100 deployments tracked
 - Calibration dashboard shows real FP/FN rates
 - Feedback loop captures ratings on 50%+ of findings
 
 ### Epic 5 Effort Estimate
-- Solo: 7-8 weeks
-- With help: 4-5 weeks
+- Solo: 10-12 weeks
+- With help: 6-8 weeks
 
 ---
 
