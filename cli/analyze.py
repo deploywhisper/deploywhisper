@@ -37,12 +37,15 @@ from services.analysis_service import (
     build_advisory_summary,
     build_share_summary,
 )
+from services.project_service import create_project, list_projects
+from services.project_service import resolve_project_reference
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     build_pending_analysis,
     uniquify_artifact_names,
 )
 from services.report_service import REPORT_SCHEMA_VERSION
+from services.topology_service import save_topology_definition
 
 
 def _emit_json(payload: dict, *, stream) -> None:
@@ -259,7 +262,12 @@ def _run_skill_remove(skill_id: str) -> int:
     return 0
 
 
-def _run_analyze(paths: list[str]) -> int:
+def _run_analyze(
+    paths: list[str],
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> int:
     if not paths:
         _emit_json(
             build_error(
@@ -296,6 +304,8 @@ def _run_analyze(paths: list[str]) -> int:
         ):
             result = analyze_uploaded_files(
                 raw_files,
+                project_id=project_id,
+                project_key=project_key,
                 audit_context={
                     "source_interface": "cli",
                     "trigger_type": os.getenv(
@@ -304,6 +314,15 @@ def _run_analyze(paths: list[str]) -> int:
                     "trigger_id": os.getenv("DEPLOYWHISPER_TRIGGER_ID"),
                 },
             )
+    except ValueError as exc:
+        _emit_json(
+            build_error(
+                code=getattr(exc, "code", "invalid_project_request"),
+                message=str(exc),
+            ),
+            stream=sys.stderr,
+        )
+        return 2
     except Exception as exc:  # noqa: BLE001
         _emit_json(
             build_error(
@@ -331,6 +350,99 @@ def _run_analyze(paths: list[str]) -> int:
         ),
     }
     _emit_json(payload, stream=sys.stdout)
+    return 0
+
+
+def _run_project_create(args: argparse.Namespace) -> int:
+    try:
+        created = create_project(
+            project_key=args.project_key,
+            display_name=args.display_name,
+            description=args.description,
+            repository_url=args.repository_url,
+            default_branch=args.default_branch,
+        )
+    except ValueError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 2
+    print(
+        f"Created project {created.project_key} "
+        f"({created.display_name}) [id={created.id}]"
+    )
+    return 0
+
+
+def _run_project_list() -> int:
+    projects = list_projects()
+    for project in projects:
+        suffix = " [default]" if project.is_default else ""
+        print(f"{project.project_key}: {project.display_name}{suffix}")
+    return 0
+
+
+def _run_topology_import(args: argparse.Namespace) -> int:
+    try:
+        project = resolve_project_reference(
+            project_id=args.project_id,
+            project_key=args.project_key,
+        )
+    except ValueError as exc:
+        _emit_json(
+            build_error(
+                code=getattr(exc, "code", "invalid_project_request"),
+                message=str(exc),
+            ),
+            stream=sys.stderr,
+        )
+        return 2
+
+    path = Path(args.path)
+    try:
+        raw_text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        _emit_json(
+            build_error(
+                code="topology_read_failed",
+                message="Topology file could not be read.",
+                details={"path": str(path), "reason": str(exc)},
+            ),
+            stream=sys.stderr,
+        )
+        return 2
+
+    try:
+        status = save_topology_definition(raw_text, project_id=project.id)
+    except ValueError as exc:
+        _emit_json(
+            build_error(
+                code="invalid_topology_definition",
+                message=str(exc),
+                details={"path": str(path)},
+            ),
+            stream=sys.stderr,
+        )
+        return 2
+
+    _emit_json(
+        {
+            "data": {
+                "project": project.model_dump(),
+                "topology": {
+                    "path": status.path,
+                    "exists": status.exists,
+                    "updated_at": status.updated_at,
+                    "service_count": status.service_count,
+                    "dependency_count": status.dependency_count,
+                    "resource_key_count": status.resource_key_count,
+                    "preview_services": status.preview_services,
+                    "warnings": status.warnings,
+                    "blocking_errors": status.blocking_errors,
+                },
+            },
+            "meta": build_meta(interface="cli"),
+        },
+        stream=sys.stdout,
+    )
     return 0
 
 
@@ -422,7 +534,69 @@ def build_parser() -> argparse.ArgumentParser:
         "analyze", help="Run headless advisory analysis for one or more artifacts."
     )
     analyze_parser.add_argument(
+        "--project",
+        dest="project_key",
+        help="Optional project/workspace key for the analysis.",
+    )
+    analyze_parser.add_argument(
+        "--project-id",
+        dest="project_id",
+        type=int,
+        help="Optional numeric project/workspace id for the analysis.",
+    )
+    analyze_parser.add_argument(
         "paths", nargs="*", help="Artifact file paths to analyze."
+    )
+
+    project_parser = subparsers.add_parser(
+        "project", help="Manage lightweight project/workspace records."
+    )
+    project_subparsers = project_parser.add_subparsers(dest="project_command")
+    project_subparsers.required = True
+    project_create_parser = project_subparsers.add_parser(
+        "create", help="Create a project/workspace record."
+    )
+    project_create_parser.add_argument("project_key", help="Stable project key.")
+    project_create_parser.add_argument(
+        "display_name", help="Human-readable project name."
+    )
+    project_create_parser.add_argument(
+        "--description",
+        help="Optional project description.",
+    )
+    project_create_parser.add_argument(
+        "--repository-url",
+        help="Optional repository URL.",
+    )
+    project_create_parser.add_argument(
+        "--default-branch",
+        help="Optional default branch name.",
+    )
+    project_subparsers.add_parser("list", help="List known project/workspace records.")
+
+    topology_parser = subparsers.add_parser(
+        "topology", help="Manage project-scoped topology context."
+    )
+    topology_subparsers = topology_parser.add_subparsers(dest="topology_command")
+    topology_subparsers.required = True
+    topology_import_parser = topology_subparsers.add_parser(
+        "import",
+        help="Import a topology JSON file for a project/workspace.",
+    )
+    topology_import_parser.add_argument(
+        "--project",
+        dest="project_key",
+        help="Project/workspace key for the topology import.",
+    )
+    topology_import_parser.add_argument(
+        "--project-id",
+        dest="project_id",
+        type=int,
+        help="Numeric project/workspace id for the topology import.",
+    )
+    topology_import_parser.add_argument(
+        "path",
+        help="Path to a topology JSON file.",
     )
 
     github_parser = subparsers.add_parser(
@@ -502,7 +676,19 @@ def main() -> None:
     if args.command == "skill" and args.skill_command == "remove":
         raise SystemExit(_run_skill_remove(args.skill_id))
     if args.command == "analyze":
-        raise SystemExit(_run_analyze(args.paths))
+        raise SystemExit(
+            _run_analyze(
+                args.paths,
+                project_id=getattr(args, "project_id", None),
+                project_key=getattr(args, "project_key", None),
+            )
+        )
+    if args.command == "project" and args.project_command == "create":
+        raise SystemExit(_run_project_create(args))
+    if args.command == "project" and args.project_command == "list":
+        raise SystemExit(_run_project_list())
+    if args.command == "topology" and args.topology_command == "import":
+        raise SystemExit(_run_topology_import(args))
     if args.command == "github" and args.github_command == "init":
         raise SystemExit(_run_github_init(args))
 

@@ -9,11 +9,27 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy import event
+from sqlalchemy.engine import make_url
 from sqlalchemy import inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from config import settings
 
+
+def _ensure_sqlite_parent_directory(database_url: str) -> None:
+    try:
+        url = make_url(database_url)
+    except Exception:  # noqa: BLE001
+        return
+    if url.drivername != "sqlite":
+        return
+    database = url.database or ""
+    if not database or database == ":memory:":
+        return
+    Path(database).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
+
+
+_ensure_sqlite_parent_directory(settings.database_url)
 engine = create_engine(settings.database_url, future=True)
 _KNOWN_ALEMBIC_REVISIONS = {
     "0001_create_analysis_reports",
@@ -22,6 +38,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "007_add_blast_radius_payload",
     "008_add_rollback_plan_payload",
     "009_add_report_share_settings",
+    "010_add_project_workspaces",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -136,6 +153,13 @@ def _bootstrap_brownfield_revision() -> None:
             if "analysis_reports" in tables
             else set()
         )
+        if (
+            "projects" in tables
+            and "topology_versions" in tables
+            and "project_id" in report_columns
+        ):
+            _write_alembic_revision(connection, "010_add_project_workspaces")
+            return
         if {
             "report_schema_version",
             "blast_radius_json",

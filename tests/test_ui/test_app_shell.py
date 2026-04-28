@@ -13,6 +13,7 @@ import config as config_module
 import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
+import services.project_service as project_service_module
 import services.report_service as report_service_module
 import ui.components.upload_panel as upload_panel_module
 import ui.routes.dashboard as dashboard_module
@@ -35,6 +36,7 @@ class DashboardShellTests(unittest.TestCase):
         reload(tables_module)
         reload(database_module)
         reload(analysis_reports_repository_module)
+        reload(project_service_module)
         reload(report_service_module)
         reload(upload_panel_module)
         reload(dashboard_module)
@@ -178,6 +180,9 @@ class DashboardShellTests(unittest.TestCase):
                 "trigger_type": "dashboard_upload",
             },
         )
+        project_service_module.set_active_project(
+            project_service_module.ensure_default_project().id
+        )
 
         response = self.client.get("/")
 
@@ -281,6 +286,9 @@ class DashboardShellTests(unittest.TestCase):
                 "trigger_type": "dashboard_upload",
             },
         )
+        project_service_module.set_active_project(
+            project_service_module.ensure_default_project().id
+        )
 
         response = self.client.get("/")
 
@@ -356,6 +364,9 @@ class DashboardShellTests(unittest.TestCase):
                 "source_interface": "ui",
                 "trigger_type": "dashboard_upload",
             },
+        )
+        project_service_module.set_active_project(
+            project_service_module.ensure_default_project().id
         )
 
         response = self.client.get("/")
@@ -440,6 +451,9 @@ class DashboardShellTests(unittest.TestCase):
                 "source_interface": "ui",
                 "trigger_type": "dashboard_upload",
             },
+        )
+        project_service_module.set_active_project(
+            project_service_module.ensure_default_project().id
         )
 
         response = self.client.get("/")

@@ -18,6 +18,7 @@ import models.repositories.analysis_reports as analysis_reports_repository_modul
 import models.tables as tables_module
 import services.report_service as report_service_module
 import services.analysis_service as analysis_service_module
+import services.project_service as project_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from cli.analyze import main
 from importlib import reload
@@ -42,6 +43,7 @@ class AnalyzeCliTests(unittest.TestCase):
         reload(tables_module)
         reload(database_module)
         reload(analysis_reports_repository_module)
+        reload(project_service_module)
         reload(report_service_module)
         database_module.init_db()
 
@@ -671,6 +673,59 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["persisted_report"]["audit"]["trigger_id"], "job-789"
         )
 
+    def test_analyze_command_accepts_project_key(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+
+        def passthrough_analyze_uploaded_files(
+            files,
+            completion_client=None,
+            audit_context=None,
+            project_id=None,
+            project_key=None,
+        ):
+            return analysis_service_module.analyze_uploaded_files(
+                files,
+                completion_client=completion_client,
+                audit_context=audit_context,
+                project_id=project_id,
+                project_key=project_key,
+            )
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(
+            payload["data"]["persisted_report"]["project"]["project_key"], "payments"
+        )
+
     def test_analyze_command_reports_unsupported_inputs_with_structured_error(
         self,
     ) -> None:
@@ -713,6 +768,174 @@ class AnalyzeCliTests(unittest.TestCase):
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "artifact_read_failed")
         self.assertEqual(payload["error"]["details"]["path"], str(missing_path))
+
+    def test_project_create_command_reports_created_workspace(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                ["deploywhisper", "project", "create", "payments", "Payments API"],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("Created project payments", output.getvalue())
+
+    def test_project_list_command_includes_default_workspace(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "project", "list"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("unassigned", output.getvalue())
+
+    def test_project_command_requires_subcommand(self) -> None:
+        stderr = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "project"]),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("required", stderr.getvalue().lower())
+
+    def test_topology_import_command_saves_project_scoped_context(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        topology_path = Path(self.tempdir.name) / "topology.json"
+        topology_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "topology",
+                    "import",
+                    "--project",
+                    "payments",
+                    str(topology_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["data"]["project"]["project_key"], "payments")
+        self.assertEqual(payload["data"]["topology"]["service_count"], 1)
+
+    def test_topology_import_command_rejects_unknown_project(self) -> None:
+        topology_path = Path(self.tempdir.name) / "topology.json"
+        topology_path.write_text(json.dumps({"services": []}), encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "topology",
+                    "import",
+                    "--project",
+                    "missing",
+                    str(topology_path),
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_not_found")
+
+    def test_topology_command_requires_subcommand(self) -> None:
+        stderr = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "topology"]),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("required", stderr.getvalue().lower())
+
+    def test_analyze_command_rejects_conflicting_project_reference(self) -> None:
+        first = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            encoding="utf-8",
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project-id",
+                    str(first.id),
+                    "--project",
+                    "platform",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "conflicting_project_reference")
 
     def test_analyze_command_preserves_distinct_files_with_same_basename(self) -> None:
         first_dir = Path(self.tempdir.name) / "first"
@@ -916,11 +1139,21 @@ class AnalyzeCliTests(unittest.TestCase):
             warnings=[],
         )
 
-        def noisy_analyze_uploaded_files(files, audit_context=None):
+        def noisy_analyze_uploaded_files(
+            files,
+            completion_client=None,
+            audit_context=None,
+            project_id=None,
+            project_key=None,
+        ):
             print("unexpected provider noise")
             print("unexpected provider noise", file=sys.stderr)
             return analysis_service_module.analyze_uploaded_files(
-                files, audit_context=audit_context
+                files,
+                completion_client=completion_client,
+                audit_context=audit_context,
+                project_id=project_id,
+                project_key=project_key,
             )
 
         with (

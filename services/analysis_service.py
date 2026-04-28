@@ -222,8 +222,16 @@ def _parser_success_by_tool(parse_batch: ParseBatchResult) -> dict[str, float]:
     }
 
 
-def _build_context_completeness(parse_batch: ParseBatchResult) -> ContextCompleteness:
-    topology_status = get_topology_status()
+def _build_context_completeness(
+    parse_batch: ParseBatchResult,
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> ContextCompleteness:
+    topology_status = get_topology_status(
+        project_id=project_id,
+        project_key=project_key,
+    )
     topology_freshness_days = _topology_freshness_days(topology_status.updated_at)
     incident_index_size = len(load_incident_candidates())
     parser_success_rate = round(
@@ -616,13 +624,19 @@ def build_share_summary(report: dict) -> ShareSummary:
 
 def build_analysis_artifacts(
     files: list[tuple[str, bytes | None]],
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
     completion_client=None,
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
     evidence_items = extract_batch_evidence(parse_batch)
     changes = _collect_changes(parse_batch)
-    topology, topology_warning = load_topology()
+    topology, topology_warning = load_topology(
+        project_id=project_id,
+        project_key=project_key,
+    )
     assessment = evaluate_parse_batch(
         parse_batch,
         evidence_items=evidence_items,
@@ -630,7 +644,11 @@ def build_analysis_artifacts(
         raw_files={name: raw_content for name, raw_content in files},
         completion_client=completion_client,
     )
-    assessment.context_completeness = _build_context_completeness(parse_batch)
+    assessment.context_completeness = _build_context_completeness(
+        parse_batch,
+        project_id=project_id,
+        project_key=project_key,
+    )
     findings = build_findings(
         assessment=assessment,
         evidence_items=evidence_items,
@@ -664,10 +682,17 @@ def build_analysis_artifacts(
 def analyze_uploaded_files(
     files: list[tuple[str, bytes | None]],
     completion_client=None,
+    project_id: int | None = None,
+    project_key: str | None = None,
     audit_context: dict | None = None,
 ) -> AnalysisRunResult:
     """Run the shared parse -> assess -> persist pipeline."""
-    artifacts = build_analysis_artifacts(files, completion_client=completion_client)
+    artifacts = build_analysis_artifacts(
+        files,
+        project_id=project_id,
+        project_key=project_key,
+        completion_client=completion_client,
+    )
     persisted_report = persist_analysis_report(
         artifacts.parse_batch,
         artifacts.assessment,
@@ -677,6 +702,8 @@ def analyze_uploaded_files(
         findings=artifacts.findings,
         evidence_items=artifacts.evidence_items,
         artifact_snapshots={name: raw_content for name, raw_content in files},
+        project_id=project_id,
+        project_key=project_key,
         audit_context=audit_context,
     )
     return AnalysisRunResult(

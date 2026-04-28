@@ -5,7 +5,7 @@ from __future__ import annotations
 import hmac
 import os
 
-from fastapi import APIRouter, Depends, File, Header, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 
 from api.errors import ApiError, ApiRoute
 from api.schemas import (
@@ -35,9 +35,20 @@ from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
 from services.report_service import configure_report_share
 from services.report_service import REPORT_SCHEMA_VERSION
+from services.project_service import ensure_default_project
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
+
+
+def _project_api_error(exc: ValueError) -> ApiError:
+    code = getattr(exc, "code", "invalid_project_request")
+    status_code = 404 if code == "project_not_found" else 400
+    return ApiError(
+        status_code=status_code,
+        code=code,
+        message=str(exc),
+    )
 
 
 def require_share_management_token(
@@ -105,19 +116,28 @@ async def _read_upload_files_with_limit(
 
 @router.get("", response_model=AnalysisListResponse)
 def list_analyses(
+    project_id: int | None = Query(default=None),
+    project_key: str | None = Query(default=None),
     severity: str | None = Query(default=None),
     recommendation: str | None = Query(default=None),
     search: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
 ) -> AnalysisListResponse:
-    page_payload = fetch_filtered_analysis_history_page(
-        severity=severity,
-        recommendation=recommendation,
-        search=search,
-        page=page,
-        page_size=page_size,
-    )
+    try:
+        if project_id is None and project_key is None:
+            project_id = ensure_default_project().id
+        page_payload = fetch_filtered_analysis_history_page(
+            project_id=project_id,
+            project_key=project_key,
+            severity=severity,
+            recommendation=recommendation,
+            search=search,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as exc:
+        raise _project_api_error(exc) from exc
     return AnalysisListResponse(
         data=[AnalysisReportData(**report) for report in page_payload["items"]],
         meta=build_report_meta(
@@ -145,6 +165,8 @@ async def create_analysis(
     files: list[UploadFile] | None = File(
         default=None, description="Supported deployment artifacts to analyze."
     ),
+    project_id: int | None = Form(default=None),
+    project_key: str | None = Form(default=None),
     trigger_type: str | None = Header(
         default=None, alias="X-DeployWhisper-Trigger-Type"
     ),
@@ -167,14 +189,19 @@ async def create_analysis(
             details={"items": [item.model_dump() for item in pending_analysis.items]},
         )
 
-    result = analyze_uploaded_files(
-        raw_files,
-        audit_context={
-            "source_interface": "api",
-            "trigger_type": trigger_type or "api_request",
-            "trigger_id": trigger_id,
-        },
-    )
+    try:
+        result = analyze_uploaded_files(
+            raw_files,
+            project_id=project_id,
+            project_key=project_key,
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": trigger_type or "api_request",
+                "trigger_id": trigger_id,
+            },
+        )
+    except ValueError as exc:
+        raise _project_api_error(exc) from exc
     advisory = build_advisory_summary(result.assessment, result.narrative)
     share_summary = build_share_summary(result.persisted_report)
     return AnalysisRunResponse(
@@ -204,8 +231,21 @@ async def create_analysis(
         500: {"model": ErrorResponse},
     },
 )
-def get_analysis(report_id: int) -> AnalysisDetailResponse:
-    report = fetch_analysis_report(report_id)
+def get_analysis(
+    report_id: int,
+    project_id: int | None = Query(default=None),
+    project_key: str | None = Query(default=None),
+) -> AnalysisDetailResponse:
+    try:
+        if project_id is None and project_key is None:
+            project_id = ensure_default_project().id
+        report = fetch_analysis_report(
+            report_id,
+            project_id=project_id,
+            project_key=project_key,
+        )
+    except ValueError as exc:
+        raise _project_api_error(exc) from exc
     if report is None:
         raise ApiError(
             status_code=404,

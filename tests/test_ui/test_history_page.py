@@ -13,6 +13,7 @@ import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
 import services.report_service as report_service_module
+import services.project_service as project_service_module
 import ui.routes.history as history_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.rollback_planner import RollbackPlan, RollbackStep
@@ -52,6 +53,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         reload(tables_module)
         reload(database_module)
         reload(analysis_reports_repository_module)
+        reload(project_service_module)
         reload(report_service_module)
         reload(history_module)
         reload(app_module)
@@ -240,6 +242,19 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn(
             "Review the security group change before deployment.", response.text
         )
+
+    def test_history_detail_route_hides_report_from_other_active_project(self) -> None:
+        self._persist_report()
+        other = project_service_module.create_project(
+            project_key="other",
+            display_name="Other",
+        )
+        project_service_module.set_active_project(other.id)
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Analysis report not found", response.text)
 
     def test_public_report_route_blocks_compare_view_when_previous_report_is_protected(
         self,

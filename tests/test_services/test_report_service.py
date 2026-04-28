@@ -15,6 +15,7 @@ import config as config_module
 import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
+import services.project_service as project_service_module
 import services.report_service as report_service_module
 import services.settings_service as settings_service_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
@@ -34,6 +35,7 @@ class ReportServiceTests(unittest.TestCase):
         reload(tables_module)
         reload(database_module)
         reload(analysis_reports_repository_module)
+        reload(project_service_module)
         reload(settings_service_module)
         reload(report_service_module)
         database_module.init_db()
@@ -1542,6 +1544,154 @@ class ReportServiceTests(unittest.TestCase):
         self.assertIn("narrative_skills_json", columns)
         self.assertIn("dashboard_display_duration_seconds", columns)
         self.assertIn("report_schema_version", columns)
+
+    def test_persist_analysis_report_scopes_reports_to_project(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        legacy = self._persist_shareable_report()
+
+        scoped = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[
+                            UnifiedChange(
+                                source_file="payments.json",
+                                tool="terraform",
+                                resource_id="aws_security_group.payments",
+                                action="modify",
+                                summary="Payments change.",
+                            )
+                        ],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=15,
+                severity="low",
+                recommendation="go",
+                top_risk="Low-risk payments change.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: low-risk payments change.",
+                explanation="Scoped report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        self.assertEqual(legacy["project"]["project_key"], "unassigned")
+        self.assertEqual(scoped["project"]["project_key"], "payments")
+
+        page = report_service_module.fetch_filtered_analysis_history_page(
+            project_key="payments"
+        )
+        self.assertEqual(len(page["items"]), 1)
+        self.assertEqual(page["items"][0]["project"]["project_key"], "payments")
+
+    def test_fetch_analysis_report_respects_project_scope(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        scoped = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=15,
+                severity="low",
+                recommendation="go",
+                top_risk="Low-risk payments change.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: low-risk payments change.",
+                explanation="Scoped report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        with self.assertRaises(project_service_module.ProjectResolutionError):
+            report_service_module.fetch_analysis_report(
+                scoped["id"], project_key="missing"
+            )
+        self.assertIsNotNone(
+            report_service_module.fetch_analysis_report(
+                scoped["id"], project_key=project.project_key
+            )
+        )
+
+    def test_previous_scan_diffs_do_not_cross_project_boundaries(self) -> None:
+        payments = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        platform = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        first = self._persist_comparison_report(
+            score=40,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Payments review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.get_analysis_report(
+                session, int(first["id"]), include_evidence=True
+            )
+            assert report is not None
+            report.project_id = payments.id
+            session.commit()
+        second = self._persist_comparison_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Platform review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.get_analysis_report(
+                session, int(second["id"]), include_evidence=True
+            )
+            assert report is not None
+            report.project_id = platform.id
+            session.commit()
+
+        history = report_service_module.fetch_filtered_analysis_history_page()
+        by_id = {item["id"]: item for item in history["items"]}
+        self.assertNotIn("previous_scan_diff", by_id[int(first["id"])])
+        self.assertNotIn("previous_scan_diff", by_id[int(second["id"])])
 
 
 if __name__ == "__main__":

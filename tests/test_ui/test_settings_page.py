@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
+from importlib import reload
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import app as app_module
+import config as config_module
+import models.database as database_module
+import models.tables as tables_module
 from fastapi.testclient import TestClient
 
-from app import create_app
 from ui.routes.settings import (
     process_custom_skill_upload_content,
     process_topology_upload_content,
@@ -20,7 +25,20 @@ from ui.routes.settings import (
 
 class SettingsPageTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(create_app())
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.tempdir.name) / "settings.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+        reload(app_module)
+        database_module.init_db()
+        self.client = TestClient(app_module.create_app())
+
+    def tearDown(self) -> None:
+        database_module.engine.dispose()
+        os.environ.pop("DATABASE_URL", None)
+        self.tempdir.cleanup()
 
     def test_settings_page_contains_topology_context_workflow(self) -> None:
         response = self.client.get("/settings")

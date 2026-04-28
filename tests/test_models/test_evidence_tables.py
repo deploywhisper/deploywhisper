@@ -12,6 +12,7 @@ from pathlib import Path
 import config as config_module
 import models.database as database_module
 import models.tables as tables_module
+import services.project_service as project_service_module
 from sqlalchemy.exc import IntegrityError
 
 
@@ -23,7 +24,9 @@ class EvidenceTableTests(unittest.TestCase):
         reload(config_module)
         reload(tables_module)
         reload(database_module)
+        reload(project_service_module)
         database_module.init_db()
+        self.default_project = project_service_module.ensure_default_project()
 
     def tearDown(self) -> None:
         database_module.engine.dispose()
@@ -55,6 +58,7 @@ class EvidenceTableTests(unittest.TestCase):
     def test_report_findings_and_evidence_relationships_round_trip(self) -> None:
         with database_module.SessionLocal() as session:
             report = tables_module.AnalysisReport(
+                project_id=self.default_project.id,
                 risk_score=55,
                 severity="medium",
                 recommendation="caution",
@@ -151,6 +155,7 @@ class EvidenceTableTests(unittest.TestCase):
         with database_module.SessionLocal() as session:
             session.add(
                 tables_module.AnalysisReport(
+                    project_id=self.default_project.id,
                     risk_score=10,
                     severity="low",
                     recommendation="go",
@@ -176,6 +181,7 @@ class EvidenceTableTests(unittest.TestCase):
             )
             session.add(
                 tables_module.AnalysisReport(
+                    project_id=self.default_project.id,
                     risk_score=20,
                     severity="medium",
                     recommendation="caution",

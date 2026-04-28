@@ -7,6 +7,7 @@ from typing import Any
 from nicegui import ui
 
 from llm.skill_context import get_custom_skill_statuses, save_custom_skill
+from services.project_service import get_active_project
 from services.settings_service import (
     activate_local_mode,
     get_dashboard_result_display_duration_seconds,
@@ -21,14 +22,18 @@ from services.topology_service import get_topology_status, save_topology_definit
 from ui.theme import apply_theme, build_navigation_shell, build_page_header
 
 
-def process_topology_upload_content(raw_content: bytes) -> dict[str, Any]:
+def process_topology_upload_content(
+    raw_content: bytes,
+    *,
+    project_id: int | None = None,
+) -> dict[str, Any]:
     """Decode topology upload content and return admin-facing feedback payload."""
     try:
         raw_text = raw_content.decode("utf-8")
-        status = save_topology_definition(raw_text)
+        status = save_topology_definition(raw_text, project_id=project_id)
     except (UnicodeDecodeError, ValueError) as exc:
         return {
-            "status": get_topology_status(),
+            "status": get_topology_status(project_id=project_id),
             "success_message": None,
             "error_message": f"Topology update failed: {exc}",
         }
@@ -69,9 +74,12 @@ def build_settings_page() -> None:
     """Render the provider settings form."""
     apply_theme()
     build_navigation_shell("settings")
+    active_project = get_active_project()
     settings = get_provider_settings()
     dashboard_duration_seconds = get_dashboard_result_display_duration_seconds()
-    topology_status = get_topology_status()
+    topology_status = get_topology_status(
+        project_id=active_project.id if active_project is not None else None
+    )
     custom_skill_statuses = get_custom_skill_statuses()
     provider_options = provider_select_options()
 
@@ -215,6 +223,10 @@ def build_settings_page() -> None:
                 "Upload or replace the service-topology JSON used by blast-radius analysis. "
                 "DeployWhisper validates the structure immediately and shows any uncertainty."
             ).classes("text-sm dw-muted")
+            if active_project is not None:
+                ui.label(
+                    f"Active project: {active_project.display_name} ({active_project.project_key})"
+                ).classes("text-xs font-semibold uppercase tracking-[0.08em] dw-muted")
             topology_feedback = ui.column().classes("w-full gap-2")
 
             def render_topology_feedback(
@@ -261,7 +273,13 @@ def build_settings_page() -> None:
                         ui.label(warning).classes("text-xs dw-warning-text")
 
             def handle_topology_upload(event) -> None:
-                upload_result = process_topology_upload_content(event.content.read())
+                current_project = get_active_project()
+                upload_result = process_topology_upload_content(
+                    event.content.read(),
+                    project_id=current_project.id
+                    if current_project is not None
+                    else None,
+                )
                 render_topology_feedback(
                     upload_result["status"],
                     success_message=upload_result["success_message"],

@@ -17,6 +17,13 @@ from services.intake_service import (
     total_upload_bytes,
     uniquify_artifact_names,
 )
+from services.project_service import (
+    create_project,
+    get_active_project,
+    has_active_project_selection,
+    list_projects,
+    set_active_project,
+)
 from services.report_service import (
     fetch_active_dashboard_report,
 )
@@ -77,16 +84,45 @@ def _format_countdown_label(seconds: int) -> str:
 def run_uploaded_analysis(
     files: list[tuple[str, bytes]],
     *,
+    project_key: str | None = None,
     completion_client=None,
 ):
     """Run the shared upload analysis pipeline with the dashboard audit context."""
     return analyze_uploaded_files(
         files,
         completion_client=completion_client,
+        project_key=project_key,
         audit_context={
             "source_interface": "ui",
             "trigger_type": "dashboard_upload",
         },
+    )
+
+
+def resolve_initial_project_selection(*, has_saved_selection: bool, active_project):
+    """Return the upload-panel project selection state."""
+    if not has_saved_selection or active_project is None:
+        return None, None
+    return active_project.id, active_project.project_key
+
+
+def uploads_allowed(active_project_key: str | None) -> bool:
+    """Return whether manual uploads should be enabled."""
+    return bool(active_project_key)
+
+
+def should_clear_pending_uploads(
+    *,
+    current_file_count: int,
+    previous_project_id: int | None,
+    next_project_id: int | None,
+) -> bool:
+    """Return whether a project switch should clear staged uploads."""
+    return (
+        current_file_count > 0
+        and previous_project_id is not None
+        and next_project_id is not None
+        and previous_project_id != next_project_id
     )
 
 
@@ -97,6 +133,12 @@ def build_upload_panel(
     result_container=None,
 ) -> None:
     """Render the upload intake component for pending analyses."""
+    saved_selection = has_active_project_selection()
+    active_project = get_active_project() if saved_selection else None
+    initial_project_id, initial_project_key = resolve_initial_project_selection(
+        has_saved_selection=saved_selection,
+        active_project=active_project,
+    )
     state: dict[str, object] = {
         "files": [],
         "summary": build_pending_analysis([]),
@@ -105,6 +147,9 @@ def build_upload_panel(
         "progress_message": "Waiting to analyze",
         "result_token": 0,
         "active_result": None,
+        "projects": list_projects(),
+        "active_project_id": initial_project_id,
+        "active_project_key": initial_project_key,
     }
 
     card_classes = "w-full shadow-none"
@@ -132,6 +177,7 @@ def build_upload_panel(
             "artifacts. DeployWhisper now recognizes CloudFormation by template signatures such as Resources, "
             "Parameters, Outputs, AWSTemplateFormatVersion, and intrinsic references."
         ).classes(body_spacing)
+        project_controls = ui.row().classes("w-full items-end gap-3 flex-wrap")
 
         summary_row = ui.row().classes("w-full items-center gap-2 text-sm dw-muted")
         detail_column = ui.column().classes("w-full gap-2")
@@ -140,6 +186,133 @@ def build_upload_panel(
 
     progress_bar = None
     progress_label = None
+    project_select = None
+
+    def _project_options() -> dict[int, str]:
+        return {
+            int(project.id): f"{project.display_name} ({project.project_key})"
+            for project in state["projects"]
+        }
+
+    def refresh_saved_report() -> None:
+        active_project_id = state["active_project_id"]
+        if active_project_id is None:
+            result_mount.clear()
+            return
+        active_report = fetch_active_dashboard_report(project_id=active_project_id)
+        result_mount.clear()
+        if active_report is not None:
+            render_result_card(
+                active_report,
+                remaining_seconds=active_report["dashboard_remaining_seconds"],
+            )
+
+    def refresh_projects(
+        *,
+        selected_project_id: int | None = None,
+        notify_parent: bool = False,
+    ) -> None:
+        state["projects"] = list_projects()
+        if selected_project_id is not None:
+            selected_project = set_active_project(selected_project_id)
+            state["active_project_id"] = selected_project.id
+            state["active_project_key"] = selected_project.project_key
+        if project_select is not None:
+            project_select.set_options(_project_options())
+            project_select.value = state["active_project_id"]
+            project_select.update()
+        if upload_widget is not None:
+            if uploads_allowed(state["active_project_key"]):
+                upload_widget.enable()
+            else:
+                upload_widget.disable()
+        refresh_saved_report()
+        if notify_parent and on_analysis_complete:
+            on_analysis_complete()
+
+    with project_controls:
+        project_select = ui.select(
+            options=_project_options(),
+            value=state["active_project_id"],
+            label="Project workspace",
+        ).classes("min-w-[280px] flex-1")
+
+        def handle_project_change(event) -> None:
+            selected_id = int(event.value) if event.value is not None else None
+            if selected_id is None:
+                return
+            if should_clear_pending_uploads(
+                current_file_count=len(state["files"]),
+                previous_project_id=state["active_project_id"],
+                next_project_id=selected_id,
+            ):
+                state["files"] = []
+                state["summary"] = build_pending_analysis([])
+                upload_error.set_text("Re-upload artifacts after switching projects.")
+                if upload_widget is not None:
+                    upload_widget.reset()
+            refresh_projects(selected_project_id=selected_id, notify_parent=True)
+            render_summary()
+            render_actions()
+
+        project_select.on_value_change(handle_project_change)
+
+        def open_create_project_dialog() -> None:
+            dialog = ui.dialog()
+            with (
+                dialog,
+                ui.card().classes(
+                    "w-[520px] dw-panel shadow-none p-6 gap-3"
+                ) as dialog_card,
+            ):
+                decorate_modal_card(dialog_card, label="Create project workspace")
+                ui.label("Create project workspace").classes(
+                    "text-lg font-medium dw-text"
+                )
+                key_input = ui.input("Project key").classes("w-full")
+                name_input = ui.input("Display name").classes("w-full")
+                description_input = ui.textarea("Description").classes("w-full")
+                repository_input = ui.input("Repository URL").classes("w-full")
+                branch_input = ui.input("Default branch").classes("w-full")
+                error_label = ui.label("").classes("text-xs dw-warning-text")
+
+                def submit_project() -> None:
+                    try:
+                        created = create_project(
+                            project_key=key_input.value,
+                            display_name=name_input.value,
+                            description=description_input.value or None,
+                            repository_url=repository_input.value or None,
+                            default_branch=branch_input.value or None,
+                        )
+                    except ValueError as exc:
+                        error_label.set_text(str(exc))
+                        return
+                    dialog.close()
+                    refresh_projects(selected_project_id=created.id, notify_parent=True)
+                    render_actions()
+                    ui.notify(
+                        f"Project workspace created: {created.display_name}.",
+                        color="positive",
+                    )
+
+                with ui.row().classes("w-full justify-end gap-3 mt-4"):
+                    cancel_button = ui.button("Cancel", on_click=dialog.close).props(
+                        "outline no-caps"
+                    )
+                    decorate_modal_close(cancel_button)
+                    ui.button(
+                        "Create project",
+                        on_click=submit_project,
+                        color="primary",
+                    ).props("unelevated no-caps")
+            dialog.open()
+
+        ui.button(
+            "Create project",
+            on_click=open_create_project_dialog,
+            color="primary",
+        ).props("flat no-caps")
 
     def clear_result_if_current(token: int) -> None:
         if token != state["result_token"]:
@@ -294,7 +467,11 @@ def build_upload_panel(
             analyze_button = ui.button(
                 "Analyze", on_click=run_analysis, color="primary"
             ).props("unelevated")
-            if summary.ready_count == 0:
+            if not state["active_project_key"]:
+                ui.label(
+                    "Select an existing project or create one before running manual analysis."
+                ).classes("text-xs dw-muted")
+            if summary.ready_count == 0 or not state["active_project_key"]:
                 analyze_button.disable()
 
     def update_progress(value: int, message: str) -> None:
@@ -341,6 +518,12 @@ def build_upload_panel(
         if not files:
             ui.notify("No supported artifacts are ready for analysis.", color="warning")
             return
+        if not state["active_project_key"]:
+            ui.notify(
+                "Select or create a project workspace before running analysis.",
+                color="warning",
+            )
+            return
 
         state["is_running"] = True
         upload_widget.disable()
@@ -350,7 +533,11 @@ def build_upload_panel(
         try:
             raw_files = list(state["files"])
             update_progress(25, "Running shared analysis pipeline")
-            result = await run.io_bound(run_uploaded_analysis, raw_files)
+            result = await run.io_bound(
+                run_uploaded_analysis,
+                raw_files,
+                project_key=state["active_project_key"],
+            )
             parse_batch = result.parse_batch
             assessment = result.assessment
             narrative = result.narrative
@@ -449,6 +636,11 @@ def build_upload_panel(
         dialog.open()
 
     async def handle_multi_upload(event: events.MultiUploadEventArguments) -> None:
+        if not uploads_allowed(state["active_project_key"]):
+            upload_error.set_text(
+                "Select or create a project workspace before uploading deployment artifacts."
+            )
+            return
         if state["is_running"]:
             upload_error.set_text(
                 "Wait for the current analysis to finish before uploading more artifacts."
@@ -482,6 +674,7 @@ def build_upload_panel(
             "One or more files were rejected by the uploader. Check file type or size."
         )
 
+    upload_widget = None
     with upload_card:
         upload_widget = (
             ui.upload(
@@ -496,10 +689,5 @@ def build_upload_panel(
             .classes("w-full")
         )
 
-    active_report = fetch_active_dashboard_report()
-    if active_report is not None:
-        render_result_card(
-            active_report,
-            remaining_seconds=active_report["dashboard_remaining_seconds"],
-        )
+    refresh_projects()
     render_summary()

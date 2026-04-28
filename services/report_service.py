@@ -34,6 +34,10 @@ from services.artifact_snapshot_service import (
     delete_report_artifacts,
     save_report_artifacts,
 )
+from services.project_service import (
+    build_project_payload,
+    resolve_project_reference,
+)
 from services.settings_service import get_dashboard_result_display_duration_seconds
 from services.settings_service import resolve_provider_runtime
 
@@ -43,6 +47,19 @@ _SEVERITY_PREFIX_PATTERN = re.compile(
     r"^\s*(critical|high|medium|low|info|warning|caution)\s*[:\-]\s*",
     flags=re.IGNORECASE,
 )
+
+
+def _resolve_project_id(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> int | None:
+    if project_id is None and project_key is None:
+        return None
+    return resolve_project_reference(
+        project_id=project_id,
+        project_key=project_key,
+    ).id
 
 
 def build_share_report_link(report_id: int | None) -> str | None:
@@ -224,6 +241,16 @@ def _default_rollback_plan_payload() -> dict[str, Any]:
 def _artifact_signature(files_analyzed: list[str]) -> tuple[str, ...]:
     """Normalize analyzed-file identity for history diff grouping."""
     return tuple(sorted(str(name) for name in files_analyzed if str(name).strip()))
+
+
+def _history_signature(report: dict[str, Any]) -> tuple[int, tuple[str, ...]] | None:
+    artifact_signature = _artifact_signature(
+        report.get("audit", {}).get("files_analyzed") or []
+    )
+    if not artifact_signature:
+        return None
+    project_id = int(report.get("project", {}).get("id") or 0)
+    return (project_id, artifact_signature)
 
 
 def _normalize_free_text(value: Any) -> str:
@@ -533,11 +560,13 @@ def _find_previous_comparable_report(
     if not current_signature:
         return None
     current_id = int(current_report["id"])
+    current_project_id = int(current_report.get("project", {}).get("id") or 0)
     previous_candidates = sorted(
         (
             report
             for report in candidate_reports
             if int(report["id"]) < current_id
+            and int(report.get("project", {}).get("id") or 0) == current_project_id
             and _artifact_signature(report.get("audit", {}).get("files_analyzed") or [])
             == current_signature
         ),
@@ -562,13 +591,23 @@ def _list_serialized_reports(*, include_evidence: bool) -> list[dict[str, Any]]:
 def fetch_previous_comparable_report(
     report_id: int,
     *,
+    project_id: int | None = None,
+    project_key: str | None = None,
     previous_report_id: int | None = None,
 ) -> dict | None:
-    current_report = fetch_analysis_report(report_id)
+    current_report = fetch_analysis_report(
+        report_id,
+        project_id=project_id,
+        project_key=project_key,
+    )
     if current_report is None:
         return None
     if previous_report_id is not None:
-        return fetch_analysis_report(previous_report_id)
+        return fetch_analysis_report(
+            previous_report_id,
+            project_id=project_id,
+            project_key=project_key,
+        )
     serialized_reports = _list_serialized_reports(include_evidence=False)
     return _find_previous_comparable_report(current_report, serialized_reports)
 
@@ -688,13 +727,11 @@ def _attach_previous_scan_diffs(
     all_reports: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Annotate history rows with diff metadata for the previous scan of the same files."""
-    latest_by_signature: dict[tuple[str, ...], dict[str, Any]] = {}
+    latest_by_signature: dict[tuple[int, tuple[str, ...]], dict[str, Any]] = {}
     previous_by_id: dict[int, dict[str, Any]] = {}
 
     for report in reversed(all_reports):
-        signature = _artifact_signature(
-            report.get("audit", {}).get("files_analyzed") or []
-        )
+        signature = _history_signature(report)
         if signature:
             previous = latest_by_signature.get(signature)
             if previous is not None:
@@ -876,6 +913,19 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     )
     return {
         "id": report.id,
+        "project": build_project_payload(
+            {
+                "id": report.project.id,
+                "project_key": report.project.project_key,
+                "display_name": report.project.display_name,
+                "description": report.project.description,
+                "repository_url": report.project.repository_url,
+                "default_branch": report.project.default_branch,
+                "is_default": report.project.is_default,
+                "created_at": report.project.created_at.isoformat(),
+                "updated_at": report.project.updated_at.isoformat(),
+            }
+        ),
         "risk_score": report.risk_score,
         "severity": report.severity,
         "recommendation": report.recommendation,
@@ -953,6 +1003,8 @@ def persist_analysis_report(
     findings: list[Finding] | None = None,
     evidence_items: list[EvidenceItem] | None = None,
     artifact_snapshots: dict[str, bytes | None] | None = None,
+    project_id: int | None = None,
+    project_key: str | None = None,
     audit_context: dict[str, Any] | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
@@ -963,6 +1015,10 @@ def persist_analysis_report(
     )
     audit = _build_audit_metadata(parse_batch, audit_context=audit_context)
     combined_warnings = list(dict.fromkeys([*assessment.warnings, *narrative.warnings]))
+    resolved_project = resolve_project_reference(
+        project_id=project_id,
+        project_key=project_key,
+    )
     dashboard_display_duration_seconds = None
     if (
         audit.get("source_interface") == "ui"
@@ -976,6 +1032,7 @@ def persist_analysis_report(
         with SessionLocal() as session:
             report = create_analysis_report(
                 session,
+                project_id=resolved_project.id,
                 risk_score=assessment.score,
                 severity=assessment.severity,
                 recommendation=assessment.recommendation,
@@ -1030,11 +1087,22 @@ def persist_analysis_report(
     return _run_with_schema_retry(operation)
 
 
-def fetch_analysis_report(report_id: int) -> dict | None:
+def fetch_analysis_report(
+    report_id: int,
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> dict | None:
+    scoped_project_id = _resolve_project_id(
+        project_id=project_id, project_key=project_key
+    )
+
     def operation():
         with SessionLocal() as session:
             report = get_analysis_report(session, report_id, include_evidence=True)
             if report is None:
+                return None
+            if scoped_project_id is not None and report.project_id != scoped_project_id:
                 return None
             return _serialize_report(report, include_evidence=True)
 
@@ -1044,19 +1112,31 @@ def fetch_analysis_report(report_id: int) -> dict | None:
 def fetch_report_comparison(
     report_id: int,
     *,
+    project_id: int | None = None,
+    project_key: str | None = None,
     previous_report_id: int | None = None,
 ) -> dict | None:
-    current_report = fetch_analysis_report(report_id)
+    current_report = fetch_analysis_report(
+        report_id,
+        project_id=project_id,
+        project_key=project_key,
+    )
     if current_report is None:
         return None
     previous_report = fetch_previous_comparable_report(
         report_id,
+        project_id=project_id,
+        project_key=project_key,
         previous_report_id=previous_report_id,
     )
     if previous_report is None:
         return None
     if previous_report_id is None:
-        previous_report = fetch_analysis_report(int(previous_report["id"]))
+        previous_report = fetch_analysis_report(
+            int(previous_report["id"]),
+            project_id=project_id,
+            project_key=project_key,
+        )
         if previous_report is None:
             return None
     return _build_report_comparison(current_report, previous_report)
@@ -1170,11 +1250,15 @@ def fetch_analysis_history() -> list[dict]:
 
 def fetch_filtered_analysis_history(
     *,
+    project_id: int | None = None,
+    project_key: str | None = None,
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
 ) -> list[dict]:
     page = fetch_filtered_analysis_history_page(
+        project_id=project_id,
+        project_key=project_key,
         severity=severity,
         recommendation=recommendation,
         search=search,
@@ -1184,6 +1268,8 @@ def fetch_filtered_analysis_history(
 
 def fetch_filtered_analysis_history_page(
     *,
+    project_id: int | None = None,
+    project_key: str | None = None,
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
@@ -1193,11 +1279,16 @@ def fetch_filtered_analysis_history_page(
     page = max(page, 1)
     page_size = max(1, min(page_size, 100))
     offset = (page - 1) * page_size
+    resolved_project_id = _resolve_project_id(
+        project_id=project_id,
+        project_key=project_key,
+    )
 
     def operation():
         with SessionLocal() as session:
             reports = list_analysis_reports(
                 session,
+                project_id=resolved_project_id,
                 severity=severity,
                 recommendation=recommendation,
                 search=search,
@@ -1205,9 +1296,14 @@ def fetch_filtered_analysis_history_page(
                 offset=offset,
                 include_evidence=False,
             )
-            all_reports = list_analysis_reports(session, include_evidence=False)
+            all_reports = list_analysis_reports(
+                session,
+                project_id=resolved_project_id,
+                include_evidence=False,
+            )
             total_count = count_analysis_reports(
                 session,
+                project_id=resolved_project_id,
                 severity=severity,
                 recommendation=recommendation,
                 search=search,
@@ -1233,21 +1329,41 @@ def fetch_filtered_analysis_history_page(
     }
 
 
-def fetch_risk_trends() -> dict:
+def fetch_risk_trends(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> dict:
     """Return high-signal trend summaries over stored reports."""
     trend_sample_size = 100
+    resolved_project_id = _resolve_project_id(
+        project_id=project_id,
+        project_key=project_key,
+    )
 
     def operation():
         with SessionLocal() as session:
             reports = list_analysis_reports(
-                session, limit=trend_sample_size, include_evidence=False
+                session,
+                project_id=resolved_project_id,
+                limit=trend_sample_size,
+                include_evidence=False,
             )
             return {
                 "reports": reports,
-                "total_reports": count_analysis_reports(session),
-                "severity_counts": count_analysis_reports_by_field(session, "severity"),
+                "total_reports": count_analysis_reports(
+                    session,
+                    project_id=resolved_project_id,
+                ),
+                "severity_counts": count_analysis_reports_by_field(
+                    session,
+                    "severity",
+                    project_id=resolved_project_id,
+                ),
                 "recommendation_counts": count_analysis_reports_by_field(
-                    session, "recommendation"
+                    session,
+                    "recommendation",
+                    project_id=resolved_project_id,
                 ),
             }
 
@@ -1289,12 +1405,24 @@ def fetch_risk_trends() -> dict:
     }
 
 
-def fetch_dashboard_stats() -> dict:
+def fetch_dashboard_stats(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> dict:
     """Return dashboard-friendly aggregate metrics for the latest persisted analyses."""
+    resolved_project_id = _resolve_project_id(
+        project_id=project_id,
+        project_key=project_key,
+    )
 
     def operation():
         with SessionLocal() as session:
-            return list_analysis_reports(session, include_evidence=False)
+            return list_analysis_reports(
+                session,
+                project_id=resolved_project_id,
+                include_evidence=False,
+            )
 
     reports = _run_with_schema_retry(operation)
 
@@ -1315,18 +1443,30 @@ def fetch_dashboard_stats() -> dict:
     }
 
 
-def fetch_dashboard_briefing() -> dict[str, Any]:
+def fetch_dashboard_briefing(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> dict[str, Any]:
     """Return dashboard hero metrics and latest-scan context from persisted reports."""
+    resolved_project_id = _resolve_project_id(
+        project_id=project_id,
+        project_key=project_key,
+    )
 
     def operation():
         with SessionLocal() as session:
             return [
                 _serialize_report(report, include_evidence=False)
-                for report in list_analysis_reports(session, include_evidence=False)
+                for report in list_analysis_reports(
+                    session,
+                    project_id=resolved_project_id,
+                    include_evidence=False,
+                )
             ]
 
     serialized_reports = _run_with_schema_retry(operation)
-    stats = fetch_dashboard_stats()
+    stats = fetch_dashboard_stats(project_id=resolved_project_id)
     severity_counts = stats["severity_counts"]
     saved_briefings = len(serialized_reports)
     high_focus = severity_counts["high"] + severity_counts["critical"]
@@ -1374,13 +1514,26 @@ def fetch_dashboard_briefing() -> dict[str, Any]:
     }
 
 
-def fetch_active_dashboard_report(*, now: datetime | None = None) -> dict | None:
+def fetch_active_dashboard_report(
+    *,
+    now: datetime | None = None,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> dict | None:
     """Return the most recent dashboard result still within its configured visibility window."""
     current_time = now or datetime.now(UTC)
+    resolved_project_id = _resolve_project_id(
+        project_id=project_id,
+        project_key=project_key,
+    )
 
     def operation():
         with SessionLocal() as session:
-            report = latest_active_dashboard_report(session, now=current_time)
+            report = latest_active_dashboard_report(
+                session,
+                now=current_time,
+                project_id=resolved_project_id,
+            )
             if report is None:
                 return None
             detailed_report = get_analysis_report(

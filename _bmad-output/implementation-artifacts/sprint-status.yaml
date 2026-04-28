@@ -94,7 +94,7 @@ development_status:
   epic-4-retrospective: optional
 
   epic-5: in-progress
-  5-1-project-workspace-foundation: ready-for-dev
+  5-1-project-workspace-foundation: done
   5-2-topology-import-foundation: ready-for-dev
   5-3-topology-drift-detection: ready-for-dev
   5-4-topology-freshness-badge: ready-for-dev
