@@ -225,3 +225,4 @@ test-results/
 _bmad-output/implementation-artifacts
 _bmad/
 data/report-artifacts/
+data/deploywhisper.db
