@@ -207,7 +207,11 @@ def resolve_project_reference(
                 "project_not_found",
                 f"Unknown project reference: {detail}.",
             )
-        if normalized_key is not None and record_by_key is None and project_id is not None:
+        if (
+            normalized_key is not None
+            and record_by_key is None
+            and project_id is not None
+        ):
             raise ProjectResolutionError(
                 "project_not_found",
                 f"Unknown project reference: project_id={project_id}, project_key={normalized_key}.",

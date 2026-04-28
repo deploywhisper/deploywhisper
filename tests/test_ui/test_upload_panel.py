@@ -71,7 +71,9 @@ class UploadPanelTests(unittest.TestCase):
         self.assertFalse(uploads_allowed(""))
         self.assertTrue(uploads_allowed("payments"))
 
-    def test_should_clear_pending_uploads_only_when_project_changes_with_files(self) -> None:
+    def test_should_clear_pending_uploads_only_when_project_changes_with_files(
+        self,
+    ) -> None:
         self.assertTrue(
             should_clear_pending_uploads(
                 current_file_count=2,
