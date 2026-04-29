@@ -22,7 +22,9 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
   - `deploywhisper project create <key> <display-name>`
   - `deploywhisper project list`
   - `deploywhisper analyze --project <key> <artifact...>`
-  - `deploywhisper topology import --project <key> <topology.json>`
+  - `deploywhisper topology import --from custom --source <topology.json> --project <key>`
+  - `deploywhisper topology import --from terraform --source <state-or-uri> --project <key>`
+  - The topology import command now routes through a shared source registry and returns a normalized import result with accepted, skipped, partially parsed, and unsupported resources.
 - GitHub App integration: respects `DEPLOYWHISPER_GITHUB_PROJECT_KEY` when set; otherwise derives an owner-safe default from the full repository slug and creates it on demand.
 
 ### Guardrails
@@ -31,6 +33,7 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 - Explicit `project_key` / `project_id` references now fail fast when they are unknown instead of silently falling back to `unassigned`.
 - Conflicting `project_key` and `project_id` inputs are rejected.
 - Repository-derived project keys include the owner segment when available to avoid collisions between unrelated repositories with the same leaf name.
+- Topology import stores normalized graph metadata only. Raw source artifacts are not persisted, and unsupported resources degrade to explicit warnings instead of aborting the whole import.
 
 ### Legacy Mapping
 

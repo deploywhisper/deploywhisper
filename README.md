@@ -76,7 +76,7 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 - Multi-tool intake for Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation
 - Plain-English risk narrative and deploy recommendation
 - Advisory-only output with explicit human-review posture
-- Blast radius analysis using a service-topology file
+- Blast radius analysis using a project-scoped service-topology graph with a shared multi-source import foundation
 - Rollback plan generation with complexity signaling
 - Incident-history matching for operational memory
 - API, CLI, and web entrypoints over one shared analysis pipeline
