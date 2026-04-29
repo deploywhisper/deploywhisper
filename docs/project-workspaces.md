@@ -8,6 +8,7 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 - New analyses can attach to a project through the UI, API, CLI, or GitHub integration path.
 - Persisted reports now carry project metadata and history filters can scope by project.
 - Topology uploads are stored per project, with legacy file-based topology continuing to resolve through the default `unassigned` project.
+- Topology drift checks now run on a persisted cadence (daily by default), reuse the imported source reference when available, and surface per-project added/removed/modified resource reports in settings.
 - Deployment outcome and reviewer feedback tables now exist with project foreign keys so later Epic 5 stories can extend the same isolation boundary without schema churn.
 
 ### User Flows
@@ -34,6 +35,7 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 - Conflicting `project_key` and `project_id` inputs are rejected.
 - Repository-derived project keys include the owner segment when available to avoid collisions between unrelated repositories with the same leaf name.
 - Topology import stores normalized graph metadata only. Raw source artifacts are not persisted, and unsupported resources degrade to explicit warnings instead of aborting the whole import.
+- Drift cadence is persisted through the settings UI, and scheduled drift checks warn when more than 10% of mapped resources changed since the last import.
 
 ### Legacy Mapping
 

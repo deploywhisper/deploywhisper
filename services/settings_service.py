@@ -138,6 +138,8 @@ PROVIDER_CATALOG: dict[str, dict[str, str | bool | None]] = {
 
 DASHBOARD_RESULT_DURATION_OPTIONS = [60, 300, 600, 900, 1800]
 DEFAULT_DASHBOARD_RESULT_DURATION_SECONDS = 300
+TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS = [6, 12, 24, 168]
+DEFAULT_TOPOLOGY_DRIFT_CHECK_INTERVAL_HOURS = 24
 PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
     "openai": ("OPENAI_API_KEY",),
     "anthropic": ("ANTHROPIC_API_KEY",),
@@ -484,3 +486,36 @@ def save_dashboard_result_display_duration_seconds(seconds: int) -> int:
             session, key="dashboard_result_display_duration_seconds", value=str(seconds)
         )
     return seconds
+
+
+def get_topology_drift_check_interval_hours() -> int:
+    """Return the configured topology drift check interval."""
+    try:
+        with SessionLocal() as session:
+            interval = get_setting(session, "topology_drift_check_interval_hours")
+    except OperationalError:
+        interval = None
+
+    if interval:
+        try:
+            hours = int(interval.value)
+        except ValueError:
+            hours = DEFAULT_TOPOLOGY_DRIFT_CHECK_INTERVAL_HOURS
+        if hours in TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS:
+            return hours
+    return DEFAULT_TOPOLOGY_DRIFT_CHECK_INTERVAL_HOURS
+
+
+def save_topology_drift_check_interval_hours(hours: int) -> int:
+    """Persist the topology drift check interval."""
+    if hours not in TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS:
+        raise ValueError(
+            "Topology drift check interval must be one of the supported preset values."
+        )
+    with SessionLocal() as session:
+        upsert_setting(
+            session,
+            key="topology_drift_check_interval_hours",
+            value=str(hours),
+        )
+    return hours

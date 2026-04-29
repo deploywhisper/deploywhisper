@@ -11,11 +11,14 @@ from services.project_service import get_active_project
 from services.settings_service import (
     activate_local_mode,
     get_dashboard_result_display_duration_seconds,
+    get_topology_drift_check_interval_hours,
     provider_defaults,
     provider_select_options,
     get_provider_settings,
     save_dashboard_result_display_duration_seconds,
     save_provider_settings,
+    save_topology_drift_check_interval_hours,
+    TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS,
     validate_provider_settings,
 )
 from services.topology_service import get_topology_status, save_topology_definition
@@ -89,6 +92,7 @@ def build_settings_page() -> None:
         active_project = get_active_project()
         settings = get_provider_settings()
         dashboard_duration_seconds = get_dashboard_result_display_duration_seconds()
+        drift_interval_hours = get_topology_drift_check_interval_hours()
         topology_status = get_topology_status(
             project_id=active_project.id if active_project is not None else None
         )
@@ -252,6 +256,18 @@ def build_settings_page() -> None:
                         "text-xs font-semibold uppercase tracking-[0.08em] dw-muted"
                     )
                 topology_feedback = ui.column().classes("w-full gap-2")
+                drift_interval_options = {
+                    hours: (
+                        "Every 6 hours"
+                        if hours == 6
+                        else "Every 12 hours"
+                        if hours == 12
+                        else "Daily"
+                        if hours == 24
+                        else "Weekly"
+                    )
+                    for hours in TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS
+                }
 
                 def render_topology_feedback(
                     status,
@@ -295,6 +311,71 @@ def build_settings_page() -> None:
                             ui.label(blocking_error).classes("text-xs dw-danger-text")
                         for warning in status.warnings:
                             ui.label(warning).classes("text-xs dw-warning-text")
+                        ui.separator()
+                        ui.label("Topology drift").classes(
+                            "text-sm font-semibold dw-text"
+                        )
+                        if status.drift is None:
+                            ui.label("No drift check has run yet.").classes(
+                                "text-xs dw-muted"
+                            )
+                        else:
+                            drift = status.drift
+                            ui.label(
+                                f"Status: {drift.status.replace('_', ' ')}"
+                            ).classes("text-xs dw-text")
+                            ui.label(
+                                f"Drift check cadence: {drift.interval_hours} hour(s)"
+                            ).classes("text-xs dw-muted")
+                            if drift.checked_at:
+                                ui.label(f"Last checked: {drift.checked_at}").classes(
+                                    "text-xs dw-muted"
+                                )
+                            if drift.next_check_at:
+                                ui.label(f"Next check: {drift.next_check_at}").classes(
+                                    "text-xs dw-muted"
+                                )
+                            if (
+                                drift.added_resources
+                                or drift.removed_resources
+                                or drift.modified_resources
+                            ):
+                                ui.label(
+                                    "Changed resources: "
+                                    f"+{len(drift.added_resources)} / "
+                                    f"-{len(drift.removed_resources)} / "
+                                    f"~{len(drift.modified_resources)}"
+                                ).classes("text-xs dw-text")
+                                if drift.added_resources:
+                                    ui.label(
+                                        "Added: " + ", ".join(drift.added_resources)
+                                    ).classes("text-xs dw-muted")
+                                if drift.removed_resources:
+                                    ui.label(
+                                        "Removed: " + ", ".join(drift.removed_resources)
+                                    ).classes("text-xs dw-muted")
+                                if drift.modified_resources:
+                                    ui.label(
+                                        "Modified: "
+                                        + ", ".join(drift.modified_resources)
+                                    ).classes("text-xs dw-muted")
+                            for warning in drift.warnings:
+                                ui.label(warning).classes("text-xs dw-warning-text")
+
+                def save_drift_interval(event) -> None:
+                    try:
+                        saved_interval = save_topology_drift_check_interval_hours(
+                            int(event.value)
+                        )
+                    except ValueError as exc:
+                        ui.notify(str(exc), type="negative")
+                        return
+                    ui.notify(
+                        "Topology drift cadence updated to "
+                        f"{drift_interval_options.get(saved_interval, saved_interval)}.",
+                        type="positive",
+                    )
+                    render_settings_content.refresh()
 
                 def handle_topology_upload(event) -> None:
                     current_project = get_active_project()
@@ -316,6 +397,14 @@ def build_settings_page() -> None:
                     multiple=False,
                     max_file_size=5_000_000,
                 ).props("accept=.json").classes("w-full")
+                drift_interval_select = ui.select(
+                    options=drift_interval_options,
+                    value=drift_interval_hours,
+                    label="Drift check cadence",
+                ).classes("w-full")
+                drift_interval_select.on_value_change(
+                    lambda event: save_drift_interval(event)
+                )
                 render_topology_feedback(topology_status)
 
             with ui.card().classes("w-full dw-panel shadow-none"):

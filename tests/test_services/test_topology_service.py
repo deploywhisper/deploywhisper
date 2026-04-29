@@ -15,11 +15,14 @@ import config as config_module
 import models.database as database_module
 import models.tables as tables_module
 import services.project_service as project_service_module
+import services.settings_service as settings_service_module
 from models.database import SessionLocal
 from services.topology_service import (
+    check_topology_drift,
     get_topology_status,
     import_topology_source,
     load_topology,
+    run_due_topology_drift_checks,
     save_topology_definition,
 )
 
@@ -33,6 +36,7 @@ class TopologyServiceTests(unittest.TestCase):
         reload(tables_module)
         reload(database_module)
         reload(project_service_module)
+        reload(settings_service_module)
         database_module.init_db()
 
     def tearDown(self) -> None:
@@ -244,6 +248,203 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertIn("terraform", result.warnings[0].lower())
         self.assertIsNone(topology)
         self.assertIn("not configured", warning)
+
+    def test_check_topology_drift_reports_added_removed_and_modified_resources(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        source_path = Path(self.tempdir.name) / "drift-topology.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        },
+                        {
+                            "id": "billing",
+                            "label": "Billing",
+                            "resource_keys": ["Deployment/billing"],
+                            "downstream": [],
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        import_topology_source("custom", str(source_path), project_key="payments")
+
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": ["worker"],
+                        },
+                        {
+                            "id": "worker",
+                            "label": "Worker",
+                            "resource_keys": ["Deployment/worker"],
+                            "downstream": [],
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        drift = check_topology_drift(project_key="payments", force=True)
+        status = get_topology_status(project_key="payments")
+
+        self.assertTrue(drift.alert)
+        self.assertGreater(drift.change_percent, 10.0)
+        self.assertEqual(drift.added_resources, ["Deployment/worker"])
+        self.assertEqual(drift.removed_resources, ["Deployment/billing"])
+        self.assertEqual(drift.modified_resources, ["Deployment/api"])
+        self.assertEqual(drift.status, "drifted")
+        self.assertIsNotNone(status.drift)
+        assert status.drift is not None
+        self.assertEqual(status.drift.status, "drifted")
+
+    def test_get_topology_status_runs_due_scheduled_drift_check_by_default(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        source_path = Path(self.tempdir.name) / "scheduled-drift-topology.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        import_topology_source("custom", str(source_path), project_key="payments")
+
+        status = get_topology_status(project_key="payments")
+
+        self.assertIsNotNone(status.drift)
+        assert status.drift is not None
+        self.assertEqual(status.drift.interval_hours, 24)
+        self.assertEqual(status.drift.status, "up_to_date")
+        self.assertFalse(status.drift.alert)
+        self.assertIsNotNone(status.drift.checked_at)
+        self.assertIsNotNone(status.drift.next_check_at)
+
+    def test_check_topology_drift_marks_manual_topology_as_unavailable(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        save_topology_definition(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ),
+            project_key="payments",
+        )
+
+        drift = check_topology_drift(project_key="payments", force=True)
+
+        self.assertEqual(drift.status, "unavailable")
+        self.assertFalse(drift.alert)
+        self.assertIn("manual", " ".join(drift.warnings).lower())
+
+    def test_run_due_topology_drift_checks_updates_projects_with_due_imports(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        source_path = Path(self.tempdir.name) / "scheduler-drift-topology.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        import_topology_source("custom", str(source_path), project_key="payments")
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": ["worker"],
+                        },
+                        {
+                            "id": "worker",
+                            "label": "Worker",
+                            "resource_keys": ["Deployment/worker"],
+                            "downstream": [],
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with SessionLocal() as session:
+            cached_drift = session.get(
+                tables_module.AppSetting,
+                f"topology_drift_status::{project.id}",
+            )
+            assert cached_drift is not None
+            cached_payload = json.loads(cached_drift.value)
+            cached_payload["checked_at"] = "2026-04-01T00:00:00Z"
+            cached_payload["next_check_at"] = "2026-04-02T00:00:00Z"
+            cached_drift.value = json.dumps(cached_payload)
+            session.commit()
+
+        run_due_topology_drift_checks()
+        status = get_topology_status(project_key="payments")
+
+        self.assertIsNotNone(status.drift)
+        assert status.drift is not None
+        self.assertEqual(status.drift.status, "drifted")
+        self.assertEqual(status.drift.added_resources, ["Deployment/worker"])
 
     def test_load_topology_imports_legacy_file_into_default_project(self) -> None:
         legacy_path = Path(self.tempdir.name) / "legacy-topology.json"
