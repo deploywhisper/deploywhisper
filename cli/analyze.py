@@ -9,7 +9,6 @@ import json
 import os
 import sys
 from pathlib import Path
-
 from api.errors import build_error
 from api.schemas import build_analysis_run_data, build_meta
 from integrations.github.init_service import (
@@ -45,7 +44,7 @@ from services.intake_service import (
     uniquify_artifact_names,
 )
 from services.report_service import REPORT_SCHEMA_VERSION
-from services.topology_service import save_topology_definition
+from services.topology_service import get_topology_status, import_topology_source
 
 
 def _emit_json(payload: dict, *, stream) -> None:
@@ -386,38 +385,18 @@ def _run_topology_import(args: argparse.Namespace) -> int:
             project_id=args.project_id,
             project_key=args.project_key,
         )
+        import_result = import_topology_source(
+            args.source_type,
+            args.source,
+            project_id=project.id,
+        )
+        status = get_topology_status(project_id=project.id)
     except ValueError as exc:
         _emit_json(
             build_error(
-                code=getattr(exc, "code", "invalid_project_request"),
+                code=getattr(exc, "code", "invalid_topology_definition"),
                 message=str(exc),
-            ),
-            stream=sys.stderr,
-        )
-        return 2
-
-    path = Path(args.path)
-    try:
-        raw_text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        _emit_json(
-            build_error(
-                code="topology_read_failed",
-                message="Topology file could not be read.",
-                details={"path": str(path), "reason": str(exc)},
-            ),
-            stream=sys.stderr,
-        )
-        return 2
-
-    try:
-        status = save_topology_definition(raw_text, project_id=project.id)
-    except ValueError as exc:
-        _emit_json(
-            build_error(
-                code="invalid_topology_definition",
-                message=str(exc),
-                details={"path": str(path)},
+                details=getattr(exc, "details", None),
             ),
             stream=sys.stderr,
         )
@@ -427,6 +406,7 @@ def _run_topology_import(args: argparse.Namespace) -> int:
         {
             "data": {
                 "project": project.model_dump(),
+                "import": import_result.model_dump(),
                 "topology": {
                     "path": status.path,
                     "exists": status.exists,
@@ -581,7 +561,18 @@ def build_parser() -> argparse.ArgumentParser:
     topology_subparsers.required = True
     topology_import_parser = topology_subparsers.add_parser(
         "import",
-        help="Import a topology JSON file for a project/workspace.",
+        help="Import topology context from a registered source for a project/workspace.",
+    )
+    topology_import_parser.add_argument(
+        "--from",
+        dest="source_type",
+        required=True,
+        help="Registered topology source identifier.",
+    )
+    topology_import_parser.add_argument(
+        "--source",
+        required=True,
+        help="Topology source path or URI reference.",
     )
     topology_import_parser.add_argument(
         "--project",
@@ -594,11 +585,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Numeric project/workspace id for the topology import.",
     )
-    topology_import_parser.add_argument(
-        "path",
-        help="Path to a topology JSON file.",
-    )
-
     github_parser = subparsers.add_parser(
         "github", help="GitHub workflow setup helpers."
     )

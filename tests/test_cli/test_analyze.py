@@ -841,9 +841,12 @@ class AnalyzeCliTests(unittest.TestCase):
                     "deploywhisper",
                     "topology",
                     "import",
+                    "--from",
+                    "custom",
+                    "--source",
+                    str(topology_path),
                     "--project",
                     "payments",
-                    str(topology_path),
                 ],
             ),
             redirect_stdout(output),
@@ -855,6 +858,11 @@ class AnalyzeCliTests(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["data"]["project"]["project_key"], "payments")
         self.assertEqual(payload["data"]["topology"]["service_count"], 1)
+        self.assertEqual(payload["data"]["import"]["source_type"], "custom")
+        self.assertEqual(
+            payload["data"]["import"]["diff"]["added_services"],
+            ["api"],
+        )
 
     def test_topology_import_command_rejects_unknown_project(self) -> None:
         topology_path = Path(self.tempdir.name) / "topology.json"
@@ -869,9 +877,12 @@ class AnalyzeCliTests(unittest.TestCase):
                     "deploywhisper",
                     "topology",
                     "import",
+                    "--from",
+                    "custom",
+                    "--source",
+                    str(topology_path),
                     "--project",
                     "missing",
-                    str(topology_path),
                 ],
             ),
             redirect_stdout(stdout),
@@ -883,6 +894,44 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 2)
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "project_not_found")
+
+    def test_topology_import_command_warns_without_failing_for_unknown_source(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "topology",
+                    "import",
+                    "--from",
+                    "pulumi",
+                    "--source",
+                    "state.json",
+                    "--project",
+                    "payments",
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertFalse(payload["data"]["import"]["applied"])
+        self.assertEqual(
+            payload["data"]["import"]["unsupported_resources"][0]["resource_ref"],
+            "state.json",
+        )
+        self.assertIn("unsupported", payload["data"]["import"]["warnings"][0].lower())
 
     def test_topology_command_requires_subcommand(self) -> None:
         stderr = io.StringIO()

@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-04-27
+# last_updated: 2026-04-29
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-04-27
-last_updated: 2026-04-27
+last_updated: 2026-04-29
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -95,7 +95,7 @@ development_status:
 
   epic-5: in-progress
   5-1-project-workspace-foundation: done
-  5-2-topology-import-foundation: ready-for-dev
+  5-2-topology-import-foundation: done
   5-3-topology-drift-detection: ready-for-dev
   5-4-topology-freshness-badge: ready-for-dev
   5-5-deployment-history-capture: ready-for-dev

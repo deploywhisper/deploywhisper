@@ -18,6 +18,7 @@ import services.project_service as project_service_module
 from models.database import SessionLocal
 from services.topology_service import (
     get_topology_status,
+    import_topology_source,
     load_topology,
     save_topology_definition,
 )
@@ -80,6 +81,169 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertEqual(scoped_topology["services"][0]["id"], "api")
         self.assertIsNone(default_topology)
         self.assertIn("not configured", default_warning)
+
+    def test_import_topology_source_reports_diff_and_discards_raw_source_fields(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        source_path = Path(self.tempdir.name) / "topology-import.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": ["worker"],
+                        },
+                        {
+                            "id": "worker",
+                            "label": "Worker",
+                            "resource_keys": ["Deployment/worker"],
+                            "downstream": [],
+                        },
+                    ],
+                    "raw_source": "do-not-persist-this",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        first_result = import_topology_source(
+            "custom",
+            str(source_path),
+            project_key="payments",
+        )
+
+        self.assertEqual(first_result.source_type, "custom")
+        self.assertEqual(sorted(first_result.diff.added_services), ["api", "worker"])
+        self.assertEqual(first_result.diff.removed_services, [])
+        self.assertEqual(first_result.diff.changed_services, [])
+        self.assertEqual(len(first_result.accepted_resources), 2)
+        self.assertEqual(first_result.partially_parsed_resources, [])
+        self.assertEqual(first_result.unsupported_resources, [])
+
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API v2",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        }
+                    ],
+                    "raw_source": "still-do-not-persist-this",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        second_result = import_topology_source(
+            "custom",
+            str(source_path),
+            project_key="payments",
+        )
+        topology, _ = load_topology(project_key="payments")
+
+        self.assertEqual(second_result.diff.added_services, [])
+        self.assertEqual(second_result.diff.removed_services, ["worker"])
+        self.assertEqual(second_result.diff.changed_services, ["api"])
+        assert topology is not None
+        self.assertNotIn("raw_source", topology)
+        with SessionLocal() as session:
+            latest = (
+                session.query(tables_module.TopologyVersion)
+                .filter(tables_module.TopologyVersion.project_id == project.id)
+                .order_by(tables_module.TopologyVersion.id.desc())
+                .first()
+            )
+        assert latest is not None
+        self.assertNotIn("do-not-persist-this", latest.payload_json)
+        self.assertNotIn("still-do-not-persist-this", latest.payload_json)
+
+    def test_import_topology_source_records_partial_and_skipped_resources(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        source_path = Path(self.tempdir.name) / "partial-topology.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": ["worker"],
+                        },
+                        {
+                            "id": "api",
+                            "label": "Duplicate API",
+                            "resource_keys": ["Deployment/api-duplicate"],
+                            "downstream": [],
+                        },
+                        {
+                            "label": "Missing ID",
+                            "resource_keys": ["Deployment/missing-id"],
+                            "downstream": [],
+                        },
+                        "not-a-service",
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = import_topology_source(
+            "custom",
+            str(source_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertEqual(
+            [item.resource_ref for item in result.accepted_resources],
+            ["Deployment/api"],
+        )
+        self.assertEqual(len(result.skipped_resources), 1)
+        self.assertEqual(len(result.partially_parsed_resources), 3)
+        self.assertIn(
+            "worker",
+            " ".join(item.message for item in result.partially_parsed_resources),
+        )
+        assert topology is not None
+        self.assertEqual(topology["services"][0]["downstream"], [])
+        self.assertIn("partially parsed", warning)
+
+    def test_import_topology_source_warns_without_failing_for_unimplemented_source(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+
+        result = import_topology_source(
+            "terraform",
+            "s3://example-bucket/topology.tfstate",
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertFalse(result.applied)
+        self.assertEqual(result.diff.added_services, [])
+        self.assertEqual(result.accepted_resources, [])
+        self.assertEqual(len(result.unsupported_resources), 1)
+        self.assertIn("terraform", result.warnings[0].lower())
+        self.assertIsNone(topology)
+        self.assertIn("not configured", warning)
 
     def test_load_topology_imports_legacy_file_into_default_project(self) -> None:
         legacy_path = Path(self.tempdir.name) / "legacy-topology.json"
@@ -283,6 +447,40 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertIn("missing downstream services", combined_errors)
         self.assertIn("circular dependency detected", combined_errors)
         self.assertIn("orphaned services", combined_warnings)
+
+    def test_import_topology_source_keeps_legacy_default_project_mirror_compatible(
+        self,
+    ) -> None:
+        source_path = Path(self.tempdir.name) / "default-topology-import.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        legacy_path = Path(self.tempdir.name) / "legacy-topology.json"
+        fake_settings = SimpleNamespace(topology_path=str(legacy_path))
+
+        with patch("services.topology_service.settings", fake_settings):
+            result = import_topology_source("custom", str(source_path))
+            topology, warning = load_topology()
+
+        self.assertTrue(result.applied)
+        self.assertTrue(legacy_path.exists())
+        mirrored_payload = json.loads(legacy_path.read_text(encoding="utf-8"))
+        self.assertIn("services", mirrored_payload)
+        self.assertNotIn("metadata", mirrored_payload)
+        self.assertIsNotNone(topology)
+        self.assertIsNone(warning)
 
     def test_save_topology_definition_rejects_invalid_structure_and_keeps_previous_active_file(
         self,

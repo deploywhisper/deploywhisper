@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from json import JSONDecodeError
 from pathlib import Path
+from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +16,22 @@ from models.tables import TopologyVersion
 from services.project_service import build_project_payload, resolve_project_reference
 
 STALE_AFTER_DAYS = 30
+
+
+class TopologyImportError(ValueError):
+    """Raised when a topology import cannot proceed."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.details = details or {}
 
 
 class TopologyStatus(BaseModel):
@@ -52,6 +69,60 @@ class TopologyStatus(BaseModel):
     )
 
 
+class TopologyImportResource(BaseModel):
+    """One normalized resource outcome produced during topology import."""
+
+    resource_ref: str = Field(..., description="Stable resource or service reference")
+    service_id: str | None = Field(
+        default=None, description="Owning service id when available"
+    )
+    message: str = Field(..., description="Operator-facing import note")
+
+
+class TopologyImportDiff(BaseModel):
+    """Normalized topology diff for one import run."""
+
+    added_services: list[str] = Field(default_factory=list)
+    removed_services: list[str] = Field(default_factory=list)
+    changed_services: list[str] = Field(default_factory=list)
+
+
+class TopologyImportResult(BaseModel):
+    """Typed import result returned to CLI and future integrations."""
+
+    source_type: str = Field(..., description="Selected topology source identifier")
+    source_ref: str = Field(..., description="Source path or URI reference")
+    applied: bool = Field(
+        default=False,
+        description="Whether the import updated the active topology graph",
+    )
+    warnings: list[str] = Field(default_factory=list)
+    accepted_resources: list[TopologyImportResource] = Field(default_factory=list)
+    skipped_resources: list[TopologyImportResource] = Field(default_factory=list)
+    partially_parsed_resources: list[TopologyImportResource] = Field(
+        default_factory=list
+    )
+    unsupported_resources: list[TopologyImportResource] = Field(default_factory=list)
+    diff: TopologyImportDiff = Field(default_factory=TopologyImportDiff)
+
+
+class TopologyChangeSet(BaseModel):
+    """Normalized topology update contract shared across source handlers."""
+
+    operation: Literal["noop", "replace"] = Field(default="replace")
+    services: list[dict[str, Any]] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    accepted_resources: list[TopologyImportResource] = Field(default_factory=list)
+    skipped_resources: list[TopologyImportResource] = Field(default_factory=list)
+    partially_parsed_resources: list[TopologyImportResource] = Field(
+        default_factory=list
+    )
+    unsupported_resources: list[TopologyImportResource] = Field(default_factory=list)
+
+
+TopologySourceHandler = Callable[[str], TopologyChangeSet]
+
+
 def _topology_path() -> Path:
     return Path(settings.topology_path)
 
@@ -66,6 +137,36 @@ def _invalid_stored_topology_status(path: Path, message: str) -> TopologyStatus:
         exists=True,
         blocking_errors=[message],
     )
+
+
+def _unique_messages(messages: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for message in messages:
+        normalized = str(message or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(normalized)
+    return unique
+
+
+def _import_metadata(payload: dict[str, Any]) -> dict[str, Any]:
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    import_metadata = metadata.get("import")
+    if not isinstance(import_metadata, dict):
+        return {}
+    return import_metadata
+
+
+def _extract_import_warnings(payload: dict[str, Any]) -> list[str]:
+    import_metadata = _import_metadata(payload)
+    warnings = import_metadata.get("warnings", [])
+    if not isinstance(warnings, list):
+        return []
+    return _unique_messages([str(item) for item in warnings])
 
 
 def _load_latest_topology_payload(
@@ -193,9 +294,9 @@ def _find_cycle(service_graph: dict[str, list[str]]) -> list[str]:
 
 
 def _build_topology_status(
-    payload: dict, *, path: Path, exists: bool
+    payload: dict[str, Any], *, path: Path, exists: bool
 ) -> TopologyStatus:
-    warnings: list[str] = []
+    warnings = list(_extract_import_warnings(payload))
     blocking_errors: list[str] = []
     services_raw = payload.get("services", [])
     if not isinstance(services_raw, list):
@@ -205,7 +306,6 @@ def _build_topology_status(
     preview_services: list[str] = []
     seen_ids: set[str] = set()
     inbound_service_ids: set[str] = set()
-    missing_refs: set[str] = set()
     service_graph: dict[str, list[str]] = {}
     dependency_count = 0
     resource_key_count = 0
@@ -294,7 +394,7 @@ def _build_topology_status(
             + "."
         )
 
-    updated_at = _parse_updated_at(payload.get("updated_at"), warnings)
+    updated_at = _parse_updated_at(str(payload.get("updated_at") or ""), warnings)
 
     return TopologyStatus(
         payload=payload,
@@ -305,8 +405,408 @@ def _build_topology_status(
         dependency_count=dependency_count,
         resource_key_count=resource_key_count,
         preview_services=preview_services[:5],
-        warnings=warnings,
+        warnings=_unique_messages(warnings),
         blocking_errors=blocking_errors,
+    )
+
+
+def _join_warnings(warnings: list[str]) -> str | None:
+    if not warnings:
+        return None
+    return " ".join(warnings)
+
+
+def _resource_ref_from_service(service_id: str, resource_keys: list[str]) -> str:
+    if resource_keys:
+        return resource_keys[0]
+    return f"service:{service_id}"
+
+
+def _parse_custom_source(source_ref: str) -> TopologyChangeSet:
+    path = Path(source_ref)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise TopologyImportError(
+            "topology_read_failed",
+            "Topology source could not be read.",
+            details={"path": str(path), "reason": str(exc)},
+        ) from exc
+    except JSONDecodeError as exc:
+        raise TopologyImportError(
+            "invalid_topology_definition",
+            "Topology source must be valid JSON.",
+            details={"path": str(path)},
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise TopologyImportError(
+            "invalid_topology_definition",
+            "Topology source must be a JSON object.",
+            details={"path": str(path)},
+        )
+    return _build_custom_change_set(payload)
+
+
+def _build_custom_change_set(payload: dict[str, Any]) -> TopologyChangeSet:
+    services_raw = payload.get("services", [])
+    if not isinstance(services_raw, list):
+        raise TopologyImportError(
+            "invalid_topology_definition",
+            "Topology definition must provide services as a list.",
+        )
+
+    services: list[dict[str, Any]] = []
+    seen_service_ids: set[str] = set()
+    accepted_resources: list[TopologyImportResource] = []
+    skipped_resources: list[TopologyImportResource] = []
+    partially_parsed_resources: list[TopologyImportResource] = []
+
+    for index, service in enumerate(services_raw, start=1):
+        entry_ref = f"service[{index}]"
+        if not isinstance(service, dict):
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=entry_ref,
+                    message="Service entry was not a JSON object and was ignored.",
+                )
+            )
+            continue
+
+        service_id = str(service.get("id", "")).strip()
+        if not service_id:
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=entry_ref,
+                    message="Service entry is missing an id and was ignored.",
+                )
+            )
+            continue
+
+        resource_keys_raw = service.get("resource_keys", [])
+        if not isinstance(resource_keys_raw, list):
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=service_id,
+                    service_id=service_id,
+                    message="Resource keys were malformed and were dropped.",
+                )
+            )
+            resource_keys_raw = []
+        resource_keys = [
+            str(resource_key).strip()
+            for resource_key in resource_keys_raw
+            if str(resource_key).strip()
+        ]
+
+        if service_id in seen_service_ids:
+            skipped_resources.append(
+                TopologyImportResource(
+                    resource_ref=_resource_ref_from_service(service_id, resource_keys),
+                    service_id=service_id,
+                    message="Duplicate service id was skipped.",
+                )
+            )
+            continue
+
+        downstream_raw = service.get("downstream", [])
+        if not isinstance(downstream_raw, list):
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=service_id,
+                    service_id=service_id,
+                    message="Downstream targets were malformed and were dropped.",
+                )
+            )
+            downstream_raw = []
+        downstream = [
+            str(target).strip() for target in downstream_raw if str(target).strip()
+        ]
+
+        seen_service_ids.add(service_id)
+        services.append(
+            {
+                "id": service_id,
+                "label": str(service.get("label") or service_id),
+                "resource_keys": resource_keys,
+                "downstream": downstream,
+            }
+        )
+
+        if resource_keys:
+            for resource_key in resource_keys:
+                accepted_resources.append(
+                    TopologyImportResource(
+                        resource_ref=resource_key,
+                        service_id=service_id,
+                        message="Resource was mapped into the topology graph.",
+                    )
+                )
+        else:
+            accepted_resources.append(
+                TopologyImportResource(
+                    resource_ref=f"service:{service_id}",
+                    service_id=service_id,
+                    message="Service was mapped into the topology graph.",
+                )
+            )
+
+    valid_service_ids = {service["id"] for service in services}
+    normalized_services: list[dict[str, Any]] = []
+    for service in services:
+        valid_downstream: list[str] = []
+        for downstream_id in service["downstream"]:
+            if downstream_id not in valid_service_ids:
+                partially_parsed_resources.append(
+                    TopologyImportResource(
+                        resource_ref=f"{service['id']}->{downstream_id}",
+                        service_id=service["id"],
+                        message=(
+                            f"Downstream service '{downstream_id}' could not be resolved "
+                            "and was dropped."
+                        ),
+                    )
+                )
+                continue
+            valid_downstream.append(downstream_id)
+        normalized_services.append({**service, "downstream": valid_downstream})
+
+    warnings: list[str] = []
+    if partially_parsed_resources:
+        warnings.append(
+            "Topology import partially parsed one or more resources; malformed entries or unresolved relationships were skipped."
+        )
+    if skipped_resources:
+        warnings.append(
+            "Topology import skipped duplicate services while preserving the first valid definition."
+        )
+
+    if not accepted_resources and services_raw:
+        warnings.append("Topology import did not produce any valid services to apply.")
+        return TopologyChangeSet(
+            operation="noop",
+            warnings=warnings,
+            skipped_resources=skipped_resources,
+            partially_parsed_resources=partially_parsed_resources,
+        )
+
+    return TopologyChangeSet(
+        operation="replace",
+        services=normalized_services,
+        warnings=warnings,
+        accepted_resources=accepted_resources,
+        skipped_resources=skipped_resources,
+        partially_parsed_resources=partially_parsed_resources,
+    )
+
+
+def _build_unimplemented_source_handler(source_type: str) -> TopologySourceHandler:
+    def handler(source_ref: str) -> TopologyChangeSet:
+        message = (
+            f"Topology source '{source_type}' is registered but its connector is not implemented yet; "
+            "no topology changes were applied."
+        )
+        return TopologyChangeSet(
+            operation="noop",
+            warnings=[message],
+            unsupported_resources=[
+                TopologyImportResource(
+                    resource_ref=source_ref,
+                    message=message,
+                )
+            ],
+        )
+
+    return handler
+
+
+TOPOLOGY_SOURCE_REGISTRY: dict[str, TopologySourceHandler] = {
+    "custom": _parse_custom_source,
+    "terraform": _build_unimplemented_source_handler("terraform"),
+    "cloudformation": _build_unimplemented_source_handler("cloudformation"),
+    "kubernetes": _build_unimplemented_source_handler("kubernetes"),
+    "ansible": _build_unimplemented_source_handler("ansible"),
+}
+
+
+def _lookup_source_handler(source_type: str) -> TopologySourceHandler:
+    normalized = str(source_type or "").strip().lower()
+    handler = TOPOLOGY_SOURCE_REGISTRY.get(normalized)
+    if handler is not None:
+        return handler
+
+    def unsupported_handler(source_ref: str) -> TopologyChangeSet:
+        message = (
+            f"Topology source '{normalized or 'unknown'}' is unsupported; "
+            "no topology changes were applied."
+        )
+        return TopologyChangeSet(
+            operation="noop",
+            warnings=[message],
+            unsupported_resources=[
+                TopologyImportResource(
+                    resource_ref=source_ref,
+                    message=message,
+                )
+            ],
+        )
+
+    return unsupported_handler
+
+
+def _current_timestamp() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _build_payload_from_change_set(
+    *,
+    change_set: TopologyChangeSet,
+    source_type: str,
+    source_ref: str,
+) -> dict[str, Any]:
+    return {
+        "updated_at": _current_timestamp(),
+        "services": change_set.services,
+        "metadata": {
+            "import": {
+                "source_type": source_type,
+                "source_ref": source_ref,
+                "warnings": change_set.warnings,
+                "accepted_resources": [
+                    item.model_dump() for item in change_set.accepted_resources
+                ],
+                "skipped_resources": [
+                    item.model_dump() for item in change_set.skipped_resources
+                ],
+                "partially_parsed_resources": [
+                    item.model_dump() for item in change_set.partially_parsed_resources
+                ],
+                "unsupported_resources": [
+                    item.model_dump() for item in change_set.unsupported_resources
+                ],
+            }
+        },
+    }
+
+
+def _build_legacy_mirror_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in payload.items() if key != "metadata"}
+
+
+def _persist_topology_payload(
+    payload: dict[str, Any],
+    *,
+    project: dict[str, Any],
+    source_type: str,
+) -> TopologyStatus:
+    topology_path = _topology_scope_path(project)
+    candidate_status = _build_topology_status(payload, path=topology_path, exists=False)
+    if candidate_status.blocking_errors:
+        raise TopologyImportError(
+            "invalid_topology_definition",
+            " ".join(candidate_status.blocking_errors),
+            details={"path": str(topology_path)},
+        )
+
+    with SessionLocal() as session:
+        if bool(project.get("is_default")):
+            legacy_path = _topology_path()
+            try:
+                legacy_path.parent.mkdir(parents=True, exist_ok=True)
+                legacy_path.write_text(
+                    json.dumps(_build_legacy_mirror_payload(payload), indent=2),
+                    encoding="utf-8",
+                )
+            except OSError as exc:
+                raise TopologyImportError(
+                    "topology_write_failed",
+                    "Topology definition could not be mirrored to the legacy topology file.",
+                    details={"path": str(legacy_path), "reason": str(exc)},
+                ) from exc
+        session.add(
+            TopologyVersion(
+                project_id=int(project["id"]),
+                source_type=source_type,
+                payload_json=json.dumps(payload),
+            )
+        )
+        session.commit()
+    return get_topology_status(project_id=int(project["id"]))
+
+
+def _canonical_service(service: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(service.get("id") or "").strip(),
+        "label": str(service.get("label") or "").strip(),
+        "resource_keys": sorted(
+            str(item).strip()
+            for item in service.get("resource_keys", [])
+            if str(item).strip()
+        ),
+        "downstream": sorted(
+            str(item).strip()
+            for item in service.get("downstream", [])
+            if str(item).strip()
+        ),
+    }
+
+
+def _build_topology_diff(
+    before_payload: dict[str, Any] | None,
+    after_payload: dict[str, Any] | None,
+) -> TopologyImportDiff:
+    before_services = before_payload.get("services", []) if before_payload else []
+    after_services = after_payload.get("services", []) if after_payload else []
+
+    before_map = {
+        service["id"]: _canonical_service(service)
+        for service in before_services
+        if isinstance(service, dict) and str(service.get("id") or "").strip()
+    }
+    after_map = {
+        service["id"]: _canonical_service(service)
+        for service in after_services
+        if isinstance(service, dict) and str(service.get("id") or "").strip()
+    }
+
+    added = sorted(
+        service_id for service_id in after_map if service_id not in before_map
+    )
+    removed = sorted(
+        service_id for service_id in before_map if service_id not in after_map
+    )
+    changed = sorted(
+        service_id
+        for service_id in before_map.keys() & after_map.keys()
+        if before_map[service_id] != after_map[service_id]
+    )
+    return TopologyImportDiff(
+        added_services=added,
+        removed_services=removed,
+        changed_services=changed,
+    )
+
+
+def _build_import_result(
+    *,
+    source_type: str,
+    source_ref: str,
+    applied: bool,
+    change_set: TopologyChangeSet,
+    before_payload: dict[str, Any] | None,
+    after_payload: dict[str, Any] | None,
+    warnings: list[str],
+) -> TopologyImportResult:
+    return TopologyImportResult(
+        source_type=source_type,
+        source_ref=source_ref,
+        applied=applied,
+        warnings=_unique_messages(warnings),
+        accepted_resources=change_set.accepted_resources,
+        skipped_resources=change_set.skipped_resources,
+        partially_parsed_resources=change_set.partially_parsed_resources,
+        unsupported_resources=change_set.unsupported_resources,
+        diff=_build_topology_diff(before_payload, after_payload),
     )
 
 
@@ -337,6 +837,61 @@ def get_topology_status(
     return _build_topology_status(payload, path=topology_path, exists=True)
 
 
+def import_topology_source(
+    source_type: str,
+    source_ref: str,
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> TopologyImportResult:
+    """Import topology through the shared source registry."""
+    normalized_source_type = str(source_type or "").strip().lower()
+    if not normalized_source_type:
+        raise TopologyImportError(
+            "invalid_topology_source",
+            "Topology source type is required.",
+        )
+
+    project = build_project_payload(
+        resolve_project_reference(project_id=project_id, project_key=project_key)
+    )
+    previous_payload, _, _ = _load_latest_topology_payload(project)
+    change_set = _lookup_source_handler(normalized_source_type)(source_ref)
+    warnings = list(change_set.warnings)
+
+    if change_set.operation == "noop":
+        return _build_import_result(
+            source_type=normalized_source_type,
+            source_ref=source_ref,
+            applied=False,
+            change_set=change_set,
+            before_payload=previous_payload,
+            after_payload=previous_payload,
+            warnings=warnings,
+        )
+
+    payload = _build_payload_from_change_set(
+        change_set=change_set,
+        source_type=normalized_source_type,
+        source_ref=source_ref,
+    )
+    status = _persist_topology_payload(
+        payload,
+        project=project,
+        source_type=normalized_source_type,
+    )
+    warnings.extend(status.warnings)
+    return _build_import_result(
+        source_type=normalized_source_type,
+        source_ref=source_ref,
+        applied=True,
+        change_set=change_set,
+        before_payload=previous_payload,
+        after_payload=status.payload,
+        warnings=warnings,
+    )
+
+
 def save_topology_definition(
     raw_text: str,
     *,
@@ -355,38 +910,35 @@ def save_topology_definition(
     project = build_project_payload(
         resolve_project_reference(project_id=project_id, project_key=project_key)
     )
-    topology_path = _topology_scope_path(project)
-    payload["updated_at"] = (
-        datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    validation_payload = dict(payload)
+    validation_payload["updated_at"] = _current_timestamp()
+    validation_status = _build_topology_status(
+        validation_payload,
+        path=_topology_scope_path(project),
+        exists=False,
     )
-    candidate_status = _build_topology_status(payload, path=topology_path, exists=False)
-    if candidate_status.blocking_errors:
-        raise ValueError(" ".join(candidate_status.blocking_errors))
-    with SessionLocal() as session:
-        if bool(project.get("is_default")):
-            legacy_path = _topology_path()
-            try:
-                legacy_path.parent.mkdir(parents=True, exist_ok=True)
-                legacy_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-            except OSError as exc:
-                raise ValueError(
-                    "Topology definition could not be mirrored to the legacy topology file."
-                ) from exc
-        session.add(
-            TopologyVersion(
-                project_id=int(project["id"]),
-                source_type="manual",
-                payload_json=json.dumps(payload),
-            )
+    if validation_status.blocking_errors:
+        raise ValueError(" ".join(validation_status.blocking_errors))
+
+    change_set = _build_custom_change_set(payload)
+    if change_set.operation == "noop" and payload.get("services"):
+        message = _join_warnings(change_set.warnings) or (
+            "Topology import did not produce any valid services to apply."
         )
-        session.commit()
-    return get_topology_status(project_id=int(project["id"]))
+        raise ValueError(message)
 
-
-def _join_warnings(warnings: list[str]) -> str | None:
-    if not warnings:
-        return None
-    return " ".join(warnings)
+    try:
+        return _persist_topology_payload(
+            _build_payload_from_change_set(
+                change_set=change_set,
+                source_type="manual",
+                source_ref="inline://manual-topology",
+            ),
+            project=project,
+            source_type="manual",
+        )
+    except TopologyImportError as exc:
+        raise ValueError(exc.message) from exc
 
 
 def load_topology(

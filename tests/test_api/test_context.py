@@ -82,3 +82,29 @@ class ContextApiTests(unittest.TestCase):
             get_response.json()["data"]["topology"]["service_count"],
             1,
         )
+
+    def test_save_project_topology_rejects_invalid_relationships(self) -> None:
+        response = self.client.post(
+            "/api/v1/context/topology",
+            json={
+                "project_key": self.project.project_key,
+                "topology": {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": ["worker"],
+                        }
+                    ]
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"]["code"], "invalid_topology_definition"
+        )
+        self.assertIn(
+            "missing downstream services", response.json()["error"]["message"]
+        )
