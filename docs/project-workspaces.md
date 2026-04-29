@@ -12,7 +12,7 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 
 ### User Flows
 
-- Web UI: choose an existing project or create one from the upload panel before running a manual analysis.
+- Web UI: choose an existing project or create one before running a manual analysis, and switch the active project from the searchable full-width `Active Project` card directly below the fixed header when moving between dashboard, history, and other routed pages.
 - API:
   - `POST /api/v1/projects` creates a project
   - `POST /api/v1/analyses` accepts multipart `project_key` or `project_id`
@@ -27,6 +27,7 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 
 ### Guardrails
 
+- Shared workspace chrome now keeps project switching in a dedicated global card below the header, with searchable filtering, keyboard navigation, and current/default project context shown consistently across pages.
 - Explicit `project_key` / `project_id` references now fail fast when they are unknown instead of silently falling back to `unassigned`.
 - Conflicting `project_key` and `project_id` inputs are rejected.
 - Repository-derived project keys include the owner segment when available to avoid collisions between unrelated repositories with the same leaf name.

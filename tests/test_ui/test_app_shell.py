@@ -54,6 +54,12 @@ class DashboardShellTests(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("DeployWhisper", response.text)
+        self.assertIn("Active Project", response.text)
+        self.assertIn("Search repo or project name", response.text)
+        self.assertIn("New project", response.text)
+        self.assertIn("Unassigned", response.text)
+        self.assertIn("Default workspace", response.text)
+        self.assertIn("dw-project-bar", response.text)
         self.assertIn("Upload deployment artifacts", response.text)
         self.assertIn("Deploy review", response.text)
         self.assertIn("Deployment briefing", response.text)
@@ -66,7 +72,31 @@ class DashboardShellTests(unittest.TestCase):
     def test_history_page_contains_back_to_dashboard_action(self) -> None:
         response = self.client.get("/history")
         self.assertEqual(response.status_code, 200)
+        self.assertIn("Search repo or project name", response.text)
         self.assertIn("Back to dashboard", response.text)
+
+    def test_shell_reflects_active_project_across_dashboard_and_history(self) -> None:
+        payments = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.set_active_project(payments.id)
+
+        dashboard_response = self.client.get("/")
+        history_response = self.client.get("/history")
+
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertEqual(history_response.status_code, 200)
+        self.assertIn("Active Project", dashboard_response.text)
+        self.assertIn("Payments", dashboard_response.text)
+        self.assertIn("Key payments", dashboard_response.text)
+        self.assertIn("Active Project", history_response.text)
+        self.assertIn("Payments", history_response.text)
+        self.assertIn("Key payments", history_response.text)
+        self.assertIn(
+            "Project-scoped history for Payments (payments).",
+            history_response.text,
+        )
 
     def test_dashboard_shows_persisted_result_provenance_when_active_report_exists(
         self,

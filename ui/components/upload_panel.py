@@ -18,7 +18,6 @@ from services.intake_service import (
     uniquify_artifact_names,
 )
 from services.project_service import (
-    create_project,
     get_active_project,
     has_active_project_selection,
     list_projects,
@@ -29,6 +28,10 @@ from services.report_service import (
 )
 from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
+)
+from ui.components.project_workspace_switcher import (
+    build_project_options,
+    open_create_project_dialog as show_create_project_dialog,
 )
 from ui.components.blast_radius_graph import render_blast_radius_panel
 from ui.components.rollback_plan import render_rollback_plan
@@ -129,6 +132,7 @@ def should_clear_pending_uploads(
 def build_upload_panel(
     on_analysis_complete: Callable[[], None] | None = None,
     *,
+    on_project_change: Callable[[object], None] | None = None,
     embedded: bool = False,
     result_container=None,
 ) -> None:
@@ -189,10 +193,7 @@ def build_upload_panel(
     project_select = None
 
     def _project_options() -> dict[int, str]:
-        return {
-            int(project.id): f"{project.display_name} ({project.project_key})"
-            for project in state["projects"]
-        }
+        return build_project_options(state["projects"])
 
     def refresh_saved_report() -> None:
         active_project_id = state["active_project_id"]
@@ -213,6 +214,7 @@ def build_upload_panel(
         notify_parent: bool = False,
     ) -> None:
         state["projects"] = list_projects()
+        selected_project = None
         if selected_project_id is not None:
             selected_project = set_active_project(selected_project_id)
             state["active_project_id"] = selected_project.id
@@ -227,6 +229,8 @@ def build_upload_panel(
             else:
                 upload_widget.disable()
         refresh_saved_report()
+        if selected_project is not None and on_project_change is not None:
+            on_project_change(selected_project)
         if notify_parent and on_analysis_complete:
             on_analysis_complete()
 
@@ -258,55 +262,19 @@ def build_upload_panel(
         project_select.on_value_change(handle_project_change)
 
         def open_create_project_dialog() -> None:
-            dialog = ui.dialog()
-            with (
-                dialog,
-                ui.card().classes(
-                    "w-[520px] dw-panel shadow-none p-6 gap-3"
-                ) as dialog_card,
-            ):
-                decorate_modal_card(dialog_card, label="Create project workspace")
-                ui.label("Create project workspace").classes(
-                    "text-lg font-medium dw-text"
-                )
-                key_input = ui.input("Project key").classes("w-full")
-                name_input = ui.input("Display name").classes("w-full")
-                description_input = ui.textarea("Description").classes("w-full")
-                repository_input = ui.input("Repository URL").classes("w-full")
-                branch_input = ui.input("Default branch").classes("w-full")
-                error_label = ui.label("").classes("text-xs dw-warning-text")
-
-                def submit_project() -> None:
-                    try:
-                        created = create_project(
-                            project_key=key_input.value,
-                            display_name=name_input.value,
-                            description=description_input.value or None,
-                            repository_url=repository_input.value or None,
-                            default_branch=branch_input.value or None,
-                        )
-                    except ValueError as exc:
-                        error_label.set_text(str(exc))
-                        return
-                    dialog.close()
-                    refresh_projects(selected_project_id=created.id, notify_parent=True)
-                    render_actions()
+            show_create_project_dialog(
+                on_created=lambda created: (
+                    refresh_projects(
+                        selected_project_id=created.id,
+                        notify_parent=True,
+                    ),
+                    render_actions(),
                     ui.notify(
                         f"Project workspace created: {created.display_name}.",
                         color="positive",
-                    )
-
-                with ui.row().classes("w-full justify-end gap-3 mt-4"):
-                    cancel_button = ui.button("Cancel", on_click=dialog.close).props(
-                        "outline no-caps"
-                    )
-                    decorate_modal_close(cancel_button)
-                    ui.button(
-                        "Create project",
-                        on_click=submit_project,
-                        color="primary",
-                    ).props("unelevated no-caps")
-            dialog.open()
+                    ),
+                )
+            )
 
         ui.button(
             "Create project",
