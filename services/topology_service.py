@@ -12,10 +12,17 @@ from pydantic import BaseModel, Field
 
 from config import settings
 from models.database import SessionLocal
+from models.repositories.settings import get_setting, upsert_setting
 from models.tables import TopologyVersion
-from services.project_service import build_project_payload, resolve_project_reference
+from services.project_service import (
+    build_project_payload,
+    list_projects,
+    resolve_project_reference,
+)
+from services.settings_service import get_topology_drift_check_interval_hours
 
 STALE_AFTER_DAYS = 30
+TOPOLOGY_DRIFT_ALERT_THRESHOLD_PERCENT = 10.0
 
 
 class TopologyImportError(ValueError):
@@ -32,6 +39,84 @@ class TopologyImportError(ValueError):
         self.code = code
         self.message = message
         self.details = details or {}
+
+
+class TopologyDriftStatus(BaseModel):
+    """Summary of the latest topology drift check for one project."""
+
+    status: Literal["up_to_date", "drifted", "unsupported", "unavailable"] = Field(
+        default="unavailable"
+    )
+    checked_at: str | None = Field(
+        default=None, description="ISO timestamp for the latest drift check"
+    )
+    next_check_at: str | None = Field(
+        default=None, description="ISO timestamp for the next scheduled drift check"
+    )
+    interval_hours: int = Field(
+        default=24, description="Configured drift check cadence in hours"
+    )
+    source_type: str | None = Field(
+        default=None, description="Imported topology source identifier when available"
+    )
+    source_ref: str | None = Field(
+        default=None, description="Imported topology source reference when available"
+    )
+    total_resource_count: int = Field(
+        default=0, description="Total resources considered during the drift check"
+    )
+    changed_resource_count: int = Field(
+        default=0, description="Number of changed resources in the latest drift check"
+    )
+    change_percent: float = Field(
+        default=0.0, description="Percentage of changed resources"
+    )
+    alert: bool = Field(
+        default=False,
+        description="Whether the drift report exceeds the alert threshold",
+    )
+    added_resources: list[str] = Field(default_factory=list)
+    removed_resources: list[str] = Field(default_factory=list)
+    modified_resources: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class TopologyDriftData(BaseModel):
+    """API/UI-facing drift payload nested under topology status."""
+
+    status: str = Field(..., description="Current drift state label")
+    checked_at: str | None = Field(
+        default=None, description="ISO timestamp for the latest drift check"
+    )
+    next_check_at: str | None = Field(
+        default=None, description="ISO timestamp for the next scheduled drift check"
+    )
+    interval_hours: int = Field(
+        default=24, description="Configured drift check cadence in hours"
+    )
+    source_type: str | None = Field(
+        default=None, description="Imported topology source identifier when available"
+    )
+    source_ref: str | None = Field(
+        default=None, description="Imported topology source reference when available"
+    )
+    total_resource_count: int = Field(
+        default=0, description="Total resources considered during the drift check"
+    )
+    changed_resource_count: int = Field(
+        default=0, description="Number of changed resources in the latest drift check"
+    )
+    change_percent: float = Field(
+        default=0.0, description="Percentage of changed resources"
+    )
+    alert: bool = Field(
+        default=False,
+        description="Whether the drift report exceeds the alert threshold",
+    )
+    added_resources: list[str] = Field(default_factory=list)
+    removed_resources: list[str] = Field(default_factory=list)
+    modified_resources: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class TopologyStatus(BaseModel):
@@ -66,6 +151,9 @@ class TopologyStatus(BaseModel):
     blocking_errors: list[str] = Field(
         default_factory=list,
         description="Validation errors that make the topology unsafe to activate",
+    )
+    drift: TopologyDriftStatus | None = Field(
+        default=None, description="Latest topology drift check summary when available"
     )
 
 
@@ -167,6 +255,155 @@ def _extract_import_warnings(payload: dict[str, Any]) -> list[str]:
     if not isinstance(warnings, list):
         return []
     return _unique_messages([str(item) for item in warnings])
+
+
+def _resource_snapshot(payload: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    if not payload:
+        return {}
+    snapshot: dict[str, dict[str, Any]] = {}
+    services_raw = payload.get("services", [])
+    if not isinstance(services_raw, list):
+        return {}
+    for service in services_raw:
+        if not isinstance(service, dict):
+            continue
+        service_id = str(service.get("id") or "").strip()
+        if not service_id:
+            continue
+        resource_keys_raw = service.get("resource_keys", [])
+        resource_keys = [
+            str(resource_key).strip()
+            for resource_key in resource_keys_raw
+            if str(resource_key).strip()
+        ]
+        if not resource_keys:
+            resource_keys = [f"service:{service_id}"]
+        signature = {
+            "service_id": service_id,
+            "label": str(service.get("label") or service_id),
+            "downstream": sorted(
+                str(target).strip()
+                for target in service.get("downstream", [])
+                if str(target).strip()
+            ),
+        }
+        for resource_key in resource_keys:
+            snapshot[resource_key] = signature
+    return snapshot
+
+
+def _drift_setting_key(project: dict[str, Any]) -> str:
+    return f"topology_drift_status::{project['id']}"
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _build_next_check_at(checked_at: str | None, interval_hours: int) -> str | None:
+    checked_at_dt = _parse_iso_datetime(checked_at)
+    if checked_at_dt is None:
+        return None
+    return (
+        (checked_at_dt + timedelta(hours=interval_hours))
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
+def _load_cached_topology_drift(project: dict[str, Any]) -> TopologyDriftStatus | None:
+    with SessionLocal() as session:
+        record = get_setting(session, _drift_setting_key(project))
+    if record is None:
+        return None
+    try:
+        payload = json.loads(record.value)
+    except JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return TopologyDriftStatus(**payload)
+
+
+def _save_topology_drift(
+    project: dict[str, Any], drift_status: TopologyDriftStatus
+) -> TopologyDriftStatus:
+    with SessionLocal() as session:
+        upsert_setting(
+            session,
+            key=_drift_setting_key(project),
+            value=json.dumps(drift_status.model_dump()),
+        )
+    return drift_status
+
+
+def _is_drift_check_due(
+    cached_status: TopologyDriftStatus | None, interval_hours: int
+) -> bool:
+    if cached_status is None:
+        return True
+    checked_at = _parse_iso_datetime(cached_status.checked_at)
+    if checked_at is None:
+        return True
+    return datetime.now(UTC) >= checked_at + timedelta(hours=interval_hours)
+
+
+def _build_drift_status(
+    *,
+    status: Literal["up_to_date", "drifted", "unsupported", "unavailable"],
+    interval_hours: int,
+    source_type: str | None,
+    source_ref: str | None,
+    total_resource_count: int = 0,
+    added_resources: list[str] | None = None,
+    removed_resources: list[str] | None = None,
+    modified_resources: list[str] | None = None,
+    warnings: list[str] | None = None,
+) -> TopologyDriftStatus:
+    checked_at = _current_timestamp()
+    added = sorted(added_resources or [])
+    removed = sorted(removed_resources or [])
+    modified = sorted(modified_resources or [])
+    changed_count = len(added) + len(removed) + len(modified)
+    total = max(total_resource_count, len(added) + len(removed) + len(modified))
+    change_percent = 0.0 if total == 0 else (changed_count / total) * 100.0
+    alert = change_percent > TOPOLOGY_DRIFT_ALERT_THRESHOLD_PERCENT
+    drift_warnings = list(warnings or [])
+    if status == "drifted":
+        threshold_text = "above" if alert else "within"
+        drift_warnings.append(
+            f"Topology drift detected — {change_percent:.1f}% of resources changed since the last import, {threshold_text} the {TOPOLOGY_DRIFT_ALERT_THRESHOLD_PERCENT:.0f}% alert threshold."
+        )
+    return TopologyDriftStatus(
+        status=status,
+        checked_at=checked_at,
+        next_check_at=_build_next_check_at(checked_at, interval_hours),
+        interval_hours=interval_hours,
+        source_type=source_type,
+        source_ref=source_ref,
+        total_resource_count=total_resource_count,
+        changed_resource_count=changed_count,
+        change_percent=round(change_percent, 2),
+        alert=alert,
+        added_resources=added,
+        removed_resources=removed,
+        modified_resources=modified,
+        warnings=_unique_messages(drift_warnings),
+    )
+
+
+def run_due_topology_drift_checks() -> list[TopologyDriftStatus]:
+    """Run due topology drift checks for every known project."""
+    drift_statuses: list[TopologyDriftStatus] = []
+    for project in list_projects():
+        drift_statuses.append(check_topology_drift(project_id=project.id))
+    return drift_statuses
 
 
 def _load_latest_topology_payload(
@@ -810,6 +1047,139 @@ def _build_import_result(
     )
 
 
+def check_topology_drift(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    force: bool = False,
+) -> TopologyDriftStatus:
+    """Run or reuse a scheduled topology drift check for one project."""
+    interval_hours = get_topology_drift_check_interval_hours()
+    project = build_project_payload(
+        resolve_project_reference(project_id=project_id, project_key=project_key)
+    )
+    payload, _, status_override = _load_latest_topology_payload(project)
+    import_metadata = _import_metadata(payload or {})
+    source_type = str(import_metadata.get("source_type") or "").strip() or None
+    source_ref = str(import_metadata.get("source_ref") or "").strip() or None
+    cached_status = _load_cached_topology_drift(project)
+
+    if not force and not _is_drift_check_due(cached_status, interval_hours):
+        return cached_status or _build_drift_status(
+            status="unavailable",
+            interval_hours=interval_hours,
+            source_type=source_type,
+            source_ref=source_ref,
+            warnings=["Topology drift check is unavailable."],
+        )
+
+    if payload is None or status_override is not None:
+        return _save_topology_drift(
+            project,
+            _build_drift_status(
+                status="unavailable",
+                interval_hours=interval_hours,
+                source_type=source_type,
+                source_ref=source_ref,
+                warnings=[
+                    "Topology drift is unavailable because no valid topology import is active."
+                ],
+            ),
+        )
+
+    if not source_type or not source_ref:
+        return _save_topology_drift(
+            project,
+            _build_drift_status(
+                status="unavailable",
+                interval_hours=interval_hours,
+                source_type=source_type,
+                source_ref=source_ref,
+                warnings=[
+                    "Topology drift is unavailable because the active topology does not include an import source reference."
+                ],
+            ),
+        )
+
+    if source_type == "manual":
+        return _save_topology_drift(
+            project,
+            _build_drift_status(
+                status="unavailable",
+                interval_hours=interval_hours,
+                source_type=source_type,
+                source_ref=source_ref,
+                warnings=[
+                    "Topology drift is unavailable for manual topology uploads because there is no source connector to re-evaluate."
+                ],
+            ),
+        )
+
+    try:
+        change_set = _lookup_source_handler(source_type)(source_ref)
+    except TopologyImportError as exc:
+        return _save_topology_drift(
+            project,
+            _build_drift_status(
+                status="unavailable",
+                interval_hours=interval_hours,
+                source_type=source_type,
+                source_ref=source_ref,
+                warnings=[str(exc)],
+            ),
+        )
+
+    if change_set.operation != "replace":
+        return _save_topology_drift(
+            project,
+            _build_drift_status(
+                status="unsupported",
+                interval_hours=interval_hours,
+                source_type=source_type,
+                source_ref=source_ref,
+                warnings=change_set.warnings
+                or [
+                    "Topology drift is not supported for the active source connector yet."
+                ],
+            ),
+        )
+
+    current_resources = _resource_snapshot(payload)
+    candidate_payload = {"services": change_set.services}
+    candidate_resources = _resource_snapshot(candidate_payload)
+    added_resources = sorted(
+        resource_ref
+        for resource_ref in candidate_resources
+        if resource_ref not in current_resources
+    )
+    removed_resources = sorted(
+        resource_ref
+        for resource_ref in current_resources
+        if resource_ref not in candidate_resources
+    )
+    modified_resources = sorted(
+        resource_ref
+        for resource_ref in current_resources.keys() & candidate_resources.keys()
+        if current_resources[resource_ref] != candidate_resources[resource_ref]
+    )
+    drift_status = _build_drift_status(
+        status=(
+            "drifted"
+            if added_resources or removed_resources or modified_resources
+            else "up_to_date"
+        ),
+        interval_hours=interval_hours,
+        source_type=source_type,
+        source_ref=source_ref,
+        total_resource_count=max(len(current_resources), len(candidate_resources)),
+        added_resources=added_resources,
+        removed_resources=removed_resources,
+        modified_resources=modified_resources,
+        warnings=change_set.warnings,
+    )
+    return _save_topology_drift(project, drift_status)
+
+
 def get_topology_status(
     *,
     project_id: int | None = None,
@@ -834,7 +1204,9 @@ def get_topology_status(
                 "Blast radius may be incomplete — service topology is not configured."
             ],
         )
-    return _build_topology_status(payload, path=topology_path, exists=True)
+    status = _build_topology_status(payload, path=topology_path, exists=True)
+    status.drift = check_topology_drift(project_id=int(project["id"]))
+    return status
 
 
 def import_topology_source(

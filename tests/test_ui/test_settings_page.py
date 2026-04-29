@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import tempfile
@@ -15,6 +16,7 @@ import app as app_module
 import config as config_module
 import models.database as database_module
 import models.tables as tables_module
+import services.project_service as project_service_module
 from fastapi.testclient import TestClient
 
 from ui.routes.settings import (
@@ -53,6 +55,87 @@ class SettingsPageTests(unittest.TestCase):
         self.assertIn("Dashboard Result Display Duration", response.text)
         self.assertIn("Topology context", response.text)
         self.assertIn("blast-radius analysis", response.text)
+        self.assertIn("Drift check cadence", response.text)
+        self.assertIn("Topology drift", response.text)
+
+    def test_settings_page_lists_drift_resource_names(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.set_active_project(project.id)
+        source_path = Path(self.tempdir.name) / "ui-drift-topology.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        },
+                        {
+                            "id": "billing",
+                            "label": "Billing",
+                            "resource_keys": ["Deployment/billing"],
+                            "downstream": [],
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        import services.topology_service as topology_service_module
+
+        topology_service_module.import_topology_source(
+            "custom",
+            str(source_path),
+            project_key="payments",
+        )
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": ["worker"],
+                        },
+                        {
+                            "id": "worker",
+                            "label": "Worker",
+                            "resource_keys": ["Deployment/worker"],
+                            "downstream": [],
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        topology_service_module.check_topology_drift(
+            project_key="payments",
+            force=True,
+        )
+
+        response = self.client.get("/settings")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Deployment/worker", response.text)
+        self.assertIn("Deployment/billing", response.text)
+        self.assertIn("Deployment/api", response.text)
+
+    def test_topology_drift_scheduler_loop_runs_a_pass(self) -> None:
+        stop_event = asyncio.Event()
+
+        def run_once() -> None:
+            stop_event.set()
+
+        with patch("app.run_due_topology_drift_checks", side_effect=run_once) as mocked:
+            asyncio.run(app_module._topology_drift_scheduler_loop(stop_event))
+
+        self.assertTrue(mocked.called)
 
     def test_process_topology_upload_content_reports_success_for_valid_upload(
         self,

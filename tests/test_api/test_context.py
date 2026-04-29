@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -82,6 +83,7 @@ class ContextApiTests(unittest.TestCase):
             get_response.json()["data"]["topology"]["service_count"],
             1,
         )
+        self.assertIn("drift", get_response.json()["data"]["topology"])
 
     def test_save_project_topology_rejects_invalid_relationships(self) -> None:
         response = self.client.post(
@@ -108,3 +110,70 @@ class ContextApiTests(unittest.TestCase):
         self.assertIn(
             "missing downstream services", response.json()["error"]["message"]
         )
+
+    def test_fetch_project_topology_includes_drift_resource_lists(self) -> None:
+        topology_path = Path(self.tempdir.name) / "drift-topology.json"
+        topology_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        },
+                        {
+                            "id": "billing",
+                            "label": "Billing",
+                            "resource_keys": ["Deployment/billing"],
+                            "downstream": [],
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        import services.topology_service as topology_service_module
+
+        topology_service_module.import_topology_source(
+            "custom",
+            str(topology_path),
+            project_key=self.project.project_key,
+        )
+        topology_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": ["worker"],
+                        },
+                        {
+                            "id": "worker",
+                            "label": "Worker",
+                            "resource_keys": ["Deployment/worker"],
+                            "downstream": [],
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        topology_service_module.check_topology_drift(
+            project_key=self.project.project_key,
+            force=True,
+        )
+
+        response = self.client.get(
+            "/api/v1/context/topology",
+            params={"project_key": self.project.project_key},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        drift = response.json()["data"]["topology"]["drift"]
+        self.assertEqual(drift["added_resources"], ["Deployment/worker"])
+        self.assertEqual(drift["removed_resources"], ["Deployment/billing"])
+        self.assertEqual(drift["modified_resources"], ["Deployment/api"])

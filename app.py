@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 from html import escape
 import hashlib
 import hmac
+import logging
 
 from fastapi import Form, Request
 from fastapi.exceptions import RequestValidationError
@@ -38,10 +41,13 @@ from services.report_service import (
     fetch_shared_report_comparison,
 )
 from services.skill_manifest_service import build_skill_manifest_v1_schema
+from services.topology_service import run_due_topology_drift_checks
 from ui.routes.dashboard import build_dashboard
 import ui.routes.skills as skills_ui_routes  # noqa: F401
 
 configure_logging()
+logger = logging.getLogger(__name__)
+TOPOLOGY_DRIFT_SCHEDULER_POLL_SECONDS = 60
 
 
 def _ensure_nicegui_config_defaults() -> None:
@@ -86,7 +92,28 @@ fastapi_app.include_router(context_router)
 fastapi_app.include_router(skills_router)
 
 
-_original_lifespan = fastapi_app.router.lifespan_context
+if not hasattr(fastapi_app, "_deploywhisper_original_lifespan_context"):
+    fastapi_app._deploywhisper_original_lifespan_context = (
+        fastapi_app.router.lifespan_context
+    )
+
+_original_lifespan = fastapi_app._deploywhisper_original_lifespan_context
+
+
+async def _topology_drift_scheduler_loop(stop_event: asyncio.Event) -> None:
+    """Run topology drift checks on a lightweight polling loop."""
+    while not stop_event.is_set():
+        try:
+            run_due_topology_drift_checks()
+        except Exception:
+            logger.exception("Topology drift scheduler pass failed.")
+        try:
+            await asyncio.wait_for(
+                stop_event.wait(),
+                timeout=TOPOLOGY_DRIFT_SCHEDULER_POLL_SECONDS,
+            )
+        except TimeoutError:
+            continue
 
 
 @asynccontextmanager
@@ -94,10 +121,22 @@ async def lifespan(app):
     """Compose NiceGUI startup/shutdown with DeployWhisper app initialization."""
     async with _original_lifespan(app):
         init_db()
-        yield
+        stop_event = asyncio.Event()
+        drift_scheduler_task = asyncio.create_task(
+            _topology_drift_scheduler_loop(stop_event)
+        )
+        try:
+            yield
+        finally:
+            stop_event.set()
+            drift_scheduler_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await drift_scheduler_task
 
 
-fastapi_app.router.lifespan_context = lifespan
+if not getattr(fastapi_app, "_deploywhisper_lifespan_installed", False):
+    fastapi_app.router.lifespan_context = lifespan
+    fastapi_app._deploywhisper_lifespan_installed = True
 
 
 @fastapi_app.get("/api/v1", include_in_schema=False)

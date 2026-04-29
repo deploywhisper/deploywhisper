@@ -295,6 +295,45 @@ class TopologyStatusData(BaseModel):
     blocking_errors: list[str] = Field(
         default_factory=list, description="Blocking validation errors"
     )
+    drift: "TopologyDriftStatusData | None" = Field(
+        default=None, description="Latest drift check summary when available"
+    )
+
+
+class TopologyDriftStatusData(BaseModel):
+    status: str = Field(..., description="Current topology drift state")
+    checked_at: str | None = Field(
+        default=None, description="ISO timestamp for the latest drift check"
+    )
+    next_check_at: str | None = Field(
+        default=None, description="ISO timestamp for the next scheduled drift check"
+    )
+    interval_hours: int = Field(
+        default=24, description="Configured drift check cadence in hours"
+    )
+    source_type: str | None = Field(
+        default=None, description="Imported topology source identifier when available"
+    )
+    source_ref: str | None = Field(
+        default=None, description="Imported topology source reference when available"
+    )
+    total_resource_count: int = Field(
+        default=0, description="Total resources considered during the drift check"
+    )
+    changed_resource_count: int = Field(
+        default=0, description="Number of changed resources in the latest drift check"
+    )
+    change_percent: float = Field(
+        default=0.0, description="Percentage of changed resources"
+    )
+    alert: bool = Field(
+        default=False,
+        description="Whether the drift report exceeds the alert threshold",
+    )
+    added_resources: list[str] = Field(default_factory=list)
+    removed_resources: list[str] = Field(default_factory=list)
+    modified_resources: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class TopologyContextRequest(BaseModel):

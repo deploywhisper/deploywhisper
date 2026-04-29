@@ -413,3 +413,17 @@ class SettingsServiceTests(unittest.TestCase):
         self.assertEqual(
             settings_service_module.get_dashboard_result_display_duration_seconds(), 900
         )
+
+    def test_save_and_get_topology_drift_check_interval_hours(self) -> None:
+        self.assertEqual(
+            settings_service_module.get_topology_drift_check_interval_hours(),
+            settings_service_module.DEFAULT_TOPOLOGY_DRIFT_CHECK_INTERVAL_HOURS,
+        )
+
+        saved = settings_service_module.save_topology_drift_check_interval_hours(168)
+
+        self.assertEqual(saved, 168)
+        self.assertEqual(
+            settings_service_module.get_topology_drift_check_interval_hours(),
+            168,
+        )
