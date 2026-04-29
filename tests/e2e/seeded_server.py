@@ -8,6 +8,9 @@ import tempfile
 from importlib import import_module, reload
 from pathlib import Path
 
+import nicegui.run as nicegui_run
+import uvicorn
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -17,6 +20,16 @@ os.environ.setdefault("APP_HOST", "127.0.0.1")
 os.environ.setdefault("APP_PORT", "8080")
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_TEMP_ROOT / 'accessibility.db'}")
 os.environ.setdefault("ARTIFACT_SNAPSHOT_DIR", str(_TEMP_ROOT / "report-artifacts"))
+
+
+def _safe_nicegui_setup() -> None:
+    try:
+        nicegui_run.process_pool = None
+    except Exception:
+        pass
+
+
+nicegui_run.setup = _safe_nicegui_setup
 
 
 def _load_runtime_modules() -> tuple[object, object, object, object, object]:
@@ -243,13 +256,51 @@ def _seed_review_report(report_service_module) -> None:
     )
 
 
+def _seed_projects() -> None:
+    from services.project_service import create_project
+
+    create_project(
+        project_key="payments",
+        display_name="Payments",
+        repository_url="https://github.com/acme/payments-api.git",
+        default_branch="main",
+    )
+    create_project(
+        project_key="platform",
+        display_name="Platform",
+        repository_url="https://github.com/acme/platform-hub.git",
+        default_branch="main",
+    )
+
+
 def main() -> None:
     database_module, report_service_module = _reload_runtime()
     database_module.init_db()
+    _seed_projects()
     _seed_review_report(report_service_module)
     app_module = import_module("app")
-
-    app_module.run()
+    app_module.fastapi_app.config.add_run_config(
+        reload=False,
+        title="DeployWhisper",
+        viewport="width=device-width, initial-scale=1",
+        favicon=None,
+        dark=False,
+        language="en-US",
+        binding_refresh_interval=0.1,
+        reconnect_timeout=3.0,
+        message_history_length=1000,
+        tailwind=True,
+        unocss=None,
+        prod_js=True,
+        show_welcome_message=False,
+        markdown=False,
+    )
+    uvicorn.run(
+        app_module.create_app(),
+        host=os.environ["APP_HOST"],
+        port=int(os.environ["APP_PORT"]),
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":

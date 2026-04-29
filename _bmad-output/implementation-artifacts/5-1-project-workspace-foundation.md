@@ -13,10 +13,10 @@ so that reports, topology, history, and feedback stay isolated by project or rep
 ## Acceptance Criteria
 
 1. Users can create a project/workspace with project key, display name, and optional description, repository URL, and default branch.
-2. Web UI requires selecting or creating a project before new manual analysis uploads.
+2. Web UI requires selecting or creating a project before new manual analysis uploads, and makes the active project obvious in the shared workspace so users can change project context without returning to the dashboard upload panel.
 3. API and CLI accept `project_key` or `project_id` for new analyses and project-scoped context operations.
 4. GitHub integrations can accept an explicit project key and otherwise derive a stable default from repository name.
-5. Analysis reports, topology imports, deployment outcomes, and reviewer feedback are scoped to a project/workspace.
+5. Analysis reports, topology imports, deployment outcomes, and reviewer feedback are scoped to a project/workspace, and dashboard/history/report views refresh consistently when the active project changes.
 6. Existing installations can map legacy records into a default or unassigned project without losing history.
 7. Scope explicitly excludes RBAC, SSO, org hierarchy, hosted SaaS scoping, and deep multi-tenant behavior.
 
@@ -37,6 +37,9 @@ so that reports, topology, history, and feedback stay isolated by project or rep
 - [x] Implement AC6: legacy-data migration or default/unassigned project mapping without history loss (AC: 6)
 - [x] Implement AC7: enforce non-goals so this story does not add RBAC, SSO, org hierarchy, hosted SaaS scoping, or deep multi-tenant behavior (AC: 7)
 - [x] Add deterministic tests, docs, and rollout notes covering project-scoped analysis flows and legacy mapping (AC: 1, 2, 3, 4, 5, 6, 7)
+- [x] Implement AC2 refinement: shared-shell project selection/search flow that updates the active workspace across routed pages without requiring a return to the dashboard upload panel (AC: 2)
+- [x] Make the active project visible in shared workspace chrome and preserve project-scoped history/report context after project changes (AC: 2, 5)
+- [x] Add deterministic UI regression coverage for shared-shell project switching cues across dashboard and history surfaces (AC: 2, 5)
 
 ### Review Findings
 
@@ -85,6 +88,7 @@ so that reports, topology, history, and feedback stay isolated by project or rep
 - [Architecture](../planning-artifacts/architecture.md)
 - [Project Context](../project-context.md)
 - [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-04-27-epic-5-project-workspace-foundation.md)
+- [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-04-28-epic-5-project-switching.md)
 
 ## Dev Agent Record
 
@@ -118,6 +122,12 @@ GPT-5 (Codex)
 - 2026-04-28T19:05:00+05:30: `./.venv/bin/python -m unittest -q tests.test_ui.test_upload_panel tests.test_ui.test_history_page tests.test_api.test_analyses tests.test_services.test_project_service`
 - 2026-04-28T19:05:00+05:30: `./.venv/bin/ruff check ui/components/upload_panel.py tests/test_ui/test_upload_panel.py`
 - 2026-04-28T19:20:00+05:30: Story 5.1 re-review triage reconciled the remaining public-share concern against Story 3.4’s accepted `/reports/{id}` contract; no actionable 5.1 findings remained
+- 2026-04-28T21:05:00+05:30: `./.venv/bin/python -m unittest -q tests.test_ui.test_project_workspace_switcher tests.test_ui.test_app_shell tests.test_ui.test_history_page tests.test_ui.test_upload_panel tests.test_ui.test_settings_page`
+- 2026-04-28T21:10:00+05:30: `./.venv/bin/ruff check .`
+- 2026-04-28T21:11:00+05:30: `./.venv/bin/ruff format ui/theme.py`
+- 2026-04-28T21:11:00+05:30: `./.venv/bin/ruff format --check .`
+- 2026-04-28T21:14:00+05:30: `./.venv/bin/python -m unittest discover -q`
+- 2026-04-28T21:16:00+05:30: `bash scripts/ci-local.sh`
 
 ### Completion Notes List
 
@@ -132,6 +142,8 @@ GPT-5 (Codex)
 - Fixed the third Story 5.1 review pass by default-scoping API detail fetches to `unassigned`, rejecting partially invalid dual project references, clearing staged uploads on project switch, resolving the current project at settings-upload time, and allowing GitHub explicit project-key overrides to create or fail in a controlled way.
 - Verified the final Story 5.1 rerun finding is resolved in the live upload-panel flow: switching projects with staged artifacts clears pending uploads and requires re-upload under the newly selected workspace.
 - Re-ran code review after all patches. No actionable Story 5.1 findings remain; the only residual concern was the intentional public-share behavior introduced and accepted in Story 3.4.
+- Applied the 2026-04-28 project-switching correction by adding a shared-shell project selector with global create-project access, making the active/default workspace visible across routed pages, and extending regression coverage so dashboard/history surfaces reflect the same active project context.
+- Validation passed again after the cross-page workspace refinement: focused UI unittests, repo-wide Ruff check/format check, full `unittest discover -q`, and `scripts/ci-local.sh` all passed. Local CI still skipped Bandit because it is not installed in this environment.
 
 ### File List
 
@@ -167,13 +179,18 @@ GPT-5 (Codex)
 - tests/test_services/test_report_service.py
 - tests/test_services/test_topology_service.py
 - tests/test_ui/test_app_shell.py
+- tests/test_ui/test_project_workspace_switcher.py
 - tests/test_ui/test_settings_page.py
 - tests/test_ui/test_upload_panel.py
+- ui/components/project_workspace_switcher.py
 - ui/components/upload_panel.py
 - ui/routes/dashboard.py
 - ui/routes/history.py
 - ui/routes/settings.py
+- ui/theme.py
+- _bmad-output/planning-artifacts/ux-design-specification.md
 
 ### Change Log
 
 - 2026-04-28: Implemented project workspace foundations across persistence, UI/API/CLI intake, topology scoping, GitHub project derivation, and rollout documentation.
+- 2026-04-28: Refined Story 5.1 so project switching is available from shared workspace chrome, with active-project visibility and cross-page UI regression coverage.

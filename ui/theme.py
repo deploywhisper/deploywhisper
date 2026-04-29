@@ -2,7 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from nicegui import ui
+
+from services.project_service import (
+    get_active_project,
+    has_active_project_selection,
+    list_projects,
+    ProjectRecord,
+    set_active_project,
+)
+from ui.components.project_workspace_switcher import (
+    build_project_combobox,
+    open_create_project_dialog,
+    project_context_heading,
+    project_context_meta,
+    project_context_summary,
+)
 
 _BRAND_MARK_SVG = """
 <svg width="26" height="26" viewBox="0 0 80 80" fill="none" aria-hidden="true">
@@ -15,7 +32,7 @@ _BRAND_MARK_SVG = """
 </svg>
 """
 
-_THEME_HEAD_HTML = """
+_THEME_HEAD_HTML = r"""
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -150,7 +167,7 @@ code,
   width: min(1240px, calc(100% - 32px));
   max-width: 1240px;
   margin: 0 auto;
-  padding: 122px 0 36px;
+  padding: 224px 0 36px;
   box-sizing: border-box;
 }
 
@@ -187,7 +204,7 @@ code,
   padding: 28px 30px;
 }
 
-.dw-topbar {
+.dw-header-stack {
   position: fixed;
   inset: 18px 0 auto;
   z-index: 100;
@@ -204,6 +221,203 @@ code,
   box-shadow: 0 18px 44px rgba(2, 7, 17, 0.16);
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
+}
+
+.dw-topbar-primary {
+  width: 100%;
+  align-items: center;
+  gap: 16px;
+}
+
+.dw-topbar-nav {
+  min-width: 0;
+}
+
+.dw-topbar-utilities {
+  align-items: center;
+}
+
+.dw-project-bar {
+  width: min(1240px, 100%);
+  margin: 12px auto 0;
+  padding: 18px 20px;
+  border-radius: 26px;
+  border: 1px solid var(--dw-line);
+  background: linear-gradient(180deg, var(--dw-surface), var(--dw-surface-strong));
+  box-shadow: var(--dw-shadow);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.dw-project-filter-copy {
+  min-width: 220px;
+  flex: 1 1 260px;
+}
+
+.dw-project-filter-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dw-muted);
+}
+
+.dw-project-filter-title {
+  color: var(--dw-text);
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.dw-project-filter-meta {
+  color: var(--dw-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dw-project-filter-controls {
+  width: min(100%, 560px);
+  flex: 1 1 420px;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 10px;
+  overflow: visible;
+}
+
+.dw-project-bar,
+.dw-project-combobox {
+  position: relative;
+  overflow: visible;
+}
+
+.dw-project-search-input {
+  min-width: 320px;
+  flex: 1 1 360px;
+}
+
+.dw-project-search-input .q-field__control {
+  min-height: 52px;
+  border-radius: 18px;
+  background: var(--dw-surface-soft);
+  border-color: transparent !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.dw-project-search-input .q-field--outlined .q-field__control:before {
+  border-color: var(--dw-line);
+}
+
+.dw-project-search-input .q-field--focused .q-field__control {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dw-accent) 14%, transparent);
+}
+
+.dw-project-search-input .q-field__native,
+.dw-project-search-input .q-field__input,
+.dw-project-search-input .q-field__label,
+.dw-project-search-input .q-field__marginal {
+  color: var(--dw-text) !important;
+}
+
+.dw-project-search-input .q-field__label {
+  color: var(--dw-muted) !important;
+}
+
+.dw-project-search-input .q-field__append .q-icon,
+.dw-project-search-input .q-field__prepend .q-icon {
+  color: var(--dw-accent);
+}
+
+.dw-project-dropdown-anchor {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  z-index: 1300;
+}
+
+.dw-project-dropdown-panel {
+  border: 1px solid var(--dw-line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--dw-surface-strong) 96%, transparent);
+  box-shadow: 0 22px 46px rgba(2, 7, 17, 0.24);
+  overflow: hidden;
+}
+
+.dw-project-dropdown-list {
+  max-height: min(360px, calc(100vh - 220px));
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.dw-project-feedback-row {
+  padding: 16px 18px;
+}
+
+.dw-project-feedback-copy,
+.dw-project-empty-copy {
+  color: var(--dw-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.dw-project-option-button {
+  display: block;
+  width: 100%;
+  min-height: 76px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease;
+  user-select: none;
+}
+
+.dw-project-option-button:hover,
+.dw-project-option-active {
+  background: var(--dw-pill-bg);
+}
+
+.dw-project-option-selected {
+  box-shadow: inset 0 0 0 1px var(--dw-accent-line);
+}
+
+.dw-project-option-primary {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dw-text);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.dw-project-option-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--dw-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dw-project-option-check {
+  color: var(--dw-accent);
+  margin-top: 2px;
+}
+
+.dw-project-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dw-text);
+}
+
+.dw-project-match {
+  background: color-mix(in srgb, var(--dw-accent) 22%, transparent);
+  color: var(--dw-text);
+  border-radius: 6px;
+  padding: 0 2px;
 }
 
 .dw-brand {
@@ -687,7 +901,7 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
 @media (max-width: 960px) {
   .dw-main-content {
     width: min(100%, calc(100% - 24px));
-    padding-top: 136px;
+    padding-top: 262px;
   }
 
   .dw-findings-grid {
@@ -705,7 +919,7 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
 }
 
 @media (max-width: 820px) {
-  .dw-topbar {
+  .dw-header-stack {
     inset: 12px 0 auto;
     padding: 0 12px;
   }
@@ -715,6 +929,29 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
     gap: 12px;
   }
 
+  .dw-project-bar {
+    margin-top: 10px;
+    padding: 16px 16px 18px;
+  }
+
+  .dw-topbar-primary {
+    align-items: flex-start;
+  }
+
+  .dw-topbar-nav {
+    width: 100%;
+    justify-content: flex-start !important;
+  }
+
+  .dw-project-filter-controls {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .dw-project-search-input {
+    min-width: 0;
+  }
+
   .dw-brand-subtitle,
   .dw-brand-tag {
     display: none;
@@ -722,6 +959,15 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
 
   .dw-findings-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dw-main-content {
+    padding-top: 308px;
+  }
+
+  .dw-project-filter-controls {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
@@ -761,7 +1007,11 @@ def build_brand_lockup(*, href: str = "/", compact: bool = False) -> None:
                 )
 
 
-def build_navigation_shell(active: str) -> None:
+def build_navigation_shell(
+    active: str,
+    *,
+    on_project_change: Callable[[ProjectRecord], None] | None = None,
+) -> Callable[[], None]:
     """Render the shared top navigation shell."""
     nav_items = (
         ("Dashboard", "/", "dashboard"),
@@ -770,29 +1020,77 @@ def build_navigation_shell(active: str) -> None:
         ("Settings", "/settings", "settings"),
     )
 
-    with ui.element("header").classes("dw-topbar"):
-        with ui.row().classes(
-            "dw-topbar-shell w-full items-center gap-4 flex-wrap justify-between"
-        ):
-            build_brand_lockup(compact=True)
-            with ui.row().classes(
-                "items-center gap-1 flex-wrap grow justify-center max-md:w-full"
-            ):
-                for label, href, key in nav_items:
-                    classes = "dw-nav-link no-underline"
-                    if active == key:
-                        classes += " dw-nav-link-active"
-                    ui.link(label, href).classes(classes)
-            with ui.row().classes(
-                "items-center gap-2 ml-auto max-md:w-full max-md:justify-end"
-            ):
-                ui.button(
-                    "Theme",
-                    icon="contrast",
-                    on_click=lambda: ui.run_javascript(
-                        "window.dwToggleTheme && window.dwToggleTheme()"
-                    ),
-                ).props("flat no-caps").classes("dw-theme-button")
+    with ui.element("div").classes("dw-header-stack"):
+        with ui.column().classes("dw-topbar-shell w-full"):
+            with ui.row().classes("dw-topbar-primary w-full justify-between flex-wrap"):
+                build_brand_lockup(compact=True)
+                with ui.row().classes(
+                    "dw-topbar-nav items-center gap-1 flex-wrap grow justify-center max-md:w-full"
+                ):
+                    for label, href, key in nav_items:
+                        classes = "dw-nav-link no-underline"
+                        if active == key:
+                            classes += " dw-nav-link-active"
+                        ui.link(label, href).classes(classes)
+                with ui.row().classes(
+                    "dw-topbar-utilities items-center gap-2 ml-auto max-md:w-full max-md:justify-end"
+                ):
+                    ui.button(
+                        "Theme",
+                        icon="contrast",
+                        on_click=lambda: ui.run_javascript(
+                            "window.dwToggleTheme && window.dwToggleTheme()"
+                        ),
+                    ).props("flat no-caps").classes("dw-theme-button")
+
+        @ui.refreshable
+        def render_project_bar() -> None:
+            saved_selection = has_active_project_selection()
+            active_project = get_active_project()
+            current_project_id = (
+                active_project.id if saved_selection and active_project else None
+            )
+            with ui.card().classes("dw-project-bar shadow-none"):
+                with ui.row().classes(
+                    "w-full items-end justify-between gap-4 flex-wrap"
+                ):
+                    with ui.column().classes("dw-project-filter-copy gap-[3px]"):
+                        ui.label(project_context_heading()).classes(
+                            "dw-project-filter-kicker"
+                        )
+                        ui.label(project_context_summary(active_project)).classes(
+                            "dw-project-filter-title"
+                        )
+                        ui.label(
+                            project_context_meta(
+                                has_saved_selection=saved_selection,
+                                active_project=active_project,
+                            )
+                        ).classes("dw-project-filter-meta")
+                    with ui.row().classes("dw-project-filter-controls flex-wrap"):
+                        build_project_combobox(
+                            projects=list_projects(),
+                            current_project_id=current_project_id,
+                            on_select=lambda project: handle_project_change(project),
+                        )
+                        ui.button(
+                            "New project",
+                            on_click=lambda: open_create_project_dialog(
+                                on_created=lambda created: handle_project_change(
+                                    created
+                                )
+                            ),
+                            color="primary",
+                        ).props("flat no-caps").classes("dw-theme-button")
+
+        def handle_project_change(project: ProjectRecord) -> None:
+            set_active_project(project.id)
+            render_project_bar.refresh()
+            if on_project_change is not None:
+                on_project_change(project)
+
+        render_project_bar()
+    return lambda: render_project_bar.refresh()
 
 
 def build_page_header(

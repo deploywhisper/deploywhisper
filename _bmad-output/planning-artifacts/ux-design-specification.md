@@ -763,13 +763,14 @@ Before upload or repository-triggered analysis becomes routine across multiple t
 
 ```mermaid
 flowchart TD
-    A[Open dashboard or trigger GitHub analysis] --> B{Project already selected or derivable?}
+    A[Open dashboard, history, or trigger GitHub analysis] --> B{Project already selected or derivable?}
     B -->|No| C[Create project with key, name, optional repo URL and description]
     B -->|Yes| D[Reuse existing project context]
     C --> E[Project becomes active workspace]
     D --> E
-    E --> F[Upload files or submit repository-triggered analysis]
-    F --> G[Report, topology, history, feedback, and outcomes are stored under that project]
+    E --> F[User can confirm, search, or switch the active project from shared workspace chrome]
+    F --> G[Upload files or review project-scoped reports in the selected workspace]
+    G --> H[Report, topology, history, feedback, and outcomes are stored and viewed under that project]
 ```
 
 This flow should feel closer to SonarQube's project key model than to an enterprise org/admin setup. The user should not have to think about RBAC, SSO, team hierarchy, or hosted SaaS boundaries to isolate reports cleanly.
@@ -1205,6 +1206,7 @@ DeployWhisper favors in-page review over navigation-heavy workflows.
 - route-level navigation for dashboard, history, settings, and admin areas
 - stable left-side shell navigation using stock Quasar patterns
 - the left navigation must remain visible on desktop and serve as the primary page-switching control
+- shared workspace chrome should keep the active project/workspace visible and allow project switching without forcing a detour through the dashboard upload flow
 - branding sits at the top of the navigation rail, followed by page links in a simple vertical list
 
 **Review navigation**
