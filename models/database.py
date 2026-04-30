@@ -39,6 +39,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "008_add_rollback_plan_payload",
     "009_add_report_share_settings",
     "010_add_project_workspaces",
+    "011_add_deployment_outcome_fields",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -129,6 +130,13 @@ def _analysis_report_columns(connection) -> set[str]:
     }
 
 
+def _deployment_outcome_columns(connection) -> set[str]:
+    return {
+        column["name"]
+        for column in inspect(connection).get_columns("deployment_outcomes")
+    }
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
@@ -153,6 +161,17 @@ def _bootstrap_brownfield_revision() -> None:
             if "analysis_reports" in tables
             else set()
         )
+        deployment_outcome_columns = (
+            _deployment_outcome_columns(connection)
+            if "deployment_outcomes" in tables
+            else set()
+        )
+        if {
+            "deployed_at",
+            "linked_incident_id",
+        }.issubset(deployment_outcome_columns):
+            _write_alembic_revision(connection, "011_add_deployment_outcome_fields")
+            return
         if (
             "projects" in tables
             and "topology_versions" in tables

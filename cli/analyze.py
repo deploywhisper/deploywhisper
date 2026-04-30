@@ -36,6 +36,7 @@ from services.analysis_service import (
     build_advisory_summary,
     build_share_summary,
 )
+from services.deployment_outcome_service import record_deployment_outcome
 from services.project_service import create_project, list_projects
 from services.project_service import resolve_project_reference
 from services.intake_service import (
@@ -379,6 +380,39 @@ def _run_project_list() -> int:
     return 0
 
 
+def _run_outcome_record(args: argparse.Namespace) -> int:
+    try:
+        recorded = record_deployment_outcome(
+            analysis_id=args.analysis_id,
+            outcome=args.outcome,
+            deployed_at=args.deployed_at,
+            linked_incident_id=args.linked_incident_id,
+            environment=args.environment,
+            summary=args.summary,
+            project_id=args.project_id,
+            project_key=args.project_key,
+            source_interface="cli",
+        )
+    except ValueError as exc:
+        _emit_json(
+            build_error(
+                code=getattr(exc, "code", "invalid_deployment_request"),
+                message=str(exc),
+            ),
+            stream=sys.stderr,
+        )
+        return 2
+
+    _emit_json(
+        {
+            "data": recorded,
+            "meta": build_meta(interface="cli", id=recorded["id"]),
+        },
+        stream=sys.stdout,
+    )
+    return 0
+
+
 def _run_topology_import(args: argparse.Namespace) -> int:
     try:
         project = resolve_project_reference(
@@ -554,6 +588,55 @@ def build_parser() -> argparse.ArgumentParser:
     )
     project_subparsers.add_parser("list", help="List known project/workspace records.")
 
+    outcome_parser = subparsers.add_parser(
+        "outcome", help="Record post-deployment outcomes for persisted analyses."
+    )
+    outcome_subparsers = outcome_parser.add_subparsers(dest="outcome_command")
+    outcome_subparsers.required = True
+    outcome_record_parser = outcome_subparsers.add_parser(
+        "record",
+        help="Capture a deployment outcome for a persisted analysis report.",
+    )
+    outcome_record_parser.add_argument(
+        "--analysis-id",
+        required=True,
+        type=int,
+        help="Persisted analysis report identifier.",
+    )
+    outcome_record_parser.add_argument(
+        "--outcome",
+        required=True,
+        help="Deployment result: success, failure, or rolled_back.",
+    )
+    outcome_record_parser.add_argument(
+        "--deployed-at",
+        help="Optional ISO 8601 deployment timestamp. Defaults to now.",
+    )
+    outcome_record_parser.add_argument(
+        "--linked-incident-id",
+        type=int,
+        help="Optional linked incident identifier.",
+    )
+    outcome_record_parser.add_argument(
+        "--environment",
+        help="Optional environment label such as prod or staging.",
+    )
+    outcome_record_parser.add_argument(
+        "--summary",
+        help="Optional operator summary for the deployment outcome.",
+    )
+    outcome_record_parser.add_argument(
+        "--project",
+        dest="project_key",
+        help="Optional project/workspace key for validation.",
+    )
+    outcome_record_parser.add_argument(
+        "--project-id",
+        dest="project_id",
+        type=int,
+        help="Optional numeric project/workspace id for validation.",
+    )
+
     topology_parser = subparsers.add_parser(
         "topology", help="Manage project-scoped topology context."
     )
@@ -673,6 +756,8 @@ def main() -> None:
         raise SystemExit(_run_project_create(args))
     if args.command == "project" and args.project_command == "list":
         raise SystemExit(_run_project_list())
+    if args.command == "outcome" and args.outcome_command == "record":
+        raise SystemExit(_run_outcome_record(args))
     if args.command == "topology" and args.topology_command == "import":
         raise SystemExit(_run_topology_import(args))
     if args.command == "github" and args.github_command == "init":

@@ -36,6 +36,9 @@ if "IncidentRecord" not in globals():
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
         )
+        deployment_outcomes: Mapped[list["DeploymentOutcome"]] = relationship(
+            back_populates="incident"
+        )
 
 
 if "Project" not in globals():
@@ -64,6 +67,10 @@ if "Project" not in globals():
             onupdate=lambda: datetime.now(UTC),
         )
         reports: Mapped[list["AnalysisReport"]] = relationship(back_populates="project")
+        deployment_outcomes: Mapped[list["DeploymentOutcome"]] = relationship(
+            back_populates="project",
+            cascade="all, delete-orphan",
+        )
         topology_versions: Mapped[list["TopologyVersion"]] = relationship(
             back_populates="project",
             cascade="all, delete-orphan",
@@ -127,6 +134,9 @@ if "AnalysisReport" not in globals():
             back_populates="report",
             cascade="all, delete-orphan",
             uselist=False,
+        )
+        deployment_outcomes: Mapped[list["DeploymentOutcome"]] = relationship(
+            back_populates="report"
         )
         project: Mapped["Project"] = relationship(back_populates="reports")
         created_at: Mapped[datetime] = mapped_column(
@@ -327,11 +337,25 @@ if "DeploymentOutcome" not in globals():
             ForeignKey("analysis_reports.id", ondelete="SET NULL"),
             nullable=True,
         )
+        linked_incident_id: Mapped[int | None] = mapped_column(
+            ForeignKey("incident_records.id", ondelete="SET NULL"),
+            nullable=True,
+        )
         environment: Mapped[str | None] = mapped_column(String(80), nullable=True)
         outcome_label: Mapped[str] = mapped_column(String(40), default="unknown")
         summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+        deployed_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
+        project: Mapped["Project"] = relationship(back_populates="deployment_outcomes")
+        report: Mapped["AnalysisReport | None"] = relationship(
+            back_populates="deployment_outcomes"
+        )
+        incident: Mapped["IncidentRecord | None"] = relationship(
+            back_populates="deployment_outcomes"
         )
 
 
