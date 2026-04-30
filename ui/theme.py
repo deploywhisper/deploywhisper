@@ -885,6 +885,31 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
   color: var(--dw-accent) !important;
 }
 
+.dw-topology-uploader {
+  width: 100%;
+}
+
+.dw-topology-uploader .q-uploader {
+  width: 100%;
+  border: 1px solid var(--dw-line-strong) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+.dw-topology-uploader .q-uploader__header {
+  padding: 12px 16px;
+}
+
+.dw-topology-uploader .q-uploader__list {
+  padding: 10px;
+}
+
+.dw-topology-uploader .q-uploader__file {
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--dw-surface) 92%, transparent);
+  border: 1px solid var(--dw-line);
+}
+
 .q-linear-progress {
   border-radius: 999px;
   overflow: hidden;

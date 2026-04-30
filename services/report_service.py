@@ -298,6 +298,7 @@ def _comparison_report_summary(report: dict[str, Any]) -> dict[str, Any]:
         "severity": str(report.get("severity") or "unknown"),
         "recommendation": str(report.get("recommendation") or "unknown"),
         "top_risk": str(report.get("top_risk") or ""),
+        "context_completeness": dict(report.get("context_completeness") or {}),
     }
 
 

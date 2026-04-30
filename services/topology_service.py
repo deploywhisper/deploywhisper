@@ -1271,6 +1271,41 @@ def save_topology_definition(
     project_key: str | None = None,
 ) -> TopologyStatus:
     """Persist topology input as the active blast-radius context and return validation feedback."""
+    validation_status = validate_topology_definition(
+        raw_text,
+        project_id=project_id,
+        project_key=project_key,
+    )
+    if validation_status.blocking_errors:
+        raise ValueError(" ".join(validation_status.blocking_errors))
+
+    payload = dict(validation_status.payload or {})
+    project = build_project_payload(
+        resolve_project_reference(project_id=project_id, project_key=project_key)
+    )
+    change_set = _build_custom_change_set(payload)
+
+    try:
+        return _persist_topology_payload(
+            _build_payload_from_change_set(
+                change_set=change_set,
+                source_type="manual",
+                source_ref="inline://manual-topology",
+            ),
+            project=project,
+            source_type="manual",
+        )
+    except TopologyImportError as exc:
+        raise ValueError(exc.message) from exc
+
+
+def validate_topology_definition(
+    raw_text: str,
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> TopologyStatus:
+    """Validate topology input without persisting it."""
     try:
         payload = json.loads(raw_text)
     except JSONDecodeError as exc:
@@ -1289,28 +1324,17 @@ def save_topology_definition(
         path=_topology_scope_path(project),
         exists=False,
     )
-    if validation_status.blocking_errors:
-        raise ValueError(" ".join(validation_status.blocking_errors))
 
     change_set = _build_custom_change_set(payload)
     if change_set.operation == "noop" and payload.get("services"):
         message = _join_warnings(change_set.warnings) or (
             "Topology import did not produce any valid services to apply."
         )
-        raise ValueError(message)
-
-    try:
-        return _persist_topology_payload(
-            _build_payload_from_change_set(
-                change_set=change_set,
-                source_type="manual",
-                source_ref="inline://manual-topology",
-            ),
-            project=project,
-            source_type="manual",
-        )
-    except TopologyImportError as exc:
-        raise ValueError(exc.message) from exc
+        validation_status.blocking_errors.append(message)
+    validation_status.warnings = _unique_messages(
+        list(validation_status.warnings) + list(change_set.warnings)
+    )
+    return validation_status
 
 
 def load_topology(

@@ -102,6 +102,91 @@ class RiskEngineTests(unittest.TestCase):
 
         self.assertTrue(all(score != baseline_score for score in rescored.values()))
 
+    def test_score_evidence_keeps_verdict_fields_coherent_for_apply_with_topology(
+        self,
+    ) -> None:
+        topology = {
+            "services": [
+                {
+                    "id": "edge",
+                    "label": "Edge",
+                    "resource_keys": [
+                        "resource/LoadBalancer",
+                        "resource/TargetGroup",
+                        "resource/Listener",
+                    ],
+                    "downstream": ["runtime"],
+                },
+                {
+                    "id": "network",
+                    "label": "Network",
+                    "resource_keys": [
+                        "resource/SecurityGroupRules",
+                        "resource/SecurityGroupRulesOutbound",
+                    ],
+                    "downstream": ["runtime"],
+                },
+                {
+                    "id": "runtime",
+                    "label": "Runtime",
+                    "resource_keys": [
+                        "resource/ASG",
+                        "resource/SQSAccessPolicy",
+                    ],
+                    "downstream": [],
+                },
+            ]
+        }
+
+        assessment = score_evidence(
+            [
+                self._item(
+                    evidence_id="ev-low",
+                    source_ref=(
+                        "cloudformation://loyalty.yaml#resource/LoadBalancer?action=apply"
+                    ),
+                    summary=(
+                        "CloudFormation resource LoadBalancer supplied as a standalone template; "
+                        "previous stack state is unknown, so the delta cannot be confirmed."
+                    ),
+                    severity_hint="low",
+                ),
+                self._item(
+                    evidence_id="ev-high-a",
+                    source_ref=(
+                        "cloudformation://loyalty.yaml#resource/SecurityGroupRules?action=apply"
+                    ),
+                    summary=(
+                        "CloudFormation resource SecurityGroupRules supplied as a standalone template; "
+                        "previous stack state is unknown, so the delta cannot be confirmed."
+                    ),
+                    severity_hint="high",
+                ),
+                self._item(
+                    evidence_id="ev-high-b",
+                    source_ref=(
+                        "cloudformation://loyalty.yaml#resource/SecurityGroupRulesOutbound?action=apply"
+                    ),
+                    summary=(
+                        "CloudFormation resource SecurityGroupRulesOutbound supplied as a standalone template; "
+                        "previous stack state is unknown, so the delta cannot be confirmed."
+                    ),
+                    severity_hint="high",
+                ),
+            ],
+            topology=topology,
+        )
+
+        self.assertEqual(assessment.severity, "high")
+        self.assertEqual(assessment.recommendation, "no-go")
+        self.assertTrue(assessment.top_risk.startswith("HIGH: resource/"))
+        self.assertGreaterEqual(assessment.score, 42)
+        self.assertEqual(assessment.contributors[0].severity, "high")
+        self.assertGreater(
+            assessment.contributors[0].contribution,
+            assessment.contributors[-1].contribution,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

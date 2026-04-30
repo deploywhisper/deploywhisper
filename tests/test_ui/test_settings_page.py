@@ -20,6 +20,7 @@ import services.project_service as project_service_module
 from fastapi.testclient import TestClient
 
 from ui.routes.settings import (
+    preview_topology_upload_content,
     process_custom_skill_upload_content,
     process_topology_upload_content,
 )
@@ -55,6 +56,15 @@ class SettingsPageTests(unittest.TestCase):
         self.assertIn("Dashboard Result Display Duration", response.text)
         self.assertIn("Topology context", response.text)
         self.assertIn("blast-radius analysis", response.text)
+        self.assertIn(
+            "DeployWhisper validates the structure when you select a file",
+            response.text,
+        )
+        self.assertIn("Save topology to active project", response.text)
+        self.assertIn(
+            "Choose a topology JSON, review the validation result, then click save to apply it to the active project shown above.",
+            response.text,
+        )
         self.assertIn("Drift check cadence", response.text)
         self.assertIn("Topology drift", response.text)
 
@@ -162,6 +172,28 @@ class SettingsPageTests(unittest.TestCase):
         self.assertIn("Service topology updated", result["success_message"])
         self.assertEqual(result["status"].service_count, 1)
 
+    def test_preview_topology_upload_content_reports_success_for_valid_upload(
+        self,
+    ) -> None:
+        result = preview_topology_upload_content(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+        )
+
+        self.assertIsNone(result["error_message"])
+        self.assertIn("Topology JSON is valid", result["success_message"])
+        self.assertEqual(result["status"].service_count, 1)
+
     def test_process_topology_upload_content_preserves_active_topology_when_upload_is_invalid(
         self,
     ) -> None:
@@ -203,6 +235,55 @@ class SettingsPageTests(unittest.TestCase):
         self.assertEqual(
             invalid_result["status"].updated_at, valid_result["status"].updated_at
         )
+
+    def test_preview_topology_upload_content_reports_validation_errors_without_saving(
+        self,
+    ) -> None:
+        result = preview_topology_upload_content(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": ["worker"],
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+        )
+
+        self.assertIn("Topology validation failed", result["error_message"])
+        self.assertEqual(result["status"].service_count, 1)
+
+    def test_preview_topology_upload_content_does_not_reuse_active_topology_on_parse_error(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "service_topology.json"
+            fake_settings = SimpleNamespace(topology_path=str(path))
+            with patch("services.topology_service.settings", fake_settings):
+                valid_result = process_topology_upload_content(
+                    json.dumps(
+                        {
+                            "services": [
+                                {
+                                    "id": "api",
+                                    "label": "API",
+                                    "resource_keys": ["Deployment/api"],
+                                    "downstream": [],
+                                }
+                            ]
+                        }
+                    ).encode("utf-8")
+                )
+                invalid_preview = preview_topology_upload_content(b"{not-json")
+
+        self.assertIsNone(valid_result["error_message"])
+        self.assertIn("Topology validation failed", invalid_preview["error_message"])
+        self.assertEqual(invalid_preview["status"].service_count, 0)
+        self.assertEqual(invalid_preview["status"].preview_services, [])
 
     def test_process_custom_skill_upload_content_reports_override_detection(
         self,

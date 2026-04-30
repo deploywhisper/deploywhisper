@@ -16,6 +16,7 @@ from ui.components.context_completeness_panel import (
 from ui.components.findings_table import render_findings_table
 from ui.components.review_accessibility import decorate_review_section
 from ui.components.rollback_plan import render_rollback_plan
+from ui.components.topology_freshness_banner import render_topology_freshness_banner
 from ui.formatters.datetime import format_history_timestamp
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
@@ -364,6 +365,7 @@ def render_report_detail_page(report: dict[str, Any]) -> None:
                     ui.label(
                         "Full advisory context for the saved deployment report, including evidence, context quality, blast radius, and rollback guidance."
                     ).classes("text-sm dw-muted leading-6")
+                    render_topology_freshness_banner(context)
                 with ui.column().classes("dw-report-score-block shrink-0 gap-1"):
                     ui.label(str(report.get("risk_score", "—"))).classes(
                         "dw-verdict-score-value"

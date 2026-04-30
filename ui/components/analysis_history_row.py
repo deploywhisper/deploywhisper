@@ -8,6 +8,34 @@ from ui.formatters.confidence import render_confidence_badge
 from ui.formatters.datetime import format_history_timestamp
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
+from ui.formatters.topology_freshness import (
+    TOPOLOGY_MANAGEMENT_LINK,
+    topology_freshness_age_text,
+    topology_freshness_badge_text,
+    topology_freshness_level,
+)
+
+
+def _freshness_badge_style(level: str) -> str:
+    palette = {
+        "unknown": ("rgba(69, 81, 99, 0.1)", "#455163", "rgba(69, 81, 99, 0.25)"),
+        "current": ("rgba(83, 194, 107, 0.12)", "#53c26b", "rgba(83, 194, 107, 0.35)"),
+        "stale": ("rgba(216, 164, 50, 0.12)", "#d8a432", "rgba(216, 164, 50, 0.35)"),
+        "critical": ("rgba(207, 63, 63, 0.12)", "#cf3f3f", "rgba(207, 63, 63, 0.35)"),
+    }
+    background, color, border = palette[level]
+    return (
+        f"background:{background};"
+        f"color:{color};"
+        f"border:1px solid {border};"
+        "border-radius:999px;"
+        "padding:2px 8px;"
+        "font-size:0.68rem;"
+        "line-height:1.1;"
+        "font-weight:700;"
+        "letter-spacing:0.04em;"
+        "text-transform:uppercase;"
+    )
 
 
 def render_analysis_history_row(
@@ -47,6 +75,21 @@ def render_analysis_history_row(
                 )
                 if summary:
                     ui.label(summary).classes("text-xs dw-muted leading-5")
+                context = report.get("context_completeness") or {}
+                with ui.row().classes("w-full items-center gap-2 flex-wrap"):
+                    ui.label("Topology freshness").classes(
+                        "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
+                    )
+                    ui.label(topology_freshness_age_text(context)).classes(
+                        "text-xs font-semibold dw-text"
+                    )
+                    ui.label(topology_freshness_badge_text(context)).style(
+                        _freshness_badge_style(topology_freshness_level(context))
+                    )
+                    manage_link = ui.link(
+                        "Manage topology", TOPOLOGY_MANAGEMENT_LINK
+                    ).classes("text-[11px] font-semibold dw-accent-text")
+                    manage_link.on("click.stop", lambda *_: None)
                 if previous_scan_diff:
                     delta = int(previous_scan_diff.get("score_delta", 0))
                     delta_prefix = "+" if delta > 0 else ""
