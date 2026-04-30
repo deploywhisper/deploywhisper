@@ -24,6 +24,7 @@ from cli.analyze import main
 from importlib import reload
 from integrations.github.init_service import GitHubInitOptions, GitHubInitResult
 from llm.narrator import NarrativeResult
+from parsers.base import ParseBatchResult, ParsedFileResult
 from services.skill_installer_service import InstalledSkillEntry, SkillInstallResult
 from services.skill_registry_service import SkillRegistryEntry
 from services.skill_test_harness_service import (
@@ -725,6 +726,101 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["project"]["project_key"], "payments"
         )
+
+    def test_outcome_record_command_records_deployment_result(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        persisted = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.tf",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Outcome capture test report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: outcome capture test report.",
+                explanation="Outcome capture test report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            audit_context={"source_interface": "cli"},
+        )
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "outcome",
+                    "record",
+                    "--analysis-id",
+                    str(persisted["id"]),
+                    "--outcome",
+                    "success",
+                    "--deployed-at",
+                    "2026-04-30T08:15:00Z",
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["meta"]["interface"], "cli")
+        self.assertEqual(payload["data"]["analysis_id"], persisted["id"])
+        self.assertEqual(payload["data"]["project"]["project_key"], "payments")
+        self.assertEqual(payload["data"]["outcome"], "success")
+
+    def test_outcome_record_command_reports_unknown_analysis_with_structured_error(
+        self,
+    ) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "outcome",
+                    "record",
+                    "--analysis-id",
+                    "999",
+                    "--outcome",
+                    "success",
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "analysis_not_found")
 
     def test_analyze_command_reports_unsupported_inputs_with_structured_error(
         self,

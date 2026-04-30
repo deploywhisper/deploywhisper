@@ -28,6 +28,9 @@ class Settings:
     share_management_token: str | None = os.getenv(
         "DEPLOYWHISPER_SHARE_TOKEN"
     ) or os.getenv("APP_SHARE_MANAGEMENT_TOKEN")
+    deployment_outcome_token: str | None = os.getenv(
+        "DEPLOYWHISPER_OUTCOME_TOKEN"
+    ) or os.getenv("APP_DEPLOYMENT_OUTCOME_TOKEN")
     github_app_enabled: bool = (
         os.getenv("DEPLOYWHISPER_GITHUB_APP_ENABLED", "false").lower() == "true"
     )

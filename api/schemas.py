@@ -88,6 +88,7 @@ ParseStatus = Literal["parsed", "failed", "skipped"]
 RiskSeverity = Literal["low", "medium", "high", "critical"]
 DeployRecommendation = Literal["go", "caution", "no-go"]
 RollbackComplexity = Literal["low", "medium", "high"]
+DeploymentOutcomeLabel = Literal["success", "failure", "rolled_back"]
 
 
 class IntakeItem(BaseModel):
@@ -274,6 +275,66 @@ class ProjectListResponse(BaseModel):
 
 class ProjectResponse(BaseModel):
     data: ProjectData
+    meta: ResourceOnlyMetaPayload
+
+
+class DeploymentOutcomeCreateRequest(BaseModel):
+    analysis_id: int = Field(..., description="Analysis identifier for the deployment.")
+    outcome: DeploymentOutcomeLabel = Field(
+        ..., description="Final deployment result for the analyzed change."
+    )
+    deployed_at: str = Field(..., description="Deployment completion timestamp.")
+    linked_incident_id: int | None = Field(
+        default=None,
+        description="Optional linked incident identifier when the deployment failed.",
+    )
+    environment: str | None = Field(
+        default=None,
+        description="Optional environment label such as prod or staging.",
+    )
+    summary: str | None = Field(
+        default=None,
+        description="Optional operator summary for the deployment outcome.",
+    )
+    project_id: int | None = Field(
+        default=None,
+        description="Optional numeric project/workspace identifier.",
+    )
+    project_key: str | None = Field(
+        default=None,
+        description="Optional stable project/workspace key.",
+    )
+
+
+class DeploymentOutcomeData(BaseModel):
+    id: int = Field(..., description="Stable deployment outcome identifier.")
+    project: ProjectData = Field(..., description="Owning project/workspace.")
+    analysis_id: int | None = Field(
+        default=None,
+        description="Analysis report identifier tied to this deployment.",
+    )
+    outcome: DeploymentOutcomeLabel = Field(
+        ..., description="Normalized deployment outcome label."
+    )
+    deployed_at: str = Field(..., description="Deployment completion timestamp.")
+    linked_incident_id: int | None = Field(
+        default=None,
+        description="Linked incident identifier when available.",
+    )
+    environment: str | None = Field(
+        default=None, description="Optional environment label."
+    )
+    summary: str | None = Field(default=None, description="Optional operator summary.")
+    created_at: str = Field(..., description="Outcome record creation timestamp.")
+
+
+class DeploymentOutcomeListResponse(BaseModel):
+    data: list[DeploymentOutcomeData]
+    meta: ListMetaPayload
+
+
+class DeploymentOutcomeResponse(BaseModel):
+    data: DeploymentOutcomeData
     meta: ResourceOnlyMetaPayload
 
 

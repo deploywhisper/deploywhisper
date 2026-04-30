@@ -62,7 +62,10 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
         self.assertIn("project_id", self._table_columns("analysis_reports"))
         self.assertIn("project_key", self._table_columns("projects"))
+        self.assertIn("title", self._table_columns("incident_records"))
         self.assertIn("payload_json", self._table_columns("topology_versions"))
+        self.assertIn("deployed_at", self._table_columns("deployment_outcomes"))
+        self.assertIn("linked_incident_id", self._table_columns("deployment_outcomes"))
         self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
         self.assertIn("blast_radius_json", self._table_columns("analysis_reports"))
         self.assertIn("rollback_plan_json", self._table_columns("analysis_reports"))
@@ -180,6 +183,70 @@ class MigrationTests(unittest.TestCase):
         self.assertTrue(any(row[2] == "analysis_reports" for row in finding_fks))
         self.assertTrue(any(row[2] == "findings" for row in evidence_fks))
 
+    def test_downgrade_to_010_drops_incident_records_when_011_created_it(self) -> None:
+        command.upgrade(self._config(), "head")
+
+        command.downgrade(self._config(), "010_add_project_workspaces")
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            tables = {
+                row[0]
+                for row in sqlite_conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            marker = sqlite_conn.execute(
+                "SELECT value FROM app_settings WHERE key = ? LIMIT 1",
+                ("migration:011:created_incident_records",),
+            ).fetchone()
+        finally:
+            sqlite_conn.close()
+
+        self.assertNotIn("incident_records", tables)
+        self.assertIsNone(marker)
+
+    def test_downgrade_to_010_preserves_preexisting_incident_records(self) -> None:
+        command.upgrade(self._config(), "010_add_project_workspaces")
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            """
+            CREATE TABLE incident_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title VARCHAR(255) NOT NULL,
+                severity VARCHAR(20) NOT NULL,
+                source_file VARCHAR(255) NOT NULL,
+                incident_date VARCHAR(40),
+                content TEXT NOT NULL,
+                created_at DATETIME NOT NULL
+            )
+            """
+        )
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        command.upgrade(self._config(), "head")
+        command.downgrade(self._config(), "010_add_project_workspaces")
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            tables = {
+                row[0]
+                for row in sqlite_conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            marker = sqlite_conn.execute(
+                "SELECT value FROM app_settings WHERE key = ? LIMIT 1",
+                ("migration:011:created_incident_records",),
+            ).fetchone()
+        finally:
+            sqlite_conn.close()
+
+        self.assertIn("incident_records", tables)
+        self.assertIsNone(marker)
+
     def test_init_db_upgrades_brownfield_database_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "0001_create_analysis_reports")
         sqlite_conn = sqlite3.connect(self.db_path)
@@ -224,7 +291,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "010_add_project_workspaces")
+        self.assertEqual(revision, "011_add_deployment_outcome_fields")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -273,7 +340,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "010_add_project_workspaces")
+        self.assertEqual(revision, "011_add_deployment_outcome_fields")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -299,7 +366,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "010_add_project_workspaces")
+        self.assertEqual(revision, "011_add_deployment_outcome_fields")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -325,7 +392,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "010_add_project_workspaces")
+        self.assertEqual(revision, "011_add_deployment_outcome_fields")
 
 
 if __name__ == "__main__":
