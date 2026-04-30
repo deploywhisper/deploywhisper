@@ -513,7 +513,10 @@ def build_history_detail_page(report_id: int, *, show_comparison: bool = False) 
                                 f"/history/{report_id}/compare#report-comparison"
                             ),
                         ).props("flat no-caps").classes("dw-theme-button")
-            render_report_detail_page(report)
+            render_report_detail_page(
+                report,
+                on_feedback_change=render_history_detail_content.refresh,
+            )
 
     content_refresh["fn"] = lambda *_: render_history_detail_content.refresh()
     render_history_detail_content()

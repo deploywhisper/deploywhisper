@@ -40,6 +40,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "009_add_report_share_settings",
     "010_add_project_workspaces",
     "011_add_deployment_outcome_fields",
+    "012_add_feedback_event_fields",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -137,6 +138,12 @@ def _deployment_outcome_columns(connection) -> set[str]:
     }
 
 
+def _feedback_event_columns(connection) -> set[str]:
+    return {
+        column["name"] for column in inspect(connection).get_columns("feedback_events")
+    }
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
@@ -166,6 +173,17 @@ def _bootstrap_brownfield_revision() -> None:
             if "deployment_outcomes" in tables
             else set()
         )
+        feedback_event_columns = (
+            _feedback_event_columns(connection)
+            if "feedback_events" in tables
+            else set()
+        )
+        if {
+            "finding_id",
+            "false_positive_reason",
+        }.issubset(feedback_event_columns):
+            _write_alembic_revision(connection, "012_add_feedback_event_fields")
+            return
         if {
             "deployed_at",
             "linked_incident_id",

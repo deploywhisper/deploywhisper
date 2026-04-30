@@ -278,6 +278,18 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Operational narrative", response.text)
         self.assertIn("What changed?", response.text)
+
+    def test_history_detail_route_shows_reviewer_feedback_controls(self) -> None:
+        self._persist_report()
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Reviewer feedback", response.text)
+        self.assertIn("Thumbs up", response.text)
+        self.assertIn("Thumbs down", response.text)
+        self.assertIn("False positive reason", response.text)
+        self.assertIn("Missed finding note", response.text)
         self.assertIn("Why is it risky?", response.text)
         self.assertIn("Exact resource/file", response.text)
         self.assertIn("Verify before deploying", response.text)

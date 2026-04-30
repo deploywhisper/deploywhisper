@@ -9,6 +9,12 @@ from nicegui import ui
 
 from analysis.blast_radius import BlastRadiusResult
 from analysis.rollback_planner import RollbackPlan
+from services.feedback_service import (
+    FeedbackError,
+    fetch_report_feedback_state,
+    record_false_negative_feedback,
+    record_finding_feedback,
+)
 from ui.components.blast_radius_graph import render_blast_radius_panel
 from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
@@ -336,7 +342,160 @@ def _render_audit_metadata(report: dict[str, Any]) -> None:
                     ).classes("text-sm dw-muted")
 
 
-def render_report_detail_page(report: dict[str, Any]) -> None:
+def render_reviewer_feedback_panel(
+    report: dict[str, Any],
+    *,
+    on_feedback_change=None,
+) -> None:
+    feedback_state = fetch_report_feedback_state(int(report["id"]))
+    latest_finding_feedback = feedback_state["finding_feedback"]
+    latest_false_negative = (
+        feedback_state["false_negative_notes"][0]
+        if feedback_state["false_negative_notes"]
+        else None
+    )
+
+    def submit_finding_feedback(
+        *,
+        finding_id: str,
+        useful: bool,
+        false_positive_flag: bool = False,
+        reason_input=None,
+    ) -> None:
+        try:
+            record_finding_feedback(
+                analysis_id=int(report["id"]),
+                finding_id=finding_id,
+                useful=useful,
+                false_positive_flag=false_positive_flag,
+                false_positive_reason=(
+                    reason_input.value if reason_input is not None else None
+                ),
+            )
+        except FeedbackError as exc:
+            ui.notify(str(exc), color="warning")
+            return
+        ui.notify("Reviewer feedback saved.", color="positive")
+        if on_feedback_change is not None:
+            on_feedback_change()
+
+    def submit_false_negative(note_input) -> None:
+        try:
+            record_false_negative_feedback(
+                analysis_id=int(report["id"]),
+                note=note_input.value,
+            )
+        except FeedbackError as exc:
+            ui.notify(str(exc), color="warning")
+            return
+        ui.notify("Missed-finding note saved.", color="positive")
+        if on_feedback_change is not None:
+            on_feedback_change()
+
+    with ui.card().classes("w-full dw-panel shadow-none p-5") as feedback_card:
+        decorate_review_section(
+            feedback_card,
+            section="feedback",
+            label="Reviewer feedback",
+        )
+        with ui.column().classes("gap-4"):
+            with ui.column().classes("gap-1"):
+                ui.label("Reviewer feedback").classes("text-lg font-medium dw-text")
+                ui.label(
+                    "Capture whether each finding was useful, flag false positives with a reason, and record anything the report missed."
+                ).classes("text-sm dw-muted leading-6")
+            for finding in report.get("findings", []):
+                finding_id = str(finding["finding_id"])
+                current_feedback = latest_finding_feedback.get(finding_id)
+                with ui.card().classes("w-full dw-panel-soft shadow-none"):
+                    with ui.column().classes("gap-3 p-4"):
+                        ui.label(finding["title"]).classes(
+                            "text-sm font-semibold dw-text"
+                        )
+                        if current_feedback is not None:
+                            status_bits = []
+                            if current_feedback.get("useful") is True:
+                                status_bits.append("Latest vote: useful")
+                            elif current_feedback.get("useful") is False:
+                                status_bits.append("Latest vote: not useful")
+                            if current_feedback.get("false_positive_flag"):
+                                status_bits.append("Marked false positive")
+                            ui.label(" · ".join(status_bits)).classes(
+                                "text-xs dw-muted"
+                            )
+                        with ui.row().classes("w-full gap-3 flex-wrap"):
+                            ui.button(
+                                "Thumbs up",
+                                on_click=lambda fid=finding_id: submit_finding_feedback(
+                                    finding_id=fid,
+                                    useful=True,
+                                ),
+                            ).props("outline no-caps").classes("dw-theme-button")
+                            ui.button(
+                                "Thumbs down",
+                                on_click=lambda fid=finding_id: submit_finding_feedback(
+                                    finding_id=fid,
+                                    useful=False,
+                                ),
+                            ).props("outline no-caps").classes("dw-theme-button")
+                        false_positive_reason = (
+                            ui.textarea(
+                                label="False positive reason",
+                                value=(
+                                    current_feedback.get("false_positive_reason")
+                                    if current_feedback is not None
+                                    else ""
+                                ),
+                            )
+                            .props("outlined autogrow")
+                            .classes("w-full")
+                        )
+                        ui.button(
+                            "Mark false positive",
+                            on_click=lambda fid=finding_id, reason_input=false_positive_reason: (
+                                submit_finding_feedback(
+                                    finding_id=fid,
+                                    useful=False,
+                                    false_positive_flag=True,
+                                    reason_input=reason_input,
+                                )
+                            ),
+                        ).props("outline no-caps").classes("dw-danger-button")
+            with ui.card().classes("w-full dw-panel-soft shadow-none"):
+                with ui.column().classes("gap-3 p-4"):
+                    ui.label("Missed finding note").classes(
+                        "text-sm font-semibold dw-text"
+                    )
+                    if latest_false_negative is not None:
+                        ui.label(
+                            "Latest note: "
+                            + str(latest_false_negative["false_negative_note"])
+                        ).classes("text-xs dw-muted")
+                    missed_note = (
+                        ui.textarea(
+                            label="Missed finding note",
+                            value=(
+                                latest_false_negative.get("false_negative_note")
+                                if latest_false_negative is not None
+                                else ""
+                            ),
+                        )
+                        .props("outlined autogrow")
+                        .classes("w-full")
+                    )
+                    ui.button(
+                        "Save missed finding note",
+                        on_click=lambda note_input=missed_note: submit_false_negative(
+                            note_input
+                        ),
+                    ).props("outline no-caps").classes("dw-theme-button")
+
+
+def render_report_detail_page(
+    report: dict[str, Any],
+    *,
+    on_feedback_change=None,
+) -> None:
     """Render one report as a dedicated, single-column detail page."""
     findings = report.get("findings", [])
     evidence_items = report.get("evidence_items", [])
@@ -402,6 +561,7 @@ def render_report_detail_page(report: dict[str, Any]) -> None:
         artifact_names=artifact_names,
         report_id=int(report["id"]),
     )
+    render_reviewer_feedback_panel(report, on_feedback_change=on_feedback_change)
     render_context_completeness_panel(context)
     if (
         blast_radius.get("affected")
