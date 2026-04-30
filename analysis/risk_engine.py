@@ -13,6 +13,8 @@ from analysis.risk_scorer import (
     _build_top_risk,
     _overall_recommendation,
     _overall_score,
+    SEVERITY_ORDER,
+    SEVERITY_SCORE,
     _severity_max,
 )
 from evidence.models import EvidenceItem
@@ -44,17 +46,22 @@ def _evidence_to_change(item: EvidenceItem) -> UnifiedChange:
 def _evidence_weighted_contribution(
     contributor: RiskContributor,
     item: EvidenceItem,
+    *,
+    baseline_contribution: int,
 ) -> int:
     confidence_weight = 0.3 + (item.confidence * 0.4)
+    severity_alignment_weight = 0.25 + (item.confidence * 0.15)
     trace_bonus = min(len(item.related_change_ids), 3)
     deterministic_bonus = 2 if item.deterministic else 0
+    weighted_baseline = round(baseline_contribution * confidence_weight)
+    severity_floor = round(
+        SEVERITY_SCORE[contributor.severity] * severity_alignment_weight
+    )
     return min(
         100,
         max(
             0,
-            round(contributor.contribution * confidence_weight)
-            + trace_bonus
-            + deterministic_bonus,
+            max(weighted_baseline, severity_floor) + trace_bonus + deterministic_bonus,
         ),
     )
 
@@ -63,10 +70,15 @@ def _apply_evidence_fields(
     contributor: RiskContributor,
     item: EvidenceItem,
 ) -> RiskContributor:
+    baseline_contribution = contributor.contribution
     contributor.evidence_id = item.evidence_id
     contributor.summary = item.summary
     contributor.severity = _severity_max(contributor.severity, item.severity_hint)
-    contributor.contribution = _evidence_weighted_contribution(contributor, item)
+    contributor.contribution = _evidence_weighted_contribution(
+        contributor,
+        item,
+        baseline_contribution=baseline_contribution,
+    )
     return contributor
 
 
@@ -81,6 +93,14 @@ def _top_risk_contributors(contributors: list[RiskContributor]) -> list[str]:
         if len(evidence_ids) == 3:
             break
     return evidence_ids
+
+
+def _contributor_sort_key(contributor: RiskContributor) -> tuple[int, int, str]:
+    return (
+        SEVERITY_ORDER[contributor.severity],
+        contributor.contribution,
+        contributor.evidence_id or "",
+    )
 
 
 def score_evidence(
@@ -108,13 +128,7 @@ def score_evidence(
         _apply_evidence_fields(contributor, item)
         for contributor, item in zip(contributors, evidence_items, strict=False)
     ]
-    contributors.sort(
-        key=lambda contributor: (
-            contributor.contribution,
-            contributor.evidence_id or "",
-        ),
-        reverse=True,
-    )
+    contributors.sort(key=_contributor_sort_key, reverse=True)
     interaction_risks = detect_interaction_risks(changes)
     warnings: list[str] = []
     if partial_context:

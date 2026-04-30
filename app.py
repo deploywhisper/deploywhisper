@@ -42,6 +42,12 @@ from services.report_service import (
 )
 from services.skill_manifest_service import build_skill_manifest_v1_schema
 from services.topology_service import run_due_topology_drift_checks
+from ui.formatters.topology_freshness import (
+    topology_freshness_age_text,
+    topology_freshness_badge_text,
+    topology_freshness_level,
+    topology_freshness_supporting_text,
+)
 from ui.routes.dashboard import build_dashboard
 import ui.routes.skills as skills_ui_routes  # noqa: F401
 
@@ -328,6 +334,18 @@ def _shared_report_comparison_html(
     if not show_comparison:
         return compare_controls
 
+    previous_freshness_age = topology_freshness_age_text(
+        comparison["previous_report"].get("context_completeness")
+    )
+    previous_freshness_badge = topology_freshness_badge_text(
+        comparison["previous_report"].get("context_completeness")
+    )
+    current_freshness_age = topology_freshness_age_text(
+        comparison["current_report"].get("context_completeness")
+    )
+    current_freshness_badge = topology_freshness_badge_text(
+        comparison["current_report"].get("context_completeness")
+    )
     score_delta = int(comparison.get("risk_score_delta") or 0)
     score_prefix = "+" if score_delta > 0 else ""
     delta_class = (
@@ -354,6 +372,8 @@ def _shared_report_comparison_html(
         "<section class='comparison-column'>"
         "<h3>Previous report</h3>"
         f"<p class='diff-meta'>Report #{int(comparison['previous_report']['id'])} · {escape(str(comparison['previous_report']['severity']).upper())} · {escape(str(comparison['previous_report']['recommendation']).upper())}</p>"
+        "<p class='diff-meta'><strong>Topology freshness</strong></p>"
+        f"<p class='diff-meta'>{escape(previous_freshness_age)} <span class='diff-chip'>{escape(previous_freshness_badge)}</span></p>"
         "<h4>Findings removed</h4>"
         f"{_shared_report_diff_list(comparison['findings']['removed'], empty_message='No findings were removed.')}"
         "<h4>Evidence removed</h4>"
@@ -362,6 +382,8 @@ def _shared_report_comparison_html(
         "<section class='comparison-column'>"
         "<h3>Current report</h3>"
         f"<p class='diff-meta'>Report #{int(comparison['current_report']['id'])} · {escape(str(comparison['current_report']['severity']).upper())} · {escape(str(comparison['current_report']['recommendation']).upper())}</p>"
+        "<p class='diff-meta'><strong>Topology freshness</strong></p>"
+        f"<p class='diff-meta'>{escape(current_freshness_age)} <span class='diff-chip'>{escape(current_freshness_badge)}</span></p>"
         "<h4>Findings added</h4>"
         f"{_shared_report_diff_list(comparison['findings']['added'], empty_message='No findings were added.')}"
         "<h4>Evidence added</h4>"
@@ -406,6 +428,11 @@ def _shared_report_html(
         if share.get("redact_filenames")
         else ""
     )
+    freshness_context = report.get("context_completeness")
+    freshness_level = topology_freshness_level(freshness_context)
+    freshness_age = topology_freshness_age_text(freshness_context)
+    freshness_badge = topology_freshness_badge_text(freshness_context)
+    freshness_supporting = topology_freshness_supporting_text(freshness_context)
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>Shared DeployWhisper report #{int(report['id'])}</title>"
@@ -442,6 +469,13 @@ def _shared_report_html(
         ".diff-chip{display:inline-block;margin-right:8px;padding:4px 8px;border-radius:999px;background:#eff4fb;font-size:12px;font-weight:700;}"
         ".diff-meta{margin:4px 0 6px;font-size:13px;color:#7b8596;}"
         ".diff-transition{display:inline-block;margin-left:8px;font-weight:700;color:#18202b;}"
+        ".freshness{margin-top:20px;padding:18px;border-radius:18px;}"
+        ".freshness.current{background:rgba(83,194,107,0.1);border:1px solid rgba(83,194,107,0.28);}"
+        ".freshness.stale{background:rgba(216,164,50,0.12);border:1px solid rgba(216,164,50,0.32);}"
+        ".freshness.critical{background:rgba(207,63,63,0.12);border:1px solid rgba(207,63,63,0.32);}"
+        ".freshness.unknown{background:rgba(69,81,99,0.06);border:1px solid rgba(69,81,99,0.18);}"
+        ".freshness-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}"
+        ".freshness-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}"
         "code{display:inline-block;margin-top:6px;padding:4px 6px;border-radius:8px;background:#f1ede5;color:#455163;word-break:break-all;}"
         "a{color:#d96b3d;text-decoration:none;}"
         "</style></head><body><main>"
@@ -453,6 +487,19 @@ def _shared_report_html(
         f"<span class='badge'>{escape(str(report.get('recommendation', '')).upper())}</span>"
         f"<p class='score'>{int(report.get('risk_score') or 0)}</p>"
         f"<p>{escape(str(report.get('narrative_opening') or report.get('parse_summary') or ''))}</p>"
+        f"<div class='freshness {escape(freshness_level)}'>"
+        "<div class='freshness-row'>"
+        "<div>"
+        "<div class='eyebrow'>Topology freshness</div>"
+        "<div class='freshness-meta'>"
+        f"<strong>{escape(freshness_age)}</strong>"
+        f"<span class='badge'>{escape(freshness_badge)}</span>"
+        "</div>"
+        "</div>"
+        "<span class='eyebrow'>Shared report view</span>"
+        "</div>"
+        f"<p>{escape(freshness_supporting)} Workspace admins refresh topology from the internal settings page.</p>"
+        "</div>"
         f"{_shared_report_comparison_html(report, comparison, show_comparison=show_comparison)}"
         "</section>"
         "<section class='panel'><div class='grid'>"

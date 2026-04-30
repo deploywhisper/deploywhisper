@@ -21,6 +21,7 @@ from ui.components.review_accessibility import (
     decorate_modal_card,
     decorate_modal_close,
 )
+from ui.components.topology_freshness_banner import render_topology_freshness_banner
 from ui.theme import apply_theme, build_navigation_shell, build_page_header
 
 
@@ -389,6 +390,9 @@ def _render_history_report_comparison(
                         f"{str(comparison['previous_report']['severity']).upper()} · "
                         f"{str(comparison['previous_report']['recommendation']).upper()}"
                     ).classes("text-xs dw-muted")
+                    render_topology_freshness_banner(
+                        comparison["previous_report"].get("context_completeness") or {}
+                    )
                     _render_history_comparison_items(
                         "Findings removed",
                         comparison["findings"]["removed"],
@@ -407,6 +411,9 @@ def _render_history_report_comparison(
                         f"{str(comparison['current_report']['severity']).upper()} · "
                         f"{str(comparison['current_report']['recommendation']).upper()}"
                     ).classes("text-xs dw-muted")
+                    render_topology_freshness_banner(
+                        comparison["current_report"].get("context_completeness") or {}
+                    )
                     _render_history_comparison_items(
                         "Findings added",
                         comparison["findings"]["added"],

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from nicegui import ui
+from nicegui import events, ui
 
 from llm.skill_context import get_custom_skill_statuses, save_custom_skill
 from services.project_service import get_active_project
@@ -12,16 +12,21 @@ from services.settings_service import (
     activate_local_mode,
     get_dashboard_result_display_duration_seconds,
     get_topology_drift_check_interval_hours,
+    get_provider_settings,
     provider_defaults,
     provider_select_options,
-    get_provider_settings,
     save_dashboard_result_display_duration_seconds,
     save_provider_settings,
     save_topology_drift_check_interval_hours,
     TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS,
     validate_provider_settings,
 )
-from services.topology_service import get_topology_status, save_topology_definition
+from services.topology_service import (
+    TopologyStatus,
+    get_topology_status,
+    save_topology_definition,
+    validate_topology_definition,
+)
 from ui.theme import apply_theme, build_navigation_shell, build_page_header
 
 
@@ -46,6 +51,39 @@ def process_topology_upload_content(
         "success_message": (
             f"Service topology updated — {status.service_count} services, "
             f"{status.dependency_count} dependencies — last updated just now."
+        ),
+        "error_message": None,
+    }
+
+
+def preview_topology_upload_content(
+    raw_content: bytes,
+    *,
+    project_id: int | None = None,
+) -> dict[str, Any]:
+    """Decode topology upload content and validate it before persistence."""
+    try:
+        raw_text = raw_content.decode("utf-8")
+        status = validate_topology_definition(raw_text, project_id=project_id)
+    except (UnicodeDecodeError, ValueError) as exc:
+        return {
+            "status": TopologyStatus(path="selected://topology-upload", exists=False),
+            "success_message": None,
+            "error_message": f"Topology validation failed: {exc}",
+        }
+
+    if status.blocking_errors:
+        return {
+            "status": status,
+            "success_message": None,
+            "error_message": " ".join(status.blocking_errors),
+        }
+
+    return {
+        "status": status,
+        "success_message": (
+            f"Topology JSON is valid — {status.service_count} services, "
+            f"{status.dependency_count} dependencies — ready to save."
         ),
         "error_message": None,
     }
@@ -98,6 +136,7 @@ def build_settings_page() -> None:
         )
         custom_skill_statuses = get_custom_skill_statuses()
         provider_options = provider_select_options()
+        staged_topology: dict[str, Any] = {"name": None, "content": None}
 
         with ui.column().classes("dw-main-content dw-shell gap-5"):
             with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
@@ -243,169 +282,286 @@ def build_settings_page() -> None:
                 ).props("unelevated")
                 duration_feedback.text = f"Dashboard results currently remain visible for {duration_options[dashboard_duration_seconds]}."
 
-            with ui.card().classes("w-full dw-panel shadow-none"):
-                ui.label("Topology context").classes("text-lg font-medium dw-text")
-                ui.label(
-                    "Upload or replace the service-topology JSON used by blast-radius analysis. "
-                    "DeployWhisper validates the structure immediately and shows any uncertainty."
-                ).classes("text-sm dw-muted")
-                if active_project is not None:
+            with ui.element("section").props("id=topology-context").classes("w-full"):
+                with ui.card().classes("w-full dw-panel shadow-none"):
+                    ui.label("Topology context").classes("text-lg font-medium dw-text")
                     ui.label(
-                        f"Active project: {active_project.display_name} ({active_project.project_key})"
-                    ).classes(
-                        "text-xs font-semibold uppercase tracking-[0.08em] dw-muted"
+                        "Upload or replace the service-topology JSON used by blast-radius analysis. "
+                        "DeployWhisper validates the structure when you select a file, "
+                        "then saves it to the active project when you confirm."
+                    ).classes("text-sm dw-muted")
+                    if active_project is not None:
+                        ui.label(
+                            f"Active project: {active_project.display_name} ({active_project.project_key})"
+                        ).classes(
+                            "text-xs font-semibold uppercase tracking-[0.08em] dw-muted"
+                        )
+                    topology_feedback = ui.column().classes("w-full gap-2")
+                    topology_validation_feedback = ui.column().classes("w-full gap-2")
+                    topology_upload_feedback = ui.label("").classes(
+                        "text-xs font-medium dw-accent-text"
                     )
-                topology_feedback = ui.column().classes("w-full gap-2")
-                drift_interval_options = {
-                    hours: (
-                        "Every 6 hours"
-                        if hours == 6
-                        else "Every 12 hours"
-                        if hours == 12
-                        else "Daily"
-                        if hours == 24
-                        else "Weekly"
-                    )
-                    for hours in TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS
-                }
+                    drift_interval_options = {
+                        hours: (
+                            "Every 6 hours"
+                            if hours == 6
+                            else "Every 12 hours"
+                            if hours == 12
+                            else "Daily"
+                            if hours == 24
+                            else "Weekly"
+                        )
+                        for hours in TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS
+                    }
 
-                def render_topology_feedback(
-                    status,
-                    *,
-                    success_message: str | None = None,
-                    error_message: str | None = None,
-                ) -> None:
-                    topology_feedback.clear()
-                    with topology_feedback:
-                        if error_message:
-                            ui.label(error_message).classes("text-sm dw-danger-text")
-
-                        if success_message:
-                            ui.label(success_message).classes("text-sm dw-success-text")
-
-                        if status.exists:
-                            ui.label(
-                                f"{status.service_count} services · {status.dependency_count} dependencies · "
-                                f"{status.resource_key_count} resource mappings"
-                            ).classes("text-sm dw-text")
-                            updated_at = status.updated_at or "timestamp unavailable"
-                            ui.label(f"Active file: {status.path}").classes(
-                                "text-xs dw-muted"
+                    def render_topology_validation_feedback(
+                        status,
+                        *,
+                        file_name: str | None = None,
+                        success_message: str | None = None,
+                        error_message: str | None = None,
+                    ) -> None:
+                        topology_validation_feedback.clear()
+                        if status is None:
+                            return
+                        with topology_validation_feedback:
+                            ui.label("Selected topology file").classes(
+                                "text-xs font-semibold uppercase tracking-[0.08em] dw-muted"
                             )
-                            ui.label(f"Last updated: {updated_at}").classes(
-                                "text-xs dw-muted"
-                            )
+                            if file_name:
+                                ui.label(file_name).classes("text-sm dw-text")
+                            if error_message:
+                                ui.label(error_message).classes(
+                                    "text-sm dw-danger-text"
+                                )
+                            if success_message:
+                                ui.label(success_message).classes(
+                                    "text-sm dw-success-text"
+                                )
+                            if status.service_count or status.dependency_count:
+                                ui.label(
+                                    f"{status.service_count} services · "
+                                    f"{status.dependency_count} dependencies · "
+                                    f"{status.resource_key_count} resource mappings"
+                                ).classes("text-xs dw-text")
                             if status.preview_services:
                                 ui.label(
                                     "Preview: " + ", ".join(status.preview_services)
                                 ).classes("text-xs dw-muted")
-                        else:
-                            ui.label(f"Active file: {status.path}").classes(
-                                "text-xs dw-muted"
-                            )
-                            ui.label("No topology is active yet.").classes(
-                                "text-sm dw-muted"
-                            )
-
-                        for blocking_error in status.blocking_errors:
-                            ui.label(blocking_error).classes("text-xs dw-danger-text")
-                        for warning in status.warnings:
-                            ui.label(warning).classes("text-xs dw-warning-text")
-                        ui.separator()
-                        ui.label("Topology drift").classes(
-                            "text-sm font-semibold dw-text"
-                        )
-                        if status.drift is None:
-                            ui.label("No drift check has run yet.").classes(
-                                "text-xs dw-muted"
-                            )
-                        else:
-                            drift = status.drift
-                            ui.label(
-                                f"Status: {drift.status.replace('_', ' ')}"
-                            ).classes("text-xs dw-text")
-                            ui.label(
-                                f"Drift check cadence: {drift.interval_hours} hour(s)"
-                            ).classes("text-xs dw-muted")
-                            if drift.checked_at:
-                                ui.label(f"Last checked: {drift.checked_at}").classes(
-                                    "text-xs dw-muted"
-                                )
-                            if drift.next_check_at:
-                                ui.label(f"Next check: {drift.next_check_at}").classes(
-                                    "text-xs dw-muted"
-                                )
-                            if (
-                                drift.added_resources
-                                or drift.removed_resources
-                                or drift.modified_resources
-                            ):
-                                ui.label(
-                                    "Changed resources: "
-                                    f"+{len(drift.added_resources)} / "
-                                    f"-{len(drift.removed_resources)} / "
-                                    f"~{len(drift.modified_resources)}"
-                                ).classes("text-xs dw-text")
-                                if drift.added_resources:
-                                    ui.label(
-                                        "Added: " + ", ".join(drift.added_resources)
-                                    ).classes("text-xs dw-muted")
-                                if drift.removed_resources:
-                                    ui.label(
-                                        "Removed: " + ", ".join(drift.removed_resources)
-                                    ).classes("text-xs dw-muted")
-                                if drift.modified_resources:
-                                    ui.label(
-                                        "Modified: "
-                                        + ", ".join(drift.modified_resources)
-                                    ).classes("text-xs dw-muted")
-                            for warning in drift.warnings:
+                            for warning in status.warnings:
                                 ui.label(warning).classes("text-xs dw-warning-text")
+                            for blocking_error in status.blocking_errors:
+                                if error_message and blocking_error in error_message:
+                                    continue
+                                ui.label(blocking_error).classes(
+                                    "text-xs dw-danger-text"
+                                )
 
-                def save_drift_interval(event) -> None:
-                    try:
-                        saved_interval = save_topology_drift_check_interval_hours(
-                            int(event.value)
+                    def render_topology_feedback(
+                        status,
+                        *,
+                        success_message: str | None = None,
+                        error_message: str | None = None,
+                    ) -> None:
+                        topology_feedback.clear()
+                        with topology_feedback:
+                            if error_message:
+                                ui.label(error_message).classes(
+                                    "text-sm dw-danger-text"
+                                )
+
+                            if success_message:
+                                ui.label(success_message).classes(
+                                    "text-sm dw-success-text"
+                                )
+
+                            if status.exists:
+                                ui.label(
+                                    f"{status.service_count} services · {status.dependency_count} dependencies · "
+                                    f"{status.resource_key_count} resource mappings"
+                                ).classes("text-sm dw-text")
+                                updated_at = (
+                                    status.updated_at or "timestamp unavailable"
+                                )
+                                ui.label(f"Active file: {status.path}").classes(
+                                    "text-xs dw-muted"
+                                )
+                                ui.label(f"Last updated: {updated_at}").classes(
+                                    "text-xs dw-muted"
+                                )
+                                if status.preview_services:
+                                    ui.label(
+                                        "Preview: " + ", ".join(status.preview_services)
+                                    ).classes("text-xs dw-muted")
+                            else:
+                                ui.label(f"Active file: {status.path}").classes(
+                                    "text-xs dw-muted"
+                                )
+                                ui.label("No topology is active yet.").classes(
+                                    "text-sm dw-muted"
+                                )
+
+                            for blocking_error in status.blocking_errors:
+                                ui.label(blocking_error).classes(
+                                    "text-xs dw-danger-text"
+                                )
+                            for warning in status.warnings:
+                                ui.label(warning).classes("text-xs dw-warning-text")
+                            ui.separator()
+                            ui.label("Topology drift").classes(
+                                "text-sm font-semibold dw-text"
+                            )
+                            if status.drift is None:
+                                ui.label("No drift check has run yet.").classes(
+                                    "text-xs dw-muted"
+                                )
+                            else:
+                                drift = status.drift
+                                ui.label(
+                                    f"Status: {drift.status.replace('_', ' ')}"
+                                ).classes("text-xs dw-text")
+                                ui.label(
+                                    f"Drift check cadence: {drift.interval_hours} hour(s)"
+                                ).classes("text-xs dw-muted")
+                                if drift.checked_at:
+                                    ui.label(
+                                        f"Last checked: {drift.checked_at}"
+                                    ).classes("text-xs dw-muted")
+                                if drift.next_check_at:
+                                    ui.label(
+                                        f"Next check: {drift.next_check_at}"
+                                    ).classes("text-xs dw-muted")
+                                if (
+                                    drift.added_resources
+                                    or drift.removed_resources
+                                    or drift.modified_resources
+                                ):
+                                    ui.label(
+                                        "Changed resources: "
+                                        f"+{len(drift.added_resources)} / "
+                                        f"-{len(drift.removed_resources)} / "
+                                        f"~{len(drift.modified_resources)}"
+                                    ).classes("text-xs dw-text")
+                                    if drift.added_resources:
+                                        ui.label(
+                                            "Added: " + ", ".join(drift.added_resources)
+                                        ).classes("text-xs dw-muted")
+                                    if drift.removed_resources:
+                                        ui.label(
+                                            "Removed: "
+                                            + ", ".join(drift.removed_resources)
+                                        ).classes("text-xs dw-muted")
+                                    if drift.modified_resources:
+                                        ui.label(
+                                            "Modified: "
+                                            + ", ".join(drift.modified_resources)
+                                        ).classes("text-xs dw-muted")
+                                for warning in drift.warnings:
+                                    ui.label(warning).classes("text-xs dw-warning-text")
+
+                    def save_drift_interval(event) -> None:
+                        try:
+                            saved_interval = save_topology_drift_check_interval_hours(
+                                int(event.value)
+                            )
+                        except ValueError as exc:
+                            ui.notify(str(exc), type="negative")
+                            return
+                        ui.notify(
+                            "Topology drift cadence updated to "
+                            f"{drift_interval_options.get(saved_interval, saved_interval)}.",
+                            type="positive",
                         )
-                    except ValueError as exc:
-                        ui.notify(str(exc), type="negative")
-                        return
-                    ui.notify(
-                        "Topology drift cadence updated to "
-                        f"{drift_interval_options.get(saved_interval, saved_interval)}.",
-                        type="positive",
-                    )
-                    render_settings_content.refresh()
+                        render_settings_content.refresh()
 
-                def handle_topology_upload(event) -> None:
-                    current_project = get_active_project()
-                    upload_result = process_topology_upload_content(
-                        event.content.read(),
-                        project_id=current_project.id
-                        if current_project is not None
-                        else None,
-                    )
-                    render_topology_feedback(
-                        upload_result["status"],
-                        success_message=upload_result["success_message"],
-                        error_message=upload_result["error_message"],
-                    )
+                    async def handle_topology_upload(
+                        event: events.UploadEventArguments,
+                    ) -> None:
+                        current_project = get_active_project()
+                        uploaded_content = await event.file.read()
+                        preview_result = preview_topology_upload_content(
+                            uploaded_content,
+                            project_id=current_project.id
+                            if current_project is not None
+                            else None,
+                        )
+                        if preview_result["error_message"] is None:
+                            staged_topology["name"] = event.file.name
+                            staged_topology["content"] = uploaded_content
+                            topology_upload_feedback.text = f"Selected topology JSON ready to save: {event.file.name}"
+                        else:
+                            staged_topology["name"] = None
+                            staged_topology["content"] = None
+                            topology_upload_feedback.text = ""
+                        render_topology_validation_feedback(
+                            preview_result["status"],
+                            file_name=event.file.name,
+                            success_message=preview_result["success_message"],
+                            error_message=preview_result["error_message"],
+                        )
 
-                ui.upload(
-                    on_upload=handle_topology_upload,
-                    auto_upload=True,
-                    multiple=False,
-                    max_file_size=5_000_000,
-                ).props("accept=.json").classes("w-full")
-                drift_interval_select = ui.select(
-                    options=drift_interval_options,
-                    value=drift_interval_hours,
-                    label="Drift check cadence",
-                ).classes("w-full")
-                drift_interval_select.on_value_change(
-                    lambda event: save_drift_interval(event)
-                )
-                render_topology_feedback(topology_status)
+                    with ui.column().classes(
+                        "w-full gap-3 rounded-[20px] border border-[color:var(--dw-line)] bg-[color:var(--dw-surface-soft)] p-4 mt-3"
+                    ):
+                        topology_upload = (
+                            ui.upload(
+                                on_upload=handle_topology_upload,
+                                auto_upload=True,
+                                multiple=False,
+                                max_file_size=5_000_000,
+                            )
+                            .props("accept=.json")
+                            .classes("w-full dw-topology-uploader")
+                        )
+                        ui.label(
+                            "Choose a topology JSON, review the validation result, then click save to apply it to the active project shown above."
+                        ).classes("text-xs dw-muted leading-5")
+
+                        def submit_topology_upload() -> None:
+                            current_project = get_active_project()
+                            if current_project is None:
+                                ui.notify(
+                                    "Select an active project before saving topology context.",
+                                    type="warning",
+                                )
+                                return
+                            content = staged_topology.get("content")
+                            if not isinstance(content, (bytes, bytearray)):
+                                ui.notify(
+                                    "Choose a topology JSON before saving it to the active project.",
+                                    type="warning",
+                                )
+                                return
+                            upload_result = process_topology_upload_content(
+                                bytes(content),
+                                project_id=current_project.id,
+                            )
+                            render_topology_feedback(
+                                upload_result["status"],
+                                success_message=upload_result["success_message"],
+                                error_message=upload_result["error_message"],
+                            )
+                            if upload_result["error_message"] is None:
+                                staged_topology["name"] = None
+                                staged_topology["content"] = None
+                                topology_upload_feedback.text = ""
+                                render_topology_validation_feedback(None)
+                                topology_upload.reset()
+
+                        ui.button(
+                            "Save topology to active project",
+                            on_click=submit_topology_upload,
+                            color="primary",
+                        ).props("unelevated no-caps").classes("self-start")
+                    drift_interval_select = ui.select(
+                        options=drift_interval_options,
+                        value=drift_interval_hours,
+                        label="Drift check cadence",
+                    ).classes("w-full")
+                    drift_interval_select.on_value_change(
+                        lambda event: save_drift_interval(event)
+                    )
+                    render_topology_feedback(topology_status)
 
             with ui.card().classes("w-full dw-panel shadow-none"):
                 ui.label("Custom AI Skills").classes("text-lg font-medium dw-text")

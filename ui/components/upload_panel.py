@@ -39,6 +39,7 @@ from ui.components.review_accessibility import (
     decorate_modal_card,
     decorate_modal_close,
 )
+from ui.components.topology_freshness_banner import render_topology_freshness_banner
 from services.settings_service import check_provider_readiness
 from ui.components.findings_table import render_findings_table
 from ui.formatters.narrative import extract_llm_notice
@@ -362,6 +363,8 @@ def build_upload_panel(
                 )
                 if llm_notice:
                     ui.label(llm_notice).classes("text-xs dw-warning-text leading-5")
+                context = report.get("context_completeness") or {}
+                render_topology_freshness_banner(context)
                 findings = report.get("findings", [])
                 evidence_items = report.get("evidence_items", [])
                 artifact_names = list(report.get("audit", {}).get("files_analyzed", []))
@@ -374,7 +377,6 @@ def build_upload_panel(
                             artifact_names=artifact_names,
                             report_id=int(report["id"]),
                         )
-                context = report.get("context_completeness") or {}
                 render_context_completeness_panel(context)
                 blast_radius = report.get("blast_radius") or {}
                 if (

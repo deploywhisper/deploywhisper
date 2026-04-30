@@ -9,6 +9,7 @@ from ui.formatters.context_completeness import render_context_completeness_badge
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
+from ui.components.topology_freshness_banner import render_topology_freshness_banner
 from ui.components.review_accessibility import (
     decorate_review_section,
     register_review_accessibility,
@@ -54,6 +55,7 @@ def render_verdict_card(report: dict) -> None:
                                 report["severity"], f"{report['severity'].upper()} RISK"
                             )
                         ui.label(report["top_risk"]).classes("dw-verdict-top-risk")
+                        render_topology_freshness_banner(context)
             with ui.column().classes("gap-2 min-w-[220px]"):
                 ui.label("Key signals").classes("text-xs font-semibold dw-muted")
                 with ui.row().classes("items-center gap-2 flex-wrap"):

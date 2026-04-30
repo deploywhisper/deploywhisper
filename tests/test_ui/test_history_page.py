@@ -75,6 +75,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         top_risk: str = "Security group exposure risk",
         opening_sentence: str = "Ingress widens access to production resources.",
         finding_description: str = "Security group exposure risk",
+        context_completeness: dict | None = None,
     ) -> None:
         parse_batch = ParseBatchResult(
             files=[
@@ -99,6 +100,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
             severity=severity,
             recommendation=recommendation,
             top_risk=top_risk,
+            context_completeness=context_completeness or {},
             contributors=[
                 RiskContributor(
                     source_file="plan.json",
@@ -173,6 +175,14 @@ class HistoryPageRenderingTests(unittest.TestCase):
             top_risk="Initial security group review",
             opening_sentence="Initial review of the security group change.",
             finding_description="Security group exposure risk",
+            context_completeness={
+                "topology_freshness_days": 12,
+                "topology_last_imported_at": "2026-04-18T11:22:33Z",
+                "incident_index_size": 7,
+                "parser_success_rate": 1.0,
+                "parser_success_by_tool": {"terraform": 1.0},
+                "context_score": 0.92,
+            },
         )
         self._persist_report(
             score=88,
@@ -181,6 +191,14 @@ class HistoryPageRenderingTests(unittest.TestCase):
             top_risk="Security group exposure risk",
             opening_sentence="Ingress widens access to production resources.",
             finding_description="Security group exposure risk",
+            context_completeness={
+                "topology_freshness_days": 95,
+                "topology_last_imported_at": "2026-01-18T11:22:33Z",
+                "incident_index_size": 7,
+                "parser_success_rate": 1.0,
+                "parser_success_by_tool": {"terraform": 1.0},
+                "context_score": 0.82,
+            },
         )
 
         overview_response = self.client.get("/reports/2")
@@ -194,6 +212,11 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Risk score delta", compare_response.text)
         self.assertIn("+46", compare_response.text)
         self.assertIn("MEDIUM → CRITICAL", compare_response.text)
+        self.assertIn("Topology freshness", compare_response.text)
+        self.assertIn("12 days old", compare_response.text)
+        self.assertIn("95 days old", compare_response.text)
+        self.assertIn("CURRENT", compare_response.text)
+        self.assertIn("CRITICAL 90+", compare_response.text)
 
     def test_history_detail_route_shows_compare_button_and_diff_view(self) -> None:
         self._persist_report(
@@ -203,6 +226,14 @@ class HistoryPageRenderingTests(unittest.TestCase):
             top_risk="Initial security group review",
             opening_sentence="Initial review of the security group change.",
             finding_description="Security group exposure risk",
+            context_completeness={
+                "topology_freshness_days": 12,
+                "topology_last_imported_at": "2026-04-18T11:22:33Z",
+                "incident_index_size": 7,
+                "parser_success_rate": 1.0,
+                "parser_success_by_tool": {"terraform": 1.0},
+                "context_score": 0.92,
+            },
         )
         self._persist_report(
             score=88,
@@ -211,6 +242,14 @@ class HistoryPageRenderingTests(unittest.TestCase):
             top_risk="Security group exposure risk",
             opening_sentence="Ingress widens access to production resources.",
             finding_description="Security group exposure risk",
+            context_completeness={
+                "topology_freshness_days": 95,
+                "topology_last_imported_at": "2026-01-18T11:22:33Z",
+                "incident_index_size": 7,
+                "parser_success_rate": 1.0,
+                "parser_success_by_tool": {"terraform": 1.0},
+                "context_score": 0.82,
+            },
         )
 
         overview_response = self.client.get("/history/2")
@@ -224,6 +263,12 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Risk score delta", compare_response.text)
         self.assertIn("+46", compare_response.text)
         self.assertIn("MEDIUM → CRITICAL", compare_response.text)
+        self.assertIn("Topology freshness", compare_response.text)
+        self.assertIn("12 days old", compare_response.text)
+        self.assertIn("95 days old", compare_response.text)
+        self.assertIn("CURRENT", compare_response.text)
+        self.assertIn("CRITICAL 90+", compare_response.text)
+        self.assertIn("/settings#topology-context", compare_response.text)
 
     def test_history_detail_route_shows_operational_narrative(self) -> None:
         self._persist_report()
@@ -295,7 +340,16 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertNotIn("Comparison with report #1", compare_response.text)
 
     def test_history_page_renders_toolbar_and_report_actions(self) -> None:
-        self._persist_report()
+        self._persist_report(
+            context_completeness={
+                "topology_freshness_days": 45,
+                "topology_last_imported_at": "2026-04-18T11:22:33Z",
+                "incident_index_size": 7,
+                "parser_success_rate": 1.0,
+                "parser_success_by_tool": {"terraform": 1.0},
+                "context_score": 0.82,
+            }
+        )
 
         response = self.client.get("/history")
 
@@ -304,6 +358,10 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Delete selected", response.text)
         self.assertIn("Security group exposure risk", response.text)
         self.assertIn("NO-GO", response.text)
+        self.assertIn("Topology freshness", response.text)
+        self.assertIn("45 days old", response.text)
+        self.assertIn("STALE 30+", response.text)
+        self.assertIn("/settings#topology-context", response.text)
         self.assertIn("HIGH CONFIDENCE", response.text)
         self.assertIn('"title":"Confidence 1.00"', response.text)
         self.assertIn("Risk: heuristic+llm", response.text)
@@ -351,6 +409,27 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Audit metadata", response.text)
         self.assertNotIn('"data-dw-modal-root":"1"', response.text)
 
+    def test_history_detail_route_shows_topology_freshness_badge(self) -> None:
+        self._persist_report(
+            context_completeness={
+                "topology_freshness_days": 45,
+                "topology_last_imported_at": "2026-04-18T11:22:33Z",
+                "incident_index_size": 7,
+                "parser_success_rate": 1.0,
+                "parser_success_by_tool": {"terraform": 1.0},
+                "context_score": 0.82,
+            }
+        )
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Topology freshness", response.text)
+        self.assertIn("45 days old", response.text)
+        self.assertIn("STALE 30+", response.text)
+        self.assertIn("Manage topology", response.text)
+        self.assertIn("/settings#topology-context", response.text)
+
     def test_public_report_route_renders_read_only_share_view(self) -> None:
         self._persist_report()
 
@@ -360,6 +439,32 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Shared DeployWhisper report", response.text)
         self.assertIn("Analysis report", response.text)
         self.assertNotIn("Delete selected", response.text)
+
+    def test_public_report_route_shows_topology_freshness_without_internal_settings_link(
+        self,
+    ) -> None:
+        self._persist_report(
+            context_completeness={
+                "topology_freshness_days": 45,
+                "topology_last_imported_at": "2026-04-18T11:22:33Z",
+                "incident_index_size": 7,
+                "parser_success_rate": 1.0,
+                "parser_success_by_tool": {"terraform": 1.0},
+                "context_score": 0.82,
+            }
+        )
+
+        response = self.client.get("/reports/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Topology freshness", response.text)
+        self.assertIn("45 days old", response.text)
+        self.assertIn("STALE 30+", response.text)
+        self.assertIn(
+            "Workspace admins refresh topology from the internal settings page.",
+            response.text,
+        )
+        self.assertNotIn("/settings#topology-context", response.text)
 
     def test_public_report_route_requires_password_and_redacts_filenames(self) -> None:
         self._persist_report()
