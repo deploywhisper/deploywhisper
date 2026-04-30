@@ -375,10 +375,12 @@ if "FeedbackEvent" not in globals():
             ForeignKey("analysis_reports.id", ondelete="SET NULL"),
             nullable=True,
         )
+        finding_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
         reviewer_role: Mapped[str | None] = mapped_column(String(80), nullable=True)
         useful: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
         correctness_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
         false_positive_flag: Mapped[bool] = mapped_column(Boolean, default=False)
+        false_positive_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
         false_negative_note: Mapped[str | None] = mapped_column(Text, nullable=True)
         outcome_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
         created_at: Mapped[datetime] = mapped_column(

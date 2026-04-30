@@ -7,6 +7,7 @@ from typing import Any
 from nicegui import events, ui
 
 from llm.skill_context import get_custom_skill_statuses, save_custom_skill
+from services.feedback_service import fetch_feedback_summary
 from services.project_service import get_active_project
 from services.settings_service import (
     activate_local_mode,
@@ -132,6 +133,9 @@ def build_settings_page() -> None:
         dashboard_duration_seconds = get_dashboard_result_display_duration_seconds()
         drift_interval_hours = get_topology_drift_check_interval_hours()
         topology_status = get_topology_status(
+            project_id=active_project.id if active_project is not None else None
+        )
+        feedback_summary = fetch_feedback_summary(
             project_id=active_project.id if active_project is not None else None
         )
         custom_skill_statuses = get_custom_skill_statuses()
@@ -562,6 +566,54 @@ def build_settings_page() -> None:
                         lambda event: save_drift_interval(event)
                     )
                     render_topology_feedback(topology_status)
+
+            with ui.card().classes("w-full dw-panel shadow-none"):
+                ui.label("Reviewer feedback summary").classes(
+                    "text-lg font-medium dw-text"
+                )
+                ui.label(
+                    "Admin-facing summary of the latest reviewer feedback state for the active project."
+                ).classes("text-sm dw-muted")
+                with ui.row().classes("w-full items-stretch gap-2 flex-wrap mt-3"):
+                    metrics = [
+                        ("Useful", feedback_summary["current_state"]["useful_count"]),
+                        (
+                            "Not useful",
+                            feedback_summary["current_state"]["not_useful_count"],
+                        ),
+                        (
+                            "False positives",
+                            feedback_summary["current_state"]["false_positive_count"],
+                        ),
+                        (
+                            "Missed findings",
+                            feedback_summary["current_state"]["missed_finding_count"],
+                        ),
+                    ]
+                    for label, value in metrics:
+                        with ui.card().classes(
+                            "dw-panel-soft shadow-none min-w-[120px] flex-1"
+                        ):
+                            with ui.column().classes("gap-1 p-3"):
+                                ui.label(str(value)).classes(
+                                    "text-2xl font-semibold dw-text"
+                                )
+                                ui.label(label).classes(
+                                    "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
+                                )
+                ui.label(
+                    f"Recorded feedback events: {feedback_summary['totals']['events_recorded']}"
+                ).classes("text-sm dw-muted mt-3")
+                with ui.column().classes("w-full gap-2 mt-2"):
+                    ui.label("Recent notes").classes("text-sm font-semibold dw-text")
+                    if not feedback_summary["recent_notes"]:
+                        ui.label(
+                            "No reviewer notes have been captured for the active project yet."
+                        ).classes("text-sm dw-muted")
+                    for item in feedback_summary["recent_notes"]:
+                        ui.label(
+                            f"{item['type'].replace('_', ' ').title()}: {item['text']}"
+                        ).classes("text-sm dw-muted leading-6")
 
             with ui.card().classes("w-full dw-panel shadow-none"):
                 ui.label("Custom AI Skills").classes("text-lg font-medium dw-text")

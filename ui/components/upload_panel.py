@@ -34,6 +34,7 @@ from ui.components.project_workspace_switcher import (
     open_create_project_dialog as show_create_project_dialog,
 )
 from ui.components.blast_radius_graph import render_blast_radius_panel
+from ui.components.report_detail_page import render_reviewer_feedback_panel
 from ui.components.rollback_plan import render_rollback_plan
 from ui.components.review_accessibility import (
     decorate_modal_card,
@@ -376,6 +377,14 @@ def build_upload_panel(
                             title="Findings table",
                             artifact_names=artifact_names,
                             report_id=int(report["id"]),
+                        )
+                        render_reviewer_feedback_panel(
+                            report,
+                            on_feedback_change=lambda current_report=report: (
+                                render_result_card(
+                                    current_report, timer_state["remaining"]
+                                )
+                            ),
                         )
                 render_context_completeness_panel(context)
                 blast_radius = report.get("blast_radius") or {}

@@ -99,7 +99,7 @@ development_status:
   5-3-topology-drift-detection: done
   5-4-topology-freshness-badge: review
   5-5-deployment-history-capture: review
-  5-6-reviewer-feedback-capture: ready-for-dev
+  5-6-reviewer-feedback-capture: review
   5-7-outcome-linking: ready-for-dev
   5-8-calibration-dashboard: ready-for-dev
   5-9-trend-analysis: ready-for-dev

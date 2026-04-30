@@ -25,6 +25,7 @@ class ContainerContractTests(unittest.TestCase):
                 "009_add_report_share_settings.py",
                 "010_add_project_workspaces.py",
                 "011_add_deployment_outcome_fields.py",
+                "012_add_feedback_event_fields.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -35,6 +36,7 @@ class ContainerContractTests(unittest.TestCase):
         share_content = migrations[5].read_text(encoding="utf-8")
         project_content = migrations[6].read_text(encoding="utf-8")
         deployment_outcomes_content = migrations[7].read_text(encoding="utf-8")
+        feedback_content = migrations[8].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -64,6 +66,12 @@ class ContainerContractTests(unittest.TestCase):
         )
         self.assertIn('"deployed_at"', deployment_outcomes_content)
         self.assertIn('"linked_incident_id"', deployment_outcomes_content)
+        self.assertIn(
+            'down_revision = "011_add_deployment_outcome_fields"',
+            feedback_content,
+        )
+        self.assertIn('"finding_id"', feedback_content)
+        self.assertIn('"false_positive_reason"', feedback_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())

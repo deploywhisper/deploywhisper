@@ -235,6 +235,10 @@ class DashboardShellTests(unittest.TestCase):
             "1 saved briefing is shaping the current advisory view.", response.text
         )
         self.assertIn("Findings table", response.text)
+        self.assertIn("Reviewer feedback", response.text)
+        self.assertIn("Thumbs up", response.text)
+        self.assertIn("Thumbs down", response.text)
+        self.assertIn("Missed finding note", response.text)
         self.assertIn("Severity", response.text)
         self.assertIn("Evidence", response.text)
         self.assertIn("View evidence", response.text)
