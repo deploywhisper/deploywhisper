@@ -1,1143 +1,1208 @@
 # DeployWhisper Architecture Document
 
-**Product:** DeployWhisper
-**Document type:** Architecture Decision and Target-State Design
-**Version:** 1.0
-**Date:** April 2026
-**Owner:** Pramod Kumar Sahoo
+**Product:** DeployWhisper  
+**Document type:** Architecture Decision and Target-State Design  
+**Version:** 2.0 Final PRD Alignment  
+**Date:** 2026-05-01  
+**Owner:** Pramod Kumar Sahoo  
+**Primary source:** `_bmad-output/planning-artifacts/prd.md` finalized 2026-05-01  
 
 ---
 
 ## 1. Purpose
 
-This architecture defines how DeployWhisper evolves into the **most trusted pre-deployment intelligence layer** for infrastructure changes while preserving the strongest parts of the current implementation:
+This architecture defines how DeployWhisper evolves into the self-hosted, fully open-source safety layer for human-written and AI-generated infrastructure changes before production.
 
-- Shared NiceGUI + FastAPI runtime
-- API / CLI / UI over one analysis core
-- Local-first raw IaC boundary
-- Advisory-only product posture
-- Self-hosted simplicity for early teams
+The design aligns with the finalized PRD and intentionally preserves the strongest parts of the current implementation:
 
-The architecture is intentionally designed in two layers:
+- Python-first application stack.
+- Shared NiceGUI + FastAPI runtime.
+- API, CLI, UI, and workflow integrations over one analysis core.
+- Local-first raw artifact boundary.
+- Advisory-first output.
+- SQLite-backed self-hosted baseline with a PostgreSQL path for shared/team installs.
+- Direct provider adapters behind a DeployWhisper-owned provider boundary.
+- Deterministic analysis before narrative generation.
 
-1. **Trusted v1 architecture** — for product-market fit and trust building
-2. **Scale-ready path** — for PR-native delivery, richer context, community ecosystem, and higher concurrency
-
-This version (3.0) extends v2.0 by adding **three new architectural pillars** required for market leadership:
-
-- **Skills Marketplace infrastructure** (ecosystem moat)
-- **Benchmark Corpus infrastructure** (proof engine)
-- **GitHub Adapter layer** (workflow-native adoption)
+This document is the bridge between the finalized PRD and implementable epics/stories. It replaces the older six-epic architecture direction with a target-state architecture that supports the PRD's fourteen-epic roadmap.
 
 ---
 
-## 2. Architecture Goals
+## 2. Non-Negotiable Product Constraints
 
-The architecture must support seven product goals:
+The following constraints shape every architectural decision.
 
-1. Evidence-backed risk intelligence
-2. Workflow-native delivery
-3. Local-first security
-4. Context-rich decision support
-5. Community ecosystem extensibility (new)
-6. Measurable accuracy through benchmarks (new)
-7. Clean migration path from early self-hosted deployment to broader organizational use
-
----
-
-## 3. Architectural Principles
-
-### 3.1 Evidence first
-Every major risk decision must be traceable to evidence objects, not only narrative text.
-
-### 3.2 One analysis core
-UI, API, CLI, and PR integrations must call the same orchestration pipeline.
-
-### 3.3 Advisory-first core
-The core system produces reports and recommendations. Enforcement, if ever added, should consume report output through adapters.
-
-### 3.4 Local-first boundary
-Raw artifacts stay local. External model usage is limited to structured summaries.
-
-### 3.5 Uncertainty as first-class output
-Missing context, weak matches, low confidence, and partial coverage are not edge cases — they are product outputs.
-
-### 3.6 Evolve without rewrite
-Keep current repo strengths and extend them instead of replacing the application.
-
-### 3.7 Community extension by design (new)
-Skills, parsers, and context connectors must be extensible by community contributors without core code changes.
-
-### 3.8 Measurable by construction (new)
-Every risk decision must be testable against a benchmark corpus. Accuracy must be a published, tracked metric.
+1. **Fully open-source:** No open-core split, paid enterprise-only feature set, proprietary required plugin, or closed benchmark dataset.
+2. **Self-hosted only:** No DeployWhisper-hosted SaaS product, hosted API, hosted dashboard, hosted model service, or vendor-managed control plane.
+3. **Local-first raw artifact boundary:** Raw IaC, scanner artifacts, incident exports, and sensitive context stay in the user's infrastructure by default.
+4. **Evidence Law:** No high or critical finding without deterministic evidence.
+5. **Advisory-first core:** The core produces evidence-backed recommendations; enforcement can only happen through explicitly configured adapters.
+6. **One shared analysis core:** UI, API, CLI, GitHub, CI/CD, MCP/agent, and future integrations must call the same orchestration pipeline.
+7. **Documentation as product:** User-facing, operator-facing, API-facing, integration-facing, and contributor-facing changes are incomplete without documentation.
+8. **Community and CNCF readiness:** Governance, maintainership, security, release, benchmark, and contribution paths are first-class product surfaces.
 
 ---
 
-## 4. Recommended Architecture Direction
+## 3. Architecture Goals
 
-DeployWhisper uses a layered architecture:
+DeployWhisper must support these product goals:
 
-- **Access layer** — Web UI, API, CLI, PR/CI integrations
-- **Orchestration layer** — Shared analysis pipeline
-- **Intelligence layer** — parsers, evidence engine, scoring, blast radius, rollback, similarity, narrative preparation
-- **Context layer** — topology, incidents, deployment history, criticality, ownership
-- **Ecosystem layer** (new) — Skills registry, benchmark corpus, contribution workflows
-- **Persistence layer** — reports, evidence, history, settings, context, feedback
-- **Platform layer** — config, secrets boundary, logging, health, jobs, observability
-
----
-
-## 5. System Context
-
-### Actors
-- Platform engineer
-- SRE / production approver
-- Platform admin
-- CI pipeline / PR workflow
-- Skills contributor (new)
-- Benchmark reviewer (new)
-- Local or remote LLM provider
-- Context sources (topology, incidents, deployment history, service ownership)
-
-### External Systems
-- GitHub (first-priority integration; Action + App)
-- GitLab / Jenkins / Atlantis / HCP Terraform (future adapters)
-- Ollama or external model providers
-- Direct provider SDKs for first-class narrative integrations
-- Optional incident or ticket sources
-- Optional Terraform state or service-catalog data sources
-- Skills registry (community contribution repository)
-- Benchmark corpus (public dataset)
+1. Produce a defensible deployment briefing from deterministic evidence, not generic AI prose.
+2. Make project, workspace, and environment scope explicit before reports, incidents, topology, feedback, and connectors harden.
+3. Provide day-zero value through public risk patterns before organization-specific incident history exists.
+4. Work alongside existing security tools by ingesting scanner output as external evidence without blindly inheriting scanner severity.
+5. Support human reviewers and AI coding agents through stable machine-readable report outputs.
+6. Preserve local-first operation while allowing user-owned optional integrations.
+7. Publish benchmark and honest failure evidence so trust claims are measurable.
+8. Enable community extension through Skills, parsers, connectors, risk patterns, benchmark scenarios, and documentation.
+9. Offer a migration path from local SQLite usage to shared self-hosted operation without introducing hosted-control-plane assumptions.
 
 ---
 
-## 6. High-Level Component View
+## 4. Architectural Principles
 
-```
-          +---------------------+
-          |  Web UI (NiceGUI)   |
-          +----------+----------+
-                     |
-          +----------v----------+
-          |  REST API (FastAPI) |
-          +----------+----------+
-                     |
-          +----------v----------+
-          |      CLI / CI       |
-          +----------+----------+
-                     |
-          +----------v----------+
-          |   GitHub Adapter    |  <-- NEW in v3
-          +----------+----------+
-                     |
-          +----------v-------------------------------+
-          |     Shared Analysis Orchestration        |
-          | intake -> parse -> evidence -> context   |
-          | -> score -> narrate -> persist -> deliver|
-          +----------+-------------------------------+
-                     |
-     +---------------+---------------+------------------+
-     |                               |                  |
-+----v-----+                  +------v------+    +------v------+
-| Parsers  |                  | Context     |    | Narrative   |
-| registry |                  | services    |    | service     |
-+----+-----+                  +------+------+    +------+------+
-     |                               |                  |
-+----v-----------------+      +------v------+    +------v------+
-| Evidence / Findings  |      | Topology    |    | LLM provider|
-| Risk / Rollback      |      | Incidents   |    | adapters    |
-| Similarity / Scoring |      | History     |    | (structured |
-+----+-----------------+      +------+------+    |  summary    |
-     |                               |           |  only)      |
-     +---------------+---------------+           +-------------+
-                     |
-     +---------------+--------------------------+
-     |                                          |
-+----v----------+                    +----------v----------+
-| Skills        |  <-- NEW in v3    | Benchmark Runner    |  <-- NEW in v3
-| Registry      |                    | + Corpus            |
-+----+----------+                    +----------+----------+
-     |                                          |
-     +---------------+--------------------------+
-                     |
-             +-------v--------+
-             | Persistence    |
-             | reports        |
-             | evidence       |
-             | settings       |
-             | history        |
-             | feedback       |
-             | context        |
-             | skills cache   |
-             | benchmark runs |
-             +----------------+
+### 4.1 Evidence first
+
+Every material risk claim must trace to one or more evidence items. Evidence items must identify artifact, location, resource, operation, project/workspace scope, and context source when available.
+
+### 4.2 Evidence Law enforcement in code
+
+High and critical findings require deterministic evidence. This is not copy, UX guidance, or a soft convention; it must be enforced in schema validation, tests, report generation, PR output, API output, CLI output, and benchmark checks.
+
+### 4.3 One analysis core
+
+All delivery surfaces call the same orchestration path:
+
+```text
+intake -> classify -> parse -> evidence -> context -> score -> explain -> persist -> deliver
 ```
 
----
+No UI, CLI, API, GitHub Action, GitHub App, MCP, or policy adapter may reimplement scoring, evidence rules, or severity logic.
 
-## 6.1 Narrative Provider Integration Model
+### 4.4 Advisory by default, adapter enforcement by exception
 
-DeployWhisper treats provider independence as a **repo-owned architectural boundary**, not as a permanent commitment to any single third-party multi-provider SDK.
+DeployWhisper's canonical report is advisory. Optional policy, CI, or approval adapters may translate report output into warnings, soft blocks, or hard blocks only when explicitly configured.
 
-The narrative path stays intentionally narrow:
+### 4.5 Local-first and least-disclosure
 
-- providers receive structured summaries only
-- provider calls happen after deterministic scoring
-- provider failure degrades to deterministic output
-- provider/model metadata remains audit-visible across UI, API, CLI, and persisted reports
+Raw artifacts and sensitive context stay local. External model calls, when enabled, receive structured summaries rather than raw uploaded artifacts.
 
-Provider support is tiered:
+### 4.6 Uncertainty is output
 
-- **Tier 1 direct adapters**: Ollama, OpenAI, Anthropic, Gemini
-- **Tier 2 compatibility adapters**: OpenRouter, Groq, xAI
-- **Tier 3 future adapters**: only add when a clear product or operational need exists
+Missing topology, stale context, partial parsing, external scanner conflicts, low match confidence, or degraded narrative are not hidden. They must become report fields, UI states, CLI messages, API fields, and benchmark signals.
 
-Future MCP and tool-integration work should be represented through provider capability metadata rather than hidden provider-specific branching:
+### 4.7 Baseline before expansion
 
-- `supports_structured_output`
-- `supports_remote_mcp`
-- `supports_local_mcp`
-- `supports_tool_approval`
-- `supports_local_only_mode`
+Existing working capabilities are preserved and extended. The architecture does not require a rewrite to reach the next phase.
 
-This keeps the local-first trust boundary stable while allowing provider-native features to evolve without leaking provider-specific logic across the rest of the codebase.
+### 4.8 Documentation and tests travel with architecture
+
+Every new boundary, schema, adapter, connector, integration, and report contract needs tests and docs in the same delivery stream.
 
 ---
 
-## 7. What We Keep From the Current Baseline
+## 5. Current Baseline
 
-The current repo already aligns with several correct decisions and those stay:
+The current repository already provides meaningful implementation foundation:
 
-- One shared analysis core across UI, API, and CLI
-- NiceGUI + FastAPI shared runtime
-- SQLite for early self-hosted simplicity
-- SQLAlchemy / Alembic / Pydantic
-- Local-first raw IaC handling
-- Advisory-only posture
-- History and audit persistence
+- `app.py` composes the NiceGUI UI, FastAPI routes, OpenAPI docs, and database startup.
+- `api/` exposes versioned `/api/v1` routes and schema contracts.
+- `cli/` exposes headless analysis and related commands.
+- `services/analysis_service.py` orchestrates the shared analysis flow.
+- `services/intake_service.py` handles upload classification, unsupported inputs, and sensitive-file behavior.
+- `parsers/` normalizes Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation inputs.
+- `analysis/` provides risk scoring, blast radius, interaction risk, rollback, and incident matching.
+- `evidence/` provides the emerging evidence-oriented boundary.
+- `llm/` provides provider resolution, direct SDK adapters, compatibility adapters, prompts, and narrative generation.
+- `models/` and `models/repositories/` provide SQLAlchemy tables and persistence access.
+- `ui/` provides NiceGUI pages and components for upload, report review, history, incidents, settings, projects, and Skills.
+- `integrations/github/` and `api/routes/github_app.py` provide the GitHub integration foundation.
+- `services/project_service.py`, `services/feedback_service.py`, `services/deployment_outcome_service.py`, and `services/backtesting_service.py` show that project, feedback, outcome, and backtesting concepts are already emerging in code.
+- `services/skill_*` and `tests/skill-tests/` provide marketplace and Skill validation foundation.
+- `docs/` already contains substantial product, integration, evidence, GitHub, project/workspace, and Skills documentation.
 
-The v3 rewrite is **not** a call for a rewrite-from-scratch. It adds the missing architectural capabilities that support market leadership:
-
-- First-class evidence model (v2 + v3)
-- PR-native integration layer (v2 + v3)
-- Feedback and calibration loop (v2 + v3)
-- Context connectors (v2 + v3)
-- Skills marketplace infrastructure (v3 new)
-- Benchmark corpus infrastructure (v3 new)
-- Scale path beyond SQLite-only usage (v2 + v3)
-
----
-
-## 8. Core Domain Model
-
-The architecture standardizes around these core domain objects. (Same as v2 — kept as-is because they are correctly specified.)
-
-### 8.1 ArtifactBundle
-Represents the user or automation submission.
-
-Fields:
-- `bundle_id`
-- `source_surface` (`web`, `api`, `cli`, `github`, etc.)
-- `trigger_context`
-- `environment`
-- `submitted_at`
-- `artifact_manifest`
-
-### 8.2 ArtifactRecord
-Represents each uploaded or referenced artifact.
-
-Fields:
-- `artifact_id`
-- `bundle_id`
-- `filename`
-- `detected_tool`
-- `classification_status`
-- `sensitivity_status`
-- `parse_status`
-- `content_hash`
-- `size_bytes`
-
-### 8.3 NormalizedChange
-Canonical internal representation of parsed change data.
-
-Fields:
-- `change_id`
-- `artifact_id`
-- `resource_type`
-- `resource_name`
-- `operation`
-- `before_summary`
-- `after_summary`
-- `environment_scope`
-- `service_scope`
-- `tags`
-
-### 8.4 EvidenceItem
-The most important missing domain object in the original planning set.
-
-Fields:
-- `evidence_id`
-- `analysis_id`
-- `source_type` (`artifact`, `topology`, `incident`, `history`, `heuristic`, `skill`)
-- `source_ref`
-- `summary`
-- `severity_hint`
-- `deterministic` (bool)
-- `confidence`
-- `related_change_ids`
-
-### 8.5 Finding
-A reviewer-facing risk observation.
-
-Fields:
-- `finding_id`
-- `analysis_id`
-- `title`
-- `description`
-- `severity`
-- `category`
-- `deterministic`
-- `confidence`
-- `uncertainty_note`
-- `evidence_refs`
-- `skill_id` (new — points to the skill that contributed this finding, if any)
-
-### 8.6 RiskAssessment
-Overall report verdict.
-
-Fields:
-- `analysis_id`
-- `overall_severity`
-- `recommendation`
-- `score`
-- `confidence`
-- `top_risk_contributors`
-- `context_completeness`
-
-### 8.7 ContextSnapshot
-Frozen contextual state used during one analysis.
-
-Fields:
-- `topology_version`
-- `incident_index_version`
-- `history_window`
-- `criticality_inputs`
-- `owner_mapping_version`
-- `skills_active` (new — list of skill IDs + versions active during analysis)
-
-### 8.8 Report
-Persisted analysis object that all surfaces render.
-
-Fields:
-- `analysis_id`
-- `summary`
-- `findings`
-- `risk_assessment`
-- `blast_radius`
-- `rollback_plan`
-- `incident_matches`
-- `share_summary`
-- `report_schema_version`
-
-### 8.9 FeedbackEvent
-Supports the learning loop.
-
-Fields:
-- `feedback_id`
-- `analysis_id`
-- `reviewer_role`
-- `useful`
-- `correctness_rating`
-- `false_positive_flag`
-- `false_negative_note`
-- `outcome_label`
-- `captured_at`
-
-### 8.10 Skill (new)
-Represents a community-contributed or first-party Skill in the registry.
-
-Fields:
-- `skill_id`
-- `name`
-- `version`
-- `author`
-- `license`
-- `tool_type` (terraform, kubernetes, ansible, jenkins, cloudformation, docker, git, custom)
-- `tags`
-- `description`
-- `manifest` (parsed frontmatter)
-- `content` (markdown body)
-- `test_suite_path`
-- `test_pass_rate`
-- `download_count`
-- `published_at`
-- `last_updated`
-
-### 8.11 BenchmarkScenario (new)
-Represents a labeled scenario in the benchmark corpus.
-
-Fields:
-- `scenario_id`
-- `title`
-- `tool_types` (list)
-- `artifacts` (list of file content + paths)
-- `expected_findings` (list with severity and title pattern)
-- `expected_verdict`
-- `rationale`
-- `annotator_credits`
-- `license`
-
-### 8.12 BenchmarkRun (new)
-Represents one execution of the benchmark corpus.
-
-Fields:
-- `run_id`
-- `deploywhisper_version`
-- `commit_hash`
-- `started_at`
-- `completed_at`
-- `corpus_version`
-- `results` (JSON array of per-scenario outcomes)
-- `metrics` (precision, recall, F1 by severity and by tool)
+The architecture should extend this baseline, not rebuild it.
 
 ---
 
-## 9. Service Architecture
+## 6. Target System Context
 
-### 9.1 Intake Service
-Responsibilities:
-- Validate request surface
-- Classify and register artifacts
-- Detect sensitive/unsupported files
-- Create artifact manifest
-- Enforce raw-content security boundary
+### 6.1 Actors
 
-### 9.2 Parser Registry
-Responsibilities:
-- Detect supported tool type
-- Dispatch to correct parser
-- Isolate parser failures
-- Return `NormalizedChange` objects and parser warnings
+- Platform engineer running pre-deploy review.
+- SRE or production approver making go/no-go decisions.
+- Security/AppSec reviewer interpreting scanner findings in deployment context.
+- Platform admin maintaining projects, workspaces, topology, incidents, connectors, provider settings, and Skills.
+- Junior engineer learning from evidence-backed explanations.
+- Engineering manager reviewing history, outcomes, trends, and benchmark evidence.
+- AI coding agent requesting machine-readable review.
+- Skill, parser, connector, benchmark, and documentation contributor.
+- Maintainer or CNCF reviewer evaluating project health.
 
-Supported parsers: Terraform, Kubernetes, Ansible, Jenkins, CloudFormation (and Docker, Git as auxiliary).
+### 6.2 External systems
 
-### 9.3 Evidence Engine
-Responsibilities:
-- Turn parsed changes + heuristics + context + active skills into `EvidenceItem`
-- Maintain traceability from findings to evidence
-- Separate deterministic evidence from inferred interpretation
-- Feed scoring and narrative preparation
+All external systems are user-owned or community-owned integrations, not DeployWhisper-operated services:
 
-### 9.4 Risk Engine
-Responsibilities:
-- Compute severity and score
-- Detect cross-tool interactions
-- Generate risk contributors
-- Compute recommendation
-- Emit confidence and uncertainty
-
-The risk engine remains mostly deterministic in v1/v1.5. LLMs are not the primary decision-maker.
-
-### 9.5 Context Service
-Responsibilities:
-- Serve topology, incidents, deployment history, criticality, ownership
-- Expose freshness / version information per context domain
-- Feed the evidence engine and blast-radius calculator
-
-### 9.6 Narrator Service
-Responsibilities:
-- Accept frozen risk assessment + findings + evidence references
-- Produce plain-English narrative
-- Never mutate severity, findings, or evidence
-
-### 9.7 Report Service
-Responsibilities:
-- Assemble final Report from pipeline outputs
-- Persist Report with schema version
-- Serve Report to all access surfaces
-- Generate share summaries (markdown + machine-readable JSON)
-
-### 9.8 Feedback Service
-Responsibilities:
-- Capture reviewer feedback per finding and per report
-- Link deployment outcomes back to reports
-- Feed calibration dashboards
-
-### 9.9 Integration Service
-Responsibilities:
-- Orchestrate GitHub Action, App, and Check Run interactions
-- Format PR comments
-- Handle rerun-on-commit logic
-- Generate shareable report URLs
-
-### 9.10 Skills Registry Service (new)
-Responsibilities:
-- Expose Skills registry API (list, detail, versions)
-- Run Skill validators on submissions
-- Serve the Skills browser UI
-- Manage skill install/update/remove lifecycle
-- Track skill analytics (downloads, test pass rates, ratings)
-
-### 9.11 Skill Validator (new)
-Responsibilities:
-- Parse and validate skill manifests
-- Run skill test harness (known-risky-scenarios per skill)
-- Produce pass/fail report for every skill version
-
-### 9.12 Benchmark Runner (new)
-Responsibilities:
-- Load benchmark corpus
-- Execute DeployWhisper analysis per scenario
-- Compare against expected findings and verdict
-- Optionally execute comparator tools (tflint, kube-score, K8sGPT, vanilla LLM)
-- Compute precision, recall, F1 per tool and per severity
-- Publish results to dashboard
+- GitHub, GitLab, Jenkins, Atlantis, HCP Terraform, Argo CD, Flux, and other workflow systems.
+- Local Ollama and user-configured external model providers.
+- Incident systems or exports such as Markdown, YAML, JSON, PagerDuty, Opsgenie, Jira, GitHub Issues, and Slack exports.
+- External scanner outputs such as SARIF and scanner-specific JSON.
+- Terraform/OpenTofu state, Kubernetes manifests/live-state, CODEOWNERS, service catalogs, and ownership maps.
+- Public Skills registry repository and private organization Skill sources.
+- Public benchmark corpus and benchmark report artifacts.
+- Open-source supply-chain systems such as OpenSSF Scorecard, CodeQL, SBOM, signing, and provenance workflows.
 
 ---
 
-## 10. Analysis Pipeline (canonical order)
+## 7. High-Level Component Architecture
 
-Every analysis — regardless of trigger surface — flows through this pipeline:
-
-```
-1. INTAKE      Validate submission, create manifest, classify artifacts
-2. PARSE       Dispatch parsers, produce NormalizedChange list
-3. LOAD SKILLS Resolve active Skills for detected tools
-4. EVIDENCE    Extract EvidenceItem list from changes + heuristics + skills
-5. CONTEXT     Load frozen ContextSnapshot (topology, incidents, history)
-6. BLAST       Compute blast radius with completeness indicator
-7. SIMILARITY  Match against incident memory
-8. ROLLBACK    Generate rollback plan and complexity
-9. SCORE       Produce RiskAssessment with contributors
-10. NARRATE    Generate narrative from frozen verdict (LLM, optional)
-11. ASSEMBLE   Build Report with share summary
-12. PERSIST    Save report with audit metadata before returning
-13. DELIVER    Return via UI / API / CLI / PR comment
+```text
+                         +-----------------------------+
+                         |  Human Review Surfaces      |
+                         |  UI / CLI / API / PR output |
+                         +--------------+--------------+
+                                        |
+                         +--------------v--------------+
+                         |  Delivery Adapter Layer     |
+                         | GitHub / CI / MCP / Policy  |
+                         +--------------+--------------+
+                                        |
+                         +--------------v--------------+
+                         | Shared Analysis Orchestrator|
+                         +--------------+--------------+
+                                        |
+       +--------------------------------+--------------------------------+
+       |                                |                                |
++------v------+                 +-------v-------+                +-------v-------+
+| Intake &    |                 | Evidence &    |                | Context &     |
+| Parser      |                 | Risk Core     |                | Memory        |
+| Registry    |                 |               |                |               |
++------+------+                 +-------+-------+                +-------+-------+
+       |                                |                                |
+       +--------------------------------+--------------------------------+
+                                        |
+                         +--------------v--------------+
+                         | Report Contract & Storage   |
+                         +--------------+--------------+
+                                        |
+       +--------------------------------+--------------------------------+
+       |                                |                                |
++------v------+                 +-------v-------+                +-------v-------+
+| Skills &    |                 | Benchmarks &  |                | Governance,   |
+| Extensions  |                 | Backtesting   |                | Docs, Supply  |
+|             |                 |               |                | Chain         |
++-------------+                 +---------------+                +---------------+
 ```
 
-Key invariants:
-- Steps 1-9 are deterministic and must not depend on LLM availability.
-- Step 10 can fail or be disabled; the report still renders without narrative.
-- Step 12 must complete before step 13 — reports are never shown unless persisted.
-- Skills (step 3) are resolved once and frozen for the analysis — no mid-pipeline skill changes.
+### 7.1 Access layer
+
+Responsible for accepting requests and presenting results:
+
+- NiceGUI web UI.
+- FastAPI `/api/v1` routes.
+- CLI command surface.
+- GitHub Action and GitHub App integration.
+- Future GitLab, Jenkins, Atlantis, Argo CD, Flux, chat, and MCP/agent surfaces.
+
+Architectural rule:
+
+- Access surfaces adapt input/output only. They do not score, infer severity, enforce Evidence Law, or generate independent report semantics.
+
+### 7.2 Delivery adapter layer
+
+Responsible for workflow-specific formatting and optional enforcement translation:
+
+- PR comment formatter.
+- GitHub Checks/status publisher.
+- Machine-friendly summaries.
+- Report links and report diffs.
+- Policy adapter output contract.
+- MCP or equivalent agent-callable interface.
+
+Architectural rule:
+
+- Adapters consume canonical report objects. They do not mutate canonical findings or escalate severities.
+
+### 7.3 Shared analysis orchestrator
+
+Responsible for the canonical pipeline:
+
+```text
+artifact bundle
+-> submission manifest
+-> parser outputs
+-> evidence items
+-> context snapshot
+-> findings
+-> risk assessment
+-> narrative summary
+-> persisted report
+-> delivery payloads
+```
+
+Architectural rule:
+
+- Narrative generation always runs after deterministic evidence and scoring.
+
+### 7.4 Intelligence layer
+
+Responsible for deterministic and derived intelligence:
+
+- Parser registry.
+- Evidence extraction.
+- Cross-tool interaction analysis.
+- Risk scoring.
+- Blast radius.
+- Rollback readiness and complexity.
+- Incident and public risk-pattern matching.
+- External scanner contextualization.
+- Confidence and uncertainty ledger.
+- Why-not-lower / why-not-higher explanation support.
+
+### 7.5 Context and memory layer
+
+Responsible for project-scoped context:
+
+- Project/workspace/environment model.
+- Topology sources and freshness.
+- Ownership and CODEOWNERS mapping.
+- Incident memory.
+- Public risk pattern memory.
+- Deployment outcomes.
+- Reviewer feedback.
+- Trend and calibration data.
+- Context TODO generation.
+
+### 7.6 Ecosystem layer
+
+Responsible for open contribution surfaces:
+
+- Skills registry.
+- Skill manifest and trust levels.
+- Skill test harness.
+- Skill installer and browser.
+- Parser/plugin contribution paths where supported.
+- Benchmark corpus and scenario contribution.
+- Public risk pattern contribution.
+- Documentation and RFC workflows.
+
+### 7.7 Persistence layer
+
+Responsible for durable self-hosted state:
+
+- Reports and report artifacts.
+- Evidence items.
+- Findings and report schema version.
+- Projects and workspaces.
+- Topology/context snapshots.
+- Incidents and public risk patterns.
+- Deployment outcomes and feedback.
+- Scanner imports.
+- Benchmark runs and results.
+- Settings and provider metadata.
+
+SQLite remains valid for local and small single-node installs. PostgreSQL is the target path for shared/team installs and higher concurrency.
 
 ---
 
-## 11. Security and Privacy Architecture
+## 8. Canonical Analysis Pipeline
 
-### 11.1 Security principles
-- Secrets never logged
-- Raw IaC stays local
-- Sensitive-file filtering is always on
-- Provider credentials remain external to persistence
-- Report objects store metadata and structured outputs, not secrets or raw private inputs
+The canonical pipeline is:
 
-### 11.2 Shared-deployment model
-Early shared deployments may rely on network boundary / reverse-proxy controls. However, the architecture should reserve clean insertion points for:
-- SSO
-- RBAC
-- Team scoping
-- Audit access controls
+```text
+1. Intake
+2. Classification
+3. Sensitive-file and unsupported-artifact handling
+4. Parsing and normalization
+5. Evidence extraction
+6. Context enrichment
+7. Public risk-pattern and incident matching
+8. External scanner contextualization
+9. Risk scoring and Evidence Law validation
+10. Confidence, uncertainty, and context TODO generation
+11. Narrative generation from structured summaries
+12. Report persistence
+13. Surface-specific delivery formatting
+```
 
-For v1 and Epic 5 scope, use lightweight project/workspace isolation inside the existing single-team deployment model rather than introducing authn/authz or multi-tenant boundaries.
+### 8.1 Intake
 
-### 11.3 Audit model
-Every analysis captures:
-- Project/workspace identity
-- Who or what triggered it
-- When it ran
-- Artifact manifest
-- Provider mode
-- Report schema version
-- Risk verdict
-- Context versions
-- Active skills (version hashes)
-- Feedback and later outcome where available
+The intake layer accepts one or more artifacts and produces a submission manifest containing:
 
-### 11.4 Skill security (new)
-Skills are markdown files with structured frontmatter. They contain no executable code. Skill content is treated as trusted input to the LLM context but never executed. Skills are signed or hashed at registry time so installed skills can be verified against registry version.
+- Accepted artifacts.
+- Excluded artifacts.
+- Unsupported artifacts.
+- Sensitive-file blocks.
+- Partial parse status.
+- Artifact provenance and redaction status.
+- Project/workspace key or derived default.
+
+### 8.2 Parsing and normalization
+
+Parsers normalize supported toolchains into a shared internal change model. Supported and planned toolchains include:
+
+- Terraform and OpenTofu.
+- Terraform plan JSON.
+- Kubernetes.
+- Helm.
+- Kustomize.
+- Ansible.
+- Jenkins.
+- CloudFormation.
+- CI/CD pipeline definitions.
+- Future community-supported toolchains.
+
+Parser failures should produce explicit partial-analysis output, not silent success or hard failure unless no useful analysis can be produced.
+
+### 8.3 Evidence extraction
+
+Evidence extraction turns normalized changes and context sources into first-class evidence items. Evidence items are the required substrate for findings.
+
+Evidence item fields should include:
+
+- Evidence ID.
+- Evidence type.
+- Source kind.
+- Artifact reference.
+- Location or path.
+- Resource identifier.
+- Operation/change type.
+- Determinism level.
+- Project/workspace/environment scope.
+- Context source reference.
+- Redaction status.
+- Confidence contribution.
+
+### 8.4 Context enrichment
+
+Context enrichment attaches deployment context to evidence and findings:
+
+- Project/workspace/environment.
+- Service ownership.
+- Topology and dependency graph.
+- Topology freshness.
+- Environment criticality.
+- Deployment history.
+- Incident memory.
+- Public risk patterns.
+- External scanner output.
+- Context completeness and TODOs.
+
+### 8.5 Risk scoring
+
+Risk scoring produces:
+
+- Overall advisory verdict.
+- Severity.
+- Findings.
+- Contributors.
+- Confidence ledger.
+- Why-not-lower and why-not-higher explanations.
+- Insufficient-context verdict where needed.
+- Evidence Law status.
+
+High and critical findings must fail validation if no deterministic evidence is present.
+
+### 8.6 Narrative generation
+
+Narrative generation consumes a structured report summary after scoring. It may:
+
+- Explain risk.
+- Summarize evidence.
+- Suggest verification steps.
+- Improve readability.
+- Help junior reviewers learn from the report.
+
+It must not:
+
+- Create new high or critical findings.
+- Override deterministic severity.
+- Hide missing context.
+- Require raw IaC to leave the local boundary.
+- Block deterministic report delivery if it fails.
+
+### 8.7 Persistence before success
+
+Report persistence must happen before returning final success through UI, API, CLI, or integration outputs.
+
+---
+
+## 9. Core Domain Model
+
+### 9.1 Instance
+
+The self-hosted DeployWhisper installation. Owns global configuration, provider settings, optional system-wide connectors, and maintainer/operator settings.
+
+### 9.2 Project
+
+A logical product, repository, platform area, or service group. Reports, topology, incidents, scanner imports, outcomes, feedback, and settings must be project-scoped unless intentionally global.
+
+### 9.3 Workspace or environment
+
+A project sub-scope such as production, staging, Terraform workspace, Kubernetes cluster, account, namespace, or environment.
+
+### 9.4 ArtifactBundle
+
+A single analysis submission containing one or more uploaded or integration-provided artifacts plus manifest metadata.
+
+### 9.5 ArtifactRecord
+
+Metadata for one artifact, including source, type, parse status, sensitive-file status, redaction status, and project/workspace scope.
+
+### 9.6 NormalizedChange
+
+Parser-level representation of infrastructure change before evidence extraction.
+
+### 9.7 EvidenceItem
+
+Inspectable proof used to support findings, context, confidence, and benchmark replay.
+
+### 9.8 Finding
+
+Evidence-backed claim about deployment risk. Findings include severity, category, deterministic/inferred/external classification, evidence references, explanation, remediation or verification guidance, confidence, and Evidence Law status.
+
+### 9.9 RiskAssessment
+
+The scored deployment-risk object containing verdict, severity, findings, contributors, confidence, uncertainty, context completeness, why-not-lower/higher explanations, and advisory recommendation.
+
+### 9.10 ContextSnapshot
+
+Point-in-time context attached to a report, including topology, ownership, freshness, connector status, project/workspace scope, incidents, scanner imports, and context TODOs.
+
+### 9.11 PublicRiskPattern
+
+Built-in or community-contributed known risk pattern that gives fresh installs day-zero memory.
+
+### 9.12 IncidentRecord
+
+Organization-specific incident memory record with root cause, trigger change, affected services, rollback path, prevention notes, match signals, and permission/scope metadata.
+
+### 9.13 ExternalScannerFinding
+
+Scanner-provided evidence imported from SARIF or scanner-specific output. It is labeled as external evidence and cannot automatically become a high/critical DeployWhisper finding without DeployWhisper evidence and scoring.
+
+### 9.14 DeploymentOutcome
+
+Post-deployment result linked to a report, project, workspace, and optional incident. Used for calibration, false-positive tracking, and false-reassurance tracking.
+
+### 9.15 FeedbackEvent
+
+Reviewer feedback on report, finding, confidence, correctness, false-positive, false-negative, or usefulness.
+
+### 9.16 Skill
+
+Markdown-based guidance package with manifest metadata, trust level, test scenarios, supported toolchain/context, and version.
+
+### 9.17 BenchmarkScenario
+
+Public or private replayable scenario with artifacts, expected findings, expected evidence, expected verdict rationale, and labels.
+
+### 9.18 BenchmarkRun
+
+Execution record comparing DeployWhisper output against benchmark scenarios and optional reproducible baselines.
+
+### 9.19 Report
+
+The canonical persisted output. Reports must include schema version, project/workspace scope, evidence, findings, assessment, context, narrative status, delivery payload summaries, and audit metadata.
+
+---
+
+## 10. Service Architecture
+
+### 10.1 Intake Service
+
+Owns artifact validation, sensitive-file handling, unsupported-artifact handling, submission manifest creation, aggregate size checks, and artifact provenance.
+
+### 10.2 Project Service
+
+Owns project/workspace creation, derived project keys, scope lookup, and project-aware defaults.
+
+### 10.3 Parser Registry
+
+Owns tool detection and parser dispatch. Parsers stay isolated by toolchain and return normalized changes plus parse status.
+
+### 10.4 Evidence Service
+
+Owns evidence-item extraction, evidence classification, evidence-to-finding linkage, deterministic/inferred/external labels, and Evidence Law validation support.
+
+### 10.5 Context Service
+
+Owns topology, ownership, freshness, connector state, context completeness, context TODOs, and context snapshot generation.
+
+### 10.6 Risk Engine
+
+Owns severity, verdict, contributors, cross-tool interaction risk, confidence ledger, why-not-lower/higher, insufficient-context verdicts, and Evidence Law gate enforcement.
+
+### 10.7 Public Risk Pattern Service
+
+Owns built-in risk pattern matching and community-contributed risk pattern loading.
+
+### 10.8 Incident Service
+
+Owns organization-specific incident ingestion, indexing, similarity matching, match explanation, and incident scope.
+
+### 10.9 External Scanner Service
+
+Owns SARIF and scanner-specific ingestion, normalization into external evidence, scanner conflict handling, and report/API/PR representation.
+
+### 10.10 Narrator Service
+
+Owns provider selection, structured summary generation, prompt construction, response parsing, degraded fallback, and provider audit metadata.
+
+### 10.11 Report Service
+
+Owns report persistence, retrieval, sharing, comparison, schema versioning, redaction, and audit metadata.
+
+### 10.12 Feedback and Outcome Services
+
+Own reviewer feedback, deployment outcomes, false-positive tracking, false-reassurance tracking, calibration inputs, and learning reports.
+
+### 10.13 Integration Service
+
+Owns GitHub, CI/CD, PR comments, check runs, rerun-on-commit behavior, report links, machine-friendly outputs, and future workflow adapters.
+
+### 10.14 Agent Interface Service
+
+Owns `--agent-json`, MCP or equivalent agent-callable interfaces, prompt-injection protections, advisory-only agent guardrails, and stable machine-readable output.
+
+### 10.15 Skills Services
+
+Own registry, manifest validation, trust levels, install/update/remove, analytics, test harness, browser metadata, and contribution workflow outputs.
+
+### 10.16 Benchmark and Backtesting Services
+
+Own corpus execution, benchmark results, comparative baselines, incident backtesting, regression tracking, latency metrics, and honest failure reporting.
+
+### 10.17 Governance and Documentation Support
+
+Not a runtime service, but an architecture-owned delivery area covering docs generation/checking, RFCs, release process, maintainer ownership, CODEOWNERS, OpenSSF Scorecard, SBOM, signing, provenance, and CNCF readiness artifacts.
+
+---
+
+## 11. Interface Architecture
+
+### 11.1 Web UI
+
+The web UI remains NiceGUI-based and optimized for reviewer workflow:
+
+- Project/workspace selection.
+- Upload and analysis progress.
+- Verdict-first report.
+- Evidence Law status.
+- Confidence ledger.
+- Findings table with evidence inspection.
+- Context completeness and TODOs.
+- Blast radius and topology freshness.
+- Rollback guidance.
+- Public risk patterns and incident memory.
+- External scanner context.
+- Report diff.
+- History, trends, outcomes, and feedback.
+- Settings for provider, topology, incidents, scanner imports, Skills, and projects.
+
+UX rules:
+
+- Verdict is always above the fold.
+- Uncertainty is visible.
+- Evidence is inspectable on demand.
+- The UI remains advisory and never implies autonomous approval.
+
+### 11.2 REST API
+
+The API remains versioned under `/api/v1` and should expose:
+
+- Project/workspace management.
+- Analysis submission and retrieval.
+- Report detail and report comparison.
+- Evidence and findings.
+- Incidents and public risk patterns.
+- External scanner import.
+- Deployment outcomes and feedback.
+- Skills registry and Skill validation.
+- GitHub App and integration routes.
+- Health/readiness including provider and degraded-mode state.
+
+API rules:
+
+- Use Pydantic response models.
+- Preserve stable schema versions.
+- Return explicit partial-analysis and degraded-mode fields.
+- Include project/workspace scope in report and context objects.
+
+### 11.3 CLI
+
+The CLI must call the same analysis core and support:
+
+- File and directory analysis.
+- Project/workspace key input.
+- JSON output.
+- `--agent-json` output.
+- CI-friendly advisory summary.
+- Scanner import where practical.
+- Backtesting and benchmark commands where appropriate.
+- Local-only mode and provider status.
+
+CLI rules:
+
+- CLI output must show Evidence Law status.
+- CLI output must remain advisory unless an explicitly configured adapter maps results to exit codes.
+
+### 11.4 GitHub integration
+
+The GitHub path has two complementary surfaces:
+
+- GitHub Action for immediate CI/PR adoption.
+- GitHub App for richer installation, PR interaction, checks, and rerun workflows.
+
+Architecture rules:
+
+- Action runtime/package lives in the external `deploywhisper/analyze-action` repository. This app repo documents and integrates with that action; it must not host the Marketplace action runtime.
+- PR comments use the canonical report summary.
+- Check runs consume report output and configured adapter policy.
+- Rerun-on-commit compares the new report against the previous report for the same PR/context.
+- GitHub repository flows may derive default project keys from repository name.
+
+### 11.5 Agent and MCP interface
+
+Agent-facing output must be stable, bounded, and advisory:
+
+- Machine-readable report contract.
+- Evidence references.
+- Confidence and uncertainty.
+- Context TODOs.
+- Recommended verification steps.
+- Explicit "not approval" field.
+- Prompt-injection-safe handling of comments, scanner text, incident text, and documentation-like inputs.
+
+Agents must not be able to use DeployWhisper to autonomously approve, deploy, or remediate production changes.
+
+### 11.6 Policy adapter interface
+
+Policy adapters consume canonical report outputs and produce optional enforcement interpretation:
+
+- Advisory only.
+- Warn.
+- Soft block.
+- Hard block.
+
+Hard or soft blocking must be explicitly configured by the user. The core report stays advisory.
 
 ---
 
 ## 12. Persistence Architecture
 
-### 12.1 v1 schema
-SQLite database with the following tables:
+### 12.1 Storage baseline
 
-- `projects`
-- `artifact_bundles`
-- `artifact_records`
-- `analysis_reports`
-- `findings`
-- `evidence_items`
-- `incident_records`
-- `topology_versions`
-- `settings`
-- `feedback_events`
-- `skills` (new)
-- `skill_versions` (new)
-- `skill_test_runs` (new)
-- `benchmark_scenarios` (new)
-- `benchmark_runs` (new)
+SQLite remains the default for local, single-node, and evaluation installs. The database lives under `data/` by default and is suitable for the current self-hosted baseline.
 
-### 12.2 vNext storage path
-When the product moves beyond single-team usage:
-- Migrate operational persistence to PostgreSQL
-- Keep repository interfaces stable
-- Optionally introduce object storage for large retained artifacts
-- Optionally introduce Redis / queue only when async workers become necessary
+### 12.2 Shared install path
 
-The persistence abstraction is designed now to make that migration low-risk later.
+PostgreSQL is the target path for shared/team installs requiring higher concurrency, stronger backup/restore, and clearer operational boundaries.
 
----
+### 12.3 Persistence entities
 
-## 13. Deployment Architecture
+The persistence model should cover:
 
-### 13.1 v1 deployment
-- One application container
-- One SQLite persistent volume
-- Optional separate Ollama runtime for local model execution
-- Reverse proxy when shared internal deployment is needed
+- Projects and workspaces.
+- Reports and report artifacts.
+- Artifact records and submission manifests.
+- Evidence items.
+- Findings.
+- Context snapshots.
+- Topology sources and freshness.
+- Public risk patterns.
+- Incident records.
+- External scanner imports.
+- Deployment outcomes.
+- Feedback events.
+- Skills, manifests, trust levels, and analytics.
+- Benchmark scenarios, benchmark runs, and benchmark results.
+- Settings and provider metadata.
 
-This is the correct early deployment model and stays.
+### 12.4 Schema evolution
 
-### 13.2 vNext deployment
-When adoption grows:
-- Web/API process
-- Background worker(s)
-- PostgreSQL
-- Optional queue (Redis or similar)
-- Optional object storage
-- Observability stack
-- SSO-enabled reverse proxy or app-native auth
+Schema migration uses Alembic. Report schema evolution must also be explicit and visible:
 
-Introduced as a migration path, not a prerequisite.
+- `report_schema_version` persisted with reports.
+- Schema docs under `docs/schemas/`.
+- Backward-compatible API behavior where practical.
+- Migration notes for user-visible changes.
 
 ---
 
-## 14. Interface Architecture
+## 13. Security and Privacy Architecture
 
-### 14.1 Web UI
-Purpose:
-- Verdict-first report review
-- Admin workflows
-- History and analytics
-- Context maintenance
-- Skills browsing and management (new)
+### 13.1 Raw-local boundary
 
-Key principle:
-- Present high-signal summary first, evidence second, raw details last.
+Raw IaC and sensitive artifacts remain local by default. External LLM calls receive structured summaries, not raw uploads.
 
-### 14.2 REST API
-Purpose:
-- Programmatic analysis
-- Report retrieval
-- Context management
-- Integration surfaces
-- Skills registry access (new)
+### 13.2 Secret handling
 
-Core endpoints:
+Provider credentials and connector credentials must be environment-backed or otherwise handled through explicit secure configuration. They must not be persisted unsafely in the database, logs, prompts, reports, or telemetry.
 
-```
-GET    /api/v1/projects
-POST   /api/v1/projects
-POST   /api/v1/analyses
-GET    /api/v1/analyses
-GET    /api/v1/analyses/{analysis_id}
-POST   /api/v1/context/topology
-POST   /api/v1/context/incidents
-POST   /api/v1/feedback/{analysis_id}
-POST   /api/v1/integrations/github/summary
+### 13.3 Prompt-injection controls
 
-GET    /api/v1/skills                      (new)
-GET    /api/v1/skills/{skill_id}           (new)
-GET    /api/v1/skills/{skill_id}/versions  (new)
-POST   /api/v1/skills/install              (new)
+Treat these inputs as untrusted:
 
-GET    /api/v1/benchmarks                  (new)
-GET    /api/v1/benchmarks/runs             (new)
-GET    /api/v1/benchmarks/runs/{run_id}    (new)
-POST   /api/v1/benchmarks/run              (new; admin only)
-```
+- IaC comments.
+- PR comments.
+- Incident text.
+- Scanner output.
+- Documentation-like artifacts.
+- Skill content.
 
-### 14.3 CLI
-Purpose:
-- Local and CI usage
-- Headless testing
-- Benchmark corpus execution
-- Skill management (new)
+Prompt-injection tests are required for agent and narrative flows.
 
-Core commands:
+### 13.4 Project and RBAC boundary
 
-```
-deploywhisper project create <key>
-deploywhisper analyze --project <key> <path>
-deploywhisper report <analysis_id>
-deploywhisper topology import --from <source> --source <uri-or-path>
-deploywhisper topology import --from terraform --source s3://my-bucket/terraform.tfstate
-deploywhisper topology import --from cloudformation --source stack-template.yaml
-deploywhisper topology import --from kubernetes --source manifests/
-deploywhisper topology import --from ansible --source inventory.yaml
-deploywhisper skill install <name>           (new)
-deploywhisper skill list                     (new)
-deploywhisper skill update <name>            (new)
-deploywhisper benchmark run                  (new)
-deploywhisper github init                    (new)
-```
+Project/workspace/RBAC boundaries must prevent cross-project leakage in reports, incidents, scanner imports, outcomes, feedback, topology, and connector credentials.
 
-### 14.4 GitHub Integration (new section in v3)
+Early implementation may use lightweight project records before full authn/authz, but data models and APIs must not assume a single unscoped universe.
 
-**GitHub Adapter layer** — first-class adoption surface after trusted core.
+### 13.5 External scanner trust boundary
 
-Capabilities:
-- Project-aware PR analysis with optional explicit project key and repository-derived default
-- PR analysis trigger (GitHub Action)
-- Summary comment with verdict, top risks, blast radius, rollback, uncertainty
-- Rerun on new commit (updates existing comment, shows diff)
-- Compare old vs new report
-- Link to full report (shareable URL)
-- Check Run integration (advisory-only, never required)
-- Advanced self-hosted GitHub App support for richer interactions (checks API, OAuth, installation wizard)
+Scanner output is external evidence. It must be labeled and conflict-aware:
 
-Adapter pattern:
-- Core analysis pipeline is surface-agnostic
-- GitHub adapter translates GitHub events into `ArtifactBundle` submissions
-- Comment formatter translates `Report` into GitHub-flavored markdown
-- All adapter logic lives in `integrations/github/` — no core code changes required to add GitLab, Atlantis, HCP Terraform, or Jenkins adapters later
+- Scanner findings do not automatically become DeployWhisper findings.
+- Scanner severity does not automatically map to DeployWhisper high/critical severity.
+- Conflicts between scanner output and deterministic evidence are surfaced.
+- Scanner evidence can contribute to context and confidence only through explicit scoring rules.
+
+### 13.6 Skill trust boundary
+
+Skills are markdown guidance, not executable plugins. They can influence narrative and heuristics only through controlled loading, manifest validation, trust levels, and tests.
+
+### 13.7 Supply-chain posture
+
+The project should support:
+
+- Security policy.
+- CodeQL.
+- Dependency update workflow.
+- OpenSSF Scorecard.
+- SBOM generation.
+- Release signing and provenance.
+- Attestations.
+- Release process documentation.
+- Air-gapped installation guidance.
 
 ---
 
-## 15. Skills Marketplace Architecture (new in v3)
+## 14. Deployment Architecture
 
-### 15.1 Why this matters architecturally
+### 14.1 Supported deployment paths
 
-The Skills marketplace is DeployWhisper's **ecosystem moat**. No competitor has built this. Architecturally, it requires three components:
+DeployWhisper is self-hosted. Supported paths:
 
-1. **Skills Registry Service** — API, storage, versioning
-2. **Skill Validator** — manifest validation + test harness
-3. **Skill Installer** — CLI that fetches skills into `skills/custom/`
+- Local Python development install.
+- Local CLI-first install.
+- Single-container Docker install.
+- Docker Compose install.
+- Kubernetes/Helm install.
+- Air-gapped or restricted-network install.
+- Self-hosted CI/CD runner integration.
 
-### 15.2 Skill manifest schema
+### 14.2 Not supported by product direction
 
-Skills are markdown files with YAML frontmatter:
+The architecture must not assume or require:
 
-```yaml
----
-name: helm-rollout-risks
-version: 1.2.0
-author: community@example.com
-license: MIT
-tool_type: kubernetes
-tags: [helm, rollout, probes]
-description: Detects Helm chart rollout risks including missing probes and unsafe upgrade strategies
-triggers:
-  - file_glob: "**/*.yaml"
-    content_pattern: "kind: HelmRelease"
-  - file_glob: "Chart.yaml"
-token_budget: 2000
-test_suite_path: tests/scenarios/
----
+- DeployWhisper-hosted SaaS.
+- DeployWhisper-hosted API.
+- DeployWhisper-hosted dashboard.
+- DeployWhisper-hosted model service.
+- Vendor-managed control plane.
+- Proprietary telemetry.
+- Account registration with DeployWhisper.
 
-# Helm Rollout Risks
+### 14.3 Scaling path
 
-## Risk patterns
-...
-```
+The scaling path is:
 
-### 15.3 Skill test harness
+1. Single-process NiceGUI + FastAPI + SQLite.
+2. Containerized single-node runtime with persistent volume.
+3. Docker Compose shared runtime.
+4. Kubernetes/Helm self-hosted runtime.
+5. PostgreSQL-backed shared runtime.
+6. Optional async worker path for expensive connectors, benchmark runs, and integration processing.
 
-Every skill ships with a test suite:
-
-```
-skills/registry/helm-rollout-risks/
-├── skill.md                    (the skill content)
-├── manifest.yaml               (parsed frontmatter, auto-generated)
-└── tests/
-    └── scenarios/
-        ├── missing-readiness-probe.yaml
-        ├── maxunavailable-100.yaml
-        └── expected.json       (expected findings for each scenario)
-```
-
-The Skill Validator runs every scenario through DeployWhisper with only that skill active, compares against expected findings, and computes a pass rate.
-
-### 15.4 Skills storage
-
-Skills are stored in three places:
-
-- **Registry (canonical)** — public Git repository at `github.com/deploywhisper/skills-registry`; each skill is a directory
-- **Cache (local)** — installed skills live in `skills/custom/` in the user's DeployWhisper install
-- **Database (metadata)** — `skills` and `skill_versions` tables hold manifest metadata, analytics, and test results
-
-### 15.5 Registry API
-
-The Skills Registry Service exposes a read API for the browser UI and the installer CLI:
-
-```
-GET /api/v1/skills                      -> list all skills with filters
-GET /api/v1/skills/{id}                 -> skill detail
-GET /api/v1/skills/{id}/versions        -> version history
-GET /api/v1/skills/{id}/content         -> raw skill markdown
-GET /api/v1/skills/{id}/test-results    -> test suite pass/fail
-POST /api/v1/skills/install             -> install request (auth required)
-```
-
-Write operations (contribute, update, remove) happen via GitHub PR to the registry repository — not via API. This keeps the contribution process transparent and auditable.
-
-### 15.6 Skill loading at analysis time
-
-During step 3 of the analysis pipeline (Load Skills):
-
-1. Inspect `NormalizedChange` list to determine detected tool types.
-2. Query local skill cache for skills matching those tools.
-3. Apply skill trigger patterns against artifact contents.
-4. Freeze the active skill set in the `ContextSnapshot`.
-5. Make skill content available to the Evidence Engine (as heuristic context) and Narrator (as LLM context).
-
-Skills do not execute code. They provide structured domain knowledge to both deterministic heuristics and the LLM narrator.
+Async workers are a future path. The core architecture should keep orchestration boundaries clean enough to add workers without changing report contracts.
 
 ---
 
-## 16. Benchmark Architecture (new in v3)
+## 15. Skills Ecosystem Architecture
 
-### 16.1 Why this matters architecturally
+Skills scale DeployWhisper's domain knowledge without requiring core code changes for every risk pattern or tool nuance.
 
-The benchmark corpus is DeployWhisper's **proof engine**. You cannot claim measurable accuracy without one. Architecturally it requires:
+### 15.1 Skill package
 
-1. **Corpus storage** — labeled scenarios as versioned data
-2. **Benchmark Runner** — executes corpus through DeployWhisper and comparators
-3. **Results publication** — scheduled runs published to public dashboard
+A Skill is a markdown-based package with:
 
-### 16.2 Corpus structure
+- Manifest metadata.
+- Toolchain/context tags.
+- Trigger metadata.
+- Version.
+- Trust level.
+- Test scenarios.
+- Documentation.
 
-Benchmark corpus lives in a separate public repo: `github.com/deploywhisper/benchmark-corpus`.
+### 15.2 Trust levels
 
-```
-benchmark-corpus/
-├── scenarios/
-│   ├── terraform/
-│   │   ├── sg-0000-open/
-│   │   │   ├── scenario.yaml       (metadata + expected)
-│   │   │   └── artifacts/
-│   │   │       └── main.tf
-│   │   └── iam-wildcard/...
-│   ├── kubernetes/...
-│   ├── ansible/...
-│   ├── jenkins/...
-│   └── cloudformation/...
-├── annotations/
-│   └── reviewers.yaml              (SRE reviewer credits)
-└── LICENSE
-```
+Skill trust levels:
 
-Each `scenario.yaml`:
+- Experimental.
+- Verified.
+- Core.
+- Deprecated.
 
-```yaml
-scenario_id: terraform-sg-0000-open
-title: Security group opened to 0.0.0.0/0 on port 5432
-tool_types: [terraform]
-expected_verdict: HIGH
-expected_findings:
-  - severity: HIGH
-    title_pattern: "security group.*0\\.0\\.0\\.0/0"
-    tool: terraform
-rationale: |
-  Opening a database port to the public internet is a known critical
-  misconfiguration. Any scanner or AI reviewer worth using should flag
-  this unambiguously.
-annotators: [reviewer_01, reviewer_02]
-license: MIT
-```
+Verified and core Skills require deterministic test scenarios.
 
-### 16.3 Benchmark Runner
+### 15.3 Registry and installation
 
-The Benchmark Runner is a CLI command and an API endpoint:
+The public Skills registry should support listing, fetching, installing, updating, removing, validating, and browsing Skills. Private organization Skills remain local/self-hosted.
+
+### 15.4 Runtime loading
+
+Skill loading must be:
+
+- Filename/manifest based.
+- Project-aware where needed.
+- Safe for local-first operation.
+- Non-executable by default.
+- Explicit about trust level and source.
+
+---
+
+## 16. Benchmark and Honest Failure Architecture
+
+Benchmarks are product infrastructure, not marketing collateral.
+
+### 16.1 Benchmark corpus
+
+Benchmark scenarios include:
+
+- Input artifacts.
+- Expected findings.
+- Expected evidence.
+- Expected verdict rationale.
+- Risk labels.
+- Unsupported or insufficient-context labels where appropriate.
+- Latency measurement profile.
+
+### 16.2 Benchmark runner
+
+The runner executes scenarios through the same analysis core. It measures:
+
+- Precision.
+- Recall.
+- False reassurance.
+- False positives.
+- Evidence coverage.
+- Evidence Law violations.
+- Latency p50/p95/p99.
+- Regression stability.
+- Unsupported scenarios.
+
+### 16.3 Honest failure reports
+
+Published benchmark reports must include:
+
+- What improved.
+- What regressed.
+- Scenarios detected correctly.
+- Scenarios missed.
+- False reassurance cases.
+- False positives.
+- Unsupported scenarios.
+- Evidence coverage.
+- Context limitations.
+- Follow-up issues.
+
+Material misses should create linked GitHub issues unless explicitly out of scope.
+
+### 16.4 Backtesting
+
+Backtesting replays incident-causing historical changes against the analysis core and compares findings to known outcomes.
+
+---
+
+## 17. Documentation and Governance Architecture
+
+Documentation and governance are architectural surfaces because the product is self-hosted and open-source.
+
+### 17.1 Required governance artifacts
+
+The repository should maintain:
+
+- `GOVERNANCE.md`.
+- `MAINTAINERS.md`.
+- `CODEOWNERS`.
+- `CONTRIBUTOR_LADDER.md`.
+- `CONTRIBUTING.md`.
+- `CODE_OF_CONDUCT.md`.
+- `SECURITY.md`.
+- `SUPPORT.md`.
+- `ROADMAP.md`.
+- `RELEASE_PROCESS.md`.
+- `ADOPTERS.md`.
+- RFC process.
+
+### 17.2 Required documentation areas
+
+The docs architecture should cover:
+
+- Concepts: Evidence Law, project model, incident memory, context graph, benchmark honesty.
+- Install: local, Docker Compose, Kubernetes/Helm, air-gapped.
+- Use: first analysis, report interpretation, PR workflow, CLI, API.
+- Configure: providers, projects, topology, incidents, scanner ingestion, Skills.
+- Integrate: GitHub, future GitLab/Jenkins/Atlantis/GitOps, policy adapters, MCP/agents.
+- Operate: backup, restore, upgrade, logs, observability, database, workers, troubleshooting.
+- Extend: parser authoring, connector authoring, Skill authoring, benchmark scenarios, risk patterns.
+- Secure: secrets, prompt injection, local-first provider boundary, supply chain.
+- Community: governance, maintainers, contributing, RFCs, releases, CNCF readiness.
+
+### 17.3 Docs as done criteria
+
+Stories that affect users, operators, integrations, APIs, contributors, or maintainers are not done until relevant docs are updated.
+
+---
+
+## 18. Test and Validation Architecture
+
+The current project uses `unittest` as the authoritative test runner.
+
+### 18.1 Required test layers
+
+- Parser fixtures for supported toolchains.
+- Intake and sensitive-file tests.
+- Evidence model and Evidence Law tests.
+- Risk scoring tests.
+- Context completeness and topology freshness tests.
+- Incident, public risk pattern, and external scanner tests.
+- Report schema and API contract tests.
+- CLI output tests.
+- UI component and accessibility smoke tests where behavior changes.
+- Provider boundary and degraded narrative tests.
+- GitHub integration tests.
+- Skill manifest and test harness tests.
+- Benchmark runner and backtesting tests.
+- Prompt-injection tests for narrative and agent flows.
+
+### 18.2 Required validation commands
+
+For Python code changes:
 
 ```bash
-deploywhisper benchmark run --corpus ./benchmark-corpus --comparators tflint,kube-score
+./.venv/bin/python -m unittest discover -q
+./.venv/bin/ruff check .
+./.venv/bin/ruff format --check .
 ```
 
-Output: per-scenario pass/fail, per-tool precision/recall/F1, overall metrics.
+For broad local CI:
 
-Results are persisted as `BenchmarkRun` rows and published to the public dashboard at `deploywhisper.deploywhisper.dev/benchmarks`.
+```bash
+bash scripts/ci-local.sh
+```
 
-### 16.4 Comparator execution
+For review-flow or accessibility-sensitive UI changes:
 
-For public comparison, the runner can execute other tools:
+```bash
+npm run test:ui-review
+npm run test:ui-review:voiceover
+```
 
-- `tflint` — invoked via subprocess
-- `kube-score` — invoked via subprocess
-- `K8sGPT` — invoked via CLI
-- Vanilla LLM prompt — sends artifacts to configured LLM with a generic "analyze this for risk" prompt
+### 18.3 Evidence Law validation
 
-Each comparator's output is mapped to a common finding format so direct comparison is possible.
-
-### 16.5 Quarterly publication
-
-A scheduled job runs the corpus every quarter against:
-- Current DeployWhisper main branch
-- Previous DeployWhisper release
-- All configured comparators
-
-Results are published to the public dashboard with methodology, raw data download, and a version-over-version trend chart.
-
----
-
-## 17. Trust Architecture
-
-This is the most important architectural section.
-
-DeployWhisper wins only if trust is structurally built into the system.
-
-Trust requires:
-
-1. **Evidence references** on findings
-2. **Confidence** on judgments
-3. **Uncertainty** on missing context
-4. **Deterministic core** for risk logic
-5. **Narrative as explanation, not authority**
-6. **Backtesting and calibration**
-7. **Outcome learning without silent model drift**
-8. **Published benchmark accuracy** (new in v3)
-9. **Community-auditable skills** (new in v3)
-
-Architectural implications:
-
-- Scoring must be understandable
-- Narrative must be downstream of the report, not upstream of it
-- Report schema must preserve source traceability
-- Benchmark and feedback subsystems are not optional extras
-- Skills are transparent markdown, not black-box code
-- Accuracy is measured and published, not asserted
-
----
-
-## 18. Observability and Quality
-
-### 18.1 Logs
-Use structured logs with:
-- Analysis ID
-- Stage
-- Duration
-- Parser outcomes
-- Provider mode
-- Severity result
-- Error metadata
-- Active skills (IDs + versions)
-
-Never log:
-- Raw IaC
-- Secrets
-- Prompts
-- Full model responses
-
-### 18.2 Health and readiness
-Expose:
-- Health endpoint
-- Readiness endpoint
-- Provider mode visibility
-- Storage health
-- Migration/version health
-- Skills registry connectivity (new)
-
-### 18.3 Test strategy
-Must include:
-- Parser fixture tests
-- Cross-tool interaction tests
-- Evidence traceability tests
-- Report schema tests
-- PR formatter tests
-- Benchmark corpus tests
-- Failure degradation tests
-- Persistence-before-success tests
-- Skill manifest validation tests (new)
-- Skill test-harness regression tests (new)
+CI should fail when fixtures generate high or critical findings without deterministic evidence.
 
 ---
 
 ## 19. Recommended Project Structure
 
-This structure extends the current repo.
+Current structure remains valid and should evolve as follows:
 
-```
-deploywhisper/
-├── api/
-├── ui/
-├── cli/
-├── services/
-│   ├── analysis_pipeline.py
-│   ├── intake_service.py
-│   ├── report_service.py
-│   ├── context_service.py
-│   ├── feedback_service.py
-│   ├── integration_service.py
-│   ├── skills_registry_service.py       (new)
-│   └── benchmark_service.py             (new)
-├── parsers/
-├── analysis/
-│   ├── risk_engine.py
-│   ├── rollback_planner.py
-│   ├── blast_radius.py
-│   ├── incident_matcher.py
-│   └── confidence.py
-├── evidence/
-│   ├── models.py
-│   ├── extractor.py
-│   └── mappers.py
-├── llm/
-│   ├── narrator.py
-│   ├── providers.py
-│   ├── adapters/
-│   │   ├── base.py
-│   │   ├── registry.py
-│   │   ├── openai_adapter.py
-│   │   ├── anthropic_adapter.py
-│   │   ├── gemini_adapter.py
-│   │   ├── ollama_adapter.py
-│   │   └── openai_compatible_adapter.py
-│   └── summary_builder.py
-├── integrations/
-│   ├── github/
-│   │   ├── action.py
-│   │   ├── app.py
-│   │   ├── comment_formatter.py
-│   │   └── check_run.py
-│   └── common/
-├── skills/                              (new layout)
-│   ├── registry_client.py
-│   ├── validator.py
-│   ├── installer.py
-│   ├── loader.py
-│   ├── custom/                          (user-installed skills)
-│   └── builtin/                         (first-party skills)
-├── benchmarks/                          (new)
-│   ├── runner.py
-│   ├── comparators.py
-│   └── results_publisher.py
-├── models/
-│   ├── tables.py
-│   ├── repositories/
-│   └── schemas.py
-├── analytics/
-│   ├── benchmarks.py
-│   ├── calibration.py
-│   └── trend_queries.py
-├── data/
-├── tests/
-└── docs/
+```text
+api/                         FastAPI routes, dependencies, schemas, errors
+analysis/                    deterministic risk, blast radius, rollback, interaction logic
+cli/                         headless CLI and agent/CI output modes
+evidence/                    evidence extraction, evidence models, Evidence Law validation
+integrations/                GitHub and future workflow adapters
+llm/                         provider boundary, adapters, prompts, narrative generation, Skills context
+models/                      SQLAlchemy tables and repository classes
+parsers/                     parser registry and tool-specific parsers
+services/                    orchestration, reports, projects, incidents, topology, outcomes, Skills
+ui/                          NiceGUI routes, components, formatters, session state
+docs/                        product, architecture, operation, API, integration, contribution docs
+skills/                      built-in and local custom Skills
+tests/                       layer-specific unittest coverage and UI/integration tests
+benchmarks/                  future benchmark corpus and runner fixtures
+patterns/                    future public risk patterns
+examples/                    safe sample artifacts and demos
+schemas/                     machine-readable schemas shared across docs/runtime when useful
 ```
 
----
+Rules:
 
-## 20. Architectural Decisions
-
-### ADR-01: Keep shared NiceGUI + FastAPI runtime in v1
-**Status:** Accepted
-**Reason:** Low friction, already aligned with repo, correct for early self-hosted product.
-
-### ADR-02: Add explicit evidence model
-**Status:** Accepted
-**Reason:** Required for trust, differentiation, and benchmarkability.
-
-### ADR-03: Keep advisory-first core
-**Status:** Accepted
-**Reason:** Enforcement too early will damage trust and positioning.
-
-### ADR-04: Introduce GitHub integration as first-class adapter
-**Status:** Accepted
-**Reason:** Workflow-native adoption is required for becoming the default choice.
-
-### ADR-05: Preserve raw-local / structured-summary-only LLM boundary
-**Status:** Accepted
-**Reason:** One of the clearest product differentiators.
-
-### ADR-06: Design for SQLite now, PostgreSQL later
-**Status:** Accepted
-**Reason:** Current product stage favors simplicity; future stage requires scale path.
-
-### ADR-07: Add benchmark and feedback services before enterprise polish
-**Status:** Accepted
-**Reason:** Trust data is a stronger moat than early enterprise checkbox work.
-
-### ADR-08: Skills as markdown, not executable plugins (new)
-**Status:** Accepted
-**Reason:** Markdown skills are transparent, community-auditable, and eliminate a whole class of plugin-security problems. Skills provide knowledge, not code.
-
-### ADR-09: Skills contributed via PR to public registry repo, not via API (new)
-**Status:** Accepted
-**Reason:** Contribution process must be transparent and auditable. PR review + automated test harness is the quality gate. This mirrors the model used by Helm charts, Kubernetes Operators Hub, and VS Code extensions.
-
-### ADR-10: Benchmark corpus is public, open-source, community-extendable (new)
-**Status:** Accepted
-**Reason:** The corpus's value is its trust — if it's private or vendor-controlled, nobody will believe it. Publishing under MIT and accepting PRs for new scenarios makes it a community asset, not a marketing claim.
-
-### ADR-11: GitHub adapter uses Action + App in parallel (new)
-**Status:** Accepted
-**Reason:** Action is simpler and best aligns with the product's open-source local-first posture, so ship it first. Self-hosted GitHub App support enables richer interactions (check runs, PR events, OAuth) for teams that run their own DeployWhisper server. Defer any public hosted Marketplace app until the trust, privacy, and operating model are intentionally defined.
-
-### ADR-12: Prefer direct provider SDKs over external meta-provider abstractions for the narrative path
-**Status:** Accepted
-**Reason:** DeployWhisper's provider use case is narrow enough that a repo-owned adapter layer gives better control over dependency risk, resolver stability, and future provider-native MCP or tool divergence than a multi-provider meta-abstraction.
+- Keep shared logic in services/analysis/evidence, not UI/API/CLI adapters.
+- Keep provider-specific logic behind `llm/`.
+- Keep parser-specific normalization inside `parsers/`.
+- Keep integration-specific formatting inside `integrations/` or adapter services.
+- Keep docs near product-facing decisions and update them with user-visible changes.
 
 ---
 
-## 21. Migration Plan From Current Codebase
+## 20. Architecture Decisions
 
-### Step 1
-Keep current shared runtime and service architecture.
+### ADR-01: Remain self-hosted only
 
-### Step 2
-Introduce `EvidenceItem` and `Finding` schemas as first-class persisted entities (Epic 1).
+DeployWhisper must not depend on a hosted DeployWhisper control plane, SaaS API, hosted dashboard, hosted model service, account registration, or proprietary telemetry.
 
-### Step 3
-Refactor scoring pipeline so verdicts are assembled from evidence and context before narrative (Epic 1).
+### ADR-02: Keep shared NiceGUI + FastAPI runtime for the baseline
 
-### Step 4
-Add `integrations/github/` with PR summary formatter and rerun support (Epic 3).
+The current shared runtime is sufficient for local and early self-hosted usage. Split runtimes or workers are future scaling paths, not prerequisites.
 
-### Step 5
-Add Skills Registry Service, Validator, and Installer (Epic 4).
+### ADR-03: Keep one analysis core
 
-### Step 6
-Add feedback tables and benchmark harness (Epic 5 + 6).
+All surfaces must call the same orchestration pipeline to prevent semantic drift.
 
-### Step 7
-Add context freshness/versioning for topology and incidents (Epic 5).
+### ADR-04: Make project/workspace scope foundational
 
-### Step 8
-Prepare repository interfaces for PostgreSQL and async-worker migration (Phase 3).
+Reports, incidents, topology, outcomes, feedback, scanner imports, and connectors must be scoped before shared usage hardens.
+
+### ADR-05: Enforce the Evidence Law in runtime and tests
+
+No high or critical finding without deterministic evidence. The rule must be validated in schema, services, tests, and benchmark checks.
+
+### ADR-06: Preserve advisory-first core
+
+Policy adapters may consume report output, but core report semantics remain advisory.
+
+### ADR-07: Treat external scanner output as external evidence
+
+Scanner output is useful context, but scanner severity cannot automatically create high/critical DeployWhisper findings.
+
+### ADR-08: Keep raw artifacts local by default
+
+External model calls receive structured summaries. Raw artifacts do not leave user-controlled infrastructure by default.
+
+### ADR-09: Prefer direct provider adapters behind a repo-owned boundary
+
+OpenAI, Anthropic, Gemini, Ollama, and compatibility providers are accessed through DeployWhisper-owned adapter contracts.
+
+### ADR-10: Skills are markdown guidance, not executable plugins
+
+Skills can extend knowledge and guidance without creating arbitrary code execution risk.
+
+### ADR-11: Benchmarks are required for trust claims
+
+Published benchmark reports must include misses, false positives, false reassurance, unsupported scenarios, and regressions.
+
+### ADR-12: GitHub Action runtime lives in the external action repository
+
+The Marketplace action runtime/package belongs in `deploywhisper/analyze-action`; this application repo documents and integrates with it.
+
+### ADR-13: Documentation is part of completion
+
+User-visible, operator-visible, integration-visible, API-visible, and contributor-visible changes require docs.
+
+### ADR-14: PostgreSQL and async workers are scale paths, not baseline dependencies
+
+SQLite and single-process operation remain valid for local and small installs. PostgreSQL and workers are added when shared/self-hosted scale requires them.
 
 ---
 
-## 22. What This Architecture Optimizes For
+## 21. PRD Epic Architecture Mapping
 
-This architecture optimizes for:
-
-- Trust
-- Adoption in real workflows
-- Local-first security
-- Maintainable evolution
-- Community extensibility (new)
-- Measurable accuracy (new)
-- Eventual enterprise path
-
-It does **not** optimize for:
-
-- Maximum feature breadth in v1
-- Deep multi-tenant enterprise scope on day one
-- Flashy AI behavior without evidence
-- Pipeline ownership or enforcement ownership
+| PRD Epic | Architecture Ownership |
+| --- | --- |
+| Epic 0: Open Governance, Traceability, and Maintainer Ownership | Governance artifacts, CODEOWNERS, maintainers, RFCs, traceability, release process |
+| Epic 1: Project, Workspace, and RBAC Foundation | Project/workspace model, RBAC boundary, scoped persistence, API/UI/CLI project selection |
+| Epic 2: Trusted Evidence Core and Evidence Law | Evidence model, findings, Evidence Law validator, report schema, tests |
+| Epic 3: Report and Review Experience | Verdict-first UI, evidence inspector, confidence ledger, context TODOs, report diff |
+| Epic 4: Day-Zero Risk Patterns and Incident Memory | Public risk patterns, incident ingestion, similarity matching, sample incident pack |
+| Epic 5: Workflow-Native Delivery | GitHub, CI/CD, PR comments, rerun-on-commit, report links, adapter outputs |
+| Epic 6: Benchmarks, Calibration, and Honest Failure Reporting | Corpus, runner, backtesting, benchmark report, outcome/feedback calibration |
+| Epic 7: Context Moat | Topology, Terraform state, Kubernetes live-state, ownership, context graph, freshness |
+| Epic 8: Existing Security Tool Integration | SARIF/scanner ingestion, external evidence, conflict handling, scanner docs |
+| Epic 9: Skills Ecosystem | Registry, manifest, trust levels, installer, browser, test harness, analytics |
+| Epic 10: AI Infrastructure Safety and Agent-Native Review | Agent JSON, MCP/equivalent interface, prompt-injection tests, AI-generated IaC risk patterns |
+| Epic 11: Optional Enforcement Adapters | Policy adapter contract, advisory/warn/soft-block/hard-block translation |
+| Epic 12: Security and Supply Chain Hardening | Security policy, Scorecard, CodeQL, SBOM, signing, provenance, air-gapped docs |
+| Epic 13: Documentation and User Enablement | Docs IA, install/use/operate/extend/contribute guides, docs CI |
+| Epic 14: CNCF Readiness | Governance maturity, adopters, community metrics, CNCF package |
 
 ---
 
-## 23. Final Recommendation
+## 22. Migration Plan From Current Codebase
 
-Keep the current core technical direction, but evolve the system around five missing architectural pillars:
+### Step 1: Freeze stale story authority
 
-1. **Evidence-backed report objects** (Epic 1-2)
-2. **Workflow-native integration layer** (Epic 3)
-3. **Skills Marketplace infrastructure** (Epic 4) — new in v3
-4. **Feedback / calibration loop** (Epic 5)
-5. **Benchmark corpus infrastructure** (Epic 6) — new in v3
+Treat existing sprint/story status as historical until revised epics and readiness checks are complete.
 
-That is the shortest path from "interesting open-source product" to "trusted, community-extensible, measurably-accurate pre-deployment intelligence platform".
+### Step 2: Establish project/workspace scope
+
+Harden project/workspace models across reports, incidents, topology, outcomes, feedback, scanner imports, UI, API, CLI, and integrations.
+
+### Step 3: Complete Evidence Law core
+
+Make evidence items and findings first-class across scoring, report schema, persistence, UI, API, CLI, PR comments, and tests.
+
+### Step 4: Upgrade report experience
+
+Add Evidence Law status, confidence ledger, context TODOs, why-not-lower/higher, evidence inspector, scanner context, and report diff.
+
+### Step 5: Add day-zero memory and incident learning
+
+Introduce public risk patterns, sample incident pack safeguards, incident import, match explanations, deployment outcomes, feedback, and backtesting.
+
+### Step 6: Align workflow delivery
+
+Use canonical report summaries for GitHub Action, GitHub App, PR comments, checks, reruns, CLI, API, and future adapters.
+
+### Step 7: Build benchmark infrastructure
+
+Add corpus, runner, honest failure reports, benchmark metrics, and regression tracking.
+
+### Step 8: Expand context and scanner ingestion
+
+Add Terraform state, Kubernetes live-state, CODEOWNERS, external scanner imports, conflict handling, and context graph features.
+
+### Step 9: Mature Skills, agent interfaces, and policy adapters
+
+Harden Skills marketplace, add agent-readable outputs, add MCP/equivalent interface, and expose optional policy adapters.
+
+### Step 10: Prepare for CNCF-scale operations
+
+Add supply-chain hardening, docs completeness, maintainer coverage, release process, community metrics, adopters, PostgreSQL path, and async worker path.
+
+---
+
+## 23. Implementation Guardrails
+
+Future implementation agents must follow these guardrails:
+
+- Do not introduce hosted DeployWhisper dependencies.
+- Do not send raw artifacts externally by default.
+- Do not create or persist unsafe credentials.
+- Do not bypass intake classification or sensitive-file checks.
+- Do not duplicate scoring logic in UI, API, CLI, GitHub, MCP, or policy adapters.
+- Do not let LLM narrative create high/critical findings.
+- Do not map external scanner severity directly to DeployWhisper severity.
+- Do not treat missing context as certainty.
+- Do not mark user-visible stories done without docs.
+- Do not add new dependencies unless explicitly justified and approved.
+- Do not place GitHub Marketplace Action runtime in this repo; use `deploywhisper/analyze-action`.
+
+---
+
+## 24. Final Recommendation
+
+DeployWhisper should evolve by hardening its existing local-first analysis foundation into a project-scoped, evidence-enforced, workflow-native, benchmark-measured, community-extensible, self-hosted open-source system.
+
+The immediate planning sequence is:
+
+1. Use this architecture as the source for revised epics.
+2. Regenerate `epics.md` from the finalized PRD and this architecture.
+3. Run implementation readiness validation.
+4. Reconcile existing stories and code against the revised epic acceptance criteria.
+5. Regenerate sprint planning.
+6. Resume story execution from the revised plan.
