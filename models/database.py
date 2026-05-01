@@ -41,6 +41,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "010_add_project_workspaces",
     "011_add_deployment_outcome_fields",
     "012_add_feedback_event_fields",
+    "013_add_incident_analysis_reference",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -144,6 +145,27 @@ def _feedback_event_columns(connection) -> set[str]:
     }
 
 
+def _incident_record_columns(connection) -> set[str]:
+    return {
+        column["name"] for column in inspect(connection).get_columns("incident_records")
+    }
+
+
+def _incident_record_has_analysis_link(connection) -> bool:
+    inspector = inspect(connection)
+    foreign_keys = inspector.get_foreign_keys("incident_records")
+    indexes = inspector.get_indexes("incident_records")
+    has_foreign_key = any(
+        foreign_key.get("referred_table") == "analysis_reports"
+        and "analysis_id" in (foreign_key.get("constrained_columns") or [])
+        for foreign_key in foreign_keys
+    )
+    has_index = any(
+        "analysis_id" in (index.get("column_names") or []) for index in indexes
+    )
+    return has_foreign_key and has_index
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
@@ -178,10 +200,27 @@ def _bootstrap_brownfield_revision() -> None:
             if "feedback_events" in tables
             else set()
         )
-        if {
+        incident_record_columns = (
+            _incident_record_columns(connection)
+            if "incident_records" in tables
+            else set()
+        )
+        has_feedback_fields = {
             "finding_id",
             "false_positive_reason",
-        }.issubset(feedback_event_columns):
+        }.issubset(feedback_event_columns)
+        has_complete_incident_link = {"analysis_id"}.issubset(
+            incident_record_columns
+        ) and _incident_record_has_analysis_link(connection)
+        if has_complete_incident_link and has_feedback_fields:
+            _write_alembic_revision(connection, "013_add_incident_analysis_reference")
+            return
+        if "analysis_id" in incident_record_columns:
+            raise RuntimeError(
+                "Detected a partial incident-analysis link schema without a complete "
+                "migration history. Manual recovery is required."
+            )
+        if has_feedback_fields:
             _write_alembic_revision(connection, "012_add_feedback_event_fields")
             return
         if {

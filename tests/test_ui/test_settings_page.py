@@ -143,10 +143,14 @@ class SettingsPageTests(unittest.TestCase):
         def run_once() -> None:
             stop_event.set()
 
-        with patch("app.run_due_topology_drift_checks", side_effect=run_once) as mocked:
+        with (
+            patch("app.run_due_topology_drift_checks", side_effect=run_once) as mocked,
+            patch("app.run_due_weekly_backtests") as mocked_backtests,
+        ):
             asyncio.run(app_module._topology_drift_scheduler_loop(stop_event))
 
         self.assertTrue(mocked.called)
+        self.assertTrue(mocked_backtests.called)
 
     def test_process_topology_upload_content_reports_success_for_valid_upload(
         self,

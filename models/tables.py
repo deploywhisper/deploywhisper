@@ -32,6 +32,11 @@ if "IncidentRecord" not in globals():
         severity: Mapped[str] = mapped_column(String(20), default="unknown")
         source_file: Mapped[str] = mapped_column(String(255))
         incident_date: Mapped[str | None] = mapped_column(String(40), nullable=True)
+        analysis_id: Mapped[int | None] = mapped_column(
+            ForeignKey("analysis_reports.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        )
         content: Mapped[str] = mapped_column(Text)
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), default=lambda: datetime.now(UTC)

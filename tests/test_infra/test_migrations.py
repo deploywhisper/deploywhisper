@@ -63,6 +63,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("project_id", self._table_columns("analysis_reports"))
         self.assertIn("project_key", self._table_columns("projects"))
         self.assertIn("title", self._table_columns("incident_records"))
+        self.assertIn("analysis_id", self._table_columns("incident_records"))
         self.assertIn("payload_json", self._table_columns("topology_versions"))
         self.assertIn("deployed_at", self._table_columns("deployment_outcomes"))
         self.assertIn("linked_incident_id", self._table_columns("deployment_outcomes"))
@@ -194,6 +195,14 @@ class MigrationTests(unittest.TestCase):
         self.assertNotIn("finding_id", columns)
         self.assertNotIn("false_positive_reason", columns)
 
+    def test_downgrade_to_012_removes_incident_analysis_reference(self) -> None:
+        command.upgrade(self._config(), "head")
+
+        command.downgrade(self._config(), "012_add_feedback_event_fields")
+
+        columns = self._table_columns("incident_records")
+        self.assertNotIn("analysis_id", columns)
+
     def test_downgrade_to_010_drops_incident_records_when_011_created_it(self) -> None:
         command.upgrade(self._config(), "head")
 
@@ -302,7 +311,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "012_add_feedback_event_fields")
+        self.assertEqual(revision, "013_add_incident_analysis_reference")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -351,7 +360,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "012_add_feedback_event_fields")
+        self.assertEqual(revision, "013_add_incident_analysis_reference")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -377,10 +386,29 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "012_add_feedback_event_fields")
+        self.assertEqual(revision, "013_add_incident_analysis_reference")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
+
+    def test_init_db_rejects_partial_incident_analysis_link_schema(self) -> None:
+        command.upgrade(self._config(), "011_add_deployment_outcome_fields")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            "ALTER TABLE incident_records ADD COLUMN analysis_id INTEGER"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(
+            RuntimeError, "partial incident-analysis link schema"
+        ):
+            database_module.init_db()
 
     def test_init_db_repairs_empty_alembic_revision_state(self) -> None:
         command.upgrade(self._config(), "0001_create_analysis_reports")
@@ -403,7 +431,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "012_add_feedback_event_fields")
+        self.assertEqual(revision, "013_add_incident_analysis_reference")
 
 
 if __name__ == "__main__":

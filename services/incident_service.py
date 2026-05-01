@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from models.database import SessionLocal
+from models.repositories.analysis_reports import get_analysis_report
 from models.repositories.incident_records import (
     create_incident_record,
     list_incident_records,
@@ -49,19 +50,31 @@ def _extract_incident_date(content: str) -> str | None:
     return match.group(1)
 
 
-def ingest_incident_document(source_file: str, content: str) -> dict:
+def ingest_incident_document(
+    source_file: str,
+    content: str,
+    *,
+    analysis_id: int | None = None,
+) -> dict:
     """Normalize and persist an incident document from markdown/plain text input."""
     normalized_content = content.strip()
     title = _extract_title(normalized_content, source_file)
     severity = _extract_severity(normalized_content)
     incident_date = _extract_incident_date(normalized_content)
     with SessionLocal() as session:
+        if (
+            analysis_id is not None
+            and get_analysis_report(session, analysis_id, include_evidence=False)
+            is None
+        ):
+            raise ValueError(f"Analysis report not found: {analysis_id}.")
         record = create_incident_record(
             session,
             title=title,
             severity=severity,
             source_file=source_file,
             incident_date=incident_date,
+            analysis_id=analysis_id,
             content=normalized_content,
         )
     return {
@@ -70,6 +83,7 @@ def ingest_incident_document(source_file: str, content: str) -> dict:
         "severity": record.severity,
         "source_file": record.source_file,
         "incident_date": record.incident_date,
+        "analysis_id": record.analysis_id,
     }
 
 
@@ -84,6 +98,7 @@ def get_incident_records() -> list[dict]:
             "severity": record.severity,
             "source_file": record.source_file,
             "incident_date": record.incident_date,
+            "analysis_id": record.analysis_id,
             "content": record.content,
         }
         for record in records

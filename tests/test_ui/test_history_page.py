@@ -12,6 +12,7 @@ import config as config_module
 import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
+import services.deployment_outcome_service as deployment_outcome_service_module
 import services.report_service as report_service_module
 import services.project_service as project_service_module
 import ui.routes.history as history_module
@@ -76,7 +77,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         opening_sentence: str = "Ingress widens access to production resources.",
         finding_description: str = "Security group exposure risk",
         context_completeness: dict | None = None,
-    ) -> None:
+    ) -> dict:
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -128,7 +129,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
             local_mode=True,
             skills_applied=["git", "terraform"],
         )
-        report_service_module.persist_analysis_report(
+        return report_service_module.persist_analysis_report(
             parse_batch,
             assessment,
             narrative,
@@ -378,6 +379,29 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn('"title":"Confidence 1.00"', response.text)
         self.assertIn("Risk: heuristic+llm", response.text)
         self.assertIn("Narrative: llm", response.text)
+
+    def test_history_page_renders_calibration_snapshot_from_backtest_feed(self) -> None:
+        report = self._persist_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Review warned deployment outcome.",
+            opening_sentence="Warned deployment later failed.",
+        )
+        deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=report["id"],
+            outcome="failure",
+            deployed_at="2026-04-29T08:00:00Z",
+        )
+
+        response = self.client.get("/history")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Calibration snapshot", response.text)
+        self.assertIn("1 failed deploys", response.text)
+        self.assertIn("1 warned", response.text)
+        self.assertIn("Precision 1.00", response.text)
+        self.assertIn("Recall 1.00", response.text)
 
     def test_history_page_shows_diff_indicator_for_rescanned_same_artifact(
         self,
