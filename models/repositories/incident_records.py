@@ -15,6 +15,7 @@ def create_incident_record(
     severity: str,
     source_file: str,
     incident_date: str | None,
+    analysis_id: int | None = None,
     content: str,
 ) -> IncidentRecord:
     record = IncidentRecord(
@@ -22,6 +23,7 @@ def create_incident_record(
         severity=severity,
         source_file=source_file,
         incident_date=incident_date,
+        analysis_id=analysis_id,
         content=content,
     )
     session.add(record)

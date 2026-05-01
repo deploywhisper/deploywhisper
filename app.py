@@ -36,6 +36,7 @@ from config import settings
 from logging_config import configure_logging
 from models.database import init_db
 from services.artifact_snapshot_service import load_report_artifact
+from services.backtesting_service import run_due_weekly_backtests
 from services.report_service import (
     fetch_analysis_report,
     fetch_shared_analysis_report,
@@ -115,6 +116,10 @@ async def _topology_drift_scheduler_loop(stop_event: asyncio.Event) -> None:
             run_due_topology_drift_checks()
         except Exception:
             logger.exception("Topology drift scheduler pass failed.")
+        try:
+            run_due_weekly_backtests()
+        except Exception:
+            logger.exception("Weekly backtesting pass failed.")
         try:
             await asyncio.wait_for(
                 stop_event.wait(),

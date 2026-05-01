@@ -7,6 +7,7 @@ from typing import Any
 from nicegui import ui
 
 from services.project_service import get_active_project
+from services.backtesting_service import fetch_calibration_dashboard_seed
 from services.report_service import (
     fetch_analysis_report,
     fetch_filtered_analysis_history_page,
@@ -61,6 +62,7 @@ def build_history_page() -> None:
         reports = reports_page["items"]
         total_report_count = reports_page["total_count"]
         trends = fetch_risk_trends(project_id=active_project_id)
+        calibration = fetch_calibration_dashboard_seed(project_id=active_project_id)
         selected_ids: set[int] = set()
         page_state = {"page": 1, "page_size": 5}
         card_checkboxes: dict[int, Any] = {}
@@ -98,6 +100,18 @@ def build_history_page() -> None:
                             )[:3]
                         )
                     ).classes("mt-[2px] text-sm dw-muted")
+            with ui.card().classes("w-full dw-panel shadow-none p-4"):
+                with ui.column().classes("gap-0"):
+                    ui.label("Calibration snapshot").classes("dw-eyebrow mb-1")
+                    ui.label(
+                        f"{calibration['failed_deploy_count']} failed deploys · "
+                        f"{calibration['warned_failed_deploy_count']} warned"
+                    ).classes("text-lg font-medium dw-text leading-6")
+                    ui.label(
+                        f"Precision {calibration['overall_precision']:.2f} · "
+                        f"Recall {calibration['overall_recall']:.2f} · "
+                        f"{calibration['window']['days']}d window"
+                    ).classes("mt-[2px] text-sm dw-muted")
             search_input = (
                 ui.input(placeholder="Search top risk or summary")
                 .props("outlined dense clearable prepend-icon=search")
@@ -109,7 +123,7 @@ def build_history_page() -> None:
             history_column = ui.column().classes("w-full gap-3")
 
             def refresh_data(query: str | None = None) -> list[dict]:
-                nonlocal reports, trends, total_report_count
+                nonlocal reports, trends, total_report_count, calibration
                 page_payload = fetch_filtered_analysis_history_page(
                     project_id=active_project_id,
                     search=query,
@@ -119,6 +133,9 @@ def build_history_page() -> None:
                 reports = page_payload["items"]
                 total_report_count = page_payload["total_count"]
                 trends = fetch_risk_trends(project_id=active_project_id)
+                calibration = fetch_calibration_dashboard_seed(
+                    project_id=active_project_id
+                )
                 max_page = max(
                     1, (total_report_count - 1) // page_state["page_size"] + 1
                 )
