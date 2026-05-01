@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -10,7 +11,7 @@ from typing import Any
 from sqlalchemy import select
 
 from models.database import SessionLocal
-from models.repositories.settings import get_setting, upsert_setting
+from models.repositories.settings import delete_setting, get_setting, upsert_setting
 from models.tables import AnalysisReport, DeploymentOutcome, IncidentRecord
 from services.project_service import (
     build_project_payload,
@@ -21,6 +22,8 @@ from services.project_service import (
 BACKTEST_WINDOW_DAYS = 7
 BACKTEST_LAST_RUN_KEY = "backtesting:last_run_at:project:"
 BACKTEST_SNAPSHOT_KEY = "backtesting:snapshot:project:"
+
+logger = logging.getLogger(__name__)
 
 
 def _last_run_key(project_id: int) -> str:
@@ -122,12 +125,6 @@ def _serialize_timestamp(value: datetime) -> str:
     return value.isoformat()
 
 
-def _row_key(*, analysis_id: int | None, fallback_prefix: str, fallback_id: int) -> str:
-    if analysis_id is not None:
-        return f"analysis:{analysis_id}"
-    return f"{fallback_prefix}:{fallback_id}"
-
-
 def _coerce_utc_timestamp(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -135,25 +132,6 @@ def _coerce_utc_timestamp(value: str) -> datetime:
     else:
         parsed = parsed.astimezone(UTC)
     return parsed
-
-
-def _latest_outcome_rows(
-    rows: list[tuple[DeploymentOutcome, AnalysisReport | None]],
-) -> list[tuple[DeploymentOutcome, AnalysisReport | None]]:
-    latest_by_key: dict[str, tuple[DeploymentOutcome, AnalysisReport | None]] = {}
-    for outcome, report in rows:
-        analysis_id = (
-            int(outcome.analysis_id) if outcome.analysis_id is not None else None
-        )
-        key = _row_key(
-            analysis_id=analysis_id,
-            fallback_prefix="outcome",
-            fallback_id=int(outcome.id),
-        )
-        current = latest_by_key.get(key)
-        if current is None or current[0].deployed_at <= outcome.deployed_at:
-            latest_by_key[key] = (outcome, report)
-    return list(latest_by_key.values())
 
 
 def _build_summary(
@@ -169,10 +147,9 @@ def _build_summary(
     by_severity_counts: dict[str, dict[str, int]] = defaultdict(
         lambda: {"warned": 0, "failed": 0, "true_positive": 0}
     )
-    deduped_rows = _latest_outcome_rows(rows)
     analysis_ids = {
         int(outcome.analysis_id)
-        for outcome, _ in deduped_rows
+        for outcome, _ in rows
         if outcome.analysis_id is not None
     }
     incidents = _incident_rows(project_id=project.id, analysis_ids=analysis_ids)
@@ -189,22 +166,18 @@ def _build_summary(
         ) <= _incident_event_timestamp(incident):
             incident_by_analysis_id[analysis_id] = incident
 
-    for outcome, report in deduped_rows:
+    for outcome, report in rows:
+        if outcome.analysis_id is None or report is None:
+            continue
         did_warn = _warned(report)
         failed = outcome.outcome_label in {"failure", "rolled_back"}
         severity = str(report.severity if report is not None else "unknown").lower()
-        analysis_id = (
-            int(outcome.analysis_id) if outcome.analysis_id is not None else None
-        )
+        analysis_id = int(outcome.analysis_id)
         if did_warn:
             warned_total += 1
             by_severity_counts[severity]["warned"] += 1
         if failed:
-            linked_incident = (
-                incident_by_analysis_id.get(analysis_id)
-                if analysis_id is not None
-                else None
-            )
+            linked_incident = incident_by_analysis_id.get(analysis_id)
             by_severity_counts[severity]["failed"] += 1
             failed_rows.append(
                 {
@@ -258,11 +231,17 @@ def _build_summary(
     }
 
 
+def invalidate_backtesting_snapshot(*, project_id: int) -> None:
+    with SessionLocal() as session:
+        delete_setting(session, _snapshot_key(project_id))
+
+
 def run_weekly_backtest(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
     now: datetime | None = None,
+    record_last_run: bool = True,
 ) -> dict[str, Any]:
     reference_now = now or datetime.now(UTC)
     if reference_now.tzinfo is None:
@@ -281,11 +260,12 @@ def run_weekly_backtest(
         window_end=reference_now,
     )
     with SessionLocal() as session:
-        upsert_setting(
-            session,
-            key=_last_run_key(project.id),
-            value=_serialize_timestamp(reference_now),
-        )
+        if record_last_run:
+            upsert_setting(
+                session,
+                key=_last_run_key(project.id),
+                value=_serialize_timestamp(reference_now),
+            )
         upsert_setting(
             session,
             key=_snapshot_key(project.id),
@@ -306,7 +286,12 @@ def run_due_weekly_backtests(*, now: datetime | None = None) -> list[dict[str, A
             last_run_at = _coerce_utc_timestamp(last_run.value)
             if reference_now - last_run_at < timedelta(days=BACKTEST_WINDOW_DAYS):
                 continue
-        summaries.append(run_weekly_backtest(project_id=project.id, now=reference_now))
+        try:
+            summaries.append(
+                run_weekly_backtest(project_id=project.id, now=reference_now)
+            )
+        except Exception:
+            logger.exception("Weekly backtesting failed for project %s.", project.id)
     return summaries
 
 
@@ -320,4 +305,4 @@ def fetch_calibration_dashboard_seed(
         snapshot = get_setting(session, _snapshot_key(project.id))
     if snapshot is not None:
         return json.loads(snapshot.value)
-    return run_weekly_backtest(project_id=project.id)
+    return run_weekly_backtest(project_id=project.id, record_last_run=False)

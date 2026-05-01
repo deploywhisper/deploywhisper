@@ -10,6 +10,7 @@ from models.repositories.incident_records import (
     create_incident_record,
     list_incident_records,
 )
+from services.backtesting_service import invalidate_backtesting_snapshot
 
 SEVERITY_PATTERN = re.compile(r"\b(P0|P1|P2|critical|high|medium|low)\b", re.IGNORECASE)
 DATE_PATTERN = re.compile(
@@ -61,13 +62,15 @@ def ingest_incident_document(
     title = _extract_title(normalized_content, source_file)
     severity = _extract_severity(normalized_content)
     incident_date = _extract_incident_date(normalized_content)
+    report = None
+    linked_project_id: int | None = None
     with SessionLocal() as session:
-        if (
-            analysis_id is not None
-            and get_analysis_report(session, analysis_id, include_evidence=False)
-            is None
-        ):
+        if analysis_id is not None:
+            report = get_analysis_report(session, analysis_id, include_evidence=False)
+        if analysis_id is not None and report is None:
             raise ValueError(f"Analysis report not found: {analysis_id}.")
+        if report is not None:
+            linked_project_id = report.project_id
         record = create_incident_record(
             session,
             title=title,
@@ -77,6 +80,8 @@ def ingest_incident_document(
             analysis_id=analysis_id,
             content=normalized_content,
         )
+    if linked_project_id is not None:
+        invalidate_backtesting_snapshot(project_id=linked_project_id)
     return {
         "id": record.id,
         "title": record.title,

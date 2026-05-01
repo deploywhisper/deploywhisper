@@ -8,6 +8,7 @@ import unittest
 from datetime import UTC, datetime
 from importlib import reload
 from pathlib import Path
+from unittest import mock
 
 import config as config_module
 import models.database as database_module
@@ -18,7 +19,7 @@ import services.deployment_outcome_service as deployment_outcome_service_module
 import services.incident_service as incident_service_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
-from models.repositories.settings import upsert_setting
+from models.repositories.settings import get_setting, upsert_setting
 from analysis.risk_scorer import RiskAssessment
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult
@@ -227,7 +228,7 @@ class BacktestingServiceTests(unittest.TestCase):
         self.assertEqual(summary["overall_recall"], 1.0)
         self.assertEqual(summary["backtest_rows"][0]["incident_id"], incident["id"])
 
-    def test_run_weekly_backtest_collapses_multiple_outcomes_for_one_analysis(
+    def test_run_weekly_backtest_counts_multiple_outcomes_for_one_analysis(
         self,
     ) -> None:
         warned_report = self._persist_report(
@@ -253,11 +254,13 @@ class BacktestingServiceTests(unittest.TestCase):
             now=datetime(2026, 4, 30, 12, 0, tzinfo=UTC),
         )
 
-        self.assertEqual(summary["failed_deploy_count"], 1)
-        self.assertEqual(summary["warned_failed_deploy_count"], 1)
+        self.assertEqual(summary["failed_deploy_count"], 2)
+        self.assertEqual(summary["warned_failed_deploy_count"], 2)
         self.assertEqual(summary["overall_precision"], 1.0)
         self.assertEqual(summary["overall_recall"], 1.0)
-        self.assertEqual(summary["backtest_rows"][0]["outcome"], "rolled_back")
+        self.assertEqual(len(summary["backtest_rows"]), 2)
+        self.assertEqual(summary["backtest_rows"][0]["outcome"], "failure")
+        self.assertEqual(summary["backtest_rows"][1]["outcome"], "rolled_back")
 
     def test_run_due_weekly_backtests_accepts_legacy_naive_last_run_timestamps(
         self,
@@ -280,3 +283,103 @@ class BacktestingServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(summaries, [])
+
+    def test_fetch_calibration_dashboard_seed_does_not_stamp_last_run_on_cache_miss(
+        self,
+    ) -> None:
+        warned_report = self._persist_report(
+            top_risk="Warned deploy failed later.",
+            recommendation="caution",
+            severity="medium",
+            file_name="warned.tf",
+        )
+        deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=warned_report["id"],
+            outcome="failure",
+            deployed_at="2026-04-29T09:00:00Z",
+        )
+
+        summary = backtesting_service_module.fetch_calibration_dashboard_seed(
+            project_id=self.project.id
+        )
+
+        self.assertEqual(summary["failed_deploy_count"], 1)
+        with database_module.SessionLocal() as session:
+            self.assertIsNone(
+                get_setting(
+                    session,
+                    f"backtesting:last_run_at:project:{self.project.id}",
+                )
+            )
+
+    def test_record_deployment_outcome_invalidates_cached_snapshot(self) -> None:
+        warned_report = self._persist_report(
+            top_risk="Warned deploy failed later.",
+            recommendation="caution",
+            severity="medium",
+            file_name="warned.tf",
+        )
+        deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=warned_report["id"],
+            outcome="failure",
+            deployed_at="2026-04-29T09:00:00Z",
+        )
+        first = backtesting_service_module.fetch_calibration_dashboard_seed(
+            project_id=self.project.id
+        )
+
+        quiet_report = self._persist_report(
+            top_risk="Go recommendation later failed.",
+            recommendation="go",
+            severity="low",
+            file_name="quiet.tf",
+        )
+        deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=quiet_report["id"],
+            outcome="failure",
+            deployed_at="2026-04-29T10:00:00Z",
+        )
+
+        refreshed = backtesting_service_module.fetch_calibration_dashboard_seed(
+            project_id=self.project.id
+        )
+
+        self.assertEqual(first["failed_deploy_count"], 1)
+        self.assertEqual(refreshed["failed_deploy_count"], 2)
+        self.assertEqual(refreshed["warned_failed_deploy_count"], 1)
+
+    def test_run_due_weekly_backtests_continues_after_one_project_failure(self) -> None:
+        other_project = project_service_module.create_project(
+            project_key="search",
+            display_name="Search",
+        )
+        warned_report = self._persist_report(
+            top_risk="Warned deploy failed later.",
+            recommendation="caution",
+            severity="medium",
+            file_name="warned.tf",
+        )
+        deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=warned_report["id"],
+            outcome="failure",
+            deployed_at="2026-04-29T09:00:00Z",
+        )
+
+        original = backtesting_service_module.run_weekly_backtest
+
+        def flaky_run_weekly_backtest(**kwargs):
+            if kwargs.get("project_id") == other_project.id:
+                raise RuntimeError("boom")
+            return original(**kwargs)
+
+        with mock.patch(
+            "services.backtesting_service.run_weekly_backtest",
+            side_effect=flaky_run_weekly_backtest,
+        ):
+            summaries = backtesting_service_module.run_due_weekly_backtests(
+                now=datetime(2026, 4, 30, 12, 0, tzinfo=UTC)
+            )
+
+        project_keys = {summary["project"]["project_key"] for summary in summaries}
+        self.assertIn("payments", project_keys)
+        self.assertNotIn("search", project_keys)

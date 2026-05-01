@@ -15,6 +15,7 @@ from models.repositories.deployment_outcomes import (
 )
 from models.repositories.incident_records import get_incident_record
 from models.repositories.projects import get_project, get_project_by_key
+from services.backtesting_service import invalidate_backtesting_snapshot
 from services.project_service import ensure_default_project, normalize_project_key
 
 ALLOWED_DEPLOYMENT_OUTCOMES = {"success", "failure", "rolled_back"}
@@ -168,6 +169,7 @@ def record_deployment_outcome(
     del source_interface
     normalized_outcome = _normalize_outcome(outcome)
     normalized_timestamp = _coerce_timestamp(deployed_at)
+    linked_project_id: int | None = None
 
     with SessionLocal() as session:
         report = get_analysis_report(session, analysis_id, include_evidence=False)
@@ -186,6 +188,7 @@ def record_deployment_outcome(
                 "conflicting_project_reference",
                 "The supplied project reference does not match the analysis report project.",
             )
+        linked_project_id = report.project_id
         if (
             linked_incident_id is not None
             and get_incident_record(session, linked_incident_id) is None
@@ -204,7 +207,10 @@ def record_deployment_outcome(
             environment=_normalize_optional_text(environment),
             summary=_normalize_optional_text(summary),
         )
-        return _serialize_deployment_outcome(recorded)
+        payload = _serialize_deployment_outcome(recorded)
+    if linked_project_id is not None:
+        invalidate_backtesting_snapshot(project_id=linked_project_id)
+    return payload
 
 
 def list_deployment_outcomes(
