@@ -1,4 +1,4 @@
-# generated: 2026-04-27
+# generated: 2026-05-01
 # last_updated: 2026-05-01
 # project: deploywhisper
 # project_key: NOKEY
@@ -34,7 +34,7 @@
 # - Developer typically creates next story after previous one is done to incorporate learnings
 # - Dev moves story to review, then runs code-review
 
-generated: 2026-04-27
+generated: 2026-05-01
 last_updated: 2026-05-01
 project: deploywhisper
 project_key: NOKEY
@@ -42,94 +42,140 @@ tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
 development_status:
+  epic-0: in-progress
+  0-1-publish-core-governance-files: review
+  0-2-define-maintainer-ownership-and-codeowners: ready-for-dev
+  0-3-create-requirements-traceability-matrix: ready-for-dev
+  0-4-establish-rfc-and-decision-process: ready-for-dev
+  epic-0-retrospective: optional
+
   epic-1: in-progress
-  1-1-domain-model-foundations: done
-  1-2-evidence-extractor-service: in-progress
-  1-3-refactor-risk-scorer-to-consume-evidence: review
-  1-4-confidence-field-on-every-finding: review
-  1-5-context-completeness-on-riskassessment: review
-  1-6-narrator-runs-after-scoring: review
-  1-7-deterministic-degradation: review
-  1-8-report-schema-v2: review
+  1-1-project-and-workspace-records: ready-for-dev
+  1-2-project-aware-analysis-submission: ready-for-dev
+  1-3-project-scoped-report-persistence: ready-for-dev
+  1-4-project-scoped-learning-and-context-records: ready-for-dev
+  1-5-lightweight-rbac-role-model: ready-for-dev
+  1-6-project-model-documentation: ready-for-dev
   epic-1-retrospective: optional
 
   epic-2: in-progress
-  2-1-verdict-card-redesign: review
-  2-2-findings-table-with-evidence-badges: ready-for-dev
-  2-3-evidence-inspector-panel: review
-  2-4-context-completeness-panel: review
-  2-5-blast-radius-visualization: review
-  2-6-rollback-plan-panel: review
-  2-7-share-summary-generator: review
-  2-8-keyboard-navigation: in-progress
+  2-1-submission-manifest-and-provenance: ready-for-dev
+  2-2-terraform-plan-json-intake: ready-for-dev
+  2-3-evidence-item-model-and-extraction: ready-for-dev
+  2-4-finding-model-and-evidence-links: ready-for-dev
+  2-5-evidence-law-runtime-gate: ready-for-dev
+  2-6-confidence-uncertainty-and-insufficient-context: ready-for-dev
+  2-7-narrative-after-scoring-and-degraded-fallback: ready-for-dev
+  2-8-report-schema-versioning: ready-for-dev
+  2-9-durable-report-persistence-and-audit-metadata: ready-for-dev
   epic-2-retrospective: optional
 
   epic-3: in-progress
-  3-1-github-action-v1: review
-  3-2-pr-comment-formatter: review
-  3-3-rerun-on-commit: review
-  3-4-shareable-report-urls: review
-  3-5-report-comparison-view: review
-  3-6-github-app: in-progress
-  3-7-check-run-integration: review
-  3-8-installation-wizard: review
-  3-9-self-hosted-github-app-setup-documentation: done
-  3-10-github-delivery-mode-documentation: backlog
-  3-11-advisory-policy-adapter-output-contract: backlog
+  3-1-verdict-first-report-header: ready-for-dev
+  3-2-findings-table-with-evidence-badges: ready-for-dev
+  3-3-evidence-inspector-panel: ready-for-dev
+  3-4-confidence-ledger-and-why-not-lower-higher: ready-for-dev
+  3-5-context-completeness-and-todo-panel: ready-for-dev
+  3-6-report-diff-after-rerun: ready-for-dev
+  3-7-keyboard-and-accessibility-review-pass: ready-for-dev
+  3-8-historical-report-search-and-filtering: ready-for-dev
   epic-3-retrospective: optional
 
   epic-4: in-progress
-  4-1-skills-registry-api: done
-  4-2-skills-manifest-spec-v1: review
-  4-3-skill-test-harness: review
-  4-4-skills-installer-cli: review
-  4-5-skills-browser-ui: review
-  4-6-contribution-workflow: review
-  4-7-seed-20-community-skills: done
-  4-8-skill-analytics: done
-  4-9-editorial-curation: done
-  4-10-seed-marketplace-catalog-batch-2: backlog
-  4-11-seed-marketplace-catalog-batch-3: backlog
-  4-12-seed-marketplace-catalog-batch-4: backlog
+  4-1-public-risk-pattern-library-v1: ready-for-dev
+  4-2-safe-sample-incident-pack: ready-for-dev
+  4-3-incident-import-for-markdown-yaml-and-json: ready-for-dev
+  4-4-incident-similarity-with-match-explanation: ready-for-dev
+  4-5-reviewer-feedback-capture: ready-for-dev
+  4-6-deployment-outcome-capture: ready-for-dev
+  4-7-incident-ingestion-management-and-indexing: ready-for-dev
   epic-4-retrospective: optional
 
   epic-5: in-progress
-  5-1-project-workspace-foundation: done
-  5-2-topology-import-foundation: done
-  5-3-topology-drift-detection: done
-  5-4-topology-freshness-badge: review
-  5-5-deployment-history-capture: review
-  5-6-reviewer-feedback-capture: review
-  5-7-outcome-linking: done
-  5-8-calibration-dashboard: ready-for-dev
-  5-9-trend-analysis: ready-for-dev
-  5-10-terraform-state-topology-source: ready-for-dev
-  5-11-cloudformation-topology-source: ready-for-dev
-  5-12-threshold-and-reporting-defaults-management: ready-for-dev
-  5-13-policy-adapter-consumption-boundary: ready-for-dev
-  5-14-kubernetes-manifest-topology-source: ready-for-dev
-  5-15-ansible-topology-source: ready-for-dev
-  5-16-custom-topology-source-boundary: ready-for-dev
+  5-1-versioned-api-report-contract: ready-for-dev
+  5-2-cli-project-aware-advisory-output: ready-for-dev
+  5-3-github-action-integration-contract: ready-for-dev
+  5-4-pr-comment-formatter: ready-for-dev
+  5-5-rerun-on-commit-and-report-comparison: ready-for-dev
+  5-6-future-adapter-output-contract: ready-for-dev
   epic-5-retrospective: optional
 
   epic-6: in-progress
   6-1-benchmark-corpus-v1: ready-for-dev
-  6-2-scenario-annotation: ready-for-dev
-  6-3-benchmark-runner: ready-for-dev
-  6-4-comparative-runner: ready-for-dev
-  6-5-published-results-dashboard: ready-for-dev
-  6-6-quarterly-regression: ready-for-dev
-  6-7-open-source-the-corpus: ready-for-dev
-  6-8-incident-backtesting: ready-for-dev
-  6-9-benchmark-corpus-expansion-batch: backlog
-  6-10-benchmark-corpus-completion-and-quality-gate: backlog
-  6-11-hosted-and-llm-comparator-adapters: backlog
-  6-12-comparative-result-normalization-and-reporting: backlog
+  6-2-benchmark-runner: ready-for-dev
+  6-3-honest-failure-report-generator: ready-for-dev
+  6-4-outcome-calibration-metrics: ready-for-dev
+  6-5-incident-backtesting: ready-for-dev
+  6-6-risk-trend-review: ready-for-dev
   epic-6-retrospective: optional
 
-  brownfield-hardening: in-progress
-  bh-s1-lock-provider-boundary-behavior-with-regression-tests: ready-for-dev
-  bh-s2-introduce-provider-adapter-contract-and-registry: ready-for-dev
-  bh-s3-migrate-openai-anthropic-gemini-and-ollama-to-direct-sdk-adapters: ready-for-dev
-  bh-s4-migrate-openrouter-groq-and-xai-to-a-compatibility-adapter-and-remove-the-legacy-meta-provider-dependency: ready-for-dev
-  bh-s5-add-provider-capability-metadata-and-mcp-readiness-hooks: ready-for-dev
+  epic-7: in-progress
+  7-1-project-scoped-topology-context: ready-for-dev
+  7-2-terraform-state-connector: ready-for-dev
+  7-3-kubernetes-live-state-connector: ready-for-dev
+  7-4-codeowners-and-ownership-mapping: ready-for-dev
+  7-5-context-graph-and-freshness-ledger: ready-for-dev
+  epic-7-retrospective: optional
+
+  epic-8: in-progress
+  8-1-sarif-ingestion: ready-for-dev
+  8-2-scanner-json-adapter-v1: ready-for-dev
+  8-3-external-evidence-report-context: ready-for-dev
+  8-4-scanner-conflict-handling: ready-for-dev
+  8-5-existing-security-tools-comparison-guide: ready-for-dev
+  epic-8-retrospective: optional
+
+  epic-9: in-progress
+  9-1-skill-manifest-spec-v1: ready-for-dev
+  9-2-skills-registry-api: ready-for-dev
+  9-3-skill-test-harness: ready-for-dev
+  9-4-skills-installer-cli: ready-for-dev
+  9-5-skills-browser-ui: ready-for-dev
+  9-6-skill-contribution-workflow: ready-for-dev
+  9-7-skill-analytics-and-deprecation-signals: ready-for-dev
+  epic-9-retrospective: optional
+
+  epic-10: in-progress
+  10-1-agent-json-cli-mode: ready-for-dev
+  10-2-mcp-compatible-or-equivalent-agent-interface: ready-for-dev
+  10-3-ai-generated-iac-provenance-and-risk-patterns: ready-for-dev
+  10-4-prompt-injection-test-suite: ready-for-dev
+  10-5-ai-safety-documentation: ready-for-dev
+  epic-10-retrospective: optional
+
+  epic-11: in-progress
+  11-1-policy-adapter-output-contract: ready-for-dev
+  11-2-threshold-and-reporting-defaults-management: ready-for-dev
+  11-3-integration-level-enforcement-settings: ready-for-dev
+  11-4-enforcement-guardrail-documentation: ready-for-dev
+  epic-11-retrospective: optional
+
+  epic-12: in-progress
+  12-1-secrets-and-raw-artifact-boundary-audit: ready-for-dev
+  12-2-provider-settings-administration: ready-for-dev
+  12-3-connector-credential-handling-and-redaction-audit: ready-for-dev
+  12-4-openssf-scorecard-and-codeql: ready-for-dev
+  12-5-sbom-and-release-checksums: ready-for-dev
+  12-6-signing-and-provenance: ready-for-dev
+  12-7-backup-restore-upgrade-and-retention-docs: ready-for-dev
+  12-8-air-gapped-and-restricted-network-guide: ready-for-dev
+  epic-12-retrospective: optional
+
+  epic-13: in-progress
+  13-1-documentation-information-architecture: ready-for-dev
+  13-2-first-analysis-and-report-interpretation-guides: ready-for-dev
+  13-3-api-and-report-schema-references: ready-for-dev
+  13-4-cli-evidence-and-agent-output-references: ready-for-dev
+  13-5-connector-guides: ready-for-dev
+  13-6-workflow-integration-guides: ready-for-dev
+  13-7-docs-ci-and-drift-checks: ready-for-dev
+  13-8-release-notes-and-upgrade-notes: ready-for-dev
+  epic-13-retrospective: optional
+
+  epic-14: in-progress
+  14-1-cncf-readiness-checklist: ready-for-dev
+  14-2-public-adopters-and-usage-signals: ready-for-dev
+  14-3-maintainer-coverage-and-promotion-process: ready-for-dev
+  14-4-community-health-metrics: ready-for-dev
+  14-5-cncf-application-package: ready-for-dev
+  epic-14-retrospective: optional
