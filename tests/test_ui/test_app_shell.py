@@ -66,8 +66,21 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Last scan: none yet", response.text)
         self.assertIn("Analysis snapshot", response.text)
         self.assertIn("Files scanned", response.text)
+        self.assertIn("/assets/favicon-512.png", response.text)
+        self.assertIn("/assets/favicon.ico", response.text)
         self.assertNotIn("Foundation ready", response.text)
         self.assertNotIn("5-second verdict", response.text)
+
+    def test_brand_icon_assets_are_served(self) -> None:
+        brand_icon = self.client.get("/assets/favicon-512.png")
+        favicon = self.client.get("/assets/favicon.ico")
+
+        self.assertEqual(brand_icon.status_code, 200)
+        self.assertEqual(brand_icon.headers["content-type"], "image/png")
+        self.assertGreater(len(brand_icon.content), 0)
+        self.assertEqual(favicon.status_code, 200)
+        self.assertEqual(favicon.headers["content-type"], "image/x-icon")
+        self.assertGreater(len(favicon.content), 0)
 
     def test_history_page_contains_back_to_dashboard_action(self) -> None:
         response = self.client.get("/history")

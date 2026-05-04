@@ -283,7 +283,7 @@ def main() -> None:
         reload=False,
         title="DeployWhisper",
         viewport="width=device-width, initial-scale=1",
-        favicon=None,
+        favicon="/assets/favicon.ico",
         dark=False,
         language="en-US",
         binding_refresh_interval=0.1,

@@ -21,18 +21,12 @@ from ui.components.project_workspace_switcher import (
     project_context_summary,
 )
 
-_BRAND_MARK_SVG = """
-<svg width="26" height="26" viewBox="0 0 80 80" fill="none" aria-hidden="true">
-  <path d="M16 12 L40 4 L64 12 L64 42 C64 58 52 68 40 74 C28 68 16 58 16 42Z" fill="var(--dw-accent-soft)" stroke="var(--dw-accent)" stroke-width="2.5"/>
-  <path d="M28 36 C28 28 34 22 40 22" stroke="var(--dw-accent)" stroke-width="3" stroke-linecap="round"/>
-  <path d="M24 40 C24 28 31 18 40 18" stroke="var(--dw-accent)" stroke-width="2.2" stroke-linecap="round" opacity=".55"/>
-  <circle cx="40" cy="40" r="3.5" fill="var(--dw-accent)"/>
-  <path d="M40 48 L40 56" stroke="var(--dw-accent)" stroke-width="3" stroke-linecap="round"/>
-  <path d="M36 53 L40 57 L44 53" stroke="var(--dw-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-"""
+BRAND_MARK_IMAGE_PATH = "/assets/favicon-512.png"
 
 _THEME_HEAD_HTML = r"""
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -428,8 +422,8 @@ code,
 }
 
 .dw-brand-mark {
-  width: 46px;
-  height: 46px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -437,6 +431,13 @@ code,
   border: 1px solid var(--dw-accent-line);
   background: linear-gradient(180deg, color-mix(in srgb, var(--dw-accent) 18%, transparent), color-mix(in srgb, var(--dw-accent) 8%, transparent));
   flex-shrink: 0;
+}
+
+.dw-brand-mark-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .dw-brand-copy {
@@ -1019,7 +1020,10 @@ def build_brand_lockup(*, href: str = "/", compact: bool = False) -> None:
     """Render the shared DeployWhisper logo lockup."""
     with ui.element("a").props(f"href={href}").classes("dw-brand no-underline"):
         with ui.element("span").classes("dw-brand-mark"):
-            ui.html(_BRAND_MARK_SVG)
+            ui.html(
+                f'<img src="{BRAND_MARK_IMAGE_PATH}" alt="" '
+                'class="dw-brand-mark-image" aria-hidden="true">'
+            )
         with ui.column().classes("dw-brand-copy gap-[2px]"):
             with ui.row().classes("items-center gap-3 flex-wrap"):
                 ui.html(

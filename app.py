@@ -9,6 +9,7 @@ from html import escape
 import hashlib
 import hmac
 import logging
+from pathlib import Path
 
 from fastapi import Form, Request
 from fastapi.exceptions import RequestValidationError
@@ -56,6 +57,8 @@ import ui.routes.skills as skills_ui_routes  # noqa: F401
 configure_logging()
 logger = logging.getLogger(__name__)
 TOPOLOGY_DRIFT_SCHEDULER_POLL_SECONDS = 60
+ASSETS_DIR = Path(__file__).resolve().parent / "ui" / "assets"
+FAVICON_PATH = "/assets/favicon.ico"
 
 
 def _ensure_nicegui_config_defaults() -> None:
@@ -66,7 +69,7 @@ def _ensure_nicegui_config_defaults() -> None:
         "prod_js": False,
         "title": settings.app_name,
         "viewport": "width=device-width, initial-scale=1",
-        "favicon": None,
+        "favicon": FAVICON_PATH,
         "dark": False,
         "language": "en-US",
         "endpoint_documentation": "none",
@@ -89,6 +92,9 @@ def _ensure_nicegui_config_defaults() -> None:
 
 
 _ensure_nicegui_config_defaults()
+if not getattr(fastapi_app, "_deploywhisper_assets_mounted", False):
+    fastapi_app.add_static_files("/assets", ASSETS_DIR)
+    fastapi_app._deploywhisper_assets_mounted = True
 fastapi_app.add_exception_handler(ApiError, api_error_handler)
 fastapi_app.add_exception_handler(RequestValidationError, validation_error_handler)
 fastapi_app.add_exception_handler(StarletteHTTPException, http_error_envelope_handler)
@@ -660,6 +666,7 @@ def run() -> None:
         host=settings.app_host,
         port=settings.app_port,
         title=settings.app_name,
+        favicon=FAVICON_PATH,
         dark=False,
         reload=False,
         show=False,
