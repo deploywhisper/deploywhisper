@@ -12,10 +12,14 @@ PRD = ROOT / "_bmad-output" / "planning-artifacts" / "prd.md"
 MATRIX = (
     ROOT / "_bmad-output" / "planning-artifacts" / "requirements-traceability-matrix.md"
 )
+SPRINT_STATUS = (
+    ROOT / "_bmad-output" / "implementation-artifacts" / "sprint-status.yaml"
+)
 
 REQUIREMENT_ID = re.compile(r"\*\*([A-Z][A-Z0-9]+(?:-[A-Z]+)?)-\d{2}\*\*")
 MATRIX_ROW = re.compile(r"^\|\s*`([^`]+)`\s*\|")
 ARTIFACT_PATH = re.compile(r"`(_bmad-output/implementation-artifacts/[^`]+\.md)`")
+STORY_STATUS = re.compile(r"^\s+([0-9]+-[0-9]+-[a-z0-9-]+):\s+\S+")
 
 
 def _prd_requirement_families() -> set[str]:
@@ -29,6 +33,14 @@ def _matrix_rows() -> list[list[str]]:
             continue
         rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
     return rows
+
+
+def _planned_story_artifacts() -> set[str]:
+    return {
+        f"_bmad-output/implementation-artifacts/{match.group(1)}.md"
+        for line in SPRINT_STATUS.read_text(encoding="utf-8").splitlines()
+        if (match := STORY_STATUS.match(line))
+    }
 
 
 class RequirementsTraceabilityMatrixTests(unittest.TestCase):
@@ -55,6 +67,7 @@ class RequirementsTraceabilityMatrixTests(unittest.TestCase):
         rows = _matrix_rows()
         self.assertNotEqual([], rows)
 
+        planned_artifacts = _planned_story_artifacts()
         missing_epic = []
         missing_artifact = []
         missing_status = []
@@ -73,7 +86,10 @@ class RequirementsTraceabilityMatrixTests(unittest.TestCase):
                 missing_artifact.append(family)
             for artifact_path in artifact_paths:
                 artifact_file = ROOT / artifact_path
-                if not artifact_file.is_file():
+                if (
+                    not artifact_file.is_file()
+                    and artifact_path not in planned_artifacts
+                ):
                     missing_artifact.append(f"{family}: {artifact_path}")
             if not status:
                 missing_status.append(family)

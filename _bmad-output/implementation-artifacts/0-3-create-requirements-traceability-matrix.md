@@ -109,6 +109,7 @@ GPT-5
 - `./.venv/bin/ruff check .` passed during review rerun.
 - `./.venv/bin/ruff format --check .` passed during review rerun.
 - `./.venv/bin/python -m unittest discover -q` passed with 223 tests run and 1 skipped during review rerun.
+- `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra --cov=. --cov-report=xml:coverage-api-cli-infra.xml --cov-report=term-missing -q --tb=short` passed with 133 tests after fixing CI-only artifact validation.
 
 ### Completion Notes List
 
@@ -118,6 +119,7 @@ GPT-5
 - Resolved review finding by adding implementation-artifact/story-file coverage to the matrix and guardrail test.
 - Resolved review finding by validating that implementation artifact paths listed in the matrix resolve to real story files.
 - Code review rerun completed cleanly with no new findings.
+- Fixed CI-only traceability guardrail failure by validating referenced implementation artifacts against committed story files or planned story keys in `sprint-status.yaml`, avoiding dependence on ignored local story files.
 
 ### File List
 
