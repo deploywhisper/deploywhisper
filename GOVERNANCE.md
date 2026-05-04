@@ -12,9 +12,9 @@ DeployWhisper is an open-source, self-hosted project for evidence-backed pre-dep
 
 ## Decision Making
 
-Day-to-day changes are reviewed through pull requests. Larger changes that affect architecture, governance, security posture, public roadmap, supported interfaces, or compatibility expectations should use the RFC process once that process is published.
+Day-to-day changes are reviewed through pull requests. Larger changes that affect architecture, governance, security posture, public roadmap, supported interfaces, or compatibility expectations use the public RFC process in `docs/rfcs/README.md`.
 
-Until the full RFC process is available, maintainers should record major decisions in planning artifacts, pull request descriptions, or issue discussions and link them from the related work.
+Accepted RFCs must record the decision outcome and link back to relevant PRD or architecture sections. When an accepted RFC changes the current PRD or architecture, maintainers must track the required planning update in the RFC decision record.
 
 ## Maintainer Model
 
@@ -43,3 +43,4 @@ Core DeployWhisper capabilities should remain usable in a self-hosted environmen
 - `SECURITY.md` explains vulnerability reporting and security boundaries.
 - `SUPPORT.md` explains community support expectations.
 - `ROADMAP.md` publishes current roadmap direction.
+- `docs/rfcs/README.md` defines the public RFC and decision process for major changes.

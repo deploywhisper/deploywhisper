@@ -46,7 +46,7 @@ development_status:
   0-1-publish-core-governance-files: done
   0-2-define-maintainer-ownership-and-codeowners: done
   0-3-create-requirements-traceability-matrix: ready-for-dev
-  0-4-establish-rfc-and-decision-process: ready-for-dev
+  0-4-establish-rfc-and-decision-process: done
   epic-0-retrospective: optional
 
   epic-1: in-progress
