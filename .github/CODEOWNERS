@@ -1,12 +1,36 @@
 # Default owner for everything
 * @pramodksahoo
 
-# Critical paths need explicit review
-/parsers/       @pramodksahoo
-/llm/           @pramodksahoo
-/analysis/      @pramodksahoo
+# Maintainer areas
+/.agents/       @pramodksahoo
+/_bmad/         @pramodksahoo
+/_bmad-output/  @pramodksahoo
 /.github/       @pramodksahoo
+/api/           @pramodksahoo
+/analysis/      @pramodksahoo
+/cli/           @pramodksahoo
+/data/          @pramodksahoo
+/docs/          @pramodksahoo
+/evidence/      @pramodksahoo
+/integrations/  @pramodksahoo
+/llm/           @pramodksahoo
+/migrations/    @pramodksahoo
+/models/        @pramodksahoo
+/parsers/       @pramodksahoo
+/samples/       @pramodksahoo
+/schemas/       @pramodksahoo
+/scripts/       @pramodksahoo
+/services/      @pramodksahoo
 /skills/        @pramodksahoo
+/tests/         @pramodksahoo
+/ui/            @pramodksahoo
+
+# High-signal contribution workflow files
 /tests/skill-tests/ @pramodksahoo
-/docs/contributing/skills.md @pramodksahoo
+/MAINTAINERS.md @pramodksahoo
+/CONTRIBUTING.md @pramodksahoo
+/GOVERNANCE.md @pramodksahoo
+/SECURITY.md @pramodksahoo
+/ROADMAP.md @pramodksahoo
 /.github/PULL_REQUEST_TEMPLATE/skill.md @pramodksahoo
+/docs/contributing/skills.md @pramodksahoo
