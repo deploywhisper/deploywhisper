@@ -79,7 +79,10 @@ class DashboardShellTests(unittest.TestCase):
         self.assertEqual(brand_icon.headers["content-type"], "image/png")
         self.assertGreater(len(brand_icon.content), 0)
         self.assertEqual(favicon.status_code, 200)
-        self.assertEqual(favicon.headers["content-type"], "image/x-icon")
+        self.assertIn(
+            favicon.headers["content-type"],
+            {"image/x-icon", "image/vnd.microsoft.icon"},
+        )
         self.assertGreater(len(favicon.content), 0)
 
     def test_history_page_contains_back_to_dashboard_action(self) -> None:
