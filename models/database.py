@@ -7,7 +7,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine
+from sqlalchemy import DateTime, Integer, String, create_engine
 from sqlalchemy import event
 from sqlalchemy.engine import make_url
 from sqlalchemy import inspect
@@ -42,6 +42,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "011_add_deployment_outcome_fields",
     "012_add_feedback_event_fields",
     "013_add_incident_analysis_reference",
+    "014_add_project_workspace_records",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -166,6 +167,83 @@ def _incident_record_has_analysis_link(connection) -> bool:
     return has_foreign_key and has_index
 
 
+def _project_workspace_columns(connection) -> set[str]:
+    return {
+        column["name"]
+        for column in inspect(connection).get_columns("project_workspaces")
+    }
+
+
+def _project_workspace_schema_complete(connection) -> bool:
+    inspector = inspect(connection)
+    column_map = {
+        column["name"]: column
+        for column in inspect(connection).get_columns("project_workspaces")
+    }
+    columns = set(column_map)
+    required_columns = {
+        "id",
+        "project_id",
+        "workspace_key",
+        "display_name",
+        "description",
+        "environment",
+        "created_at",
+        "updated_at",
+    }
+    required_non_nullable_columns = {
+        "project_id",
+        "workspace_key",
+        "display_name",
+        "created_at",
+        "updated_at",
+    }
+    has_required_nullability = all(
+        column_name in column_map and column_map[column_name].get("nullable") is False
+        for column_name in required_non_nullable_columns
+    )
+    has_primary_key = bool(column_map.get("id", {}).get("primary_key"))
+    required_type_affinities = {
+        "id": Integer,
+        "project_id": Integer,
+        "workspace_key": String,
+        "display_name": String,
+        "description": String,
+        "environment": String,
+        "created_at": DateTime,
+        "updated_at": DateTime,
+    }
+    has_required_types = all(
+        column_name in column_map
+        and column_map[column_name]["type"]._type_affinity is expected_affinity
+        for column_name, expected_affinity in required_type_affinities.items()
+    )
+    has_unique_key = any(
+        set(constraint.get("column_names") or []) == {"project_id", "workspace_key"}
+        for constraint in inspector.get_unique_constraints("project_workspaces")
+    )
+    has_project_fk = any(
+        foreign_key.get("referred_table") == "projects"
+        and "project_id" in (foreign_key.get("constrained_columns") or [])
+        and (foreign_key.get("options") or {}).get("ondelete") == "CASCADE"
+        for foreign_key in inspector.get_foreign_keys("project_workspaces")
+    )
+    indexed_columns = {
+        tuple(index.get("column_names") or [])
+        for index in inspector.get_indexes("project_workspaces")
+    }
+    return (
+        required_columns.issubset(columns)
+        and has_required_nullability
+        and has_primary_key
+        and has_required_types
+        and has_unique_key
+        and has_project_fk
+        and ("project_id",) in indexed_columns
+        and ("workspace_key",) in indexed_columns
+    )
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
@@ -173,6 +251,19 @@ def _bootstrap_brownfield_revision() -> None:
 
         has_baseline_tables = _BASELINE_TABLES.issubset(tables)
         has_evidence_tables = _EVIDENCE_TABLES.issubset(tables)
+        has_project_workspace_table = "project_workspaces" in tables
+        has_complete_workspace_records = (
+            has_project_workspace_table
+            and _project_workspace_schema_complete(connection)
+            and has_baseline_tables
+            and "projects" in tables
+            and "topology_versions" in tables
+        )
+        if has_project_workspace_table and not has_complete_workspace_records:
+            raise RuntimeError(
+                "Detected a partial project workspace schema without a complete "
+                "migration history. Manual recovery is required."
+            )
         if not has_baseline_tables and "alembic_version" not in tables:
             return
 
@@ -212,6 +303,14 @@ def _bootstrap_brownfield_revision() -> None:
         has_complete_incident_link = {"analysis_id"}.issubset(
             incident_record_columns
         ) and _incident_record_has_analysis_link(connection)
+        if (
+            has_complete_workspace_records
+            and "projects" in tables
+            and "topology_versions" in tables
+            and "project_id" in report_columns
+        ):
+            _write_alembic_revision(connection, "014_add_project_workspace_records")
+            return
         if has_complete_incident_link and has_feedback_fields:
             _write_alembic_revision(connection, "013_add_incident_analysis_reference")
             return

@@ -894,6 +894,53 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("unassigned", output.getvalue())
 
+    def test_project_workspace_create_and_list_commands(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        create_output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "project",
+                    "workspace",
+                    "create",
+                    "payments",
+                    "Production / US East",
+                    "Production US East",
+                    "--environment",
+                    "prod",
+                ],
+            ),
+            redirect_stdout(create_output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("Created workspace production-us-east", create_output.getvalue())
+
+        list_output = io.StringIO()
+        with (
+            patch(
+                "sys.argv",
+                ["deploywhisper", "project", "workspace", "list", "payments"],
+            ),
+            redirect_stdout(list_output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn(
+            "payments/production-us-east: Production US East (prod)",
+            list_output.getvalue(),
+        )
+
     def test_project_command_requires_subcommand(self) -> None:
         stderr = io.StringIO()
 

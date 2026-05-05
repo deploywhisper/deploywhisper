@@ -37,7 +37,8 @@ from services.analysis_service import (
     build_share_summary,
 )
 from services.deployment_outcome_service import record_deployment_outcome
-from services.project_service import create_project, list_projects
+from services.project_service import create_project, create_workspace
+from services.project_service import list_projects, list_workspaces
 from services.project_service import resolve_project_reference
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
@@ -380,6 +381,43 @@ def _run_project_list() -> int:
     return 0
 
 
+def _run_project_workspace_create(args: argparse.Namespace) -> int:
+    try:
+        created = create_workspace(
+            project_key=args.project_key,
+            workspace_key=args.workspace_key,
+            display_name=args.display_name,
+            description=args.description,
+            environment=args.environment,
+        )
+    except ValueError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 2
+    print(
+        f"Created workspace {created.workspace_key} "
+        f"({created.display_name}) for project {created.project_key} "
+        f"[id={created.id}]"
+    )
+    return 0
+
+
+def _run_project_workspace_list(args: argparse.Namespace) -> int:
+    try:
+        workspaces = list_workspaces(project_key=args.project_key)
+    except ValueError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 2
+    for workspace in workspaces:
+        environment = (
+            f" ({workspace.environment})" if workspace.environment is not None else ""
+        )
+        print(
+            f"{workspace.project_key}/{workspace.workspace_key}: "
+            f"{workspace.display_name}{environment}"
+        )
+    return 0
+
+
 def _run_outcome_record(args: argparse.Namespace) -> int:
     try:
         recorded = record_deployment_outcome(
@@ -587,6 +625,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional default branch name.",
     )
     project_subparsers.add_parser("list", help="List known project/workspace records.")
+    project_workspace_parser = project_subparsers.add_parser(
+        "workspace", help="Manage workspace/environment records for a project."
+    )
+    workspace_subparsers = project_workspace_parser.add_subparsers(
+        dest="workspace_command"
+    )
+    workspace_subparsers.required = True
+    workspace_create_parser = workspace_subparsers.add_parser(
+        "create", help="Create a workspace/environment record."
+    )
+    workspace_create_parser.add_argument("project_key", help="Owning project key.")
+    workspace_create_parser.add_argument("workspace_key", help="Stable workspace key.")
+    workspace_create_parser.add_argument(
+        "display_name", help="Human-readable workspace name."
+    )
+    workspace_create_parser.add_argument(
+        "--description",
+        help="Optional workspace description.",
+    )
+    workspace_create_parser.add_argument(
+        "--environment",
+        help="Optional environment label such as prod or staging.",
+    )
+    workspace_list_parser = workspace_subparsers.add_parser(
+        "list", help="List workspace/environment records for a project."
+    )
+    workspace_list_parser.add_argument("project_key", help="Owning project key.")
 
     outcome_parser = subparsers.add_parser(
         "outcome", help="Record post-deployment outcomes for persisted analyses."
@@ -756,6 +821,11 @@ def main() -> None:
         raise SystemExit(_run_project_create(args))
     if args.command == "project" and args.project_command == "list":
         raise SystemExit(_run_project_list())
+    if args.command == "project" and args.project_command == "workspace":
+        if args.workspace_command == "create":
+            raise SystemExit(_run_project_workspace_create(args))
+        if args.workspace_command == "list":
+            raise SystemExit(_run_project_workspace_list(args))
     if args.command == "outcome" and args.outcome_command == "record":
         raise SystemExit(_run_outcome_record(args))
     if args.command == "topology" and args.topology_command == "import":
