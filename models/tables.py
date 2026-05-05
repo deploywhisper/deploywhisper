@@ -72,6 +72,10 @@ if "Project" not in globals():
             onupdate=lambda: datetime.now(UTC),
         )
         reports: Mapped[list["AnalysisReport"]] = relationship(back_populates="project")
+        workspaces: Mapped[list["ProjectWorkspace"]] = relationship(
+            back_populates="project",
+            cascade="all, delete-orphan",
+        )
         deployment_outcomes: Mapped[list["DeploymentOutcome"]] = relationship(
             back_populates="project",
             cascade="all, delete-orphan",
@@ -80,6 +84,40 @@ if "Project" not in globals():
             back_populates="project",
             cascade="all, delete-orphan",
         )
+
+
+if "ProjectWorkspace" not in globals():
+
+    class ProjectWorkspace(Base):
+        """First-class workspace/environment scope within a project."""
+
+        __tablename__ = "project_workspaces"
+        __table_args__ = (
+            UniqueConstraint(
+                "project_id",
+                "workspace_key",
+                name="uq_project_workspaces_project_key",
+            ),
+        )
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        workspace_key: Mapped[str] = mapped_column(String(120), index=True)
+        display_name: Mapped[str] = mapped_column(String(255))
+        description: Mapped[str | None] = mapped_column(Text, nullable=True)
+        environment: Mapped[str | None] = mapped_column(String(80), nullable=True)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True),
+            default=lambda: datetime.now(UTC),
+            onupdate=lambda: datetime.now(UTC),
+        )
+        project: Mapped["Project"] = relationship(back_populates="workspaces")
 
 
 if "AnalysisReport" not in globals():

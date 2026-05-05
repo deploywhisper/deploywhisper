@@ -56,3 +56,90 @@ class ProjectsApiTests(unittest.TestCase):
         payload = response.json()
         self.assertGreaterEqual(payload["meta"]["count"], 1)
         self.assertEqual(payload["data"][0]["project_key"], "unassigned")
+
+    def test_create_workspace_returns_structured_payload(self) -> None:
+        project_response = self.client.post(
+            "/api/v1/projects",
+            json={
+                "project_key": "payments-api",
+                "display_name": "Payments API",
+            },
+        )
+        self.assertEqual(project_response.status_code, 200)
+
+        response = self.client.post(
+            "/api/v1/projects/payments-api/workspaces",
+            json={
+                "workspace_key": "Production / US East",
+                "display_name": "Production US East",
+                "description": "Primary production environment",
+                "environment": "prod",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["project_key"], "payments-api")
+        self.assertEqual(payload["data"]["workspace_key"], "production-us-east")
+        self.assertEqual(payload["data"]["display_name"], "Production US East")
+        self.assertEqual(payload["data"]["environment"], "prod")
+
+    def test_duplicate_workspace_key_returns_explicit_error_without_partial_record(
+        self,
+    ) -> None:
+        project_response = self.client.post(
+            "/api/v1/projects",
+            json={
+                "project_key": "platform",
+                "display_name": "Platform",
+            },
+        )
+        self.assertEqual(project_response.status_code, 200)
+        first_response = self.client.post(
+            "/api/v1/projects/platform/workspaces",
+            json={
+                "workspace_key": "prod",
+                "display_name": "Production",
+            },
+        )
+        self.assertEqual(first_response.status_code, 200)
+
+        duplicate_response = self.client.post(
+            "/api/v1/projects/platform/workspaces",
+            json={
+                "workspace_key": "prod",
+                "display_name": "Production Duplicate",
+            },
+        )
+
+        self.assertEqual(duplicate_response.status_code, 400)
+        payload = duplicate_response.json()
+        self.assertEqual(payload["error"]["code"], "invalid_workspace_request")
+        self.assertIn("Workspace key already exists", payload["error"]["message"])
+
+        list_response = self.client.get("/api/v1/projects/platform/workspaces")
+        self.assertEqual(list_response.status_code, 200)
+        workspaces = list_response.json()["data"]
+        self.assertEqual(len(workspaces), 1)
+        self.assertEqual(workspaces[0]["display_name"], "Production")
+
+    def test_workspace_routes_return_not_found_for_unknown_project(self) -> None:
+        list_response = self.client.get("/api/v1/projects/missing/workspaces")
+        create_response = self.client.post(
+            "/api/v1/projects/missing/workspaces",
+            json={
+                "workspace_key": "prod",
+                "display_name": "Production",
+            },
+        )
+
+        self.assertEqual(list_response.status_code, 404)
+        self.assertEqual(create_response.status_code, 404)
+        self.assertEqual(
+            list_response.json()["error"]["code"],
+            "project_not_found",
+        )
+        self.assertEqual(
+            create_response.json()["error"]["code"],
+            "project_not_found",
+        )

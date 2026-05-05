@@ -268,6 +268,29 @@ class ProjectCreateRequest(BaseModel):
     )
 
 
+class WorkspaceCreateRequest(BaseModel):
+    workspace_key: str = Field(..., description="Stable workspace/environment key")
+    display_name: str = Field(..., description="Human-readable workspace name")
+    description: str | None = Field(default=None, description="Optional description")
+    environment: str | None = Field(
+        default=None, description="Optional environment label such as prod or staging"
+    )
+
+
+class WorkspaceData(BaseModel):
+    id: int = Field(..., description="Stable workspace identifier")
+    project_id: int = Field(..., description="Owning project identifier")
+    project_key: str = Field(..., description="Owning stable project key")
+    workspace_key: str = Field(..., description="Stable workspace/environment key")
+    display_name: str = Field(..., description="Human-readable workspace name")
+    description: str | None = Field(default=None, description="Optional description")
+    environment: str | None = Field(
+        default=None, description="Optional environment label"
+    )
+    created_at: str = Field(..., description="Creation timestamp")
+    updated_at: str = Field(..., description="Last update timestamp")
+
+
 class ProjectListResponse(BaseModel):
     data: list[ProjectData]
     meta: ListMetaPayload
@@ -275,6 +298,16 @@ class ProjectListResponse(BaseModel):
 
 class ProjectResponse(BaseModel):
     data: ProjectData
+    meta: ResourceOnlyMetaPayload
+
+
+class WorkspaceListResponse(BaseModel):
+    data: list[WorkspaceData]
+    meta: ListMetaPayload
+
+
+class WorkspaceResponse(BaseModel):
+    data: WorkspaceData
     meta: ResourceOnlyMetaPayload
 
 

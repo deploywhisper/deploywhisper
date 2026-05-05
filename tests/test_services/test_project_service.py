@@ -7,6 +7,9 @@ import tempfile
 import unittest
 from importlib import reload
 from pathlib import Path
+from unittest.mock import patch
+
+from sqlalchemy.exc import IntegrityError
 
 import config as config_module
 import models.database as database_module
@@ -51,6 +54,247 @@ class ProjectServiceTests(unittest.TestCase):
         self.assertEqual(project.display_name, "Payments API")
         self.assertEqual(project.repository_url, "https://github.com/acme/payments-api")
         self.assertEqual(project.default_branch, "main")
+
+    def test_project_duplicate_integrity_error_uses_explicit_validation_error(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+
+        with (
+            patch.object(
+                project_service_module, "get_project_by_key", return_value=None
+            ),
+            self.assertRaisesRegex(ValueError, "Project key already exists"),
+        ):
+            project_service_module.create_project(
+                project_key="platform",
+                display_name="Platform Duplicate",
+            )
+
+        projects = [
+            project
+            for project in project_service_module.list_projects()
+            if project.project_key == "platform"
+        ]
+        self.assertEqual(len(projects), 1)
+        self.assertEqual(projects[0].display_name, "Platform")
+
+    def test_create_workspace_normalizes_key_and_persists_metadata(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments-api",
+            display_name="Payments API",
+        )
+
+        workspace = project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="Production / US East",
+            display_name="Production US East",
+            description="Primary production environment",
+            environment="prod",
+        )
+
+        self.assertEqual(workspace.project_id, project.id)
+        self.assertEqual(workspace.project_key, "payments-api")
+        self.assertEqual(workspace.workspace_key, "production-us-east")
+        self.assertEqual(workspace.display_name, "Production US East")
+        self.assertEqual(workspace.description, "Primary production environment")
+        self.assertEqual(workspace.environment, "prod")
+        self.assertTrue(workspace.created_at)
+        self.assertTrue(workspace.updated_at)
+
+        workspaces = project_service_module.list_workspaces(project_key="payments-api")
+        self.assertEqual(
+            [item.workspace_key for item in workspaces], ["production-us-east"]
+        )
+
+    def test_invalid_workspace_key_does_not_create_partial_record(self) -> None:
+        project = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+
+        with self.assertRaisesRegex(ValueError, "Workspace key"):
+            project_service_module.create_workspace(
+                project_key=project.project_key,
+                workspace_key=" !!! ",
+                display_name="Invalid",
+            )
+
+        self.assertEqual(
+            project_service_module.list_workspaces(project_key="platform"), []
+        )
+
+    def test_duplicate_workspace_key_does_not_create_partial_record(self) -> None:
+        project = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+
+        with self.assertRaisesRegex(ValueError, "Workspace key already exists"):
+            project_service_module.create_workspace(
+                project_key=project.project_key,
+                workspace_key="prod",
+                display_name="Production Duplicate",
+            )
+
+        workspaces = project_service_module.list_workspaces(project_key="platform")
+        self.assertEqual(len(workspaces), 1)
+        self.assertEqual(workspaces[0].display_name, "Production")
+
+    def test_workspace_duplicate_integrity_error_uses_explicit_validation_error(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+
+        with (
+            patch.object(
+                project_service_module, "get_workspace_by_key", return_value=None
+            ),
+            self.assertRaisesRegex(ValueError, "Workspace key already exists"),
+        ):
+            project_service_module.create_workspace(
+                project_key=project.project_key,
+                workspace_key="prod",
+                display_name="Production Duplicate",
+            )
+
+        workspaces = project_service_module.list_workspaces(project_key="platform")
+        self.assertEqual(len(workspaces), 1)
+        self.assertEqual(workspaces[0].display_name, "Production")
+
+    def test_workspace_project_fk_integrity_error_uses_project_not_found(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        integrity_error = IntegrityError(
+            "insert",
+            {},
+            Exception("FOREIGN KEY constraint failed"),
+        )
+
+        with (
+            patch.object(
+                project_service_module, "get_workspace_by_key", return_value=None
+            ),
+            patch.object(
+                project_service_module,
+                "create_workspace_record",
+                side_effect=integrity_error,
+            ),
+            self.assertRaises(
+                project_service_module.ProjectResolutionError
+            ) as exc_info,
+        ):
+            project_service_module.create_workspace(
+                project_key=project.project_key,
+                workspace_key="prod",
+                display_name="Production",
+            )
+
+        self.assertEqual(exc_info.exception.code, "project_not_found")
+
+    def test_non_duplicate_workspace_integrity_error_is_not_rewritten(self) -> None:
+        project = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        integrity_error = IntegrityError(
+            "insert",
+            {},
+            Exception("CHECK constraint failed: project_workspaces_environment"),
+        )
+
+        with (
+            patch.object(
+                project_service_module, "get_workspace_by_key", return_value=None
+            ),
+            patch.object(
+                project_service_module,
+                "create_workspace_record",
+                side_effect=integrity_error,
+            ),
+            self.assertRaises(IntegrityError),
+        ):
+            project_service_module.create_workspace(
+                project_key=project.project_key,
+                workspace_key="prod",
+                display_name="Production",
+            )
+
+    def test_list_workspaces_without_project_key_uses_default_project_only(
+        self,
+    ) -> None:
+        default_project = project_service_module.ensure_default_project()
+        project_service_module.create_workspace(
+            project_key=default_project.project_key,
+            workspace_key="legacy",
+            display_name="Legacy",
+        )
+        other_project = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        project_service_module.create_workspace(
+            project_key=other_project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+
+        workspaces = project_service_module.list_workspaces()
+
+        self.assertEqual(
+            [workspace.workspace_key for workspace in workspaces], ["legacy"]
+        )
+        self.assertEqual(workspaces[0].project_key, default_project.project_key)
+
+    def test_invalid_workspace_list_project_key_does_not_create_default_project(
+        self,
+    ) -> None:
+        with database_module.engine.begin() as connection:
+            connection.exec_driver_sql(
+                "DELETE FROM projects WHERE project_key = ?",
+                ("unassigned",),
+            )
+
+        with self.assertRaisesRegex(ValueError, "Project key"):
+            project_service_module.list_workspaces(project_key=" !!! ")
+
+        with database_module.SessionLocal() as session:
+            self.assertIsNone(project_service_module.get_default_project(session))
+
+    def test_blank_workspace_list_project_key_does_not_create_default_project(
+        self,
+    ) -> None:
+        with database_module.engine.begin() as connection:
+            connection.exec_driver_sql(
+                "DELETE FROM projects WHERE project_key = ?",
+                ("unassigned",),
+            )
+
+        with self.assertRaisesRegex(ValueError, "Project key"):
+            project_service_module.list_workspaces(project_key="")
+
+        with database_module.SessionLocal() as session:
+            self.assertIsNone(project_service_module.get_default_project(session))
 
     def test_resolve_project_reference_derives_stable_repository_key(self) -> None:
         project = project_service_module.resolve_project_reference(

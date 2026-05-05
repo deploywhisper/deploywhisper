@@ -6,15 +6,18 @@ import re
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from models.database import SessionLocal, init_db
 from models.repositories.projects import (
     create_project as create_project_record,
+    create_workspace as create_workspace_record,
     get_default_project,
     get_project,
     get_project_by_key,
+    get_workspace_by_key,
     list_projects as list_project_records,
+    list_workspaces as list_workspace_records,
 )
 from models.repositories.settings import get_setting, upsert_setting
 
@@ -45,6 +48,18 @@ class ProjectRecord(BaseModel):
     updated_at: str
 
 
+class WorkspaceRecord(BaseModel):
+    id: int
+    project_id: int
+    project_key: str
+    workspace_key: str
+    display_name: str
+    description: str | None = None
+    environment: str | None = None
+    created_at: str
+    updated_at: str
+
+
 def _serialize(record) -> ProjectRecord:
     created_at = record.created_at.isoformat()
     updated_at = record.updated_at.isoformat()
@@ -61,12 +76,87 @@ def _serialize(record) -> ProjectRecord:
     )
 
 
+def _serialize_workspace(record) -> WorkspaceRecord:
+    project_key = record.project.project_key if record.project is not None else ""
+    return WorkspaceRecord(
+        id=record.id,
+        project_id=record.project_id,
+        project_key=project_key,
+        workspace_key=record.workspace_key,
+        display_name=record.display_name,
+        description=record.description,
+        environment=record.environment,
+        created_at=record.created_at.isoformat(),
+        updated_at=record.updated_at.isoformat(),
+    )
+
+
 def normalize_project_key(value: str) -> str:
     normalized = _PROJECT_KEY_PATTERN.sub("-", value.strip().lower()).strip("-")
     normalized = re.sub(r"-{2,}", "-", normalized)
     if not normalized:
         raise ValueError("Project key must contain at least one letter or number.")
     return normalized
+
+
+def normalize_workspace_key(value: str) -> str:
+    try:
+        return normalize_project_key(value)
+    except ValueError as exc:
+        raise ValueError(
+            "Workspace key must contain at least one letter or number."
+        ) from exc
+
+
+def _is_workspace_unique_integrity_error(exc: IntegrityError) -> bool:
+    constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", "")
+    if constraint_name == "uq_project_workspaces_project_key":
+        return True
+    message = str(exc.orig).lower()
+    return (
+        "uq_project_workspaces_project_key" in message
+        or (
+            "unique constraint failed" in message
+            and "project_workspaces.project_id" in message
+            and "project_workspaces.workspace_key" in message
+        )
+        or (
+            "duplicate key" in message
+            and "project_workspaces" in message
+            and "workspace_key" in message
+        )
+    )
+
+
+def _is_project_unique_integrity_error(exc: IntegrityError) -> bool:
+    constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", "")
+    if constraint_name in {"uq_projects_project_key", "projects_project_key_key"}:
+        return True
+    message = str(exc.orig).lower()
+    return (
+        "uq_projects_project_key" in message
+        or ("unique constraint failed" in message and "projects.project_key" in message)
+        or (
+            "duplicate key" in message
+            and "projects" in message
+            and "project_key" in message
+        )
+    )
+
+
+def _is_workspace_project_fk_integrity_error(exc: IntegrityError) -> bool:
+    constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", "")
+    if constraint_name in {
+        "project_workspaces_project_id_fkey",
+        "fk_project_workspaces_project_id_projects",
+    }:
+        return True
+    message = str(exc.orig).lower()
+    return "foreign key constraint failed" in message or (
+        "violates foreign key constraint" in message
+        and "project_workspaces" in message
+        and "project_id" in message
+    )
 
 
 def _display_name_from_key(project_key: str) -> str:
@@ -146,22 +236,102 @@ def create_project(
         existing = get_project_by_key(session, normalized_key)
         if existing is not None:
             raise ValueError(f"Project key already exists: {normalized_key}")
-        created = create_project_record(
-            session,
-            project_key=normalized_key,
-            display_name=normalized_display_name,
-            description=(description or None),
-            repository_url=(repository_url or None),
-            default_branch=(default_branch or None),
-            is_default=False,
-        )
+        try:
+            created = create_project_record(
+                session,
+                project_key=normalized_key,
+                display_name=normalized_display_name,
+                description=(description or None),
+                repository_url=(repository_url or None),
+                default_branch=(default_branch or None),
+                is_default=False,
+            )
+        except IntegrityError as exc:
+            session.rollback()
+            if not _is_project_unique_integrity_error(exc):
+                raise
+            raise ValueError(f"Project key already exists: {normalized_key}") from exc
         return _serialize(created)
+
+
+def create_workspace(
+    *,
+    project_key: str,
+    workspace_key: str,
+    display_name: str,
+    description: str | None = None,
+    environment: str | None = None,
+) -> WorkspaceRecord:
+    normalized_project_key = normalize_project_key(project_key)
+    normalized_workspace_key = normalize_workspace_key(workspace_key)
+    normalized_display_name = str(display_name or "").strip()
+    if not normalized_display_name:
+        raise ValueError("Display name is required.")
+    with SessionLocal() as session:
+        project = get_project_by_key(session, normalized_project_key)
+        if project is None:
+            raise ProjectResolutionError(
+                "project_not_found",
+                f"Unknown project reference: project_key={normalized_project_key}.",
+            )
+        existing = get_workspace_by_key(
+            session,
+            project_id=project.id,
+            workspace_key=normalized_workspace_key,
+        )
+        if existing is not None:
+            raise ValueError(
+                f"Workspace key already exists for project "
+                f"{normalized_project_key}: {normalized_workspace_key}"
+            )
+        try:
+            created = create_workspace_record(
+                session,
+                project_id=project.id,
+                workspace_key=normalized_workspace_key,
+                display_name=normalized_display_name,
+                description=(description or None),
+                environment=(environment or None),
+            )
+        except IntegrityError as exc:
+            session.rollback()
+            if _is_workspace_unique_integrity_error(exc):
+                raise ValueError(
+                    f"Workspace key already exists for project "
+                    f"{normalized_project_key}: {normalized_workspace_key}"
+                ) from exc
+            if _is_workspace_project_fk_integrity_error(exc):
+                raise ProjectResolutionError(
+                    "project_not_found",
+                    f"Unknown project reference: project_key={normalized_project_key}.",
+                ) from exc
+            raise
+        created.project = project
+        return _serialize_workspace(created)
 
 
 def list_projects() -> list[ProjectRecord]:
     ensure_default_project()
     with SessionLocal() as session:
         return [_serialize(record) for record in list_project_records(session)]
+
+
+def list_workspaces(*, project_key: str | None = None) -> list[WorkspaceRecord]:
+    if project_key is None:
+        normalized_project_key = ensure_default_project().project_key
+    else:
+        normalized_project_key = normalize_project_key(project_key)
+    with SessionLocal() as session:
+        project = get_project_by_key(session, normalized_project_key)
+        if project is None:
+            raise ProjectResolutionError(
+                "project_not_found",
+                f"Unknown project reference: project_key={normalized_project_key}.",
+            )
+        return [
+            _serialize_workspace(record)
+            for record in list_workspace_records(session, project_id=project.id)
+        ]
 
 
 def get_project_by_id(project_id: int) -> ProjectRecord | None:
@@ -295,3 +465,11 @@ def build_project_payload(project: ProjectRecord | dict[str, Any]) -> dict[str, 
     if isinstance(project, ProjectRecord):
         return project.model_dump()
     return dict(project)
+
+
+def build_workspace_payload(
+    workspace: WorkspaceRecord | dict[str, Any],
+) -> dict[str, Any]:
+    if isinstance(workspace, WorkspaceRecord):
+        return workspace.model_dump()
+    return dict(workspace)

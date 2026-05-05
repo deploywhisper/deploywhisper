@@ -53,6 +53,43 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
+    def _create_project_workspace_table(
+        self,
+        *,
+        id_definition: str = "id INTEGER PRIMARY KEY AUTOINCREMENT",
+        workspace_key_definition: str = "workspace_key VARCHAR(120) NOT NULL",
+    ) -> None:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            sqlite_conn.execute(
+                f"""
+                CREATE TABLE project_workspaces (
+                    {id_definition},
+                    project_id INTEGER NOT NULL,
+                    {workspace_key_definition},
+                    display_name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    environment VARCHAR(80),
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    UNIQUE(project_id, workspace_key)
+                )
+                """
+            )
+            sqlite_conn.execute(
+                "CREATE INDEX ix_project_workspaces_project_id "
+                "ON project_workspaces (project_id)"
+            )
+            sqlite_conn.execute(
+                "CREATE INDEX ix_project_workspaces_workspace_key "
+                "ON project_workspaces (workspace_key)"
+            )
+            sqlite_conn.execute("DROP TABLE alembic_version")
+            sqlite_conn.commit()
+        finally:
+            sqlite_conn.close()
+
     def test_upgrade_head_creates_evidence_schema_on_clean_database(self) -> None:
         command.upgrade(self._config(), "head")
 
@@ -62,6 +99,9 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
         self.assertIn("project_id", self._table_columns("analysis_reports"))
         self.assertIn("project_key", self._table_columns("projects"))
+        self.assertIn("workspace_key", self._table_columns("project_workspaces"))
+        self.assertIn("environment", self._table_columns("project_workspaces"))
+        self.assertNotIn("is_default", self._table_columns("project_workspaces"))
         self.assertIn("title", self._table_columns("incident_records"))
         self.assertIn("analysis_id", self._table_columns("incident_records"))
         self.assertIn("payload_json", self._table_columns("topology_versions"))
@@ -311,7 +351,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "013_add_incident_analysis_reference")
+        self.assertEqual(revision, "014_add_project_workspace_records")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -360,7 +400,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "013_add_incident_analysis_reference")
+        self.assertEqual(revision, "014_add_project_workspace_records")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -386,7 +426,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "013_add_incident_analysis_reference")
+        self.assertEqual(revision, "014_add_project_workspace_records")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -410,6 +450,118 @@ class MigrationTests(unittest.TestCase):
         ):
             database_module.init_db()
 
+    def test_init_db_rejects_partial_project_workspace_schema(self) -> None:
+        command.upgrade(self._config(), "013_add_incident_analysis_reference")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            """
+            CREATE TABLE project_workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                workspace_key VARCHAR(120) NOT NULL
+            )
+            """
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial project workspace schema"):
+            database_module.init_db()
+
+    def test_init_db_rejects_nullable_project_workspace_required_columns(self) -> None:
+        command.upgrade(self._config(), "013_add_incident_analysis_reference")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            """
+            CREATE TABLE project_workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER,
+                workspace_key VARCHAR(120),
+                display_name VARCHAR(255),
+                description TEXT,
+                environment VARCHAR(80),
+                created_at DATETIME,
+                updated_at DATETIME,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                UNIQUE(project_id, workspace_key)
+            )
+            """
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_project_workspaces_project_id "
+            "ON project_workspaces (project_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_project_workspaces_workspace_key "
+            "ON project_workspaces (workspace_key)"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial project workspace schema"):
+            database_module.init_db()
+
+    def test_init_db_rejects_project_workspace_schema_without_primary_key(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "013_add_incident_analysis_reference")
+        self._create_project_workspace_table(id_definition="id INTEGER NOT NULL")
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial project workspace schema"):
+            database_module.init_db()
+
+    def test_init_db_rejects_project_workspace_schema_with_wrong_key_type(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "013_add_incident_analysis_reference")
+        self._create_project_workspace_table(
+            workspace_key_definition="workspace_key INTEGER NOT NULL"
+        )
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial project workspace schema"):
+            database_module.init_db()
+
+    def test_init_db_rejects_stray_project_workspace_table_without_baseline(
+        self,
+    ) -> None:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            """
+            CREATE TABLE project_workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                workspace_key VARCHAR(120) NOT NULL
+            )
+            """
+        )
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial project workspace schema"):
+            database_module.init_db()
+
     def test_init_db_repairs_empty_alembic_revision_state(self) -> None:
         command.upgrade(self._config(), "0001_create_analysis_reports")
         sqlite_conn = sqlite3.connect(self.db_path)
@@ -431,7 +583,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "013_add_incident_analysis_reference")
+        self.assertEqual(revision, "014_add_project_workspace_records")
 
 
 if __name__ == "__main__":

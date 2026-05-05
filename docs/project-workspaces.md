@@ -5,6 +5,7 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 ### What Changed
 
 - Projects have a stable `project_key`, display name, optional description, repository URL, and default branch.
+- Workspaces have a stable project-local `workspace_key`, display name, optional description, optional environment label, and timestamps.
 - New analyses can attach to a project through the UI, API, CLI, or GitHub integration path.
 - Persisted reports now carry project metadata and history filters can scope by project.
 - Topology uploads are stored per project, with legacy file-based topology continuing to resolve through the default `unassigned` project.
@@ -16,12 +17,16 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 - Web UI: choose an existing project or create one before running a manual analysis, and switch the active project from the searchable full-width `Active Project` card directly below the fixed header when moving between dashboard, history, and other routed pages.
 - API:
   - `POST /api/v1/projects` creates a project
+  - `GET /api/v1/projects/<project_key>/workspaces` lists workspace/environment records for a project
+  - `POST /api/v1/projects/<project_key>/workspaces` creates a workspace/environment record
   - `POST /api/v1/analyses` accepts multipart `project_key` or `project_id`
   - `GET /api/v1/context/topology?project_key=<key>` reads project-scoped topology status
   - `POST /api/v1/context/topology` stores project-scoped topology JSON with `project_key` or `project_id`
 - CLI:
   - `deploywhisper project create <key> <display-name>`
   - `deploywhisper project list`
+  - `deploywhisper project workspace create <project-key> <workspace-key> <display-name>`
+  - `deploywhisper project workspace list <project-key>`
   - `deploywhisper analyze --project <key> <artifact...>`
   - `deploywhisper topology import --from custom --source <topology.json> --project <key>`
   - `deploywhisper topology import --from terraform --source <state-or-uri> --project <key>`
@@ -40,6 +45,7 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 ### Legacy Mapping
 
 - Existing persisted reports are backfilled into the default `unassigned` project during migration `010_add_project_workspaces`.
+- First-class workspace/environment records are introduced by migration `014_add_project_workspace_records`.
 - Existing file-based topology remains readable through the default project and new default-project topology updates continue to mirror the legacy file path for compatibility.
 
 ### Non-Goals
