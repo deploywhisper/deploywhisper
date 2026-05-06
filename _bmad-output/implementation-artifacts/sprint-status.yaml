@@ -54,7 +54,7 @@ development_status:
   1-2-project-aware-analysis-submission: review
   1-3-project-scoped-report-persistence: done
   1-4-project-scoped-learning-and-context-records: done
-  1-5-lightweight-rbac-role-model: ready-for-dev
+  1-5-lightweight-rbac-role-model: done
   1-6-project-model-documentation: ready-for-dev
   epic-1-retrospective: optional
 

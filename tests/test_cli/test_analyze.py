@@ -968,6 +968,80 @@ class AnalyzeCliTests(unittest.TestCase):
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "analysis_not_found")
 
+    def test_outcome_record_command_returns_authorization_error_for_reviewer(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        persisted = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.tf",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Outcome capture authorization test report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: outcome capture authorization test report.",
+                explanation="Outcome capture authorization test report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            audit_context={"source_interface": "cli"},
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "outcome",
+                    "record",
+                    "--analysis-id",
+                    str(persisted["id"]),
+                    "--outcome",
+                    "success",
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "reviewer",
+                    "DEPLOYWHISPER_PROJECT_KEYS": "payments",
+                },
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+        self.assertNotIn("payments", payload["error"]["message"])
+
     def test_analyze_command_reports_unsupported_inputs_with_structured_error(
         self,
     ) -> None:
@@ -1058,6 +1132,120 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "artifact_read_failed")
         self.assertEqual(payload["error"]["details"]["path"], str(missing_path))
 
+    def test_analyze_command_returns_authorization_error_for_read_only(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "read-only",
+                    "DEPLOYWHISPER_PROJECT_KEYS": "payments",
+                },
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+        self.assertNotIn("payments", payload["error"]["message"])
+
+    def test_analyze_command_requires_scope_for_non_admin_role(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {"DEPLOYWHISPER_PROJECT_ROLE": "contributor"},
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_scope_required")
+
+    def test_analyze_command_masks_missing_project_id_for_scoped_actor(self) -> None:
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project-id",
+                    "999",
+                    str(artifact_path),
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "contributor",
+                    "DEPLOYWHISPER_PROJECT_KEYS": "payments",
+                },
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
+
     def test_project_create_command_reports_created_workspace(self) -> None:
         output = io.StringIO()
 
@@ -1086,6 +1274,48 @@ class AnalyzeCliTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("unassigned", output.getvalue())
+
+    def test_project_roles_command_lists_capabilities(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "project", "roles"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("admin:", output.getvalue())
+        self.assertIn("project.manage", output.getvalue())
+
+    def test_project_create_command_returns_authorization_error_for_read_only(
+        self,
+    ) -> None:
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                ["deploywhisper", "project", "create", "payments", "Payments API"],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "read-only",
+                    "DEPLOYWHISPER_PROJECT_KEYS": "payments",
+                },
+                clear=False,
+            ),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+        self.assertNotIn("payments", payload["error"]["message"])
 
     def test_project_workspace_create_and_list_commands(self) -> None:
         project_service_module.create_project(
@@ -1199,6 +1429,53 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["import"]["diff"]["added_services"],
             ["api"],
         )
+
+    def test_topology_import_command_returns_authorization_error_for_read_only(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        topology_path = Path(self.tempdir.name) / "topology.json"
+        topology_path.write_text(json.dumps({"services": []}), encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "topology",
+                    "import",
+                    "--from",
+                    "custom",
+                    "--source",
+                    str(topology_path),
+                    "--project",
+                    "payments",
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "read-only",
+                    "DEPLOYWHISPER_PROJECT_KEYS": "payments",
+                },
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+        self.assertNotIn("payments", payload["error"]["message"])
 
     def test_topology_import_command_rejects_unknown_project(self) -> None:
         topology_path = Path(self.tempdir.name) / "topology.json"

@@ -39,6 +39,16 @@ class ProjectResolutionError(ValueError):
         self.message = message
 
 
+class ProjectAuthorizationError(PermissionError):
+    """Raised when an actor is not authorized for a project action."""
+
+    def __init__(self, result: "ProjectAuthorizationResult") -> None:
+        super().__init__(result.message)
+        self.result = result
+        self.code = result.code
+        self.message = result.message
+
+
 class ProjectRecord(BaseModel):
     id: int
     project_key: str
@@ -61,6 +71,117 @@ class WorkspaceRecord(BaseModel):
     environment: str | None = None
     created_at: str
     updated_at: str
+
+
+class ProjectRoleDefinition(BaseModel):
+    role: str
+    display_name: str
+    description: str
+    capabilities: list[str]
+
+
+class ProjectAuthorizationResult(BaseModel):
+    allowed: bool
+    code: str
+    message: str
+    role: str
+    capability: str
+    project_key: str | None = None
+
+
+PROJECT_ROLE_CAPABILITIES: dict[str, tuple[str, ...]] = {
+    "admin": (
+        "project.read",
+        "project.manage",
+        "workspace.read",
+        "workspace.manage",
+        "analysis.submit",
+        "report.read",
+        "report.review",
+        "feedback.create",
+        "outcome.read",
+        "outcome.manage",
+        "incident.manage",
+        "topology.read",
+        "topology.manage",
+        "scanner.manage",
+        "settings.manage",
+        "role.manage",
+    ),
+    "maintainer": (
+        "project.read",
+        "workspace.read",
+        "workspace.manage",
+        "analysis.submit",
+        "report.read",
+        "report.review",
+        "feedback.create",
+        "outcome.read",
+        "outcome.manage",
+        "incident.manage",
+        "topology.read",
+        "topology.manage",
+        "scanner.manage",
+    ),
+    "reviewer": (
+        "project.read",
+        "workspace.read",
+        "report.read",
+        "report.review",
+        "feedback.create",
+        "outcome.read",
+        "topology.read",
+    ),
+    "contributor": (
+        "project.read",
+        "workspace.read",
+        "analysis.submit",
+        "report.read",
+        "feedback.create",
+        "topology.read",
+    ),
+    "read-only": (
+        "project.read",
+        "workspace.read",
+        "report.read",
+        "topology.read",
+    ),
+}
+
+PROJECT_ROLE_DESCRIPTIONS: dict[str, tuple[str, str]] = {
+    "admin": (
+        "Admin",
+        "Full project administration, settings, role, and data-management access.",
+    ),
+    "maintainer": (
+        "Maintainer",
+        "Operational ownership for project context, analysis, reports, and imports.",
+    ),
+    "reviewer": (
+        "Reviewer",
+        "Review-focused access for reports and finding feedback.",
+    ),
+    "contributor": (
+        "Contributor",
+        "Submission access for analyses plus report and feedback participation.",
+    ),
+    "read-only": (
+        "Read-only",
+        "Read access to project, workspace, and report metadata.",
+    ),
+}
+
+
+def list_project_role_definitions() -> list[ProjectRoleDefinition]:
+    return [
+        ProjectRoleDefinition(
+            role=role,
+            display_name=PROJECT_ROLE_DESCRIPTIONS[role][0],
+            description=PROJECT_ROLE_DESCRIPTIONS[role][1],
+            capabilities=list(capabilities),
+        )
+        for role, capabilities in PROJECT_ROLE_CAPABILITIES.items()
+    ]
 
 
 def _serialize(record) -> ProjectRecord:
@@ -109,6 +230,143 @@ def normalize_workspace_key(value: str) -> str:
         raise ValueError(
             "Workspace key must contain at least one letter or number."
         ) from exc
+
+
+def normalize_project_role(value: str | None) -> str:
+    if value is None:
+        return "admin"
+    role = str(value).strip().lower().replace("_", "-")
+    if not role:
+        raise ValueError("Project role must contain at least one letter or number.")
+    if role not in PROJECT_ROLE_CAPABILITIES:
+        raise ValueError(f"Unknown project role: {role}")
+    return role
+
+
+def _normalize_allowed_project_keys(
+    allowed_project_keys: list[str] | tuple[str, ...] | set[str] | None,
+) -> set[str] | None:
+    if allowed_project_keys is None:
+        return None
+    normalized_keys: set[str] = set()
+    for project_key in allowed_project_keys:
+        if not str(project_key or "").strip():
+            continue
+        try:
+            normalized_keys.add(normalize_project_key(project_key))
+        except ValueError:
+            continue
+    return normalized_keys
+
+
+def authorize_project_action(
+    *,
+    role: str | None = None,
+    capability: str,
+    project_key: str | None = None,
+    allowed_project_keys: list[str] | tuple[str, ...] | set[str] | None = None,
+) -> ProjectAuthorizationResult:
+    try:
+        normalized_role = normalize_project_role(role)
+    except ValueError:
+        return ProjectAuthorizationResult(
+            allowed=False,
+            code="invalid_project_role",
+            message="Caller supplied an unknown project role.",
+            role=str(role or ""),
+            capability=capability,
+        )
+
+    if capability not in PROJECT_ROLE_CAPABILITIES[normalized_role]:
+        return ProjectAuthorizationResult(
+            allowed=False,
+            code="project_permission_denied",
+            message="Caller role is not authorized for this project action.",
+            role=normalized_role,
+            capability=capability,
+            project_key=None,
+        )
+
+    normalized_project_key = normalize_project_key(project_key) if project_key else None
+    allowed_keys = _normalize_allowed_project_keys(allowed_project_keys)
+    if normalized_role != "admin" and not allowed_keys:
+        return ProjectAuthorizationResult(
+            allowed=False,
+            code="project_scope_required",
+            message="Caller role requires an explicit project scope.",
+            role=normalized_role,
+            capability=capability,
+            project_key=None,
+        )
+    if normalized_project_key is not None and allowed_keys is not None:
+        if normalized_project_key not in allowed_keys:
+            return ProjectAuthorizationResult(
+                allowed=False,
+                code="project_scope_forbidden",
+                message="Caller is not authorized for the requested project.",
+                role=normalized_role,
+                capability=capability,
+                project_key=None,
+            )
+
+    return ProjectAuthorizationResult(
+        allowed=True,
+        code="project_authorized",
+        message="Caller is authorized for this project action.",
+        role=normalized_role,
+        capability=capability,
+        project_key=normalized_project_key,
+    )
+
+
+def require_project_permission(
+    *,
+    role: str | None = None,
+    capability: str,
+    project_key: str | None = None,
+    allowed_project_keys: list[str] | tuple[str, ...] | set[str] | None = None,
+) -> ProjectAuthorizationResult:
+    result = authorize_project_action(
+        role=role,
+        capability=capability,
+        project_key=project_key,
+        allowed_project_keys=allowed_project_keys,
+    )
+    if not result.allowed:
+        raise ProjectAuthorizationError(result)
+    return result
+
+
+def filter_projects_by_authorization(
+    projects: list[ProjectRecord],
+    *,
+    role: str | None = None,
+    allowed_project_keys: list[str] | tuple[str, ...] | set[str] | None = None,
+) -> list[ProjectRecord]:
+    require_project_permission(
+        role=role,
+        capability="project.read",
+        allowed_project_keys=allowed_project_keys,
+    )
+    allowed_keys = _normalize_allowed_project_keys(allowed_project_keys)
+    if allowed_keys is None:
+        return projects
+    return [project for project in projects if project.project_key in allowed_keys]
+
+
+def has_restricted_project_scope(
+    *,
+    role: str | None = None,
+    allowed_project_keys: list[str] | tuple[str, ...] | set[str] | None = None,
+) -> bool:
+    """Return whether an actor should not receive project existence details."""
+    allowed_keys = _normalize_allowed_project_keys(allowed_project_keys)
+    if allowed_keys is not None:
+        return True
+    try:
+        return normalize_project_role(role) != "admin"
+    except ValueError:
+        return True
 
 
 def _is_workspace_unique_integrity_error(exc: IntegrityError) -> bool:

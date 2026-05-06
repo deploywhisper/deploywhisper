@@ -143,3 +143,89 @@ class ProjectsApiTests(unittest.TestCase):
             create_response.json()["error"]["code"],
             "project_not_found",
         )
+
+    def test_roles_endpoint_returns_lightweight_rbac_contract(self) -> None:
+        response = self.client.get("/api/v1/projects/roles")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["count"], 5)
+        roles = {item["role"]: item for item in payload["data"]}
+        self.assertIn("project.manage", roles["admin"]["capabilities"])
+        self.assertEqual(
+            roles["read-only"]["capabilities"],
+            ["project.read", "workspace.read", "report.read", "topology.read"],
+        )
+
+    def test_project_create_denies_read_only_role_without_scope_leak(self) -> None:
+        response = self.client.post(
+            "/api/v1/projects",
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": "payments",
+            },
+            json={
+                "project_key": "payments",
+                "display_name": "Payments",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+        self.assertNotIn("payments", payload["error"]["message"])
+
+    def test_project_list_filters_to_actor_project_scope(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+
+        response = self.client.get(
+            "/api/v1/projects",
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": "payments",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["count"], 1)
+        self.assertEqual(payload["data"][0]["project_key"], "payments")
+
+    def test_project_list_denies_non_admin_role_without_scope(self) -> None:
+        response = self.client.get(
+            "/api/v1/projects",
+            headers={"X-DeployWhisper-Project-Role": "read-only"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_required")
+
+    def test_workspace_list_denies_project_outside_actor_scope(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+
+        response = self.client.get(
+            "/api/v1/projects/platform/workspaces",
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": "payments",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
+        self.assertNotIn("platform", payload["error"]["message"])

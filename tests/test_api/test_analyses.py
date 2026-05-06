@@ -504,6 +504,154 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
 
+    def test_create_analysis_denies_role_without_submit_capability(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": []}',
+                    "application/json",
+                ),
+            )
+        ]
+
+        response = self.client.post(
+            "/api/v1/analyses",
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": "payments",
+            },
+            files=files,
+            data={"project_key": "payments"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+        self.assertNotIn("payments", payload["error"]["message"])
+
+    def test_project_role_header_requires_nonblank_role(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": []}',
+                    "application/json",
+                ),
+            )
+        ]
+
+        response = self.client.post(
+            "/api/v1/analyses",
+            headers={"X-DeployWhisper-Project-Role": " "},
+            files=files,
+            data={"project_key": "payments"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "invalid_project_role")
+
+    def test_non_admin_role_requires_project_scope_header(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={"project_key": "payments"},
+            headers={"X-DeployWhisper-Project-Role": "read-only"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_required")
+
+    def test_analysis_reads_mask_missing_project_id_for_scoped_actor(self) -> None:
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={"project_id": 999},
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": "payments",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
+    def test_analysis_reads_deny_project_outside_actor_scope(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        scoped = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=15,
+                severity="low",
+                recommendation="go",
+                top_risk="Scoped project report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: scoped project report.",
+                explanation="Scoped report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+        headers = {
+            "X-DeployWhisper-Project-Role": "read-only",
+            "X-DeployWhisper-Project-Keys": "platform",
+        }
+
+        list_response = self.client.get(
+            "/api/v1/analyses",
+            params={"project_key": "payments"},
+            headers=headers,
+        )
+        detail_response = self.client.get(
+            f"/api/v1/analyses/{scoped['id']}",
+            params={"project_key": "payments"},
+            headers=headers,
+        )
+
+        self.assertEqual(list_response.status_code, 403)
+        self.assertEqual(
+            list_response.json()["error"]["code"], "project_scope_forbidden"
+        )
+        self.assertNotIn("payments", list_response.json()["error"]["message"])
+        self.assertEqual(detail_response.status_code, 403)
+        self.assertEqual(
+            detail_response.json()["error"]["code"], "project_scope_forbidden"
+        )
+        self.assertNotIn("payments", detail_response.json()["error"]["message"])
+
     def test_create_analysis_accepts_project_id(self) -> None:
         project = project_service_module.create_project(
             project_key="payments",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import os
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 
@@ -32,11 +33,16 @@ from services.intake_service import (
     build_pending_analysis,
     uniquify_artifact_names,
 )
+from services.report_service import REPORT_SCHEMA_VERSION
+from services.report_service import configure_report_share
 from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
-from services.report_service import configure_report_share
-from services.report_service import REPORT_SCHEMA_VERSION
-from services.project_service import ensure_default_project
+from services.project_service import (
+    ensure_default_project,
+    has_restricted_project_scope,
+    require_project_permission,
+)
+from services.project_service import resolve_project_reference
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
@@ -50,6 +56,82 @@ def _project_api_error(exc: ValueError) -> ApiError:
         code=code,
         message=str(exc),
     )
+
+
+def _split_project_scope_header(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _authorization_context(
+    project_role: Annotated[
+        str | None,
+        Header(alias="X-DeployWhisper-Project-Role"),
+    ] = None,
+    project_keys: Annotated[
+        str | None,
+        Header(alias="X-DeployWhisper-Project-Keys"),
+    ] = None,
+) -> dict[str, object]:
+    return {
+        "role": project_role,
+        "allowed_project_keys": _split_project_scope_header(project_keys),
+    }
+
+
+def _raise_authorization_error(exc: PermissionError) -> ApiError:
+    raise ApiError(
+        status_code=403,
+        code=getattr(exc, "code", "project_permission_denied"),
+        message=getattr(exc, "message", str(exc)),
+    ) from exc
+
+
+def _project_scope_forbidden_error() -> ApiError:
+    return ApiError(
+        status_code=403,
+        code="project_scope_forbidden",
+        message="Caller is not authorized for the requested project.",
+    )
+
+
+def _require_api_project_permission(
+    *,
+    authorization: dict[str, object],
+    capability: str,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> None:
+    if project_key is not None:
+        require_project_permission(
+            role=authorization["role"],
+            capability=capability,
+            project_key=project_key,
+            allowed_project_keys=authorization["allowed_project_keys"],
+        )
+        return
+    if project_id is not None:
+        require_project_permission(
+            role=authorization["role"],
+            capability=capability,
+            allowed_project_keys=authorization["allowed_project_keys"],
+        )
+        try:
+            project = resolve_project_reference(project_id=project_id)
+        except ValueError as exc:
+            if has_restricted_project_scope(
+                role=authorization["role"],
+                allowed_project_keys=authorization["allowed_project_keys"],
+            ):
+                raise _project_scope_forbidden_error() from exc
+            raise
+        require_project_permission(
+            role=authorization["role"],
+            capability=capability,
+            project_key=project.project_key,
+            allowed_project_keys=authorization["allowed_project_keys"],
+        )
 
 
 def _reject_unscoped_workspace_id(
@@ -141,6 +223,7 @@ def list_analyses(
     search: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
+    authorization: dict[str, object] = Depends(_authorization_context),
 ) -> AnalysisListResponse:
     try:
         _reject_unscoped_workspace_id(
@@ -155,6 +238,12 @@ def list_analyses(
             and workspace_key is None
         ):
             project_id = ensure_default_project().id
+        _require_api_project_permission(
+            authorization=authorization,
+            capability="report.read",
+            project_id=project_id,
+            project_key=project_key,
+        )
         page_payload = fetch_filtered_analysis_history_page(
             project_id=project_id,
             project_key=project_key,
@@ -166,6 +255,8 @@ def list_analyses(
             page=page,
             page_size=page_size,
         )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
     except ValueError as exc:
         raise _project_api_error(exc) from exc
     return AnalysisListResponse(
@@ -216,6 +307,7 @@ async def create_analysis(
         default=None, alias="X-DeployWhisper-Trigger-Type"
     ),
     trigger_id: str | None = Header(default=None, alias="X-DeployWhisper-Trigger-Id"),
+    authorization: dict[str, object] = Depends(_authorization_context),
 ) -> AnalysisRunResponse:
     if not files:
         raise ApiError(
@@ -225,12 +317,41 @@ async def create_analysis(
         )
 
     try:
-        resolve_analysis_project_scope(
-            project_id=project_id,
-            project_key=project_key,
-            workspace_id=workspace_id,
-            workspace_key=workspace_key,
-        )
+        project_key_for_auth = project_key.strip() if project_key is not None else None
+        if project_key_for_auth:
+            _require_api_project_permission(
+                authorization=authorization,
+                capability="analysis.submit",
+                project_key=project_key_for_auth,
+            )
+        else:
+            require_project_permission(
+                role=authorization["role"],
+                capability="analysis.submit",
+                allowed_project_keys=authorization["allowed_project_keys"],
+            )
+        try:
+            resolved_project = resolve_analysis_project_scope(
+                project_id=project_id,
+                project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
+            )
+        except ValueError as exc:
+            if project_id is not None and has_restricted_project_scope(
+                role=authorization["role"],
+                allowed_project_keys=authorization["allowed_project_keys"],
+            ):
+                raise _project_scope_forbidden_error() from exc
+            raise
+        if not project_key_for_auth:
+            _require_api_project_permission(
+                authorization=authorization,
+                capability="analysis.submit",
+                project_id=resolved_project.id,
+            )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
     except ValueError as exc:
         raise _project_api_error(exc) from exc
 
@@ -294,6 +415,7 @@ def get_analysis(
     project_key: str | None = Query(default=None),
     workspace_id: int | None = Query(default=None),
     workspace_key: str | None = Query(default=None),
+    authorization: dict[str, object] = Depends(_authorization_context),
 ) -> AnalysisDetailResponse:
     try:
         _reject_unscoped_workspace_id(
@@ -308,6 +430,12 @@ def get_analysis(
             and workspace_key is None
         ):
             project_id = ensure_default_project().id
+        _require_api_project_permission(
+            authorization=authorization,
+            capability="report.read",
+            project_id=project_id,
+            project_key=project_key,
+        )
         report = fetch_analysis_report(
             report_id,
             project_id=project_id,
@@ -315,6 +443,8 @@ def get_analysis(
             workspace_id=workspace_id,
             workspace_key=workspace_key,
         )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
     except ValueError as exc:
         raise _project_api_error(exc) from exc
     if report is None:

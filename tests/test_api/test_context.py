@@ -85,6 +85,55 @@ class ContextApiTests(unittest.TestCase):
         )
         self.assertIn("drift", get_response.json()["data"]["topology"])
 
+    def test_save_project_topology_denies_role_without_topology_capability(
+        self,
+    ) -> None:
+        response = self.client.post(
+            "/api/v1/context/topology",
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+            json={
+                "project_key": self.project.project_key,
+                "topology": {"services": []},
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+        self.assertNotIn(self.project.project_key, payload["error"]["message"])
+
+    def test_get_project_topology_allows_topology_read_capability(self) -> None:
+        response = self.client.get(
+            "/api/v1/context/topology",
+            params={"project_key": self.project.project_key},
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["data"]["project"]["project_key"],
+            self.project.project_key,
+        )
+
+    def test_get_project_topology_masks_missing_id_for_scoped_actor(self) -> None:
+        response = self.client.get(
+            "/api/v1/context/topology",
+            params={"project_id": 999},
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
     def test_save_project_topology_rejects_invalid_relationships(self) -> None:
         response = self.client.post(
             "/api/v1/context/topology",

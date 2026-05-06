@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import os
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query
 
@@ -21,6 +22,12 @@ from services.deployment_outcome_service import (
     list_deployment_outcomes,
     record_deployment_outcome,
 )
+from services.project_service import (
+    has_restricted_project_scope,
+    require_project_permission,
+    resolve_project_reference,
+)
+from services.report_service import fetch_analysis_report
 
 router = APIRouter(
     prefix="/api/v1/deployments",
@@ -72,6 +79,108 @@ def _deployment_api_error(exc: ValueError) -> ApiError:
     )
 
 
+def _split_project_scope_header(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _authorization_context(
+    project_role: Annotated[
+        str | None,
+        Header(alias="X-DeployWhisper-Project-Role"),
+    ] = None,
+    project_keys: Annotated[
+        str | None,
+        Header(alias="X-DeployWhisper-Project-Keys"),
+    ] = None,
+) -> dict[str, object]:
+    return {
+        "role": project_role,
+        "allowed_project_keys": _split_project_scope_header(project_keys),
+    }
+
+
+def _raise_authorization_error(exc: PermissionError) -> ApiError:
+    raise ApiError(
+        status_code=403,
+        code=getattr(exc, "code", "project_permission_denied"),
+        message=getattr(exc, "message", str(exc)),
+    ) from exc
+
+
+def _project_scope_forbidden_error() -> ApiError:
+    return ApiError(
+        status_code=403,
+        code="project_scope_forbidden",
+        message="Caller is not authorized for the requested project.",
+    )
+
+
+def _require_deployment_project_permission(
+    *,
+    authorization: dict[str, object],
+    capability: str,
+    project_id: int | None = None,
+    project_key: str | None = None,
+) -> None:
+    if project_key is not None:
+        require_project_permission(
+            role=authorization["role"],
+            capability=capability,
+            project_key=project_key,
+            allowed_project_keys=authorization["allowed_project_keys"],
+        )
+        return
+    require_project_permission(
+        role=authorization["role"],
+        capability=capability,
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+    try:
+        project = resolve_project_reference(project_id=project_id)
+    except ValueError as exc:
+        if has_restricted_project_scope(
+            role=authorization["role"],
+            allowed_project_keys=authorization["allowed_project_keys"],
+        ):
+            raise _project_scope_forbidden_error() from exc
+        raise
+    require_project_permission(
+        role=authorization["role"],
+        capability=capability,
+        project_key=project.project_key,
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+
+
+def _require_deployment_analysis_permission(
+    *,
+    authorization: dict[str, object],
+    capability: str,
+    analysis_id: int,
+) -> None:
+    require_project_permission(
+        role=authorization["role"],
+        capability=capability,
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+    report = fetch_analysis_report(analysis_id)
+    if report is None:
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    project = report.get("project") or {}
+    require_project_permission(
+        role=authorization["role"],
+        capability=capability,
+        project_key=project.get("project_key"),
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+
+
 @router.post(
     "/outcomes",
     response_model=DeploymentOutcomeResponse,
@@ -85,8 +194,22 @@ def _deployment_api_error(exc: ValueError) -> ApiError:
 def create_deployment_outcome_route(
     payload: DeploymentOutcomeCreateRequest,
     _: None = Depends(require_deployment_outcome_token),
+    authorization: dict[str, object] = Depends(_authorization_context),
 ) -> DeploymentOutcomeResponse:
     try:
+        if payload.project_key is not None or payload.project_id is not None:
+            _require_deployment_project_permission(
+                authorization=authorization,
+                capability="outcome.manage",
+                project_id=payload.project_id,
+                project_key=payload.project_key,
+            )
+        else:
+            _require_deployment_analysis_permission(
+                authorization=authorization,
+                capability="outcome.manage",
+                analysis_id=payload.analysis_id,
+            )
         recorded = record_deployment_outcome(
             analysis_id=payload.analysis_id,
             outcome=payload.outcome,
@@ -100,6 +223,8 @@ def create_deployment_outcome_route(
             workspace_key=payload.workspace_key,
             source_interface="api",
         )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
     except ValueError as exc:
         raise _deployment_api_error(exc) from exc
     return DeploymentOutcomeResponse(
@@ -126,8 +251,27 @@ def get_deployment_outcomes(
     workspace_id: int | None = Query(default=None),
     workspace_key: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
+    authorization: dict[str, object] = Depends(_authorization_context),
 ) -> DeploymentOutcomeListResponse:
     try:
+        if project_key is not None or project_id is not None:
+            _require_deployment_project_permission(
+                authorization=authorization,
+                capability="outcome.read",
+                project_id=project_id,
+                project_key=project_key,
+            )
+        elif analysis_id is not None:
+            _require_deployment_analysis_permission(
+                authorization=authorization,
+                capability="outcome.read",
+                analysis_id=analysis_id,
+            )
+        else:
+            _require_deployment_project_permission(
+                authorization=authorization,
+                capability="outcome.read",
+            )
         outcomes = list_deployment_outcomes(
             analysis_id=analysis_id,
             outcome=outcome,
@@ -137,6 +281,8 @@ def get_deployment_outcomes(
             workspace_key=workspace_key,
             limit=limit,
         )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
     except ValueError as exc:
         raise _deployment_api_error(exc) from exc
     return DeploymentOutcomeListResponse(
