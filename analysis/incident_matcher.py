@@ -23,9 +23,20 @@ class IncidentMatch(BaseModel):
     summary: str = Field(..., description="Short operational explanation")
 
 
-def load_incident_candidates() -> list[dict]:
+def load_incident_candidates(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+) -> list[dict]:
     """Return stored incident records for future similarity matching."""
-    return get_incident_records()
+    return get_incident_records(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
 
 
 TOKEN_PATTERN = re.compile(r"[a-z0-9_./-]+", re.IGNORECASE)
@@ -88,10 +99,21 @@ def _recency_bonus(incident_date: str | None) -> float:
 
 
 def find_incident_matches(
-    changes: list[UnifiedChange], min_similarity: float = 0.2
+    changes: list[UnifiedChange],
+    min_similarity: float = 0.2,
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> list[IncidentMatch]:
     """Return incident matches ranked by simple token overlap."""
-    candidates = load_incident_candidates()
+    candidates = load_incident_candidates(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
     if not candidates:
         return []
 

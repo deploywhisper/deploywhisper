@@ -39,6 +39,11 @@ class FeedbackServiceTests(unittest.TestCase):
             project_key="payments",
             display_name="Payments",
         )
+        self.workspace = project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="prod",
+            display_name="Production",
+        )
         self.report = report_service_module.persist_analysis_report(
             ParseBatchResult(
                 files=[
@@ -83,6 +88,7 @@ class FeedbackServiceTests(unittest.TestCase):
                 )
             ],
             project_id=self.project.id,
+            workspace_id=self.workspace.id,
             audit_context={"source_interface": "ui"},
         )
         self.finding_id = self.report["findings"][0]["finding_id"]
@@ -104,6 +110,8 @@ class FeedbackServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(event["analysis_id"], self.report["id"])
+        self.assertEqual(event["project_id"], self.project.id)
+        self.assertEqual(event["workspace_id"], self.workspace.id)
         self.assertEqual(event["finding_id"], self.finding_id)
         self.assertFalse(event["useful"])
         self.assertTrue(event["false_positive_flag"])
@@ -119,6 +127,8 @@ class FeedbackServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(event["analysis_id"], self.report["id"])
+        self.assertEqual(event["project_id"], self.project.id)
+        self.assertEqual(event["workspace_id"], self.workspace.id)
         self.assertIsNone(event["finding_id"])
         self.assertEqual(
             event["false_negative_note"],
@@ -145,7 +155,8 @@ class FeedbackServiceTests(unittest.TestCase):
         )
 
         summary = feedback_service_module.fetch_feedback_summary(
-            project_id=self.project.id
+            project_id=self.project.id,
+            workspace_id=self.workspace.id,
         )
 
         self.assertEqual(summary["project"]["project_key"], "payments")
@@ -157,6 +168,79 @@ class FeedbackServiceTests(unittest.TestCase):
         self.assertIn(
             "payments failover prerequisite", summary["recent_notes"][0]["text"]
         )
+
+    def test_feedback_summary_filters_by_workspace(self) -> None:
+        staging_workspace = project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="staging",
+            display_name="Staging",
+        )
+        staging_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments-staging.tf",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=44,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Staging report for feedback tests.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="CAUTION: staging feedback test report.",
+                explanation="Staging feedback test report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            findings=[
+                Finding(
+                    finding_id="finding-staging",
+                    analysis_id=0,
+                    title="MEDIUM: staging security group",
+                    description="Security group needs review.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=[],
+                    skill_id=None,
+                )
+            ],
+            project_id=self.project.id,
+            workspace_id=staging_workspace.id,
+            audit_context={"source_interface": "ui"},
+        )
+        feedback_service_module.record_finding_feedback(
+            analysis_id=self.report["id"],
+            finding_id=self.finding_id,
+            useful=True,
+        )
+        feedback_service_module.record_finding_feedback(
+            analysis_id=staging_report["id"],
+            finding_id=staging_report["findings"][0]["finding_id"],
+            useful=False,
+        )
+
+        summary = feedback_service_module.fetch_feedback_summary(
+            project_id=self.project.id,
+            workspace_id=self.workspace.id,
+        )
+
+        self.assertEqual(summary["totals"]["events_recorded"], 1)
+        self.assertEqual(summary["current_state"]["useful_count"], 1)
+        self.assertEqual(summary["current_state"]["not_useful_count"], 0)
 
     def test_record_finding_feedback_rejects_unknown_finding(self) -> None:
         with self.assertRaises(feedback_service_module.FeedbackError) as ctx:

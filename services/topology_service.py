@@ -16,8 +16,10 @@ from models.repositories.settings import get_setting, upsert_setting
 from models.tables import TopologyVersion
 from services.project_service import (
     build_project_payload,
+    build_workspace_payload,
     list_projects,
     resolve_project_reference,
+    resolve_workspace_reference,
 )
 from services.settings_service import get_topology_drift_check_interval_hours
 
@@ -215,8 +217,12 @@ def _topology_path() -> Path:
     return Path(settings.topology_path)
 
 
-def _topology_scope_path(project: dict) -> Path:
-    return Path(f"project://{project['project_key']}/topology/latest")
+def _topology_scope_path(project: dict, workspace: dict | None = None) -> Path:
+    if workspace is None:
+        return Path(f"project://{project['project_key']}/topology/latest")
+    return Path(
+        f"project://{project['project_key']}/{workspace['workspace_key']}/topology/latest"
+    )
 
 
 def _invalid_stored_topology_status(path: Path, message: str) -> TopologyStatus:
@@ -292,8 +298,12 @@ def _resource_snapshot(payload: dict[str, Any] | None) -> dict[str, dict[str, An
     return snapshot
 
 
-def _drift_setting_key(project: dict[str, Any]) -> str:
-    return f"topology_drift_status::{project['id']}"
+def _drift_setting_key(
+    project: dict[str, Any], workspace: dict[str, Any] | None = None
+) -> str:
+    if workspace is None:
+        return f"topology_drift_status::{project['id']}"
+    return f"topology_drift_status::{project['id']}::{workspace['id']}"
 
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:
@@ -317,9 +327,11 @@ def _build_next_check_at(checked_at: str | None, interval_hours: int) -> str | N
     )
 
 
-def _load_cached_topology_drift(project: dict[str, Any]) -> TopologyDriftStatus | None:
+def _load_cached_topology_drift(
+    project: dict[str, Any], workspace: dict[str, Any] | None = None
+) -> TopologyDriftStatus | None:
     with SessionLocal() as session:
-        record = get_setting(session, _drift_setting_key(project))
+        record = get_setting(session, _drift_setting_key(project, workspace))
     if record is None:
         return None
     try:
@@ -332,12 +344,14 @@ def _load_cached_topology_drift(project: dict[str, Any]) -> TopologyDriftStatus 
 
 
 def _save_topology_drift(
-    project: dict[str, Any], drift_status: TopologyDriftStatus
+    project: dict[str, Any],
+    drift_status: TopologyDriftStatus,
+    workspace: dict[str, Any] | None = None,
 ) -> TopologyDriftStatus:
     with SessionLocal() as session:
         upsert_setting(
             session,
-            key=_drift_setting_key(project),
+            key=_drift_setting_key(project, workspace),
             value=json.dumps(drift_status.model_dump()),
         )
     return drift_status
@@ -408,15 +422,18 @@ def run_due_topology_drift_checks() -> list[TopologyDriftStatus]:
 
 def _load_latest_topology_payload(
     project: dict,
+    workspace: dict | None = None,
 ) -> tuple[dict | None, Path, TopologyStatus | None]:
-    topology_path = _topology_scope_path(project)
+    topology_path = _topology_scope_path(project, workspace)
     with SessionLocal() as session:
-        record = (
-            session.query(TopologyVersion)
-            .filter(TopologyVersion.project_id == int(project["id"]))
-            .order_by(TopologyVersion.id.desc())
-            .first()
+        stmt = session.query(TopologyVersion).filter(
+            TopologyVersion.project_id == int(project["id"])
         )
+        if workspace is None:
+            stmt = stmt.filter(TopologyVersion.workspace_id.is_(None))
+        else:
+            stmt = stmt.filter(TopologyVersion.workspace_id == int(workspace["id"]))
+        record = stmt.order_by(TopologyVersion.id.desc()).first()
         if record is None:
             if bool(project.get("is_default")):
                 legacy_status = _read_legacy_topology_status()
@@ -934,9 +951,10 @@ def _persist_topology_payload(
     payload: dict[str, Any],
     *,
     project: dict[str, Any],
+    workspace: dict[str, Any] | None,
     source_type: str,
 ) -> TopologyStatus:
-    topology_path = _topology_scope_path(project)
+    topology_path = _topology_scope_path(project, workspace)
     candidate_status = _build_topology_status(payload, path=topology_path, exists=False)
     if candidate_status.blocking_errors:
         raise TopologyImportError(
@@ -946,7 +964,7 @@ def _persist_topology_payload(
         )
 
     with SessionLocal() as session:
-        if bool(project.get("is_default")):
+        if bool(project.get("is_default")) and workspace is None:
             legacy_path = _topology_path()
             try:
                 legacy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -963,12 +981,16 @@ def _persist_topology_payload(
         session.add(
             TopologyVersion(
                 project_id=int(project["id"]),
+                workspace_id=int(workspace["id"]) if workspace is not None else None,
                 source_type=source_type,
                 payload_json=json.dumps(payload),
             )
         )
         session.commit()
-    return get_topology_status(project_id=int(project["id"]))
+    return get_topology_status(
+        project_id=int(project["id"]),
+        workspace_id=int(workspace["id"]) if workspace is not None else None,
+    )
 
 
 def _canonical_service(service: dict[str, Any]) -> dict[str, Any]:
@@ -1051,6 +1073,8 @@ def check_topology_drift(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
     force: bool = False,
 ) -> TopologyDriftStatus:
     """Run or reuse a scheduled topology drift check for one project."""
@@ -1058,11 +1082,21 @@ def check_topology_drift(
     project = build_project_payload(
         resolve_project_reference(project_id=project_id, project_key=project_key)
     )
-    payload, _, status_override = _load_latest_topology_payload(project)
+    workspace_record = resolve_workspace_reference(
+        project_id=int(project["id"]),
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    workspace = (
+        build_workspace_payload(workspace_record)
+        if workspace_record is not None
+        else None
+    )
+    payload, _, status_override = _load_latest_topology_payload(project, workspace)
     import_metadata = _import_metadata(payload or {})
     source_type = str(import_metadata.get("source_type") or "").strip() or None
     source_ref = str(import_metadata.get("source_ref") or "").strip() or None
-    cached_status = _load_cached_topology_drift(project)
+    cached_status = _load_cached_topology_drift(project, workspace)
 
     if not force and not _is_drift_check_due(cached_status, interval_hours):
         return cached_status or _build_drift_status(
@@ -1085,6 +1119,7 @@ def check_topology_drift(
                     "Topology drift is unavailable because no valid topology import is active."
                 ],
             ),
+            workspace,
         )
 
     if not source_type or not source_ref:
@@ -1099,6 +1134,7 @@ def check_topology_drift(
                     "Topology drift is unavailable because the active topology does not include an import source reference."
                 ],
             ),
+            workspace,
         )
 
     if source_type == "manual":
@@ -1113,6 +1149,7 @@ def check_topology_drift(
                     "Topology drift is unavailable for manual topology uploads because there is no source connector to re-evaluate."
                 ],
             ),
+            workspace,
         )
 
     try:
@@ -1127,6 +1164,7 @@ def check_topology_drift(
                 source_ref=source_ref,
                 warnings=[str(exc)],
             ),
+            workspace,
         )
 
     if change_set.operation != "replace":
@@ -1142,6 +1180,7 @@ def check_topology_drift(
                     "Topology drift is not supported for the active source connector yet."
                 ],
             ),
+            workspace,
         )
 
     current_resources = _resource_snapshot(payload)
@@ -1177,19 +1216,33 @@ def check_topology_drift(
         modified_resources=modified_resources,
         warnings=change_set.warnings,
     )
-    return _save_topology_drift(project, drift_status)
+    return _save_topology_drift(project, drift_status, workspace)
 
 
 def get_topology_status(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> TopologyStatus:
     """Return the active topology context with validation details for admin workflows."""
     project = build_project_payload(
         resolve_project_reference(project_id=project_id, project_key=project_key)
     )
-    payload, topology_path, status_override = _load_latest_topology_payload(project)
+    workspace_record = resolve_workspace_reference(
+        project_id=int(project["id"]),
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    workspace = (
+        build_workspace_payload(workspace_record)
+        if workspace_record is not None
+        else None
+    )
+    payload, topology_path, status_override = _load_latest_topology_payload(
+        project, workspace
+    )
     if status_override is not None and payload is None:
         return status_override
     if payload is None:
@@ -1205,7 +1258,10 @@ def get_topology_status(
             ],
         )
     status = _build_topology_status(payload, path=topology_path, exists=True)
-    status.drift = check_topology_drift(project_id=int(project["id"]))
+    status.drift = check_topology_drift(
+        project_id=int(project["id"]),
+        workspace_id=int(workspace["id"]) if workspace is not None else None,
+    )
     return status
 
 
@@ -1215,6 +1271,8 @@ def import_topology_source(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> TopologyImportResult:
     """Import topology through the shared source registry."""
     normalized_source_type = str(source_type or "").strip().lower()
@@ -1227,7 +1285,17 @@ def import_topology_source(
     project = build_project_payload(
         resolve_project_reference(project_id=project_id, project_key=project_key)
     )
-    previous_payload, _, _ = _load_latest_topology_payload(project)
+    workspace_record = resolve_workspace_reference(
+        project_id=int(project["id"]),
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    workspace = (
+        build_workspace_payload(workspace_record)
+        if workspace_record is not None
+        else None
+    )
+    previous_payload, _, _ = _load_latest_topology_payload(project, workspace)
     change_set = _lookup_source_handler(normalized_source_type)(source_ref)
     warnings = list(change_set.warnings)
 
@@ -1250,6 +1318,7 @@ def import_topology_source(
     status = _persist_topology_payload(
         payload,
         project=project,
+        workspace=workspace,
         source_type=normalized_source_type,
     )
     warnings.extend(status.warnings)
@@ -1269,12 +1338,16 @@ def save_topology_definition(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> TopologyStatus:
     """Persist topology input as the active blast-radius context and return validation feedback."""
     validation_status = validate_topology_definition(
         raw_text,
         project_id=project_id,
         project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
     )
     if validation_status.blocking_errors:
         raise ValueError(" ".join(validation_status.blocking_errors))
@@ -1282,6 +1355,16 @@ def save_topology_definition(
     payload = dict(validation_status.payload or {})
     project = build_project_payload(
         resolve_project_reference(project_id=project_id, project_key=project_key)
+    )
+    workspace_record = resolve_workspace_reference(
+        project_id=int(project["id"]),
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    workspace = (
+        build_workspace_payload(workspace_record)
+        if workspace_record is not None
+        else None
     )
     change_set = _build_custom_change_set(payload)
 
@@ -1293,6 +1376,7 @@ def save_topology_definition(
                 source_ref="inline://manual-topology",
             ),
             project=project,
+            workspace=workspace,
             source_type="manual",
         )
     except TopologyImportError as exc:
@@ -1304,6 +1388,8 @@ def validate_topology_definition(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> TopologyStatus:
     """Validate topology input without persisting it."""
     try:
@@ -1317,11 +1403,21 @@ def validate_topology_definition(
     project = build_project_payload(
         resolve_project_reference(project_id=project_id, project_key=project_key)
     )
+    workspace_record = resolve_workspace_reference(
+        project_id=int(project["id"]),
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    workspace = (
+        build_workspace_payload(workspace_record)
+        if workspace_record is not None
+        else None
+    )
     validation_payload = dict(payload)
     validation_payload["updated_at"] = _current_timestamp()
     validation_status = _build_topology_status(
         validation_payload,
-        path=_topology_scope_path(project),
+        path=_topology_scope_path(project, workspace),
         exists=False,
     )
 
@@ -1341,8 +1437,15 @@ def load_topology(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> tuple[dict | None, str | None]:
     """Load topology context and return an optional warning."""
-    status = get_topology_status(project_id=project_id, project_key=project_key)
+    status = get_topology_status(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
     messages = status.blocking_errors + status.warnings
     return status.payload, _join_warnings(messages)

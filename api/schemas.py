@@ -333,18 +333,25 @@ class DeploymentOutcomeCreateRequest(BaseModel):
         description="Optional operator summary for the deployment outcome.",
     )
     project_id: int | None = Field(
-        default=None,
-        description="Optional numeric project/workspace identifier.",
+        default=None, description="Optional numeric project identifier."
     )
     project_key: str | None = Field(
-        default=None,
-        description="Optional stable project/workspace key.",
+        default=None, description="Optional stable project key."
+    )
+    workspace_id: int | None = Field(
+        default=None, description="Optional numeric workspace identifier."
+    )
+    workspace_key: str | None = Field(
+        default=None, description="Optional stable workspace key."
     )
 
 
 class DeploymentOutcomeData(BaseModel):
     id: int = Field(..., description="Stable deployment outcome identifier.")
     project: ProjectData = Field(..., description="Owning project/workspace.")
+    workspace: WorkspaceData | None = Field(
+        default=None, description="Optional workspace/environment scope."
+    )
     analysis_id: int | None = Field(
         default=None,
         description="Analysis report identifier tied to this deployment.",
@@ -440,6 +447,12 @@ class TopologyContextRequest(BaseModel):
     )
     project_key: str | None = Field(
         default=None, description="Optional stable project key"
+    )
+    workspace_id: int | None = Field(
+        default=None, description="Optional numeric workspace identifier"
+    )
+    workspace_key: str | None = Field(
+        default=None, description="Optional stable workspace key"
     )
 
 

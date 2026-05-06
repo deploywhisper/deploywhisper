@@ -40,6 +40,11 @@ class DeploymentOutcomeServiceTests(unittest.TestCase):
             project_key="payments",
             display_name="Payments",
         )
+        self.workspace = project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="prod",
+            display_name="Production",
+        )
         self.persisted_report = report_service_module.persist_analysis_report(
             ParseBatchResult(
                 files=[
@@ -69,6 +74,7 @@ class DeploymentOutcomeServiceTests(unittest.TestCase):
                 warnings=[],
             ),
             project_id=self.project.id,
+            workspace_id=self.workspace.id,
             audit_context={"source_interface": "api"},
         )
 
@@ -87,6 +93,8 @@ class DeploymentOutcomeServiceTests(unittest.TestCase):
                 severity="high",
                 source_file="incident.md",
                 incident_date="2026-04-30",
+                project_id=self.project.id,
+                workspace_id=self.workspace.id,
                 content="Rollback needed after checkout deployment.",
             )
 
@@ -102,6 +110,7 @@ class DeploymentOutcomeServiceTests(unittest.TestCase):
 
         self.assertEqual(recorded["analysis_id"], self.persisted_report["id"])
         self.assertEqual(recorded["project"]["project_key"], "payments")
+        self.assertEqual(recorded["workspace"]["workspace_key"], "prod")
         self.assertEqual(recorded["outcome"], "rolled_back")
         self.assertEqual(recorded["linked_incident_id"], incident.id)
         self.assertEqual(recorded["environment"], "prod")
@@ -128,6 +137,35 @@ class DeploymentOutcomeServiceTests(unittest.TestCase):
             )
 
         self.assertEqual(ctx.exception.code, "conflicting_project_reference")
+
+    def test_record_deployment_outcome_rejects_cross_project_incident_link(
+        self,
+    ) -> None:
+        other_project = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        with SessionLocal() as session:
+            incident = create_incident_record(
+                session,
+                title="Platform degraded",
+                severity="high",
+                source_file="platform-incident.md",
+                incident_date="2026-04-30",
+                project_id=other_project.id,
+                content="Platform rollback needed.",
+            )
+
+        with self.assertRaises(
+            deployment_outcome_service_module.DeploymentOutcomeError
+        ) as ctx:
+            deployment_outcome_service_module.record_deployment_outcome(
+                analysis_id=self.persisted_report["id"],
+                outcome="rolled_back",
+                linked_incident_id=incident.id,
+            )
+
+        self.assertEqual(ctx.exception.code, "conflicting_incident_scope")
 
     def test_list_deployment_outcomes_filters_by_analysis_id(self) -> None:
         deployment_outcome_service_module.record_deployment_outcome(
@@ -186,3 +224,64 @@ class DeploymentOutcomeServiceTests(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["analysis_id"], self.persisted_report["id"])
         self.assertEqual(results[0]["project"]["project_key"], "payments")
+        self.assertEqual(results[0]["workspace"]["workspace_key"], "prod")
+
+    def test_list_deployment_outcomes_filters_by_workspace_id(self) -> None:
+        staging_workspace = project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="staging",
+            display_name="Staging",
+        )
+        deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=self.persisted_report["id"],
+            outcome="success",
+            deployed_at="2026-04-30T08:15:00Z",
+            source_interface="api",
+        )
+        staging_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments-staging.tf",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=20,
+                severity="low",
+                recommendation="go",
+                top_risk="Staging report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: staging report.",
+                explanation="Staging report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=self.project.id,
+            workspace_id=staging_workspace.id,
+            audit_context={"source_interface": "api"},
+        )
+        deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=staging_report["id"],
+            outcome="failure",
+            deployed_at="2026-04-30T09:30:00Z",
+            source_interface="api",
+        )
+
+        results = deployment_outcome_service_module.list_deployment_outcomes(
+            project_id=self.project.id,
+            workspace_id=self.workspace.id,
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["analysis_id"], self.persisted_report["id"])
+        self.assertEqual(results[0]["workspace"]["workspace_key"], "prod")

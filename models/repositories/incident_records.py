@@ -11,6 +11,8 @@ from models.tables import IncidentRecord
 def create_incident_record(
     session: Session,
     *,
+    project_id: int,
+    workspace_id: int | None = None,
     title: str,
     severity: str,
     source_file: str,
@@ -19,6 +21,8 @@ def create_incident_record(
     content: str,
 ) -> IncidentRecord:
     record = IncidentRecord(
+        project_id=project_id,
+        workspace_id=workspace_id,
         title=title,
         severity=severity,
         source_file=source_file,
@@ -32,8 +36,18 @@ def create_incident_record(
     return record
 
 
-def list_incident_records(session: Session) -> list[IncidentRecord]:
-    result = session.execute(select(IncidentRecord).order_by(IncidentRecord.id.asc()))
+def list_incident_records(
+    session: Session,
+    *,
+    project_id: int | None = None,
+    workspace_id: int | None = None,
+) -> list[IncidentRecord]:
+    stmt = select(IncidentRecord).order_by(IncidentRecord.id.asc())
+    if project_id is not None:
+        stmt = stmt.where(IncidentRecord.project_id == project_id)
+    if workspace_id is not None:
+        stmt = stmt.where(IncidentRecord.workspace_id == workspace_id)
+    result = session.execute(stmt)
     return list(result.scalars().all())
 
 

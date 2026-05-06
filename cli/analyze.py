@@ -451,6 +451,8 @@ def _run_outcome_record(args: argparse.Namespace) -> int:
             summary=args.summary,
             project_id=args.project_id,
             project_key=args.project_key,
+            workspace_id=args.workspace_id,
+            workspace_key=args.workspace_key,
             source_interface="cli",
         )
     except ValueError as exc:
@@ -483,8 +485,14 @@ def _run_topology_import(args: argparse.Namespace) -> int:
             args.source_type,
             args.source,
             project_id=project.id,
+            workspace_id=args.workspace_id,
+            workspace_key=args.workspace_key,
         )
-        status = get_topology_status(project_id=project.id)
+        status = get_topology_status(
+            project_id=project.id,
+            workspace_id=args.workspace_id,
+            workspace_key=args.workspace_key,
+        )
     except ValueError as exc:
         _emit_json(
             build_error(
@@ -732,7 +740,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--project-id",
         dest="project_id",
         type=int,
-        help="Optional numeric project/workspace id for validation.",
+        help="Optional numeric project id for validation.",
+    )
+    outcome_record_parser.add_argument(
+        "--workspace",
+        dest="workspace_key",
+        help="Optional workspace/environment key for validation.",
+    )
+    outcome_record_parser.add_argument(
+        "--workspace-id",
+        dest="workspace_id",
+        type=int,
+        help="Optional numeric workspace/environment id for validation.",
     )
 
     topology_parser = subparsers.add_parser(
@@ -758,13 +777,24 @@ def build_parser() -> argparse.ArgumentParser:
     topology_import_parser.add_argument(
         "--project",
         dest="project_key",
-        help="Project/workspace key for the topology import.",
+        help="Project key for the topology import.",
     )
     topology_import_parser.add_argument(
         "--project-id",
         dest="project_id",
         type=int,
-        help="Numeric project/workspace id for the topology import.",
+        help="Numeric project id for the topology import.",
+    )
+    topology_import_parser.add_argument(
+        "--workspace",
+        dest="workspace_key",
+        help="Optional workspace/environment key for the topology import.",
+    )
+    topology_import_parser.add_argument(
+        "--workspace-id",
+        dest="workspace_id",
+        type=int,
+        help="Optional numeric workspace/environment id for the topology import.",
     )
     github_parser = subparsers.add_parser(
         "github", help="GitHub workflow setup helpers."

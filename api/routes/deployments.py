@@ -96,6 +96,8 @@ def create_deployment_outcome_route(
             summary=payload.summary,
             project_id=payload.project_id,
             project_key=payload.project_key,
+            workspace_id=payload.workspace_id,
+            workspace_key=payload.workspace_key,
             source_interface="api",
         )
     except ValueError as exc:
@@ -121,6 +123,8 @@ def get_deployment_outcomes(
     outcome: str | None = Query(default=None),
     project_id: int | None = Query(default=None),
     project_key: str | None = Query(default=None),
+    workspace_id: int | None = Query(default=None),
+    workspace_key: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
 ) -> DeploymentOutcomeListResponse:
     try:
@@ -129,6 +133,8 @@ def get_deployment_outcomes(
             outcome=outcome,
             project_id=project_id,
             project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
             limit=limit,
         )
     except ValueError as exc:

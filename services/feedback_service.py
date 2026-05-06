@@ -15,6 +15,7 @@ from services.project_service import (
     build_project_payload,
     ensure_default_project,
     resolve_project_reference,
+    resolve_workspace_reference,
 )
 
 
@@ -44,6 +45,7 @@ def _serialize_event(event) -> dict[str, Any]:
     return {
         "id": event.id,
         "project_id": event.project_id,
+        "workspace_id": event.workspace_id,
         "analysis_id": event.analysis_id,
         "finding_id": event.finding_id,
         "reviewer_role": event.reviewer_role,
@@ -65,6 +67,27 @@ def _project_payload(
     return build_project_payload(
         resolve_project_reference(project_id=project_id, project_key=project_key)
     )
+
+
+def _resolve_summary_scope(
+    *,
+    project_id: int | None,
+    project_key: str | None,
+    workspace_id: int | None,
+    workspace_key: str | None,
+):
+    if project_id is None and project_key is None:
+        project = ensure_default_project()
+    else:
+        project = resolve_project_reference(
+            project_id=project_id, project_key=project_key
+        )
+    workspace = resolve_workspace_reference(
+        project_id=project.id,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    return project, workspace
 
 
 def record_finding_feedback(
@@ -108,6 +131,7 @@ def record_finding_feedback(
         event = create_feedback_event(
             session,
             project_id=report.project_id,
+            workspace_id=report.workspace_id,
             analysis_id=analysis_id,
             finding_id=normalized_finding_id,
             reviewer_role=reviewer_role,
@@ -142,6 +166,7 @@ def record_false_negative_feedback(
         event = create_feedback_event(
             session,
             project_id=report.project_id,
+            workspace_id=report.workspace_id,
             analysis_id=analysis_id,
             reviewer_role=reviewer_role,
             false_negative_note=normalized_note,
@@ -177,15 +202,21 @@ def fetch_feedback_summary(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> dict[str, Any]:
-    if project_id is None and project_key is None:
-        project = ensure_default_project()
-    else:
-        project = resolve_project_reference(
-            project_id=project_id, project_key=project_key
-        )
+    project, workspace = _resolve_summary_scope(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
     with SessionLocal() as session:
-        events = list_feedback_events(session, project_id=project.id)
+        events = list_feedback_events(
+            session,
+            project_id=project.id,
+            workspace_id=workspace.id if workspace is not None else None,
+        )
 
     latest_finding_feedback: dict[tuple[int | None, str], Any] = {}
     latest_false_negative_by_report: dict[int | None, Any] = {}

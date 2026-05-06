@@ -231,13 +231,27 @@ def _build_context_completeness(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> ContextCompleteness:
     topology_status = get_topology_status(
         project_id=project_id,
         project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
     )
     topology_freshness_days = _topology_freshness_days(topology_status.updated_at)
-    incident_index_size = len(load_incident_candidates())
+    if project_id is None and project_key is None:
+        incident_index_size = 0
+    else:
+        incident_index_size = len(
+            load_incident_candidates(
+                project_id=project_id,
+                project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
+            )
+        )
     parser_success_rate = round(
         parse_batch.parsed_count / max(len(parse_batch.files), 1),
         2,
@@ -631,6 +645,8 @@ def build_analysis_artifacts(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
     completion_client=None,
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
@@ -640,6 +656,8 @@ def build_analysis_artifacts(
     topology, topology_warning = load_topology(
         project_id=project_id,
         project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
     )
     assessment = evaluate_parse_batch(
         parse_batch,
@@ -652,6 +670,8 @@ def build_analysis_artifacts(
         parse_batch,
         project_id=project_id,
         project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
     )
     findings = build_findings(
         assessment=assessment,
@@ -664,7 +684,17 @@ def build_analysis_artifacts(
     rollback_plan = generate_rollback_plan(
         changes, partial_context=parse_batch.has_partial_context
     )
-    incident_matches = find_incident_matches(changes)
+    incident_matches = (
+        []
+        if project_id is None and project_key is None
+        else find_incident_matches(
+            changes,
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+    )
     narrative = generate_narrative(
         assessment.model_copy(deep=True),
         [finding.model_copy(deep=True) for finding in findings],
@@ -740,6 +770,8 @@ def analyze_uploaded_files(
     artifacts = build_analysis_artifacts(
         files,
         project_id=resolved_project.id,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
         completion_client=completion_client,
     )
     persisted_report = persist_analysis_report(
