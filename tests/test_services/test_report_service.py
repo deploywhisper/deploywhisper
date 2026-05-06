@@ -1648,6 +1648,104 @@ class ReportServiceTests(unittest.TestCase):
             )
         )
 
+    def test_persist_analysis_report_stores_and_filters_workspace_scope(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        prod = project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+            environment="prod",
+        )
+        staging = project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="staging",
+            display_name="Staging",
+            environment="staging",
+        )
+
+        prod_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments-prod.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=72,
+                severity="high",
+                recommendation="no-go",
+                top_risk="Production payment ingress widened.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="NO-GO: production payment ingress widened.",
+                explanation="Workspace-scoped report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            workspace_id=prod.id,
+            audit_context={"source_interface": "api"},
+        )
+        report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments-staging.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=15,
+                severity="low",
+                recommendation="go",
+                top_risk="Staging payment ingress changed.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: staging payment ingress changed.",
+                explanation="Workspace-scoped report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            workspace_id=staging.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        scoped_page = report_service_module.fetch_filtered_analysis_history_page(
+            project_key=project.project_key,
+            workspace_key=prod.workspace_key,
+        )
+        wrong_workspace = report_service_module.fetch_analysis_report(
+            prod_report["id"],
+            project_key=project.project_key,
+            workspace_key=staging.workspace_key,
+        )
+
+        self.assertEqual(scoped_page["total_count"], 1)
+        self.assertEqual(scoped_page["items"][0]["id"], prod_report["id"])
+        self.assertEqual(scoped_page["items"][0]["workspace"]["workspace_key"], "prod")
+        self.assertIsNone(wrong_workspace)
+
     def test_previous_scan_diffs_do_not_cross_project_boundaries(self) -> None:
         payments = project_service_module.create_project(
             project_key="payments",

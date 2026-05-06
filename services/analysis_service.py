@@ -22,7 +22,11 @@ from llm.narrator import NarrativeResult, generate_narrative
 from llm.providers import generate_completion_with_settings
 from parsers.base import ParseBatchResult, UnifiedChange
 from services.intake_service import build_parse_batch
-from services.project_service import ProjectResolutionError, resolve_project_reference
+from services.project_service import (
+    ProjectResolutionError,
+    resolve_project_reference,
+    resolve_workspace_reference,
+)
 from services.report_service import build_share_report_link, persist_analysis_report
 from services.settings_service import resolve_provider_runtime
 from services.topology_service import (
@@ -683,6 +687,8 @@ def resolve_analysis_project_scope(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ):
     """Resolve the required analysis project before artifact parsing."""
     raw_project_key = str(project_key) if project_key is not None else None
@@ -703,10 +709,16 @@ def resolve_analysis_project_scope(
                 "or use a workflow integration that derives one."
             ),
         )
-    return resolve_project_reference(
+    resolved_project = resolve_project_reference(
         project_id=project_id,
         project_key=cleaned_project_key or None,
     )
+    resolve_workspace_reference(
+        project_id=resolved_project.id,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    return resolved_project
 
 
 def analyze_uploaded_files(
@@ -714,12 +726,16 @@ def analyze_uploaded_files(
     completion_client=None,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
     audit_context: dict | None = None,
 ) -> AnalysisRunResult:
     """Run the shared parse -> assess -> persist pipeline."""
     resolved_project = resolve_analysis_project_scope(
         project_id=project_id,
         project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
     )
     artifacts = build_analysis_artifacts(
         files,
@@ -736,6 +752,8 @@ def analyze_uploaded_files(
         evidence_items=artifacts.evidence_items,
         artifact_snapshots={name: raw_content for name, raw_content in files},
         project_id=resolved_project.id,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
         audit_context=audit_context,
     )
     return AnalysisRunResult(

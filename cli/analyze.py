@@ -269,6 +269,8 @@ def _run_analyze(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> int:
     if not paths:
         _emit_json(
@@ -281,7 +283,12 @@ def _run_analyze(
         return 2
 
     try:
-        resolve_analysis_project_scope(project_id=project_id, project_key=project_key)
+        resolve_analysis_project_scope(
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
     except ValueError as exc:
         _emit_json(
             build_error(
@@ -320,6 +327,8 @@ def _run_analyze(
                 raw_files,
                 project_id=project_id,
                 project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
                 audit_context={
                     "source_interface": "cli",
                     "trigger_type": os.getenv(
@@ -601,13 +610,24 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument(
         "--project",
         dest="project_key",
-        help="Project/workspace key for the analysis. Required unless --project-id is provided.",
+        help="Project key for the analysis. Required unless --project-id is provided.",
     )
     analyze_parser.add_argument(
         "--project-id",
         dest="project_id",
         type=int,
-        help="Numeric project/workspace id for the analysis. Required unless --project is provided.",
+        help="Numeric project id for the analysis. Required unless --project is provided.",
+    )
+    analyze_parser.add_argument(
+        "--workspace",
+        dest="workspace_key",
+        help="Optional project-local workspace/environment key for the analysis.",
+    )
+    analyze_parser.add_argument(
+        "--workspace-id",
+        dest="workspace_id",
+        type=int,
+        help="Optional numeric workspace/environment id for the analysis.",
     )
     analyze_parser.add_argument(
         "paths", nargs="*", help="Artifact file paths to analyze."
@@ -828,6 +848,8 @@ def main() -> None:
                 args.paths,
                 project_id=getattr(args, "project_id", None),
                 project_key=getattr(args, "project_key", None),
+                workspace_id=getattr(args, "workspace_id", None),
+                workspace_key=getattr(args, "workspace_key", None),
             )
         )
     if args.command == "project" and args.project_command == "create":

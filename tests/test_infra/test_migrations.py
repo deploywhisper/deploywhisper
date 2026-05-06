@@ -53,6 +53,21 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
+    def _foreign_keys(self, table_name: str) -> list[dict]:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            return [
+                {
+                    "constrained_columns": [row[3]],
+                    "referred_table": row[2],
+                    "referred_columns": [row[4]],
+                    "ondelete": row[6],
+                }
+                for row in sqlite_conn.execute(f"PRAGMA foreign_key_list({table_name})")
+            ]
+        finally:
+            sqlite_conn.close()
+
     def _create_project_workspace_table(
         self,
         *,
@@ -98,6 +113,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("analysis_id", self._table_columns("risk_assessments"))
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
         self.assertIn("project_id", self._table_columns("analysis_reports"))
+        self.assertIn("workspace_id", self._table_columns("analysis_reports"))
         self.assertIn("project_key", self._table_columns("projects"))
         self.assertIn("workspace_key", self._table_columns("project_workspaces"))
         self.assertIn("environment", self._table_columns("project_workspaces"))
@@ -115,6 +131,14 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("share_password_hash", self._table_columns("analysis_reports"))
         self.assertIn("share_password_salt", self._table_columns("analysis_reports"))
         self.assertIn("share_redact_filenames", self._table_columns("analysis_reports"))
+        report_fks = self._foreign_keys("analysis_reports")
+        self.assertTrue(
+            any(
+                foreign_key["referred_table"] == "project_workspaces"
+                and foreign_key["constrained_columns"] == ["workspace_id"]
+                for foreign_key in report_fks
+            )
+        )
         report_schema_row = next(
             row
             for row in self._table_info("analysis_reports")
@@ -351,7 +375,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "014_add_project_workspace_records")
+        self.assertEqual(revision, "015_add_report_workspace_scope")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -400,7 +424,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "014_add_project_workspace_records")
+        self.assertEqual(revision, "015_add_report_workspace_scope")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -426,10 +450,30 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "014_add_project_workspace_records")
+        self.assertEqual(revision, "015_add_report_workspace_scope")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
+        self.assertIn("workspace_id", columns)
+
+    def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
+        command.upgrade(self._config(), "014_add_project_workspace_records")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            "ALTER TABLE analysis_reports ADD COLUMN workspace_id INTEGER"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(
+            RuntimeError, "partial analysis report workspace scope schema"
+        ):
+            database_module.init_db()
 
     def test_init_db_rejects_partial_incident_analysis_link_schema(self) -> None:
         command.upgrade(self._config(), "011_add_deployment_outcome_fields")
@@ -583,7 +627,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "014_add_project_workspace_records")
+        self.assertEqual(revision, "015_add_report_workspace_scope")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ def _report_load_options(*, include_evidence: bool) -> list:
     options = [
         selectinload(AnalysisReport.risk_assessment),
         selectinload(AnalysisReport.project),
+        selectinload(AnalysisReport.workspace),
     ]
     findings_loader = selectinload(AnalysisReport.findings)
     if include_evidence:
@@ -33,6 +34,7 @@ def create_analysis_report(
     session: Session,
     *,
     project_id: int,
+    workspace_id: int | None = None,
     risk_score: int,
     severity: str,
     recommendation: str,
@@ -63,6 +65,7 @@ def create_analysis_report(
 ) -> AnalysisReport:
     report = AnalysisReport(
         project_id=project_id,
+        workspace_id=workspace_id,
         risk_score=risk_score,
         severity=severity,
         recommendation=recommendation,
@@ -174,13 +177,22 @@ def create_analysis_report(
 
 
 def get_analysis_report(
-    session: Session, report_id: int, *, include_evidence: bool = True
+    session: Session,
+    report_id: int,
+    *,
+    project_id: int | None = None,
+    workspace_id: int | None = None,
+    include_evidence: bool = True,
 ) -> AnalysisReport | None:
     stmt = (
         select(AnalysisReport)
         .options(*_report_load_options(include_evidence=include_evidence))
         .where(AnalysisReport.id == report_id)
     )
+    if project_id is not None:
+        stmt = stmt.where(AnalysisReport.project_id == project_id)
+    if workspace_id is not None:
+        stmt = stmt.where(AnalysisReport.workspace_id == workspace_id)
     return session.execute(stmt).scalar_one_or_none()
 
 
@@ -216,6 +228,7 @@ def list_analysis_reports(
     session: Session,
     *,
     project_id: int | None = None,
+    workspace_id: int | None = None,
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
@@ -230,6 +243,8 @@ def list_analysis_reports(
     )
     if project_id is not None:
         stmt = stmt.where(AnalysisReport.project_id == project_id)
+    if workspace_id is not None:
+        stmt = stmt.where(AnalysisReport.workspace_id == workspace_id)
     if severity:
         stmt = stmt.where(AnalysisReport.severity == severity)
     if recommendation:
@@ -253,6 +268,7 @@ def count_analysis_reports(
     session: Session,
     *,
     project_id: int | None = None,
+    workspace_id: int | None = None,
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
@@ -260,6 +276,8 @@ def count_analysis_reports(
     stmt = select(func.count()).select_from(AnalysisReport)
     if project_id is not None:
         stmt = stmt.where(AnalysisReport.project_id == project_id)
+    if workspace_id is not None:
+        stmt = stmt.where(AnalysisReport.workspace_id == workspace_id)
     if severity:
         stmt = stmt.where(AnalysisReport.severity == severity)
     if recommendation:
@@ -279,11 +297,14 @@ def count_analysis_reports_by_field(
     field_name: str,
     *,
     project_id: int | None = None,
+    workspace_id: int | None = None,
 ) -> dict[str, int]:
     column = getattr(AnalysisReport, field_name)
     stmt = select(column, func.count()).group_by(column)
     if project_id is not None:
         stmt = stmt.where(AnalysisReport.project_id == project_id)
+    if workspace_id is not None:
+        stmt = stmt.where(AnalysisReport.workspace_id == workspace_id)
     rows = session.execute(stmt).all()
     return {str(value): int(count) for value, count in rows if value is not None}
 
@@ -293,11 +314,13 @@ def latest_active_dashboard_report(
     *,
     now: datetime | None = None,
     project_id: int | None = None,
+    workspace_id: int | None = None,
 ) -> AnalysisReport | None:
     current_time = now or datetime.now(UTC)
     reports = list_analysis_reports(
         session,
         project_id=project_id,
+        workspace_id=workspace_id,
         include_evidence=False,
     )
     for report in reports:

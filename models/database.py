@@ -43,6 +43,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "012_add_feedback_event_fields",
     "013_add_incident_analysis_reference",
     "014_add_project_workspace_records",
+    "015_add_report_workspace_scope",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -244,6 +245,36 @@ def _project_workspace_schema_complete(connection) -> bool:
     )
 
 
+def _analysis_report_workspace_scope_complete(connection) -> bool:
+    inspector = inspect(connection)
+    column_map = {
+        column["name"]: column
+        for column in inspect(connection).get_columns("analysis_reports")
+    }
+    workspace_column = column_map.get("workspace_id")
+    has_workspace_column = (
+        workspace_column is not None
+        and workspace_column["type"]._type_affinity is Integer
+        and workspace_column.get("nullable") is True
+    )
+    has_workspace_fk = any(
+        foreign_key.get("referred_table") == "project_workspaces"
+        and "workspace_id" in (foreign_key.get("constrained_columns") or [])
+        and "id" in (foreign_key.get("referred_columns") or [])
+        and (foreign_key.get("options") or {}).get("ondelete") == "SET NULL"
+        for foreign_key in inspector.get_foreign_keys("analysis_reports")
+    )
+    indexed_columns = {
+        tuple(index.get("column_names") or [])
+        for index in inspector.get_indexes("analysis_reports")
+    }
+    return (
+        has_workspace_column
+        and has_workspace_fk
+        and ("workspace_id",) in indexed_columns
+    )
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
@@ -303,6 +334,25 @@ def _bootstrap_brownfield_revision() -> None:
         has_complete_incident_link = {"analysis_id"}.issubset(
             incident_record_columns
         ) and _incident_record_has_analysis_link(connection)
+        has_report_workspace_scope = "workspace_id" in report_columns
+        has_complete_report_workspace_scope = (
+            has_report_workspace_scope
+            and _analysis_report_workspace_scope_complete(connection)
+        )
+        if has_report_workspace_scope and not has_complete_report_workspace_scope:
+            raise RuntimeError(
+                "Detected a partial analysis report workspace scope schema without "
+                "a complete migration history. Manual recovery is required."
+            )
+        if (
+            has_complete_workspace_records
+            and "projects" in tables
+            and "topology_versions" in tables
+            and "project_id" in report_columns
+            and has_complete_report_workspace_scope
+        ):
+            _write_alembic_revision(connection, "015_add_report_workspace_scope")
+            return
         if (
             has_complete_workspace_records
             and "projects" in tables
