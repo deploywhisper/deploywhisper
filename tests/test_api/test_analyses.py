@@ -589,6 +589,48 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
 
+    def test_analysis_reads_mask_conflicting_project_reference_for_scoped_actor(
+        self,
+    ) -> None:
+        allowed = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        forbidden = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        headers = {
+            "X-DeployWhisper-Project-Role": "read-only",
+            "X-DeployWhisper-Project-Keys": allowed.project_key,
+        }
+
+        list_response = self.client.get(
+            "/api/v1/analyses",
+            params={
+                "project_key": allowed.project_key,
+                "project_id": forbidden.id,
+            },
+            headers=headers,
+        )
+        detail_response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}",
+            params={
+                "project_key": allowed.project_key,
+                "project_id": forbidden.id,
+            },
+            headers=headers,
+        )
+
+        self.assertEqual(list_response.status_code, 403)
+        self.assertEqual(
+            list_response.json()["error"]["code"], "project_scope_forbidden"
+        )
+        self.assertEqual(detail_response.status_code, 403)
+        self.assertEqual(
+            detail_response.json()["error"]["code"], "project_scope_forbidden"
+        )
+
     def test_analysis_reads_deny_project_outside_actor_scope(self) -> None:
         project = project_service_module.create_project(
             project_key="payments",

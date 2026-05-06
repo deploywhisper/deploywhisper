@@ -134,6 +134,29 @@ class ContextApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
 
+    def test_get_project_topology_masks_conflicting_reference_for_scoped_actor(
+        self,
+    ) -> None:
+        forbidden = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+
+        response = self.client.get(
+            "/api/v1/context/topology",
+            params={
+                "project_key": self.project.project_key,
+                "project_id": forbidden.id,
+            },
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
     def test_save_project_topology_rejects_invalid_relationships(self) -> None:
         response = self.client.post(
             "/api/v1/context/topology",

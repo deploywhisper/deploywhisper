@@ -104,6 +104,19 @@ def _emit_project_scope_forbidden_error() -> int:
     return 2
 
 
+def _should_mask_cli_project_reference_error(
+    *,
+    project_id: int | None,
+    exc: ValueError,
+) -> bool:
+    return (
+        project_id is not None
+        and getattr(exc, "code", None)
+        in {"project_not_found", "conflicting_project_reference"}
+        and _cli_authorization_has_restricted_project_scope()
+    )
+
+
 def _require_cli_project_permission(
     *,
     capability: str,
@@ -384,11 +397,7 @@ def _run_analyze(
     except PermissionError as exc:
         return _emit_project_authorization_error(exc)
     except ValueError as exc:
-        if (
-            project_id is not None
-            and not project_key_for_auth
-            and _cli_authorization_has_restricted_project_scope()
-        ):
+        if _should_mask_cli_project_reference_error(project_id=project_id, exc=exc):
             return _emit_project_scope_forbidden_error()
         _emit_json(
             build_error(
@@ -657,10 +666,9 @@ def _run_topology_import(args: argparse.Namespace) -> int:
     except PermissionError as exc:
         return _emit_project_authorization_error(exc)
     except ValueError as exc:
-        if (
-            args.project_id is not None
-            and not project_key_for_auth
-            and _cli_authorization_has_restricted_project_scope()
+        if _should_mask_cli_project_reference_error(
+            project_id=args.project_id,
+            exc=exc,
         ):
             return _emit_project_scope_forbidden_error()
         _emit_json(

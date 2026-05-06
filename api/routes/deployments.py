@@ -117,6 +117,23 @@ def _project_scope_forbidden_error() -> ApiError:
     )
 
 
+def _should_mask_project_reference_error(
+    *,
+    authorization: dict[str, object],
+    project_id: int | None,
+    exc: ValueError,
+) -> bool:
+    return (
+        project_id is not None
+        and getattr(exc, "code", None)
+        in {"project_not_found", "conflicting_project_reference"}
+        and has_restricted_project_scope(
+            role=authorization["role"],
+            allowed_project_keys=authorization["allowed_project_keys"],
+        )
+    )
+
+
 def _require_deployment_project_permission(
     *,
     authorization: dict[str, object],
@@ -131,6 +148,19 @@ def _require_deployment_project_permission(
             project_key=project_key,
             allowed_project_keys=authorization["allowed_project_keys"],
         )
+        if project_id is not None:
+            try:
+                resolve_project_reference(
+                    project_id=project_id, project_key=project_key
+                )
+            except ValueError as exc:
+                if _should_mask_project_reference_error(
+                    authorization=authorization,
+                    project_id=project_id,
+                    exc=exc,
+                ):
+                    raise _project_scope_forbidden_error() from exc
+                raise
         return
     require_project_permission(
         role=authorization["role"],
@@ -140,9 +170,10 @@ def _require_deployment_project_permission(
     try:
         project = resolve_project_reference(project_id=project_id)
     except ValueError as exc:
-        if has_restricted_project_scope(
-            role=authorization["role"],
-            allowed_project_keys=authorization["allowed_project_keys"],
+        if _should_mask_project_reference_error(
+            authorization=authorization,
+            project_id=project_id,
+            exc=exc,
         ):
             raise _project_scope_forbidden_error() from exc
         raise
@@ -167,6 +198,8 @@ def _require_deployment_analysis_permission(
     )
     report = fetch_analysis_report(analysis_id)
     if report is None:
+        if _is_restricted_project_actor(authorization):
+            raise _project_scope_forbidden_error()
         raise ApiError(
             status_code=404,
             code="analysis_not_found",
@@ -177,6 +210,13 @@ def _require_deployment_analysis_permission(
         role=authorization["role"],
         capability=capability,
         project_key=project.get("project_key"),
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+
+
+def _is_restricted_project_actor(authorization: dict[str, object]) -> bool:
+    return has_restricted_project_scope(
+        role=authorization["role"],
         allowed_project_keys=authorization["allowed_project_keys"],
     )
 
@@ -197,18 +237,18 @@ def create_deployment_outcome_route(
     authorization: dict[str, object] = Depends(_authorization_context),
 ) -> DeploymentOutcomeResponse:
     try:
-        if payload.project_key is not None or payload.project_id is not None:
+        if payload.analysis_id is not None:
+            _require_deployment_analysis_permission(
+                authorization=authorization,
+                capability="outcome.manage",
+                analysis_id=payload.analysis_id,
+            )
+        elif payload.project_key is not None or payload.project_id is not None:
             _require_deployment_project_permission(
                 authorization=authorization,
                 capability="outcome.manage",
                 project_id=payload.project_id,
                 project_key=payload.project_key,
-            )
-        else:
-            _require_deployment_analysis_permission(
-                authorization=authorization,
-                capability="outcome.manage",
-                analysis_id=payload.analysis_id,
             )
         recorded = record_deployment_outcome(
             analysis_id=payload.analysis_id,
@@ -226,6 +266,16 @@ def create_deployment_outcome_route(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
+        if _is_restricted_project_actor(authorization) and getattr(
+            exc, "code", None
+        ) in {"analysis_not_found", "conflicting_project_reference"}:
+            raise _project_scope_forbidden_error() from exc
+        if _should_mask_project_reference_error(
+            authorization=authorization,
+            project_id=payload.project_id,
+            exc=exc,
+        ):
+            raise _project_scope_forbidden_error() from exc
         raise _deployment_api_error(exc) from exc
     return DeploymentOutcomeResponse(
         data=DeploymentOutcomeData(**recorded),
@@ -254,18 +304,18 @@ def get_deployment_outcomes(
     authorization: dict[str, object] = Depends(_authorization_context),
 ) -> DeploymentOutcomeListResponse:
     try:
-        if project_key is not None or project_id is not None:
+        if analysis_id is not None:
+            _require_deployment_analysis_permission(
+                authorization=authorization,
+                capability="outcome.read",
+                analysis_id=analysis_id,
+            )
+        elif project_key is not None or project_id is not None:
             _require_deployment_project_permission(
                 authorization=authorization,
                 capability="outcome.read",
                 project_id=project_id,
                 project_key=project_key,
-            )
-        elif analysis_id is not None:
-            _require_deployment_analysis_permission(
-                authorization=authorization,
-                capability="outcome.read",
-                analysis_id=analysis_id,
             )
         else:
             _require_deployment_project_permission(
@@ -284,6 +334,16 @@ def get_deployment_outcomes(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
+        if _is_restricted_project_actor(authorization) and getattr(
+            exc, "code", None
+        ) in {"analysis_not_found", "conflicting_project_reference"}:
+            raise _project_scope_forbidden_error() from exc
+        if _should_mask_project_reference_error(
+            authorization=authorization,
+            project_id=project_id,
+            exc=exc,
+        ):
+            raise _project_scope_forbidden_error() from exc
         raise _deployment_api_error(exc) from exc
     return DeploymentOutcomeListResponse(
         data=[DeploymentOutcomeData(**item) for item in outcomes],

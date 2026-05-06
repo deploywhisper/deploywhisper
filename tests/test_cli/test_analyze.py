@@ -1246,6 +1246,54 @@ class AnalyzeCliTests(unittest.TestCase):
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
 
+    def test_analyze_command_masks_conflicting_project_reference_for_scoped_actor(
+        self,
+    ) -> None:
+        allowed = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        forbidden = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    allowed.project_key,
+                    "--project-id",
+                    str(forbidden.id),
+                    str(artifact_path),
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "contributor",
+                    "DEPLOYWHISPER_PROJECT_KEYS": allowed.project_key,
+                },
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
+
     def test_project_create_command_reports_created_workspace(self) -> None:
         output = io.StringIO()
 
@@ -1507,6 +1555,58 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 2)
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "project_not_found")
+
+    def test_topology_import_command_masks_conflicting_project_for_scoped_actor(
+        self,
+    ) -> None:
+        allowed = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        forbidden = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        topology_path = Path(self.tempdir.name) / "topology.json"
+        topology_path.write_text(json.dumps({"services": []}), encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "topology",
+                    "import",
+                    "--from",
+                    "custom",
+                    "--source",
+                    str(topology_path),
+                    "--project",
+                    allowed.project_key,
+                    "--project-id",
+                    str(forbidden.id),
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "maintainer",
+                    "DEPLOYWHISPER_PROJECT_KEYS": allowed.project_key,
+                },
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
 
     def test_topology_import_command_warns_without_failing_for_unknown_source(
         self,

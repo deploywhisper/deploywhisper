@@ -74,6 +74,23 @@ def _project_scope_forbidden_error() -> ApiError:
     )
 
 
+def _should_mask_project_reference_error(
+    *,
+    authorization: dict[str, object],
+    project_id: int | None,
+    exc: ValueError,
+) -> bool:
+    return (
+        project_id is not None
+        and getattr(exc, "code", None)
+        in {"project_not_found", "conflicting_project_reference"}
+        and has_restricted_project_scope(
+            role=authorization["role"],
+            allowed_project_keys=authorization["allowed_project_keys"],
+        )
+    )
+
+
 def _resolve_authorized_topology_project(
     *,
     authorization: dict[str, object],
@@ -99,13 +116,10 @@ def _resolve_authorized_topology_project(
             project_id=project_id, project_key=project_key
         )
     except ValueError as exc:
-        if (
-            project_id is not None
-            and project_key is None
-            and has_restricted_project_scope(
-                role=authorization["role"],
-                allowed_project_keys=authorization["allowed_project_keys"],
-            )
+        if _should_mask_project_reference_error(
+            authorization=authorization,
+            project_id=project_id,
+            exc=exc,
         ):
             raise _project_scope_forbidden_error() from exc
         raise

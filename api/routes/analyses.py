@@ -96,6 +96,23 @@ def _project_scope_forbidden_error() -> ApiError:
     )
 
 
+def _should_mask_project_reference_error(
+    *,
+    authorization: dict[str, object],
+    project_id: int | None,
+    exc: ValueError,
+) -> bool:
+    return (
+        project_id is not None
+        and getattr(exc, "code", None)
+        in {"project_not_found", "conflicting_project_reference"}
+        and has_restricted_project_scope(
+            role=authorization["role"],
+            allowed_project_keys=authorization["allowed_project_keys"],
+        )
+    )
+
+
 def _require_api_project_permission(
     *,
     authorization: dict[str, object],
@@ -110,6 +127,19 @@ def _require_api_project_permission(
             project_key=project_key,
             allowed_project_keys=authorization["allowed_project_keys"],
         )
+        if project_id is not None:
+            try:
+                resolve_project_reference(
+                    project_id=project_id, project_key=project_key
+                )
+            except ValueError as exc:
+                if _should_mask_project_reference_error(
+                    authorization=authorization,
+                    project_id=project_id,
+                    exc=exc,
+                ):
+                    raise _project_scope_forbidden_error() from exc
+                raise
         return
     if project_id is not None:
         require_project_permission(
@@ -120,9 +150,10 @@ def _require_api_project_permission(
         try:
             project = resolve_project_reference(project_id=project_id)
         except ValueError as exc:
-            if has_restricted_project_scope(
-                role=authorization["role"],
-                allowed_project_keys=authorization["allowed_project_keys"],
+            if _should_mask_project_reference_error(
+                authorization=authorization,
+                project_id=project_id,
+                exc=exc,
             ):
                 raise _project_scope_forbidden_error() from exc
             raise
@@ -258,6 +289,12 @@ def list_analyses(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_project_reference_error(
+            authorization=authorization,
+            project_id=project_id,
+            exc=exc,
+        ):
+            raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
     return AnalysisListResponse(
         data=[AnalysisReportData(**report) for report in page_payload["items"]],
@@ -338,9 +375,10 @@ async def create_analysis(
                 workspace_key=workspace_key,
             )
         except ValueError as exc:
-            if project_id is not None and has_restricted_project_scope(
-                role=authorization["role"],
-                allowed_project_keys=authorization["allowed_project_keys"],
+            if _should_mask_project_reference_error(
+                authorization=authorization,
+                project_id=project_id,
+                exc=exc,
             ):
                 raise _project_scope_forbidden_error() from exc
             raise
@@ -353,6 +391,12 @@ async def create_analysis(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_project_reference_error(
+            authorization=authorization,
+            project_id=project_id,
+            exc=exc,
+        ):
+            raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
 
     raw_files = await _read_upload_files_with_limit(files)
@@ -446,6 +490,12 @@ def get_analysis(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_project_reference_error(
+            authorization=authorization,
+            project_id=project_id,
+            exc=exc,
+        ):
+            raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
     if report is None:
         raise ApiError(
