@@ -35,6 +35,8 @@ def _build_topology_context_response(
     *,
     project_id: int | None = None,
     project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
 ) -> TopologyContextResponse:
     try:
         project = resolve_project_reference(
@@ -42,7 +44,11 @@ def _build_topology_context_response(
         )
     except ValueError as exc:
         raise _project_api_error(exc) from exc
-    status = get_topology_status(project_id=project.id)
+    status = get_topology_status(
+        project_id=project.id,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
     return TopologyContextResponse(
         data=TopologyContextData(
             project=ProjectData(**project.model_dump()),
@@ -56,10 +62,14 @@ def _build_topology_context_response(
 def get_project_topology(
     project_id: int | None = Query(default=None),
     project_key: str | None = Query(default=None),
+    workspace_id: int | None = Query(default=None),
+    workspace_key: str | None = Query(default=None),
 ) -> TopologyContextResponse:
     return _build_topology_context_response(
         project_id=project_id,
         project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
     )
 
 
@@ -77,6 +87,8 @@ def save_project_topology(payload: TopologyContextRequest) -> TopologyContextRes
         save_topology_definition(
             json.dumps(payload.topology),
             project_id=project.id,
+            workspace_id=payload.workspace_id,
+            workspace_key=payload.workspace_key,
         )
     except ValueError as exc:
         raise ApiError(
@@ -85,4 +97,8 @@ def save_project_topology(payload: TopologyContextRequest) -> TopologyContextRes
             message=str(exc),
         ) from exc
 
-    return _build_topology_context_response(project_id=project.id)
+    return _build_topology_context_response(
+        project_id=project.id,
+        workspace_id=payload.workspace_id,
+        workspace_key=payload.workspace_key,
+    )

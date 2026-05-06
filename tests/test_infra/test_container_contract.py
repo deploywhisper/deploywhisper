@@ -29,6 +29,7 @@ class ContainerContractTests(unittest.TestCase):
                 "013_add_incident_analysis_reference.py",
                 "014_add_project_workspace_records.py",
                 "015_add_report_workspace_scope.py",
+                "016_scope_learning_context_records.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -43,6 +44,7 @@ class ContainerContractTests(unittest.TestCase):
         incident_link_content = migrations[9].read_text(encoding="utf-8")
         workspace_content = migrations[10].read_text(encoding="utf-8")
         report_workspace_content = migrations[11].read_text(encoding="utf-8")
+        learning_context_scope_content = migrations[12].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -94,6 +96,13 @@ class ContainerContractTests(unittest.TestCase):
             report_workspace_content,
         )
         self.assertIn('"workspace_id"', report_workspace_content)
+        self.assertIn(
+            'down_revision = "015_add_report_workspace_scope"',
+            learning_context_scope_content,
+        )
+        self.assertIn('"incident_records"', learning_context_scope_content)
+        self.assertIn('"project_id"', learning_context_scope_content)
+        self.assertIn('"workspace_id"', learning_context_scope_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())

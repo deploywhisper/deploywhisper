@@ -24,6 +24,12 @@ Query stored outcome history:
 curl "http://localhost:8080/api/v1/deployments/outcomes?analysis_id=42"
 ```
 
+Project and workspace filters are also supported for scoped history views:
+
+```bash
+curl "http://localhost:8080/api/v1/deployments/outcomes?project_key=payments&workspace_key=prod"
+```
+
 Supported outcome values are `success`, `failure`, and `rolled_back`.
 Set `DEPLOYWHISPER_OUTCOME_TOKEN` (or `APP_DEPLOYMENT_OUTCOME_TOKEN`) on the server before using the ingestion endpoint.
 
@@ -36,6 +42,8 @@ deploywhisper outcome record \
   --analysis-id 42 \
   --outcome success \
   --deployed-at 2026-04-30T08:15:00Z \
+  --project payments \
+  --workspace prod \
   --environment prod
 ```
 
@@ -45,6 +53,7 @@ deploywhisper outcome record \
 
 - Migration `011_add_deployment_outcome_fields` adds `deployed_at` and `linked_incident_id` to the existing `deployment_outcomes` table.
 - Migration `011_add_deployment_outcome_fields` also backfills the previously metadata-only `incident_records` table into the Alembic chain so `alembic upgrade head` produces a complete schema.
-- Outcome capture stays project-scoped by deriving the owning workspace from the referenced `analysis_id`.
-- Incident linkage is optional and validates against the existing `incident_records` table when provided.
+- Migration `016_scope_learning_context_records` adds project/workspace scope to incidents, topology snapshots, feedback, and deployment outcomes.
+- Outcome capture stays project/workspace-scoped by deriving the owning scope from the referenced `analysis_id`.
+- Incident linkage is optional and validates that the incident belongs to the same project and compatible workspace when provided.
 - The webhook-style ingestion path now requires `X-DeployWhisper-Outcome-Token`, aligned with the repo's existing explicit token-based mutation pattern.

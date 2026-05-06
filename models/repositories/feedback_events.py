@@ -12,6 +12,7 @@ def create_feedback_event(
     session: Session,
     *,
     project_id: int,
+    workspace_id: int | None = None,
     analysis_id: int,
     finding_id: str | None = None,
     reviewer_role: str | None = None,
@@ -24,6 +25,7 @@ def create_feedback_event(
 ) -> FeedbackEvent:
     event = FeedbackEvent(
         project_id=project_id,
+        workspace_id=workspace_id,
         analysis_id=analysis_id,
         finding_id=finding_id,
         reviewer_role=reviewer_role,
@@ -44,6 +46,7 @@ def list_feedback_events(
     session: Session,
     *,
     project_id: int | None = None,
+    workspace_id: int | None = None,
     analysis_id: int | None = None,
     limit: int | None = None,
 ) -> list[FeedbackEvent]:
@@ -52,6 +55,8 @@ def list_feedback_events(
     )
     if project_id is not None:
         stmt = stmt.where(FeedbackEvent.project_id == project_id)
+    if workspace_id is not None:
+        stmt = stmt.where(FeedbackEvent.workspace_id == workspace_id)
     if analysis_id is not None:
         stmt = stmt.where(FeedbackEvent.analysis_id == analysis_id)
     if limit is not None:

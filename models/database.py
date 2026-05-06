@@ -44,6 +44,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "013_add_incident_analysis_reference",
     "014_add_project_workspace_records",
     "015_add_report_workspace_scope",
+    "016_scope_learning_context_records",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -275,6 +276,84 @@ def _analysis_report_workspace_scope_complete(connection) -> bool:
     )
 
 
+def _learning_context_scope_complete(connection) -> bool:
+    inspector = inspect(connection)
+    workspace_unique_columns = {
+        tuple(unique.get("column_names") or [])
+        for unique in inspector.get_unique_constraints("project_workspaces")
+    }
+    has_workspace_project_id_unique = (
+        "project_id",
+        "id",
+    ) in workspace_unique_columns
+
+    def has_workspace_scope(table_name: str) -> bool:
+        columns = {
+            column["name"]: column for column in inspector.get_columns(table_name)
+        }
+        workspace_column = columns.get("workspace_id")
+        has_workspace_column = (
+            workspace_column is not None
+            and workspace_column["type"]._type_affinity is Integer
+            and workspace_column.get("nullable") is True
+        )
+        has_workspace_fk = any(
+            foreign_key.get("referred_table") == "project_workspaces"
+            and "workspace_id" in (foreign_key.get("constrained_columns") or [])
+            and "id" in (foreign_key.get("referred_columns") or [])
+            and (foreign_key.get("options") or {}).get("ondelete") == "SET NULL"
+            for foreign_key in inspector.get_foreign_keys(table_name)
+        )
+        has_project_workspace_scope_fk = any(
+            foreign_key.get("referred_table") == "project_workspaces"
+            and (foreign_key.get("constrained_columns") or [])
+            == ["project_id", "workspace_id"]
+            and (foreign_key.get("referred_columns") or []) == ["project_id", "id"]
+            for foreign_key in inspector.get_foreign_keys(table_name)
+        )
+        indexed_columns = {
+            tuple(index.get("column_names") or [])
+            for index in inspector.get_indexes(table_name)
+        }
+        return (
+            has_workspace_column
+            and has_workspace_fk
+            and has_project_workspace_scope_fk
+            and ("workspace_id",) in indexed_columns
+        )
+
+    incident_columns = {
+        column["name"]: column for column in inspector.get_columns("incident_records")
+    }
+    incident_project_column = incident_columns.get("project_id")
+    has_incident_project_column = (
+        incident_project_column is not None
+        and incident_project_column["type"]._type_affinity is Integer
+        and incident_project_column.get("nullable") is False
+    )
+    has_incident_project_fk = any(
+        foreign_key.get("referred_table") == "projects"
+        and "project_id" in (foreign_key.get("constrained_columns") or [])
+        and "id" in (foreign_key.get("referred_columns") or [])
+        and (foreign_key.get("options") or {}).get("ondelete") == "CASCADE"
+        for foreign_key in inspector.get_foreign_keys("incident_records")
+    )
+    incident_indexed_columns = {
+        tuple(index.get("column_names") or [])
+        for index in inspector.get_indexes("incident_records")
+    }
+    return (
+        has_workspace_project_id_unique
+        and has_incident_project_column
+        and has_incident_project_fk
+        and ("project_id",) in incident_indexed_columns
+        and has_workspace_scope("incident_records")
+        and has_workspace_scope("deployment_outcomes")
+        and has_workspace_scope("feedback_events")
+        and has_workspace_scope("topology_versions")
+    )
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
@@ -339,6 +418,36 @@ def _bootstrap_brownfield_revision() -> None:
             has_report_workspace_scope
             and _analysis_report_workspace_scope_complete(connection)
         )
+        scoped_learning_columns_present = (
+            "project_id" in incident_record_columns
+            or "workspace_id" in incident_record_columns
+            or "workspace_id" in deployment_outcome_columns
+            or "workspace_id" in feedback_event_columns
+            or (
+                "topology_versions" in tables
+                and "workspace_id"
+                in {
+                    column["name"]
+                    for column in inspect(connection).get_columns("topology_versions")
+                }
+            )
+        )
+        has_complete_learning_context_scope = (
+            "incident_records" in tables
+            and "deployment_outcomes" in tables
+            and "feedback_events" in tables
+            and "topology_versions" in tables
+            and scoped_learning_columns_present
+            and _learning_context_scope_complete(connection)
+        )
+        if scoped_learning_columns_present and not has_complete_learning_context_scope:
+            raise RuntimeError(
+                "Detected a partial learning/context scope schema without a complete "
+                "migration history. Manual recovery is required."
+            )
+        if has_complete_learning_context_scope:
+            _write_alembic_revision(connection, "016_scope_learning_context_records")
+            return
         if has_report_workspace_scope and not has_complete_report_workspace_scope:
             raise RuntimeError(
                 "Detected a partial analysis report workspace scope schema without "

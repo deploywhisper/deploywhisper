@@ -68,6 +68,46 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
+    def _foreign_key_groups(self, table_name: str) -> list[dict]:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            grouped: dict[int, dict] = {}
+            rows = sqlite_conn.execute(f"PRAGMA foreign_key_list({table_name})")
+            for row in rows:
+                group = grouped.setdefault(
+                    row[0],
+                    {
+                        "constrained_columns": [],
+                        "referred_table": row[2],
+                        "referred_columns": [],
+                        "ondelete": row[6],
+                    },
+                )
+                group["constrained_columns"].append(row[3])
+                group["referred_columns"].append(row[4])
+            return list(grouped.values())
+        finally:
+            sqlite_conn.close()
+
+    def _unique_constraint_columns(self, table_name: str) -> set[tuple[str, ...]]:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            unique_columns: set[tuple[str, ...]] = set()
+            for index_row in sqlite_conn.execute(f"PRAGMA index_list({table_name})"):
+                is_unique = bool(index_row[2])
+                if not is_unique:
+                    continue
+                columns = tuple(
+                    column_row[2]
+                    for column_row in sqlite_conn.execute(
+                        f"PRAGMA index_info({index_row[1]})"
+                    )
+                )
+                unique_columns.add(columns)
+            return unique_columns
+        finally:
+            sqlite_conn.close()
+
     def _create_project_workspace_table(
         self,
         *,
@@ -131,6 +171,10 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("share_password_hash", self._table_columns("analysis_reports"))
         self.assertIn("share_password_salt", self._table_columns("analysis_reports"))
         self.assertIn("share_redact_filenames", self._table_columns("analysis_reports"))
+        self.assertIn(
+            ("project_id", "id"),
+            self._unique_constraint_columns("project_workspaces"),
+        )
         report_fks = self._foreign_keys("analysis_reports")
         self.assertTrue(
             any(
@@ -139,6 +183,23 @@ class MigrationTests(unittest.TestCase):
                 for foreign_key in report_fks
             )
         )
+        for table_name in (
+            "incident_records",
+            "deployment_outcomes",
+            "feedback_events",
+            "topology_versions",
+        ):
+            grouped_fks = self._foreign_key_groups(table_name)
+            self.assertTrue(
+                any(
+                    foreign_key["referred_table"] == "project_workspaces"
+                    and foreign_key["constrained_columns"]
+                    == ["project_id", "workspace_id"]
+                    and foreign_key["referred_columns"] == ["project_id", "id"]
+                    for foreign_key in grouped_fks
+                ),
+                f"{table_name} should enforce workspace/project consistency",
+            )
         report_schema_row = next(
             row
             for row in self._table_info("analysis_reports")
@@ -151,6 +212,85 @@ class MigrationTests(unittest.TestCase):
             if row[1] == "share_redact_filenames"
         )
         self.assertIsNone(share_redact_row[4])
+
+    def test_learning_context_scope_rejects_cross_project_workspace_rows(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "head")
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("PRAGMA foreign_keys = ON")
+        try:
+            first_project_id = sqlite_conn.execute(
+                "SELECT id FROM projects WHERE project_key = ? LIMIT 1",
+                ("unassigned",),
+            ).fetchone()[0]
+            sqlite_conn.execute(
+                """
+                INSERT INTO projects (
+                    project_key,
+                    display_name,
+                    is_default,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "platform",
+                    "Platform",
+                    0,
+                    "2026-05-06T00:00:00+00:00",
+                    "2026-05-06T00:00:00+00:00",
+                ),
+            )
+            other_project_id = sqlite_conn.execute(
+                "SELECT id FROM projects WHERE project_key = ? LIMIT 1",
+                ("platform",),
+            ).fetchone()[0]
+            sqlite_conn.execute(
+                """
+                INSERT INTO project_workspaces (
+                    project_id,
+                    workspace_key,
+                    display_name,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    other_project_id,
+                    "prod",
+                    "Production",
+                    "2026-05-06T00:00:00+00:00",
+                    "2026-05-06T00:00:00+00:00",
+                ),
+            )
+            workspace_id = sqlite_conn.execute(
+                "SELECT id FROM project_workspaces WHERE workspace_key = ? LIMIT 1",
+                ("prod",),
+            ).fetchone()[0]
+
+            with self.assertRaises(sqlite3.IntegrityError):
+                sqlite_conn.execute(
+                    """
+                    INSERT INTO topology_versions (
+                        project_id,
+                        workspace_id,
+                        source_type,
+                        payload_json,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        first_project_id,
+                        workspace_id,
+                        "manual",
+                        "{}",
+                        "2026-05-06T00:00:00+00:00",
+                    ),
+                )
+        finally:
+            sqlite_conn.close()
 
     def test_upgrade_head_preserves_existing_analysis_reports(self) -> None:
         command.upgrade(self._config(), "0001_create_analysis_reports")
@@ -375,7 +515,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "015_add_report_workspace_scope")
+        self.assertEqual(revision, "016_scope_learning_context_records")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -424,7 +564,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "015_add_report_workspace_scope")
+        self.assertEqual(revision, "016_scope_learning_context_records")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -450,7 +590,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "015_add_report_workspace_scope")
+        self.assertEqual(revision, "016_scope_learning_context_records")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -627,7 +767,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "015_add_report_workspace_scope")
+        self.assertEqual(revision, "016_scope_learning_context_records")
 
 
 if __name__ == "__main__":

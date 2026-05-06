@@ -12,6 +12,7 @@ import config as config_module
 import models.database as database_module
 import models.tables as tables_module
 import services.incident_service as incident_service_module
+import services.project_service as project_service_module
 import analysis.incident_matcher as incident_matcher_module
 from parsers.base import UnifiedChange
 
@@ -24,9 +25,14 @@ class IncidentMatcherTests(unittest.TestCase):
         reload(config_module)
         reload(tables_module)
         reload(database_module)
+        reload(project_service_module)
         reload(incident_service_module)
         reload(incident_matcher_module)
         database_module.init_db()
+        self.project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
 
     def tearDown(self) -> None:
         database_module.engine.dispose()
@@ -37,6 +43,7 @@ class IncidentMatcherTests(unittest.TestCase):
         incident_service_module.ingest_incident_document(
             "incident.md",
             "# Database exposure\nDate: 2026-04-16\nSeverity: P1\nTerraform security group database exposure during deployment restart.",
+            project_id=self.project.id,
         )
         changes = [
             UnifiedChange(
@@ -47,7 +54,10 @@ class IncidentMatcherTests(unittest.TestCase):
                 summary="Terraform security group database exposure during deployment restart.",
             )
         ]
-        matches = incident_matcher_module.find_incident_matches(changes)
+        matches = incident_matcher_module.find_incident_matches(
+            changes,
+            project_id=self.project.id,
+        )
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0].title, "Database exposure")
         self.assertGreater(matches[0].similarity, 0.2)
@@ -63,13 +73,17 @@ class IncidentMatcherTests(unittest.TestCase):
                 summary="Terraform security group database exposure during deployment restart.",
             )
         ]
-        matches = incident_matcher_module.find_incident_matches(changes)
+        matches = incident_matcher_module.find_incident_matches(
+            changes,
+            project_id=self.project.id,
+        )
         self.assertEqual(matches, [])
 
     def test_find_incident_matches_avoids_generic_token_false_positive(self) -> None:
         incident_service_module.ingest_incident_document(
             "generic.md",
             "# Generic deployment note\nSeverity: low\nA deployment changed a resource and included a service update.",
+            project_id=self.project.id,
         )
         changes = [
             UnifiedChange(
@@ -81,7 +95,7 @@ class IncidentMatcherTests(unittest.TestCase):
             )
         ]
         matches = incident_matcher_module.find_incident_matches(
-            changes, min_similarity=0.15
+            changes, min_similarity=0.15, project_id=self.project.id
         )
         self.assertEqual(matches, [])
 
@@ -89,10 +103,12 @@ class IncidentMatcherTests(unittest.TestCase):
         incident_service_module.ingest_incident_document(
             "generic.md",
             "# Generic deployment note\nSeverity: low\nSecurity group update.",
+            project_id=self.project.id,
         )
         incident_service_module.ingest_incident_document(
             "specific.md",
             "# Database exposure\nSeverity: P1\nTerraform security group database exposure during deployment restart.",
+            project_id=self.project.id,
         )
         changes = [
             UnifiedChange(
@@ -104,7 +120,7 @@ class IncidentMatcherTests(unittest.TestCase):
             )
         ]
         matches = incident_matcher_module.find_incident_matches(
-            changes, min_similarity=0.1
+            changes, min_similarity=0.1, project_id=self.project.id
         )
         self.assertGreaterEqual(len(matches), 1)
         self.assertEqual(matches[0].title, "Database exposure")
@@ -115,10 +131,12 @@ class IncidentMatcherTests(unittest.TestCase):
         incident_service_module.ingest_incident_document(
             "older.md",
             "# Similar deploy\nDate: 2024-01-01\nSeverity: low\nDatabase exposure during deploy restart.",
+            project_id=self.project.id,
         )
         incident_service_module.ingest_incident_document(
             "recent.md",
             "# Similar deploy\nDate: 2026-04-16\nSeverity: P1\nDatabase exposure during deploy restart.",
+            project_id=self.project.id,
         )
         changes = [
             UnifiedChange(
@@ -130,7 +148,7 @@ class IncidentMatcherTests(unittest.TestCase):
             )
         ]
         matches = incident_matcher_module.find_incident_matches(
-            changes, min_similarity=0.1
+            changes, min_similarity=0.1, project_id=self.project.id
         )
         self.assertGreaterEqual(len(matches), 2)
         self.assertEqual(matches[0].source_file, "recent.md")

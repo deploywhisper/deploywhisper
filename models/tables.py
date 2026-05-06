@@ -26,8 +26,24 @@ if "IncidentRecord" not in globals():
         """Stored incident context for later similarity matching."""
 
         __tablename__ = "incident_records"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                name="fk_incident_records_project_workspace_scope",
+            ),
+        )
 
         id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        workspace_id: Mapped[int | None] = mapped_column(
+            ForeignKey("project_workspaces.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        )
         title: Mapped[str] = mapped_column(String(255))
         severity: Mapped[str] = mapped_column(String(20), default="unknown")
         source_file: Mapped[str] = mapped_column(String(255))
@@ -43,6 +59,11 @@ if "IncidentRecord" not in globals():
         )
         deployment_outcomes: Mapped[list["DeploymentOutcome"]] = relationship(
             back_populates="incident"
+        )
+        project: Mapped["Project"] = relationship(back_populates="incident_records")
+        workspace: Mapped["ProjectWorkspace | None"] = relationship(
+            back_populates="incident_records",
+            foreign_keys=[workspace_id],
         )
 
 
@@ -80,6 +101,10 @@ if "Project" not in globals():
             back_populates="project",
             cascade="all, delete-orphan",
         )
+        incident_records: Mapped[list["IncidentRecord"]] = relationship(
+            back_populates="project",
+            cascade="all, delete-orphan",
+        )
         topology_versions: Mapped[list["TopologyVersion"]] = relationship(
             back_populates="project",
             cascade="all, delete-orphan",
@@ -97,6 +122,11 @@ if "ProjectWorkspace" not in globals():
                 "project_id",
                 "workspace_key",
                 name="uq_project_workspaces_project_key",
+            ),
+            UniqueConstraint(
+                "project_id",
+                "id",
+                name="uq_project_workspaces_project_id_id",
             ),
         )
 
@@ -120,6 +150,22 @@ if "ProjectWorkspace" not in globals():
         project: Mapped["Project"] = relationship(back_populates="workspaces")
         reports: Mapped[list["AnalysisReport"]] = relationship(
             back_populates="workspace"
+        )
+        deployment_outcomes: Mapped[list["DeploymentOutcome"]] = relationship(
+            back_populates="workspace",
+            foreign_keys="DeploymentOutcome.workspace_id",
+        )
+        incident_records: Mapped[list["IncidentRecord"]] = relationship(
+            back_populates="workspace",
+            foreign_keys="IncidentRecord.workspace_id",
+        )
+        topology_versions: Mapped[list["TopologyVersion"]] = relationship(
+            back_populates="workspace",
+            foreign_keys="TopologyVersion.workspace_id",
+        )
+        feedback_events: Mapped[list["FeedbackEvent"]] = relationship(
+            back_populates="workspace",
+            foreign_keys="FeedbackEvent.workspace_id",
         )
 
 
@@ -361,10 +407,22 @@ if "TopologyVersion" not in globals():
         """Persisted topology snapshot scoped to one project."""
 
         __tablename__ = "topology_versions"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                name="fk_topology_versions_project_workspace_scope",
+            ),
+        )
 
         id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
         project_id: Mapped[int] = mapped_column(
             ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        workspace_id: Mapped[int | None] = mapped_column(
+            ForeignKey("project_workspaces.id", ondelete="SET NULL"),
+            nullable=True,
             index=True,
         )
         source_type: Mapped[str] = mapped_column(String(30), default="manual")
@@ -373,6 +431,10 @@ if "TopologyVersion" not in globals():
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
         )
         project: Mapped["Project"] = relationship(back_populates="topology_versions")
+        workspace: Mapped["ProjectWorkspace | None"] = relationship(
+            back_populates="topology_versions",
+            foreign_keys=[workspace_id],
+        )
 
 
 if "DeploymentOutcome" not in globals():
@@ -381,10 +443,22 @@ if "DeploymentOutcome" not in globals():
         """Persisted deployment outcome scoped to one project."""
 
         __tablename__ = "deployment_outcomes"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                name="fk_deployment_outcomes_project_workspace_scope",
+            ),
+        )
 
         id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
         project_id: Mapped[int] = mapped_column(
             ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        workspace_id: Mapped[int | None] = mapped_column(
+            ForeignKey("project_workspaces.id", ondelete="SET NULL"),
+            nullable=True,
             index=True,
         )
         analysis_id: Mapped[int | None] = mapped_column(
@@ -405,6 +479,10 @@ if "DeploymentOutcome" not in globals():
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
         )
         project: Mapped["Project"] = relationship(back_populates="deployment_outcomes")
+        workspace: Mapped["ProjectWorkspace | None"] = relationship(
+            back_populates="deployment_outcomes",
+            foreign_keys=[workspace_id],
+        )
         report: Mapped["AnalysisReport | None"] = relationship(
             back_populates="deployment_outcomes"
         )
@@ -419,10 +497,22 @@ if "FeedbackEvent" not in globals():
         """Persisted reviewer feedback event scoped to one project."""
 
         __tablename__ = "feedback_events"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                name="fk_feedback_events_project_workspace_scope",
+            ),
+        )
 
         id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
         project_id: Mapped[int] = mapped_column(
             ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        workspace_id: Mapped[int | None] = mapped_column(
+            ForeignKey("project_workspaces.id", ondelete="SET NULL"),
+            nullable=True,
             index=True,
         )
         analysis_id: Mapped[int | None] = mapped_column(
@@ -439,4 +529,8 @@ if "FeedbackEvent" not in globals():
         outcome_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
+        workspace: Mapped["ProjectWorkspace | None"] = relationship(
+            back_populates="feedback_events",
+            foreign_keys=[workspace_id],
         )

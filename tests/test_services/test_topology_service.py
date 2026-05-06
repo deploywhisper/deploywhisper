@@ -86,6 +86,136 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertIsNone(default_topology)
         self.assertIn("not configured", default_warning)
 
+    def test_topology_imports_are_isolated_by_workspace(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        prod_workspace = project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="prod",
+            display_name="Production",
+        )
+        staging_workspace = project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="staging",
+            display_name="Staging",
+        )
+        prod_path = Path(self.tempdir.name) / "prod-topology.json"
+        staging_path = Path(self.tempdir.name) / "staging-topology.json"
+        prod_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "prod-api",
+                            "label": "Prod API",
+                            "resource_keys": ["Deployment/prod-api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        staging_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "staging-api",
+                            "label": "Staging API",
+                            "resource_keys": ["Deployment/staging-api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        import_topology_source(
+            "custom",
+            str(prod_path),
+            project_key="payments",
+            workspace_id=prod_workspace.id,
+        )
+        import_topology_source(
+            "custom",
+            str(staging_path),
+            project_key="payments",
+            workspace_id=staging_workspace.id,
+        )
+
+        prod_topology, _ = load_topology(
+            project_key="payments",
+            workspace_id=prod_workspace.id,
+        )
+        staging_topology, _ = load_topology(
+            project_key="payments",
+            workspace_id=staging_workspace.id,
+        )
+
+        assert prod_topology is not None
+        assert staging_topology is not None
+        self.assertEqual(prod_topology["services"][0]["id"], "prod-api")
+        self.assertEqual(staging_topology["services"][0]["id"], "staging-api")
+
+    def test_default_project_workspace_topology_does_not_update_legacy_file(
+        self,
+    ) -> None:
+        default_project = project_service_module.ensure_default_project()
+        workspace = project_service_module.create_workspace(
+            project_key=default_project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+        topology_path = Path(self.tempdir.name) / "legacy-topology.json"
+        topology_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "legacy-api",
+                            "label": "Legacy API",
+                            "resource_keys": ["Deployment/legacy-api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        fake_settings = SimpleNamespace(topology_path=str(topology_path))
+
+        with patch("services.topology_service.settings", fake_settings):
+            save_topology_definition(
+                json.dumps(
+                    {
+                        "services": [
+                            {
+                                "id": "prod-api",
+                                "label": "Prod API",
+                                "resource_keys": ["Deployment/prod-api"],
+                                "downstream": [],
+                            }
+                        ]
+                    }
+                ),
+                project_id=default_project.id,
+                workspace_id=workspace.id,
+            )
+            project_topology, _ = load_topology(project_id=default_project.id)
+            workspace_topology, _ = load_topology(
+                project_id=default_project.id,
+                workspace_id=workspace.id,
+            )
+
+        assert project_topology is not None
+        assert workspace_topology is not None
+        self.assertEqual(project_topology["services"][0]["id"], "legacy-api")
+        self.assertEqual(workspace_topology["services"][0]["id"], "prod-api")
+
     def test_import_topology_source_reports_diff_and_discards_raw_source_fields(
         self,
     ) -> None:

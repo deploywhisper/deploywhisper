@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from importlib import reload
 
 import app as app_module
@@ -409,7 +410,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         deployment_outcome_service_module.record_deployment_outcome(
             analysis_id=report["id"],
             outcome="failure",
-            deployed_at="2026-04-29T08:00:00Z",
+            deployed_at=(datetime.now(UTC) - timedelta(days=1)).isoformat(),
         )
 
         response = self.client.get("/history")
