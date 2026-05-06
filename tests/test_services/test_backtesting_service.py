@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from importlib import reload
 from pathlib import Path
 from unittest import mock
@@ -88,6 +88,9 @@ class BacktestingServiceTests(unittest.TestCase):
             project_id=self.project.id,
             audit_context={"source_interface": "api"},
         )
+
+    def _recent_deployed_at(self, *, hours_ago: int = 24) -> str:
+        return (datetime.now(UTC) - timedelta(hours=hours_ago)).isoformat()
 
     def test_run_weekly_backtest_computes_failed_deploy_warning_rows(self) -> None:
         warned_report = self._persist_report(
@@ -296,7 +299,7 @@ class BacktestingServiceTests(unittest.TestCase):
         deployment_outcome_service_module.record_deployment_outcome(
             analysis_id=warned_report["id"],
             outcome="failure",
-            deployed_at="2026-04-29T09:00:00Z",
+            deployed_at=self._recent_deployed_at(hours_ago=24),
         )
 
         summary = backtesting_service_module.fetch_calibration_dashboard_seed(
@@ -322,7 +325,7 @@ class BacktestingServiceTests(unittest.TestCase):
         deployment_outcome_service_module.record_deployment_outcome(
             analysis_id=warned_report["id"],
             outcome="failure",
-            deployed_at="2026-04-29T09:00:00Z",
+            deployed_at=self._recent_deployed_at(hours_ago=24),
         )
         first = backtesting_service_module.fetch_calibration_dashboard_seed(
             project_id=self.project.id
@@ -337,7 +340,7 @@ class BacktestingServiceTests(unittest.TestCase):
         deployment_outcome_service_module.record_deployment_outcome(
             analysis_id=quiet_report["id"],
             outcome="failure",
-            deployed_at="2026-04-29T10:00:00Z",
+            deployed_at=self._recent_deployed_at(hours_ago=23),
         )
 
         refreshed = backtesting_service_module.fetch_calibration_dashboard_seed(
