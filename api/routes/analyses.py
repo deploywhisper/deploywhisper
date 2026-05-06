@@ -44,11 +44,26 @@ READ_CHUNK_BYTES = 1024 * 1024
 
 def _project_api_error(exc: ValueError) -> ApiError:
     code = getattr(exc, "code", "invalid_project_request")
-    status_code = 404 if code == "project_not_found" else 400
+    status_code = 404 if code in {"project_not_found", "workspace_not_found"} else 400
     return ApiError(
         status_code=status_code,
         code=code,
         message=str(exc),
+    )
+
+
+def _reject_unscoped_workspace_id(
+    *,
+    project_id: int | None,
+    project_key: str | None,
+    workspace_id: int | None,
+) -> None:
+    if workspace_id is None or project_id is not None or project_key is not None:
+        return
+    raise ApiError(
+        status_code=400,
+        code="missing_project_scope",
+        message="Project scope is required when resolving workspace_id.",
     )
 
 
@@ -119,6 +134,8 @@ async def _read_upload_files_with_limit(
 def list_analyses(
     project_id: int | None = Query(default=None),
     project_key: str | None = Query(default=None),
+    workspace_id: int | None = Query(default=None),
+    workspace_key: str | None = Query(default=None),
     severity: str | None = Query(default=None),
     recommendation: str | None = Query(default=None),
     search: str | None = Query(default=None),
@@ -126,11 +143,23 @@ def list_analyses(
     page_size: int = Query(default=50, ge=1, le=100),
 ) -> AnalysisListResponse:
     try:
-        if project_id is None and project_key is None:
+        _reject_unscoped_workspace_id(
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+        )
+        if (
+            project_id is None
+            and project_key is None
+            and workspace_id is None
+            and workspace_key is None
+        ):
             project_id = ensure_default_project().id
         page_payload = fetch_filtered_analysis_history_page(
             project_id=project_id,
             project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
             severity=severity,
             recommendation=recommendation,
             search=search,
@@ -175,6 +204,14 @@ async def create_analysis(
         default=None,
         description="Required unless project_id is provided; project key for the analysis.",
     ),
+    workspace_id: int | None = Form(
+        default=None,
+        description="Optional numeric workspace/environment id for the analysis.",
+    ),
+    workspace_key: str | None = Form(
+        default=None,
+        description="Optional project-local workspace/environment key for the analysis.",
+    ),
     trigger_type: str | None = Header(
         default=None, alias="X-DeployWhisper-Trigger-Type"
     ),
@@ -188,7 +225,12 @@ async def create_analysis(
         )
 
     try:
-        resolve_analysis_project_scope(project_id=project_id, project_key=project_key)
+        resolve_analysis_project_scope(
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
     except ValueError as exc:
         raise _project_api_error(exc) from exc
 
@@ -207,6 +249,8 @@ async def create_analysis(
             raw_files,
             project_id=project_id,
             project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
             audit_context={
                 "source_interface": "api",
                 "trigger_type": trigger_type or "api_request",
@@ -248,14 +292,28 @@ def get_analysis(
     report_id: int,
     project_id: int | None = Query(default=None),
     project_key: str | None = Query(default=None),
+    workspace_id: int | None = Query(default=None),
+    workspace_key: str | None = Query(default=None),
 ) -> AnalysisDetailResponse:
     try:
-        if project_id is None and project_key is None:
+        _reject_unscoped_workspace_id(
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+        )
+        if (
+            project_id is None
+            and project_key is None
+            and workspace_id is None
+            and workspace_key is None
+        ):
             project_id = ensure_default_project().id
         report = fetch_analysis_report(
             report_id,
             project_id=project_id,
             project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
         )
     except ValueError as exc:
         raise _project_api_error(exc) from exc

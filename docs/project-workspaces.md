@@ -7,7 +7,7 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 - Projects have a stable `project_key`, display name, optional description, repository URL, and default branch.
 - Workspaces have a stable project-local `workspace_key`, display name, optional description, optional environment label, and timestamps.
 - New analyses must attach to a project through the UI, API, CLI, or GitHub integration path.
-- Persisted reports now carry project metadata and history filters can scope by project.
+- Persisted reports now carry project metadata plus optional workspace metadata, and history/report filters can scope by project and workspace.
 - Topology uploads are stored per project, with legacy file-based topology continuing to resolve through the default `unassigned` project.
 - Topology drift checks now run on a persisted cadence (daily by default), reuse the imported source reference when available, and surface per-project added/removed/modified resource reports in settings.
 - Deployment outcome and reviewer feedback tables now exist with project foreign keys so later Epic 5 stories can extend the same isolation boundary without schema churn.
@@ -20,6 +20,9 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
   - `GET /api/v1/projects/<project_key>/workspaces` lists workspace/environment records for a project
   - `POST /api/v1/projects/<project_key>/workspaces` creates a workspace/environment record
   - `POST /api/v1/analyses` requires multipart `project_key` or `project_id`
+  - `POST /api/v1/analyses` also accepts optional `workspace_key` or `workspace_id` to attach a run to a project-local workspace/environment
+  - `GET /api/v1/analyses?project_key=<key>&workspace_key=<workspace>` lists reports for one workspace
+  - `GET /api/v1/analyses/<id>?project_key=<key>&workspace_key=<workspace>` returns a report only when the requested scope matches
   - `GET /api/v1/context/topology?project_key=<key>` reads project-scoped topology status
   - `POST /api/v1/context/topology` stores project-scoped topology JSON with `project_key` or `project_id`
 - CLI:
@@ -27,7 +30,7 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
   - `deploywhisper project list`
   - `deploywhisper project workspace create <project-key> <workspace-key> <display-name>`
   - `deploywhisper project workspace list <project-key>`
-  - `deploywhisper analyze --project <key> <artifact...>` or `deploywhisper analyze --project-id <id> <artifact...>`
+  - `deploywhisper analyze --project <key> [--workspace <workspace>] <artifact...>` or `deploywhisper analyze --project-id <id> [--workspace-id <id>] <artifact...>`
   - `deploywhisper topology import --from custom --source <topology.json> --project <key>`
   - `deploywhisper topology import --from terraform --source <state-or-uri> --project <key>`
   - The topology import command now routes through a shared source registry and returns a normalized import result with accepted, skipped, partially parsed, and unsupported resources.
@@ -37,6 +40,8 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 
 - Shared workspace chrome now keeps project switching in a dedicated global card below the header, with searchable filtering, keyboard navigation, and current/default project context shown consistently across pages.
 - Explicit `project_key` / `project_id` references now fail fast when they are unknown instead of silently falling back to `unassigned`.
+- Explicit `workspace_key` / `workspace_id` references fail fast when unknown or when they do not belong to the supplied project.
+- Report detail and history retrieval return the standard not-found envelope when the requested project/workspace scope does not match the report.
 - New API and CLI analysis submissions without a project reference fail fast with `missing_project_scope` instead of silently falling back to `unassigned`.
 - Conflicting `project_key` and `project_id` inputs are rejected.
 - In the current local/admin phase, unauthorized analysis scope means an unknown, conflicting, or otherwise invalid project reference. Full membership and role enforcement is intentionally deferred to the lightweight RBAC story.

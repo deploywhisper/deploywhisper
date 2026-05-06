@@ -240,6 +240,104 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["error"]["code"], "analysis_not_found")
 
+    def test_workspace_query_prevents_cross_workspace_report_lookup(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        prod = project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+            environment="prod",
+        )
+        staging = project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="staging",
+            display_name="Staging",
+            environment="staging",
+        )
+        scoped = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments-prod.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=72,
+                severity="high",
+                recommendation="no-go",
+                top_risk="Production payment ingress widened.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="NO-GO: production payment ingress widened.",
+                explanation="Workspace-scoped report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            workspace_id=prod.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        wrong_workspace_response = self.client.get(
+            f"/api/v1/analyses/{scoped['id']}",
+            params={
+                "project_key": project.project_key,
+                "workspace_key": staging.workspace_key,
+            },
+        )
+        unscoped_workspace_id_response = self.client.get(
+            f"/api/v1/analyses/{scoped['id']}",
+            params={"workspace_id": prod.id},
+        )
+        unscoped_workspace_id_list_response = self.client.get(
+            "/api/v1/analyses",
+            params={"workspace_id": prod.id},
+        )
+        scoped_id_response = self.client.get(
+            f"/api/v1/analyses/{scoped['id']}",
+            params={"project_id": project.id, "workspace_id": prod.id},
+        )
+        scoped_list_response = self.client.get(
+            "/api/v1/analyses",
+            params={
+                "project_key": project.project_key,
+                "workspace_key": prod.workspace_key,
+            },
+        )
+
+        self.assertEqual(wrong_workspace_response.status_code, 404)
+        self.assertEqual(
+            wrong_workspace_response.json()["error"]["code"], "analysis_not_found"
+        )
+        self.assertEqual(unscoped_workspace_id_response.status_code, 400)
+        self.assertEqual(
+            unscoped_workspace_id_response.json()["error"]["code"],
+            "missing_project_scope",
+        )
+        self.assertEqual(unscoped_workspace_id_list_response.status_code, 400)
+        self.assertEqual(
+            unscoped_workspace_id_list_response.json()["error"]["code"],
+            "missing_project_scope",
+        )
+        self.assertEqual(scoped_id_response.status_code, 200)
+        self.assertEqual(scoped_id_response.json()["data"]["id"], scoped["id"])
+        self.assertEqual(scoped_list_response.status_code, 200)
+        payload = scoped_list_response.json()
+        self.assertEqual(payload["meta"]["total_count"], 1)
+        self.assertEqual(payload["data"][0]["workspace"]["workspace_key"], "prod")
+
     def test_configure_share_is_disabled_without_management_token(self) -> None:
         response = self.client.post(
             f"/api/v1/analyses/{self.persisted['id']}/share",

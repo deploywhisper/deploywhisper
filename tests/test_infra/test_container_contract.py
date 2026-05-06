@@ -28,6 +28,7 @@ class ContainerContractTests(unittest.TestCase):
                 "012_add_feedback_event_fields.py",
                 "013_add_incident_analysis_reference.py",
                 "014_add_project_workspace_records.py",
+                "015_add_report_workspace_scope.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -41,6 +42,7 @@ class ContainerContractTests(unittest.TestCase):
         feedback_content = migrations[8].read_text(encoding="utf-8")
         incident_link_content = migrations[9].read_text(encoding="utf-8")
         workspace_content = migrations[10].read_text(encoding="utf-8")
+        report_workspace_content = migrations[11].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -87,6 +89,11 @@ class ContainerContractTests(unittest.TestCase):
         )
         self.assertIn('"project_workspaces"', workspace_content)
         self.assertIn('"workspace_key"', workspace_content)
+        self.assertIn(
+            'down_revision = "014_add_project_workspace_records"',
+            report_workspace_content,
+        )
+        self.assertIn('"workspace_id"', report_workspace_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())

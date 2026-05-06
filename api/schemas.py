@@ -208,6 +208,9 @@ class ProjectData(BaseModel):
 class PersistedReportData(BaseModel):
     id: int
     project: ProjectData = Field(..., description="Owning project/workspace")
+    workspace: "WorkspaceData | None" = Field(
+        default=None, description="Optional project-local workspace/environment scope"
+    )
     risk_score: int
     severity: str
     recommendation: str

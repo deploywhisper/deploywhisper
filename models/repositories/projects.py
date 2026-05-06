@@ -77,6 +77,10 @@ def create_workspace(
     return record
 
 
+def get_workspace(session: Session, workspace_id: int) -> ProjectWorkspace | None:
+    return session.get(ProjectWorkspace, workspace_id)
+
+
 def list_workspaces(
     session: Session,
     *,

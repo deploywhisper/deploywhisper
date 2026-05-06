@@ -17,6 +17,7 @@ from models.repositories.projects import (
     get_default_project,
     get_project,
     get_project_by_key,
+    get_workspace,
     get_workspace_by_key,
     list_projects as list_project_records,
     list_workspaces as list_workspace_records,
@@ -524,6 +525,99 @@ def resolve_project_reference(
                 raise RuntimeError("Default project could not be resolved.")
             record = default_record
         return _serialize(record)
+
+
+def resolve_workspace_reference(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+) -> WorkspaceRecord | None:
+    raw_workspace_key = str(workspace_key) if workspace_key is not None else None
+    cleaned_workspace_key = (
+        raw_workspace_key.strip() if raw_workspace_key is not None else None
+    )
+    if (
+        workspace_id is None
+        and raw_workspace_key is not None
+        and not cleaned_workspace_key
+    ):
+        raise ProjectResolutionError(
+            "invalid_workspace_reference",
+            "Workspace key must contain at least one letter or number.",
+        )
+    if workspace_id is None and not cleaned_workspace_key:
+        return None
+    if cleaned_workspace_key and project_id is None and project_key is None:
+        raise ProjectResolutionError(
+            "missing_project_scope",
+            "Project scope is required when resolving workspace_key.",
+        )
+
+    resolved_project = (
+        resolve_project_reference(project_id=project_id, project_key=project_key)
+        if project_id is not None or project_key is not None or cleaned_workspace_key
+        else None
+    )
+    normalized_workspace_key = (
+        normalize_workspace_key(cleaned_workspace_key)
+        if cleaned_workspace_key
+        else None
+    )
+    with SessionLocal() as session:
+        record_by_id = (
+            get_workspace(session, workspace_id) if workspace_id is not None else None
+        )
+        record_by_key = (
+            get_workspace_by_key(
+                session,
+                project_id=resolved_project.id,
+                workspace_key=normalized_workspace_key,
+            )
+            if resolved_project is not None and normalized_workspace_key is not None
+            else None
+        )
+        if workspace_id is not None and record_by_id is None:
+            raise ProjectResolutionError(
+                "workspace_not_found",
+                f"Unknown workspace reference: workspace_id={workspace_id}.",
+            )
+        if (
+            normalized_workspace_key is not None
+            and resolved_project is not None
+            and record_by_key is None
+        ):
+            raise ProjectResolutionError(
+                "workspace_not_found",
+                (
+                    "Unknown workspace reference: "
+                    f"project_key={resolved_project.project_key}, "
+                    f"workspace_key={normalized_workspace_key}."
+                ),
+            )
+        if (
+            record_by_id is not None
+            and resolved_project is not None
+            and record_by_id.project_id != resolved_project.id
+        ):
+            raise ProjectResolutionError(
+                "conflicting_workspace_reference",
+                "The supplied workspace_id does not belong to the supplied project.",
+            )
+        if (
+            record_by_id is not None
+            and record_by_key is not None
+            and record_by_id.id != record_by_key.id
+        ):
+            raise ProjectResolutionError(
+                "conflicting_workspace_reference",
+                "The supplied workspace_id and workspace_key refer to different workspaces.",
+            )
+        record = record_by_id or record_by_key
+        if record is None:
+            return None
+        return _serialize_workspace(record)
 
 
 def set_active_project(project_id: int) -> ProjectRecord:

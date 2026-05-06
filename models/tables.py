@@ -118,6 +118,9 @@ if "ProjectWorkspace" not in globals():
             onupdate=lambda: datetime.now(UTC),
         )
         project: Mapped["Project"] = relationship(back_populates="workspaces")
+        reports: Mapped[list["AnalysisReport"]] = relationship(
+            back_populates="workspace"
+        )
 
 
 if "AnalysisReport" not in globals():
@@ -130,6 +133,11 @@ if "AnalysisReport" not in globals():
         id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
         project_id: Mapped[int] = mapped_column(
             ForeignKey("projects.id", ondelete="RESTRICT"),
+            index=True,
+        )
+        workspace_id: Mapped[int | None] = mapped_column(
+            ForeignKey("project_workspaces.id", ondelete="SET NULL"),
+            nullable=True,
             index=True,
         )
         risk_score: Mapped[int] = mapped_column(Integer)
@@ -182,6 +190,9 @@ if "AnalysisReport" not in globals():
             back_populates="report"
         )
         project: Mapped["Project"] = relationship(back_populates="reports")
+        workspace: Mapped["ProjectWorkspace | None"] = relationship(
+            back_populates="reports"
+        )
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
         )
