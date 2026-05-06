@@ -718,6 +718,8 @@ class AnalyzeCliTests(unittest.TestCase):
             audit_context=None,
             project_id=None,
             project_key=None,
+            workspace_id=None,
+            workspace_key=None,
         ):
             return analysis_service_module.analyze_uploaded_files(
                 files,
@@ -725,6 +727,8 @@ class AnalyzeCliTests(unittest.TestCase):
                 audit_context=audit_context,
                 project_id=project_id,
                 project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
             )
 
         with (
@@ -771,6 +775,8 @@ class AnalyzeCliTests(unittest.TestCase):
             audit_context=None,
             project_id=None,
             project_key=None,
+            workspace_id=None,
+            workspace_key=None,
         ):
             return analysis_service_module.analyze_uploaded_files(
                 files,
@@ -778,6 +784,8 @@ class AnalyzeCliTests(unittest.TestCase):
                 audit_context=audit_context,
                 project_id=project_id,
                 project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
             )
 
         with (
@@ -824,6 +832,8 @@ class AnalyzeCliTests(unittest.TestCase):
             audit_context=None,
             project_id=None,
             project_key=None,
+            workspace_id=None,
+            workspace_key=None,
         ):
             return analysis_service_module.analyze_uploaded_files(
                 files,
@@ -831,6 +841,8 @@ class AnalyzeCliTests(unittest.TestCase):
                 audit_context=audit_context,
                 project_id=project_id,
                 project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
             )
 
         with (
@@ -1695,6 +1707,8 @@ class AnalyzeCliTests(unittest.TestCase):
             audit_context=None,
             project_id=None,
             project_key=None,
+            workspace_id=None,
+            workspace_key=None,
         ):
             print("unexpected provider noise")
             print("unexpected provider noise", file=sys.stderr)
@@ -1704,6 +1718,8 @@ class AnalyzeCliTests(unittest.TestCase):
                 audit_context=audit_context,
                 project_id=project_id,
                 project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
             )
 
         with (
