@@ -13,18 +13,18 @@ from analysis.incident_matcher import (
     load_incident_candidates,
 )
 from analysis.risk_engine import score_evidence
-from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
-from evidence.mappers import build_findings
 from analysis.risk_scorer import RiskAssessment
-from evidence.models import ContextCompleteness, EvidenceItem, Finding
+from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
 from evidence.extractor import extract_batch_evidence
+from evidence.mappers import build_findings
+from evidence.models import ContextCompleteness, EvidenceItem, Finding
 from llm.narrator import NarrativeResult, generate_narrative
 from llm.providers import generate_completion_with_settings
 from parsers.base import ParseBatchResult, UnifiedChange
 from services.intake_service import build_parse_batch
-from services.report_service import persist_analysis_report
+from services.project_service import ProjectResolutionError, resolve_project_reference
+from services.report_service import build_share_report_link, persist_analysis_report
 from services.settings_service import resolve_provider_runtime
-from services.report_service import build_share_report_link
 from services.topology_service import (
     STALE_AFTER_DAYS,
     get_topology_status,
@@ -679,6 +679,36 @@ def build_analysis_artifacts(
     )
 
 
+def resolve_analysis_project_scope(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+):
+    """Resolve the required analysis project before artifact parsing."""
+    raw_project_key = str(project_key) if project_key is not None else None
+    cleaned_project_key = (
+        raw_project_key.strip() if raw_project_key is not None else None
+    )
+    if project_id is None and raw_project_key is not None and not cleaned_project_key:
+        raise ProjectResolutionError(
+            "invalid_project_reference",
+            "Project key must contain at least one letter or number.",
+        )
+    if project_id is None and not cleaned_project_key:
+        raise ProjectResolutionError(
+            "missing_project_scope",
+            (
+                "Project scope is required for analysis submission. "
+                "Provide a project_key or project_id, select a project in the UI, "
+                "or use a workflow integration that derives one."
+            ),
+        )
+    return resolve_project_reference(
+        project_id=project_id,
+        project_key=cleaned_project_key or None,
+    )
+
+
 def analyze_uploaded_files(
     files: list[tuple[str, bytes | None]],
     completion_client=None,
@@ -687,10 +717,13 @@ def analyze_uploaded_files(
     audit_context: dict | None = None,
 ) -> AnalysisRunResult:
     """Run the shared parse -> assess -> persist pipeline."""
-    artifacts = build_analysis_artifacts(
-        files,
+    resolved_project = resolve_analysis_project_scope(
         project_id=project_id,
         project_key=project_key,
+    )
+    artifacts = build_analysis_artifacts(
+        files,
+        project_id=resolved_project.id,
         completion_client=completion_client,
     )
     persisted_report = persist_analysis_report(
@@ -702,8 +735,7 @@ def analyze_uploaded_files(
         findings=artifacts.findings,
         evidence_items=artifacts.evidence_items,
         artifact_snapshots={name: raw_content for name, raw_content in files},
-        project_id=project_id,
-        project_key=project_key,
+        project_id=resolved_project.id,
         audit_context=audit_context,
     )
     return AnalysisRunResult(

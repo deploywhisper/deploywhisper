@@ -11,12 +11,12 @@ DeployWhisper remains advisory in automation contexts.
 - Sensitive shared reports can opt into password protection and file-name redaction through `POST /api/v1/analyses/{id}/share`
 - The share-configuration API is disabled unless `DEPLOYWHISPER_SHARE_TOKEN` is set; callers must send that value in `X-DeployWhisper-Share-Token`
 - CLI and API responses preserve `severity`, `recommendation`, `partial_context`, and `narrative_degraded` for machine-readable uncertainty handling
-- High-risk or degraded analyses still return success payloads; non-zero CLI exit codes are reserved for operational failures such as unreadable files or shared-analysis crashes
+- High-risk or degraded analyses still return success payloads; non-zero CLI exit codes are reserved for operational failures such as unreadable files, missing project scope, or shared-analysis crashes
 
 ## CLI Example
 
 ```bash
-deploywhisper analyze plan.json > advisory.json
+deploywhisper analyze --project payments plan.json > advisory.json
 python - <<'PY'
 import json
 payload = json.load(open("advisory.json", encoding="utf-8"))
@@ -28,6 +28,7 @@ PY
 
 ```bash
 curl -sS -X POST http://localhost:8080/api/v1/analyses \
+  -F "project_key=payments" \
   -F "files=@plan.json" \
   > advisory.json
 python - <<'PY'

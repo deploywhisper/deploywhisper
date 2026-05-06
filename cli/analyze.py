@@ -35,6 +35,7 @@ from services.analysis_service import (
     analyze_uploaded_files,
     build_advisory_summary,
     build_share_summary,
+    resolve_analysis_project_scope,
 )
 from services.deployment_outcome_service import record_deployment_outcome
 from services.project_service import create_project, create_workspace
@@ -274,6 +275,18 @@ def _run_analyze(
             build_error(
                 code="missing_artifacts",
                 message="At least one artifact file is required.",
+            ),
+            stream=sys.stderr,
+        )
+        return 2
+
+    try:
+        resolve_analysis_project_scope(project_id=project_id, project_key=project_key)
+    except ValueError as exc:
+        _emit_json(
+            build_error(
+                code=getattr(exc, "code", "invalid_project_request"),
+                message=str(exc),
             ),
             stream=sys.stderr,
         )
@@ -588,13 +601,13 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument(
         "--project",
         dest="project_key",
-        help="Optional project/workspace key for the analysis.",
+        help="Project/workspace key for the analysis. Required unless --project-id is provided.",
     )
     analyze_parser.add_argument(
         "--project-id",
         dest="project_id",
         type=int,
-        help="Optional numeric project/workspace id for the analysis.",
+        help="Numeric project/workspace id for the analysis. Required unless --project is provided.",
     )
     analyze_parser.add_argument(
         "paths", nargs="*", help="Artifact file paths to analyze."

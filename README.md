@@ -370,7 +370,9 @@ Response shape:
 POST /api/v1/analyses
 ```
 
-Upload one or more artifact files as multipart form-data.
+Upload one or more artifact files as multipart form-data. New analysis submissions
+must include either `project_key` or `project_id`; missing scope returns a
+structured `missing_project_scope` error before artifact parsing.
 
 Response includes:
 

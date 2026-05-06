@@ -36,6 +36,11 @@ def page_selection_state(
     return selected_on_page == len(visible_ids), selected_on_page
 
 
+def resolve_history_active_project():
+    """Return the saved project or the default project when the saved selection is stale."""
+    return get_active_project()
+
+
 def build_history_page() -> None:
     """Render a scanable history view with direct report retrieval."""
     apply_theme()
@@ -52,7 +57,7 @@ def build_history_page() -> None:
 
     @ui.refreshable
     def render_history_content() -> None:
-        active_project = get_active_project()
+        active_project = resolve_history_active_project()
         active_project_id = active_project.id if active_project is not None else None
         reports_page = fetch_filtered_analysis_history_page(
             project_id=active_project_id,
@@ -481,7 +486,7 @@ def build_history_detail_page(report_id: int, *, show_comparison: bool = False) 
 
     @ui.refreshable
     def render_history_detail_content() -> None:
-        active_project = get_active_project()
+        active_project = resolve_history_active_project()
         active_project_id = active_project.id if active_project is not None else None
         report = fetch_analysis_report(report_id, project_id=active_project_id)
         comparison = (

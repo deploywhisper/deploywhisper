@@ -11,6 +11,7 @@ from api.errors import ApiError, ApiRoute
 from config import settings
 from integrations.github.app_service import (
     GitHubAppConfigurationError,
+    GitHubAppProjectScopeError,
     GitHubAppRequestError,
     build_github_app_oauth_url,
     complete_github_app_oauth,
@@ -106,6 +107,27 @@ async def github_app_webhook(request: Request) -> dict[str, object]:
             payload=payload,
             config=config,
         )
+    except GitHubAppProjectScopeError as exc:
+        code = getattr(exc, "code", "invalid_project_reference")
+        return {
+            "data": {
+                "event": event_name,
+                "action": str(payload.get("action") or "").strip() or None,
+                "handled": True,
+                "automatic_analysis_triggered": False,
+                "check_run_id": None,
+                "report_id": None,
+                "report_url": None,
+                "marketplace_url": config.marketplace_url,
+                "install_url": config.install_url,
+                "advisory_only": True,
+                "note": f"{code}: {exc}",
+            },
+            "meta": {
+                "api_version": "v1",
+                "app_name": settings.app_name,
+            },
+        }
     except GitHubAppConfigurationError as exc:
         raise ApiError(
             status_code=405,

@@ -406,6 +406,96 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
 
+    def test_create_analysis_accepts_project_id(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    "application/json",
+                ),
+            )
+        ]
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="The deployment widens database access and should be reviewed.",
+            guidance=["Review the security group change before deploy."],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=self._analysis_assessment(),
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_id": str(project.id)},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            payload["data"]["persisted_report"]["project"]["project_key"], "payments"
+        )
+
+    def test_create_analysis_accepts_project_id_with_blank_project_key(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    "application/json",
+                ),
+            )
+        ]
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="The deployment widens database access and should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=self._analysis_assessment(),
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_id": str(project.id), "project_key": "   "},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            payload["data"]["persisted_report"]["project"]["project_key"], "payments"
+        )
+
     def test_create_analysis_rejects_unknown_project_reference(self) -> None:
         files = [
             (
@@ -426,6 +516,86 @@ class AnalysesApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["error"]["code"], "project_not_found")
+
+    def test_create_analysis_rejects_unknown_project_before_parsing(self) -> None:
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    "application/json",
+                ),
+            )
+        ]
+
+        with patch(
+            "services.analysis_service.build_parse_batch",
+            side_effect=AssertionError("project must resolve before parsing"),
+        ) as build_parse_batch:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "missing"},
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "project_not_found")
+        build_parse_batch.assert_not_called()
+        list_response = self.client.get("/api/v1/analyses")
+        self.assertEqual(list_response.json()["meta"]["total_count"], 1)
+
+    def test_create_analysis_rejects_missing_project_scope_before_parsing(
+        self,
+    ) -> None:
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    "application/json",
+                ),
+            )
+        ]
+
+        with patch(
+            "services.analysis_service.build_parse_batch",
+            side_effect=AssertionError("project must resolve before parsing"),
+        ) as build_parse_batch:
+            response = self.client.post("/api/v1/analyses", files=files)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "missing_project_scope")
+        build_parse_batch.assert_not_called()
+
+    def test_create_analysis_rejects_blank_explicit_project_key_before_parsing(
+        self,
+    ) -> None:
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    "application/json",
+                ),
+            )
+        ]
+
+        with patch(
+            "services.analysis_service.build_parse_batch",
+            side_effect=AssertionError("project must resolve before parsing"),
+        ) as build_parse_batch:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "   "},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "invalid_project_reference")
+        build_parse_batch.assert_not_called()
 
     def test_list_analyses_rejects_unknown_project_reference(self) -> None:
         response = self.client.get(
@@ -456,19 +626,30 @@ class AnalysesApiTests(unittest.TestCase):
             )
         ]
 
-        response = self.client.post(
-            "/api/v1/analyses",
-            files=files,
-            data={"project_id": str(first.id), "project_key": second.project_key},
-        )
+        with patch(
+            "services.analysis_service.build_parse_batch",
+            side_effect=AssertionError("project must resolve before parsing"),
+        ) as build_parse_batch:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_id": str(first.id), "project_key": second.project_key},
+            )
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json()["error"]["code"],
             "conflicting_project_reference",
         )
+        build_parse_batch.assert_not_called()
+        list_response = self.client.get("/api/v1/analyses")
+        self.assertEqual(list_response.json()["meta"]["total_count"], 1)
 
     def test_create_analysis_captures_trigger_headers_when_present(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         files = [
             (
                 "files",
@@ -505,6 +686,7 @@ class AnalysesApiTests(unittest.TestCase):
             response = self.client.post(
                 "/api/v1/analyses",
                 files=files,
+                data={"project_key": "payments"},
                 headers={
                     "X-DeployWhisper-Trigger-Type": "user_session",
                     "X-DeployWhisper-Trigger-Id": "sess-456",
@@ -523,6 +705,10 @@ class AnalysesApiTests(unittest.TestCase):
     def test_create_analysis_preserves_distinct_artifacts_with_same_basename(
         self,
     ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         files = [
             (
                 "files",
@@ -566,7 +752,11 @@ class AnalysesApiTests(unittest.TestCase):
             ),
             patch("services.analysis_service.find_incident_matches", return_value=[]),
         ):
-            response = self.client.post("/api/v1/analyses", files=files)
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "payments"},
+            )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -574,19 +764,35 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(intake_names, ["plan.json", "plan#2.json"])
 
     def test_create_analysis_rejects_payloads_over_50_mb(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         oversized = b"x" * 50_000_001
         files = [("files", ("plan.json", oversized, "application/json"))]
 
-        response = self.client.post("/api/v1/analyses", files=files)
+        response = self.client.post(
+            "/api/v1/analyses",
+            files=files,
+            data={"project_key": "payments"},
+        )
 
         self.assertEqual(response.status_code, 413)
         payload = response.json()
         self.assertEqual(payload["error"]["code"], "upload_limit_exceeded")
 
     def test_create_analysis_rejects_requests_without_supported_artifacts(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         files = [("files", ("README.txt", b"hello", "text/plain"))]
 
-        response = self.client.post("/api/v1/analyses", files=files)
+        response = self.client.post(
+            "/api/v1/analyses",
+            files=files,
+            data={"project_key": "payments"},
+        )
 
         self.assertEqual(response.status_code, 400)
         payload = response.json()
@@ -594,6 +800,16 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(
             payload["error"]["details"]["items"][0]["status"], "unsupported"
         )
+
+    def test_create_analysis_rejects_missing_scope_before_unsupported_preflight(
+        self,
+    ) -> None:
+        files = [("files", ("README.txt", b"hello", "text/plain"))]
+
+        response = self.client.post("/api/v1/analyses", files=files)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "missing_project_scope")
 
     def test_get_analysis_returns_standard_error_envelope_for_missing_report(
         self,
@@ -624,6 +840,10 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["error"]["message"], "Method Not Allowed")
 
     def test_analysis_pipeline_failure_uses_standard_error_envelope(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         files = [
             (
                 "files",
@@ -661,7 +881,11 @@ class AnalysesApiTests(unittest.TestCase):
                 side_effect=RuntimeError("boom"),
             ),
         ):
-            response = client.post("/api/v1/analyses", files=files)
+            response = client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "payments"},
+            )
 
         self.assertEqual(response.status_code, 500)
         payload = response.json()

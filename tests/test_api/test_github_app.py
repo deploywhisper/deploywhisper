@@ -14,6 +14,7 @@ import app as app_module
 import config as config_module
 import models.database as database_module
 import models.tables as tables_module
+from integrations.github.app_service import GitHubAppProjectScopeError
 from fastapi.testclient import TestClient
 
 
@@ -121,3 +122,37 @@ class GitHubAppRouteTests(unittest.TestCase):
         self.assertTrue(body["data"]["automatic_analysis_triggered"])
         self.assertEqual(body["data"]["check_run_id"], 7)
         self.assertEqual(body["data"]["report_id"], 17)
+
+    @patch("api.routes.github_app.handle_github_app_webhook")
+    def test_webhook_acknowledges_project_scope_error(
+        self, handle_github_app_webhook
+    ) -> None:
+        payload = b'{"action":"opened"}'
+        signature = (
+            "sha256="
+            + hmac.new(
+                b"webhook-secret",
+                payload,
+                hashlib.sha256,
+            ).hexdigest()
+        )
+        handle_github_app_webhook.side_effect = GitHubAppProjectScopeError(
+            "project_not_found",
+            "Unknown project reference: project_key=missing.",
+        )
+
+        response = self.client.post(
+            "/api/v1/github/app/webhook",
+            headers={
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": signature,
+                "Content-Type": "application/json",
+            },
+            content=payload,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["data"]["automatic_analysis_triggered"])
+        self.assertTrue(body["data"]["handled"])
+        self.assertIn("project_not_found", body["data"]["note"])

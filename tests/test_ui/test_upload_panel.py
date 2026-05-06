@@ -55,6 +55,21 @@ class UploadPanelTests(unittest.TestCase):
             },
         )
 
+    def test_run_uploaded_analysis_requires_project_scope_before_parsing(self) -> None:
+        with (
+            patch(
+                "services.analysis_service.build_parse_batch",
+                side_effect=AssertionError("project must resolve before parsing"),
+            ) as build_parse_batch,
+            self.assertRaisesRegex(ValueError, "Project scope is required") as exc_info,
+        ):
+            run_uploaded_analysis([("plan.json", b'{"resource_changes": []}')])
+
+        self.assertEqual(
+            getattr(exc_info.exception, "code", ""), "missing_project_scope"
+        )
+        build_parse_batch.assert_not_called()
+
     def test_resolve_initial_project_selection_requires_saved_choice(self) -> None:
         project_id, project_key = resolve_initial_project_selection(
             has_saved_selection=False,

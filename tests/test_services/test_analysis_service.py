@@ -14,13 +14,40 @@ from analysis.rollback_planner import RollbackPlan
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 from services.analysis_service import (
+    analyze_uploaded_files,
     build_advisory_summary,
     build_analysis_artifacts,
     build_share_summary,
+    resolve_analysis_project_scope,
 )
 
 
 class AnalysisServiceTests(unittest.TestCase):
+    def test_analyze_uploaded_files_requires_explicit_project_scope_before_parsing(
+        self,
+    ) -> None:
+        with (
+            patch(
+                "services.analysis_service.build_parse_batch",
+                side_effect=AssertionError("project must resolve before parsing"),
+            ) as build_parse_batch,
+            self.assertRaisesRegex(ValueError, "Project scope is required") as exc_info,
+        ):
+            analyze_uploaded_files([("plan.json", b'{"resource_changes": []}')])
+
+        self.assertEqual(
+            getattr(exc_info.exception, "code", ""), "missing_project_scope"
+        )
+        build_parse_batch.assert_not_called()
+
+    def test_resolve_analysis_project_scope_rejects_blank_explicit_key(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Project key") as exc_info:
+            resolve_analysis_project_scope(project_key="   ")
+
+        self.assertEqual(
+            getattr(exc_info.exception, "code", ""), "invalid_project_reference"
+        )
+
     def _share_report_payload(self) -> dict:
         return {
             "id": 17,
