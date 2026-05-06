@@ -37,10 +37,24 @@ _STATE_MAX_AGE_SECONDS = 600
 _UPLOAD_LIMIT_MESSAGE = (
     "Total artifact payload exceeds the 50 MB analysis-session limit."
 )
+_PROJECT_SCOPE_ERROR_CODES = {
+    "missing_project_scope",
+    "project_not_found",
+    "conflicting_project_reference",
+    "invalid_project_reference",
+}
 
 
 class GitHubAppConfigurationError(RuntimeError):
     """Raised when required GitHub App configuration is missing."""
+
+
+class GitHubAppProjectScopeError(RuntimeError):
+    """Raised when GitHub analysis cannot resolve an explicit project scope."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class GitHubAppRequestError(RuntimeError):
@@ -330,6 +344,43 @@ def handle_github_app_webhook(
         installation_id,
         config=config,
     )
+    raw_explicit_project_key = os.getenv("DEPLOYWHISPER_GITHUB_PROJECT_KEY")
+    explicit_project_key = (
+        raw_explicit_project_key.strip()
+        if raw_explicit_project_key is not None
+        else None
+    )
+    project = None
+    if explicit_project_key is not None:
+        try:
+            project = resolve_project_reference(project_key=explicit_project_key)
+        except ProjectResolutionError as exc:
+            return _project_scope_failure_result(
+                event_name=event_name,
+                action=action,
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
+                installation_token=installation_token,
+                code=exc.code,
+                message=str(exc),
+                config=config,
+            )
+        except ValueError as exc:
+            return _project_scope_failure_result(
+                event_name=event_name,
+                action=action,
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
+                installation_token=installation_token,
+                code=getattr(exc, "code", "invalid_project_reference"),
+                message=str(exc),
+                config=config,
+            )
+        except RuntimeError as exc:
+            raise GitHubAppConfigurationError(str(exc)) from exc
+
     raw_files = _load_pull_request_artifacts(
         owner=owner,
         repo_name=repo_name,
@@ -377,29 +428,76 @@ def handle_github_app_webhook(
     if config.checks_enabled:
         _require_check_run_report_url_config(config)
 
-    explicit_project_key = (
-        os.getenv("DEPLOYWHISPER_GITHUB_PROJECT_KEY") or ""
-    ).strip() or None
+    if project is None:
+        try:
+            project = resolve_project_reference(
+                repository_name=_repository_reference(owner, repo_name, config=config),
+                allow_create=True,
+            )
+        except ProjectResolutionError as exc:
+            return _project_scope_failure_result(
+                event_name=event_name,
+                action=action,
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
+                installation_token=installation_token,
+                code=exc.code,
+                message=str(exc),
+                config=config,
+            )
+        except ValueError as exc:
+            return _project_scope_failure_result(
+                event_name=event_name,
+                action=action,
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
+                installation_token=installation_token,
+                code=getattr(exc, "code", "invalid_project_reference"),
+                message=str(exc),
+                config=config,
+            )
+        except RuntimeError as exc:
+            raise GitHubAppConfigurationError(str(exc)) from exc
+
     try:
-        project = resolve_project_reference(
-            project_key=explicit_project_key,
-            repository_name=f"{owner}/{repo_name}"
-            if explicit_project_key is None
-            else None,
-            allow_create=True,
+        result = analyze_uploaded_files(
+            accepted_files,
+            project_key=project.project_key,
+            audit_context={
+                "source_interface": "github_app",
+                "trigger_type": "github_app_pull_request",
+                "trigger_id": f"{owner}/{repo_name}#PR-{pull_number}",
+            },
         )
     except ProjectResolutionError as exc:
-        raise GitHubAppConfigurationError(str(exc)) from exc
-
-    result = analyze_uploaded_files(
-        accepted_files,
-        project_key=project.project_key,
-        audit_context={
-            "source_interface": "github_app",
-            "trigger_type": "github_app_pull_request",
-            "trigger_id": f"{owner}/{repo_name}#PR-{pull_number}",
-        },
-    )
+        return _project_scope_failure_result(
+            event_name=event_name,
+            action=action,
+            owner=owner,
+            repo_name=repo_name,
+            head_sha=head_sha,
+            installation_token=installation_token,
+            code=exc.code,
+            message=str(exc),
+            config=config,
+        )
+    except ValueError as exc:
+        code = getattr(exc, "code", None)
+        if code not in _PROJECT_SCOPE_ERROR_CODES:
+            raise
+        return _project_scope_failure_result(
+            event_name=event_name,
+            action=action,
+            owner=owner,
+            repo_name=repo_name,
+            head_sha=head_sha,
+            installation_token=installation_token,
+            code=code,
+            message=str(exc),
+            config=config,
+        )
     report_id = int(result.persisted_report["id"])
     report_url = build_share_report_link(report_id)
     check_run_id = None
@@ -426,6 +524,58 @@ def handle_github_app_webhook(
         report_id=report_id,
         report_url=report_url,
         note="GitHub App webhook processed and advisory analysis completed.",
+    )
+
+
+def _repository_reference(
+    owner: str, repo_name: str, *, config: GitHubAppConfig
+) -> str:
+    host = parse.urlparse(config.authorize_url).netloc.strip().lower()
+    if not host:
+        host = parse.urlparse(config.api_base_url).netloc.strip().lower()
+    if host == "api.github.com":
+        host = "github.com"
+    return f"{host}/{owner}/{repo_name}" if host else f"{owner}/{repo_name}"
+
+
+def _project_scope_failure_result(
+    *,
+    event_name: str,
+    action: str | None,
+    owner: str,
+    repo_name: str,
+    head_sha: str,
+    installation_token: str,
+    code: str,
+    message: str,
+    config: GitHubAppConfig,
+) -> GitHubWebhookResult:
+    note = f"{code}: {message}"
+    check_run_id = (
+        _create_check_run(
+            owner=owner,
+            repo_name=repo_name,
+            head_sha=head_sha,
+            installation_token=installation_token,
+            conclusion="neutral",
+            title=DEFAULT_CHECK_RUN_NAME,
+            summary=note,
+            details_url=None,
+            text=_check_run_text(details_url=None),
+            api_base_url=config.api_base_url,
+        )
+        if config.checks_enabled
+        else None
+    )
+    return GitHubWebhookResult(
+        event=event_name,
+        action=action,
+        handled=True,
+        automatic_analysis_triggered=False,
+        check_run_id=check_run_id,
+        report_id=None,
+        report_url=None,
+        note=note,
     )
 
 

@@ -305,6 +305,122 @@ class ProjectServiceTests(unittest.TestCase):
         self.assertEqual(project.project_key, "acmecorp-payments-api")
         self.assertEqual(project.display_name, "Payments API")
 
+    def test_resolve_project_reference_disambiguates_repository_key_collision(
+        self,
+    ) -> None:
+        first = project_service_module.resolve_project_reference(
+            repository_name="foo/bar-baz",
+            allow_create=True,
+        )
+        second = project_service_module.resolve_project_reference(
+            repository_name="foo-bar/baz",
+            allow_create=True,
+        )
+
+        self.assertEqual(first.project_key, "foo-bar-baz")
+        self.assertNotEqual(second.project_key, first.project_key)
+        self.assertTrue(second.project_key.startswith("foo-bar-baz-"))
+        self.assertEqual(second.repository_url, "foo-bar/baz")
+
+    def test_resolve_project_reference_disambiguates_manual_key_collision(
+        self,
+    ) -> None:
+        manual = project_service_module.create_project(
+            project_key="foo-bar-baz",
+            display_name="Manual Project",
+        )
+
+        resolved = project_service_module.resolve_project_reference(
+            repository_name="foo-bar/baz",
+            allow_create=True,
+        )
+
+        self.assertNotEqual(resolved.id, manual.id)
+        self.assertTrue(resolved.project_key.startswith("foo-bar-baz-"))
+        self.assertEqual(resolved.repository_url, "foo-bar/baz")
+
+    def test_resolve_project_reference_reuses_custom_key_repository_match(
+        self,
+    ) -> None:
+        existing = project_service_module.create_project(
+            project_key="platform-core",
+            display_name="Platform Core",
+            repository_url="https://github.com/acme/platform-core",
+        )
+
+        resolved = project_service_module.resolve_project_reference(
+            repository_name="github.com/acme/platform-core",
+            allow_create=True,
+        )
+
+        self.assertEqual(resolved.id, existing.id)
+        self.assertEqual(resolved.project_key, "platform-core")
+        self.assertEqual(
+            resolved.repository_url, "https://github.com/acme/platform-core"
+        )
+
+    def test_resolve_project_reference_disambiguates_missing_repository_url_collision(
+        self,
+    ) -> None:
+        existing = project_service_module.create_project(
+            project_key="foo-bar-baz",
+            display_name="BAR BAZ",
+        )
+
+        resolved = project_service_module.resolve_project_reference(
+            repository_name="foo/bar-baz",
+            allow_create=True,
+        )
+
+        self.assertNotEqual(resolved.id, existing.id)
+        self.assertTrue(resolved.project_key.startswith("foo-bar-baz-"))
+        self.assertEqual(resolved.repository_url, "foo/bar-baz")
+
+    def test_resolve_project_reference_reuses_same_repository_key(self) -> None:
+        first = project_service_module.resolve_project_reference(
+            repository_name="https://github.com/Foo/Bar-Baz.git",
+            allow_create=True,
+        )
+        second = project_service_module.resolve_project_reference(
+            repository_name="github.com/foo/bar-baz",
+            allow_create=True,
+        )
+
+        self.assertEqual(second.id, first.id)
+        self.assertEqual(second.project_key, "foo-bar-baz")
+
+    def test_resolve_project_reference_reuses_scp_style_repository_remote(
+        self,
+    ) -> None:
+        first = project_service_module.resolve_project_reference(
+            repository_name="https://github.com/Foo/Bar-Baz.git",
+            allow_create=True,
+        )
+        second = project_service_module.resolve_project_reference(
+            repository_name="git@github.com:Foo/Bar-Baz.git",
+            allow_create=True,
+        )
+
+        self.assertEqual(second.id, first.id)
+        self.assertEqual(second.project_key, "foo-bar-baz")
+
+    def test_resolve_project_reference_disambiguates_same_path_cross_host_remote(
+        self,
+    ) -> None:
+        first = project_service_module.resolve_project_reference(
+            repository_name="https://github.com/acme/api.git",
+            allow_create=True,
+        )
+        second = project_service_module.resolve_project_reference(
+            repository_name="https://gitlab.example.com/acme/api.git",
+            allow_create=True,
+        )
+
+        self.assertEqual(first.project_key, "acme-api")
+        self.assertNotEqual(second.id, first.id)
+        self.assertTrue(second.project_key.startswith("acme-api-"))
+        self.assertEqual(second.repository_url, "gitlab.example.com/acme/api")
+
     def test_active_project_setting_round_trips(self) -> None:
         created = project_service_module.create_project(
             project_key="network-core",
@@ -382,3 +498,42 @@ class ProjectServiceTests(unittest.TestCase):
         project_service_module.set_active_project(created.id)
 
         self.assertTrue(project_service_module.has_active_project_selection())
+
+    def test_active_project_selection_flag_ignores_stale_saved_project(self) -> None:
+        created = project_service_module.create_project(
+            project_key="core",
+            display_name="Core",
+        )
+        project_service_module.set_active_project(created.id)
+        with database_module.engine.begin() as connection:
+            connection.exec_driver_sql(
+                "DELETE FROM projects WHERE id = ?",
+                (created.id,),
+            )
+
+        self.assertFalse(project_service_module.has_active_project_selection())
+        active = project_service_module.get_active_project()
+        self.assertIsNotNone(active)
+        assert active is not None
+        self.assertEqual(active.project_key, project_service_module.DEFAULT_PROJECT_KEY)
+
+    def test_resolve_project_reference_ignores_blank_key_when_id_provided(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+
+        resolved = project_service_module.resolve_project_reference(
+            project_id=project.id,
+            project_key="   ",
+        )
+
+        self.assertEqual(resolved.project_key, "payments")
+
+    def test_resolve_project_reference_rejects_blank_key_without_id(self) -> None:
+        with self.assertRaises(
+            project_service_module.ProjectResolutionError
+        ) as exc_info:
+            project_service_module.resolve_project_reference(project_key="   ")
+
+        self.assertEqual(exc_info.exception.code, "invalid_project_reference")

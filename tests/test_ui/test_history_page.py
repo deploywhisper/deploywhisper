@@ -314,6 +314,24 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Analysis report not found", response.text)
 
+    def test_history_active_project_ignores_stale_saved_selection(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.set_active_project(project.id)
+        with database_module.engine.begin() as connection:
+            connection.exec_driver_sql(
+                "DELETE FROM projects WHERE id = ?",
+                (project.id,),
+            )
+
+        active = history_module.resolve_history_active_project()
+
+        self.assertIsNotNone(active)
+        assert active is not None
+        self.assertEqual(active.project_key, project_service_module.DEFAULT_PROJECT_KEY)
+
     def test_public_report_route_blocks_compare_view_when_previous_report_is_protected(
         self,
     ) -> None:

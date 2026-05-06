@@ -25,6 +25,7 @@ from services.analysis_service import (
     analyze_uploaded_files,
     build_advisory_summary,
     build_share_summary,
+    resolve_analysis_project_scope,
 )
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
@@ -155,6 +156,7 @@ def list_analyses(
     response_model=AnalysisRunResponse,
     responses={
         400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
         413: {"model": ErrorResponse},
         405: {"model": ErrorResponse},
         422: {"model": ErrorResponse},
@@ -165,8 +167,14 @@ async def create_analysis(
     files: list[UploadFile] | None = File(
         default=None, description="Supported deployment artifacts to analyze."
     ),
-    project_id: int | None = Form(default=None),
-    project_key: str | None = Form(default=None),
+    project_id: int | None = Form(
+        default=None,
+        description="Required unless project_key is provided; numeric project id for the analysis.",
+    ),
+    project_key: str | None = Form(
+        default=None,
+        description="Required unless project_id is provided; project key for the analysis.",
+    ),
     trigger_type: str | None = Header(
         default=None, alias="X-DeployWhisper-Trigger-Type"
     ),
@@ -178,6 +186,11 @@ async def create_analysis(
             code="missing_artifacts",
             message="At least one artifact file is required.",
         )
+
+    try:
+        resolve_analysis_project_scope(project_id=project_id, project_key=project_key)
+    except ValueError as exc:
+        raise _project_api_error(exc) from exc
 
     raw_files = await _read_upload_files_with_limit(files)
     pending_analysis = build_pending_analysis(raw_files)

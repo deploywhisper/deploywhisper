@@ -51,7 +51,7 @@ development_status:
 
   epic-1: in-progress
   1-1-project-and-workspace-records: done
-  1-2-project-aware-analysis-submission: ready-for-dev
+  1-2-project-aware-analysis-submission: review
   1-3-project-scoped-report-persistence: ready-for-dev
   1-4-project-scoped-learning-and-context-records: ready-for-dev
   1-5-lightweight-rbac-role-model: ready-for-dev

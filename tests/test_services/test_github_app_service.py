@@ -17,6 +17,7 @@ import models.database as database_module
 import models.tables as tables_module
 import services.project_service as project_service_module
 from integrations.github import app_service
+from llm.narrator import NarrativeResult
 
 
 class GitHubAppServiceTests(unittest.TestCase):
@@ -199,6 +200,10 @@ class GitHubAppServiceTests(unittest.TestCase):
         create_check_run,
     ) -> None:
         os.environ["DEPLOYWHISPER_GITHUB_PROJECT_KEY"] = "platform-core"
+        project_service_module.create_project(
+            project_key="platform-core",
+            display_name="Platform Core",
+        )
         generate_installation_access_token.return_value = "installation-token"
         load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
         analyze_uploaded_files.return_value = type(
@@ -234,6 +239,323 @@ class GitHubAppServiceTests(unittest.TestCase):
         self.assertEqual(
             analyze_uploaded_files.call_args.kwargs["project_key"], "platform-core"
         )
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_handles_unknown_explicit_project_override(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        os.environ["DEPLOYWHISPER_GITHUB_PROJECT_KEY"] = "wrong-project"
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        create_check_run.return_value = 994
+
+        try:
+            result = app_service.handle_github_app_webhook(
+                event_name="pull_request",
+                payload={
+                    "action": "opened",
+                    "number": 3,
+                    "installation": {"id": 42},
+                    "repository": {
+                        "name": "deploywhisper",
+                        "owner": {"login": "deploywhisper"},
+                    },
+                    "pull_request": {
+                        "number": 3,
+                        "head": {"sha": "abc123"},
+                    },
+                },
+            )
+        finally:
+            os.environ.pop("DEPLOYWHISPER_GITHUB_PROJECT_KEY", None)
+
+        load_pull_request_artifacts.assert_not_called()
+        analyze_uploaded_files.assert_not_called()
+        self.assertTrue(result.handled)
+        self.assertFalse(result.automatic_analysis_triggered)
+        self.assertEqual(result.check_run_id, 994)
+        self.assertIn("project_not_found", result.note)
+        self.assertIsNone(
+            project_service_module.get_project_by_project_key("wrong-project")
+        )
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_handles_malformed_project_override(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        os.environ["DEPLOYWHISPER_GITHUB_PROJECT_KEY"] = "!!!"
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        create_check_run.return_value = 995
+
+        try:
+            result = app_service.handle_github_app_webhook(
+                event_name="pull_request",
+                payload={
+                    "action": "opened",
+                    "number": 3,
+                    "installation": {"id": 42},
+                    "repository": {
+                        "name": "deploywhisper",
+                        "owner": {"login": "deploywhisper"},
+                    },
+                    "pull_request": {
+                        "number": 3,
+                        "head": {"sha": "abc123"},
+                    },
+                },
+            )
+        finally:
+            os.environ.pop("DEPLOYWHISPER_GITHUB_PROJECT_KEY", None)
+
+        load_pull_request_artifacts.assert_not_called()
+        analyze_uploaded_files.assert_not_called()
+        self.assertTrue(result.handled)
+        self.assertFalse(result.automatic_analysis_triggered)
+        self.assertEqual(result.check_run_id, 995)
+        self.assertIn("invalid_project_reference", result.note)
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_handles_blank_project_override(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        os.environ["DEPLOYWHISPER_GITHUB_PROJECT_KEY"] = "   "
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        create_check_run.return_value = 996
+
+        try:
+            result = app_service.handle_github_app_webhook(
+                event_name="pull_request",
+                payload={
+                    "action": "opened",
+                    "number": 3,
+                    "installation": {"id": 42},
+                    "repository": {
+                        "name": "deploywhisper",
+                        "owner": {"login": "deploywhisper"},
+                    },
+                    "pull_request": {
+                        "number": 3,
+                        "head": {"sha": "abc123"},
+                    },
+                },
+            )
+        finally:
+            os.environ.pop("DEPLOYWHISPER_GITHUB_PROJECT_KEY", None)
+
+        load_pull_request_artifacts.assert_not_called()
+        analyze_uploaded_files.assert_not_called()
+        self.assertTrue(result.handled)
+        self.assertFalse(result.automatic_analysis_triggered)
+        self.assertEqual(result.check_run_id, 996)
+        self.assertIn("invalid_project_reference", result.note)
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_handles_late_project_scope_error(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.side_effect = (
+            project_service_module.ProjectResolutionError(
+                "project_not_found",
+                "Unknown project reference: project_key=deploywhisper-deploywhisper.",
+            )
+        )
+        create_check_run.return_value = 996
+
+        result = app_service.handle_github_app_webhook(
+            event_name="pull_request",
+            payload={
+                "action": "opened",
+                "number": 3,
+                "installation": {"id": 42},
+                "repository": {
+                    "name": "deploywhisper",
+                    "owner": {"login": "deploywhisper"},
+                },
+                "pull_request": {
+                    "number": 3,
+                    "head": {"sha": "abc123"},
+                },
+            },
+        )
+
+        self.assertTrue(result.handled)
+        self.assertFalse(result.automatic_analysis_triggered)
+        self.assertEqual(result.check_run_id, 996)
+        self.assertIn("project_not_found", result.note)
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_propagates_non_project_analysis_value_error(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.side_effect = ValueError("analysis exploded")
+
+        with self.assertRaisesRegex(ValueError, "analysis exploded"):
+            app_service.handle_github_app_webhook(
+                event_name="pull_request",
+                payload={
+                    "action": "opened",
+                    "number": 3,
+                    "installation": {"id": 42},
+                    "repository": {
+                        "name": "deploywhisper",
+                        "owner": {"login": "deploywhisper"},
+                    },
+                    "pull_request": {
+                        "number": 3,
+                        "head": {"sha": "abc123"},
+                    },
+                },
+            )
+
+        create_check_run.assert_not_called()
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_disambiguates_manual_repository_key_collision(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="deploywhisper-deploywhisper",
+            display_name="Manual DeployWhisper Project",
+        )
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.return_value = type(
+            "Result",
+            (),
+            {
+                "assessment": type("Assessment", (), {"recommendation": "caution"})(),
+                "persisted_report": {"id": 19},
+            },
+        )()
+        create_check_run.return_value = 997
+
+        result = app_service.handle_github_app_webhook(
+            event_name="pull_request",
+            payload={
+                "action": "opened",
+                "number": 3,
+                "installation": {"id": 42},
+                "repository": {
+                    "name": "deploywhisper",
+                    "owner": {"login": "deploywhisper"},
+                },
+                "pull_request": {
+                    "number": 3,
+                    "head": {"sha": "abc123"},
+                },
+            },
+        )
+
+        self.assertTrue(result.automatic_analysis_triggered)
+        project_key = analyze_uploaded_files.call_args.kwargs["project_key"]
+        self.assertNotEqual(project_key, "deploywhisper-deploywhisper")
+        self.assertTrue(project_key.startswith("deploywhisper-deploywhisper-"))
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("services.analysis_service.find_incident_matches", return_value=[])
+    @patch("services.analysis_service.generate_narrative")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_derives_project_for_real_analysis(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        generate_narrative,
+        find_incident_matches,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [
+            (
+                "plan.json",
+                b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            )
+        ]
+        generate_narrative.return_value = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="The deployment widens database access and should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        create_check_run.return_value = 993
+
+        result = app_service.handle_github_app_webhook(
+            event_name="pull_request",
+            payload={
+                "action": "opened",
+                "number": 3,
+                "installation": {"id": 42},
+                "repository": {
+                    "name": "deploywhisper",
+                    "owner": {"login": "deploywhisper"},
+                },
+                "pull_request": {
+                    "number": 3,
+                    "head": {"sha": "abc123"},
+                },
+            },
+        )
+
+        self.assertTrue(result.automatic_analysis_triggered)
+        self.assertEqual(result.check_run_id, 993)
+        project = project_service_module.get_project_by_project_key(
+            "deploywhisper-deploywhisper"
+        )
+        self.assertIsNotNone(project)
+        self.assertEqual(
+            result.report_url, "https://deploywhisper.example.com/reports/1"
+        )
+        find_incident_matches.assert_called_once()
+        create_check_run.assert_called_once()
 
     @patch("integrations.github.app_service.analyze_uploaded_files")
     @patch("integrations.github.app_service._load_pull_request_artifacts")

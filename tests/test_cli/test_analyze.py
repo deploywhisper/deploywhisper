@@ -566,6 +566,10 @@ class AnalyzeCliTests(unittest.TestCase):
     def test_analyze_command_runs_shared_analysis_and_prints_structured_output(
         self,
     ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
@@ -585,7 +589,16 @@ class AnalyzeCliTests(unittest.TestCase):
                 "services.analysis_service.generate_narrative", return_value=narrative
             ),
             patch("services.analysis_service.find_incident_matches", return_value=[]),
-            patch("sys.argv", ["deploywhisper", "analyze", str(artifact_path)]),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
             redirect_stdout(output),
         ):
             with self.assertRaises(SystemExit) as ctx:
@@ -632,6 +645,10 @@ class AnalyzeCliTests(unittest.TestCase):
     def test_analyze_command_captures_trigger_context_from_environment_when_available(
         self,
     ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
@@ -659,7 +676,16 @@ class AnalyzeCliTests(unittest.TestCase):
                 },
                 clear=False,
             ),
-            patch("sys.argv", ["deploywhisper", "analyze", str(artifact_path)]),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
             redirect_stdout(output),
         ):
             with self.assertRaises(SystemExit) as ctx:
@@ -713,6 +739,114 @@ class AnalyzeCliTests(unittest.TestCase):
                     "analyze",
                     "--project",
                     "payments",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(
+            payload["data"]["persisted_report"]["project"]["project_key"], "payments"
+        )
+
+    def test_analyze_command_accepts_project_id(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+
+        def passthrough_analyze_uploaded_files(
+            files,
+            completion_client=None,
+            audit_context=None,
+            project_id=None,
+            project_key=None,
+        ):
+            return analysis_service_module.analyze_uploaded_files(
+                files,
+                completion_client=completion_client,
+                audit_context=audit_context,
+                project_id=project_id,
+                project_key=project_key,
+            )
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project-id",
+                    str(project.id),
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(
+            payload["data"]["persisted_report"]["project"]["project_key"], "payments"
+        )
+
+    def test_analyze_command_accepts_project_id_with_blank_project_key(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+
+        def passthrough_analyze_uploaded_files(
+            files,
+            completion_client=None,
+            audit_context=None,
+            project_id=None,
+            project_key=None,
+        ):
+            return analysis_service_module.analyze_uploaded_files(
+                files,
+                completion_client=completion_client,
+                audit_context=audit_context,
+                project_id=project_id,
+                project_key=project_key,
+            )
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project-id",
+                    str(project.id),
+                    "--project",
+                    "   ",
                     str(artifact_path),
                 ],
             ),
@@ -825,6 +959,43 @@ class AnalyzeCliTests(unittest.TestCase):
     def test_analyze_command_reports_unsupported_inputs_with_structured_error(
         self,
     ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "README.txt"
+        artifact_path.write_text("hello", encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "no_supported_artifacts")
+        self.assertEqual(
+            payload["error"]["details"]["items"][0]["status"], "unsupported"
+        )
+
+    def test_analyze_command_rejects_missing_scope_before_unsupported_preflight(
+        self,
+    ) -> None:
         artifact_path = Path(self.tempdir.name) / "README.txt"
         artifact_path.write_text("hello", encoding="utf-8")
         stdout = io.StringIO()
@@ -841,18 +1012,28 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 2)
         self.assertEqual(stdout.getvalue(), "")
         payload = json.loads(stderr.getvalue())
-        self.assertEqual(payload["error"]["code"], "no_supported_artifacts")
-        self.assertEqual(
-            payload["error"]["details"]["items"][0]["status"], "unsupported"
-        )
+        self.assertEqual(payload["error"]["code"], "missing_project_scope")
 
     def test_analyze_command_reports_missing_files_with_structured_error(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         missing_path = Path(self.tempdir.name) / "missing-plan.json"
         stdout = io.StringIO()
         stderr = io.StringIO()
 
         with (
-            patch("sys.argv", ["deploywhisper", "analyze", str(missing_path)]),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(missing_path),
+                ],
+            ),
             redirect_stdout(stdout),
             redirect_stderr(stderr),
         ):
@@ -1108,6 +1289,10 @@ class AnalyzeCliTests(unittest.TestCase):
 
         with (
             patch(
+                "services.analysis_service.build_parse_batch",
+                side_effect=AssertionError("project must resolve before parsing"),
+            ) as build_parse_batch,
+            patch(
                 "sys.argv",
                 [
                     "deploywhisper",
@@ -1128,8 +1313,131 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 2)
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "conflicting_project_reference")
+        build_parse_batch.assert_not_called()
+        with database_module.SessionLocal() as session:
+            self.assertEqual(
+                analysis_reports_repository_module.count_analysis_reports(session),
+                0,
+            )
+
+    def test_analyze_command_rejects_unknown_project_before_parsing(self) -> None:
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            encoding="utf-8",
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "services.analysis_service.build_parse_batch",
+                side_effect=AssertionError("project must resolve before parsing"),
+            ) as build_parse_batch,
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "missing",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_not_found")
+        build_parse_batch.assert_not_called()
+        with database_module.SessionLocal() as session:
+            self.assertEqual(
+                analysis_reports_repository_module.count_analysis_reports(session),
+                0,
+            )
+
+    def test_analyze_command_rejects_missing_project_scope_before_parsing(
+        self,
+    ) -> None:
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            encoding="utf-8",
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "services.analysis_service.build_parse_batch",
+                side_effect=AssertionError("project must resolve before parsing"),
+            ) as build_parse_batch,
+            patch("sys.argv", ["deploywhisper", "analyze", str(artifact_path)]),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "missing_project_scope")
+        build_parse_batch.assert_not_called()
+        with database_module.SessionLocal() as session:
+            self.assertEqual(
+                analysis_reports_repository_module.count_analysis_reports(session),
+                0,
+            )
+
+    def test_analyze_command_rejects_blank_explicit_project_key_before_parsing(
+        self,
+    ) -> None:
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            encoding="utf-8",
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "services.analysis_service.build_parse_batch",
+                side_effect=AssertionError("project must resolve before parsing"),
+            ) as build_parse_batch,
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "   ",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "invalid_project_reference")
+        build_parse_batch.assert_not_called()
 
     def test_analyze_command_preserves_distinct_files_with_same_basename(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         first_dir = Path(self.tempdir.name) / "first"
         second_dir = Path(self.tempdir.name) / "second"
         first_dir.mkdir(parents=True, exist_ok=True)
@@ -1160,7 +1468,14 @@ class AnalyzeCliTests(unittest.TestCase):
             patch("services.analysis_service.find_incident_matches", return_value=[]),
             patch(
                 "sys.argv",
-                ["deploywhisper", "analyze", str(first_path), str(second_path)],
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(first_path),
+                    str(second_path),
+                ],
             ),
             redirect_stdout(output),
         ):
@@ -1185,6 +1500,10 @@ class AnalyzeCliTests(unittest.TestCase):
     def test_analyze_command_reports_shared_analysis_failures_with_structured_error(
         self,
     ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
@@ -1197,7 +1516,16 @@ class AnalyzeCliTests(unittest.TestCase):
             patch(
                 "cli.analyze.analyze_uploaded_files", side_effect=RuntimeError("boom")
             ),
-            patch("sys.argv", ["deploywhisper", "analyze", str(artifact_path)]),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
             redirect_stdout(stdout),
             redirect_stderr(stderr),
         ):
@@ -1214,6 +1542,10 @@ class AnalyzeCliTests(unittest.TestCase):
     def test_analyze_command_rejects_payloads_over_limit_before_reading_all_bytes(
         self,
     ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         artifact_path = Path(self.tempdir.name) / "large-plan.json"
         artifact_path.write_text("x" * 11, encoding="utf-8")
         stdout = io.StringIO()
@@ -1221,7 +1553,16 @@ class AnalyzeCliTests(unittest.TestCase):
 
         with (
             patch("cli.analyze.MAX_TOTAL_UPLOAD_BYTES", 10),
-            patch("sys.argv", ["deploywhisper", "analyze", str(artifact_path)]),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
             redirect_stdout(stdout),
             redirect_stderr(stderr),
         ):
@@ -1236,6 +1577,10 @@ class AnalyzeCliTests(unittest.TestCase):
     def test_analyze_command_preserves_advisory_output_for_high_risk_results(
         self,
     ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["delete"]}}]}',
@@ -1282,7 +1627,16 @@ class AnalyzeCliTests(unittest.TestCase):
                 "services.analysis_service.generate_narrative", return_value=narrative
             ),
             patch("services.analysis_service.find_incident_matches", return_value=[]),
-            patch("sys.argv", ["deploywhisper", "analyze", str(artifact_path)]),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
             redirect_stdout(output),
         ):
             with self.assertRaises(SystemExit) as ctx:
@@ -1316,6 +1670,10 @@ class AnalyzeCliTests(unittest.TestCase):
         )
 
     def test_analyze_command_suppresses_non_json_stream_noise_on_success(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
@@ -1357,7 +1715,16 @@ class AnalyzeCliTests(unittest.TestCase):
                 "cli.analyze.analyze_uploaded_files",
                 side_effect=noisy_analyze_uploaded_files,
             ),
-            patch("sys.argv", ["deploywhisper", "analyze", str(artifact_path)]),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
             redirect_stdout(stdout),
             redirect_stderr(stderr),
         ):

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -173,13 +175,87 @@ def _display_name_from_key(project_key: str) -> str:
 
 
 def derive_project_key_from_repository(repository_name: str) -> str:
-    trimmed = str(repository_name or "").strip().rstrip("/")
+    _, repository_path = _parse_repository_reference(repository_name)
+    trimmed = repository_path or str(repository_name or "").strip().rstrip("/")
     if trimmed.endswith(".git"):
         trimmed = trimmed[:-4]
     if "/" not in trimmed:
         return normalize_project_key(trimmed)
     owner, leaf = trimmed.split("/", maxsplit=1)
     return normalize_project_key(f"{owner}-{leaf}")
+
+
+def _parse_repository_reference(
+    repository_name: str | None,
+) -> tuple[str | None, str | None]:
+    trimmed = str(repository_name or "").strip().rstrip("/")
+    if not trimmed:
+        return None, None
+    parsed = urlparse(trimmed)
+    host: str | None = None
+    path = trimmed
+    if parsed.scheme or parsed.netloc:
+        host = parsed.netloc.rsplit("@", maxsplit=1)[-1].lower() or None
+        path = parsed.path
+    elif ":" in trimmed:
+        host_part, path_part = trimmed.split(":", maxsplit=1)
+        if "@" in host_part or "." in host_part:
+            host = host_part.rsplit("@", maxsplit=1)[-1].lower() or None
+            path = path_part
+    else:
+        parts = trimmed.split("/", maxsplit=1)
+        if len(parts) == 2 and "." in parts[0]:
+            host = parts[0].lower() or None
+            path = parts[1]
+    canonical_path = path.strip("/")
+    if canonical_path.endswith(".git"):
+        canonical_path = canonical_path[:-4]
+    return host, canonical_path.lower() or None
+
+
+def _canonical_repository_name(repository_name: str | None) -> str | None:
+    host, repository_path = _parse_repository_reference(repository_name)
+    if repository_path is None:
+        return None
+    if host is None:
+        return repository_path
+    return f"{host}/{repository_path}"
+
+
+def _repository_project_key(repository_name: str) -> str:
+    canonical = _canonical_repository_name(repository_name) or str(repository_name)
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:8]
+    return f"{derive_project_key_from_repository(repository_name)}-{digest}"
+
+
+def _repository_matches_project(record, repository_name: str | None) -> bool:
+    record_repository = _canonical_repository_name(
+        getattr(record, "repository_url", None)
+    )
+    requested_repository = _canonical_repository_name(repository_name)
+    if requested_repository is None:
+        return True
+    if record_repository is None:
+        return False
+    return record_repository == requested_repository
+
+
+def _repository_storage_value(repository_name: str | None) -> str | None:
+    return _canonical_repository_name(repository_name) or (
+        str(repository_name).strip() if repository_name is not None else None
+    )
+
+
+def _find_project_by_repository(session, repository_name: str | None):
+    requested_repository = _canonical_repository_name(repository_name)
+    if requested_repository is None:
+        return None
+    for record in list_project_records(session):
+        if _canonical_repository_name(getattr(record, "repository_url", None)) == (
+            requested_repository
+        ):
+            return record
+    return None
 
 
 def display_name_from_repository(repository_name: str) -> str:
@@ -353,6 +429,13 @@ def resolve_project_reference(
     repository_name: str | None = None,
     allow_create: bool = False,
 ) -> ProjectRecord:
+    raw_project_key = str(project_key) if project_key is not None else None
+    project_key = raw_project_key.strip() if raw_project_key is not None else None
+    if project_id is None and raw_project_key is not None and not project_key:
+        raise ProjectResolutionError(
+            "invalid_project_reference",
+            "Project key must contain at least one letter or number.",
+        )
     ensure_default_project()
     normalized_key = normalize_project_key(project_key) if project_key else None
     derived_key = (
@@ -398,7 +481,14 @@ def resolve_project_reference(
 
         record = record_by_id or record_by_key
         if record is None and derived_key is not None:
-            record = get_project_by_key(session, derived_key)
+            record = _find_project_by_repository(session, repository_name)
+            if record is None:
+                record = get_project_by_key(session, derived_key)
+                if record is not None and not _repository_matches_project(
+                    record, repository_name
+                ):
+                    derived_key = _repository_project_key(str(repository_name))
+                    record = get_project_by_key(session, derived_key)
 
         if record is None and allow_create:
             if normalized_key is not None:
@@ -414,7 +504,7 @@ def resolve_project_reference(
                     display_name=display_name_from_repository(
                         repository_name or derived_key
                     ),
-                    repository_url=repository_name,
+                    repository_url=_repository_storage_value(repository_name),
                 )
         elif record is None and (project_id is not None or normalized_key is not None):
             detail = (
@@ -449,7 +539,11 @@ def get_active_project() -> ProjectRecord | None:
         setting = get_setting(session, ACTIVE_PROJECT_SETTING_KEY)
         if setting is None:
             return _serialize(get_default_project(session))
-        record = get_project(session, int(setting.value))
+        try:
+            project_id = int(setting.value)
+        except (TypeError, ValueError):
+            project_id = 0
+        record = get_project(session, project_id)
         if record is None:
             return _serialize(get_default_project(session))
         return _serialize(record)
@@ -458,7 +552,14 @@ def get_active_project() -> ProjectRecord | None:
 def has_active_project_selection() -> bool:
     ensure_default_project()
     with SessionLocal() as session:
-        return get_setting(session, ACTIVE_PROJECT_SETTING_KEY) is not None
+        setting = get_setting(session, ACTIVE_PROJECT_SETTING_KEY)
+        if setting is None:
+            return False
+        try:
+            project_id = int(setting.value)
+        except (TypeError, ValueError):
+            return False
+        return get_project(session, project_id) is not None
 
 
 def build_project_payload(project: ProjectRecord | dict[str, Any]) -> dict[str, Any]:
