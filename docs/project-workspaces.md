@@ -2,6 +2,8 @@
 
 DeployWhisper now scopes analyses and topology context to lightweight project/workspace records instead of treating all history as one global pile.
 
+For setup-specific modeling guidance, see the [Project Model Guide](./concepts/project-model.md).
+
 ### What Changed
 
 - Projects have a stable `project_key`, display name, optional description, repository URL, and default branch.
