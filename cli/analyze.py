@@ -39,20 +39,136 @@ from services.analysis_service import (
 )
 from services.deployment_outcome_service import record_deployment_outcome
 from services.project_service import create_project, create_workspace
+from services.project_service import filter_projects_by_authorization
+from services.project_service import has_restricted_project_scope
+from services.project_service import list_project_role_definitions
 from services.project_service import list_projects, list_workspaces
+from services.project_service import require_project_permission
 from services.project_service import resolve_project_reference
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     build_pending_analysis,
     uniquify_artifact_names,
 )
-from services.report_service import REPORT_SCHEMA_VERSION
+from services.report_service import REPORT_SCHEMA_VERSION, fetch_analysis_report
 from services.topology_service import get_topology_status, import_topology_source
 
 
 def _emit_json(payload: dict, *, stream) -> None:
     stream.write(json.dumps(payload))
     stream.write("\n")
+
+
+def _split_env_project_keys(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _project_authorization_from_env() -> dict[str, object]:
+    return {
+        "role": os.environ.get("DEPLOYWHISPER_PROJECT_ROLE"),
+        "allowed_project_keys": _split_env_project_keys(
+            os.environ.get("DEPLOYWHISPER_PROJECT_KEYS")
+        ),
+    }
+
+
+def _cli_authorization_has_restricted_project_scope() -> bool:
+    authorization = _project_authorization_from_env()
+    return has_restricted_project_scope(
+        role=authorization["role"],
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+
+
+def _emit_project_authorization_error(exc: PermissionError) -> int:
+    _emit_json(
+        build_error(
+            code=getattr(exc, "code", "project_permission_denied"),
+            message=getattr(exc, "message", str(exc)),
+        ),
+        stream=sys.stderr,
+    )
+    return 2
+
+
+def _emit_project_scope_forbidden_error() -> int:
+    _emit_json(
+        build_error(
+            code="project_scope_forbidden",
+            message="Caller is not authorized for the requested project.",
+        ),
+        stream=sys.stderr,
+    )
+    return 2
+
+
+def _emit_missing_workspace_project_scope_error() -> int:
+    _emit_json(
+        build_error(
+            code="missing_project_scope",
+            message="Project scope is required when resolving workspace_id.",
+        ),
+        stream=sys.stderr,
+    )
+    return 2
+
+
+def _should_mask_cli_project_reference_error(
+    *,
+    project_id: int | None,
+    exc: ValueError,
+) -> bool:
+    return (
+        project_id is not None
+        and getattr(exc, "code", None)
+        in {"project_not_found", "conflicting_project_reference"}
+        and _cli_authorization_has_restricted_project_scope()
+    )
+
+
+def _should_mask_cli_scope_reference_error(exc: ValueError) -> bool:
+    return _cli_authorization_has_restricted_project_scope() and getattr(
+        exc, "code", None
+    ) in {
+        "analysis_not_found",
+        "conflicting_project_reference",
+        "project_not_found",
+        "workspace_not_found",
+        "conflicting_workspace_reference",
+    }
+
+
+def _require_cli_project_permission(
+    *,
+    capability: str,
+    project_key: str | None = None,
+) -> None:
+    authorization = _project_authorization_from_env()
+    require_project_permission(
+        role=authorization["role"],
+        capability=capability,
+        project_key=project_key,
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+
+
+def _require_cli_analysis_project_permission(
+    *,
+    capability: str,
+    analysis_id: int,
+) -> bool:
+    _require_cli_project_permission(capability=capability)
+    report = fetch_analysis_report(analysis_id)
+    if report is None:
+        return False
+    project = report.get("project") or {}
+    _require_cli_project_permission(
+        capability=capability,
+        project_key=project.get("project_key"),
+    )
+    return True
 
 
 def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
@@ -283,13 +399,31 @@ def _run_analyze(
         return 2
 
     try:
-        resolve_analysis_project_scope(
+        project_key_for_auth = project_key.strip() if project_key is not None else None
+        if project_key_for_auth:
+            _require_cli_project_permission(
+                capability="analysis.submit",
+                project_key=project_key_for_auth,
+            )
+        else:
+            _require_cli_project_permission(capability="analysis.submit")
+        resolved_project = resolve_analysis_project_scope(
             project_id=project_id,
             project_key=project_key,
             workspace_id=workspace_id,
             workspace_key=workspace_key,
         )
+        _require_cli_project_permission(
+            capability="analysis.submit",
+            project_key=resolved_project.project_key,
+        )
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_cli_scope_reference_error(exc):
+            return _emit_project_scope_forbidden_error()
+        if _should_mask_cli_project_reference_error(project_id=project_id, exc=exc):
+            return _emit_project_scope_forbidden_error()
         _emit_json(
             build_error(
                 code=getattr(exc, "code", "invalid_project_request"),
@@ -338,6 +472,8 @@ def _run_analyze(
                 },
             )
     except ValueError as exc:
+        if _should_mask_cli_scope_reference_error(exc):
+            return _emit_project_scope_forbidden_error()
         _emit_json(
             build_error(
                 code=getattr(exc, "code", "invalid_project_request"),
@@ -378,6 +514,10 @@ def _run_analyze(
 
 def _run_project_create(args: argparse.Namespace) -> int:
     try:
+        _require_cli_project_permission(
+            capability="project.manage",
+            project_key=args.project_key,
+        )
         created = create_project(
             project_key=args.project_key,
             display_name=args.display_name,
@@ -385,6 +525,8 @@ def _run_project_create(args: argparse.Namespace) -> int:
             repository_url=args.repository_url,
             default_branch=args.default_branch,
         )
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     except ValueError as exc:
         sys.stderr.write(f"{exc}\n")
         return 2
@@ -396,15 +538,33 @@ def _run_project_create(args: argparse.Namespace) -> int:
 
 
 def _run_project_list() -> int:
-    projects = list_projects()
+    authorization = _project_authorization_from_env()
+    try:
+        projects = filter_projects_by_authorization(
+            list_projects(),
+            role=authorization["role"],
+            allowed_project_keys=authorization["allowed_project_keys"],
+        )
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     for project in projects:
         suffix = " [default]" if project.is_default else ""
         print(f"{project.project_key}: {project.display_name}{suffix}")
     return 0
 
 
+def _run_project_roles() -> int:
+    for definition in list_project_role_definitions():
+        print(f"{definition.role}: {', '.join(definition.capabilities)}")
+    return 0
+
+
 def _run_project_workspace_create(args: argparse.Namespace) -> int:
     try:
+        _require_cli_project_permission(
+            capability="workspace.manage",
+            project_key=args.project_key,
+        )
         created = create_workspace(
             project_key=args.project_key,
             workspace_key=args.workspace_key,
@@ -412,6 +572,8 @@ def _run_project_workspace_create(args: argparse.Namespace) -> int:
             description=args.description,
             environment=args.environment,
         )
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     except ValueError as exc:
         sys.stderr.write(f"{exc}\n")
         return 2
@@ -425,7 +587,13 @@ def _run_project_workspace_create(args: argparse.Namespace) -> int:
 
 def _run_project_workspace_list(args: argparse.Namespace) -> int:
     try:
+        _require_cli_project_permission(
+            capability="workspace.read",
+            project_key=args.project_key,
+        )
         workspaces = list_workspaces(project_key=args.project_key)
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     except ValueError as exc:
         sys.stderr.write(f"{exc}\n")
         return 2
@@ -442,6 +610,21 @@ def _run_project_workspace_list(args: argparse.Namespace) -> int:
 
 def _run_outcome_record(args: argparse.Namespace) -> int:
     try:
+        authorized_analysis = _require_cli_analysis_project_permission(
+            capability="outcome.manage",
+            analysis_id=args.analysis_id,
+        )
+        if not authorized_analysis:
+            if _cli_authorization_has_restricted_project_scope():
+                return _emit_project_scope_forbidden_error()
+            _emit_json(
+                build_error(
+                    code="analysis_not_found",
+                    message="Analysis report not found.",
+                ),
+                stream=sys.stderr,
+            )
+            return 2
         recorded = record_deployment_outcome(
             analysis_id=args.analysis_id,
             outcome=args.outcome,
@@ -455,7 +638,11 @@ def _run_outcome_record(args: argparse.Namespace) -> int:
             workspace_key=args.workspace_key,
             source_interface="cli",
         )
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_cli_scope_reference_error(exc):
+            return _emit_project_scope_forbidden_error()
         _emit_json(
             build_error(
                 code=getattr(exc, "code", "invalid_deployment_request"),
@@ -476,10 +663,30 @@ def _run_outcome_record(args: argparse.Namespace) -> int:
 
 
 def _run_topology_import(args: argparse.Namespace) -> int:
+    if (
+        args.workspace_id is not None
+        and args.project_id is None
+        and args.project_key is None
+    ):
+        return _emit_missing_workspace_project_scope_error()
     try:
+        project_key_for_auth = (
+            args.project_key.strip() if args.project_key is not None else None
+        )
+        if project_key_for_auth:
+            _require_cli_project_permission(
+                capability="topology.manage",
+                project_key=project_key_for_auth,
+            )
+        else:
+            _require_cli_project_permission(capability="topology.manage")
         project = resolve_project_reference(
             project_id=args.project_id,
             project_key=args.project_key,
+        )
+        _require_cli_project_permission(
+            capability="topology.manage",
+            project_key=project.project_key,
         )
         import_result = import_topology_source(
             args.source_type,
@@ -493,7 +700,16 @@ def _run_topology_import(args: argparse.Namespace) -> int:
             workspace_id=args.workspace_id,
             workspace_key=args.workspace_key,
         )
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_cli_scope_reference_error(exc):
+            return _emit_project_scope_forbidden_error()
+        if _should_mask_cli_project_reference_error(
+            project_id=args.project_id,
+            exc=exc,
+        ):
+            return _emit_project_scope_forbidden_error()
         _emit_json(
             build_error(
                 code=getattr(exc, "code", "invalid_topology_definition"),
@@ -666,6 +882,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional default branch name.",
     )
     project_subparsers.add_parser("list", help="List known project/workspace records.")
+    project_subparsers.add_parser(
+        "roles", help="List lightweight project role capabilities."
+    )
     project_workspace_parser = project_subparsers.add_parser(
         "workspace", help="Manage workspace/environment records for a project."
     )
@@ -886,6 +1105,8 @@ def main() -> None:
         raise SystemExit(_run_project_create(args))
     if args.command == "project" and args.project_command == "list":
         raise SystemExit(_run_project_list())
+    if args.command == "project" and args.project_command == "roles":
+        raise SystemExit(_run_project_roles())
     if args.command == "project" and args.project_command == "workspace":
         if args.workspace_command == "create":
             raise SystemExit(_run_project_workspace_create(args))

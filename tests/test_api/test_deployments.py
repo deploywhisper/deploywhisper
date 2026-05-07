@@ -133,3 +133,135 @@ class DeploymentOutcomesApiTests(unittest.TestCase):
             response.json()["error"]["code"],
             "deployment_outcome_ingest_forbidden",
         )
+
+    def test_webhook_endpoint_denies_role_without_outcome_manage(self) -> None:
+        response = self.client.post(
+            "/api/v1/deployments/outcomes",
+            headers={
+                "X-DeployWhisper-Outcome-Token": "outcome-secret",
+                "X-DeployWhisper-Project-Role": "reviewer",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+            json={
+                "analysis_id": self.persisted_report["id"],
+                "outcome": "success",
+                "deployed_at": "2026-04-30T08:15:00Z",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+        self.assertNotIn(self.project.project_key, payload["error"]["message"])
+
+    def test_outcome_list_denies_project_outside_actor_scope(self) -> None:
+        response = self.client.get(
+            "/api/v1/deployments/outcomes",
+            params={"analysis_id": self.persisted_report["id"]},
+            headers={
+                "X-DeployWhisper-Project-Role": "reviewer",
+                "X-DeployWhisper-Project-Keys": "platform",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
+        self.assertNotIn(self.project.project_key, payload["error"]["message"])
+
+    def test_outcome_list_authorizes_analysis_before_supplied_project_scope(
+        self,
+    ) -> None:
+        platform = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+
+        response = self.client.get(
+            "/api/v1/deployments/outcomes",
+            params={
+                "analysis_id": self.persisted_report["id"],
+                "project_key": platform.project_key,
+            },
+            headers={
+                "X-DeployWhisper-Project-Role": "reviewer",
+                "X-DeployWhisper-Project-Keys": platform.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
+    def test_outcome_create_authorizes_analysis_before_supplied_project_scope(
+        self,
+    ) -> None:
+        platform = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+
+        response = self.client.post(
+            "/api/v1/deployments/outcomes",
+            headers={
+                "X-DeployWhisper-Outcome-Token": "outcome-secret",
+                "X-DeployWhisper-Project-Role": "maintainer",
+                "X-DeployWhisper-Project-Keys": platform.project_key,
+            },
+            json={
+                "analysis_id": self.persisted_report["id"],
+                "project_key": platform.project_key,
+                "outcome": "success",
+                "deployed_at": "2026-04-30T08:15:00Z",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
+    def test_outcome_list_masks_missing_analysis_for_scoped_actor(self) -> None:
+        response = self.client.get(
+            "/api/v1/deployments/outcomes",
+            params={"analysis_id": 999},
+            headers={
+                "X-DeployWhisper-Project-Role": "reviewer",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
+    def test_outcome_list_rejects_workspace_id_without_project_scope(self) -> None:
+        response = self.client.get(
+            "/api/v1/deployments/outcomes",
+            params={"workspace_id": 999},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "missing_project_scope")
+
+    def test_outcome_list_masks_foreign_workspace_for_scoped_actor(self) -> None:
+        platform = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        workspace = project_service_module.create_workspace(
+            project_key=platform.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+
+        response = self.client.get(
+            "/api/v1/deployments/outcomes",
+            params={
+                "analysis_id": self.persisted_report["id"],
+                "workspace_id": workspace.id,
+            },
+            headers={
+                "X-DeployWhisper-Project-Role": "reviewer",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")

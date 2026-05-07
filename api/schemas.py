@@ -294,8 +294,23 @@ class WorkspaceData(BaseModel):
     updated_at: str = Field(..., description="Last update timestamp")
 
 
+class ProjectRoleData(BaseModel):
+    role: str = Field(..., description="Stable project role identifier")
+    display_name: str = Field(..., description="Human-readable role name")
+    description: str = Field(..., description="Role capability summary")
+    capabilities: list[str] = Field(
+        default_factory=list,
+        description="Stable project capability identifiers granted to this role",
+    )
+
+
 class ProjectListResponse(BaseModel):
     data: list[ProjectData]
+    meta: ListMetaPayload
+
+
+class ProjectRoleListResponse(BaseModel):
+    data: list[ProjectRoleData]
     meta: ListMetaPayload
 
 

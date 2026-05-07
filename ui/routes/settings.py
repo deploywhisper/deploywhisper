@@ -8,7 +8,6 @@ from nicegui import events, ui
 
 from llm.skill_context import get_custom_skill_statuses, save_custom_skill
 from services.feedback_service import fetch_feedback_summary
-from services.project_service import get_active_project
 from services.settings_service import (
     activate_local_mode,
     get_dashboard_result_display_duration_seconds,
@@ -28,7 +27,21 @@ from services.topology_service import (
     save_topology_definition,
     validate_topology_definition,
 )
+from ui.project_authorization import resolve_authorized_ui_active_project
 from ui.theme import apply_theme, build_navigation_shell, build_page_header
+
+
+def _empty_feedback_summary() -> dict[str, Any]:
+    return {
+        "current_state": {
+            "useful_count": 0,
+            "not_useful_count": 0,
+            "false_positive_count": 0,
+            "missed_finding_count": 0,
+        },
+        "totals": {"events_recorded": 0},
+        "recent_notes": [],
+    }
 
 
 def process_topology_upload_content(
@@ -128,15 +141,28 @@ def build_settings_page() -> None:
 
     @ui.refreshable
     def render_settings_content() -> None:
-        active_project = get_active_project()
+        _, active_project, authorization_error = resolve_authorized_ui_active_project()
+
+        def current_authorized_project():
+            _, project, _ = resolve_authorized_ui_active_project()
+            return project
+
         settings = get_provider_settings()
         dashboard_duration_seconds = get_dashboard_result_display_duration_seconds()
         drift_interval_hours = get_topology_drift_check_interval_hours()
-        topology_status = get_topology_status(
-            project_id=active_project.id if active_project is not None else None
+        topology_status = (
+            None
+            if authorization_error is not None
+            else get_topology_status(
+                project_id=active_project.id if active_project is not None else None
+            )
         )
-        feedback_summary = fetch_feedback_summary(
-            project_id=active_project.id if active_project is not None else None
+        feedback_summary = (
+            _empty_feedback_summary()
+            if authorization_error is not None
+            else fetch_feedback_summary(
+                project_id=active_project.id if active_project is not None else None
+            )
         )
         custom_skill_statuses = get_custom_skill_statuses()
         provider_options = provider_select_options()
@@ -481,13 +507,25 @@ def build_settings_page() -> None:
                     async def handle_topology_upload(
                         event: events.UploadEventArguments,
                     ) -> None:
-                        current_project = get_active_project()
+                        current_project = current_authorized_project()
                         uploaded_content = await event.file.read()
+                        if current_project is None:
+                            staged_topology["name"] = None
+                            staged_topology["content"] = None
+                            topology_upload_feedback.text = ""
+                            render_topology_validation_feedback(
+                                TopologyStatus(
+                                    path="selected://topology-upload",
+                                    exists=False,
+                                ),
+                                file_name=event.file.name,
+                                error_message=authorization_error
+                                or "Select an active project before previewing topology context.",
+                            )
+                            return
                         preview_result = preview_topology_upload_content(
                             uploaded_content,
-                            project_id=current_project.id
-                            if current_project is not None
-                            else None,
+                            project_id=current_project.id,
                         )
                         if preview_result["error_message"] is None:
                             staged_topology["name"] = event.file.name
@@ -522,7 +560,7 @@ def build_settings_page() -> None:
                         ).classes("text-xs dw-muted leading-5")
 
                         def submit_topology_upload() -> None:
-                            current_project = get_active_project()
+                            current_project = current_authorized_project()
                             if current_project is None:
                                 ui.notify(
                                     "Select an active project before saving topology context.",
@@ -565,7 +603,13 @@ def build_settings_page() -> None:
                     drift_interval_select.on_value_change(
                         lambda event: save_drift_interval(event)
                     )
-                    render_topology_feedback(topology_status)
+                    if authorization_error is None and topology_status is not None:
+                        render_topology_feedback(topology_status)
+                    else:
+                        with topology_feedback:
+                            ui.label(authorization_error or "").classes(
+                                "text-sm dw-warning-text"
+                            )
 
             with ui.card().classes("w-full dw-panel shadow-none"):
                 ui.label("Reviewer feedback summary").classes(

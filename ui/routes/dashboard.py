@@ -4,14 +4,36 @@ from __future__ import annotations
 
 from nicegui import ui
 
-from services.project_service import get_active_project
 from services.report_service import fetch_active_dashboard_report
 from ui.components.upload_panel import build_upload_panel
 from ui.components.verdict_card import render_verdict_card
 from ui.routes.history import build_history_detail_page, build_history_page
 from ui.routes.settings import build_settings_page
 from services.report_service import fetch_dashboard_briefing, fetch_dashboard_stats
+from ui.project_authorization import resolve_authorized_ui_active_project
 from ui.theme import apply_theme, build_navigation_shell
+
+
+def _empty_dashboard_stats() -> dict:
+    return {
+        "total_files_scanned": 0,
+        "severity_counts": {
+            "low": 0,
+            "medium": 0,
+            "high": 0,
+            "critical": 0,
+        },
+    }
+
+
+def _empty_dashboard_briefing(message: str) -> dict:
+    return {
+        **_empty_dashboard_stats(),
+        "saved_briefings": 0,
+        "high_focus": 0,
+        "weighted_focus_score": 0,
+        "latest_summary": message,
+    }
 
 
 def _briefing_summary_line(saved_briefings: int, high_focus: int) -> str:
@@ -42,8 +64,10 @@ def build_dashboard() -> None:
 
     @ui.refreshable
     def render_dashboard_content() -> None:
+        _, active_project, authorization_error = resolve_authorized_ui_active_project()
+
         def current_project():
-            return get_active_project()
+            return active_project
 
         def current_project_id() -> int | None:
             project = current_project()
@@ -58,7 +82,11 @@ def build_dashboard() -> None:
 
             def render_briefing() -> None:
                 nonlocal briefing_mount
-                briefing = fetch_dashboard_briefing(project_id=current_project_id())
+                briefing = (
+                    _empty_dashboard_briefing(authorization_error)
+                    if authorization_error is not None
+                    else fetch_dashboard_briefing(project_id=current_project_id())
+                )
                 severity_counts = briefing["severity_counts"]
                 total_reports = max(briefing["saved_briefings"], 1)
                 segments = (
@@ -163,7 +191,11 @@ def build_dashboard() -> None:
                                             )
 
             def render_stats() -> None:
-                stats = fetch_dashboard_stats(project_id=current_project_id())
+                stats = (
+                    _empty_dashboard_stats()
+                    if authorization_error is not None
+                    else fetch_dashboard_stats(project_id=current_project_id())
+                )
                 stats_mount.clear()
                 with stats_mount:
                     with ui.card().classes("w-full dw-panel shadow-none p-4"):
@@ -216,8 +248,10 @@ def build_dashboard() -> None:
                 render_stats()
 
             def render_hero() -> None:
-                active_report = fetch_active_dashboard_report(
-                    project_id=current_project_id()
+                active_report = (
+                    None
+                    if authorization_error is not None
+                    else fetch_active_dashboard_report(project_id=current_project_id())
                 )
                 hero_mount.clear()
                 with hero_mount:
@@ -230,6 +264,8 @@ def build_dashboard() -> None:
 
                     ui.label("Deploy review").classes("dw-eyebrow")
                     active_project = current_project()
+                    if authorization_error is not None:
+                        ui.label(authorization_error).classes("text-sm dw-warning-text")
                     if active_project is not None:
                         ui.label(
                             f"Current project: {active_project.display_name} ({active_project.project_key})"

@@ -10,11 +10,12 @@ from urllib.parse import urlparse
 from nicegui import ui
 from nicegui.events import KeyEventArguments
 
-from services.project_service import ProjectRecord, create_project
+from services.project_service import ProjectRecord
 from ui.components.review_accessibility import (
     decorate_modal_card,
     decorate_modal_close,
 )
+from ui.project_authorization import create_authorized_ui_project
 
 
 def project_repository_context(project: ProjectRecord) -> str | None:
@@ -327,14 +328,14 @@ def open_create_project_dialog(
 
         def submit_project() -> None:
             try:
-                created = create_project(
+                created = create_authorized_ui_project(
                     project_key=key_input.value,
                     display_name=name_input.value,
                     description=description_input.value or None,
                     repository_url=repository_input.value or None,
                     default_branch=branch_input.value or None,
                 )
-            except ValueError as exc:
+            except (PermissionError, ValueError) as exc:
                 error_label.set_text(str(exc))
                 return
             dialog.close()

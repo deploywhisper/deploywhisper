@@ -380,6 +380,82 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(payload["data"]["password_protected"])
         self.assertTrue(payload["data"]["redact_filenames"])
 
+    def test_configure_share_denies_project_outside_actor_scope(self) -> None:
+        os.environ["DEPLOYWHISPER_SHARE_TOKEN"] = "review-secret"
+        self.client = TestClient(create_app())
+
+        response = self.client.post(
+            f"/api/v1/analyses/{self.persisted['id']}/share",
+            json={"password": "s3cret-pass", "redact_filenames": True},
+            headers={
+                "X-DeployWhisper-Share-Token": "review-secret",
+                "X-DeployWhisper-Project-Role": "maintainer",
+                "X-DeployWhisper-Project-Keys": "payments",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
+        self.assertNotIn("unassigned", payload["error"]["message"])
+
+    def test_configure_share_denies_reviewer_within_actor_scope(self) -> None:
+        os.environ["DEPLOYWHISPER_SHARE_TOKEN"] = "review-secret"
+        self.client = TestClient(create_app())
+
+        response = self.client.post(
+            f"/api/v1/analyses/{self.persisted['id']}/share",
+            json={"password": "s3cret-pass", "redact_filenames": True},
+            headers={
+                "X-DeployWhisper-Share-Token": "review-secret",
+                "X-DeployWhisper-Project-Role": "reviewer",
+                "X-DeployWhisper-Project-Keys": "unassigned",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+
+    def test_configure_share_validates_missing_scope_before_missing_report(
+        self,
+    ) -> None:
+        os.environ["DEPLOYWHISPER_SHARE_TOKEN"] = "review-secret"
+        self.client = TestClient(create_app())
+
+        response = self.client.post(
+            "/api/v1/analyses/999999/share",
+            json={"password": "s3cret-pass", "redact_filenames": True},
+            headers={
+                "X-DeployWhisper-Share-Token": "review-secret",
+                "X-DeployWhisper-Project-Role": "maintainer",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_scope_required")
+
+    def test_configure_share_validates_invalid_actor_before_missing_report(
+        self,
+    ) -> None:
+        os.environ["DEPLOYWHISPER_SHARE_TOKEN"] = "review-secret"
+        self.client = TestClient(create_app())
+
+        response = self.client.post(
+            "/api/v1/analyses/999999/share",
+            json={"password": "s3cret-pass", "redact_filenames": True},
+            headers={
+                "X-DeployWhisper-Share-Token": "review-secret",
+                "X-DeployWhisper-Project-Role": "unknown-role",
+                "X-DeployWhisper-Project-Keys": "unassigned",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "invalid_project_role")
+
     def test_configure_share_rejects_unauthorized_reset_of_public_protection(
         self,
     ) -> None:
@@ -397,6 +473,47 @@ class AnalysesApiTests(unittest.TestCase):
 
         self.assertEqual(reset_response.status_code, 405)
         self.assertIn("Password required", report_response.text)
+
+    def test_create_analysis_masks_foreign_workspace_for_scoped_actor(self) -> None:
+        allowed = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        forbidden = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        workspace = project_service_module.create_workspace(
+            project_key=forbidden.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+
+        response = self.client.post(
+            "/api/v1/analyses",
+            data={
+                "project_key": allowed.project_key,
+                "workspace_id": str(workspace.id),
+            },
+            files=[
+                (
+                    "files",
+                    (
+                        "plan.json",
+                        b'{"resource_changes": []}',
+                        "application/json",
+                    ),
+                )
+            ],
+            headers={
+                "X-DeployWhisper-Project-Role": "contributor",
+                "X-DeployWhisper-Project-Keys": allowed.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
 
     def test_create_analysis_returns_structured_result(self) -> None:
         project_service_module.create_project(
@@ -503,6 +620,196 @@ class AnalysesApiTests(unittest.TestCase):
             "ev-001",
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
+
+    def test_create_analysis_denies_role_without_submit_capability(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": []}',
+                    "application/json",
+                ),
+            )
+        ]
+
+        response = self.client.post(
+            "/api/v1/analyses",
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": "payments",
+            },
+            files=files,
+            data={"project_key": "payments"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "project_permission_denied")
+        self.assertNotIn("payments", payload["error"]["message"])
+
+    def test_project_role_header_requires_nonblank_role(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": []}',
+                    "application/json",
+                ),
+            )
+        ]
+
+        response = self.client.post(
+            "/api/v1/analyses",
+            headers={"X-DeployWhisper-Project-Role": " "},
+            files=files,
+            data={"project_key": "payments"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "invalid_project_role")
+
+    def test_non_admin_role_requires_project_scope_header(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={"project_key": "payments"},
+            headers={"X-DeployWhisper-Project-Role": "read-only"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_required")
+
+    def test_analysis_reads_mask_missing_project_id_for_scoped_actor(self) -> None:
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={"project_id": 999},
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": "payments",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
+    def test_analysis_reads_mask_conflicting_project_reference_for_scoped_actor(
+        self,
+    ) -> None:
+        allowed = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        forbidden = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        headers = {
+            "X-DeployWhisper-Project-Role": "read-only",
+            "X-DeployWhisper-Project-Keys": allowed.project_key,
+        }
+
+        list_response = self.client.get(
+            "/api/v1/analyses",
+            params={
+                "project_key": allowed.project_key,
+                "project_id": forbidden.id,
+            },
+            headers=headers,
+        )
+        detail_response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}",
+            params={
+                "project_key": allowed.project_key,
+                "project_id": forbidden.id,
+            },
+            headers=headers,
+        )
+
+        self.assertEqual(list_response.status_code, 403)
+        self.assertEqual(
+            list_response.json()["error"]["code"], "project_scope_forbidden"
+        )
+        self.assertEqual(detail_response.status_code, 403)
+        self.assertEqual(
+            detail_response.json()["error"]["code"], "project_scope_forbidden"
+        )
+
+    def test_analysis_reads_deny_project_outside_actor_scope(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        scoped = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=15,
+                severity="low",
+                recommendation="go",
+                top_risk="Scoped project report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: scoped project report.",
+                explanation="Scoped report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+        headers = {
+            "X-DeployWhisper-Project-Role": "read-only",
+            "X-DeployWhisper-Project-Keys": "platform",
+        }
+
+        list_response = self.client.get(
+            "/api/v1/analyses",
+            params={"project_key": "payments"},
+            headers=headers,
+        )
+        detail_response = self.client.get(
+            f"/api/v1/analyses/{scoped['id']}",
+            params={"project_key": "payments"},
+            headers=headers,
+        )
+
+        self.assertEqual(list_response.status_code, 403)
+        self.assertEqual(
+            list_response.json()["error"]["code"], "project_scope_forbidden"
+        )
+        self.assertNotIn("payments", list_response.json()["error"]["message"])
+        self.assertEqual(detail_response.status_code, 403)
+        self.assertEqual(
+            detail_response.json()["error"]["code"], "project_scope_forbidden"
+        )
+        self.assertNotIn("payments", detail_response.json()["error"]["message"])
 
     def test_create_analysis_accepts_project_id(self) -> None:
         project = project_service_module.create_project(

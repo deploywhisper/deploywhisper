@@ -537,3 +537,82 @@ class ProjectServiceTests(unittest.TestCase):
             project_service_module.resolve_project_reference(project_key="   ")
 
         self.assertEqual(exc_info.exception.code, "invalid_project_reference")
+
+    def test_project_role_definitions_cover_expected_capabilities(self) -> None:
+        definitions = project_service_module.list_project_role_definitions()
+
+        self.assertEqual(
+            [definition.role for definition in definitions],
+            ["admin", "maintainer", "reviewer", "contributor", "read-only"],
+        )
+        capabilities_by_role = {
+            definition.role: set(definition.capabilities) for definition in definitions
+        }
+        self.assertIn("project.manage", capabilities_by_role["admin"])
+        self.assertIn("workspace.manage", capabilities_by_role["maintainer"])
+        self.assertIn("report.review", capabilities_by_role["reviewer"])
+        self.assertIn("analysis.submit", capabilities_by_role["contributor"])
+        self.assertIn("topology.read", capabilities_by_role["read-only"])
+        self.assertIn("outcome.manage", capabilities_by_role["maintainer"])
+        self.assertEqual(
+            capabilities_by_role["read-only"],
+            {"project.read", "workspace.read", "report.read", "topology.read"},
+        )
+
+    def test_blank_project_role_is_invalid_instead_of_admin(self) -> None:
+        result = project_service_module.authorize_project_action(
+            role=" ",
+            capability="project.manage",
+            project_key="payments",
+        )
+
+        self.assertFalse(result.allowed)
+        self.assertEqual(result.code, "invalid_project_role")
+
+    def test_non_admin_role_requires_explicit_project_scope(self) -> None:
+        result = project_service_module.authorize_project_action(
+            role="read-only",
+            capability="project.read",
+        )
+
+        self.assertFalse(result.allowed)
+        self.assertEqual(result.code, "project_scope_required")
+
+    def test_project_authorization_denies_missing_capability_without_leaking_scope(
+        self,
+    ) -> None:
+        result = project_service_module.authorize_project_action(
+            role="read-only",
+            capability="project.manage",
+            project_key="payments",
+            allowed_project_keys=["payments"],
+        )
+
+        self.assertFalse(result.allowed)
+        self.assertEqual(result.code, "project_permission_denied")
+        self.assertNotIn("payments", result.message)
+
+    def test_project_authorization_denies_project_outside_actor_scope(self) -> None:
+        result = project_service_module.authorize_project_action(
+            role="contributor",
+            capability="analysis.submit",
+            project_key="platform",
+            allowed_project_keys=["payments"],
+        )
+
+        self.assertFalse(result.allowed)
+        self.assertEqual(result.code, "project_scope_forbidden")
+        self.assertNotIn("platform", result.message)
+
+    def test_require_project_permission_raises_clear_authorization_error(self) -> None:
+        with self.assertRaises(
+            project_service_module.ProjectAuthorizationError
+        ) as exc_info:
+            project_service_module.require_project_permission(
+                role="read-only",
+                capability="workspace.manage",
+                project_key="payments",
+                allowed_project_keys=["payments"],
+            )
+
+        self.assertEqual(exc_info.exception.code, "project_permission_denied")

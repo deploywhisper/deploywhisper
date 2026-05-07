@@ -9,9 +9,12 @@ from nicegui import ui
 from services.project_service import (
     get_active_project,
     has_active_project_selection,
-    list_projects,
     ProjectRecord,
-    set_active_project,
+)
+from ui.project_authorization import (
+    load_authorized_ui_projects,
+    resolve_authorized_active_project_selection,
+    set_authorized_ui_project,
 )
 from ui.components.project_workspace_switcher import (
     build_project_combobox,
@@ -1074,8 +1077,17 @@ def build_navigation_shell(
 
         @ui.refreshable
         def render_project_bar() -> None:
+            projects, project_authorization_error = load_authorized_ui_projects()
             saved_selection = has_active_project_selection()
             active_project = get_active_project()
+            saved_selection, active_project = (
+                resolve_authorized_active_project_selection(
+                    has_saved_selection=saved_selection,
+                    active_project=active_project,
+                    projects=projects,
+                    authorization_error=project_authorization_error,
+                )
+            )
             current_project_id = (
                 active_project.id if saved_selection and active_project else None
             )
@@ -1096,27 +1108,43 @@ def build_navigation_shell(
                                 active_project=active_project,
                             )
                         ).classes("dw-project-filter-meta")
+                        if project_authorization_error is not None:
+                            ui.label(project_authorization_error).classes(
+                                "text-xs dw-warning-text"
+                            )
                     with ui.row().classes("dw-project-filter-controls flex-wrap"):
                         build_project_combobox(
-                            projects=list_projects(),
+                            projects=projects,
                             current_project_id=current_project_id,
-                            on_select=lambda project: handle_project_change(project),
+                            on_select=lambda project: handle_project_change(
+                                project,
+                                projects,
+                            ),
                         )
                         ui.button(
                             "New project",
                             on_click=lambda: open_create_project_dialog(
                                 on_created=lambda created: handle_project_change(
-                                    created
+                                    created,
+                                    [*projects, created],
                                 )
                             ),
                             color="primary",
                         ).props("flat no-caps").classes("dw-theme-button")
 
-        def handle_project_change(project: ProjectRecord) -> None:
-            set_active_project(project.id)
+        def handle_project_change(
+            project: ProjectRecord,
+            projects: list[ProjectRecord],
+        ) -> None:
+            try:
+                selected_project = set_authorized_ui_project(project.id, projects)
+            except PermissionError as exc:
+                ui.notify(str(exc), color="warning")
+                render_project_bar.refresh()
+                return
             render_project_bar.refresh()
             if on_project_change is not None:
-                on_project_change(project)
+                on_project_change(selected_project)
 
         render_project_bar()
     return lambda: render_project_bar.refresh()

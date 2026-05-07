@@ -20,8 +20,6 @@ from services.intake_service import (
 from services.project_service import (
     get_active_project,
     has_active_project_selection,
-    list_projects,
-    set_active_project,
 )
 from services.report_service import (
     fetch_active_dashboard_report,
@@ -39,6 +37,11 @@ from ui.components.rollback_plan import render_rollback_plan
 from ui.components.review_accessibility import (
     decorate_modal_card,
     decorate_modal_close,
+)
+from ui.project_authorization import (
+    load_authorized_ui_projects,
+    resolve_authorized_active_project_selection,
+    set_authorized_ui_project,
 )
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
 from services.settings_service import check_provider_readiness
@@ -140,7 +143,14 @@ def build_upload_panel(
 ) -> None:
     """Render the upload intake component for pending analyses."""
     saved_selection = has_active_project_selection()
-    active_project = get_active_project() if saved_selection else None
+    projects, project_authorization_error = load_authorized_ui_projects()
+    active_project = get_active_project()
+    saved_selection, active_project = resolve_authorized_active_project_selection(
+        has_saved_selection=saved_selection,
+        active_project=active_project,
+        projects=projects,
+        authorization_error=project_authorization_error,
+    )
     initial_project_id, initial_project_key = resolve_initial_project_selection(
         has_saved_selection=saved_selection,
         active_project=active_project,
@@ -153,9 +163,10 @@ def build_upload_panel(
         "progress_message": "Waiting to analyze",
         "result_token": 0,
         "active_result": None,
-        "projects": list_projects(),
+        "projects": projects,
         "active_project_id": initial_project_id,
         "active_project_key": initial_project_key,
+        "project_authorization_error": project_authorization_error,
     }
 
     card_classes = "w-full shadow-none"
@@ -210,26 +221,47 @@ def build_upload_panel(
                 remaining_seconds=active_report["dashboard_remaining_seconds"],
             )
 
+    def sync_upload_widget_state() -> None:
+        if upload_widget is None:
+            return
+        if uploads_allowed(state["active_project_key"]):
+            upload_widget.enable()
+        else:
+            upload_widget.disable()
+
     def refresh_projects(
         *,
         selected_project_id: int | None = None,
         notify_parent: bool = False,
     ) -> None:
-        state["projects"] = list_projects()
+        state["projects"], state["project_authorization_error"] = (
+            load_authorized_ui_projects()
+        )
         selected_project = None
         if selected_project_id is not None:
-            selected_project = set_active_project(selected_project_id)
+            try:
+                selected_project = set_authorized_ui_project(
+                    selected_project_id,
+                    state["projects"],
+                )
+            except PermissionError as exc:
+                state["active_project_id"] = None
+                state["active_project_key"] = None
+                upload_error.set_text(str(exc))
+                if project_select is not None:
+                    project_select.set_options(_project_options())
+                    project_select.value = None
+                    project_select.update()
+                sync_upload_widget_state()
+                refresh_saved_report()
+                return
             state["active_project_id"] = selected_project.id
             state["active_project_key"] = selected_project.project_key
         if project_select is not None:
             project_select.set_options(_project_options())
             project_select.value = state["active_project_id"]
             project_select.update()
-        if upload_widget is not None:
-            if uploads_allowed(state["active_project_key"]):
-                upload_widget.enable()
-            else:
-                upload_widget.disable()
+        sync_upload_widget_state()
         refresh_saved_report()
         if selected_project is not None and on_project_change is not None:
             on_project_change(selected_project)
@@ -450,6 +482,10 @@ def build_upload_panel(
                 ui.label(
                     "Select an existing project or create one before running manual analysis."
                 ).classes("text-xs dw-muted")
+            if state["project_authorization_error"] is not None:
+                ui.label(state["project_authorization_error"]).classes(
+                    "text-xs dw-warning-text"
+                )
             if summary.ready_count == 0 or not state["active_project_key"]:
                 analyze_button.disable()
 
@@ -569,7 +605,7 @@ def build_upload_panel(
             )
         finally:
             state["is_running"] = False
-            upload_widget.enable()
+            sync_upload_widget_state()
             render_actions()
 
     def schedule_analysis_after_dialog_close() -> None:
