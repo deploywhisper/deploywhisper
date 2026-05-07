@@ -504,6 +504,8 @@ Project documentation currently lives in a few places:
 - [UX Specification](./_bmad-output/planning-artifacts/ux-design-specification.md)
 - [Epics and Stories](./_bmad-output/planning-artifacts/epics.md)
 - [Implementation Readiness Report](./_bmad-output/planning-artifacts/implementation-readiness-report-2026-04-20.md)
+- [Project Model Guide](./docs/concepts/project-model.md)
+- [Project Workspaces](./docs/project-workspaces.md)
 - [Evidence Model Foundation](./docs/evidence-model.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)
