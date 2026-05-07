@@ -91,6 +91,37 @@ def _should_mask_project_reference_error(
     )
 
 
+def _should_mask_scope_reference_error(
+    *,
+    authorization: dict[str, object],
+    exc: ValueError,
+) -> bool:
+    return getattr(exc, "code", None) in {
+        "project_not_found",
+        "conflicting_project_reference",
+        "workspace_not_found",
+        "conflicting_workspace_reference",
+    } and has_restricted_project_scope(
+        role=authorization["role"],
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+
+
+def _reject_unscoped_workspace_id(
+    *,
+    project_id: int | None,
+    project_key: str | None,
+    workspace_id: int | None,
+) -> None:
+    if workspace_id is None or project_id is not None or project_key is not None:
+        return
+    raise ApiError(
+        status_code=400,
+        code="missing_project_scope",
+        message="Project scope is required when resolving workspace_id.",
+    )
+
+
 def _resolve_authorized_topology_project(
     *,
     authorization: dict[str, object],
@@ -142,6 +173,11 @@ def _build_topology_context_response(
     workspace_id: int | None = None,
     workspace_key: str | None = None,
 ) -> TopologyContextResponse:
+    _reject_unscoped_workspace_id(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+    )
     try:
         project = _resolve_authorized_topology_project(
             authorization=authorization,
@@ -152,12 +188,25 @@ def _build_topology_context_response(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_scope_reference_error(
+            authorization=authorization,
+            exc=exc,
+        ):
+            raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
-    status = get_topology_status(
-        project_id=project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
+    try:
+        status = get_topology_status(
+            project_id=project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+    except ValueError as exc:
+        if _should_mask_scope_reference_error(
+            authorization=authorization,
+            exc=exc,
+        ):
+            raise _project_scope_forbidden_error() from exc
+        raise _project_api_error(exc) from exc
     return TopologyContextResponse(
         data=TopologyContextData(
             project=ProjectData(**project.model_dump()),
@@ -189,6 +238,11 @@ def save_project_topology(
     payload: TopologyContextRequest,
     authorization: dict[str, object] = Depends(_authorization_context),
 ) -> TopologyContextResponse:
+    _reject_unscoped_workspace_id(
+        project_id=payload.project_id,
+        project_key=payload.project_key,
+        workspace_id=payload.workspace_id,
+    )
     try:
         project = _resolve_authorized_topology_project(
             authorization=authorization,
@@ -199,6 +253,11 @@ def save_project_topology(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_scope_reference_error(
+            authorization=authorization,
+            exc=exc,
+        ):
+            raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
 
     try:
@@ -209,6 +268,11 @@ def save_project_topology(
             workspace_key=payload.workspace_key,
         )
     except ValueError as exc:
+        if _should_mask_scope_reference_error(
+            authorization=authorization,
+            exc=exc,
+        ):
+            raise _project_scope_forbidden_error() from exc
         raise ApiError(
             status_code=400,
             code="invalid_topology_definition",

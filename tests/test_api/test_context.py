@@ -157,6 +157,45 @@ class ContextApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
 
+    def test_get_project_topology_rejects_workspace_id_without_project_scope(
+        self,
+    ) -> None:
+        response = self.client.get(
+            "/api/v1/context/topology",
+            params={"workspace_id": 999},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "missing_project_scope")
+
+    def test_get_project_topology_masks_foreign_workspace_for_scoped_actor(
+        self,
+    ) -> None:
+        platform = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        workspace = project_service_module.create_workspace(
+            project_key=platform.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+
+        response = self.client.get(
+            "/api/v1/context/topology",
+            params={
+                "project_key": self.project.project_key,
+                "workspace_id": workspace.id,
+            },
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
     def test_save_project_topology_rejects_invalid_relationships(self) -> None:
         response = self.client.post(
             "/api/v1/context/topology",

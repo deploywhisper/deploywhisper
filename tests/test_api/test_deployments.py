@@ -230,3 +230,38 @@ class DeploymentOutcomesApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
+    def test_outcome_list_rejects_workspace_id_without_project_scope(self) -> None:
+        response = self.client.get(
+            "/api/v1/deployments/outcomes",
+            params={"workspace_id": 999},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "missing_project_scope")
+
+    def test_outcome_list_masks_foreign_workspace_for_scoped_actor(self) -> None:
+        platform = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        workspace = project_service_module.create_workspace(
+            project_key=platform.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+
+        response = self.client.get(
+            "/api/v1/deployments/outcomes",
+            params={
+                "analysis_id": self.persisted_report["id"],
+                "workspace_id": workspace.id,
+            },
+            headers={
+                "X-DeployWhisper-Project-Role": "reviewer",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")

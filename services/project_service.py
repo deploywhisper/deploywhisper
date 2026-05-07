@@ -22,7 +22,7 @@ from models.repositories.projects import (
     list_projects as list_project_records,
     list_workspaces as list_workspace_records,
 )
-from models.repositories.settings import get_setting, upsert_setting
+from models.repositories.settings import delete_setting, get_setting, upsert_setting
 
 DEFAULT_PROJECT_KEY = "unassigned"
 DEFAULT_PROJECT_NAME = "Unassigned"
@@ -98,6 +98,7 @@ PROJECT_ROLE_CAPABILITIES: dict[str, tuple[str, ...]] = {
         "analysis.submit",
         "report.read",
         "report.review",
+        "report.share.manage",
         "feedback.create",
         "outcome.read",
         "outcome.manage",
@@ -115,6 +116,7 @@ PROJECT_ROLE_CAPABILITIES: dict[str, tuple[str, ...]] = {
         "analysis.submit",
         "report.read",
         "report.review",
+        "report.share.manage",
         "feedback.create",
         "outcome.read",
         "outcome.manage",
@@ -883,6 +885,12 @@ def set_active_project(project_id: int) -> ProjectRecord:
     with SessionLocal() as session:
         upsert_setting(session, key=ACTIVE_PROJECT_SETTING_KEY, value=str(project.id))
     return project
+
+
+def clear_active_project_selection() -> None:
+    """Clear the saved active-project selection for UI surfaces."""
+    with SessionLocal() as session:
+        delete_setting(session, ACTIVE_PROJECT_SETTING_KEY)
 
 
 def get_active_project() -> ProjectRecord | None:

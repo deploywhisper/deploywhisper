@@ -104,6 +104,17 @@ def _emit_project_scope_forbidden_error() -> int:
     return 2
 
 
+def _emit_missing_workspace_project_scope_error() -> int:
+    _emit_json(
+        build_error(
+            code="missing_project_scope",
+            message="Project scope is required when resolving workspace_id.",
+        ),
+        stream=sys.stderr,
+    )
+    return 2
+
+
 def _should_mask_cli_project_reference_error(
     *,
     project_id: int | None,
@@ -115,6 +126,18 @@ def _should_mask_cli_project_reference_error(
         in {"project_not_found", "conflicting_project_reference"}
         and _cli_authorization_has_restricted_project_scope()
     )
+
+
+def _should_mask_cli_scope_reference_error(exc: ValueError) -> bool:
+    return _cli_authorization_has_restricted_project_scope() and getattr(
+        exc, "code", None
+    ) in {
+        "analysis_not_found",
+        "conflicting_project_reference",
+        "project_not_found",
+        "workspace_not_found",
+        "conflicting_workspace_reference",
+    }
 
 
 def _require_cli_project_permission(
@@ -397,6 +420,8 @@ def _run_analyze(
     except PermissionError as exc:
         return _emit_project_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_cli_scope_reference_error(exc):
+            return _emit_project_scope_forbidden_error()
         if _should_mask_cli_project_reference_error(project_id=project_id, exc=exc):
             return _emit_project_scope_forbidden_error()
         _emit_json(
@@ -447,6 +472,8 @@ def _run_analyze(
                 },
             )
     except ValueError as exc:
+        if _should_mask_cli_scope_reference_error(exc):
+            return _emit_project_scope_forbidden_error()
         _emit_json(
             build_error(
                 code=getattr(exc, "code", "invalid_project_request"),
@@ -588,6 +615,8 @@ def _run_outcome_record(args: argparse.Namespace) -> int:
             analysis_id=args.analysis_id,
         )
         if not authorized_analysis:
+            if _cli_authorization_has_restricted_project_scope():
+                return _emit_project_scope_forbidden_error()
             _emit_json(
                 build_error(
                     code="analysis_not_found",
@@ -612,6 +641,8 @@ def _run_outcome_record(args: argparse.Namespace) -> int:
     except PermissionError as exc:
         return _emit_project_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_cli_scope_reference_error(exc):
+            return _emit_project_scope_forbidden_error()
         _emit_json(
             build_error(
                 code=getattr(exc, "code", "invalid_deployment_request"),
@@ -632,6 +663,12 @@ def _run_outcome_record(args: argparse.Namespace) -> int:
 
 
 def _run_topology_import(args: argparse.Namespace) -> int:
+    if (
+        args.workspace_id is not None
+        and args.project_id is None
+        and args.project_key is None
+    ):
+        return _emit_missing_workspace_project_scope_error()
     try:
         project_key_for_auth = (
             args.project_key.strip() if args.project_key is not None else None
@@ -666,6 +703,8 @@ def _run_topology_import(args: argparse.Namespace) -> int:
     except PermissionError as exc:
         return _emit_project_authorization_error(exc)
     except ValueError as exc:
+        if _should_mask_cli_scope_reference_error(exc):
+            return _emit_project_scope_forbidden_error()
         if _should_mask_cli_project_reference_error(
             project_id=args.project_id,
             exc=exc,

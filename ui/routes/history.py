@@ -6,7 +6,6 @@ from typing import Any
 
 from nicegui import ui
 
-from services.project_service import get_active_project
 from services.backtesting_service import fetch_calibration_dashboard_seed
 from services.report_service import (
     fetch_analysis_report,
@@ -23,6 +22,7 @@ from ui.components.review_accessibility import (
     decorate_modal_close,
 )
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
+from ui.project_authorization import resolve_authorized_ui_active_project
 from ui.theme import apply_theme, build_navigation_shell, build_page_header
 
 
@@ -37,8 +37,42 @@ def page_selection_state(
 
 
 def resolve_history_active_project():
-    """Return the saved project or the default project when the saved selection is stale."""
-    return get_active_project()
+    """Return the effective active project allowed for the current UI actor."""
+    _, active_project, _ = resolve_authorized_ui_active_project()
+    return active_project
+
+
+def resolve_history_project_context():
+    """Return the effective project and any authorization setup error."""
+    _, active_project, authorization_error = resolve_authorized_ui_active_project()
+    return active_project, authorization_error
+
+
+def _empty_history_page() -> dict[str, Any]:
+    return {"items": [], "total_count": 0}
+
+
+def _empty_risk_trends() -> dict[str, Any]:
+    return {
+        "total_reports": 0,
+        "severity_counts": {},
+        "recommendation_counts": {},
+        "tool_counts": {},
+        "audit_rows": [],
+        "trend_sample_size": 100,
+    }
+
+
+def _empty_calibration_dashboard_seed() -> dict[str, Any]:
+    return {
+        "failed_deploy_count": 0,
+        "warned_failed_deploy_count": 0,
+        "overall_precision": 0.0,
+        "overall_recall": 0.0,
+        "window": {"days": 7},
+        "backtest_rows": [],
+        "by_severity": {},
+    }
 
 
 def build_history_page() -> None:
@@ -57,17 +91,29 @@ def build_history_page() -> None:
 
     @ui.refreshable
     def render_history_content() -> None:
-        active_project = resolve_history_active_project()
+        active_project, authorization_error = resolve_history_project_context()
         active_project_id = active_project.id if active_project is not None else None
-        reports_page = fetch_filtered_analysis_history_page(
-            project_id=active_project_id,
-            page=1,
-            page_size=5,
+        reports_page = (
+            _empty_history_page()
+            if authorization_error is not None
+            else fetch_filtered_analysis_history_page(
+                project_id=active_project_id,
+                page=1,
+                page_size=5,
+            )
         )
         reports = reports_page["items"]
         total_report_count = reports_page["total_count"]
-        trends = fetch_risk_trends(project_id=active_project_id)
-        calibration = fetch_calibration_dashboard_seed(project_id=active_project_id)
+        trends = (
+            _empty_risk_trends()
+            if authorization_error is not None
+            else fetch_risk_trends(project_id=active_project_id)
+        )
+        calibration = (
+            _empty_calibration_dashboard_seed()
+            if authorization_error is not None
+            else fetch_calibration_dashboard_seed(project_id=active_project_id)
+        )
         selected_ids: set[int] = set()
         page_state = {"page": 1, "page_size": 5}
         card_checkboxes: dict[int, Any] = {}
@@ -79,7 +125,9 @@ def build_history_page() -> None:
                     eyebrow="History",
                     title="Analysis history",
                     subtitle=(
-                        "Review earlier deploy briefings, audit metadata, and risk trends."
+                        authorization_error
+                        if authorization_error is not None
+                        else "Review earlier deploy briefings, audit metadata, and risk trends."
                         if active_project is None
                         else f"Project-scoped history for {active_project.display_name} ({active_project.project_key})."
                     ),
@@ -129,17 +177,27 @@ def build_history_page() -> None:
 
             def refresh_data(query: str | None = None) -> list[dict]:
                 nonlocal reports, trends, total_report_count, calibration
-                page_payload = fetch_filtered_analysis_history_page(
-                    project_id=active_project_id,
-                    search=query,
-                    page=page_state["page"],
-                    page_size=page_state["page_size"],
+                page_payload = (
+                    _empty_history_page()
+                    if authorization_error is not None
+                    else fetch_filtered_analysis_history_page(
+                        project_id=active_project_id,
+                        search=query,
+                        page=page_state["page"],
+                        page_size=page_state["page_size"],
+                    )
                 )
                 reports = page_payload["items"]
                 total_report_count = page_payload["total_count"]
-                trends = fetch_risk_trends(project_id=active_project_id)
-                calibration = fetch_calibration_dashboard_seed(
-                    project_id=active_project_id
+                trends = (
+                    _empty_risk_trends()
+                    if authorization_error is not None
+                    else fetch_risk_trends(project_id=active_project_id)
+                )
+                calibration = (
+                    _empty_calibration_dashboard_seed()
+                    if authorization_error is not None
+                    else fetch_calibration_dashboard_seed(project_id=active_project_id)
                 )
                 max_page = max(
                     1, (total_report_count - 1) // page_state["page_size"] + 1
@@ -486,13 +544,17 @@ def build_history_detail_page(report_id: int, *, show_comparison: bool = False) 
 
     @ui.refreshable
     def render_history_detail_content() -> None:
-        active_project = resolve_history_active_project()
+        active_project, authorization_error = resolve_history_project_context()
         active_project_id = active_project.id if active_project is not None else None
-        report = fetch_analysis_report(report_id, project_id=active_project_id)
+        report = (
+            None
+            if authorization_error is not None
+            else fetch_analysis_report(report_id, project_id=active_project_id)
+        )
         comparison = (
-            fetch_report_comparison(report_id, project_id=active_project_id)
-            if show_comparison
-            else None
+            None
+            if authorization_error is not None or not show_comparison
+            else fetch_report_comparison(report_id, project_id=active_project_id)
         )
 
         with ui.column().classes("dw-main-content dw-shell gap-5"):
@@ -500,8 +562,13 @@ def build_history_detail_page(report_id: int, *, show_comparison: bool = False) 
                 if report is None:
                     build_page_header(
                         eyebrow="History",
-                        title="Analysis report not found",
-                        subtitle="The requested report could not be loaded. It may have been deleted.",
+                        title=(
+                            "Project authorization unavailable"
+                            if authorization_error is not None
+                            else "Analysis report not found"
+                        ),
+                        subtitle=authorization_error
+                        or "The requested report could not be loaded. It may have been deleted.",
                         back_href="/history",
                         back_label="Back to History",
                     )
@@ -516,7 +583,8 @@ def build_history_detail_page(report_id: int, *, show_comparison: bool = False) 
             if report is None:
                 with ui.card().classes("w-full dw-panel shadow-none p-6"):
                     ui.label(
-                        "This report is unavailable. Return to history and choose another saved analysis."
+                        authorization_error
+                        or "This report is unavailable. Return to history and choose another saved analysis."
                     ).classes("text-sm dw-muted")
                 return
             with ui.card().classes("w-full dw-panel shadow-none p-4"):

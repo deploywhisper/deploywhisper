@@ -16,8 +16,11 @@ import models.tables as tables_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
 import ui.components.upload_panel as upload_panel_module
+import ui.project_authorization as project_authorization_module
 import ui.routes.dashboard as dashboard_module
 import ui.routes.history as history_module
+import ui.routes.settings as settings_module
+import ui.theme as theme_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
@@ -38,9 +41,12 @@ class DashboardShellTests(unittest.TestCase):
         reload(analysis_reports_repository_module)
         reload(project_service_module)
         reload(report_service_module)
+        reload(project_authorization_module)
+        reload(theme_module)
+        reload(history_module)
+        reload(settings_module)
         reload(upload_panel_module)
         reload(dashboard_module)
-        reload(history_module)
         reload(app_module)
         database_module.init_db()
         self.client = TestClient(app_module.create_app())
@@ -48,6 +54,8 @@ class DashboardShellTests(unittest.TestCase):
     def tearDown(self) -> None:
         database_module.engine.dispose()
         os.environ.pop("DATABASE_URL", None)
+        os.environ.pop("DEPLOYWHISPER_PROJECT_ROLE", None)
+        os.environ.pop("DEPLOYWHISPER_PROJECT_KEYS", None)
         self.tempdir.cleanup()
 
     def test_root_page_contains_deploywhisper_shell_text(self) -> None:
@@ -113,6 +121,130 @@ class DashboardShellTests(unittest.TestCase):
             "Project-scoped history for Payments (payments).",
             history_response.text,
         )
+
+    def test_ui_pages_ignore_saved_active_project_when_actor_scope_is_invalid(
+        self,
+    ) -> None:
+        platform = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        project_service_module.set_active_project(platform.id)
+        platform_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="platform-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=91,
+                severity="critical",
+                recommendation="no-go",
+                top_risk="Platform-only risk.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="NO-GO: platform-only risk.",
+                explanation="Platform-only risk.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=platform.id,
+            audit_context={"source_interface": "ui"},
+        )
+        report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="unassigned-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=15,
+                severity="low",
+                recommendation="go",
+                top_risk="Unassigned risk.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: unassigned risk.",
+                explanation="Unassigned risk.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            audit_context={"source_interface": "ui"},
+        )
+        os.environ["DEPLOYWHISPER_PROJECT_ROLE"] = "read-only"
+
+        dashboard_response = self.client.get("/")
+        project_service_module.set_active_project(platform.id)
+        history_response = self.client.get("/history")
+        project_service_module.set_active_project(platform.id)
+        history_detail_response = self.client.get(f"/history/{platform_report['id']}")
+        project_service_module.set_active_project(platform.id)
+        history_compare_response = self.client.get(
+            f"/history/{platform_report['id']}/compare"
+        )
+        project_service_module.set_active_project(platform.id)
+        settings_response = self.client.get("/settings")
+
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertEqual(history_response.status_code, 200)
+        self.assertEqual(history_detail_response.status_code, 200)
+        self.assertEqual(history_compare_response.status_code, 200)
+        self.assertEqual(settings_response.status_code, 200)
+        self.assertIn(
+            "Caller role requires an explicit project scope.",
+            dashboard_response.text,
+        )
+        self.assertNotIn("Last scan: unassigned-plan.json", dashboard_response.text)
+        self.assertNotIn("Last scan: platform-plan.json", dashboard_response.text)
+        self.assertIn(
+            "Caller role requires an explicit project scope.",
+            history_response.text,
+        )
+        self.assertNotIn("unassigned-plan.json", history_response.text)
+        self.assertNotIn("platform-plan.json", history_response.text)
+        self.assertNotIn("Project-scoped history for Platform", history_response.text)
+        self.assertIn(
+            "Project authorization unavailable",
+            history_detail_response.text,
+        )
+        self.assertIn(
+            "Project authorization unavailable",
+            history_compare_response.text,
+        )
+        self.assertNotIn("Platform-only risk.", history_detail_response.text)
+        self.assertNotIn("platform-plan.json", history_detail_response.text)
+        self.assertNotIn("Platform-only risk.", history_compare_response.text)
+        self.assertNotIn("platform-plan.json", history_compare_response.text)
+        self.assertIn(
+            "Caller role requires an explicit project scope.",
+            settings_response.text,
+        )
+        self.assertNotIn(
+            "Active project: Platform (platform)",
+            settings_response.text,
+        )
+        self.assertNotIn("Active file:", settings_response.text)
+        self.assertTrue(project_service_module.has_active_project_selection())
 
     def test_dashboard_shows_persisted_result_provenance_when_active_report_exists(
         self,

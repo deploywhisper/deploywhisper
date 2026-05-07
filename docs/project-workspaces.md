@@ -51,10 +51,10 @@ DeployWhisper now scopes analyses and topology context to lightweight project/wo
 - New API and CLI analysis submissions without a project reference fail fast with `missing_project_scope` instead of silently falling back to `unassigned`.
 - Authorization failures return `project_permission_denied`, `project_scope_forbidden`, or `invalid_project_role` with a generic message that does not include the denied project key.
 - API project lists are filtered to the caller's allowed project keys when the lightweight actor scope is present, so unrelated project records are not returned.
-- Analysis submission requires `analysis.submit`, report reads require `report.read`, topology status reads require `topology.read`, topology context changes require `topology.manage`, and deployment outcome reads/writes require `outcome.read` / `outcome.manage` when a lightweight actor role is supplied.
+- Analysis submission requires `analysis.submit`, report reads require `report.read`, report share configuration requires `report.share.manage`, topology status reads require `topology.read`, topology context changes require `topology.manage`, and deployment outcome reads/writes require `outcome.read` / `outcome.manage` when a lightweight actor role is supplied.
 - Non-admin lightweight roles must include at least one allowed project key through the actor header or environment variable.
 - Conflicting `project_key` and `project_id` inputs are rejected.
-- In the current local/admin phase, omitted actor headers or CLI actor environment variables mean local admin behavior. Full identity provider integration remains deferred.
+- In the current local/admin phase, omitted actor headers or CLI actor environment variables mean local admin behavior. Shared self-hosted installs must put DeployWhisper behind a trusted identity layer, proxy, or middleware that strips caller-supplied project actor headers and injects the verified role/scope before exposing project-scoped APIs. Full identity provider integration remains deferred.
 - Repository-derived project keys include the owner segment when available to avoid collisions between unrelated repositories with the same leaf name.
 - Topology import stores normalized graph metadata only. Raw source artifacts are not persisted, and unsupported resources degrade to explicit warnings instead of aborting the whole import.
 - Drift cadence is persisted through the settings UI, and scheduled drift checks warn when more than 10% of mapped resources changed since the last import.

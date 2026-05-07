@@ -134,6 +134,27 @@ def _should_mask_project_reference_error(
     )
 
 
+def _reject_unscoped_workspace_id(
+    *,
+    analysis_id: int | None,
+    project_id: int | None,
+    project_key: str | None,
+    workspace_id: int | None,
+) -> None:
+    if (
+        workspace_id is None
+        or analysis_id is not None
+        or project_id is not None
+        or project_key is not None
+    ):
+        return
+    raise ApiError(
+        status_code=400,
+        code="missing_project_scope",
+        message="Project scope is required when resolving workspace_id.",
+    )
+
+
 def _require_deployment_project_permission(
     *,
     authorization: dict[str, object],
@@ -221,6 +242,22 @@ def _is_restricted_project_actor(authorization: dict[str, object]) -> bool:
     )
 
 
+def _should_mask_scope_reference_error(
+    *,
+    authorization: dict[str, object],
+    exc: ValueError,
+) -> bool:
+    return _is_restricted_project_actor(authorization) and getattr(
+        exc, "code", None
+    ) in {
+        "analysis_not_found",
+        "conflicting_project_reference",
+        "project_not_found",
+        "workspace_not_found",
+        "conflicting_workspace_reference",
+    }
+
+
 @router.post(
     "/outcomes",
     response_model=DeploymentOutcomeResponse,
@@ -266,9 +303,10 @@ def create_deployment_outcome_route(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
-        if _is_restricted_project_actor(authorization) and getattr(
-            exc, "code", None
-        ) in {"analysis_not_found", "conflicting_project_reference"}:
+        if _should_mask_scope_reference_error(
+            authorization=authorization,
+            exc=exc,
+        ):
             raise _project_scope_forbidden_error() from exc
         if _should_mask_project_reference_error(
             authorization=authorization,
@@ -304,6 +342,12 @@ def get_deployment_outcomes(
     authorization: dict[str, object] = Depends(_authorization_context),
 ) -> DeploymentOutcomeListResponse:
     try:
+        _reject_unscoped_workspace_id(
+            analysis_id=analysis_id,
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+        )
         if analysis_id is not None:
             _require_deployment_analysis_permission(
                 authorization=authorization,
@@ -334,9 +378,10 @@ def get_deployment_outcomes(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
-        if _is_restricted_project_actor(authorization) and getattr(
-            exc, "code", None
-        ) in {"analysis_not_found", "conflicting_project_reference"}:
+        if _should_mask_scope_reference_error(
+            authorization=authorization,
+            exc=exc,
+        ):
             raise _project_scope_forbidden_error() from exc
         if _should_mask_project_reference_error(
             authorization=authorization,

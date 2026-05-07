@@ -1042,6 +1042,207 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "project_permission_denied")
         self.assertNotIn("payments", payload["error"]["message"])
 
+    def test_outcome_record_command_masks_missing_analysis_for_scoped_actor(
+        self,
+    ) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "outcome",
+                    "record",
+                    "--analysis-id",
+                    "999",
+                    "--outcome",
+                    "success",
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "maintainer",
+                    "DEPLOYWHISPER_PROJECT_KEYS": "payments",
+                },
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
+
+    def test_outcome_record_command_masks_conflicting_project_for_scoped_actor(
+        self,
+    ) -> None:
+        allowed = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        forbidden = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        persisted = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.tf",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Outcome capture authorization test report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: outcome capture authorization test report.",
+                explanation="Outcome capture authorization test report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=allowed.id,
+            audit_context={"source_interface": "cli"},
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "outcome",
+                    "record",
+                    "--analysis-id",
+                    str(persisted["id"]),
+                    "--project-id",
+                    str(forbidden.id),
+                    "--outcome",
+                    "success",
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "maintainer",
+                    "DEPLOYWHISPER_PROJECT_KEYS": allowed.project_key,
+                },
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
+
+    def test_outcome_record_command_masks_foreign_workspace_for_scoped_actor(
+        self,
+    ) -> None:
+        allowed = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        forbidden = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        workspace = project_service_module.create_workspace(
+            project_key=forbidden.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+        persisted = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments.tf",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Outcome capture authorization test report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: outcome capture authorization test report.",
+                explanation="Outcome capture authorization test report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=allowed.id,
+            audit_context={"source_interface": "cli"},
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "outcome",
+                    "record",
+                    "--analysis-id",
+                    str(persisted["id"]),
+                    "--workspace-id",
+                    str(workspace.id),
+                    "--outcome",
+                    "success",
+                ],
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "DEPLOYWHISPER_PROJECT_ROLE": "maintainer",
+                    "DEPLOYWHISPER_PROJECT_KEYS": allowed.project_key,
+                },
+                clear=False,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "project_scope_forbidden")
+
     def test_analyze_command_reports_unsupported_inputs_with_structured_error(
         self,
     ) -> None:
@@ -1477,6 +1678,49 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["import"]["diff"]["added_services"],
             ["api"],
         )
+
+    def test_topology_import_command_requires_project_scope_for_workspace_id(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        workspace = project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+        topology_path = Path(self.tempdir.name) / "topology.json"
+        topology_path.write_text(json.dumps({"services": []}), encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "topology",
+                    "import",
+                    "--from",
+                    "custom",
+                    "--source",
+                    str(topology_path),
+                    "--workspace-id",
+                    str(workspace.id),
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "missing_project_scope")
 
     def test_topology_import_command_returns_authorization_error_for_read_only(
         self,

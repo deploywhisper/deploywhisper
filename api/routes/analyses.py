@@ -113,6 +113,22 @@ def _should_mask_project_reference_error(
     )
 
 
+def _should_mask_scope_reference_error(
+    *,
+    authorization: dict[str, object],
+    exc: ValueError,
+) -> bool:
+    return getattr(exc, "code", None) in {
+        "project_not_found",
+        "conflicting_project_reference",
+        "workspace_not_found",
+        "conflicting_workspace_reference",
+    } and has_restricted_project_scope(
+        role=authorization["role"],
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+
+
 def _require_api_project_permission(
     *,
     authorization: dict[str, object],
@@ -163,6 +179,37 @@ def _require_api_project_permission(
             project_key=project.project_key,
             allowed_project_keys=authorization["allowed_project_keys"],
         )
+
+
+def _require_report_share_permission(
+    *,
+    authorization: dict[str, object],
+    report_id: int,
+) -> None:
+    require_project_permission(
+        role=authorization["role"],
+        capability="report.share.manage",
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+    report = fetch_analysis_report(report_id)
+    if report is None:
+        if has_restricted_project_scope(
+            role=authorization["role"],
+            allowed_project_keys=authorization["allowed_project_keys"],
+        ):
+            raise _project_scope_forbidden_error()
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    project = report.get("project") or {}
+    require_project_permission(
+        role=authorization["role"],
+        capability="report.share.manage",
+        project_key=project.get("project_key"),
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
 
 
 def _reject_unscoped_workspace_id(
@@ -293,6 +340,9 @@ def list_analyses(
             authorization=authorization,
             project_id=project_id,
             exc=exc,
+        ) or _should_mask_scope_reference_error(
+            authorization=authorization,
+            exc=exc,
         ):
             raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
@@ -379,6 +429,9 @@ async def create_analysis(
                 authorization=authorization,
                 project_id=project_id,
                 exc=exc,
+            ) or _should_mask_scope_reference_error(
+                authorization=authorization,
+                exc=exc,
             ):
                 raise _project_scope_forbidden_error() from exc
             raise
@@ -394,6 +447,9 @@ async def create_analysis(
         if _should_mask_project_reference_error(
             authorization=authorization,
             project_id=project_id,
+            exc=exc,
+        ) or _should_mask_scope_reference_error(
+            authorization=authorization,
             exc=exc,
         ):
             raise _project_scope_forbidden_error() from exc
@@ -494,6 +550,9 @@ def get_analysis(
             authorization=authorization,
             project_id=project_id,
             exc=exc,
+        ) or _should_mask_scope_reference_error(
+            authorization=authorization,
+            exc=exc,
         ):
             raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
@@ -526,7 +585,15 @@ def configure_analysis_share(
     report_id: int,
     payload: AnalysisShareConfigRequest,
     _: None = Depends(require_share_management_token),
+    authorization: dict[str, object] = Depends(_authorization_context),
 ) -> AnalysisShareConfigResponse:
+    try:
+        _require_report_share_permission(
+            authorization=authorization,
+            report_id=report_id,
+        )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
     share_config = configure_report_share(
         report_id,
         password=payload.password,
