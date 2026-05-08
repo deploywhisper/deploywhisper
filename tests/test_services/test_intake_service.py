@@ -10,6 +10,8 @@ from services.intake_service import (
     is_sensitive_file,
     uniquify_artifact_names,
 )
+from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
+from services.submission_manifest import build_submission_manifest
 
 
 class IntakeServiceTests(unittest.TestCase):
@@ -103,6 +105,180 @@ Outputs:
         self.assertEqual(pending.items[0].name, "plan.json")
         self.assertEqual(pending.items[1].name, "plan#2.json")
         self.assertTrue(all(item.status == "ready" for item in pending.items))
+
+    def test_submission_manifest_records_final_artifact_outcomes(self) -> None:
+        files = [
+            ("plan.json", b'{"resource_changes": []}'),
+            ("broken.tf", b"resource {"),
+            (".env", b"SECRET=1"),
+            ("notes.txt", b"hello"),
+        ]
+        pending = build_pending_analysis(files)
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.logs",
+                            action="modify",
+                            summary="Terraform resource changed.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="broken.tf",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="broken.tf",
+                        tool="terraform",
+                        message="Unexpected token",
+                    ),
+                ),
+                ParsedFileResult(
+                    file_name="notes.txt",
+                    tool="unsupported",
+                    status="skipped",
+                    issue=ParseIssue(
+                        file_name="notes.txt",
+                        tool="unsupported",
+                        message="Unsupported or unrecognized file excluded from parsing.",
+                    ),
+                ),
+            ]
+        )
+
+        manifest = build_submission_manifest(
+            files,
+            pending_analysis=pending,
+            parse_batch=parse_batch,
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "api_request",
+                "trigger_id": "run-123",
+            },
+        )
+
+        self.assertEqual(manifest.submitted_artifact_count, 4)
+        self.assertEqual(manifest.accepted_artifact_count, 2)
+        self.assertEqual(manifest.analyzed_artifact_count, 1)
+        self.assertEqual(manifest.excluded_artifact_count, 1)
+        self.assertEqual(manifest.sensitive_artifact_count, 1)
+        self.assertEqual(manifest.failed_artifact_count, 1)
+        self.assertEqual(manifest.partial_artifact_count, 3)
+        self.assertTrue(manifest.partial_analysis)
+        by_name = {item.name: item for item in manifest.items}
+        self.assertEqual(by_name["plan.json"].status, "accepted")
+        self.assertEqual(
+            by_name["plan.json"].message,
+            "Terraform artifact parsed successfully and included in analysis.",
+        )
+        self.assertEqual(by_name["broken.tf"].status, "failed")
+        self.assertTrue(by_name["broken.tf"].partial)
+        self.assertEqual(
+            by_name["broken.tf"].message,
+            "Terraform artifact failed parser validation; analysis coverage is partial.",
+        )
+        self.assertNotIn("Unexpected token", by_name["broken.tf"].message)
+        self.assertEqual(by_name[".env"].status, "sensitive")
+        self.assertTrue(by_name[".env"].partial)
+        self.assertEqual(by_name[".env"].redaction_status, "sensitive_blocked")
+        self.assertEqual(by_name["notes.txt"].status, "excluded")
+        self.assertTrue(by_name["notes.txt"].partial)
+        self.assertEqual(
+            by_name["notes.txt"].message,
+            "Unsupported file type or unsupported content fingerprint.",
+        )
+        self.assertEqual(
+            by_name["plan.json"].provenance["source_interface"],
+            "api",
+        )
+        self.assertFalse(manifest.redaction["filenames_redacted"])
+
+    def test_submission_manifest_marks_non_analyzed_submissions_partial(self) -> None:
+        files = [
+            ("plan.json", b'{"resource_changes": []}'),
+            (".env", b"SECRET=1"),
+            ("notes.txt", b"hello"),
+        ]
+        pending = build_pending_analysis(files)
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.logs",
+                            action="modify",
+                            summary="Terraform resource changed.",
+                        )
+                    ],
+                )
+            ]
+        )
+
+        manifest = build_submission_manifest(
+            files,
+            pending_analysis=pending,
+            parse_batch=parse_batch,
+        )
+
+        by_name = {item.name: item for item in manifest.items}
+        self.assertEqual(manifest.partial_artifact_count, 2)
+        self.assertTrue(manifest.partial_analysis)
+        self.assertFalse(by_name["plan.json"].partial)
+        self.assertTrue(by_name[".env"].partial)
+        self.assertTrue(by_name["notes.txt"].partial)
+
+    def test_submission_manifest_trusts_parse_batch_for_parsed_artifacts(
+        self,
+    ) -> None:
+        files = [
+            (
+                "plan.json",
+                b'resource "aws_security_group" "main" {\n  name = "web"\n}\n',
+            )
+        ]
+        pending = build_pending_analysis(files)
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+
+        manifest = build_submission_manifest(
+            files,
+            pending_analysis=pending,
+            parse_batch=parse_batch,
+        )
+
+        self.assertEqual(pending.items[0].status, "unsupported")
+        self.assertEqual(manifest.accepted_artifact_count, 1)
+        self.assertEqual(manifest.excluded_artifact_count, 0)
+        self.assertEqual(manifest.items[0].status, "accepted")
+        self.assertFalse(manifest.items[0].partial)
 
 
 if __name__ == "__main__":

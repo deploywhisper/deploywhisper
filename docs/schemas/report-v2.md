@@ -56,6 +56,93 @@ This schema version applies to:
     ]
   },
   "parse_summary": "1 parsed, 0 failed, 0 skipped, 1 normalized changes",
+  "submission_manifest": {
+    "submitted_artifact_count": 2,
+    "accepted_artifact_count": 1,
+    "analyzed_artifact_count": 1,
+    "excluded_artifact_count": 0,
+    "sensitive_artifact_count": 1,
+    "failed_artifact_count": 0,
+    "partial_artifact_count": 1,
+    "partial_analysis": true,
+    "provenance": {
+      "source_interface": "api",
+      "trigger_type": "api_request",
+      "trigger_id": "run-123",
+      "project_id": 7,
+      "project_key": "payments",
+      "workspace_id": 12,
+      "workspace_key": "prod"
+    },
+    "redaction": {
+      "filenames_redacted": false,
+      "sensitive_content_excluded": true
+    },
+    "items": [
+      {
+        "name": "plan.json",
+        "tool": "terraform",
+        "status": "accepted",
+        "intake_status": "ready",
+        "parse_status": "parsed",
+        "message": "Terraform artifact parsed successfully and included in analysis.",
+        "partial": false,
+        "redaction_status": "none",
+        "provenance": {
+          "source_interface": "api",
+          "trigger_type": "api_request",
+          "trigger_id": "run-123",
+          "project_id": 7,
+          "project_key": "payments",
+          "workspace_id": 12,
+          "workspace_key": "prod",
+          "submitted_index": 1,
+          "submitted_name": "plan.json"
+        }
+      },
+      {
+        "name": ".env",
+        "tool": "unsupported",
+        "status": "sensitive",
+        "intake_status": "sensitive",
+        "parse_status": null,
+        "message": "Sensitive file detected and excluded from unsafe downstream handling.",
+        "partial": true,
+        "redaction_status": "sensitive_blocked",
+        "provenance": {
+          "source_interface": "api",
+          "trigger_type": "api_request",
+          "trigger_id": "run-123",
+          "project_id": 7,
+          "project_key": "payments",
+          "workspace_id": 12,
+          "workspace_key": "prod",
+          "submitted_index": 2,
+          "submitted_name": ".env"
+        }
+      }
+    ]
+  },
+  "submission_manifest_fallback": [
+    {
+      "name": "plan.json",
+      "tool": "terraform",
+      "status": "accepted",
+      "intake_status": "ready",
+      "parse_status": "parsed",
+      "partial": false,
+      "redaction_status": "none"
+    },
+    {
+      "name": ".env",
+      "tool": "unsupported",
+      "status": "sensitive",
+      "intake_status": "sensitive",
+      "parse_status": null,
+      "partial": true,
+      "redaction_status": "sensitive_blocked"
+    }
+  ],
   "findings": [],
   "evidence_items": [],
   "contributors": [],
@@ -78,3 +165,5 @@ This schema version applies to:
 - context completeness and traceable contributors
 - persisted rollback plans with time estimates and complexity rationale
 - degraded narrative visibility fields
+- submission manifest payloads that record accepted, excluded, failed, partial, sensitive, provenance, and redaction status
+- durable submission manifest fallback identity/status metadata for malformed-manifest recovery

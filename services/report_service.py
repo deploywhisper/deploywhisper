@@ -12,9 +12,12 @@ from datetime import UTC, datetime
 from collections import Counter, defaultdict
 from typing import Any
 
+from pydantic import ValidationError
+
 from analysis.blast_radius import BlastRadiusResult
 from analysis.rollback_planner import RollbackPlan
 from analysis.risk_scorer import RiskAssessment
+from api.schemas import IntakeItem, PendingAnalysis
 from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 
@@ -29,7 +32,7 @@ from models.repositories.analysis_reports import (
     list_analysis_reports,
     update_analysis_report_share_settings,
 )
-from parsers.base import ParseBatchResult
+from parsers.base import ParseBatchResult, ParsedFileResult
 from services.artifact_snapshot_service import (
     delete_report_artifacts,
     save_report_artifacts,
@@ -42,9 +45,38 @@ from services.project_service import (
 )
 from services.settings_service import get_dashboard_result_display_duration_seconds
 from services.settings_service import resolve_provider_runtime
+from services.submission_manifest import (
+    SubmissionManifest,
+    build_submission_manifest,
+    normalize_manifest_redaction_status,
+    normalize_submission_manifest_payload,
+)
 
 LEGACY_REPORT_SCHEMA_VERSION = "v1"
 REPORT_SCHEMA_VERSION = "v2"
+_SUBMISSION_MANIFEST_INFERRED_WARNING = (
+    "Submission manifest metadata was inferred from available analysis artifacts "
+    "because submitted artifact context was unavailable; excluded or sensitive "
+    "submissions may be missing."
+)
+_AMBIGUOUS_ARTIFACT_REPLACEMENT = "Artifact file"
+_EXTENSIONLESS_FILE_BASENAMES = {
+    "Brewfile",
+    "BUILD",
+    "Containerfile",
+    "Dockerfile",
+    "Earthfile",
+    "Gemfile",
+    "Jenkinsfile",
+    "Justfile",
+    "Makefile",
+    "Procfile",
+    "Rakefile",
+    "Taskfile",
+    "Tiltfile",
+    "Vagrantfile",
+    "WORKSPACE",
+}
 _SEVERITY_PREFIX_PATTERN = re.compile(
     r"^\s*(critical|high|medium|low|info|warning|caution)\s*[:\-]\s*",
     flags=re.IGNORECASE,
@@ -124,9 +156,20 @@ def _redaction_pairs(original_names: list[str]) -> list[tuple[str, str]]:
         replacement = f"Artifact {index}"
         pairs.append((original_name, replacement))
         basename = str(original_name).split("/")[-1]
-        if basename and basename_counts[basename] == 1:
-            pairs.append((basename, replacement))
-    return pairs
+        if _is_redactable_basename(basename):
+            basename_replacement = (
+                replacement
+                if basename_counts[basename] == 1
+                else _AMBIGUOUS_ARTIFACT_REPLACEMENT
+            )
+            basename_pair = (basename, basename_replacement)
+            if basename_pair not in pairs:
+                pairs.append(basename_pair)
+    return sorted(pairs, key=lambda pair: len(pair[0]), reverse=True)
+
+
+def _is_redactable_basename(basename: str) -> bool:
+    return "." in basename or basename in _EXTENSIONLESS_FILE_BASENAMES
 
 
 def _redact_text_value(value: Any, pairs: list[tuple[str, str]]) -> Any:
@@ -139,7 +182,16 @@ def _redact_text_value(value: Any, pairs: list[tuple[str, str]]) -> Any:
 
 
 def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
-    original_names = list(report.get("audit", {}).get("files_analyzed") or [])
+    audit_names = list(report.get("audit", {}).get("files_analyzed") or [])
+    original_names = list(audit_names)
+    for item in (report.get("submission_manifest") or {}).get("items") or []:
+        item_name = str(item.get("name") or "")
+        if item_name and item_name not in original_names:
+            original_names.append(item_name)
+    for item in report.get("submission_manifest_fallback") or []:
+        item_name = str(item.get("name") or "")
+        if item_name and item_name not in original_names:
+            original_names.append(item_name)
     if not original_names:
         return report
     redaction_map = {
@@ -161,8 +213,17 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
         ],
         "audit": {
             **dict(report.get("audit") or {}),
-            "files_analyzed": [redaction_map[name] for name in original_names],
+            "files_analyzed": [redaction_map[name] for name in audit_names],
         },
+        "submission_manifest": _redact_submission_manifest_file_names(
+            dict(report.get("submission_manifest") or {}),
+            redaction_map,
+            pairs,
+        ),
+        "submission_manifest_fallback": _redact_submission_manifest_fallback_file_names(
+            report.get("submission_manifest_fallback") or [],
+            redaction_map,
+        ),
         "findings": [
             {
                 **finding,
@@ -200,6 +261,65 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
     return redacted
 
 
+def _redact_submission_manifest_file_names(
+    manifest: dict[str, Any],
+    redaction_map: dict[str, str],
+    pairs: list[tuple[str, str]],
+) -> dict[str, Any]:
+    if not manifest:
+        return manifest
+    redacted_items = []
+    for item in manifest.get("items") or []:
+        item_payload = dict(item)
+        original_name = str(item_payload.get("name") or "")
+        replacement = redaction_map.get(original_name, original_name)
+        provenance = dict(item_payload.get("provenance") or {})
+        provenance = {
+            "submitted_index": provenance.get("submitted_index"),
+            "submitted_name": replacement,
+        }
+        item_payload["name"] = replacement
+        item_payload["message"] = _redact_text_value(item_payload.get("message"), pairs)
+        item_payload["provenance"] = provenance
+        if (
+            normalize_manifest_redaction_status(item_payload.get("redaction_status"))
+            != "sensitive_blocked"
+        ):
+            item_payload["redaction_status"] = "redacted"
+        else:
+            item_payload["redaction_status"] = "sensitive_blocked"
+        redacted_items.append(item_payload)
+    return {
+        **manifest,
+        "provenance": {},
+        "items": redacted_items,
+        "redaction": {
+            **dict(manifest.get("redaction") or {}),
+            "filenames_redacted": True,
+        },
+    }
+
+
+def _redact_submission_manifest_fallback_file_names(
+    fallback_items: list[dict[str, Any]],
+    redaction_map: dict[str, str],
+) -> list[dict[str, Any]]:
+    redacted_items: list[dict[str, Any]] = []
+    for item in fallback_items:
+        item_payload = dict(item)
+        original_name = str(item_payload.get("name") or "")
+        item_payload["name"] = redaction_map.get(original_name, original_name)
+        if (
+            normalize_manifest_redaction_status(item_payload.get("redaction_status"))
+            != "sensitive_blocked"
+        ):
+            item_payload["redaction_status"] = "redacted"
+        else:
+            item_payload["redaction_status"] = "sensitive_blocked"
+        redacted_items.append(item_payload)
+    return redacted_items
+
+
 def _run_with_schema_retry(operation):
     """Execute one report operation without runtime schema mutation."""
     return operation()
@@ -222,7 +342,11 @@ def _build_audit_metadata(
     runtime = resolve_provider_runtime()
     context = audit_context or {}
     return {
-        "files_analyzed": [file_result.file_name for file_result in parse_batch.files],
+        "files_analyzed": [
+            file_result.file_name
+            for file_result in parse_batch.files
+            if file_result.status == "parsed"
+        ],
         "llm_provider": runtime["provider"],
         "llm_model": runtime["model"],
         "llm_local_mode": runtime["local_mode"],
@@ -261,17 +385,116 @@ def _default_rollback_plan_payload() -> dict[str, Any]:
     }
 
 
+def _pending_analysis_from_parse_batch(
+    parse_batch: ParseBatchResult,
+) -> PendingAnalysis:
+    def intake_item_for(file_result: ParsedFileResult) -> IntakeItem:
+        if file_result.status == "skipped":
+            return IntakeItem(
+                name=file_result.file_name,
+                tool=file_result.tool,
+                status="unsupported",
+                message=(
+                    file_result.issue.message
+                    if file_result.issue is not None
+                    else "Artifact excluded from parser analysis."
+                ),
+            )
+        return IntakeItem(
+            name=file_result.file_name,
+            tool=file_result.tool,
+            status="ready",
+            message=f"{file_result.tool.title()} artifact accepted for analysis.",
+        )
+
+    return PendingAnalysis(
+        items=[intake_item_for(file_result) for file_result in parse_batch.files]
+    )
+
+
 def _artifact_signature(files_analyzed: list[str]) -> tuple[str, ...]:
     """Normalize analyzed-file identity for history diff grouping."""
     return tuple(sorted(str(name) for name in files_analyzed if str(name).strip()))
 
 
+def _report_artifact_names(report: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    for original_name in report.get("audit", {}).get("files_analyzed") or []:
+        if original_name not in names:
+            names.append(original_name)
+    for item in (report.get("submission_manifest") or {}).get("items") or []:
+        item_name = str(item.get("name") or "")
+        if item_name and item_name not in names:
+            names.append(item_name)
+    return names
+
+
+ComparisonArtifact = tuple[str, str, str, str, str, bool]
+
+
+def _comparison_artifact_signature(
+    report: dict[str, Any],
+) -> tuple[ComparisonArtifact, ...]:
+    manifest = report.get("submission_manifest", {})
+    if manifest is None:
+        return tuple()
+    manifest_items = (manifest or {}).get("items") or []
+    if manifest_items:
+        return tuple(
+            sorted(
+                (
+                    str(item.get("name") or ""),
+                    str(item.get("tool") or ""),
+                    str(item.get("status") or ""),
+                    str(item.get("intake_status") or ""),
+                    str(item.get("parse_status") or ""),
+                    bool(item.get("partial", False)),
+                )
+                for item in manifest_items
+                if str(item.get("name") or "").strip()
+            )
+        )
+    legacy_tool_by_artifact = _legacy_tool_by_artifact(report)
+    return tuple(
+        (
+            name,
+            legacy_tool_by_artifact.get(name, ""),
+            "accepted",
+            "ready",
+            "parsed",
+            False,
+        )
+        for name in _artifact_signature(
+            report.get("audit", {}).get("files_analyzed") or []
+        )
+    )
+
+
+def _legacy_tool_by_artifact(report: dict[str, Any]) -> dict[str, str]:
+    tools_by_artifact: dict[str, set[str]] = defaultdict(set)
+    for contributor in report.get("contributors") or []:
+        source_file = str(contributor.get("source_file") or "").strip()
+        tool = str(contributor.get("tool") or "").strip()
+        if source_file and tool:
+            tools_by_artifact[source_file].add(tool)
+    return {
+        source_file: next(iter(tools))
+        for source_file, tools in tools_by_artifact.items()
+        if len(tools) == 1
+    }
+
+
+def _comparison_signatures_match(
+    left: tuple[ComparisonArtifact, ...],
+    right: tuple[ComparisonArtifact, ...],
+) -> bool:
+    return left == right
+
+
 def _history_signature(
     report: dict[str, Any],
-) -> tuple[int, int, tuple[str, ...]] | None:
-    artifact_signature = _artifact_signature(
-        report.get("audit", {}).get("files_analyzed") or []
-    )
+) -> tuple[int, int, tuple[ComparisonArtifact, ...]] | None:
+    artifact_signature = _comparison_artifact_signature(report)
     if not artifact_signature:
         return None
     project_id = int(report.get("project", {}).get("id") or 0)
@@ -581,9 +804,7 @@ def _find_previous_comparable_report(
     current_report: dict[str, Any],
     candidate_reports: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    current_signature = _artifact_signature(
-        current_report.get("audit", {}).get("files_analyzed") or []
-    )
+    current_signature = _comparison_artifact_signature(current_report)
     if not current_signature:
         return None
     current_id = int(current_report["id"])
@@ -597,8 +818,9 @@ def _find_previous_comparable_report(
             and int(report.get("project", {}).get("id") or 0) == current_project_id
             and int((report.get("workspace") or {}).get("id") or 0)
             == current_workspace_id
-            and _artifact_signature(report.get("audit", {}).get("files_analyzed") or [])
-            == current_signature
+            and _comparison_signatures_match(
+                _comparison_artifact_signature(report), current_signature
+            )
         ),
         key=lambda report: int(report["id"]),
         reverse=True,
@@ -656,7 +878,7 @@ def _redact_report_comparison(
 ) -> dict[str, Any]:
     names: list[str] = []
     for report in (current_report, previous_report):
-        for original_name in report.get("audit", {}).get("files_analyzed") or []:
+        for original_name in _report_artifact_names(report):
             if original_name not in names:
                 names.append(original_name)
     pairs = _redaction_pairs(names)
@@ -763,16 +985,21 @@ def _attach_previous_scan_diffs(
     all_reports: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Annotate history rows with diff metadata for the previous scan of the same files."""
-    latest_by_signature: dict[tuple[int, tuple[str, ...]], dict[str, Any]] = {}
     previous_by_id: dict[int, dict[str, Any]] = {}
+    latest_by_scope: dict[
+        tuple[int, int],
+        dict[tuple[ComparisonArtifact, ...], dict[str, Any]],
+    ] = defaultdict(dict)
 
-    for report in reversed(all_reports):
+    for report in sorted(all_reports, key=lambda item: int(item["id"])):
         signature = _history_signature(report)
         if signature:
-            previous = latest_by_signature.get(signature)
+            scope = (signature[0], signature[1])
+            scoped_reports = latest_by_scope[scope]
+            previous = scoped_reports.get(signature[2])
             if previous is not None:
                 previous_by_id[int(report["id"])] = previous
-            latest_by_signature[signature] = report
+            scoped_reports[signature[2]] = report
 
     annotated: list[dict[str, Any]] = []
     for report in reports:
@@ -903,6 +1130,87 @@ def can_read_report_schema(
         return False
 
 
+def _load_submission_manifest_payload(
+    raw_value: str | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        decoded = json.loads(raw_value or "{}")
+    except json.JSONDecodeError:
+        return (
+            None,
+            "Submission manifest metadata was unavailable because persisted JSON was malformed.",
+        )
+    if not isinstance(decoded, dict):
+        return (
+            None,
+            "Submission manifest metadata was unavailable because persisted JSON had an unexpected shape.",
+        )
+    try:
+        manifest = SubmissionManifest.model_validate(decoded)
+    except ValidationError:
+        return (
+            None,
+            "Submission manifest metadata was unavailable because persisted JSON had an unexpected shape.",
+        )
+    return normalize_submission_manifest_payload(manifest.model_dump(mode="json")), None
+
+
+def _submission_manifest_fallback_items(
+    manifest: SubmissionManifest,
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": item.name,
+            "tool": item.tool,
+            "status": item.status,
+            "intake_status": item.intake_status,
+            "parse_status": item.parse_status,
+            "partial": item.partial,
+            "redaction_status": normalize_manifest_redaction_status(
+                item.redaction_status
+            ),
+        }
+        for item in manifest.items
+    ]
+
+
+def _load_submission_manifest_fallback_payload(
+    raw_value: str | None,
+) -> list[dict[str, Any]]:
+    try:
+        decoded = json.loads(raw_value or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(decoded, list):
+        return []
+    fallback_items: list[dict[str, Any]] = []
+    for item in decoded:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        status = str(item.get("status") or "").strip()
+        if not name or not status:
+            continue
+        fallback_items.append(
+            {
+                "name": name,
+                "tool": str(item.get("tool") or "unknown"),
+                "status": status,
+                "intake_status": str(item.get("intake_status") or "unknown"),
+                "parse_status": (
+                    str(item["parse_status"])
+                    if item.get("parse_status") is not None
+                    else None
+                ),
+                "partial": bool(item.get("partial", False)),
+                "redaction_status": normalize_manifest_redaction_status(
+                    item.get("redaction_status")
+                ),
+            }
+        )
+    return fallback_items
+
+
 def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     created_at = report.created_at
     if created_at.tzinfo is None:
@@ -919,6 +1227,14 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "trigger_id": report.trigger_id,
     }
     warnings = json.loads(report.warnings_json or "[]")
+    submission_manifest, manifest_warning = _load_submission_manifest_payload(
+        getattr(report, "submission_manifest_json", None)
+    )
+    submission_manifest_fallback = _load_submission_manifest_fallback_payload(
+        getattr(report, "submission_manifest_fallback_json", None)
+    )
+    if manifest_warning is not None and manifest_warning not in warnings:
+        warnings.append(manifest_warning)
     evidence_items: list[dict[str, Any]] = []
     if include_evidence:
         seen_evidence_ids: set[str] = set()
@@ -1005,6 +1321,8 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
             or _default_rollback_plan_payload()
         ),
         "parse_summary": report.parse_summary,
+        "submission_manifest": submission_manifest,
+        "submission_manifest_fallback": submission_manifest_fallback,
         "narrative_opening": report.narrative_opening,
         "narrative_explanation": report.narrative_explanation,
         "narrative_available": narrative_available,
@@ -1061,6 +1379,7 @@ def persist_analysis_report(
     workspace_id: int | None = None,
     workspace_key: str | None = None,
     audit_context: dict[str, Any] | None = None,
+    submitted_artifacts: list[tuple[str, bytes | None]] | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
     assessment, findings, evidence_items = _scope_report_entities(
@@ -1069,7 +1388,6 @@ def persist_analysis_report(
         evidence_items,
     )
     audit = _build_audit_metadata(parse_batch, audit_context=audit_context)
-    combined_warnings = list(dict.fromkeys([*assessment.warnings, *narrative.warnings]))
     resolved_project_id, resolved_workspace_id = _resolve_report_scope(
         project_id=project_id,
         project_key=project_key,
@@ -1078,6 +1396,57 @@ def persist_analysis_report(
     )
     resolved_project = resolve_project_reference(
         project_id=resolved_project_id,
+    )
+    resolved_workspace = (
+        resolve_workspace_reference(
+            project_id=resolved_project.id,
+            workspace_id=resolved_workspace_id,
+        )
+        if resolved_workspace_id is not None
+        else None
+    )
+    fallback_snapshots = {
+        file_result.file_name: None for file_result in parse_batch.files
+    }
+    if submitted_artifacts is not None:
+        submission_files = list(submitted_artifacts)
+        pending_analysis = None
+        manifest_warnings: list[str] = []
+    elif artifact_snapshots is not None:
+        submission_files = list(artifact_snapshots.items())
+        pending_analysis = None
+        manifest_warnings = [_SUBMISSION_MANIFEST_INFERRED_WARNING]
+    else:
+        submission_files = list(fallback_snapshots.items())
+        pending_analysis = _pending_analysis_from_parse_batch(parse_batch)
+        manifest_warnings = [_SUBMISSION_MANIFEST_INFERRED_WARNING]
+    submission_manifest = build_submission_manifest(
+        submission_files,
+        pending_analysis=pending_analysis,
+        parse_batch=parse_batch,
+        audit_context={
+            **(audit_context or {}),
+            "project_id": resolved_project.id,
+            "project_key": resolved_project.project_key,
+            "workspace_id": resolved_workspace.id if resolved_workspace else None,
+            "workspace_key": (
+                resolved_workspace.workspace_key if resolved_workspace else None
+            ),
+        },
+    )
+    snapshot_allowed_names = {
+        item.name for item in submission_manifest.items if item.status == "accepted"
+    }
+    snapshot_source = (
+        artifact_snapshots if artifact_snapshots is not None else dict(submission_files)
+    )
+    safe_artifact_snapshots = {
+        name: raw_content
+        for name, raw_content in snapshot_source.items()
+        if name in snapshot_allowed_names
+    }
+    combined_warnings = list(
+        dict.fromkeys([*assessment.warnings, *narrative.warnings, *manifest_warnings])
     )
     dashboard_display_duration_seconds = None
     if (
@@ -1110,6 +1479,12 @@ def persist_analysis_report(
                     ]
                 ),
                 analyzed_files_json=json.dumps(audit["files_analyzed"]),
+                submission_manifest_json=json.dumps(
+                    submission_manifest.model_dump(mode="json")
+                ),
+                submission_manifest_fallback_json=json.dumps(
+                    _submission_manifest_fallback_items(submission_manifest)
+                ),
                 blast_radius_json=json.dumps(
                     blast_radius.model_dump(mode="json")
                     if blast_radius is not None
@@ -1142,7 +1517,7 @@ def persist_analysis_report(
                     for evidence_item in (evidence_items or [])
                 ],
             )
-            save_report_artifacts(report.id, artifact_snapshots)
+            save_report_artifacts(report.id, safe_artifact_snapshots)
             return _serialize_report(report, include_evidence=True)
 
     return _run_with_schema_retry(operation)

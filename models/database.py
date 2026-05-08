@@ -45,6 +45,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "014_add_project_workspace_records",
     "015_add_report_workspace_scope",
     "016_scope_learning_context_records",
+    "017_add_submission_manifest_payload",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -276,6 +277,24 @@ def _analysis_report_workspace_scope_complete(connection) -> bool:
     )
 
 
+def _analysis_report_submission_manifest_complete(connection) -> bool:
+    column_map = {
+        column["name"]: column
+        for column in inspect(connection).get_columns("analysis_reports")
+    }
+    required_columns = (
+        "submission_manifest_json",
+        "submission_manifest_fallback_json",
+    )
+    return all(
+        (column := column_map.get(column_name)) is not None
+        and column["type"]._type_affinity is String
+        and column.get("nullable") is False
+        and column.get("default") is None
+        for column_name in required_columns
+    )
+
+
 def _learning_context_scope_complete(connection) -> bool:
     inspector = inspect(connection)
     workspace_unique_columns = {
@@ -440,11 +459,36 @@ def _bootstrap_brownfield_revision() -> None:
             and scoped_learning_columns_present
             and _learning_context_scope_complete(connection)
         )
+        has_submission_manifest_payload = bool(
+            {
+                "submission_manifest_json",
+                "submission_manifest_fallback_json",
+            }
+            & report_columns
+        )
+        has_complete_submission_manifest_payload = (
+            has_submission_manifest_payload
+            and _analysis_report_submission_manifest_complete(connection)
+        )
         if scoped_learning_columns_present and not has_complete_learning_context_scope:
             raise RuntimeError(
                 "Detected a partial learning/context scope schema without a complete "
                 "migration history. Manual recovery is required."
             )
+        if has_submission_manifest_payload and not (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+        ):
+            raise RuntimeError(
+                "Detected a partial submission manifest schema without a complete "
+                "migration history. Manual recovery is required."
+            )
+        if (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+        ):
+            _write_alembic_revision(connection, "017_add_submission_manifest_payload")
+            return
         if has_complete_learning_context_scope:
             _write_alembic_revision(connection, "016_scope_learning_context_records")
             return

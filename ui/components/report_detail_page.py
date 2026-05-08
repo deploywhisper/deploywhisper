@@ -24,9 +24,48 @@ from ui.components.review_accessibility import decorate_review_section
 from ui.components.rollback_plan import render_rollback_plan
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
 from ui.formatters.datetime import format_history_timestamp
-from ui.formatters.narrative import extract_llm_notice
+from ui.formatters.narrative import (
+    extract_llm_notice,
+    extract_submission_manifest_notice,
+)
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
+
+
+def format_submission_manifest_summary(manifest: dict[str, Any]) -> str:
+    parts = [
+        f"{manifest.get('accepted_artifact_count', 0)} accepted",
+        f"{manifest.get('analyzed_artifact_count', 0)} analyzed",
+        f"{manifest.get('excluded_artifact_count', 0)} excluded",
+        f"{manifest.get('failed_artifact_count', 0)} failed",
+        f"{manifest.get('sensitive_artifact_count', 0)} sensitive",
+    ]
+    if manifest.get("partial_analysis"):
+        parts.append(f"{manifest.get('partial_artifact_count', 0)} partial")
+    return "Submission manifest: " + ", ".join(parts)
+
+
+def format_submission_manifest_partial_notice(manifest: dict[str, Any]) -> str | None:
+    if not manifest.get("partial_analysis"):
+        return None
+    partial_count = int(manifest.get("partial_artifact_count") or 0)
+    artifact_label = "artifact" if partial_count == 1 else "artifacts"
+    return (
+        f"Partial analysis: {partial_count} submitted {artifact_label} "
+        "reduced analysis coverage."
+    )
+
+
+def format_submission_manifest_fallback_summary(
+    fallback_items: list[dict[str, Any]],
+) -> str | None:
+    if not fallback_items:
+        return None
+    artifact_summaries = [
+        f"{item.get('name', 'artifact')} ({item.get('status', 'unknown')})"
+        for item in fallback_items
+    ]
+    return "Fallback submission artifacts: " + ", ".join(artifact_summaries)
 
 
 def _detail_stat(label: str, value: str, detail: str) -> None:
@@ -44,6 +83,7 @@ def _render_summary_and_advisory(report: dict[str, Any]) -> None:
         report.get("warnings", []),
         report.get("narrative_failure_notice"),
     )
+    manifest_notice = extract_submission_manifest_notice(report.get("warnings", []))
     with ui.card().classes("w-full dw-panel shadow-none p-5"):
         with ui.column().classes("gap-4"):
             with ui.row().classes("w-full gap-4 flex-wrap"):
@@ -74,6 +114,11 @@ def _render_summary_and_advisory(report: dict[str, Any]) -> None:
             if llm_notice:
                 with ui.card().classes("dw-panel-soft shadow-none"):
                     ui.label("LLM note: " + llm_notice).classes(
+                        "p-4 text-sm dw-warning-text leading-6"
+                    )
+            if manifest_notice:
+                with ui.card().classes("dw-panel-soft shadow-none"):
+                    ui.label("Report warning: " + manifest_notice).classes(
                         "p-4 text-sm dw-warning-text leading-6"
                     )
 
@@ -340,6 +385,35 @@ def _render_audit_metadata(report: dict[str, Any]) -> None:
                     ui.label(
                         "No analyzed files were persisted for this report."
                     ).classes("text-sm dw-muted")
+            manifest = report.get("submission_manifest") or {}
+            if manifest.get("items"):
+                with ui.column().classes("gap-2"):
+                    ui.label("Submission manifest").classes(
+                        "text-sm font-semibold dw-text"
+                    )
+                    ui.label(format_submission_manifest_summary(manifest)).classes(
+                        "text-sm dw-muted"
+                    )
+                    partial_notice = format_submission_manifest_partial_notice(manifest)
+                    if partial_notice:
+                        ui.label(partial_notice).classes(
+                            "text-sm dw-warning-text leading-5"
+                        )
+                    for item in manifest["items"]:
+                        partial_marker = " · PARTIAL" if item.get("partial") else ""
+                        ui.label(
+                            f"{item.get('name', 'artifact')} · "
+                            f"{str(item.get('status', 'unknown')).upper()} · "
+                            f"{item.get('redaction_status', 'none')}"
+                            f"{partial_marker}"
+                        ).classes("text-xs dw-muted break-all")
+            fallback_summary = format_submission_manifest_fallback_summary(
+                report.get("submission_manifest_fallback") or []
+            )
+            if fallback_summary and not manifest.get("items"):
+                ui.label(fallback_summary).classes(
+                    "text-sm dw-warning-text leading-5 break-all"
+                )
 
 
 def render_reviewer_feedback_panel(

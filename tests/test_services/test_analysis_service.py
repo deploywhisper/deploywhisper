@@ -48,6 +48,133 @@ class AnalysisServiceTests(unittest.TestCase):
             getattr(exc_info.exception, "code", ""), "invalid_project_reference"
         )
 
+    def test_build_analysis_artifacts_excludes_sensitive_raw_files_downstream(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        seen_raw_files: list[dict[str, bytes | None] | None] = []
+
+        def scoring_stub(*args, **kwargs):
+            seen_raw_files.append(kwargs.get("raw_files"))
+            return assessment
+
+        def narrative_stub(*args, **kwargs):
+            seen_raw_files.append(kwargs.get("raw_files"))
+            return NarrativeResult(
+                opening_sentence="CAUTION: review the security group update.",
+                explanation="The deployment should be reviewed.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            )
+
+        with (
+            patch("services.analysis_service.load_topology", return_value=({}, None)),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at=None),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates",
+                return_value=[],
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                side_effect=scoring_stub,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                side_effect=narrative_stub,
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            build_analysis_artifacts(
+                [
+                    (
+                        "plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.main"}]}',
+                    ),
+                    ("broken.tf", b"SECRET_TOKEN=should-not-leave-intake\nresource {"),
+                    (".env", b"SECRET=1"),
+                    ("notes.txt", b"hello"),
+                ]
+            )
+
+        self.assertEqual(
+            [sorted((raw_files or {}).keys()) for raw_files in seen_raw_files],
+            [["plan.json"], ["plan.json"]],
+        )
+
+    def test_build_analysis_artifacts_marks_sensitive_or_unsupported_submissions_partial(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=24,
+            severity="low",
+            recommendation="go",
+            top_risk="Terraform changed a security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        seen_partial_context: list[bool | None] = []
+
+        def scoring_stub(*args, **kwargs):
+            seen_partial_context.append(kwargs.get("partial_context"))
+            scoped_assessment = assessment.model_copy()
+            scoped_assessment.partial_context = bool(kwargs.get("partial_context"))
+            return scoped_assessment
+
+        with (
+            patch("services.analysis_service.load_topology", return_value=({}, None)),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at=None),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates",
+                return_value=[],
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                side_effect=scoring_stub,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="GO: review the security group update.",
+                    explanation="The deployment was analyzed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.main"}]}',
+                    ),
+                    (".env", b"SECRET=1"),
+                    ("notes.txt", b"hello"),
+                ]
+            )
+
+        self.assertEqual(seen_partial_context, [True])
+        self.assertTrue(artifacts.assessment.partial_context)
+
     def _share_report_payload(self) -> dict:
         return {
             "id": 17,
@@ -682,6 +809,29 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertEqual(
             summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
         )
+
+    def test_build_share_summary_requires_attention_for_manifest_partial_analysis(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["submission_manifest"] = {
+            "partial_analysis": True,
+            "partial_artifact_count": 1,
+            "items": [
+                {
+                    "name": ".env",
+                    "status": "sensitive",
+                    "partial": True,
+                }
+            ],
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
+        )
+        self.assertIn("submitted artifacts were not analyzed", summary.plain_text)
 
     def test_build_share_summary_falls_back_to_local_report_link_without_public_base_url(
         self,

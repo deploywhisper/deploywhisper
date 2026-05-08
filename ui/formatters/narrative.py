@@ -18,3 +18,11 @@ def extract_llm_notice(
         if "llm severity assessment unavailable" in lowered:
             return warning
     return None
+
+
+def extract_submission_manifest_notice(warnings: list[str]) -> str | None:
+    """Return the report warning that says manifest coverage metadata degraded."""
+    for warning in warnings:
+        if "submission manifest metadata" in warning.lower():
+            return warning
+    return None

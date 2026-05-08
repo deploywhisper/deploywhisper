@@ -197,6 +197,10 @@ if "AnalysisReport" not in globals():
         warnings_json: Mapped[str] = mapped_column(Text, default="[]")
         contributors_json: Mapped[str] = mapped_column(Text, default="[]")
         analyzed_files_json: Mapped[str] = mapped_column(Text, default="[]")
+        submission_manifest_json: Mapped[str] = mapped_column(Text, default="{}")
+        submission_manifest_fallback_json: Mapped[str] = mapped_column(
+            Text, default="[]"
+        )
         blast_radius_json: Mapped[str] = mapped_column(Text, default="{}")
         rollback_plan_json: Mapped[str] = mapped_column(Text, default="{}")
         llm_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
