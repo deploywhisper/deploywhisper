@@ -100,13 +100,11 @@ def _matching_evidence_refs(
     evidence_items: list[EvidenceItem],
 ) -> list[str]:
     refs: list[str] = []
+    contributing_resources = set(interaction_risk.contributing_resources)
+    contributing_files = set(interaction_risk.contributing_files)
     for item in evidence_items:
-        if any(
-            resource in item.source_ref
-            for resource in interaction_risk.contributing_resources
-        ) or any(
-            file_name in item.source_ref
-            for file_name in interaction_risk.contributing_files
+        if (item.resource and item.resource in contributing_resources) or (
+            not item.resource and item.artifact in contributing_files
         ):
             refs.append(item.evidence_id)
     return refs
@@ -175,6 +173,15 @@ def build_findings(
     overrides = interaction_confidence_overrides or {}
     for interaction in assessment.interaction_risks:
         llm_confidence = overrides.get(interaction.key)
+        evidence_refs = _matching_evidence_refs(interaction, evidence_items)
+        matching_evidence_by_id = {
+            evidence_item.evidence_id: evidence_item for evidence_item in evidence_items
+        }
+        matched_evidence_items = [
+            matching_evidence_by_id[evidence_ref]
+            for evidence_ref in evidence_refs
+            if evidence_ref in matching_evidence_by_id
+        ]
         findings.append(
             Finding(
                 finding_id=_finding_id(
@@ -204,8 +211,12 @@ def build_findings(
                     deterministic=False,
                     source_confidence=llm_confidence,
                 ),
-                evidence_refs=_matching_evidence_refs(interaction, evidence_items),
-                evidence_classification="derived",
+                evidence_refs=evidence_refs,
+                evidence_classification=(
+                    classify_finding_evidence(matched_evidence_items)
+                    if matched_evidence_items
+                    else "derived"
+                ),
                 skill_id=None,
             )
         )

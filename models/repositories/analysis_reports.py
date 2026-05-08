@@ -18,6 +18,42 @@ from models.tables import (
 )
 
 
+def _validate_finding_evidence_refs(
+    finding_rows: list[tuple[PersistedFinding, list[str]]],
+    evidence_payload: list[dict[str, Any]] | None,
+) -> dict[str, str]:
+    evidence_ids: set[str] = set()
+    for evidence in evidence_payload or []:
+        evidence_id = str(evidence["evidence_id"])
+        if evidence_id in evidence_ids:
+            raise ValueError(
+                f"Duplicate evidence item {evidence_id} in report payload."
+            )
+        evidence_ids.add(evidence_id)
+
+    evidence_owner_by_id: dict[str, str] = {}
+    for persisted_finding, evidence_refs in finding_rows:
+        if len(evidence_refs) != len(set(evidence_refs)):
+            raise ValueError(
+                f"Finding {persisted_finding.finding_id} repeats evidence refs."
+            )
+        for evidence_id in evidence_refs:
+            if evidence_id not in evidence_ids:
+                raise ValueError(
+                    "Finding "
+                    f"{persisted_finding.finding_id} references missing evidence item "
+                    f"{evidence_id}."
+                )
+            evidence_owner_by_id.setdefault(evidence_id, persisted_finding.finding_id)
+    unclaimed_evidence_ids = evidence_ids - set(evidence_owner_by_id)
+    if unclaimed_evidence_ids:
+        evidence_id = sorted(unclaimed_evidence_ids)[0]
+        raise ValueError(
+            f"Evidence item {evidence_id} is not referenced by any persisted finding."
+        )
+    return evidence_owner_by_id
+
+
 def _report_load_options(*, include_evidence: bool) -> list:
     options = [
         selectinload(AnalysisReport.risk_assessment),
@@ -120,6 +156,11 @@ def create_analysis_report(
             )
         )
 
+    evidence_owner_by_id = _validate_finding_evidence_refs(
+        finding_rows,
+        evidence_payload,
+    )
+
     report.risk_assessment = PersistedRiskAssessment(
         overall_severity=severity,
         recommendation=recommendation,
@@ -137,19 +178,9 @@ def create_analysis_report(
             persisted_finding.finding_id: persisted_finding
             for persisted_finding in report.findings
         }
-        evidence_owner_by_id: dict[str, str] = {}
-        for persisted_finding, evidence_refs in finding_rows:
-            for evidence_id in evidence_refs:
-                evidence_owner_by_id.setdefault(
-                    evidence_id, persisted_finding.finding_id
-                )
-
-        fallback_owner = report.findings[0] if len(report.findings) == 1 else None
         for evidence in evidence_payload:
             owner_id = evidence_owner_by_id.get(str(evidence["evidence_id"]))
-            owner = (
-                finding_by_id.get(owner_id) if owner_id is not None else fallback_owner
-            )
+            owner = finding_by_id.get(owner_id) if owner_id is not None else None
             if owner is None:
                 raise ValueError(
                     "Evidence item "

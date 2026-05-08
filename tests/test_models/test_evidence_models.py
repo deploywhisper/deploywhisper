@@ -150,6 +150,41 @@ class EvidenceModelTests(unittest.TestCase):
         self.assertEqual(payload["guidance"], ["Restrict ingress before deployment."])
         self.assertEqual(payload["evidence_classification"], "model_inferred")
 
+    def test_non_deterministic_finding_preserves_explicit_deterministic_support(
+        self,
+    ) -> None:
+        finding = Finding(
+            finding_id="finding-001",
+            analysis_id=7,
+            title="Interaction risk",
+            description="Cross-tool interaction links deterministic evidence.",
+            severity="high",
+            category="cross-tool interaction",
+            deterministic=False,
+            confidence=0.55,
+            evidence_classification="deterministic",
+            evidence_refs=["ev-001"],
+        )
+
+        self.assertEqual(finding.evidence_classification, "deterministic")
+
+    def test_non_deterministic_finding_defaults_to_model_inferred_support(
+        self,
+    ) -> None:
+        finding = Finding(
+            finding_id="finding-001",
+            analysis_id=7,
+            title="Interaction risk",
+            description="Cross-tool interaction has no linked evidence.",
+            severity="medium",
+            category="cross-tool interaction",
+            deterministic=False,
+            confidence=0.55,
+            evidence_refs=[],
+        )
+
+        self.assertEqual(finding.evidence_classification, "model_inferred")
+
     def test_finding_rejects_invalid_confidence(self) -> None:
         with self.assertRaises(ValidationError):
             Finding(

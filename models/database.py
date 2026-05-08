@@ -14,6 +14,7 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from config import settings
+from evidence.models import FINDING_EVIDENCE_CLASSIFICATION_VALUES
 
 
 def _ensure_sqlite_parent_directory(database_url: str) -> None:
@@ -188,8 +189,11 @@ def _finding_context_fields_complete(connection) -> bool:
     )
     classification_checks = inspector.get_check_constraints("findings")
     has_classification_check = any(
-        constraint.get("name") == "ck_findings_evidence_classification"
-        or "evidence_classification" in str(constraint.get("sqltext") or "")
+        "evidence_classification" in str(constraint.get("sqltext") or "")
+        and all(
+            value in str(constraint.get("sqltext") or "")
+            for value in FINDING_EVIDENCE_CLASSIFICATION_VALUES
+        )
         for constraint in classification_checks
     )
     return has_required_types and has_required_nullability and has_classification_check

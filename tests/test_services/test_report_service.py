@@ -113,6 +113,856 @@ class ReportServiceTests(unittest.TestCase):
                             evidence_payload=[],
                         )
 
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(ValueError, "missing evidence item ev-missing"):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[
+                        {
+                            **finding,
+                            "evidence_refs": ["ev-missing"],
+                        }
+                    ],
+                    evidence_payload=[],
+                )
+
+        evidence = {
+            "evidence_id": "ev-001",
+            "analysis_id": 0,
+            "finding_id": "finding-invalid",
+            "source_type": "artifact",
+            "source_ref": "terraform://plan.json#aws_security_group.main?action=modify",
+            "summary": "Security group exposure",
+            "severity_hint": "medium",
+            "deterministic": True,
+            "confidence": 1.0,
+            "related_change_ids": ["chg-001"],
+        }
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "repeats evidence refs",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[
+                        {
+                            **finding,
+                            "evidence_refs": ["ev-001", "ev-001"],
+                        }
+                    ],
+                    evidence_payload=[evidence],
+                )
+
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "not referenced by any persisted finding",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[finding],
+                    evidence_payload=[evidence],
+                )
+
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                **report_kwargs,
+                findings_payload=[
+                    {
+                        **finding,
+                        "finding_id": "finding-one",
+                        "evidence_refs": ["ev-001"],
+                    },
+                    {
+                        **finding,
+                        "finding_id": "finding-two",
+                        "evidence_refs": ["ev-001"],
+                    },
+                ],
+                evidence_payload=[evidence],
+            )
+
+        self.assertEqual(len(report.findings), 2)
+        self.assertEqual(
+            [json.loads(finding.evidence_refs_json) for finding in report.findings],
+            [["ev-001"], ["ev-001"]],
+        )
+
+    def test_scope_report_entities_downgrades_stripped_evidence_classification(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="unresolved evidence",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-stale",
+                analysis_id=0,
+                title="MEDIUM: unresolved evidence",
+                description="Finding references evidence not present in this report.",
+                severity="medium",
+                category="cross-tool interaction",
+                deterministic=True,
+                confidence=0.8,
+                uncertainty_note=None,
+                evidence_classification="deterministic",
+                evidence_refs=["ev-missing"],
+                skill_id=None,
+            )
+        ]
+
+        _, scoped_findings, _ = report_service_module._scope_report_entities(
+            assessment,
+            findings,
+            [],
+        )
+
+        self.assertIsNotNone(scoped_findings)
+        assert scoped_findings is not None
+        self.assertEqual(scoped_findings[0].evidence_refs, [])
+        self.assertEqual(
+            scoped_findings[0].evidence_classification,
+            "model_inferred",
+        )
+
+    def test_scope_report_entities_preserves_shared_evidence_classification(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="shared evidence",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-shared-one",
+                analysis_id=0,
+                title="MEDIUM: shared evidence one",
+                description="First finding shares deterministic evidence.",
+                severity="medium",
+                category="cross-tool interaction",
+                deterministic=False,
+                confidence=0.8,
+                uncertainty_note=None,
+                evidence_classification="model_inferred",
+                evidence_refs=["ev-shared"],
+                skill_id=None,
+            ),
+            Finding(
+                finding_id="finding-shared-two",
+                analysis_id=0,
+                title="MEDIUM: shared evidence two",
+                description="Second finding shares deterministic evidence.",
+                severity="medium",
+                category="cross-tool interaction",
+                deterministic=False,
+                confidence=0.8,
+                uncertainty_note=None,
+                evidence_classification="model_inferred",
+                evidence_refs=["ev-shared"],
+                skill_id=None,
+            ),
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-shared",
+                analysis_id=0,
+                finding_id="finding-shared-one",
+                source_type="artifact",
+                source_ref="terraform://plan.json#shared",
+                summary="Shared deterministic support.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+                source_kind="artifact",
+                determinism_level="deterministic",
+            )
+        ]
+
+        _, scoped_findings, scoped_evidence_items = (
+            report_service_module._scope_report_entities(
+                assessment,
+                findings,
+                evidence_items,
+            )
+        )
+
+        self.assertIsNotNone(scoped_findings)
+        self.assertIsNotNone(scoped_evidence_items)
+        assert scoped_findings is not None
+        assert scoped_evidence_items is not None
+        shared_scoped_ref = scoped_evidence_items[0].evidence_id
+        self.assertEqual(
+            [finding.evidence_refs for finding in scoped_findings],
+            [[shared_scoped_ref], [shared_scoped_ref]],
+        )
+        self.assertEqual(
+            [finding.evidence_classification for finding in scoped_findings],
+            ["deterministic", "deterministic"],
+        )
+
+    def test_report_finding_maps_resolves_shared_evidence_refs(self) -> None:
+        _, evidence_by_finding_id = report_service_module._report_finding_maps(
+            {
+                "findings": [
+                    {
+                        "finding_id": "finding-one",
+                        "title": "MEDIUM: shared one",
+                        "description": "First finding shares evidence.",
+                        "category": "cross-tool interaction",
+                        "evidence_refs": ["ev-shared"],
+                    },
+                    {
+                        "finding_id": "finding-two",
+                        "title": "MEDIUM: shared two",
+                        "description": "Second finding shares evidence.",
+                        "category": "cross-tool interaction",
+                        "evidence_refs": ["ev-shared"],
+                    },
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-shared",
+                        "finding_id": "finding-one",
+                        "source_ref": "terraform://plan.json#shared",
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(
+            [item["evidence_id"] for item in evidence_by_finding_id["finding-one"]],
+            ["ev-shared"],
+        )
+        self.assertEqual(
+            [item["evidence_id"] for item in evidence_by_finding_id["finding-two"]],
+            ["ev-shared"],
+        )
+
+    def test_persist_analysis_report_repairs_stale_assessment_evidence_links(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            top_risk_contributors=["ev-stale"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-stale",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=18,
+                    summary="Terraform changed a security group.",
+                    normalized_action="modify",
+                    resource_category="networking/ingress",
+                    severity="medium",
+                    reasoning="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review deterministic evidence.",
+            explanation="The report has a stale assessment evidence ID.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-unlinked",
+                analysis_id=0,
+                title="MEDIUM: aws_security_group.main",
+                description="Terraform changed a security group.",
+                severity="medium",
+                category="networking/ingress",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_classification="model_inferred",
+                evidence_refs=[],
+                skill_id=None,
+            )
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-real",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref=(
+                    "terraform://plan.json#aws_security_group.main?action=modify"
+                ),
+                summary="Terraform changed a security group.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+            )
+        ]
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=findings,
+            evidence_items=evidence_items,
+        )
+
+        persisted_evidence_id = report["evidence_items"][0]["evidence_id"]
+        self.assertEqual(
+            report["findings"][0]["evidence_refs"], [persisted_evidence_id]
+        )
+        self.assertEqual(
+            report["findings"][0]["evidence_classification"],
+            "deterministic",
+        )
+        self.assertEqual(
+            report["contributors"][0]["evidence_id"], persisted_evidence_id
+        )
+        self.assertEqual(report["top_risk_contributors"], [persisted_evidence_id])
+
+    def test_persist_analysis_report_rejects_unmatched_single_finding_evidence(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.first",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        ),
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.second",
+                            action="modify",
+                            summary="Terraform changed another security group.",
+                        ),
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed security groups.",
+            top_risk_contributors=["ev-stale"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-stale",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.unmatched",
+                    action="modify",
+                    contribution=18,
+                    summary="Terraform changed security groups.",
+                    severity="medium",
+                    reasoning="Terraform changed security groups.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review deterministic evidence.",
+            explanation="The report has a stale assessment evidence ID.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-unlinked",
+                analysis_id=0,
+                title="MEDIUM: security group changes",
+                description="Terraform changed security groups.",
+                severity="medium",
+                category="networking/ingress",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_classification="model_inferred",
+                evidence_refs=[],
+                skill_id=None,
+            )
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-first",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref=(
+                    "terraform://plan.json#aws_security_group.first?action=modify"
+                ),
+                summary="Terraform changed a security group.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+            ),
+            EvidenceItem(
+                evidence_id="ev-second",
+                analysis_id=0,
+                finding_id="pending:change-2",
+                source_type="artifact",
+                source_ref=(
+                    "terraform://plan.json#aws_security_group.second?action=modify"
+                ),
+                summary="Terraform changed another security group.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+            ),
+        ]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "not referenced by any persisted finding",
+        ):
+            report_service_module.persist_analysis_report(
+                parse_batch,
+                assessment,
+                narrative,
+                findings=findings,
+                evidence_items=evidence_items,
+            )
+
+    def test_persist_analysis_report_does_not_repair_stale_link_by_same_basename(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="prod/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            top_risk_contributors=["ev-stale"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-stale",
+                    source_file="prod/plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=18,
+                    summary="Terraform changed a security group.",
+                    normalized_action="modify",
+                    resource_category="networking/ingress",
+                    severity="medium",
+                    reasoning="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review deterministic evidence.",
+            explanation="The report has a stale assessment evidence ID.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-unlinked",
+                analysis_id=0,
+                title="MEDIUM: aws_security_group.main",
+                description="Terraform changed a security group.",
+                severity="medium",
+                category="networking/ingress",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_classification="model_inferred",
+                evidence_refs=[],
+                skill_id=None,
+            )
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-wrong-artifact",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref=(
+                    "terraform://staging/plan.json#aws_security_group.main?action=modify"
+                ),
+                summary="Terraform changed a security group in a different artifact.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+            )
+        ]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "not referenced by any persisted finding",
+        ):
+            report_service_module.persist_analysis_report(
+                parse_batch,
+                assessment,
+                narrative,
+                findings=findings,
+                evidence_items=evidence_items,
+            )
+
+    def test_persist_analysis_report_does_not_repair_stale_link_by_resource_prefix(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            top_risk_contributors=["ev-stale"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-stale",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=18,
+                    summary="Terraform changed a security group.",
+                    normalized_action="modify",
+                    resource_category="networking/ingress",
+                    severity="medium",
+                    reasoning="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review deterministic evidence.",
+            explanation="The report has a stale assessment evidence ID.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-unlinked",
+                analysis_id=0,
+                title="MEDIUM: aws_security_group.main",
+                description="Terraform changed a security group.",
+                severity="medium",
+                category="networking/ingress",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_classification="model_inferred",
+                evidence_refs=[],
+                skill_id=None,
+            )
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-wrong-resource",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref=(
+                    "terraform://plan.json#aws_security_group.main-extra?action=modify"
+                ),
+                summary="Terraform changed a similarly named security group.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+            )
+        ]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "not referenced by any persisted finding",
+        ):
+            report_service_module.persist_analysis_report(
+                parse_batch,
+                assessment,
+                narrative,
+                findings=findings,
+                evidence_items=evidence_items,
+            )
+
+    def test_persist_analysis_report_does_not_repair_stale_link_without_operation(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            top_risk_contributors=["ev-stale"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-stale",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=18,
+                    summary="Terraform changed a security group.",
+                    normalized_action="modify",
+                    resource_category="networking/ingress",
+                    severity="medium",
+                    reasoning="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review deterministic evidence.",
+            explanation="The report has a stale assessment evidence ID.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-unlinked",
+                analysis_id=0,
+                title="MEDIUM: aws_security_group.main",
+                description="Terraform changed a security group.",
+                severity="medium",
+                category="networking/ingress",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_classification="model_inferred",
+                evidence_refs=[],
+                skill_id=None,
+            )
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-missing-operation",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref="terraform://plan.json#aws_security_group.main",
+                summary="Terraform changed a security group without action metadata.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+            )
+        ]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "not referenced by any persisted finding",
+        ):
+            report_service_module.persist_analysis_report(
+                parse_batch,
+                assessment,
+                narrative,
+                findings=findings,
+                evidence_items=evidence_items,
+            )
+
+    def test_persist_analysis_report_does_not_repair_stale_link_to_unrelated_only_finding(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            top_risk_contributors=["ev-stale"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-stale",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=18,
+                    summary="Terraform changed a security group.",
+                    normalized_action="modify",
+                    resource_category="networking/ingress",
+                    severity="medium",
+                    reasoning="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review deterministic evidence.",
+            explanation="The report has a stale assessment evidence ID.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-unlinked",
+                analysis_id=0,
+                title="MEDIUM: unrelated database migration",
+                description="Database migration needs review.",
+                severity="medium",
+                category="data/service",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_classification="model_inferred",
+                evidence_refs=[],
+                skill_id=None,
+            )
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-real",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref=(
+                    "terraform://plan.json#aws_security_group.main?action=modify"
+                ),
+                summary="Terraform changed a security group.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+            )
+        ]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "not referenced by any persisted finding",
+        ):
+            report_service_module.persist_analysis_report(
+                parse_batch,
+                assessment,
+                narrative,
+                findings=findings,
+                evidence_items=evidence_items,
+            )
+
     def _persist_shareable_report(self) -> dict:
         parse_batch = ParseBatchResult(
             files=[

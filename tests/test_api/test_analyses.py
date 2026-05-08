@@ -93,6 +93,7 @@ class AnalysesApiTests(unittest.TestCase):
         severity: str = "high",
         recommendation: str = "no-go",
         top_risk: str = "Security group exposure risk",
+        resource_id: str = "aws_security_group.main",
         partial_context: bool = False,
     ) -> RiskAssessment:
         return RiskAssessment(
@@ -106,7 +107,7 @@ class AnalysesApiTests(unittest.TestCase):
                     evidence_id="ev-001",
                     source_file="plan.json",
                     tool="terraform",
-                    resource_id="aws_security_group.main",
+                    resource_id=resource_id,
                     action="modify",
                     contribution=20,
                     summary=top_risk,
@@ -903,7 +904,10 @@ class AnalysesApiTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.evaluate_parse_batch",
-                return_value=self._analysis_assessment(partial_context=True),
+                return_value=self._analysis_assessment(
+                    resource_id="module.network.aws_security_group.main",
+                    partial_context=True,
+                ),
             ),
             patch(
                 "services.analysis_service.generate_narrative", return_value=narrative
@@ -1580,12 +1584,6 @@ class AnalysesApiTests(unittest.TestCase):
         )
 
         with (
-            patch(
-                "services.analysis_service.evaluate_parse_batch",
-                return_value=self._analysis_assessment(
-                    top_risk="Security group updates"
-                ),
-            ),
             patch(
                 "services.analysis_service.generate_narrative", return_value=narrative
             ),

@@ -51,6 +51,43 @@ class FindingMapperTests(unittest.TestCase):
             confidence=1.0,
             related_change_ids=["chg-001"],
         )
+        heuristic_evidence = EvidenceItem(
+            evidence_id="ev-002",
+            analysis_id=0,
+            finding_id="pending:chg-002",
+            source_type="heuristic",
+            source_ref="kubernetes://deployment.yaml#apps/Deployment/payments?action=modify",
+            summary="Deployment overlap risk",
+            severity_hint="medium",
+            deterministic=False,
+            determinism_level="heuristic",
+            confidence=0.64,
+            related_change_ids=["chg-002"],
+        )
+        unrelated_prefix_evidence = EvidenceItem(
+            evidence_id="ev-unrelated",
+            analysis_id=0,
+            finding_id="pending:chg-003",
+            source_type="artifact",
+            source_ref="terraform://plan-extra.json#aws_security_group.main-extra?action=modify",
+            summary="Unrelated security group change.",
+            severity_hint="medium",
+            deterministic=True,
+            confidence=1.0,
+            related_change_ids=["chg-003"],
+        )
+        unrelated_same_artifact_evidence = EvidenceItem(
+            evidence_id="ev-unrelated-same-artifact",
+            analysis_id=0,
+            finding_id="pending:chg-004",
+            source_type="artifact",
+            source_ref="kubernetes://deployment.yaml#apps/Deployment/analytics?action=modify",
+            summary="Unrelated deployment change.",
+            severity_hint="medium",
+            deterministic=True,
+            confidence=1.0,
+            related_change_ids=["chg-004"],
+        )
         assessment = RiskAssessment(
             score=72,
             severity="high",
@@ -80,7 +117,10 @@ class FindingMapperTests(unittest.TestCase):
                     key="terraform-kubernetes",
                     summary="Terraform and Kubernetes changes overlap around payments.",
                     contributing_files=["plan.json", "deployment.yaml"],
-                    contributing_resources=["aws_security_group.main"],
+                    contributing_resources=[
+                        "aws_security_group.main",
+                        "apps/Deployment/payments",
+                    ],
                     contribution_bonus=12,
                 )
             ],
@@ -90,7 +130,12 @@ class FindingMapperTests(unittest.TestCase):
 
         findings = build_findings(
             assessment=assessment,
-            evidence_items=[evidence],
+            evidence_items=[
+                evidence,
+                heuristic_evidence,
+                unrelated_prefix_evidence,
+                unrelated_same_artifact_evidence,
+            ],
         )
 
         self.assertEqual(findings[0].confidence, 1.0)
@@ -107,7 +152,8 @@ class FindingMapperTests(unittest.TestCase):
         self.assertEqual(findings[0].evidence_classification, "deterministic")
         self.assertEqual(findings[1].confidence, INFERRED_CONFIDENCE_FLOOR)
         self.assertFalse(findings[1].deterministic)
-        self.assertEqual(findings[1].evidence_classification, "derived")
+        self.assertEqual(findings[1].evidence_refs, ["ev-001", "ev-002"])
+        self.assertEqual(findings[1].evidence_classification, "deterministic")
         self.assertIn(
             "Review the linked resources together because the combined change may broaden blast radius.",
             findings[1].guidance,

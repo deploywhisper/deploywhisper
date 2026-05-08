@@ -16,8 +16,9 @@ from pydantic import ValidationError
 
 from analysis.blast_radius import BlastRadiusResult
 from analysis.rollback_planner import RollbackPlan
-from analysis.risk_scorer import RiskAssessment
+from analysis.risk_scorer import RiskAssessment, RiskContributor
 from api.schemas import IntakeItem, PendingAnalysis
+from evidence.mappers import classify_finding_evidence
 from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 
@@ -626,11 +627,29 @@ def _report_finding_maps(
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]:
     findings_by_fingerprint: dict[str, list[dict[str, Any]]] = defaultdict(list)
     evidence_by_finding_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for evidence_item in report.get("evidence_items") or []:
-        evidence_by_finding_id[str(evidence_item.get("finding_id") or "")].append(
-            evidence_item
-        )
+    evidence_items = list(report.get("evidence_items") or [])
+    evidence_by_id = {
+        str(evidence_item.get("evidence_id") or ""): evidence_item
+        for evidence_item in evidence_items
+    }
     for finding in report.get("findings") or []:
+        finding_id = str(finding.get("finding_id") or "")
+        seen_evidence_ids: set[str] = set()
+        for evidence_ref in finding.get("evidence_refs") or []:
+            evidence_id = str(evidence_ref)
+            evidence_item = evidence_by_id.get(evidence_id)
+            if evidence_item is None:
+                continue
+            evidence_by_finding_id[finding_id].append(evidence_item)
+            seen_evidence_ids.add(evidence_id)
+        for evidence_item in evidence_items:
+            evidence_id = str(evidence_item.get("evidence_id") or "")
+            if (
+                str(evidence_item.get("finding_id") or "") == finding_id
+                and evidence_id not in seen_evidence_ids
+            ):
+                evidence_by_finding_id[finding_id].append(evidence_item)
+                seen_evidence_ids.add(evidence_id)
         findings_by_fingerprint[_finding_fingerprint(finding)].append(finding)
     return dict(findings_by_fingerprint), evidence_by_finding_id
 
@@ -1072,18 +1091,36 @@ def _scope_report_entities(
         )
         for evidence_item in evidence_items or []
     }
+    evidence_by_id = {
+        evidence_item.evidence_id: evidence_item
+        for evidence_item in evidence_items or []
+    }
+
+    def _scoped_finding_updates(finding: Finding) -> dict[str, Any]:
+        matched_evidence_items = [
+            evidence_by_id[evidence_ref]
+            for evidence_ref in finding.evidence_refs
+            if evidence_ref in evidence_by_id
+        ]
+        updates: dict[str, Any] = {
+            "finding_id": finding_id_map[finding.finding_id],
+            "evidence_refs": [
+                evidence_id_map[evidence_ref]
+                for evidence_ref in finding.evidence_refs
+                if evidence_ref in evidence_id_map
+            ],
+        }
+        if matched_evidence_items:
+            updates["evidence_classification"] = classify_finding_evidence(
+                matched_evidence_items
+            )
+        elif finding.evidence_refs:
+            updates["evidence_classification"] = "model_inferred"
+        return updates
 
     scoped_findings = (
         [
-            finding.model_copy(
-                update={
-                    "finding_id": finding_id_map[finding.finding_id],
-                    "evidence_refs": [
-                        evidence_id_map.get(evidence_ref, evidence_ref)
-                        for evidence_ref in finding.evidence_refs
-                    ],
-                }
-            )
+            finding.model_copy(update=_scoped_finding_updates(finding))
             for finding in findings
         ]
         if findings is not None
@@ -1129,6 +1166,143 @@ def _scope_report_entities(
         }
     )
     return scoped_assessment, scoped_findings, scoped_evidence_items
+
+
+def _path_matches_contributor_source(evidence_artifact: str, source_file: str) -> bool:
+    if not evidence_artifact or not source_file:
+        return False
+    return evidence_artifact == source_file
+
+
+def _evidence_matches_contributor(
+    evidence_item: EvidenceItem,
+    contributor: RiskContributor,
+) -> bool:
+    source_matches = _path_matches_contributor_source(
+        evidence_item.artifact,
+        contributor.source_file,
+    )
+    resource_matches = evidence_item.resource == contributor.resource_id
+    contributor_actions = {
+        contributor.action,
+        contributor.normalized_action,
+    }
+    operation_matches = evidence_item.operation in contributor_actions
+    return source_matches and resource_matches and operation_matches
+
+
+def _finding_matches_contributor(
+    finding: Finding,
+    contributor: RiskContributor,
+) -> bool:
+    finding_text = " ".join(
+        (finding.title, finding.description, finding.explanation or "")
+    )
+    return (
+        re.search(
+            rf"(?<![A-Za-z0-9_./-]){re.escape(contributor.resource_id)}(?![A-Za-z0-9_./-])",
+            finding_text,
+        )
+        is not None
+    )
+
+
+def _finding_with_evidence_ref(
+    finding: Finding,
+    evidence_id: str,
+    evidence_by_id: dict[str, EvidenceItem],
+) -> Finding:
+    evidence_refs = list(finding.evidence_refs)
+    if evidence_id not in evidence_refs:
+        evidence_refs.append(evidence_id)
+    matched_evidence_items = [
+        evidence_by_id[evidence_ref]
+        for evidence_ref in evidence_refs
+        if evidence_ref in evidence_by_id
+    ]
+    updates: dict[str, Any] = {"evidence_refs": evidence_refs}
+    if matched_evidence_items:
+        updates["evidence_classification"] = classify_finding_evidence(
+            matched_evidence_items
+        )
+    return finding.model_copy(update=updates)
+
+
+def _repair_assessment_evidence_links(
+    assessment: RiskAssessment,
+    findings: list[Finding] | None,
+    evidence_items: list[EvidenceItem] | None,
+) -> tuple[RiskAssessment, list[Finding] | None]:
+    """Repair stale assessment evidence IDs only when evidence has one clear owner."""
+    if not findings or not evidence_items:
+        return assessment, findings
+
+    evidence_by_id = {
+        evidence_item.evidence_id: evidence_item for evidence_item in evidence_items
+    }
+    findings_by_id = {finding.finding_id: finding for finding in findings}
+    evidence_replacements: dict[str, str] = {}
+    updated_contributors: list[RiskContributor] = []
+
+    for contributor in assessment.contributors:
+        replacement_evidence_id: str | None = None
+        has_stale_evidence_id = (
+            contributor.evidence_id is not None
+            and contributor.evidence_id not in evidence_by_id
+        )
+        if has_stale_evidence_id:
+            matching_evidence_items = [
+                evidence_item
+                for evidence_item in evidence_items
+                if _evidence_matches_contributor(evidence_item, contributor)
+            ]
+            matching_findings = [
+                finding
+                for finding in findings_by_id.values()
+                if _finding_matches_contributor(finding, contributor)
+            ]
+            if len(matching_evidence_items) == 1 and len(matching_findings) == 1:
+                evidence_item = matching_evidence_items[0]
+                finding = matching_findings[0]
+                findings_by_id[finding.finding_id] = _finding_with_evidence_ref(
+                    finding,
+                    evidence_item.evidence_id,
+                    evidence_by_id,
+                )
+                replacement_evidence_id = evidence_item.evidence_id
+                evidence_replacements[contributor.evidence_id] = replacement_evidence_id
+        updated_contributors.append(
+            contributor.model_copy(update={"evidence_id": replacement_evidence_id})
+            if replacement_evidence_id is not None or has_stale_evidence_id
+            else contributor
+        )
+
+    findings_changed = any(
+        findings_by_id[finding.finding_id].evidence_refs != finding.evidence_refs
+        for finding in findings
+    )
+    updated_top_risk_contributors: list[str] = []
+    for evidence_id in assessment.top_risk_contributors:
+        replacement_evidence_id = evidence_replacements.get(evidence_id, evidence_id)
+        if replacement_evidence_id in evidence_by_id:
+            updated_top_risk_contributors.append(replacement_evidence_id)
+    assessment_changed = (
+        updated_contributors != list(assessment.contributors)
+        or updated_top_risk_contributors != assessment.top_risk_contributors
+    )
+
+    if not assessment_changed and not findings_changed:
+        return assessment, findings
+
+    return (
+        assessment.model_copy(
+            update={
+                "top_risk_contributors": updated_top_risk_contributors,
+                "contributors": updated_contributors,
+            }
+        ),
+        [findings_by_id[finding.finding_id] for finding in findings],
+    )
 
 
 def _evidence_items_with_report_context(
@@ -1454,6 +1628,11 @@ def persist_analysis_report(
     submitted_artifacts: list[tuple[str, bytes | None]] | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
+    assessment, findings = _repair_assessment_evidence_links(
+        assessment,
+        findings,
+        evidence_items,
+    )
     assessment, findings, evidence_items = _scope_report_entities(
         assessment,
         findings,

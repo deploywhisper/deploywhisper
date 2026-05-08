@@ -213,7 +213,10 @@ class Finding(BaseModel):
     def _populate_finding_context_fields(self) -> Finding:
         if not self.explanation:
             self.explanation = self.description
-        if not self.deterministic and self.evidence_classification == "deterministic":
+        if (
+            "evidence_classification" not in self.model_fields_set
+            and not self.deterministic
+        ):
             self.evidence_classification = "model_inferred"
         return self
 
