@@ -9,12 +9,49 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from evidence.models import Finding as FindingPayload
 from models.tables import (
     AnalysisReport,
     EvidenceItem as PersistedEvidenceItem,
     Finding as PersistedFinding,
     RiskAssessment as PersistedRiskAssessment,
 )
+
+
+def _validate_finding_evidence_refs(
+    finding_rows: list[tuple[PersistedFinding, list[str]]],
+    evidence_payload: list[dict[str, Any]] | None,
+) -> dict[str, str]:
+    evidence_ids: set[str] = set()
+    for evidence in evidence_payload or []:
+        evidence_id = str(evidence["evidence_id"])
+        if evidence_id in evidence_ids:
+            raise ValueError(
+                f"Duplicate evidence item {evidence_id} in report payload."
+            )
+        evidence_ids.add(evidence_id)
+
+    evidence_owner_by_id: dict[str, str] = {}
+    for persisted_finding, evidence_refs in finding_rows:
+        if len(evidence_refs) != len(set(evidence_refs)):
+            raise ValueError(
+                f"Finding {persisted_finding.finding_id} repeats evidence refs."
+            )
+        for evidence_id in evidence_refs:
+            if evidence_id not in evidence_ids:
+                raise ValueError(
+                    "Finding "
+                    f"{persisted_finding.finding_id} references missing evidence item "
+                    f"{evidence_id}."
+                )
+            evidence_owner_by_id.setdefault(evidence_id, persisted_finding.finding_id)
+    unclaimed_evidence_ids = evidence_ids - set(evidence_owner_by_id)
+    if unclaimed_evidence_ids:
+        evidence_id = sorted(unclaimed_evidence_ids)[0]
+        raise ValueError(
+            f"Evidence item {evidence_id} is not referenced by any persisted finding."
+        )
+    return evidence_owner_by_id
 
 
 def _report_load_options(*, include_evidence: bool) -> list:
@@ -96,32 +133,33 @@ def create_analysis_report(
     )
     finding_rows: list[tuple[PersistedFinding, list[str]]] = []
     for finding in findings_payload or []:
+        finding_payload = FindingPayload.model_validate(finding)
         persisted_finding = PersistedFinding(
-            finding_id=str(finding["finding_id"]),
-            title=str(finding["title"]),
-            description=str(finding["description"]),
-            severity=str(finding["severity"]),
-            category=str(finding["category"]),
-            deterministic=bool(finding["deterministic"]),
-            confidence=float(finding["confidence"]),
-            uncertainty_note=(
-                str(finding["uncertainty_note"])
-                if finding.get("uncertainty_note") is not None
-                else None
-            ),
-            evidence_refs_json=json.dumps(finding.get("evidence_refs", [])),
-            skill_id=(
-                str(finding["skill_id"])
-                if finding.get("skill_id") is not None
-                else None
-            ),
+            finding_id=finding_payload.finding_id,
+            title=finding_payload.title,
+            description=finding_payload.description,
+            explanation=finding_payload.explanation,
+            guidance_json=json.dumps(finding_payload.guidance),
+            severity=finding_payload.severity,
+            category=finding_payload.category,
+            deterministic=finding_payload.deterministic,
+            confidence=finding_payload.confidence,
+            uncertainty_note=finding_payload.uncertainty_note,
+            evidence_classification=finding_payload.evidence_classification,
+            evidence_refs_json=json.dumps(finding_payload.evidence_refs),
+            skill_id=finding_payload.skill_id,
         )
         finding_rows.append(
             (
                 persisted_finding,
-                [str(ref) for ref in finding.get("evidence_refs", [])],
+                finding_payload.evidence_refs,
             )
         )
+
+    evidence_owner_by_id = _validate_finding_evidence_refs(
+        finding_rows,
+        evidence_payload,
+    )
 
     report.risk_assessment = PersistedRiskAssessment(
         overall_severity=severity,
@@ -140,19 +178,9 @@ def create_analysis_report(
             persisted_finding.finding_id: persisted_finding
             for persisted_finding in report.findings
         }
-        evidence_owner_by_id: dict[str, str] = {}
-        for persisted_finding, evidence_refs in finding_rows:
-            for evidence_id in evidence_refs:
-                evidence_owner_by_id.setdefault(
-                    evidence_id, persisted_finding.finding_id
-                )
-
-        fallback_owner = report.findings[0] if len(report.findings) == 1 else None
         for evidence in evidence_payload:
             owner_id = evidence_owner_by_id.get(str(evidence["evidence_id"]))
-            owner = (
-                finding_by_id.get(owner_id) if owner_id is not None else fallback_owner
-            )
+            owner = finding_by_id.get(owner_id) if owner_id is not None else None
             if owner is None:
                 raise ValueError(
                     "Evidence item "

@@ -18,6 +18,7 @@ import services.project_service as project_service_module
 import services.report_service as report_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from app import create_app
+from evidence.models import EvidenceItem
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
@@ -92,6 +93,7 @@ class AnalysesApiTests(unittest.TestCase):
         severity: str = "high",
         recommendation: str = "no-go",
         top_risk: str = "Security group exposure risk",
+        resource_id: str = "aws_security_group.main",
         partial_context: bool = False,
     ) -> RiskAssessment:
         return RiskAssessment(
@@ -105,7 +107,7 @@ class AnalysesApiTests(unittest.TestCase):
                     evidence_id="ev-001",
                     source_file="plan.json",
                     tool="terraform",
-                    resource_id="aws_security_group.main",
+                    resource_id=resource_id,
                     action="modify",
                     contribution=20,
                     summary=top_risk,
@@ -543,11 +545,29 @@ class AnalysesApiTests(unittest.TestCase):
             local_mode=True,
             skills_applied=["git", "terraform"],
         )
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-001",
+                analysis_id=0,
+                finding_id="pending:change-001",
+                source_type="artifact",
+                source_ref="terraform://plan.json#aws_security_group.main?action=modify",
+                summary="Terraform changed a security group.",
+                severity_hint="high",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=["change-001"],
+            )
+        ]
 
         with (
             patch(
                 "services.analysis_service.evaluate_parse_batch",
                 return_value=self._analysis_assessment(),
+            ),
+            patch(
+                "services.analysis_service.extract_batch_evidence",
+                return_value=evidence_items,
             ),
             patch(
                 "services.analysis_service.generate_narrative", return_value=narrative
@@ -582,6 +602,16 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(payload["data"]["evidence_items"])
         self.assertEqual(payload["data"]["evidence_items"][0]["analysis_id"], 0)
         self.assertEqual(payload["data"]["findings"][0]["confidence"], 1.0)
+        self.assertEqual(
+            payload["data"]["findings"][0]["evidence_classification"],
+            "deterministic",
+        )
+        self.assertEqual(payload["data"]["findings"][0]["evidence_refs"], ["ev-001"])
+        self.assertEqual(
+            payload["data"]["findings"][0]["explanation"],
+            "Security group exposure risk",
+        )
+        self.assertTrue(payload["data"]["findings"][0]["guidance"])
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
         self.assertEqual(payload["data"]["narrative"]["source"], "llm")
         self.assertTrue(payload["data"]["narrative"]["skills_applied"])
@@ -607,8 +637,12 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["audit"]["trigger_type"], "api_request"
         )
+        persisted_evidence_id = payload["data"]["persisted_report"]["evidence_items"][
+            0
+        ]["evidence_id"]
         self.assertEqual(
-            payload["data"]["persisted_report"]["top_risk_contributors"], ["ev-001"]
+            payload["data"]["persisted_report"]["top_risk_contributors"],
+            [persisted_evidence_id],
         )
         self.assertEqual(
             payload["data"]["persisted_report"]["report_schema_version"], "v2"
@@ -618,7 +652,7 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(payload["data"]["persisted_report"]["evidence_items"])
         self.assertEqual(
             payload["data"]["persisted_report"]["contributors"][0]["evidence_id"],
-            "ev-001",
+            persisted_evidence_id,
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
 
@@ -870,7 +904,10 @@ class AnalysesApiTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.evaluate_parse_batch",
-                return_value=self._analysis_assessment(partial_context=True),
+                return_value=self._analysis_assessment(
+                    resource_id="module.network.aws_security_group.main",
+                    partial_context=True,
+                ),
             ),
             patch(
                 "services.analysis_service.generate_narrative", return_value=narrative
@@ -1547,12 +1584,6 @@ class AnalysesApiTests(unittest.TestCase):
         )
 
         with (
-            patch(
-                "services.analysis_service.evaluate_parse_batch",
-                return_value=self._analysis_assessment(
-                    top_risk="Security group updates"
-                ),
-            ),
             patch(
                 "services.analysis_service.generate_narrative", return_value=narrative
             ),

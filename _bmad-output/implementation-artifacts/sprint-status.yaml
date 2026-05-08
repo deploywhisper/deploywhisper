@@ -62,7 +62,7 @@ development_status:
   2-1-submission-manifest-and-provenance: done
   2-2-terraform-plan-json-intake: review
   2-3-evidence-item-model-and-extraction: done
-  2-4-finding-model-and-evidence-links: ready-for-dev
+  2-4-finding-model-and-evidence-links: done
   2-5-evidence-law-runtime-gate: ready-for-dev
   2-6-confidence-uncertainty-and-insufficient-context: ready-for-dev
   2-7-narrative-after-scoring-and-degraded-fallback: ready-for-dev

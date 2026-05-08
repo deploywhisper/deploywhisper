@@ -89,11 +89,14 @@ class EvidenceTableTests(unittest.TestCase):
                 analysis_id=report.id,
                 title="Security group exposure",
                 description="Ingress allows 0.0.0.0/0 to reach a database subnet.",
+                explanation="Ingress allows database access from the internet.",
                 severity="high",
                 category="networking/ingress",
                 deterministic=True,
                 confidence=0.95,
                 uncertainty_note=None,
+                guidance_json='["Restrict ingress before deployment."]',
+                evidence_classification="deterministic",
                 evidence_refs_json='["ev-001"]',
                 skill_id=None,
             )
@@ -152,6 +155,18 @@ class EvidenceTableTests(unittest.TestCase):
             self.assertIsNotNone(stored)
             self.assertEqual(len(stored.findings), 1)
             self.assertEqual(stored.findings[0].finding_id, "finding-001")
+            self.assertEqual(
+                stored.findings[0].explanation,
+                "Ingress allows database access from the internet.",
+            )
+            self.assertEqual(
+                stored.findings[0].guidance_json,
+                '["Restrict ingress before deployment."]',
+            )
+            self.assertEqual(
+                stored.findings[0].evidence_classification,
+                "deterministic",
+            )
             self.assertEqual(len(stored.findings[0].evidence_items), 1)
             self.assertEqual(
                 stored.findings[0].evidence_items[0].source_ref,
@@ -257,6 +272,56 @@ class EvidenceTableTests(unittest.TestCase):
                         related_change_ids_json='["change-2"]',
                     )
                 )
+                session.commit()
+
+    def test_finding_rejects_invalid_evidence_classification(self) -> None:
+        with database_module.SessionLocal() as session:
+            report = tables_module.AnalysisReport(
+                project_id=self.default_project.id,
+                risk_score=42,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Medium risk",
+                report_schema_version="v2",
+                parse_summary="0 parsed, 0 failed, 0 skipped, 0 normalized changes",
+                narrative_opening="CAUTION: medium risk",
+                narrative_explanation="Medium risk",
+                warnings_json="[]",
+                contributors_json="[]",
+                analyzed_files_json="[]",
+                submission_manifest_json="{}",
+                submission_manifest_fallback_json="[]",
+                llm_provider="ollama",
+                llm_model="ollama/llama3",
+                llm_local_mode="true",
+                assessment_source="heuristic-only",
+                narrative_source="fallback",
+                narrative_skills_json="[]",
+                source_interface="api",
+                trigger_type="session",
+                trigger_id="sess-3",
+                dashboard_display_duration_seconds=None,
+            )
+            session.add(report)
+            session.flush()
+            session.add(
+                tables_module.Finding(
+                    finding_id="finding-invalid-classification",
+                    analysis_id=report.id,
+                    title="Security group exposure",
+                    description="Ingress allows 0.0.0.0/0 to reach a database subnet.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.95,
+                    uncertainty_note=None,
+                    evidence_classification="unsupported",
+                    evidence_refs_json="[]",
+                    skill_id=None,
+                )
+            )
+
+            with self.assertRaises(IntegrityError):
                 session.commit()
 
 

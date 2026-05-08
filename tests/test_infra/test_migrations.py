@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import tempfile
@@ -52,6 +53,17 @@ class MigrationTests(unittest.TestCase):
             return list(sqlite_conn.execute(f"PRAGMA table_info({table_name})"))
         finally:
             sqlite_conn.close()
+
+    def _table_sql(self, table_name: str) -> str:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            row = sqlite_conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table_name,),
+            ).fetchone()
+        finally:
+            sqlite_conn.close()
+        return str(row[0] if row else "")
 
     def _foreign_keys(self, table_name: str) -> list[dict]:
         sqlite_conn = sqlite3.connect(self.db_path)
@@ -161,6 +173,13 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("determinism_level", self._table_columns("evidence_items"))
         self.assertIn("redaction_status", self._table_columns("evidence_items"))
         self.assertIn("analysis_id", self._table_columns("findings"))
+        self.assertIn("explanation", self._table_columns("findings"))
+        self.assertIn("guidance_json", self._table_columns("findings"))
+        self.assertIn("evidence_classification", self._table_columns("findings"))
+        self.assertIn(
+            "evidence_classification IN",
+            self._table_sql("findings"),
+        )
         self.assertIn("analysis_id", self._table_columns("risk_assessments"))
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
         self.assertIn("project_id", self._table_columns("analysis_reports"))
@@ -428,6 +447,406 @@ class MigrationTests(unittest.TestCase):
         self.assertTrue(any(row[2] == "analysis_reports" for row in finding_fks))
         self.assertTrue(any(row[2] == "findings" for row in evidence_fks))
 
+    def test_upgrade_head_backfills_finding_context_for_existing_findings(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "018_add_evidence_identity_fields")
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            sqlite_conn.execute(
+                """
+                INSERT INTO analysis_reports (
+                    id,
+                    project_id,
+                    risk_score,
+                    severity,
+                    recommendation,
+                    top_risk,
+                    report_schema_version,
+                    parse_summary,
+                    narrative_opening,
+                    narrative_explanation,
+                    warnings_json,
+                    contributors_json,
+                    analyzed_files_json,
+                    submission_manifest_json,
+                    submission_manifest_fallback_json,
+                    blast_radius_json,
+                    rollback_plan_json,
+                    share_redact_filenames,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    1,
+                    1,
+                    42,
+                    "medium",
+                    "caution",
+                    "Legacy inferred finding",
+                    "v2",
+                    "1 parsed file",
+                    "CAUTION",
+                    "Review the finding.",
+                    "[]",
+                    "[]",
+                    '["plan.json"]',
+                    "{}",
+                    "[]",
+                    "{}",
+                    "{}",
+                    0,
+                    "2026-05-08T00:00:00+00:00",
+                ),
+            )
+            sqlite_conn.execute(
+                """
+                INSERT INTO findings (
+                    finding_id,
+                    analysis_id,
+                    title,
+                    description,
+                    severity,
+                    category,
+                    deterministic,
+                    confidence,
+                    uncertainty_note,
+                    evidence_refs_json,
+                    skill_id,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "finding-legacy",
+                    1,
+                    "Legacy inferred finding",
+                    "Legacy model-assisted finding.",
+                    "medium",
+                    "cross-tool interaction",
+                    0,
+                    0.55,
+                    "Confidence uses the heuristic floor.",
+                    "[]",
+                    None,
+                    "2026-05-08T00:00:00+00:00",
+                ),
+            )
+            sqlite_conn.executemany(
+                """
+                INSERT INTO findings (
+                    finding_id,
+                    analysis_id,
+                    title,
+                    description,
+                    severity,
+                    category,
+                    deterministic,
+                    confidence,
+                    uncertainty_note,
+                    evidence_refs_json,
+                    skill_id,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    (
+                        "finding-heuristic",
+                        1,
+                        "Legacy heuristic finding",
+                        "Legacy heuristic-backed finding.",
+                        "medium",
+                        "cross-tool interaction",
+                        0,
+                        0.55,
+                        "Confidence uses the heuristic floor.",
+                        '["ev-heuristic"]',
+                        None,
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "finding-external",
+                        1,
+                        "Legacy scanner finding",
+                        "Legacy scanner-backed finding.",
+                        "medium",
+                        "scanner",
+                        0,
+                        0.7,
+                        None,
+                        '["ev-external"]',
+                        None,
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "finding-user",
+                        1,
+                        "Legacy user-context finding",
+                        "Legacy user-context-backed finding.",
+                        "medium",
+                        "operator context",
+                        0,
+                        0.7,
+                        None,
+                        '["ev-user"]',
+                        None,
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "finding-mixed",
+                        1,
+                        "Legacy mixed finding",
+                        "Legacy mixed-support finding.",
+                        "high",
+                        "cross-tool interaction",
+                        0,
+                        0.55,
+                        None,
+                        '["ev-mixed-heuristic", "ev-mixed-deterministic"]',
+                        None,
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "finding-shared-ref",
+                        1,
+                        "Legacy shared-reference finding",
+                        "Legacy finding with evidence referenced only by JSON.",
+                        "medium",
+                        "cross-tool interaction",
+                        0,
+                        0.55,
+                        None,
+                        '["ev-mixed-deterministic"]',
+                        None,
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "finding-escaped-ref",
+                        1,
+                        "Legacy escaped-reference finding",
+                        "Legacy finding with escaped evidence reference JSON.",
+                        "medium",
+                        "cross-tool interaction",
+                        0,
+                        0.55,
+                        None,
+                        json.dumps(['ev-"quoted"']),
+                        None,
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "finding-malformed-ref",
+                        1,
+                        "Legacy malformed-reference finding",
+                        "Legacy finding with malformed evidence reference JSON.",
+                        "medium",
+                        "cross-tool interaction",
+                        0,
+                        0.55,
+                        None,
+                        '["ev-malformed"',
+                        None,
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                ),
+            )
+            sqlite_conn.executemany(
+                """
+                INSERT INTO evidence_items (
+                    evidence_id,
+                    analysis_id,
+                    finding_id,
+                    source_type,
+                    source_ref,
+                    artifact,
+                    location,
+                    resource,
+                    operation,
+                    source_kind,
+                    determinism_level,
+                    redaction_status,
+                    summary,
+                    severity_hint,
+                    deterministic,
+                    confidence,
+                    related_change_ids_json,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    (
+                        "ev-heuristic",
+                        1,
+                        "finding-heuristic",
+                        "heuristic",
+                        "heuristic://interaction#payments",
+                        "",
+                        "",
+                        "payments",
+                        "modify",
+                        "heuristic",
+                        "heuristic",
+                        "none",
+                        "Heuristic overlap",
+                        "medium",
+                        0,
+                        0.55,
+                        "[]",
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "ev-external",
+                        1,
+                        "finding-external",
+                        "external_scanner",
+                        "scanner://scan.json#CVE-1",
+                        "",
+                        "",
+                        "CVE-1",
+                        "scan",
+                        "external_scanner",
+                        "deterministic",
+                        "none",
+                        "Scanner result",
+                        "medium",
+                        1,
+                        0.7,
+                        "[]",
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "ev-user",
+                        1,
+                        "finding-user",
+                        "user_context",
+                        "user_context://note#prod-freeze",
+                        "",
+                        "",
+                        "prod-freeze",
+                        "note",
+                        "user_context",
+                        "deterministic",
+                        "none",
+                        "Operator supplied context",
+                        "medium",
+                        1,
+                        0.7,
+                        "[]",
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "ev-mixed-heuristic",
+                        1,
+                        "finding-mixed",
+                        "heuristic",
+                        "heuristic://interaction#payments",
+                        "",
+                        "",
+                        "payments",
+                        "modify",
+                        "heuristic",
+                        "heuristic",
+                        "none",
+                        "Heuristic overlap",
+                        "medium",
+                        0,
+                        0.55,
+                        "[]",
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        'ev-"quoted"',
+                        1,
+                        "finding-mixed",
+                        "artifact",
+                        "terraform://plan.json#aws_security_group.quoted?action=modify",
+                        "plan.json",
+                        "plan.json#aws_security_group.quoted",
+                        "aws_security_group.quoted",
+                        "modify",
+                        "artifact",
+                        "deterministic",
+                        "none",
+                        "Deterministic quoted evidence",
+                        "medium",
+                        1,
+                        1.0,
+                        "[]",
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                    (
+                        "ev-mixed-deterministic",
+                        1,
+                        "finding-mixed",
+                        "artifact",
+                        "terraform://plan.json#aws_security_group.main?action=modify",
+                        "plan.json",
+                        "plan.json#aws_security_group.main",
+                        "aws_security_group.main",
+                        "modify",
+                        "artifact",
+                        "deterministic",
+                        "none",
+                        "Deterministic plan evidence",
+                        "high",
+                        1,
+                        1.0,
+                        "[]",
+                        "2026-05-08T00:00:00+00:00",
+                    ),
+                ),
+            )
+            sqlite_conn.commit()
+        finally:
+            sqlite_conn.close()
+
+        command.upgrade(self._config(), "head")
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            rows = sqlite_conn.execute(
+                """
+                SELECT finding_id, explanation, guidance_json, evidence_classification
+                FROM findings
+                WHERE finding_id IN (
+                    'finding-legacy',
+                    'finding-heuristic',
+                    'finding-external',
+                    'finding-user',
+                    'finding-mixed',
+                    'finding-shared-ref',
+                    'finding-escaped-ref',
+                    'finding-malformed-ref'
+                )
+                """
+            ).fetchall()
+        finally:
+            sqlite_conn.close()
+
+        context_by_finding = {row[0]: row[1:] for row in rows}
+        self.assertEqual(
+            context_by_finding["finding-legacy"][0],
+            "Legacy model-assisted finding.",
+        )
+        self.assertEqual(context_by_finding["finding-legacy"][1], "[]")
+        self.assertEqual(context_by_finding["finding-legacy"][2], "model_inferred")
+        self.assertEqual(context_by_finding["finding-heuristic"][2], "derived")
+        self.assertEqual(context_by_finding["finding-external"][2], "external")
+        self.assertEqual(context_by_finding["finding-user"][2], "user_provided")
+        self.assertEqual(context_by_finding["finding-mixed"][2], "deterministic")
+        self.assertEqual(
+            context_by_finding["finding-shared-ref"][2],
+            "deterministic",
+        )
+        self.assertEqual(
+            context_by_finding["finding-escaped-ref"][2],
+            "deterministic",
+        )
+        self.assertEqual(
+            context_by_finding["finding-malformed-ref"][2],
+            "model_inferred",
+        )
+
     def test_downgrade_to_011_removes_feedback_event_fields(self) -> None:
         command.upgrade(self._config(), "head")
 
@@ -553,7 +972,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "018_add_evidence_identity_fields")
+        self.assertEqual(revision, "019_add_finding_context_fields")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -602,7 +1021,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "018_add_evidence_identity_fields")
+        self.assertEqual(revision, "019_add_finding_context_fields")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -628,7 +1047,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "018_add_evidence_identity_fields")
+        self.assertEqual(revision, "019_add_finding_context_fields")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -687,6 +1106,69 @@ class MigrationTests(unittest.TestCase):
         reload(database_module)
 
         with self.assertRaisesRegex(RuntimeError, "partial submission manifest schema"):
+            database_module.init_db()
+
+    def test_init_db_rejects_incomplete_finding_context_schema(self) -> None:
+        command.upgrade(self._config(), "018_add_evidence_identity_fields")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("ALTER TABLE findings ADD COLUMN explanation TEXT")
+        sqlite_conn.execute("ALTER TABLE findings ADD COLUMN guidance_json TEXT")
+        sqlite_conn.execute(
+            "ALTER TABLE findings ADD COLUMN evidence_classification INTEGER"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial finding context schema"):
+            database_module.init_db()
+
+    def test_init_db_rejects_incomplete_finding_classification_constraint(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "018_add_evidence_identity_fields")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("PRAGMA foreign_keys=OFF")
+        sqlite_conn.execute("ALTER TABLE findings RENAME TO findings_old")
+        sqlite_conn.execute(
+            """
+            CREATE TABLE findings (
+                id INTEGER NOT NULL,
+                finding_id VARCHAR(80) NOT NULL,
+                analysis_id INTEGER NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                description TEXT NOT NULL,
+                explanation TEXT NOT NULL DEFAULT '',
+                guidance_json TEXT NOT NULL DEFAULT '[]',
+                severity VARCHAR(20) NOT NULL,
+                category VARCHAR(100) NOT NULL,
+                deterministic BOOLEAN NOT NULL,
+                confidence FLOAT NOT NULL,
+                uncertainty_note TEXT,
+                evidence_classification VARCHAR(30) NOT NULL DEFAULT 'deterministic',
+                evidence_refs_json TEXT NOT NULL,
+                skill_id VARCHAR(120),
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                CONSTRAINT ck_findings_evidence_classification
+                    CHECK (evidence_classification != '')
+            )
+            """
+        )
+        sqlite_conn.execute("DROP TABLE findings_old")
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial finding context schema"):
             database_module.init_db()
 
     def test_init_db_rejects_partial_incident_analysis_link_schema(self) -> None:
@@ -841,7 +1323,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "018_add_evidence_identity_fields")
+        self.assertEqual(revision, "019_add_finding_context_fields")
 
 
 if __name__ == "__main__":

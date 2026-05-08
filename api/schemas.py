@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, computed_field
-
 from config import settings
+from evidence.models import FindingEvidenceClassification
+from pydantic import BaseModel, Field, computed_field
 
 
 class MetaPayload(BaseModel):
@@ -648,6 +648,11 @@ class FindingData(BaseModel):
     analysis_id: int = Field(..., description="Analysis identifier")
     title: str = Field(..., description="Reviewer-facing finding title")
     description: str = Field(..., description="Detailed finding description")
+    explanation: str = Field(default="", description="Why the finding matters")
+    guidance: list[str] = Field(
+        default_factory=list,
+        description="Reviewer verification or remediation guidance",
+    )
     severity: RiskSeverity = Field(..., description="Finding severity")
     category: str = Field(..., description="Finding category")
     deterministic: bool = Field(
@@ -657,6 +662,10 @@ class FindingData(BaseModel):
     uncertainty_note: str | None = Field(
         default=None,
         description="Explanation when confidence reflects inferred reasoning",
+    )
+    evidence_classification: FindingEvidenceClassification = Field(
+        default="deterministic",
+        description="Dominant evidence support type for this finding",
     )
     evidence_refs: list[str] = Field(
         default_factory=list, description="Evidence IDs linked to the finding"

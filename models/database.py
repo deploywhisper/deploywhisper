@@ -14,6 +14,7 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from config import settings
+from evidence.models import FINDING_EVIDENCE_CLASSIFICATION_VALUES
 
 
 def _ensure_sqlite_parent_directory(database_url: str) -> None:
@@ -47,6 +48,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "016_scope_learning_context_records",
     "017_add_submission_manifest_payload",
     "018_add_evidence_identity_fields",
+    "019_add_finding_context_fields",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -160,6 +162,41 @@ def _evidence_item_columns(connection) -> set[str]:
     return {
         column["name"] for column in inspect(connection).get_columns("evidence_items")
     }
+
+
+def _finding_columns(connection) -> set[str]:
+    return {column["name"] for column in inspect(connection).get_columns("findings")}
+
+
+def _finding_context_fields_complete(connection) -> bool:
+    inspector = inspect(connection)
+    column_map = {
+        column["name"]: column for column in inspector.get_columns("findings")
+    }
+    required_type_affinities = {
+        "explanation": String,
+        "guidance_json": String,
+        "evidence_classification": String,
+    }
+    has_required_types = all(
+        column_name in column_map
+        and column_map[column_name]["type"]._type_affinity is expected_affinity
+        for column_name, expected_affinity in required_type_affinities.items()
+    )
+    has_required_nullability = all(
+        column_map.get(column_name, {}).get("nullable") is False
+        for column_name in required_type_affinities
+    )
+    classification_checks = inspector.get_check_constraints("findings")
+    has_classification_check = any(
+        "evidence_classification" in str(constraint.get("sqltext") or "")
+        and all(
+            value in str(constraint.get("sqltext") or "")
+            for value in FINDING_EVIDENCE_CLASSIFICATION_VALUES
+        )
+        for constraint in classification_checks
+    )
+    return has_required_types and has_required_nullability and has_classification_check
 
 
 def _evidence_identity_fields_complete(connection) -> bool:
@@ -511,6 +548,17 @@ def _bootstrap_brownfield_revision() -> None:
             "evidence_items" in tables
             and _evidence_identity_fields_complete(connection)
         )
+        has_finding_context_fields = "findings" in tables and bool(
+            {
+                "explanation",
+                "guidance_json",
+                "evidence_classification",
+            }
+            & _finding_columns(connection)
+        )
+        has_complete_finding_context_fields = (
+            "findings" in tables and _finding_context_fields_complete(connection)
+        )
         has_complete_submission_manifest_payload = (
             has_submission_manifest_payload
             and _analysis_report_submission_manifest_complete(connection)
@@ -537,6 +585,24 @@ def _bootstrap_brownfield_revision() -> None:
                 "Detected a partial evidence identity schema without a complete "
                 "migration history. Manual recovery is required."
             )
+        if has_finding_context_fields and not (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+        ):
+            raise RuntimeError(
+                "Detected a partial finding context schema without a complete "
+                "migration history. Manual recovery is required."
+            )
+        if (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+        ):
+            _write_alembic_revision(connection, "019_add_finding_context_fields")
+            return
         if (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload

@@ -6,7 +6,8 @@ import hashlib
 
 from analysis.interaction_risk import InteractionRisk
 from analysis.risk_scorer import RiskAssessment
-from evidence.models import EvidenceItem, Finding
+from evidence.models import EvidenceItem, Finding, FindingEvidenceClassification
+from parsers.base import normalize_change_action
 
 INFERRED_CONFIDENCE_FLOOR = 0.55
 
@@ -46,21 +47,88 @@ def _uncertainty_note(
     return f"Confidence uses the heuristic floor ({INFERRED_CONFIDENCE_FLOOR:.2f}) because this finding is inferred."
 
 
+def _evidence_item_classification(
+    evidence_item: EvidenceItem,
+) -> FindingEvidenceClassification:
+    if evidence_item.source_kind == "external_scanner":
+        return "external"
+    if evidence_item.source_kind == "user_context":
+        return "user_provided"
+    if evidence_item.determinism_level == "heuristic":
+        return "derived"
+    if evidence_item.determinism_level == "inferred":
+        return "model_inferred"
+    return "deterministic" if evidence_item.deterministic else "model_inferred"
+
+
+def classify_finding_evidence(
+    evidence_items: list[EvidenceItem],
+) -> FindingEvidenceClassification:
+    """Return the dominant support classification for one finding."""
+    classifications = {
+        _evidence_item_classification(evidence_item) for evidence_item in evidence_items
+    }
+    for classification in (
+        "deterministic",
+        "user_provided",
+        "external",
+        "model_inferred",
+        "derived",
+    ):
+        if classification in classifications:
+            return classification
+    return "model_inferred"
+
+
+def _contributor_guidance(
+    *,
+    category: str,
+    action: str,
+    severity: str,
+) -> list[str]:
+    guidance = ["Review the linked evidence before deployment."]
+    if category == "networking/ingress":
+        guidance.append("Verify the intended network exposure and ingress rules.")
+    if action in {"destroy", "replace"}:
+        guidance.append("Confirm rollback and recovery steps for this resource.")
+    if severity in {"high", "critical"}:
+        guidance.append("Require human review before applying the change.")
+    return guidance
+
+
 def _matching_evidence_refs(
     interaction_risk: InteractionRisk,
     evidence_items: list[EvidenceItem],
 ) -> list[str]:
     refs: list[str] = []
+    contributing_resources = set(interaction_risk.contributing_resources)
+    contributing_files = set(interaction_risk.contributing_files)
     for item in evidence_items:
-        if any(
-            resource in item.source_ref
-            for resource in interaction_risk.contributing_resources
-        ) or any(
-            file_name in item.source_ref
-            for file_name in interaction_risk.contributing_files
+        if (item.resource and item.resource in contributing_resources) or (
+            not item.resource and item.artifact in contributing_files
         ):
             refs.append(item.evidence_id)
     return refs
+
+
+def _evidence_matches_contributor(
+    evidence_item: EvidenceItem,
+    *,
+    source_file: str,
+    resource_id: str,
+    action: str,
+    normalized_action: str,
+) -> bool:
+    contributor_actions = {
+        action,
+        normalized_action,
+        normalize_change_action(action),
+    }
+    return (
+        evidence_item.artifact == source_file
+        and evidence_item.resource == resource_id
+        and evidence_item.operation in contributor_actions
+    )
 
 
 def build_findings(
@@ -79,8 +147,23 @@ def build_findings(
             if contributor.evidence_id is not None
             else None
         )
-        deterministic = evidence.deterministic if evidence is not None else True
+        if evidence is None:
+            matching_evidence_items = [
+                item
+                for item in evidence_items
+                if _evidence_matches_contributor(
+                    item,
+                    source_file=contributor.source_file,
+                    resource_id=contributor.resource_id,
+                    action=contributor.action,
+                    normalized_action=contributor.normalized_action,
+                )
+            ]
+            if len(matching_evidence_items) == 1:
+                evidence = matching_evidence_items[0]
+        deterministic = evidence.deterministic if evidence is not None else False
         source_confidence = evidence.confidence if evidence is not None else None
+        explanation = contributor.reasoning or contributor.summary
         findings.append(
             Finding(
                 finding_id=_finding_id(
@@ -96,7 +179,13 @@ def build_findings(
                 title=_title_from_resource(
                     contributor.resource_id, contributor.severity
                 ),
-                description=contributor.reasoning or contributor.summary,
+                description=explanation,
+                explanation=explanation,
+                guidance=_contributor_guidance(
+                    category=contributor.resource_category,
+                    action=contributor.normalized_action,
+                    severity=contributor.severity,
+                ),
                 severity=contributor.severity,
                 category=contributor.resource_category,
                 deterministic=deterministic,
@@ -108,8 +197,9 @@ def build_findings(
                     deterministic=deterministic,
                     source_confidence=source_confidence,
                 ),
-                evidence_refs=(
-                    [contributor.evidence_id] if contributor.evidence_id else []
+                evidence_refs=([evidence.evidence_id] if evidence is not None else []),
+                evidence_classification=classify_finding_evidence(
+                    [evidence] if evidence is not None else []
                 ),
                 skill_id=None,
             )
@@ -118,6 +208,15 @@ def build_findings(
     overrides = interaction_confidence_overrides or {}
     for interaction in assessment.interaction_risks:
         llm_confidence = overrides.get(interaction.key)
+        evidence_refs = _matching_evidence_refs(interaction, evidence_items)
+        matching_evidence_by_id = {
+            evidence_item.evidence_id: evidence_item for evidence_item in evidence_items
+        }
+        matched_evidence_items = [
+            matching_evidence_by_id[evidence_ref]
+            for evidence_ref in evidence_refs
+            if evidence_ref in matching_evidence_by_id
+        ]
         findings.append(
             Finding(
                 finding_id=_finding_id(
@@ -132,6 +231,10 @@ def build_findings(
                 analysis_id=0,
                 title="Interaction risk: " + interaction.key.replace("-", " "),
                 description=interaction.summary,
+                explanation=interaction.summary,
+                guidance=[
+                    "Review the linked resources together because the combined change may broaden blast radius."
+                ],
                 severity=assessment.severity,
                 category="cross-tool interaction",
                 deterministic=False,
@@ -143,7 +246,12 @@ def build_findings(
                     deterministic=False,
                     source_confidence=llm_confidence,
                 ),
-                evidence_refs=_matching_evidence_refs(interaction, evidence_items),
+                evidence_refs=evidence_refs,
+                evidence_classification=(
+                    classify_finding_evidence(matched_evidence_items)
+                    if matched_evidence_items
+                    else "derived"
+                ),
                 skill_id=None,
             )
         )

@@ -18,7 +18,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from evidence.models import FINDING_EVIDENCE_CLASSIFICATION_VALUES
 from models.database import Base
+
+_FINDING_EVIDENCE_CLASSIFICATION_SQL = ", ".join(
+    f"'{value}'" for value in FINDING_EVIDENCE_CLASSIFICATION_VALUES
+)
 
 if "IncidentRecord" not in globals():
 
@@ -280,6 +285,10 @@ if "Finding" not in globals():
                 "confidence >= 0.0 AND confidence <= 1.0",
                 name="ck_findings_confidence_range",
             ),
+            CheckConstraint(
+                f"evidence_classification IN ({_FINDING_EVIDENCE_CLASSIFICATION_SQL})",
+                name="ck_findings_evidence_classification",
+            ),
         )
 
         finding_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -289,11 +298,16 @@ if "Finding" not in globals():
         )
         title: Mapped[str] = mapped_column(String(255))
         description: Mapped[str] = mapped_column(Text)
+        explanation: Mapped[str] = mapped_column(Text, default="")
+        guidance_json: Mapped[str] = mapped_column(Text, default="[]")
         severity: Mapped[str] = mapped_column(String(20))
         category: Mapped[str] = mapped_column(String(80))
         deterministic: Mapped[bool] = mapped_column(Boolean, default=True)
         confidence: Mapped[float] = mapped_column(Float, default=1.0)
         uncertainty_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+        evidence_classification: Mapped[str] = mapped_column(
+            String(30), default="deterministic"
+        )
         evidence_refs_json: Mapped[str] = mapped_column(Text, default="[]")
         skill_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
         created_at: Mapped[datetime] = mapped_column(
