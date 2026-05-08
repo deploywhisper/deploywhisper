@@ -253,7 +253,19 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
                 "source_ref": _redact_text_value(
                     evidence_item.get("source_ref", ""), pairs
                 ),
+                "artifact": redaction_map.get(
+                    evidence_item.get("artifact"),
+                    _redact_text_value(evidence_item.get("artifact", ""), pairs),
+                ),
+                "location": _redact_text_value(
+                    evidence_item.get("location", ""), pairs
+                ),
                 "summary": _redact_text_value(evidence_item.get("summary"), pairs),
+                "redaction_status": (
+                    "sensitive_blocked"
+                    if evidence_item.get("redaction_status") == "sensitive_blocked"
+                    else "redacted"
+                ),
             }
             for evidence_item in (report.get("evidence_items") or [])
         ],
@@ -532,6 +544,10 @@ def _evidence_fingerprint(evidence_item: dict[str, Any]) -> str:
         [
             _normalize_free_text(evidence_item.get("source_type")),
             _normalize_free_text(evidence_item.get("source_ref")),
+            _normalize_free_text(evidence_item.get("artifact")),
+            _normalize_free_text(evidence_item.get("location")),
+            _normalize_free_text(evidence_item.get("resource")),
+            _normalize_free_text(evidence_item.get("operation")),
             _normalize_free_text(evidence_item.get("summary")),
             _normalize_free_text(evidence_item.get("severity_hint")),
             related_change_ids,
@@ -1107,6 +1123,40 @@ def _scope_report_entities(
     return scoped_assessment, scoped_findings, scoped_evidence_items
 
 
+def _evidence_items_with_report_context(
+    evidence_items: list[EvidenceItem] | None,
+    *,
+    project: Any,
+    workspace: Any | None,
+    submission_manifest: SubmissionManifest,
+) -> list[EvidenceItem] | None:
+    if evidence_items is None:
+        return None
+    redaction_status_by_artifact = {
+        item.name: normalize_manifest_redaction_status(item.redaction_status)
+        for item in submission_manifest.items
+    }
+    return [
+        evidence_item.model_copy(
+            update={
+                "project_id": project.id,
+                "project_key": project.project_key,
+                "workspace_id": workspace.id if workspace is not None else None,
+                "workspace_key": (
+                    workspace.workspace_key if workspace is not None else None
+                ),
+                "source_kind": evidence_item.source_type,
+                "determinism_level": evidence_item.determinism_level,
+                "redaction_status": redaction_status_by_artifact.get(
+                    evidence_item.artifact,
+                    evidence_item.redaction_status,
+                ),
+            }
+        )
+        for evidence_item in evidence_items
+    ]
+
+
 def normalize_report_schema_version(schema_version: str | None) -> str:
     """Return a stable schema version for stored or in-memory reports."""
     return schema_version or LEGACY_REPORT_SCHEMA_VERSION
@@ -1250,6 +1300,17 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
                         "finding_id": evidence_item.finding_id,
                         "source_type": evidence_item.source_type,
                         "source_ref": evidence_item.source_ref,
+                        "artifact": evidence_item.artifact,
+                        "location": evidence_item.location,
+                        "resource": evidence_item.resource,
+                        "operation": evidence_item.operation,
+                        "project_id": evidence_item.project_id,
+                        "project_key": evidence_item.project_key,
+                        "workspace_id": evidence_item.workspace_id,
+                        "workspace_key": evidence_item.workspace_key,
+                        "source_kind": evidence_item.source_kind,
+                        "determinism_level": evidence_item.determinism_level,
+                        "redaction_status": evidence_item.redaction_status,
                         "summary": evidence_item.summary,
                         "severity_hint": evidence_item.severity_hint,
                         "deterministic": evidence_item.deterministic,
@@ -1433,6 +1494,12 @@ def persist_analysis_report(
                 resolved_workspace.workspace_key if resolved_workspace else None
             ),
         },
+    )
+    evidence_items = _evidence_items_with_report_context(
+        evidence_items,
+        project=resolved_project,
+        workspace=resolved_workspace,
+        submission_manifest=submission_manifest,
     )
     snapshot_allowed_names = {
         item.name for item in submission_manifest.items if item.status == "accepted"

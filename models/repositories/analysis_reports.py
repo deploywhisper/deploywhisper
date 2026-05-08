@@ -165,6 +165,35 @@ def create_analysis_report(
                     finding_id=owner.finding_id,
                     source_type=str(evidence["source_type"]),
                     source_ref=str(evidence["source_ref"]),
+                    artifact=str(evidence.get("artifact") or ""),
+                    location=str(evidence.get("location") or ""),
+                    resource=str(evidence.get("resource") or ""),
+                    operation=str(evidence.get("operation") or ""),
+                    project_id=(
+                        int(evidence["project_id"])
+                        if evidence.get("project_id") is not None
+                        else None
+                    ),
+                    project_key=(
+                        str(evidence["project_key"])
+                        if evidence.get("project_key") is not None
+                        else None
+                    ),
+                    workspace_id=(
+                        int(evidence["workspace_id"])
+                        if evidence.get("workspace_id") is not None
+                        else None
+                    ),
+                    workspace_key=(
+                        str(evidence["workspace_key"])
+                        if evidence.get("workspace_key") is not None
+                        else None
+                    ),
+                    source_kind=str(evidence.get("source_kind") or "artifact"),
+                    determinism_level=str(
+                        evidence.get("determinism_level") or "deterministic"
+                    ),
+                    redaction_status=str(evidence.get("redaction_status") or "none"),
                     summary=str(evidence["summary"]),
                     severity_hint=str(evidence["severity_hint"]),
                     deterministic=bool(evidence["deterministic"]),

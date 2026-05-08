@@ -78,6 +78,12 @@ class EvidenceModelTests(unittest.TestCase):
         payload = item.model_dump()
 
         self.assertEqual(payload["analysis_id"], 7)
+        self.assertEqual(payload["artifact"], "plan.json")
+        self.assertEqual(payload["location"], "plan.json#aws_security_group.main")
+        self.assertEqual(payload["resource"], "aws_security_group.main")
+        self.assertEqual(payload["source_kind"], "artifact")
+        self.assertEqual(payload["determinism_level"], "deterministic")
+        self.assertEqual(payload["redaction_status"], "none")
         self.assertEqual(payload["severity_hint"], "high")
         self.assertEqual(payload["related_change_ids"], ["change-1", "change-2"])
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from urllib.parse import quote
 
-from evidence.models import EvidenceItem, RiskSeverity
+from evidence.models import EvidenceItem, EvidenceRedactionStatus, RiskSeverity
 from parsers.base import (
     NormalizedChange,
     ParseBatchResult,
@@ -114,6 +114,21 @@ def _severity_hint(change: NormalizedChange) -> RiskSeverity:
 class EvidenceExtractor:
     """Translate normalized parser changes into evidence-domain items."""
 
+    def __init__(
+        self,
+        *,
+        project_id: int | None = None,
+        project_key: str | None = None,
+        workspace_id: int | None = None,
+        workspace_key: str | None = None,
+        redaction_status_by_artifact: dict[str, EvidenceRedactionStatus] | None = None,
+    ) -> None:
+        self.project_id = project_id
+        self.project_key = project_key
+        self.workspace_id = workspace_id
+        self.workspace_key = workspace_key
+        self.redaction_status_by_artifact = redaction_status_by_artifact or {}
+
     def extract(self, change: NormalizedChange) -> list[EvidenceItem]:
         if change.tool == "terraform" and is_non_mutating_action(change.action):
             return []
@@ -148,12 +163,26 @@ class EvidenceExtractor:
 
     def _build_item(self, change: NormalizedChange) -> EvidenceItem:
         source_ref = _build_source_ref(change)
+        operation = _normalize_action(change.action)
         return EvidenceItem(
             evidence_id=_build_evidence_id(change, source_ref),
             analysis_id=0,
             finding_id=f"pending:{change.change_id}",
             source_type="artifact",
             source_ref=source_ref,
+            artifact=change.source_file,
+            location=f"{change.source_file}#{change.resource_id}",
+            resource=change.resource_id,
+            operation=operation,
+            project_id=self.project_id,
+            project_key=self.project_key,
+            workspace_id=self.workspace_id,
+            workspace_key=self.workspace_key,
+            source_kind="artifact",
+            determinism_level="deterministic",
+            redaction_status=self.redaction_status_by_artifact.get(
+                change.source_file, "none"
+            ),
             summary=change.summary,
             severity_hint=_severity_hint(change),
             deterministic=True,
@@ -162,11 +191,39 @@ class EvidenceExtractor:
         )
 
 
-def extract_evidence(change: NormalizedChange) -> list[EvidenceItem]:
+def extract_evidence(
+    change: NormalizedChange,
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+    redaction_status_by_artifact: dict[str, EvidenceRedactionStatus] | None = None,
+) -> list[EvidenceItem]:
     """Extract evidence items for one normalized change."""
-    return EvidenceExtractor().extract(change)
+    return EvidenceExtractor(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+        redaction_status_by_artifact=redaction_status_by_artifact,
+    ).extract(change)
 
 
-def extract_batch_evidence(batch: ParseBatchResult) -> list[EvidenceItem]:
+def extract_batch_evidence(
+    batch: ParseBatchResult,
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+    redaction_status_by_artifact: dict[str, EvidenceRedactionStatus] | None = None,
+) -> list[EvidenceItem]:
     """Extract evidence items for every parsed change in one batch."""
-    return EvidenceExtractor().extract_batch(batch)
+    return EvidenceExtractor(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+        redaction_status_by_artifact=redaction_status_by_artifact,
+    ).extract_batch(batch)

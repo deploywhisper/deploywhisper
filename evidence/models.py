@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from typing import Literal
+from urllib.parse import parse_qs, unquote
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 RiskSeverity = Literal["low", "medium", "high", "critical"]
 DeployRecommendation = Literal["go", "caution", "no-go"]
@@ -16,6 +17,9 @@ EvidenceSourceType = Literal[
     "heuristic",
     "skill",
 ]
+EvidenceSourceKind = EvidenceSourceType
+DeterminismLevel = Literal["deterministic", "heuristic", "inferred"]
+EvidenceRedactionStatus = Literal["none", "redacted", "sensitive_blocked"]
 
 
 def _validate_string_list(value: list[str]) -> list[str]:
@@ -23,6 +27,23 @@ def _validate_string_list(value: list[str]) -> list[str]:
     if any(not item for item in cleaned):
         raise ValueError("List entries must be non-empty strings.")
     return cleaned
+
+
+def _parse_source_ref(source_ref: str) -> dict[str, str]:
+    if "://" not in source_ref:
+        return {"artifact": "", "resource": "", "operation": ""}
+    remainder = source_ref.split("://", 1)[1]
+    artifact_part, _, fragment = remainder.partition("#")
+    resource_part, _, query = fragment.partition("?")
+    operation = ""
+    if query:
+        action_values = parse_qs(query).get("action") or []
+        operation = unquote(action_values[0]) if action_values else ""
+    return {
+        "artifact": unquote(artifact_part),
+        "resource": unquote(resource_part),
+        "operation": operation,
+    }
 
 
 class ContextCompleteness(BaseModel):
@@ -81,6 +102,17 @@ class EvidenceItem(BaseModel):
     finding_id: str = Field(..., min_length=1)
     source_type: EvidenceSourceType
     source_ref: str = Field(..., min_length=1)
+    artifact: str = Field(default="", description="Submitted artifact identifier")
+    location: str = Field(default="", description="Inspectable artifact location")
+    resource: str = Field(default="", description="Changed resource identifier")
+    operation: str = Field(default="", description="Normalized change operation")
+    project_id: int | None = Field(default=None, ge=1)
+    project_key: str | None = Field(default=None, min_length=1)
+    workspace_id: int | None = Field(default=None, ge=1)
+    workspace_key: str | None = Field(default=None, min_length=1)
+    source_kind: EvidenceSourceKind = Field(default="artifact")
+    determinism_level: DeterminismLevel = Field(default="deterministic")
+    redaction_status: EvidenceRedactionStatus = Field(default="none")
     summary: str = Field(..., min_length=1)
     severity_hint: RiskSeverity
     deterministic: bool
@@ -91,6 +123,28 @@ class EvidenceItem(BaseModel):
     @classmethod
     def _validate_related_change_ids(cls, value: list[str]) -> list[str]:
         return _validate_string_list(value)
+
+    @model_validator(mode="after")
+    def _populate_identity_fields(self) -> EvidenceItem:
+        parsed = _parse_source_ref(self.source_ref)
+        if not self.artifact and parsed["artifact"]:
+            self.artifact = parsed["artifact"]
+        if not self.resource and parsed["resource"]:
+            self.resource = parsed["resource"]
+        if not self.operation and parsed["operation"]:
+            self.operation = parsed["operation"]
+        if not self.location and self.artifact:
+            self.location = (
+                f"{self.artifact}#{self.resource}" if self.resource else self.artifact
+            )
+        if self.source_kind != self.source_type:
+            self.source_kind = self.source_type
+        expected_level: DeterminismLevel = (
+            "deterministic" if self.deterministic else "inferred"
+        )
+        if self.determinism_level == "deterministic" and not self.deterministic:
+            self.determinism_level = expected_level
+        return self
 
 
 class Finding(BaseModel):

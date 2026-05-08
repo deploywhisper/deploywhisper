@@ -106,6 +106,15 @@ class EvidenceTableTests(unittest.TestCase):
                     finding_id=finding.finding_id,
                     source_type="artifact",
                     source_ref="terraform://plan.json#aws_security_group.main",
+                    artifact="plan.json",
+                    location="plan.json#aws_security_group.main",
+                    resource="aws_security_group.main",
+                    operation="modify",
+                    project_id=self.default_project.id,
+                    project_key=self.default_project.project_key,
+                    source_kind="artifact",
+                    determinism_level="deterministic",
+                    redaction_status="none",
                     summary="Ingress widened to 0.0.0.0/0",
                     severity_hint="high",
                     deterministic=True,
@@ -147,6 +156,15 @@ class EvidenceTableTests(unittest.TestCase):
             self.assertEqual(
                 stored.findings[0].evidence_items[0].source_ref,
                 "terraform://plan.json#aws_security_group.main",
+            )
+            self.assertEqual(stored.findings[0].evidence_items[0].artifact, "plan.json")
+            self.assertEqual(stored.findings[0].evidence_items[0].operation, "modify")
+            self.assertEqual(
+                stored.findings[0].evidence_items[0].project_key, "unassigned"
+            )
+            self.assertEqual(
+                stored.findings[0].evidence_items[0].determinism_level,
+                "deterministic",
             )
             self.assertEqual(stored.risk_assessment.score, 72)
             self.assertEqual(stored.context_snapshot.history_window, "90d")

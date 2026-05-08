@@ -46,6 +46,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "015_add_report_workspace_scope",
     "016_scope_learning_context_records",
     "017_add_submission_manifest_payload",
+    "018_add_evidence_identity_fields",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -153,6 +154,30 @@ def _incident_record_columns(connection) -> set[str]:
     return {
         column["name"] for column in inspect(connection).get_columns("incident_records")
     }
+
+
+def _evidence_item_columns(connection) -> set[str]:
+    return {
+        column["name"] for column in inspect(connection).get_columns("evidence_items")
+    }
+
+
+def _evidence_identity_fields_complete(connection) -> bool:
+    columns = _evidence_item_columns(connection)
+    required_columns = {
+        "artifact",
+        "location",
+        "resource",
+        "operation",
+        "project_id",
+        "project_key",
+        "workspace_id",
+        "workspace_key",
+        "source_kind",
+        "determinism_level",
+        "redaction_status",
+    }
+    return required_columns.issubset(columns)
 
 
 def _incident_record_has_analysis_link(connection) -> bool:
@@ -466,6 +491,26 @@ def _bootstrap_brownfield_revision() -> None:
             }
             & report_columns
         )
+        has_evidence_identity_fields = "evidence_items" in tables and bool(
+            {
+                "artifact",
+                "location",
+                "resource",
+                "operation",
+                "project_id",
+                "project_key",
+                "workspace_id",
+                "workspace_key",
+                "source_kind",
+                "determinism_level",
+                "redaction_status",
+            }
+            & _evidence_item_columns(connection)
+        )
+        has_complete_evidence_identity_fields = (
+            "evidence_items" in tables
+            and _evidence_identity_fields_complete(connection)
+        )
         has_complete_submission_manifest_payload = (
             has_submission_manifest_payload
             and _analysis_report_submission_manifest_complete(connection)
@@ -483,6 +528,22 @@ def _bootstrap_brownfield_revision() -> None:
                 "Detected a partial submission manifest schema without a complete "
                 "migration history. Manual recovery is required."
             )
+        if has_evidence_identity_fields and not (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+        ):
+            raise RuntimeError(
+                "Detected a partial evidence identity schema without a complete "
+                "migration history. Manual recovery is required."
+            )
+        if (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+        ):
+            _write_alembic_revision(connection, "018_add_evidence_identity_fields")
+            return
         if (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload
