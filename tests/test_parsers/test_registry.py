@@ -13,7 +13,7 @@ class ParserRegistryTests(unittest.TestCase):
         files = [
             (
                 "plan.json",
-                b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             ),
             (
                 "deployment.yaml",
@@ -31,9 +31,12 @@ class ParserRegistryTests(unittest.TestCase):
         files = [
             (
                 "plan.json",
-                b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             ),
-            ("empty-plan.json", b'{"resource_changes": []}'),
+            (
+                "broken-plan.json",
+                b'{"resource_changes": [{"address": "aws_instance.web", "change": {}}]}',
+            ),
         ]
         batch = parse_uploaded_files(files)
         self.assertEqual(batch.parsed_count, 1)
@@ -77,7 +80,7 @@ module "network" {
             [
                 (
                     "eks-plan.json",
-                    b'{"resource_changes": [{"address": "aws_eks_cluster.platform", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_eks_cluster.platform", "change": {"actions": ["update"]}}]}',
                 )
             ]
         )
@@ -91,7 +94,7 @@ module "network" {
             [
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                 ),
                 (
                     "deployment.yaml",
@@ -113,13 +116,30 @@ module "network" {
         self.assertFalse(batch.has_partial_context)
         self.assertEqual(batch.files[0].status, "skipped")
 
-    def test_parse_uploaded_files_marks_supported_but_empty_result_as_failure(
+    def test_parse_uploaded_files_accepts_zero_diff_terraform_plan(
         self,
     ) -> None:
         batch = parse_uploaded_files([("plan.json", b'{"resource_changes": []}')])
-        self.assertEqual(batch.parsed_count, 0)
-        self.assertEqual(batch.failed_count, 1)
-        self.assertIn("No normalized changes produced", batch.files[0].issue.message)
+        self.assertEqual(batch.parsed_count, 1)
+        self.assertEqual(batch.failed_count, 0)
+        self.assertEqual(batch.files[0].changes[0].action, "no-op")
+        self.assertIn("no planned resource changes", batch.files[0].changes[0].summary)
+
+    def test_parse_uploaded_files_accepts_terraform_plan_with_only_noop_changes(
+        self,
+    ) -> None:
+        batch = parse_uploaded_files(
+            [
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["no-op"]}}]}',
+                )
+            ]
+        )
+
+        self.assertEqual(batch.parsed_count, 1)
+        self.assertEqual(batch.failed_count, 0)
+        self.assertEqual(batch.files[0].changes[0].action, "no-op")
 
 
 if __name__ == "__main__":

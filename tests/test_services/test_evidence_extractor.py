@@ -18,7 +18,7 @@ SCENARIOS = [
         "label": "terraform security group modify",
         "parser": parse_terraform,
         "file_name": "plan.json",
-        "raw": b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+        "raw": b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
         "expected_source_ref": "terraform://plan.json#aws_security_group.main?action=modify",
         "expected_severity": "high",
     },
@@ -42,8 +42,16 @@ SCENARIOS = [
         "label": "terraform destroy compute",
         "parser": parse_terraform,
         "file_name": "compute.json",
-        "raw": b'{"resource_changes": [{"address": "aws_instance.web", "change": {"actions": ["destroy"]}}]}',
+        "raw": b'{"resource_changes": [{"address": "aws_instance.web", "change": {"actions": ["delete"]}}]}',
         "expected_source_ref": "terraform://compute.json#aws_instance.web?action=destroy",
+        "expected_severity": "high",
+    },
+    {
+        "label": "terraform replace compute",
+        "parser": parse_terraform,
+        "file_name": "replace.json",
+        "raw": b'{"resource_changes": [{"address": "aws_instance.web", "change": {"actions": ["delete", "create"], "replace_paths": [["ami"]]}}]}',
+        "expected_source_ref": "terraform://replace.json#aws_instance.web?action=replace",
         "expected_severity": "high",
     },
     {
@@ -181,8 +189,8 @@ class EvidenceExtractorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.extractor = EvidenceExtractor()
 
-    def test_extract_covers_twenty_parser_fixture_scenarios(self) -> None:
-        self.assertEqual(len(SCENARIOS), 20)
+    def test_extract_covers_mutating_parser_fixture_scenarios(self) -> None:
+        self.assertEqual(len(SCENARIOS), 21)
 
         observed_tools: set[str] = set()
 
@@ -216,6 +224,53 @@ class EvidenceExtractorTests(unittest.TestCase):
         self.assertEqual(
             observed_tools,
             {"terraform", "kubernetes", "ansible", "jenkins", "cloudformation"},
+        )
+
+    def test_extract_skips_non_mutating_terraform_plan_changes(self) -> None:
+        for file_name, raw in (
+            ("empty-plan.json", b'{"resource_changes": []}'),
+            (
+                "data.json",
+                b'{"resource_changes": [{"address": "data.aws_ami.latest", "mode": "data", "change": {"actions": ["read"]}}]}',
+            ),
+        ):
+            with self.subTest(file_name=file_name):
+                changes = parse_terraform(file_name, raw)
+
+                self.assertEqual(len(changes), 1)
+                self.assertEqual(self.extractor.extract(changes[0]), [])
+
+    def test_extract_batch_evidence_filters_non_mutating_terraform_changes(
+        self,
+    ) -> None:
+        changes = parse_terraform(
+            "mixed-plan.json",
+            (
+                b'{"resource_changes": ['
+                b'{"address": "aws_security_group.unchanged", "change": {"actions": ["no-op"]}},'
+                b'{"address": "data.aws_ami.latest", "mode": "data", "change": {"actions": ["read"]}},'
+                b'{"address": "aws_security_group.updated", "change": {"actions": ["update"]}}'
+                b"]}"
+            ),
+        )
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="mixed-plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=changes,
+                )
+            ]
+        )
+
+        evidence_items = extract_batch_evidence(batch)
+
+        self.assertEqual(
+            [item.source_ref for item in evidence_items],
+            [
+                "terraform://mixed-plan.json#aws_security_group.updated?action=modify",
+            ],
         )
 
     def test_extract_batch_evidence_preserves_duplicate_parser_changes(self) -> None:

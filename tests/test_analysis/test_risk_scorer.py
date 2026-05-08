@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 
 from analysis.risk_scorer import score_changes, score_parse_batch
@@ -52,6 +53,223 @@ class RiskScorerTests(unittest.TestCase):
         self.assertLessEqual(assessment.score, 60)
         self.assertIn(assessment.severity, {"medium", "low"})
         self.assertEqual(assessment.recommendation, "go")
+
+    def test_noop_changes_do_not_score_as_modifications(self) -> None:
+        assessment = score_changes(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="no-op",
+                    summary="Terraform resource aws_security_group.main has no planned changes.",
+                )
+            ]
+        )
+
+        self.assertEqual(assessment.score, 0)
+        self.assertEqual(assessment.severity, "low")
+        self.assertEqual(assessment.recommendation, "go")
+        self.assertEqual(assessment.contributors[0].normalized_action, "no-op")
+
+    def test_noop_changes_keep_no_planned_change_blast_radius_with_topology(
+        self,
+    ) -> None:
+        assessment = score_changes(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="no-op",
+                    summary="Terraform resource aws_security_group.main has no planned changes.",
+                )
+            ],
+            topology={
+                "services": [
+                    {
+                        "id": "api",
+                        "resource_keys": ["aws_security_group.main"],
+                        "downstream": ["worker"],
+                    },
+                    {"id": "worker", "resource_keys": [], "downstream": []},
+                ]
+            },
+        )
+
+        contributor = assessment.contributors[0]
+        self.assertEqual(assessment.score, 0)
+        self.assertEqual(contributor.downstream_scope, 2)
+        self.assertEqual(contributor.blast_radius, "no planned change")
+        self.assertNotIn("may affect", contributor.reasoning)
+
+    def test_replacement_actions_are_not_normalized_as_destroy_only(self) -> None:
+        assessment = score_changes(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_instance.web",
+                    action="delete+create",
+                    summary="Terraform resource aws_instance.web marked for delete+create.",
+                    metadata={"replace_paths": ["ami"]},
+                )
+            ]
+        )
+
+        contributor = assessment.contributors[0]
+        self.assertEqual(contributor.normalized_action, "replace")
+        self.assertEqual(contributor.severity, "high")
+        self.assertEqual(assessment.recommendation, "no-go")
+        self.assertEqual(contributor.metadata["replace_paths"], ["ami"])
+
+    def test_mixed_destructive_actions_normalize_as_destroy(self) -> None:
+        assessment = score_changes(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_instance.web",
+                    action="modify+delete",
+                    summary="Terraform resource aws_instance.web marked for destroy.",
+                )
+            ]
+        )
+
+        self.assertEqual(assessment.contributors[0].normalized_action, "destroy")
+
+    def test_non_mutating_changes_ignore_raw_file_security_flags(self) -> None:
+        assessment = score_changes(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="no-op",
+                    summary="Terraform resource aws_security_group.main has no planned changes.",
+                )
+            ],
+            raw_files={"plan.json": b'protocol -1 cidr_blocks = ["0.0.0.0/0"]'},
+        )
+
+        contributor = assessment.contributors[0]
+        self.assertEqual(assessment.score, 0)
+        self.assertEqual(assessment.severity, "low")
+        self.assertEqual(assessment.recommendation, "go")
+        self.assertEqual(contributor.security_flags, [])
+
+    def test_mixed_non_mutating_and_mutating_actions_do_not_downgrade(self) -> None:
+        assessment = score_changes(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_instance.deleted",
+                    action="read+delete",
+                    summary="Terraform resource aws_instance.deleted marked for destroy.",
+                ),
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_instance.updated",
+                    action="no-op+update",
+                    summary="Terraform resource aws_instance.updated marked for modify.",
+                ),
+            ]
+        )
+
+        by_resource = {
+            contributor.resource_id: contributor.normalized_action
+            for contributor in assessment.contributors
+        }
+        self.assertEqual(by_resource["aws_instance.deleted"], "destroy")
+        self.assertEqual(by_resource["aws_instance.updated"], "modify")
+
+    def test_read_only_changes_do_not_score_as_modifications(self) -> None:
+        assessment = score_changes(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="data.aws_ami.latest",
+                    action="read",
+                    summary="Terraform resource data.aws_ami.latest marked for read.",
+                    metadata={"mode": "data"},
+                )
+            ]
+        )
+
+        contributor = assessment.contributors[0]
+        self.assertEqual(assessment.score, 0)
+        self.assertEqual(assessment.severity, "low")
+        self.assertEqual(contributor.normalized_action, "read")
+        self.assertEqual(
+            contributor.blast_radius,
+            "read-only lookup; no infrastructure mutation planned",
+        )
+
+    def test_llm_scoring_keeps_non_mutating_changes_at_zero(self) -> None:
+        def fake_completion(**_: object) -> str:
+            self.fail("Non-mutating changes should not invoke LLM scoring.")
+            return json.dumps(
+                {
+                    "overall_severity": "medium",
+                    "recommendation": "go",
+                    "top_risk": "LLM attempted to score the no-op change.",
+                    "overall_reasoning": "No-op entry should remain deterministic.",
+                    "change_scores": [
+                        {
+                            "source_file": "plan.json",
+                            "resource_id": "aws_security_group.main",
+                            "severity": "medium",
+                            "reasoning": "LLM marked this as medium risk.",
+                        }
+                    ],
+                }
+            )
+
+        assessment = score_changes(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="no-op",
+                    summary="Terraform resource aws_security_group.main has no planned changes.",
+                )
+            ],
+            completion_client=fake_completion,
+        )
+
+        self.assertEqual(assessment.source, "heuristic-only")
+        self.assertEqual(assessment.score, 0)
+        self.assertEqual(assessment.severity, "low")
+        self.assertEqual(assessment.recommendation, "go")
+        self.assertEqual(assessment.contributors[0].contribution, 0)
+        self.assertEqual(assessment.contributors[0].severity, "low")
+        self.assertNotIn("medium risk", assessment.contributors[0].reasoning)
+        self.assertNotIn("medium risk", assessment.top_risk)
+
+    def test_non_mutating_llm_failure_does_not_emit_provider_warning(self) -> None:
+        def failing_completion(**_: object) -> str:
+            raise RuntimeError("provider unavailable")
+
+        assessment = score_changes(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="data.aws_ami.latest",
+                    action="read",
+                    summary="Terraform resource data.aws_ami.latest is read-only.",
+                )
+            ],
+            completion_client=failing_completion,
+        )
+
+        self.assertEqual(assessment.source, "heuristic-only")
+        self.assertEqual(assessment.score, 0)
+        self.assertEqual(assessment.warnings, [])
 
     def test_high_impact_changes_can_reach_critical_and_no_go(self) -> None:
         assessment = score_changes(

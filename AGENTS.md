@@ -109,6 +109,11 @@ Minimum expectations:
   - `bash scripts/ci-local.sh`
 - If the app behavior changed, run the app locally when possible:
   - `python app.py`
+- If a story changes any UI route, NiceGUI component, rendered report/history/dashboard surface, browser interaction, keyboard behavior, or accessibility semantics, run browser-side Playwright validation and record the command/result in the story Dev Agent Record before moving the story to review:
+  - `npm run test:ui-review` for review/report flows
+  - `RUN_UI_A11Y=1 bash scripts/ci-local.sh` when the full local UI lane is needed
+  - `npm run test:ui-review:voiceover` on macOS for screen-reader or keyboard/a11y semantics
+  - If no UI surface is touched, record `UI validation not applicable` instead of silently skipping UI validation.
 - If dependencies are not installed, bootstrap locally:
   - `python3 -m venv .venv`
   - `source .venv/bin/activate`

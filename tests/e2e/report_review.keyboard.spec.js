@@ -71,6 +71,20 @@ test.describe("review keyboard flow", () => {
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(page.getByText("5-second verdict")).toBeVisible();
     await page.waitForFunction(() => window.dwReviewAccessibilityInstalled === true);
+    await expect(page.getByText("Module: module.network").first()).toBeVisible();
+    await expect(
+      page
+        .getByText("Provider: registry.terraform.io/hashicorp/aws")
+        .first()
+    ).toBeVisible();
+    await expect(
+      page.getByText("Unsupported plan fields: plan.planned_values").first()
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Thumbs up" }).first().click();
+    await expect(page.getByText("Module: module.network").first()).toBeVisible();
+    await expect(
+      page.getByText("Unsupported plan fields: plan.planned_values").first()
+    ).toBeVisible();
 
     const findingRows = page.locator('[data-dw-finding-row="1"]');
     await expect(findingRows).toHaveCount(2);
@@ -136,6 +150,10 @@ test.describe("review keyboard flow", () => {
     await page.waitForFunction(() => window.dwReviewAccessibilityInstalled === true);
     await expect(page.getByText("Analysis report detail")).toBeVisible();
     await expect(page.getByText("Back to History")).toBeVisible();
+    await expect(page.getByText("Module: module.network").first()).toBeVisible();
+    await expect(
+      page.getByText("Unsupported plan fields: plan.planned_values").first()
+    ).toBeVisible();
     await expect(page.locator('[data-dw-modal-root="1"]')).toHaveCount(0);
     await expect(page.locator('[data-dw-review-section="findings"]')).toBeVisible();
     await expect(page.locator('[data-dw-review-section="context"]')).toBeVisible();

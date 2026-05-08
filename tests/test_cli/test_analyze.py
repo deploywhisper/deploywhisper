@@ -572,7 +572,14 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            (
+                '{"planned_values": {}, "resource_changes": [{"address": "module.network.aws_security_group.main", '
+                '"module_address": "module.network", "type": "aws_security_group", '
+                '"name": "main", "provider_name": "registry.terraform.io/hashicorp/aws", '
+                '"change": {"actions": ["update"], "after_unknown": {"arn": true}, '
+                '"after_sensitive": {"ingress": [{"description": true}]}, '
+                '"replace_paths": [["ingress", 0, "cidr_blocks"]]}}]}'
+            ),
             encoding="utf-8",
         )
         narrative = NarrativeResult(
@@ -634,6 +641,19 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["report_schema_version"], "v2"
         )
+        change = payload["data"]["parse_batch"]["files"][0]["changes"][0]
+        self.assertEqual(
+            change["resource_id"], "module.network.aws_security_group.main"
+        )
+        self.assertEqual(change["metadata"]["module_address"], "module.network")
+        self.assertEqual(change["metadata"]["unknown_after_apply"], ["arn"])
+        self.assertEqual(
+            change["metadata"]["redacted_fields"], ["ingress.0.description"]
+        )
+        self.assertEqual(
+            change["metadata"]["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
         self.assertEqual(
             payload["data"]["persisted_report"]["audit"]["source_interface"], "cli"
         )
@@ -641,6 +661,66 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["persisted_report"]["audit"]["trigger_type"], "cli_command"
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 1)
+
+    def test_analyze_command_serializes_duplicate_terraform_action_parse_failure(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        valid_path = Path(self.tempdir.name) / "plan.json"
+        valid_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
+            encoding="utf-8",
+        )
+        duplicate_path = Path(self.tempdir.name) / "duplicate-plan.json"
+        duplicate_path.write_text(
+            '{"resource_changes": [{"address": "aws_instance.web", "change": {"actions": ["create", "create"]}}]}',
+            encoding="utf-8",
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review partial analysis.",
+            explanation="One Terraform plan could not be parsed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        output = io.StringIO()
+
+        with (
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(valid_path),
+                    str(duplicate_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        by_name = {
+            file_result["file_name"]: file_result
+            for file_result in payload["data"]["parse_batch"]["files"]
+        }
+        self.assertEqual(by_name["plan.json"]["status"], "parsed")
+        self.assertEqual(by_name["duplicate-plan.json"]["status"], "failed")
+        self.assertIn(
+            "Duplicate Terraform action",
+            by_name["duplicate-plan.json"]["issue"]["message"],
+        )
 
     def test_analyze_command_captures_trigger_context_from_environment_when_available(
         self,
@@ -651,7 +731,7 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         narrative = NarrativeResult(
@@ -707,7 +787,7 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         output = io.StringIO()
@@ -764,7 +844,7 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         output = io.StringIO()
@@ -821,7 +901,7 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         output = io.StringIO()
@@ -1914,7 +1994,7 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         stdout = io.StringIO()
@@ -1956,7 +2036,7 @@ class AnalyzeCliTests(unittest.TestCase):
     def test_analyze_command_rejects_unknown_project_before_parsing(self) -> None:
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         stdout = io.StringIO()
@@ -1999,7 +2079,7 @@ class AnalyzeCliTests(unittest.TestCase):
     ) -> None:
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         stdout = io.StringIO()
@@ -2033,7 +2113,7 @@ class AnalyzeCliTests(unittest.TestCase):
     ) -> None:
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         stdout = io.StringIO()
@@ -2078,11 +2158,11 @@ class AnalyzeCliTests(unittest.TestCase):
         first_path = first_dir / "plan.json"
         second_path = second_dir / "plan.json"
         first_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.first", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.first", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         second_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.second", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.second", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         output = io.StringIO()
@@ -2139,7 +2219,7 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         stdout = io.StringIO()
@@ -2309,7 +2389,7 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         artifact_path = Path(self.tempdir.name) / "plan.json"
         artifact_path.write_text(
-            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
         stdout = io.StringIO()

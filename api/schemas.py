@@ -567,6 +567,10 @@ class ChangeData(BaseModel):
     resource_id: str = Field(..., description="Resource identifier")
     action: str = Field(..., description="Change action")
     summary: str = Field(..., description="Human-readable summary")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Optional parser-specific normalized metadata",
+    )
 
 
 class ParseIssueData(BaseModel):
@@ -633,6 +637,10 @@ class RiskContributorData(BaseModel):
     )
     severity: RiskSeverity = Field(..., description="Per-resource severity")
     reasoning: str = Field(default="", description="Per-resource scoring explanation")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parser-specific normalized metadata carried into reports",
+    )
 
 
 class FindingData(BaseModel):

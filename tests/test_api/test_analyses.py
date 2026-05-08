@@ -526,7 +526,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )
@@ -622,6 +622,194 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
 
+    def test_create_analysis_preserves_real_pipeline_metadata_in_persisted_contributors(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    (
+                        b'{"planned_values": {}, "resource_changes": ['
+                        b'{"address": "data.aws_ami.selected", "mode": "data", '
+                        b'"change": {"actions": ["read"], "after_unknown": {"id": true}}}, '
+                        b'{"address": '
+                        b'"module.network.aws_security_group.main", "module_address": '
+                        b'"module.network", "provider_name": '
+                        b'"registry.terraform.io/hashicorp/aws", "type": '
+                        b'"aws_security_group", "name": "main", "change": '
+                        b'{"actions": ["update"]}}]}'
+                    ),
+                    "application/json",
+                ),
+            )
+        ]
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="The deployment should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "analysis.risk_scorer.generate_completion_with_settings",
+                return_value='{"change_scores": []}',
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "payments"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        contributors = {
+            contributor["resource_id"]: contributor
+            for contributor in payload["data"]["persisted_report"]["contributors"]
+        }
+        metadata = contributors["module.network.aws_security_group.main"]["metadata"]
+        self.assertEqual(metadata["module_address"], "module.network")
+        self.assertEqual(
+            metadata["provider_name"], "registry.terraform.io/hashicorp/aws"
+        )
+        self.assertEqual(metadata["plan_unsupported_fields"], ["plan.planned_values"])
+        self.assertEqual(
+            contributors["data.aws_ami.selected"]["metadata"]["unknown_after_apply"],
+            ["id"],
+        )
+        self.assertIsNone(contributors["data.aws_ami.selected"]["evidence_id"])
+        self.assertEqual(contributors["data.aws_ami.selected"]["contribution"], 0)
+
+        detail = self.client.get(
+            f"/api/v1/analyses/{payload['data']['persisted_report']['id']}",
+            params={"project_key": "payments"},
+        )
+        self.assertEqual(detail.status_code, 200)
+        detail_contributors = {
+            contributor["resource_id"]: contributor
+            for contributor in detail.json()["data"]["contributors"]
+        }
+        self.assertEqual(
+            detail_contributors["module.network.aws_security_group.main"]["metadata"][
+                "plan_unsupported_fields"
+            ],
+            ["plan.planned_values"],
+        )
+        self.assertEqual(
+            detail_contributors["data.aws_ami.selected"]["metadata"][
+                "unknown_after_apply"
+            ],
+            ["id"],
+        )
+
+        history = self.client.get(
+            "/api/v1/analyses",
+            params={"project_key": "payments"},
+        )
+        self.assertEqual(history.status_code, 200)
+        history_contributors = {
+            contributor["resource_id"]: contributor
+            for contributor in history.json()["data"][0]["contributors"]
+        }
+        self.assertEqual(
+            history_contributors["module.network.aws_security_group.main"]["metadata"][
+                "plan_unsupported_fields"
+            ],
+            ["plan.planned_values"],
+        )
+        self.assertEqual(
+            history_contributors["data.aws_ami.selected"]["metadata"][
+                "unknown_after_apply"
+            ],
+            ["id"],
+        )
+
+    def test_create_analysis_preserves_all_non_mutating_plan_metadata(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "empty-plan.json",
+                    (
+                        b'{"format_version": "1.2", "terraform_version": "1.8.5", '
+                        b'"planned_values": {}, "resource_changes": []}'
+                    ),
+                    "application/json",
+                ),
+            )
+        ]
+        narrative = NarrativeResult(
+            opening_sentence="GO: no planned infrastructure changes.",
+            explanation="The submitted Terraform plan contains no resource changes.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "payments"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        contributor = payload["data"]["persisted_report"]["contributors"][0]
+        self.assertEqual(contributor["resource_id"], "terraform-plan")
+        self.assertEqual(contributor["contribution"], 0)
+        self.assertEqual(
+            contributor["metadata"]["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
+
+        detail = self.client.get(
+            f"/api/v1/analyses/{payload['data']['persisted_report']['id']}",
+            params={"project_key": "payments"},
+        )
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(
+            detail.json()["data"]["contributors"][0]["metadata"][
+                "plan_unsupported_fields"
+            ],
+            ["plan.planned_values"],
+        )
+
+        history = self.client.get(
+            "/api/v1/analyses",
+            params={"project_key": "payments"},
+        )
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(
+            history.json()["data"][0]["contributors"][0]["metadata"][
+                "plan_unsupported_fields"
+            ],
+            ["plan.planned_values"],
+        )
+
     def test_create_analysis_persists_submission_manifest_with_partial_coverage(
         self,
     ) -> None:
@@ -634,7 +822,15 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
+                    (
+                        b'{"planned_values": {}, "resource_changes": [{"address": "module.network.aws_security_group.main", '
+                        b'"module_address": "module.network", "type": "aws_security_group", '
+                        b'"name": "main", "provider_name": "registry.terraform.io/hashicorp/aws", '
+                        b'"change": {"actions": ["update"], "after_unknown": {"arn": true}, '
+                        b'"after_sensitive": {"ingress": [{"description": true}]}, '
+                        b'"replace_paths": [["ingress", 0, "cidr_blocks"]], '
+                        b'"importing": {"id": "sg-123"}}, "deposed": "legacy"}]}'
+                    ),
                     "application/json",
                 ),
             ),
@@ -709,6 +905,23 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(by_name["notes.txt"]["partial"])
         self.assertEqual(by_name["plan.json"]["provenance"]["source_interface"], "api")
         self.assertEqual(by_name["plan.json"]["provenance"]["trigger_id"], "build-77")
+        change = payload["data"]["parse_batch"]["files"][0]["changes"][0]
+        self.assertEqual(
+            change["resource_id"], "module.network.aws_security_group.main"
+        )
+        self.assertEqual(change["metadata"]["module_address"], "module.network")
+        self.assertEqual(change["metadata"]["unknown_after_apply"], ["arn"])
+        self.assertEqual(
+            change["metadata"]["redacted_fields"], ["ingress.0.description"]
+        )
+        self.assertEqual(
+            change["metadata"]["unsupported_fields"],
+            ["change.importing", "resource_change.deposed"],
+        )
+        self.assertEqual(
+            change["metadata"]["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
         self.assertTrue(payload["data"]["assessment"]["partial_context"])
 
         detail = self.client.get(
@@ -720,6 +933,68 @@ class AnalysesApiTests(unittest.TestCase):
             detail.json()["data"]["submission_manifest"]["failed_artifact_count"],
             1,
         )
+
+    def test_create_analysis_surfaces_duplicate_terraform_action_parse_failure(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
+                    "application/json",
+                ),
+            ),
+            (
+                "files",
+                (
+                    "duplicate-plan.json",
+                    b'{"resource_changes": [{"address": "aws_instance.web", "change": {"actions": ["create", "create"]}}]}',
+                    "application/json",
+                ),
+            ),
+        ]
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review partial analysis.",
+            explanation="One Terraform plan could not be parsed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "payments"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        by_name = {
+            file_result["file_name"]: file_result
+            for file_result in payload["data"]["parse_batch"]["files"]
+        }
+        self.assertEqual(by_name["plan.json"]["status"], "parsed")
+        self.assertEqual(by_name["duplicate-plan.json"]["status"], "failed")
+        self.assertIn(
+            "Duplicate Terraform action",
+            by_name["duplicate-plan.json"]["issue"]["message"],
+        )
+        manifest = payload["data"]["persisted_report"]["submission_manifest"]
+        self.assertEqual(manifest["accepted_artifact_count"], 2)
+        self.assertEqual(manifest["failed_artifact_count"], 1)
+        self.assertTrue(manifest["partial_analysis"])
 
     def test_create_analysis_denies_role_without_submit_capability(self) -> None:
         project_service_module.create_project(
@@ -947,7 +1222,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )
@@ -992,7 +1267,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )
@@ -1033,7 +1308,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )
@@ -1054,7 +1329,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )
@@ -1084,7 +1359,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )
@@ -1108,7 +1383,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )
@@ -1151,7 +1426,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )
@@ -1186,7 +1461,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )
@@ -1245,7 +1520,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.first", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.first", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             ),
@@ -1253,7 +1528,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.second", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.second", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             ),
@@ -1380,7 +1655,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "files",
                 (
                     "plan.json",
-                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     "application/json",
                 ),
             )

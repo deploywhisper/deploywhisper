@@ -26,6 +26,7 @@ from analysis.risk_scorer import RiskAssessment, RiskContributor
 from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
+from parsers.terraform_parser import parse_terraform
 
 
 class ReportServiceTests(unittest.TestCase):
@@ -220,6 +221,11 @@ class ReportServiceTests(unittest.TestCase):
                             resource_id="aws_security_group.main",
                             action="modify",
                             summary="Terraform changed a security group.",
+                            metadata={
+                                "module_address": "module.network",
+                                "redacted_fields": ["ingress.0.description"],
+                                "plan_unsupported_fields": ["plan.planned_values"],
+                            },
                         )
                     ],
                 )
@@ -248,6 +254,11 @@ class ReportServiceTests(unittest.TestCase):
                     action="modify",
                     contribution=12,
                     summary="Terraform changed a security group.",
+                    metadata={
+                        "module_address": "module.network",
+                        "redacted_fields": ["ingress.0.description"],
+                        "plan_unsupported_fields": ["plan.planned_values"],
+                    },
                 )
             ],
             interaction_risks=[],
@@ -369,6 +380,10 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(
             persisted["contributors"][0]["evidence_id"], persisted_evidence_id
         )
+        self.assertEqual(
+            persisted["contributors"][0]["metadata"]["module_address"],
+            "module.network",
+        )
 
         fetched = report_service_module.fetch_analysis_report(persisted["id"])
         self.assertIsNotNone(fetched)
@@ -404,6 +419,10 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(
             fetched["contributors"][0]["evidence_id"], persisted_evidence_id
         )
+        self.assertEqual(
+            fetched["contributors"][0]["metadata"]["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
         self.assertNotIn("prompt", json.dumps(fetched))
 
         history = report_service_module.fetch_analysis_history()
@@ -413,6 +432,111 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(history[0]["top_risk_contributors"], [persisted_evidence_id])
         self.assertEqual(history[0]["report_schema_version"], "v2")
         self.assertEqual(history[0]["rollback_plan"]["complexity"], "medium")
+        self.assertEqual(
+            history[0]["contributors"][0]["metadata"]["redacted_fields"],
+            ["ingress.0.description"],
+        )
+
+    def test_empty_plan_unsupported_fields_from_real_parser_survive_report_fetch(
+        self,
+    ) -> None:
+        changes = parse_terraform(
+            "empty-plan.json",
+            b'{"planned_values": {}, "resource_changes": []}',
+        )
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(
+            changes[0].metadata["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="empty-plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=changes,
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=0,
+            severity="low",
+            recommendation="go",
+            top_risk="Terraform plan contains no planned resource mutations.",
+            top_risk_contributors=["ev-empty"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-empty",
+                    source_file=changes[0].source_file,
+                    tool=changes[0].tool,
+                    resource_id=changes[0].resource_id,
+                    action=changes[0].action,
+                    contribution=0,
+                    summary=changes[0].summary,
+                    metadata=changes[0].metadata,
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: Terraform plan has no planned resource mutations.",
+            explanation="The submitted plan is a valid empty Terraform plan.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-empty",
+                analysis_id=0,
+                finding_id="pending:empty-plan",
+                source_type="artifact",
+                source_ref="terraform://empty-plan.json#terraform-plan?action=no-op",
+                summary=changes[0].summary,
+                severity_hint="low",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=[changes[0].change_id],
+            )
+        ]
+        findings = [
+            Finding(
+                finding_id="finding-empty",
+                analysis_id=0,
+                title="LOW: empty Terraform plan",
+                description="The Terraform plan is valid and contains no mutations.",
+                severity="low",
+                category="terraform/plan",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_refs=["ev-empty"],
+                skill_id=None,
+            )
+        ]
+
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=findings,
+            evidence_items=evidence_items,
+        )
+
+        fetched = report_service_module.fetch_analysis_report(persisted["id"])
+        self.assertIsNotNone(fetched)
+        self.assertEqual(
+            fetched["contributors"][0]["metadata"]["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
+        history = report_service_module.fetch_analysis_history()
+        self.assertEqual(
+            history[0]["contributors"][0]["metadata"]["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
 
     def test_persist_analysis_report_allows_repeated_scans_with_same_logical_ids(
         self,

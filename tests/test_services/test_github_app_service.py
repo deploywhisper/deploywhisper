@@ -516,7 +516,7 @@ class GitHubAppServiceTests(unittest.TestCase):
         load_pull_request_artifacts.return_value = [
             (
                 "plan.json",
-                b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             )
         ]
         generate_narrative.return_value = NarrativeResult(

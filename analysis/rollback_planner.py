@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from parsers.base import UnifiedChange
+from parsers.base import UnifiedChange, is_non_mutating_action, normalize_change_action
 
 RollbackComplexity = Literal["low", "medium", "high"]
 
@@ -44,7 +44,8 @@ class RollbackPlan(BaseModel):
 
 
 def _rollback_priority(change: UnifiedChange) -> tuple[int, str]:
-    if change.action in {"destroy", "delete", "destroy+modify"}:
+    normalized_action = normalize_change_action(change.action)
+    if normalized_action in {"destroy", "replace"}:
         priority = 0
     elif change.tool in {"terraform", "cloudformation"}:
         priority = 1
@@ -74,9 +75,10 @@ def _estimate_step_minutes(change: UnifiedChange) -> int:
         "ansible": 7,
         "jenkins": 6,
     }.get(change.tool, 5)
-    if change.action in {"destroy", "delete", "destroy+modify"}:
+    normalized_action = normalize_change_action(change.action)
+    if normalized_action in {"destroy", "replace"}:
         base_minutes += 5
-    elif change.action in {"modify", "update", "patch"}:
+    elif normalized_action == "modify" or change.action == "patch":
         base_minutes += 2
     return base_minutes
 
@@ -85,12 +87,15 @@ def _complexity_details(
     changes: list[UnifiedChange], *, partial_context: bool
 ) -> tuple[int, str]:
     if not changes:
-        return (1, "No parsed changes were available, so rollback effort is minimal.")
+        return (
+            1,
+            "No mutating parsed changes were available, so rollback effort is minimal.",
+        )
 
     destructive_count = sum(
         1
         for change in changes
-        if change.action in {"destroy", "delete", "destroy+modify"}
+        if normalize_change_action(change.action) in {"destroy", "replace"}
     )
     tool_count = len({change.tool for change in changes})
 
@@ -143,7 +148,10 @@ def build_rollback_copy_text(plan: RollbackPlan) -> str:
 def generate_rollback_plan(
     changes: list[UnifiedChange], partial_context: bool = False
 ) -> RollbackPlan:
-    ordered_changes = sorted(changes, key=_rollback_priority)
+    mutating_changes = [
+        change for change in changes if not is_non_mutating_action(change.action)
+    ]
+    ordered_changes = sorted(mutating_changes, key=_rollback_priority)
     steps: list[RollbackStep] = []
     for index, change in enumerate(ordered_changes, start=1):
         steps.append(
@@ -151,12 +159,12 @@ def generate_rollback_plan(
                 order=index,
                 title=f"Revert {change.resource_id}",
                 detail=(
-                    f"Rollback the {change.tool} change for {change.resource_id} from {change.source_file} "
+                    f"Rollback the {change.tool} {normalize_change_action(change.action)} change for {change.resource_id} from {change.source_file} "
                     f"and verify the prior stable state is restored."
                 ),
                 estimated_minutes=_estimate_step_minutes(change),
                 critical=index == 1
-                or change.action in {"destroy", "delete", "destroy+modify"},
+                or normalize_change_action(change.action) in {"destroy", "replace"},
             )
         )
 
@@ -165,7 +173,7 @@ def generate_rollback_plan(
             RollbackStep(
                 order=1,
                 title="No rollback steps generated",
-                detail="No parsed changes were available to build rollback guidance.",
+                detail="No mutating parsed changes were available to build rollback guidance.",
                 estimated_minutes=0,
                 critical=False,
             )
@@ -177,12 +185,14 @@ def generate_rollback_plan(
             "Rollback plan may be incomplete because one or more files failed to parse."
         )
     complexity_score, complexity_explanation = _complexity_details(
-        changes, partial_context=partial_context
+        mutating_changes, partial_context=partial_context
     )
 
     return RollbackPlan(
         steps=steps,
-        complexity=_complexity_for_changes(changes, partial_context=partial_context),
+        complexity=_complexity_for_changes(
+            mutating_changes, partial_context=partial_context
+        ),
         complexity_score=complexity_score,
         complexity_explanation=complexity_explanation,
         warning=warning,

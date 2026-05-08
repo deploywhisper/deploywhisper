@@ -6,7 +6,7 @@ from collections import deque
 
 from pydantic import BaseModel, Field
 
-from parsers.base import UnifiedChange
+from parsers.base import UnifiedChange, is_non_mutating_action
 
 
 class ImpactNode(BaseModel):
@@ -34,6 +34,17 @@ class BlastRadiusResult(BaseModel):
 def compute_blast_radius(
     changes: list[UnifiedChange], topology: dict | None, warning: str | None = None
 ) -> BlastRadiusResult:
+    mutating_changes = [
+        change for change in changes if not is_non_mutating_action(change.action)
+    ]
+    if not mutating_changes:
+        return BlastRadiusResult(
+            affected=[],
+            direct_count=0,
+            transitive_count=0,
+            warning=warning,
+        )
+
     if not topology:
         return BlastRadiusResult(
             affected=[],
@@ -61,7 +72,7 @@ def compute_blast_radius(
     seen: set[str] = set()
     unmatched_resources: list[str] = []
 
-    for change in changes:
+    for change in mutating_changes:
         matched_service_ids = resource_to_service_ids.get(change.resource_id, [])
         if not matched_service_ids:
             unmatched_resources.append(change.resource_id)
