@@ -42,7 +42,7 @@ For setup-specific modeling guidance, see the [Project Model Guide](./concepts/p
   - `deploywhisper topology import --from terraform --source <state-or-uri> --project <key>`
   - The topology import command now routes through a shared source registry and returns a normalized import result with accepted, skipped, partially parsed, and unsupported resources.
   - Project, analysis, topology import, and outcome record commands can read `DEPLOYWHISPER_PROJECT_ROLE` and `DEPLOYWHISPER_PROJECT_KEYS` for automation actors that need the same lightweight authorization behavior as API callers.
-- GitHub App integration: respects `DEPLOYWHISPER_GITHUB_PROJECT_KEY` when set; otherwise derives an owner-safe default from the full repository slug and creates it on demand.
+- GitHub App integration: respects `DEPLOYWHISPER_GITHUB_PROJECT_KEY` when set; otherwise derives an owner-safe default from the full repository slug and creates it on demand. Unknown, malformed, or blank explicit override values fail fast instead of falling back to the repository-derived default.
 
 ### Guardrails
 

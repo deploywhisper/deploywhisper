@@ -43,6 +43,9 @@ So that I can map monorepos, multi-repos, Terraform workspaces, Kubernetes clust
 - [x] [Review][Patch] Cover the README Project Workspaces link added by this story [`README.md:508`]
 - [x] [Review][Patch] Make invalid GitHub override docs assertion meaning-sensitive instead of newline-sensitive [`tests/test_docs/test_project_model_documentation.py:58`]
 - [x] [Review][Patch] Make recommended-mappings table parsing tolerant of harmless Markdown separator/header formatting [`tests/test_docs/test_project_model_documentation.py:91`]
+- [x] [Review][Patch] Align Project Workspaces GitHub override docs with fail-fast invalid override behavior [`docs/project-workspaces.md:45`]
+- [x] [Review][Patch] Update README documentation index to the current 2026-05-01 implementation readiness report [`README.md:506`]
+- [x] [Review][Patch] Relax project-model docs table regression parsing so valid formatting and additional rows do not fail CI [`tests/test_docs/test_project_model_documentation.py:124`]
 
 ## Dev Notes
 
@@ -121,6 +124,12 @@ GPT-5 Codex
 - 2026-05-07: Latest re-review fix validation passed `./.venv/bin/ruff format --check .`.
 - 2026-05-07: Latest re-review fix validation passed `./.venv/bin/python -m unittest discover -q` with 291 tests run and 1 skipped.
 - 2026-05-07: Final Story 1.6 closeout review found no accepted findings; story status moved to done.
+- 2026-05-07: Fixed follow-up re-review findings for Project Workspaces GitHub override docs, README readiness link, and tolerant docs table regression parsing.
+- 2026-05-07: Follow-up finding validation passed `./.venv/bin/python -m unittest tests.test_docs.test_project_model_documentation -q` with 2 tests run.
+- 2026-05-07: Follow-up finding validation passed `./.venv/bin/ruff check .`.
+- 2026-05-07: Follow-up finding validation passed `./.venv/bin/ruff format --check .`.
+- 2026-05-07: Follow-up finding validation passed `./.venv/bin/python -m unittest discover -q` with 292 tests run and 1 skipped.
+- 2026-05-07: Follow-up finding validation passed `bash scripts/ci-local.sh`; Bandit was not installed, so the script skipped the local Bandit scan.
 
 ### Completion Notes List
 
@@ -131,6 +140,7 @@ GPT-5 Codex
 - Resolved re-review findings by documenting invalid GitHub override behavior and tightening docs tests for table structure plus intended entry-point links.
 - Resolved latest re-review findings by asserting the README workspace entry point, making invalid override coverage meaning-based, and allowing harmless Markdown table formatting changes.
 - Completed closeout after final review triage left no accepted findings.
+- Resolved follow-up re-review findings by aligning the Project Workspaces GitHub override note with fail-fast runtime behavior, updating the README readiness report link, and relaxing docs table parsing while preserving required mapping coverage.
 
 ### File List
 

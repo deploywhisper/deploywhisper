@@ -46,9 +46,11 @@ class ProjectModelDocumentationTests(unittest.TestCase):
                 "use workspaces for cloud accounts, clusters, regions, or maturity stages",
             ],
         }
+        mapping_rows = self._recommended_mapping_rows(content)
+        self.assertGreaterEqual(len(mapping_rows), len(expected_mappings))
         for setup, expected_phrases in expected_mappings.items():
             with self.subTest(setup=setup):
-                row = self._recommended_mapping_rows(content)[setup]
+                row = mapping_rows[setup]
                 for phrase in expected_phrases:
                     self.assertIn(phrase, " ".join(row.values()))
 
@@ -122,7 +124,7 @@ class ProjectModelDocumentationTests(unittest.TestCase):
 
         rows: dict[str, dict[str, str]] = {}
         for line in lines[header_index + 2 :]:
-            if not line.startswith("| "):
+            if not line.lstrip().startswith("|"):
                 break
             cells = ProjectModelDocumentationTests._table_cells(line)
             if len(cells) != len(expected_headers):
@@ -130,8 +132,6 @@ class ProjectModelDocumentationTests(unittest.TestCase):
             row = dict(zip(expected_headers, cells, strict=True))
             rows[row["infrastructure setup"]] = row
 
-        if len(rows) != 6:
-            raise AssertionError("Recommended mappings table must contain six rows.")
         return rows
 
     @staticmethod
