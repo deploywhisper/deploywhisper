@@ -7,6 +7,7 @@ import hashlib
 from analysis.interaction_risk import InteractionRisk
 from analysis.risk_scorer import RiskAssessment
 from evidence.models import EvidenceItem, Finding, FindingEvidenceClassification
+from parsers.base import normalize_change_action
 
 INFERRED_CONFIDENCE_FLOOR = 0.55
 
@@ -110,6 +111,26 @@ def _matching_evidence_refs(
     return refs
 
 
+def _evidence_matches_contributor(
+    evidence_item: EvidenceItem,
+    *,
+    source_file: str,
+    resource_id: str,
+    action: str,
+    normalized_action: str,
+) -> bool:
+    contributor_actions = {
+        action,
+        normalized_action,
+        normalize_change_action(action),
+    }
+    return (
+        evidence_item.artifact == source_file
+        and evidence_item.resource == resource_id
+        and evidence_item.operation in contributor_actions
+    )
+
+
 def build_findings(
     *,
     assessment: RiskAssessment,
@@ -126,6 +147,20 @@ def build_findings(
             if contributor.evidence_id is not None
             else None
         )
+        if evidence is None:
+            matching_evidence_items = [
+                item
+                for item in evidence_items
+                if _evidence_matches_contributor(
+                    item,
+                    source_file=contributor.source_file,
+                    resource_id=contributor.resource_id,
+                    action=contributor.action,
+                    normalized_action=contributor.normalized_action,
+                )
+            ]
+            if len(matching_evidence_items) == 1:
+                evidence = matching_evidence_items[0]
         deterministic = evidence.deterministic if evidence is not None else False
         source_confidence = evidence.confidence if evidence is not None else None
         explanation = contributor.reasoning or contributor.summary

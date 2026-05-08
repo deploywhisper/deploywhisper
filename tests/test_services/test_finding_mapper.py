@@ -266,6 +266,49 @@ class FindingMapperTests(unittest.TestCase):
         self.assertEqual(findings[0].evidence_classification, "model_inferred")
         self.assertEqual(findings[0].confidence, INFERRED_CONFIDENCE_FLOOR)
 
+    def test_build_findings_links_matching_evidence_when_contributor_id_missing(
+        self,
+    ) -> None:
+        evidence = EvidenceItem(
+            evidence_id="ev-derived",
+            analysis_id=0,
+            finding_id="pending:chg-001",
+            source_type="artifact",
+            source_ref="terraform://plan.json#aws_security_group.main?action=destroy",
+            summary="Terraform deletes a security group.",
+            severity_hint="critical",
+            deterministic=True,
+            confidence=1.0,
+            related_change_ids=["chg-001"],
+        )
+        assessment = RiskAssessment(
+            score=90,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Terraform changed a security group.",
+            contributors=[
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="delete",
+                    contribution=24,
+                    summary="Terraform changed a security group.",
+                    severity="critical",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+
+        findings = build_findings(assessment=assessment, evidence_items=[evidence])
+
+        self.assertEqual(findings[0].evidence_refs, ["ev-derived"])
+        self.assertTrue(findings[0].deterministic)
+        self.assertEqual(findings[0].confidence, 1.0)
+        self.assertEqual(findings[0].evidence_classification, "deterministic")
+
     def test_build_findings_does_not_emit_unresolved_evidence_refs(self) -> None:
         assessment = RiskAssessment(
             score=72,
