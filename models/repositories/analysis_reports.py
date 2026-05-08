@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from evidence.models import Finding as FindingPayload
 from models.tables import (
     AnalysisReport,
     EvidenceItem as PersistedEvidenceItem,
@@ -96,35 +97,26 @@ def create_analysis_report(
     )
     finding_rows: list[tuple[PersistedFinding, list[str]]] = []
     for finding in findings_payload or []:
+        finding_payload = FindingPayload.model_validate(finding)
         persisted_finding = PersistedFinding(
-            finding_id=str(finding["finding_id"]),
-            title=str(finding["title"]),
-            description=str(finding["description"]),
-            explanation=str(finding.get("explanation") or finding["description"]),
-            guidance_json=json.dumps(finding.get("guidance", [])),
-            severity=str(finding["severity"]),
-            category=str(finding["category"]),
-            deterministic=bool(finding["deterministic"]),
-            confidence=float(finding["confidence"]),
-            uncertainty_note=(
-                str(finding["uncertainty_note"])
-                if finding.get("uncertainty_note") is not None
-                else None
-            ),
-            evidence_classification=str(
-                finding.get("evidence_classification") or "deterministic"
-            ),
-            evidence_refs_json=json.dumps(finding.get("evidence_refs", [])),
-            skill_id=(
-                str(finding["skill_id"])
-                if finding.get("skill_id") is not None
-                else None
-            ),
+            finding_id=finding_payload.finding_id,
+            title=finding_payload.title,
+            description=finding_payload.description,
+            explanation=finding_payload.explanation,
+            guidance_json=json.dumps(finding_payload.guidance),
+            severity=finding_payload.severity,
+            category=finding_payload.category,
+            deterministic=finding_payload.deterministic,
+            confidence=finding_payload.confidence,
+            uncertainty_note=finding_payload.uncertainty_note,
+            evidence_classification=finding_payload.evidence_classification,
+            evidence_refs_json=json.dumps(finding_payload.evidence_refs),
+            skill_id=finding_payload.skill_id,
         )
         finding_rows.append(
             (
                 persisted_finding,
-                [str(ref) for ref in finding.get("evidence_refs", [])],
+                finding_payload.evidence_refs,
             )
         )
 

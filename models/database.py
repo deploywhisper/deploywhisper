@@ -168,13 +168,31 @@ def _finding_columns(connection) -> set[str]:
 
 
 def _finding_context_fields_complete(connection) -> bool:
-    columns = _finding_columns(connection)
-    required_columns = {
-        "explanation",
-        "guidance_json",
-        "evidence_classification",
+    inspector = inspect(connection)
+    column_map = {
+        column["name"]: column for column in inspector.get_columns("findings")
     }
-    return required_columns.issubset(columns)
+    required_type_affinities = {
+        "explanation": String,
+        "guidance_json": String,
+        "evidence_classification": String,
+    }
+    has_required_types = all(
+        column_name in column_map
+        and column_map[column_name]["type"]._type_affinity is expected_affinity
+        for column_name, expected_affinity in required_type_affinities.items()
+    )
+    has_required_nullability = all(
+        column_map.get(column_name, {}).get("nullable") is False
+        for column_name in required_type_affinities
+    )
+    classification_checks = inspector.get_check_constraints("findings")
+    has_classification_check = any(
+        constraint.get("name") == "ck_findings_evidence_classification"
+        or "evidence_classification" in str(constraint.get("sqltext") or "")
+        for constraint in classification_checks
+    )
+    return has_required_types and has_required_nullability and has_classification_check
 
 
 def _evidence_identity_fields_complete(connection) -> bool:

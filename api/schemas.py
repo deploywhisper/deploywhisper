@@ -4,17 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, computed_field
-
 from config import settings
-
-FindingEvidenceClassificationData = Literal[
-    "deterministic",
-    "derived",
-    "external",
-    "model_inferred",
-    "user_provided",
-]
+from evidence.models import FindingEvidenceClassification
+from pydantic import BaseModel, Field, computed_field
 
 
 class MetaPayload(BaseModel):
@@ -671,7 +663,7 @@ class FindingData(BaseModel):
         default=None,
         description="Explanation when confidence reflects inferred reasoning",
     )
-    evidence_classification: FindingEvidenceClassificationData = Field(
+    evidence_classification: FindingEvidenceClassification = Field(
         default="deterministic",
         description="Dominant evidence support type for this finding",
     )

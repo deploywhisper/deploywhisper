@@ -10,6 +10,17 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
+_FINDING_EVIDENCE_CLASSIFICATION_VALUES = (
+    "deterministic",
+    "derived",
+    "external",
+    "model_inferred",
+    "user_provided",
+)
+_FINDING_EVIDENCE_CLASSIFICATION_SQL = ", ".join(
+    f"'{value}'" for value in _FINDING_EVIDENCE_CLASSIFICATION_VALUES
+)
+
 
 revision = "019_add_finding_context_fields"
 down_revision = "018_add_evidence_identity_fields"
@@ -31,17 +42,30 @@ def upgrade() -> None:
         sa.Column(
             "evidence_classification",
             sa.String(length=30),
+            sa.CheckConstraint(
+                f"evidence_classification IN ({_FINDING_EVIDENCE_CLASSIFICATION_SQL})",
+                name="ck_findings_evidence_classification",
+            ),
             nullable=False,
             server_default="deterministic",
         ),
     )
-    op.execute(
-        "UPDATE findings SET explanation = description "
-        "WHERE explanation IS NULL OR explanation = ''"
+    findings = sa.table(
+        "findings",
+        sa.column("description", sa.Text()),
+        sa.column("explanation", sa.Text()),
+        sa.column("deterministic", sa.Boolean()),
+        sa.column("evidence_classification", sa.String(length=30)),
     )
     op.execute(
-        "UPDATE findings SET evidence_classification = 'model_inferred' "
-        "WHERE deterministic = 0"
+        findings.update()
+        .where(sa.or_(findings.c.explanation.is_(None), findings.c.explanation == ""))
+        .values(explanation=findings.c.description)
+    )
+    op.execute(
+        findings.update()
+        .where(findings.c.deterministic.is_(sa.false()))
+        .values(evidence_classification="model_inferred")
     )
 
 

@@ -170,6 +170,18 @@ class FindingMapperTests(unittest.TestCase):
             classify_finding_evidence([evidence_item(source_type="user_context")]),
             "user_provided",
         )
+        self.assertEqual(
+            classify_finding_evidence(
+                [
+                    evidence_item(
+                        deterministic=False,
+                        determinism_level="inferred",
+                    ),
+                    evidence_item(),
+                ]
+            ),
+            "deterministic",
+        )
 
     def test_build_findings_marks_missing_evidence_as_model_inferred(self) -> None:
         assessment = RiskAssessment(
@@ -207,6 +219,42 @@ class FindingMapperTests(unittest.TestCase):
         self.assertFalse(findings[0].deterministic)
         self.assertEqual(findings[0].evidence_classification, "model_inferred")
         self.assertEqual(findings[0].confidence, INFERRED_CONFIDENCE_FLOOR)
+
+    def test_build_findings_does_not_emit_unresolved_evidence_refs(self) -> None:
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="Security group exposure risk",
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-missing",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=20,
+                    summary="Security group exposure risk",
+                    normalized_action="modify",
+                    resource_category="networking/ingress",
+                    blast_radius="High blast radius",
+                    downstream_scope=2,
+                    security_flags=[],
+                    environment="production",
+                    severity="high",
+                    reasoning="Security group changes can affect production ingress.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+
+        findings = build_findings(assessment=assessment, evidence_items=[])
+
+        self.assertEqual(findings[0].evidence_refs, [])
+        self.assertFalse(findings[0].deterministic)
+        self.assertEqual(findings[0].evidence_classification, "model_inferred")
 
 
 if __name__ == "__main__":

@@ -29,6 +29,16 @@ FindingEvidenceClassification = Literal[
     "model_inferred",
     "user_provided",
 ]
+FINDING_EVIDENCE_CLASSIFICATION_VALUES: tuple[
+    FindingEvidenceClassification,
+    ...,
+] = (
+    "deterministic",
+    "derived",
+    "external",
+    "model_inferred",
+    "user_provided",
+)
 
 
 def _validate_string_list(value: list[str]) -> list[str]:

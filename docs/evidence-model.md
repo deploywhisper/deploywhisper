@@ -36,6 +36,7 @@ Story 2.4 extends findings with explicit support context:
 - `guidance` carries concrete verification or remediation prompts
 - `evidence_classification` distinguishes `deterministic`, `derived`, `external`, `model_inferred`, and `user_provided` support
 - `evidence_refs` remains the durable link from each finding to the persisted evidence items that support it
+- When a finding has mixed support, deterministic linked evidence takes precedence in the displayed classification so reviewers can see that at least one hard evidence item supports the finding.
 
 ## Persistence Shape
 

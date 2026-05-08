@@ -53,6 +53,17 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
+    def _table_sql(self, table_name: str) -> str:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            row = sqlite_conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table_name,),
+            ).fetchone()
+        finally:
+            sqlite_conn.close()
+        return str(row[0] if row else "")
+
     def _foreign_keys(self, table_name: str) -> list[dict]:
         sqlite_conn = sqlite3.connect(self.db_path)
         try:
@@ -164,6 +175,10 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("explanation", self._table_columns("findings"))
         self.assertIn("guidance_json", self._table_columns("findings"))
         self.assertIn("evidence_classification", self._table_columns("findings"))
+        self.assertIn(
+            "evidence_classification IN",
+            self._table_sql("findings"),
+        )
         self.assertIn("analysis_id", self._table_columns("risk_assessments"))
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
         self.assertIn("project_id", self._table_columns("analysis_reports"))
@@ -797,6 +812,25 @@ class MigrationTests(unittest.TestCase):
         reload(database_module)
 
         with self.assertRaisesRegex(RuntimeError, "partial submission manifest schema"):
+            database_module.init_db()
+
+    def test_init_db_rejects_incomplete_finding_context_schema(self) -> None:
+        command.upgrade(self._config(), "018_add_evidence_identity_fields")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("ALTER TABLE findings ADD COLUMN explanation TEXT")
+        sqlite_conn.execute("ALTER TABLE findings ADD COLUMN guidance_json TEXT")
+        sqlite_conn.execute(
+            "ALTER TABLE findings ADD COLUMN evidence_classification INTEGER"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial finding context schema"):
             database_module.init_db()
 
     def test_init_db_rejects_partial_incident_analysis_link_schema(self) -> None:

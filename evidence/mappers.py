@@ -68,11 +68,11 @@ def classify_finding_evidence(
         _evidence_item_classification(evidence_item) for evidence_item in evidence_items
     }
     for classification in (
+        "deterministic",
         "user_provided",
         "external",
         "model_inferred",
         "derived",
-        "deterministic",
     ):
         if classification in classifications:
             return classification
@@ -164,9 +164,7 @@ def build_findings(
                     deterministic=deterministic,
                     source_confidence=source_confidence,
                 ),
-                evidence_refs=(
-                    [contributor.evidence_id] if contributor.evidence_id else []
-                ),
+                evidence_refs=([evidence.evidence_id] if evidence is not None else []),
                 evidence_classification=classify_finding_evidence(
                     [evidence] if evidence is not None else []
                 ),

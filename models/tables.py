@@ -18,7 +18,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from evidence.models import FINDING_EVIDENCE_CLASSIFICATION_VALUES
 from models.database import Base
+
+_FINDING_EVIDENCE_CLASSIFICATION_SQL = ", ".join(
+    f"'{value}'" for value in FINDING_EVIDENCE_CLASSIFICATION_VALUES
+)
 
 if "IncidentRecord" not in globals():
 
@@ -279,6 +284,10 @@ if "Finding" not in globals():
             CheckConstraint(
                 "confidence >= 0.0 AND confidence <= 1.0",
                 name="ck_findings_confidence_range",
+            ),
+            CheckConstraint(
+                f"evidence_classification IN ({_FINDING_EVIDENCE_CLASSIFICATION_SQL})",
+                name="ck_findings_evidence_classification",
             ),
         )
 

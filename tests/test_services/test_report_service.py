@@ -27,6 +27,7 @@ from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 from parsers.terraform_parser import parse_terraform
+from pydantic import ValidationError
 
 
 class ReportServiceTests(unittest.TestCase):
@@ -52,6 +53,65 @@ class ReportServiceTests(unittest.TestCase):
         os.environ.pop("APP_BASE_URL", None)
         os.environ.pop("ARTIFACT_SNAPSHOT_DIR", None)
         self.tempdir.cleanup()
+
+    def test_create_analysis_report_validates_finding_context_payloads(self) -> None:
+        project = project_service_module.ensure_default_project()
+        report_kwargs = {
+            "project_id": project.id,
+            "risk_score": 42,
+            "severity": "medium",
+            "recommendation": "caution",
+            "top_risk": "Security group exposure",
+            "report_schema_version": "v2",
+            "parse_summary": "1 parsed, 0 failed, 0 skipped, 1 normalized change",
+            "narrative_opening": "CAUTION: review the security group update.",
+            "narrative_explanation": "Review the ingress change.",
+            "warnings_json": "[]",
+            "contributors_json": "[]",
+            "analyzed_files_json": '["plan.json"]',
+            "submission_manifest_json": "{}",
+            "submission_manifest_fallback_json": "[]",
+            "blast_radius_json": "{}",
+            "rollback_plan_json": "{}",
+            "llm_provider": "ollama",
+            "llm_model": "ollama/llama3",
+            "llm_local_mode": "true",
+            "assessment_source": "heuristic-only",
+            "narrative_source": "fallback",
+            "narrative_skills_json": "[]",
+            "source_interface": "api",
+            "trigger_type": "session",
+            "trigger_id": "sess-invalid-finding",
+            "dashboard_display_duration_seconds": None,
+        }
+        finding = {
+            "finding_id": "finding-invalid",
+            "analysis_id": 0,
+            "title": "MEDIUM: aws_security_group.main",
+            "description": "Security group changes can affect ingress.",
+            "severity": "medium",
+            "category": "networking/ingress",
+            "deterministic": True,
+            "confidence": 1.0,
+            "guidance": ["Review ingress before deployment."],
+            "evidence_classification": "deterministic",
+            "evidence_refs": [],
+            "skill_id": None,
+        }
+
+        for invalid_fields in (
+            {"guidance": "Review ingress before deployment."},
+            {"evidence_classification": "unsupported"},
+        ):
+            with self.subTest(invalid_fields=invalid_fields):
+                with database_module.SessionLocal() as session:
+                    with self.assertRaises(ValidationError):
+                        analysis_reports_repository_module.create_analysis_report(
+                            session,
+                            **report_kwargs,
+                            findings_payload=[{**finding, **invalid_fields}],
+                            evidence_payload=[],
+                        )
 
     def _persist_shareable_report(self) -> dict:
         parse_batch = ParseBatchResult(
