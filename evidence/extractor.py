@@ -6,7 +6,12 @@ import hashlib
 from urllib.parse import quote
 
 from evidence.models import EvidenceItem, RiskSeverity
-from parsers.base import NormalizedChange, ParseBatchResult
+from parsers.base import (
+    NormalizedChange,
+    ParseBatchResult,
+    is_non_mutating_action,
+    normalize_change_action,
+)
 
 SEVERITY_ORDER: dict[RiskSeverity, int] = {
     "low": 1,
@@ -15,10 +20,12 @@ SEVERITY_ORDER: dict[RiskSeverity, int] = {
     "critical": 4,
 }
 ACTION_BASE_SEVERITY: dict[str, RiskSeverity] = {
+    "no-op": "low",
     "apply": "low",
     "create": "low",
     "modify": "medium",
-    "replace": "medium",
+    "read": "low",
+    "replace": "high",
     "update": "medium",
     "destroy": "high",
     "delete": "high",
@@ -66,19 +73,7 @@ MEDIUM_RISK_TOKENS = {
 
 
 def _normalize_action(action: str) -> str:
-    parts = action.split("+")
-    for candidate in (
-        "apply",
-        "destroy",
-        "delete",
-        "modify",
-        "update",
-        "replace",
-        "create",
-    ):
-        if candidate in parts:
-            return candidate
-    return "modify"
+    return normalize_change_action(action)
 
 
 def _max_severity(left: RiskSeverity, right: RiskSeverity) -> RiskSeverity:
@@ -98,7 +93,10 @@ def _build_source_ref(change: NormalizedChange) -> str:
 
 
 def _severity_hint(change: NormalizedChange) -> RiskSeverity:
-    severity = ACTION_BASE_SEVERITY.get(_normalize_action(change.action), "medium")
+    normalized_action = _normalize_action(change.action)
+    if is_non_mutating_action(normalized_action):
+        return "low"
+    severity = ACTION_BASE_SEVERITY.get(normalized_action, "medium")
     resource_id = change.resource_id.lower()
     if resource_id.startswith("service/"):
         return _max_severity(severity, "high")
@@ -117,6 +115,8 @@ class EvidenceExtractor:
     """Translate normalized parser changes into evidence-domain items."""
 
     def extract(self, change: NormalizedChange) -> list[EvidenceItem]:
+        if change.tool == "terraform" and is_non_mutating_action(change.action):
+            return []
         handler = getattr(self, f"extract_{change.tool}", None)
         if handler is None:
             return [self._build_item(change)]

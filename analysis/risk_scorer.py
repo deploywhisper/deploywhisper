@@ -6,14 +6,19 @@ import json
 import logging
 import re
 from collections import deque
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from analysis.interaction_risk import InteractionRisk, detect_interaction_risks
 from evidence.models import ContextCompleteness
 from llm.providers import generate_completion_with_settings
-from parsers.base import ParseBatchResult, UnifiedChange
+from parsers.base import (
+    NON_MUTATING_ACTIONS,
+    ParseBatchResult,
+    UnifiedChange,
+    normalize_change_action,
+)
 from services.settings_service import resolve_provider_runtime
 
 RiskSeverity = Literal["low", "medium", "high", "critical"]
@@ -32,9 +37,12 @@ SEVERITY_SCORE: dict[RiskSeverity, int] = {
     "critical": 92,
 }
 ACTION_BASE_SEVERITY = {
+    "no-op": "low",
     "apply": "low",
     "create": "low",
     "modify": "medium",
+    "read": "low",
+    "replace": "high",
     "destroy": "high",
 }
 CATEGORY_BASE_SEVERITY = {
@@ -86,6 +94,10 @@ class RiskContributor(BaseModel):
     reasoning: str = Field(
         default="", description="Explicit explanation for this change score"
     )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parser-specific normalized metadata for this contributor",
+    )
 
 
 class RiskAssessment(BaseModel):
@@ -118,16 +130,7 @@ class RiskAssessment(BaseModel):
 
 
 def _normalize_action(action: str) -> str:
-    parts = action.split("+")
-    if "apply" in parts:
-        return "apply"
-    if "destroy" in parts or "delete" in parts:
-        return "destroy"
-    if "modify" in parts or "update" in parts or "replace" in parts:
-        return "modify"
-    if "create" in parts:
-        return "create"
-    return "modify"
+    return normalize_change_action(action)
 
 
 def _severity_max(left: RiskSeverity, right: RiskSeverity) -> RiskSeverity:
@@ -368,6 +371,10 @@ def _security_flags(
 def _blast_radius_text(
     category: str, downstream_scope: int | None, normalized_action: str
 ) -> str:
+    if normalized_action == "no-op":
+        return "no planned change"
+    if normalized_action == "read":
+        return "read-only lookup; no infrastructure mutation planned"
     if downstream_scope is None:
         if normalized_action == "apply":
             return "unknown downstream impact — standalone manifest without cluster context"
@@ -387,7 +394,9 @@ def _heuristic_reasoning(change: UnifiedChange, contributor: RiskContributor) ->
         f"in the {contributor.resource_category} category",
         f"targeting {contributor.environment}.",
     ]
-    if contributor.downstream_scope is not None:
+    if contributor.normalized_action in NON_MUTATING_ACTIONS:
+        parts.append(contributor.blast_radius + ".")
+    elif contributor.downstream_scope is not None:
         parts.append(
             f"It may affect {contributor.downstream_scope} downstream service(s) or resource groups."
         )
@@ -401,6 +410,8 @@ def _heuristic_reasoning(change: UnifiedChange, contributor: RiskContributor) ->
 def _heuristic_severity(
     change: UnifiedChange, contributor: RiskContributor
 ) -> RiskSeverity:
+    if contributor.normalized_action in NON_MUTATING_ACTIONS:
+        return "low"
     if contributor.normalized_action == "apply":
         if contributor.security_flags:
             return "high" if len(contributor.security_flags) == 1 else "critical"
@@ -419,15 +430,19 @@ def _heuristic_severity(
     severity = _severity_max(
         severity, CATEGORY_BASE_SEVERITY[contributor.resource_category]
     )
-    if contributor.normalized_action == "destroy" and contributor.resource_category in {
-        "networking/ingress",
-        "namespace",
-        "iam/rbac",
-        "data/service",
-    }:
+    if contributor.normalized_action in {"destroy", "replace"} and (
+        contributor.resource_category
+        in {
+            "networking/ingress",
+            "namespace",
+            "iam/rbac",
+            "data/service",
+        }
+    ):
         severity = "critical"
     if contributor.environment == "production" and contributor.normalized_action in {
         "modify",
+        "replace",
         "destroy",
     }:
         severity = _raise_severity(severity)
@@ -449,7 +464,11 @@ def _build_contributor(
     normalized_action = _normalize_action(change.action)
     resource_category = _resource_category(change)
     downstream_scope = _downstream_scope(change, topology)
-    security_flags = _security_flags(change, raw_files)
+    security_flags = (
+        []
+        if normalized_action in NON_MUTATING_ACTIONS
+        else _security_flags(change, raw_files)
+    )
     environment = _environment(change, raw_files=raw_files)
     draft = RiskContributor(
         source_file=change.source_file,
@@ -466,25 +485,33 @@ def _build_contributor(
         downstream_scope=downstream_scope,
         security_flags=security_flags,
         environment=environment,
+        metadata=dict(change.metadata),
     )
     draft.severity = _heuristic_severity(change, draft)
     draft.reasoning = _heuristic_reasoning(change, draft)
-    draft.contribution = min(
+    draft.contribution = _contribution_score(draft)
+    return draft
+
+
+def _contribution_score(contributor: RiskContributor) -> int:
+    if contributor.normalized_action in NON_MUTATING_ACTIONS:
+        return 0
+    return min(
         100,
-        SEVERITY_SCORE[draft.severity]
+        SEVERITY_SCORE[contributor.severity]
         + (
-            min(draft.downstream_scope * 3, 12)
-            if draft.downstream_scope is not None
+            min(contributor.downstream_scope * 3, 12)
+            if contributor.downstream_scope is not None
             else 0
         )
         + (
             8
-            if draft.environment == "production" and draft.normalized_action != "create"
+            if contributor.environment == "production"
+            and contributor.normalized_action != "create"
             else 0
         )
-        + min(len(draft.security_flags) * 10, 20),
+        + min(len(contributor.security_flags) * 10, 20),
     )
-    return draft
 
 
 def _sanitize_scope_claims(text: str, contributors: list[RiskContributor]) -> str:
@@ -604,20 +631,16 @@ def _apply_llm_scores(
         if severity not in SEVERITY_ORDER:
             updated.append(contributor)
             continue
+        if contributor.normalized_action in NON_MUTATING_ACTIONS:
+            contributor.severity = "low"
+            contributor.contribution = 0
+            updated.append(contributor)
+            continue
         contributor.severity = severity  # type: ignore[assignment]
         contributor.reasoning = _sanitize_scope_claims(
             str(llm_item.get("reasoning", contributor.reasoning)), [contributor]
         )
-        contributor.contribution = min(
-            100,
-            SEVERITY_SCORE[contributor.severity]
-            + (
-                min(contributor.downstream_scope * 3, 12)
-                if contributor.downstream_scope is not None
-                else 0
-            )
-            + min(len(contributor.security_flags) * 10, 20),
-        )
+        contributor.contribution = _contribution_score(contributor)
         updated.append(contributor)
     return updated, None, True
 
@@ -690,11 +713,18 @@ def score_changes(
         _build_contributor(change, topology=topology, raw_files=raw_files)
         for change in changes
     ]
-    contributors, llm_warning, llm_used = _apply_llm_scores(
-        contributors,
-        partial_context=partial_context,
-        completion_client=completion_client,
-    )
+    if contributors and all(
+        contributor.normalized_action in NON_MUTATING_ACTIONS
+        for contributor in contributors
+    ):
+        llm_warning = None
+        llm_used = False
+    else:
+        contributors, llm_warning, llm_used = _apply_llm_scores(
+            contributors,
+            partial_context=partial_context,
+            completion_client=completion_client,
+        )
     contributors.sort(
         key=lambda contributor: (
             SEVERITY_ORDER[contributor.severity],

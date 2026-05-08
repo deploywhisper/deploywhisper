@@ -75,7 +75,7 @@ These logs are retained for 14 days.
 - Source tree must compile with `python -m compileall`
 - Every shard must pass its assigned `unittest` targets
 - Pull requests get a changed-test fast-feedback run
-- Accessibility-sensitive UI work should include the opt-in Playwright keyboard smoke locally, plus the VoiceOver lane on macOS when the change affects review semantics, tab order, or screen-reader announcements
+- UI-facing stories must record browser-side Playwright validation before moving to review. Use `npm run test:ui-review` for review/report flows, `RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local UI lane, and the VoiceOver lane on macOS when the change affects review semantics, tab order, keyboard behavior, or screen-reader announcements. If no UI surface is touched, record `UI validation not applicable` in the story Dev Agent Record.
 
 ## Notes
 

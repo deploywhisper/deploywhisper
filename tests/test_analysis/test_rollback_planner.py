@@ -62,3 +62,56 @@ class RollbackPlannerTests(unittest.TestCase):
         plan = generate_rollback_plan(changes)
         self.assertEqual(plan.complexity, "high")
         self.assertEqual(plan.complexity_score, 4)
+
+    def test_generate_rollback_plan_skips_noop_and_read_changes(self) -> None:
+        changes = [
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="aws_security_group.main",
+                action="no-op",
+                summary="Terraform resource aws_security_group.main has no planned changes.",
+            ),
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="data.aws_ami.latest",
+                action="read",
+                summary="Terraform resource data.aws_ami.latest marked for read.",
+            ),
+        ]
+
+        plan = generate_rollback_plan(changes)
+
+        self.assertEqual(len(plan.steps), 1)
+        self.assertEqual(plan.steps[0].title, "No rollback steps generated")
+        self.assertFalse(plan.steps[0].critical)
+        self.assertEqual(plan.steps[0].estimated_minutes, 0)
+        self.assertEqual(plan.complexity, "low")
+        self.assertEqual(plan.complexity_score, 1)
+
+    def test_generate_rollback_plan_treats_replace_as_destructive(self) -> None:
+        changes = [
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="aws_instance.web",
+                action="replace",
+                summary="Terraform resource aws_instance.web marked for replace.",
+            ),
+            UnifiedChange(
+                source_file="deployment.yaml",
+                tool="kubernetes",
+                resource_id="Deployment/api",
+                action="modify",
+                summary="Kubernetes deployment changed.",
+            ),
+        ]
+
+        plan = generate_rollback_plan(changes)
+
+        self.assertEqual(plan.steps[0].title, "Revert aws_instance.web")
+        self.assertTrue(plan.steps[0].critical)
+        self.assertGreater(plan.steps[0].estimated_minutes, 10)
+        self.assertEqual(plan.complexity_score, 3)
+        self.assertIn("destructive change", plan.complexity_explanation)

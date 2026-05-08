@@ -32,6 +32,40 @@ This schema version applies to:
 }
 ```
 
+### Analysis parse batch change shape
+
+API and CLI analysis responses include the parser-normalized `parse_batch` payload
+before persistence. Persisted report contributors also carry the same parser
+metadata so history, shared report, and dashboard result surfaces can show module
+context, replacement paths, and fields Terraform marked unknown or sensitive
+without storing raw plan internals in a separate contract.
+
+```json
+{
+  "source_file": "tfplan.json",
+  "tool": "terraform",
+  "resource_id": "module.network.aws_security_group.web",
+  "action": "modify",
+  "summary": "Security group module.network.aws_security_group.web changes network access rules and should be reviewed for exposure before deploy.",
+  "metadata": {
+    "source_format": "terraform_plan_json",
+    "plan_format_version": "1.2",
+    "terraform_version": "1.8.5",
+    "module_address": "module.network",
+    "mode": "managed",
+    "resource_type": "aws_security_group",
+    "resource_name": "web",
+    "provider_name": "registry.terraform.io/hashicorp/aws",
+    "actions": ["update"],
+    "replace_paths": ["ingress.0.cidr_blocks"],
+    "unknown_after_apply": ["arn"],
+    "redacted_fields": ["ingress.0.description"],
+    "unsupported_fields": ["change.importing"],
+    "plan_unsupported_fields": ["plan.resource_drift"]
+  }
+}
+```
+
 ### Persisted report shape
 
 ```json
@@ -145,7 +179,23 @@ This schema version applies to:
   ],
   "findings": [],
   "evidence_items": [],
-  "contributors": [],
+  "contributors": [
+    {
+      "source_file": "plan.json",
+      "tool": "terraform",
+      "resource_id": "module.network.aws_security_group.web",
+      "action": "modify",
+      "normalized_action": "modify",
+      "severity": "high",
+      "metadata": {
+        "module_address": "module.network",
+        "replace_paths": ["ingress.0.cidr_blocks"],
+        "unknown_after_apply": ["arn"],
+        "redacted_fields": ["ingress.0.description"],
+        "plan_unsupported_fields": ["plan.resource_drift"]
+      }
+    }
+  ],
   "audit": {
     "files_analyzed": ["plan.json"]
   }
@@ -167,3 +217,4 @@ This schema version applies to:
 - degraded narrative visibility fields
 - submission manifest payloads that record accepted, excluded, failed, partial, sensitive, provenance, and redaction status
 - durable submission manifest fallback identity/status metadata for malformed-manifest recovery
+- parser-normalized change metadata for Terraform plan JSON format and Terraform versions, module paths, replacement paths, unknown-after-apply fields, redacted fields, and unsupported resource/change/plan fields

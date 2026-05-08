@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 from analysis.interaction_risk import detect_interaction_risks
@@ -31,15 +32,24 @@ def _parse_source_ref(source_ref: str) -> tuple[str, str, str, str]:
     return parsed.scheme or "unknown", source_file, resource_id, action
 
 
-def _evidence_to_change(item: EvidenceItem) -> UnifiedChange:
+def _evidence_to_change(
+    item: EvidenceItem,
+    *,
+    change_metadata_by_id: dict[str, dict[str, Any]] | None = None,
+) -> UnifiedChange:
     tool, source_file, resource_id, action = _parse_source_ref(item.source_ref)
+    change_id = item.related_change_ids[0] if item.related_change_ids else ""
+    metadata = (
+        dict(change_metadata_by_id.get(change_id, {})) if change_metadata_by_id else {}
+    )
     return UnifiedChange(
-        change_id=item.related_change_ids[0] if item.related_change_ids else "",
+        change_id=change_id,
         source_file=source_file,
         tool=tool,
         resource_id=resource_id,
         action=action,
         summary=item.summary,
+        metadata=metadata,
     )
 
 
@@ -109,9 +119,15 @@ def score_evidence(
     *,
     topology: dict | None = None,
     raw_files: dict[str, bytes | None] | None = None,
+    change_metadata_by_id: dict[str, dict[str, Any]] | None = None,
+    supplemental_changes: list[UnifiedChange] | None = None,
     completion_client=None,
 ) -> RiskAssessment:
-    changes = [_evidence_to_change(item) for item in evidence_items]
+    changes = [
+        _evidence_to_change(item, change_metadata_by_id=change_metadata_by_id)
+        for item in evidence_items
+    ]
+    changes.extend(supplemental_changes or [])
     contributors = [
         _apply_evidence_fields(
             _build_contributor(change, topology=topology, raw_files=raw_files),
@@ -119,15 +135,24 @@ def score_evidence(
         )
         for item, change in zip(evidence_items, changes, strict=False)
     ]
+    contributors.extend(
+        _build_contributor(change, topology=topology, raw_files=raw_files)
+        for change in changes[len(evidence_items) :]
+    )
     contributors, llm_warning, llm_used = _apply_llm_scores(
         contributors,
         partial_context=partial_context,
         completion_client=completion_client,
     )
+    evidence_contributor_count = len(evidence_items)
     contributors = [
         _apply_evidence_fields(contributor, item)
-        for contributor, item in zip(contributors, evidence_items, strict=False)
-    ]
+        for contributor, item in zip(
+            contributors[:evidence_contributor_count],
+            evidence_items,
+            strict=False,
+        )
+    ] + contributors[evidence_contributor_count:]
     contributors.sort(key=_contributor_sort_key, reverse=True)
     interaction_risks = detect_interaction_risks(changes)
     warnings: list[str] = []

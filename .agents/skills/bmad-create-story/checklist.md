@@ -156,6 +156,7 @@ You will systematically re-do the entire story creation process, but with a crit
 - **Breaking changes:** Missing requirements that could break existing functionality
 - **Test failures:** Missing test requirements that could allow bugs to reach production
 - **UX violations:** Missing user experience requirements that could ruin the product
+- **UI validation omissions:** Missing Playwright/browser validation task for stories that change UI routes, NiceGUI components, rendered report/history/dashboard surfaces, browser interactions, keyboard behavior, or accessibility semantics
 - **Learning failures:** Missing previous story context that could repeat same mistakes
 
 #### **3.5 Implementation DISASTERS**

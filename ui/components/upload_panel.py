@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from nicegui import events, run, ui
 
@@ -32,6 +33,10 @@ from ui.components.project_workspace_switcher import (
     open_create_project_dialog as show_create_project_dialog,
 )
 from ui.components.blast_radius_graph import render_blast_radius_panel
+from ui.components.change_table import (
+    format_change_metadata_lines,
+    render_change_table,
+)
 from ui.components.report_detail_page import (
     format_submission_manifest_fallback_summary,
     format_submission_manifest_partial_notice,
@@ -140,6 +145,25 @@ def should_clear_pending_uploads(
         and next_project_id is not None
         and previous_project_id != next_project_id
     )
+
+
+def build_feedback_rerender_handler(
+    render_result_card: Callable[..., None],
+    *,
+    report: dict[str, Any],
+    parse_batch: object,
+    timer_state: dict[str, int],
+) -> Callable[[], None]:
+    """Return a feedback callback that preserves parse metadata on rerender."""
+
+    def rerender() -> None:
+        render_result_card(
+            report,
+            remaining_seconds=timer_state["remaining"],
+            parse_batch=parse_batch,
+        )
+
+    return rerender
 
 
 def build_upload_panel(
@@ -331,7 +355,7 @@ def build_upload_panel(
         result_mount.clear()
 
     def render_result_card(
-        report: dict, *, remaining_seconds: int | None = None
+        report: dict, *, remaining_seconds: int | None = None, parse_batch=None
     ) -> None:
         token = int(state["result_token"]) + 1
         state["result_token"] = token
@@ -430,6 +454,8 @@ def build_upload_panel(
                     )
                 context = report.get("context_completeness") or {}
                 render_topology_freshness_banner(context)
+                if parse_batch is not None:
+                    render_change_table(parse_batch)
                 findings = report.get("findings", [])
                 evidence_items = report.get("evidence_items", [])
                 artifact_names = list(report.get("audit", {}).get("files_analyzed", []))
@@ -444,10 +470,11 @@ def build_upload_panel(
                         )
                         render_reviewer_feedback_panel(
                             report,
-                            on_feedback_change=lambda current_report=report: (
-                                render_result_card(
-                                    current_report, timer_state["remaining"]
-                                )
+                            on_feedback_change=build_feedback_rerender_handler(
+                                render_result_card,
+                                report=report,
+                                parse_batch=parse_batch,
+                                timer_state=timer_state,
                             ),
                         )
                 render_context_completeness_panel(context)
@@ -482,6 +509,12 @@ def build_upload_panel(
                                     ui.label(contributor["reasoning"]).classes(
                                         "text-xs dw-muted leading-5"
                                     )
+                                    for metadata_line in format_change_metadata_lines(
+                                        contributor.get("metadata") or {}
+                                    ):
+                                        ui.label(metadata_line).classes(
+                                            "text-xs dw-muted leading-5"
+                                        )
                                 render_risk_badge(contributor["severity"])
             ui.timer(1.0, update_countdown)
         update_countdown()
@@ -606,6 +639,7 @@ def build_upload_panel(
                 remaining_seconds=persisted_report.get(
                     "dashboard_display_duration_seconds"
                 ),
+                parse_batch=parse_batch,
             )
             state["files"] = []
             state["summary"] = build_pending_analysis([])

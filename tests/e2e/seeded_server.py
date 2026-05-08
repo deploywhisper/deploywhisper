@@ -9,7 +9,6 @@ from importlib import import_module, reload
 from pathlib import Path
 
 import nicegui.run as nicegui_run
-import uvicorn
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -86,6 +85,13 @@ def _seed_review_report(report_service_module) -> None:
                         resource_id="aws_security_group.main",
                         action="modify",
                         summary="Security group exposure risk",
+                        metadata={
+                            "module_address": "module.network",
+                            "provider_name": "registry.terraform.io/hashicorp/aws",
+                            "redacted_fields": ["ingress.0.description"],
+                            "unsupported_fields": ["change.importing"],
+                            "plan_unsupported_fields": ["plan.planned_values"],
+                        },
                     ),
                     UnifiedChange(
                         source_file="plan.json",
@@ -114,6 +120,13 @@ def _seed_review_report(report_service_module) -> None:
                 contribution=20,
                 summary="Ingress widens production access.",
                 severity="critical",
+                metadata={
+                    "module_address": "module.network",
+                    "provider_name": "registry.terraform.io/hashicorp/aws",
+                    "redacted_fields": ["ingress.0.description"],
+                    "unsupported_fields": ["change.importing"],
+                    "plan_unsupported_fields": ["plan.planned_values"],
+                },
             ),
             RiskContributor(
                 evidence_id="ev-002",
@@ -253,13 +266,14 @@ def _seed_review_report(report_service_module) -> None:
             "source_interface": "ui",
             "trigger_type": "dashboard_upload",
         },
+        project_key="payments",
     )
 
 
 def _seed_projects() -> None:
-    from services.project_service import create_project
+    from services.project_service import create_project, set_active_project
 
-    create_project(
+    payments_project = create_project(
         project_key="payments",
         display_name="Payments",
         repository_url="https://github.com/acme/payments-api.git",
@@ -271,6 +285,7 @@ def _seed_projects() -> None:
         repository_url="https://github.com/acme/platform-hub.git",
         default_branch="main",
     )
+    set_active_project(payments_project.id)
 
 
 def main() -> None:
@@ -279,28 +294,7 @@ def main() -> None:
     _seed_projects()
     _seed_review_report(report_service_module)
     app_module = import_module("app")
-    app_module.fastapi_app.config.add_run_config(
-        reload=False,
-        title="DeployWhisper",
-        viewport="width=device-width, initial-scale=1",
-        favicon="/assets/favicon.ico",
-        dark=False,
-        language="en-US",
-        binding_refresh_interval=0.1,
-        reconnect_timeout=3.0,
-        message_history_length=1000,
-        tailwind=True,
-        unocss=None,
-        prod_js=True,
-        show_welcome_message=False,
-        markdown=False,
-    )
-    uvicorn.run(
-        app_module.create_app(),
-        host=os.environ["APP_HOST"],
-        port=int(os.environ["APP_PORT"]),
-        log_level="info",
-    )
+    app_module.run()
 
 
 if __name__ == "__main__":

@@ -64,3 +64,48 @@ class BlastRadiusTests(unittest.TestCase):
         self.assertTrue(result.warning)
         self.assertIn("no topology mapping found", result.warning)
         self.assertEqual(result.unmatched_resources, ["aws_security_group.main"])
+
+    def test_compute_blast_radius_ignores_noop_and_read_changes(self) -> None:
+        topology = {
+            "services": [
+                {
+                    "id": "api",
+                    "label": "API Service",
+                    "resource_keys": [
+                        "aws_security_group.main",
+                        "data.aws_ami.latest",
+                    ],
+                    "downstream": ["worker"],
+                },
+                {
+                    "id": "worker",
+                    "label": "Worker",
+                    "resource_keys": [],
+                    "downstream": [],
+                },
+            ]
+        }
+        changes = [
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="aws_security_group.main",
+                action="no-op",
+                summary="Terraform resource aws_security_group.main has no planned changes.",
+            ),
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="data.aws_ami.latest",
+                action="read",
+                summary="Terraform resource data.aws_ami.latest marked for read.",
+            ),
+        ]
+
+        result = compute_blast_radius(changes, topology)
+
+        self.assertEqual(result.affected, [])
+        self.assertEqual(result.direct_count, 0)
+        self.assertEqual(result.transitive_count, 0)
+        self.assertEqual(result.unmatched_resources, [])
+        self.assertIsNone(result.warning)

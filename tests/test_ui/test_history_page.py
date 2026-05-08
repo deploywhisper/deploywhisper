@@ -92,6 +92,11 @@ class HistoryPageRenderingTests(unittest.TestCase):
                             resource_id="aws_security_group.main",
                             action="modify",
                             summary="Security group exposure risk",
+                            metadata={
+                                "module_address": "module.network",
+                                "redacted_fields": ["ingress.0.description"],
+                                "plan_unsupported_fields": ["plan.planned_values"],
+                            },
                         )
                     ],
                 )
@@ -111,6 +116,11 @@ class HistoryPageRenderingTests(unittest.TestCase):
                     action="modify",
                     contribution=20,
                     summary="Security group exposure risk",
+                    metadata={
+                        "module_address": "module.network",
+                        "redacted_fields": ["ingress.0.description"],
+                        "plan_unsupported_fields": ["plan.planned_values"],
+                    },
                 )
             ],
             interaction_risks=[],
@@ -462,6 +472,9 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Context completeness", response.text)
         self.assertIn("Blast radius", response.text)
         self.assertIn("Audit metadata", response.text)
+        self.assertIn("Module: module.network", response.text)
+        self.assertIn("Redacted fields: ingress.0.description", response.text)
+        self.assertIn("Unsupported plan fields: plan.planned_values", response.text)
         self.assertNotIn('"data-dw-modal-root":"1"', response.text)
 
     def test_history_detail_route_shows_topology_freshness_badge(self) -> None:

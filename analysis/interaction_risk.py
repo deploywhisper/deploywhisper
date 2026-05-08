@@ -7,7 +7,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from parsers.base import UnifiedChange
+from parsers.base import UnifiedChange, is_non_mutating_action
 
 
 class InteractionRisk(BaseModel):
@@ -68,6 +68,8 @@ STOP_WORDS = {
 def _collect_groups(changes: list[UnifiedChange]) -> dict[str, list[UnifiedChange]]:
     grouped: dict[str, list[UnifiedChange]] = defaultdict(list)
     for change in changes:
+        if is_non_mutating_action(change.action):
+            continue
         grouped[change.tool].append(change)
     return grouped
 

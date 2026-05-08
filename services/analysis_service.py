@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from typing import Any
 from pydantic import BaseModel, Field
 
 from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
@@ -13,14 +14,14 @@ from analysis.incident_matcher import (
     load_incident_candidates,
 )
 from analysis.risk_engine import score_evidence
-from analysis.risk_scorer import RiskAssessment
+from analysis.risk_scorer import RiskAssessment, score_changes
 from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
 from evidence.extractor import extract_batch_evidence
 from evidence.mappers import build_findings
 from evidence.models import ContextCompleteness, EvidenceItem, Finding
 from llm.narrator import NarrativeResult, generate_narrative
 from llm.providers import generate_completion_with_settings
-from parsers.base import ParseBatchResult, UnifiedChange
+from parsers.base import ParseBatchResult, UnifiedChange, is_non_mutating_action
 from services.intake_service import build_parse_batch
 from services.project_service import (
     ProjectResolutionError,
@@ -43,6 +44,8 @@ def evaluate_evidence(
     partial_context: bool = False,
     topology: dict | None = None,
     raw_files: dict[str, bytes | None] | None = None,
+    change_metadata_by_id: dict[str, dict[str, Any]] | None = None,
+    supplemental_changes: list[UnifiedChange] | None = None,
     completion_client=None,
 ) -> RiskAssessment:
     """Return a reusable unified risk assessment from evidence inputs."""
@@ -51,8 +54,46 @@ def evaluate_evidence(
         partial_context=partial_context,
         topology=topology,
         raw_files=raw_files,
+        change_metadata_by_id=change_metadata_by_id,
+        supplemental_changes=supplemental_changes,
         completion_client=completion_client,
     )
+
+
+def _change_metadata_by_id(batch: ParseBatchResult) -> dict[str, dict[str, Any]]:
+    metadata_by_id: dict[str, dict[str, Any]] = {}
+    for file_result in batch.files:
+        if file_result.status != "parsed":
+            continue
+        for change in file_result.changes:
+            if change.metadata:
+                metadata_by_id[change.change_id] = dict(change.metadata)
+    return metadata_by_id
+
+
+def _all_changes_are_non_mutating_terraform(changes: list[UnifiedChange]) -> bool:
+    return bool(changes) and all(
+        change.tool == "terraform" and is_non_mutating_action(change.action)
+        for change in changes
+    )
+
+
+def _supplemental_non_mutating_terraform_changes(
+    changes: list[UnifiedChange], evidence_items: list[EvidenceItem]
+) -> list[UnifiedChange]:
+    evidence_change_ids = {
+        change_id
+        for item in evidence_items
+        for change_id in item.related_change_ids
+        if change_id
+    }
+    return [
+        change
+        for change in changes
+        if change.tool == "terraform"
+        and is_non_mutating_action(change.action)
+        and change.change_id not in evidence_change_ids
+    ]
 
 
 def evaluate_parse_batch(
@@ -65,13 +106,34 @@ def evaluate_parse_batch(
     completion_client=None,
 ) -> RiskAssessment:
     """Compatibility wrapper that scores extracted evidence for a parse batch."""
+    scored_evidence_items = (
+        list(evidence_items)
+        if evidence_items is not None
+        else extract_batch_evidence(batch)
+    )
+    changes = _collect_changes(batch)
+    partial_context_value = (
+        batch.has_partial_context if partial_context is None else partial_context
+    )
+    if not scored_evidence_items and _all_changes_are_non_mutating_terraform(changes):
+        return score_changes(
+            changes,
+            partial_context=partial_context_value,
+            topology=topology,
+            raw_files=raw_files,
+            completion_client=completion_client,
+        )
+    if not scored_evidence_items:
+        scored_evidence_items = extract_batch_evidence(batch)
     return evaluate_evidence(
-        evidence_items or extract_batch_evidence(batch),
-        partial_context=batch.has_partial_context
-        if partial_context is None
-        else partial_context,
+        scored_evidence_items,
+        partial_context=partial_context_value,
         topology=topology,
         raw_files=raw_files,
+        change_metadata_by_id=_change_metadata_by_id(batch),
+        supplemental_changes=_supplemental_non_mutating_terraform_changes(
+            changes, scored_evidence_items
+        ),
         completion_client=completion_client,
     )
 

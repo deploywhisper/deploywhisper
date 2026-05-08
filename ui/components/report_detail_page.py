@@ -16,6 +16,7 @@ from services.feedback_service import (
     record_finding_feedback,
 )
 from ui.components.blast_radius_graph import render_blast_radius_panel
+from ui.components.change_table import format_change_metadata_lines
 from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
 )
@@ -309,6 +310,12 @@ def _render_resource_breakdown(report: dict[str, Any]) -> None:
                             ui.label(contributor["reasoning"]).classes(
                                 "text-sm dw-muted leading-6"
                             )
+                            for metadata_line in format_change_metadata_lines(
+                                contributor.get("metadata") or {}
+                            ):
+                                ui.label(metadata_line).classes(
+                                    "text-xs dw-muted leading-5"
+                                )
                             for security_flag in contributor.get("security_flags", []):
                                 ui.label(security_flag).classes(
                                     "text-xs dw-danger-text"

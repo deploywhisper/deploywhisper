@@ -1,6 +1,9 @@
 const { devices } = require("@playwright/test");
 const { screenReaderConfig } = require("@guidepup/playwright");
 
+const serverPort = process.env.APP_PORT || "8080";
+const serverUrl = `http://127.0.0.1:${serverPort}`;
+
 module.exports = {
   ...screenReaderConfig,
   testDir: "./tests/e2e",
@@ -13,13 +16,13 @@ module.exports = {
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://127.0.0.1:8080",
+    baseURL: serverUrl,
     headless: false,
     trace: "retain-on-failure",
   },
   webServer: {
     command: "./.venv/bin/python tests/e2e/seeded_server.py",
-    url: "http://127.0.0.1:8080/",
+    url: `${serverUrl}/`,
     reuseExistingServer: false,
     timeout: 120_000,
   },

@@ -1,11 +1,11 @@
 ---
 project_name: 'deploywhisper'
 user_name: 'psaho01'
-date: '2026-04-25'
+date: '2026-05-08'
 sections_completed:
   ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
 status: 'complete'
-rule_count: 34
+rule_count: 35
 optimized_for_llm: true
 ---
 
@@ -71,6 +71,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - When instructions conflict, prefer the implemented codebase plus `README.md`, `docs/ci.md`, and current scripts over stale contributor prose.
 - Validate changes with the repo’s real commands after edits. For Python changes, run `./.venv/bin/ruff check .` and `./.venv/bin/ruff format --check .` (or the equivalent through `bash scripts/ci-local.sh`) before concluding work. At minimum, keep relevant `unittest` coverage green; use `bash scripts/ci-local.sh` when the touched area is broad enough.
 - For review-flow or accessibility-sensitive UI changes, also run `npm run test:ui-review`; when working on macOS and the change affects keyboard or screen-reader semantics, run `npm run setup:ui-review` once per machine and `npm run test:ui-review:voiceover` before closing the task.
+- For any UI-facing story, include an explicit story task for browser validation. If the story changes a UI route, NiceGUI component, rendered report/history/dashboard surface, browser interaction, keyboard behavior, or accessibility semantics, the dev agent must run Playwright validation in a browser and record the command/result in the Dev Agent Record. Use `npm run test:ui-review` for review/report flows, `RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local UI lane, and `npm run test:ui-review:voiceover` on macOS for screen-reader or keyboard/a11y semantics. If no UI surface is touched, record `UI validation not applicable`; do not silently skip UI validation.
 - Treat security checks as part of normal completion criteria when they apply. Keep Bandit-compatible implementations in touched code, prefer modern hashes such as `sha256`/`blake2` over `sha1`/`md5`, and do not waive security findings when a safe fix is straightforward.
 - For AI-agent story execution, follow `CONTRIBUTING.md` Git Flow: start from `develop`, create one short-lived `feature/<identifier>-<short-description>` branch per story (or `bugfix/...` for defect work), commit incrementally on that branch, and target `develop` with a PR. Do not commit directly to `main` or `develop`.
 - For AI-agent story closure, the final reviewer must ensure the story ends on a Git Flow-compliant short-lived branch. If review happens on `develop`, the reviewer must create the proper `feature/*` or `bugfix/*` branch from that state, commit the story changes there, push it to remote, and optionally open the PR to `develop` before declaring the story lifecycle complete. A story is not properly closed if it remains only on `main`, `develop`, or detached HEAD.
@@ -103,4 +104,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Update it when tooling, validation commands, or architecture boundaries materially change.
 - Remove rules that become obsolete or are contradicted by the current codebase.
 
-Last Updated: 2026-04-25
+Last Updated: 2026-05-08

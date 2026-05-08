@@ -60,7 +60,7 @@ development_status:
 
   epic-2: in-progress
   2-1-submission-manifest-and-provenance: done
-  2-2-terraform-plan-json-intake: ready-for-dev
+  2-2-terraform-plan-json-intake: review
   2-3-evidence-item-model-and-extraction: ready-for-dev
   2-4-finding-model-and-evidence-links: ready-for-dev
   2-5-evidence-law-runtime-gate: ready-for-dev

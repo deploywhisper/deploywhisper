@@ -11,6 +11,7 @@ from analysis.interaction_risk import InteractionRisk
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.blast_radius import BlastRadiusResult
 from analysis.rollback_planner import RollbackPlan
+from evidence.extractor import extract_batch_evidence
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 from services.analysis_service import (
@@ -18,6 +19,7 @@ from services.analysis_service import (
     build_advisory_summary,
     build_analysis_artifacts,
     build_share_summary,
+    evaluate_parse_batch,
     resolve_analysis_project_scope,
 )
 
@@ -101,7 +103,7 @@ class AnalysisServiceTests(unittest.TestCase):
                 [
                     (
                         "plan.json",
-                        b'{"resource_changes": [{"address": "aws_security_group.main"}]}',
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     ),
                     ("broken.tf", b"SECRET_TOKEN=should-not-leave-intake\nresource {"),
                     (".env", b"SECRET=1"),
@@ -165,7 +167,7 @@ class AnalysisServiceTests(unittest.TestCase):
                 [
                     (
                         "plan.json",
-                        b'{"resource_changes": [{"address": "aws_security_group.main"}]}',
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     ),
                     (".env", b"SECRET=1"),
                     ("notes.txt", b"hello"),
@@ -319,7 +321,7 @@ class AnalysisServiceTests(unittest.TestCase):
                 [
                     (
                         "plan.json",
-                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     )
                 ]
             )
@@ -347,6 +349,193 @@ class AnalysisServiceTests(unittest.TestCase):
             artifacts.assessment.context_completeness.parser_success_by_tool,
             {"terraform": 1.0},
         )
+
+    def test_evaluate_parse_batch_preserves_non_mutating_metadata_without_evidence(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="empty-plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="empty-plan.json",
+                            tool="terraform",
+                            resource_id="terraform-plan",
+                            action="no-op",
+                            summary="Terraform plan has no resource changes.",
+                            metadata={
+                                "plan_format_version": "1.2",
+                                "terraform_version": "1.8.5",
+                                "plan_unsupported_fields": ["plan.planned_values"],
+                            },
+                        )
+                    ],
+                )
+            ]
+        )
+
+        assessment = evaluate_parse_batch(batch, evidence_items=[])
+
+        self.assertEqual(assessment.score, 0)
+        self.assertEqual(assessment.severity, "low")
+        self.assertEqual(len(assessment.contributors), 1)
+        self.assertEqual(assessment.contributors[0].resource_id, "terraform-plan")
+        self.assertEqual(assessment.contributors[0].contribution, 0)
+        self.assertEqual(
+            assessment.contributors[0].metadata["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
+        self.assertIn("no planned change", assessment.top_risk)
+
+    def test_evaluate_parse_batch_extracts_mutating_batch_when_evidence_empty(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="module.network.aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed an AWS security group.",
+                            metadata={
+                                "module_address": "module.network",
+                                "plan_unsupported_fields": ["plan.planned_values"],
+                            },
+                        )
+                    ],
+                )
+            ]
+        )
+
+        assessment = evaluate_parse_batch(
+            batch,
+            evidence_items=[],
+            completion_client=lambda **_: '{"change_scores": []}',
+        )
+
+        self.assertEqual(len(assessment.contributors), 1)
+        self.assertIsNotNone(assessment.contributors[0].evidence_id)
+        self.assertEqual(
+            assessment.contributors[0].resource_id,
+            "module.network.aws_security_group.main",
+        )
+        self.assertEqual(
+            assessment.contributors[0].metadata["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
+        self.assertGreater(assessment.score, 0)
+
+    def test_evaluate_parse_batch_preserves_parser_metadata_for_evidence_scoring(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="module.network.aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed an AWS security group.",
+                            metadata={
+                                "module_address": "module.network",
+                                "provider_name": "registry.terraform.io/hashicorp/aws",
+                                "plan_unsupported_fields": ["plan.planned_values"],
+                            },
+                        )
+                    ],
+                )
+            ]
+        )
+
+        assessment = evaluate_parse_batch(
+            batch,
+            evidence_items=extract_batch_evidence(batch),
+            completion_client=lambda **_: '{"change_scores": []}',
+        )
+
+        self.assertEqual(
+            assessment.contributors[0].metadata["module_address"],
+            "module.network",
+        )
+        self.assertEqual(
+            assessment.contributors[0].metadata["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
+
+    def test_evaluate_parse_batch_preserves_mixed_non_mutating_metadata(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="data.aws_ami.selected",
+                            action="read",
+                            summary="Terraform read selected AMI.",
+                            metadata={
+                                "actions": ["read"],
+                                "unknown_after_apply": ["id"],
+                                "plan_unsupported_fields": ["plan.planned_values"],
+                            },
+                        ),
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed an AWS security group.",
+                            metadata={"module_address": "module.network"},
+                        ),
+                    ],
+                )
+            ]
+        )
+
+        assessment = evaluate_parse_batch(
+            batch,
+            evidence_items=extract_batch_evidence(batch),
+            completion_client=lambda **_: '{"change_scores": []}',
+        )
+
+        contributors = {
+            contributor.resource_id: contributor
+            for contributor in assessment.contributors
+        }
+        self.assertEqual(
+            set(contributors), {"aws_security_group.main", "data.aws_ami.selected"}
+        )
+        self.assertEqual(contributors["data.aws_ami.selected"].contribution, 0)
+        self.assertIsNone(contributors["data.aws_ami.selected"].evidence_id)
+        self.assertEqual(
+            contributors["data.aws_ami.selected"].metadata["plan_unsupported_fields"],
+            ["plan.planned_values"],
+        )
+        self.assertEqual(
+            contributors["data.aws_ami.selected"].metadata["unknown_after_apply"],
+            ["id"],
+        )
+        self.assertIsNotNone(contributors["aws_security_group.main"].evidence_id)
+        self.assertGreater(assessment.score, 0)
 
     def test_build_analysis_artifacts_tracks_topology_timestamp_and_tool_success_rates(
         self,
@@ -548,7 +737,7 @@ class AnalysisServiceTests(unittest.TestCase):
                 [
                     (
                         "plan.json",
-                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     )
                 ]
             )
@@ -629,7 +818,7 @@ class AnalysisServiceTests(unittest.TestCase):
                 [
                     (
                         "plan.json",
-                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     )
                 ]
             )
@@ -937,7 +1126,7 @@ class AnalysisServiceTests(unittest.TestCase):
                 [
                     (
                         "plan.json",
-                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["modify"]}}]}',
+                        b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     )
                 ]
             )

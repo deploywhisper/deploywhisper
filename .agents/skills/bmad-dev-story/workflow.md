@@ -298,6 +298,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     <action>Create unit tests for business logic and core functionality introduced/changed by the task</action>
     <action>Add integration tests for component interactions specified in story requirements</action>
     <action>Include end-to-end tests for critical user flows when story requirements demand them</action>
+    <action>If the story changes any UI route, NiceGUI component, rendered report/history/dashboard surface, browser interaction, keyboard behavior, or accessibility semantics, add or update Playwright browser validation for that flow. Use API/database/test fixtures for setup; use the browser only to validate the user-visible behavior.</action>
     <action>Cover edge cases and error handling scenarios identified in story Dev Notes</action>
   </step>
 
@@ -307,9 +308,11 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     <action>Run the new tests to verify implementation correctness</action>
     <action>Run linting and code quality checks if configured in project</action>
     <action>Run repo-configured security checks for touched code when available (for Python, include Bandit if configured)</action>
+    <action>If UI-facing files or browser-visible behavior changed, run Playwright browser validation before review. For this repo, use `npm run test:ui-review` for review/report flows, `RUN_UI_A11Y=1 bash scripts/ci-local.sh` when the full local UI lane is needed, and `npm run test:ui-review:voiceover` on macOS when keyboard or screen-reader semantics changed. If a UI story has no applicable browser check, record the reason explicitly in the Dev Agent Record instead of silently skipping it.</action>
     <action>Validate implementation meets ALL story acceptance criteria; enforce quantitative thresholds explicitly</action>
     <action if="regression tests fail">STOP and fix before continuing - identify breaking changes immediately</action>
     <action if="new tests fail">STOP and fix before continuing - ensure implementation correctness</action>
+    <action if="required UI Playwright validation fails or is skipped without a documented non-applicability reason">STOP and fix before continuing</action>
   </step>
 
   <step n="8" goal="Validate and mark task complete ONLY when fully done">
@@ -377,6 +380,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
       - Unit tests for core functionality added/updated
       - Integration tests for component interactions added when required
       - End-to-end tests for critical flows added when story demands them
+      - UI-facing changes validated in a browser with Playwright, with command/result recorded; or Dev Agent Record explicitly states UI validation was not applicable
       - All tests pass (no regressions, new tests successful)
       - Code quality checks pass (linting, static analysis if configured)
       - Security checks pass for touched code when configured (for Python, Bandit where available)
