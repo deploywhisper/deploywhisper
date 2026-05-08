@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import tempfile
 import unittest
 from importlib import reload
@@ -621,6 +622,105 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
 
+    def test_create_analysis_persists_submission_manifest_with_partial_coverage(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
+                    "application/json",
+                ),
+            ),
+            (
+                "files",
+                (
+                    "broken.tf",
+                    b"resource {",
+                    "application/octet-stream",
+                ),
+            ),
+            (
+                "files",
+                (
+                    ".env",
+                    b"SECRET=1",
+                    "text/plain",
+                ),
+            ),
+            (
+                "files",
+                (
+                    "notes.txt",
+                    b"deployment notes",
+                    "text/plain",
+                ),
+            ),
+        ]
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review partial analysis.",
+            explanation="One artifact failed to parse.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=self._analysis_assessment(partial_context=True),
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "payments"},
+                headers={"X-DeployWhisper-Trigger-Id": "build-77"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        manifest = payload["data"]["persisted_report"]["submission_manifest"]
+        self.assertEqual(manifest["submitted_artifact_count"], 4)
+        self.assertEqual(manifest["accepted_artifact_count"], 2)
+        self.assertEqual(manifest["analyzed_artifact_count"], 1)
+        self.assertEqual(manifest["excluded_artifact_count"], 1)
+        self.assertEqual(manifest["sensitive_artifact_count"], 1)
+        self.assertEqual(manifest["failed_artifact_count"], 1)
+        self.assertEqual(manifest["partial_artifact_count"], 3)
+        self.assertTrue(manifest["partial_analysis"])
+        by_name = {item["name"]: item for item in manifest["items"]}
+        self.assertEqual(by_name["plan.json"]["status"], "accepted")
+        self.assertEqual(by_name["broken.tf"]["status"], "failed")
+        self.assertTrue(by_name["broken.tf"]["partial"])
+        self.assertEqual(by_name[".env"]["status"], "sensitive")
+        self.assertTrue(by_name[".env"]["partial"])
+        self.assertEqual(by_name["notes.txt"]["status"], "excluded")
+        self.assertTrue(by_name["notes.txt"]["partial"])
+        self.assertEqual(by_name["plan.json"]["provenance"]["source_interface"], "api")
+        self.assertEqual(by_name["plan.json"]["provenance"]["trigger_id"], "build-77")
+        self.assertTrue(payload["data"]["assessment"]["partial_context"])
+
+        detail = self.client.get(
+            f"/api/v1/analyses/{payload['data']['persisted_report']['id']}",
+            params={"project_key": "payments"},
+        )
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(
+            detail.json()["data"]["submission_manifest"]["failed_artifact_count"],
+            1,
+        )
+
     def test_create_analysis_denies_role_without_submit_capability(self) -> None:
         project_service_module.create_project(
             project_key="payments",
@@ -747,6 +847,7 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(
             detail_response.json()["error"]["code"], "project_scope_forbidden"
         )
+        self.assertNotIn("payments", detail_response.json()["error"]["message"])
 
     def test_analysis_reads_deny_project_outside_actor_scope(self) -> None:
         project = project_service_module.create_project(
@@ -810,6 +911,31 @@ class AnalysesApiTests(unittest.TestCase):
             detail_response.json()["error"]["code"], "project_scope_forbidden"
         )
         self.assertNotIn("payments", detail_response.json()["error"]["message"])
+
+    def test_analysis_detail_returns_null_manifest_when_persisted_json_is_malformed(
+        self,
+    ) -> None:
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = ? WHERE id = ?",
+                ("{not-valid-json", self.persisted["id"]),
+            )
+
+        response = self.client.get(f"/api/v1/analyses/{self.persisted['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["data"]
+        self.assertIsNone(payload["submission_manifest"])
+        self.assertEqual(
+            payload["submission_manifest_fallback"][0]["name"], "plan.json"
+        )
+        self.assertEqual(
+            payload["submission_manifest_fallback"][0]["status"], "accepted"
+        )
+        self.assertIn(
+            "Submission manifest metadata was unavailable because persisted JSON was malformed.",
+            payload["warnings"],
+        )
 
     def test_create_analysis_accepts_project_id(self) -> None:
         project = project_service_module.create_project(

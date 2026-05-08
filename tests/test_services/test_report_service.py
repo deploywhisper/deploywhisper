@@ -10,11 +10,13 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from importlib import reload
 from pathlib import Path
+from unittest.mock import patch
 
 import config as config_module
 import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
+import services.artifact_snapshot_service as artifact_snapshot_service_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
 import services.settings_service as settings_service_module
@@ -23,18 +25,21 @@ from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
-from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
+from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 
 
 class ReportServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tempdir.name) / "reports.db"
+        self.snapshot_dir = Path(self.tempdir.name) / "artifacts"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
+        os.environ["ARTIFACT_SNAPSHOT_DIR"] = str(self.snapshot_dir)
         reload(config_module)
         reload(tables_module)
         reload(database_module)
         reload(analysis_reports_repository_module)
+        reload(artifact_snapshot_service_module)
         reload(project_service_module)
         reload(settings_service_module)
         reload(report_service_module)
@@ -44,6 +49,7 @@ class ReportServiceTests(unittest.TestCase):
         database_module.engine.dispose()
         os.environ.pop("DATABASE_URL", None)
         os.environ.pop("APP_BASE_URL", None)
+        os.environ.pop("ARTIFACT_SNAPSHOT_DIR", None)
         self.tempdir.cleanup()
 
     def _persist_shareable_report(self) -> dict:
@@ -138,25 +144,33 @@ class ReportServiceTests(unittest.TestCase):
         top_risk: str,
         findings: list[Finding],
         evidence_items: list[EvidenceItem],
+        parse_files: list[ParsedFileResult] | None = None,
     ) -> dict:
-        parse_batch = ParseBatchResult(
-            files=[
-                ParsedFileResult(
-                    file_name="prod/network/plan.json",
-                    tool="terraform",
-                    status="parsed",
-                    changes=[
-                        UnifiedChange(
-                            source_file="prod/network/plan.json",
-                            tool="terraform",
-                            resource_id="aws_security_group.main",
-                            action="modify",
-                            summary=top_risk,
-                        )
-                    ],
-                )
-            ]
+        parsed_files = parse_files or [
+            ParsedFileResult(
+                file_name="prod/network/plan.json",
+                tool="terraform",
+                status="parsed",
+                changes=[
+                    UnifiedChange(
+                        source_file="prod/network/plan.json",
+                        tool="terraform",
+                        resource_id="aws_security_group.main",
+                        action="modify",
+                        summary=top_risk,
+                    )
+                ],
+            )
+        ]
+        contributor_source = next(
+            (
+                file_result.file_name
+                for file_result in parsed_files
+                if file_result.status == "parsed"
+            ),
+            parsed_files[0].file_name,
         )
+        parse_batch = ParseBatchResult(files=parsed_files)
         assessment = RiskAssessment(
             score=score,
             severity=severity,
@@ -164,7 +178,7 @@ class ReportServiceTests(unittest.TestCase):
             top_risk=top_risk,
             contributors=[
                 RiskContributor(
-                    source_file="prod/network/plan.json",
+                    source_file=contributor_source,
                     tool="terraform",
                     resource_id="aws_security_group.main",
                     action="modify",
@@ -546,6 +560,846 @@ class ReportServiceTests(unittest.TestCase):
         self.assertNotIn(
             "prod/network/plan.json",
             shared_report["evidence_items"][0]["source_ref"],
+        )
+
+    def test_shared_report_redaction_preserves_sensitive_content_exclusion(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="prod/network/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/network/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="prod/network/plan.json changed aws_security_group.main.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review prod/network/plan.json before release.",
+            explanation="The deployment should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            artifact_snapshots={
+                "prod/network/plan.json": b'{"resource_changes": []}',
+                ".env": b"SECRET=1",
+            },
+            audit_context={"source_interface": "api"},
+        )
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        manifest_items = shared_report["submission_manifest"]["items"]
+        self.assertEqual(
+            [item["name"] for item in manifest_items],
+            ["Artifact 1", "Artifact 2"],
+        )
+        by_status = {item["status"]: item for item in manifest_items}
+        self.assertEqual(by_status["accepted"]["redaction_status"], "redacted")
+        self.assertEqual(
+            by_status["sensitive"]["redaction_status"],
+            "sensitive_blocked",
+        )
+        self.assertEqual(shared_report["submission_manifest"]["provenance"], {})
+        for item in manifest_items:
+            self.assertEqual(
+                set(item["provenance"]),
+                {"submitted_index", "submitted_name"},
+            )
+            self.assertNotIn("trigger_id", item["provenance"])
+            self.assertNotIn("project_id", item["provenance"])
+            self.assertNotIn("project_key", item["provenance"])
+            self.assertNotIn("workspace_id", item["provenance"])
+            self.assertNotIn("workspace_key", item["provenance"])
+        self.assertTrue(
+            shared_report["submission_manifest"]["redaction"]["filenames_redacted"]
+        )
+
+    def test_shared_report_redaction_rewrites_manifest_messages(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="prod/network/plan.json",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="prod/network/plan.json",
+                        tool="terraform",
+                        message="Could not parse prod/network/plan.json",
+                    ),
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="prod/network/plan.json did not parse.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=True,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="Review prod/network/plan.json.",
+            explanation="The deployment could not be fully analyzed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            artifact_snapshots={
+                "prod/network/plan.json": b"resource {",
+            },
+            audit_context={"source_interface": "api"},
+        )
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        message = shared_report["submission_manifest"]["items"][0]["message"]
+        self.assertEqual(
+            message,
+            "Terraform artifact failed parser validation; analysis coverage is partial.",
+        )
+        self.assertNotIn("prod/network/plan.json", message)
+        self.assertNotIn("plan.json", message)
+
+    def test_shared_report_redaction_preserves_extensionless_basename_words(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="prod/main",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/main",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="prod/main changed; the main service remains healthy.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: prod/main needs review, but the main path is stable.",
+            explanation="Review required.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+        )
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        self.assertEqual(
+            shared_report["top_risk"],
+            "Artifact 1 changed; the main service remains healthy.",
+        )
+        self.assertEqual(
+            shared_report["narrative_opening"],
+            "CAUTION: Artifact 1 needs review, but the main path is stable.",
+        )
+
+    def test_shared_report_redaction_redacts_file_like_extensionless_basenames(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="ci/Jenkinsfile",
+                    tool="jenkins",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="ci/Jenkinsfile",
+                            tool="jenkins",
+                            resource_id="pipeline.deploy",
+                            action="modify",
+                            summary="Jenkinsfile changed.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="ci/Jenkinsfile changed; Jenkinsfile deploy stage needs review.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: Jenkinsfile needs review.",
+            explanation="Review required.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+        )
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        serialized = json.dumps(shared_report)
+        self.assertNotIn("Jenkinsfile", serialized)
+        self.assertIn("Artifact 1", serialized)
+
+    def test_shared_report_redaction_redacts_duplicate_basenames_generically(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="prod/a/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/a/plan.json",
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.a",
+                            action="modify",
+                            summary="Bucket changed.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="prod/b/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/b/plan.json",
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.b",
+                            action="modify",
+                            summary="Bucket changed.",
+                        )
+                    ],
+                ),
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="plan.json needs review after prod/a/plan.json changed.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: plan.json should be reviewed.",
+            explanation="Review required.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+        )
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        serialized = json.dumps(shared_report)
+        self.assertNotIn("plan.json", serialized)
+        self.assertNotIn("prod/a/plan.json", serialized)
+        self.assertNotIn("prod/b/plan.json", serialized)
+        self.assertIn("Artifact file", serialized)
+
+    def test_shared_report_redaction_prefers_longest_overlapping_filename(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="plan.json.bak",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json.bak",
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.backup",
+                            action="modify",
+                            summary="Backup bucket changed.",
+                        )
+                    ],
+                ),
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="plan.json.bak changed after plan.json.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: compare plan.json.bak with plan.json.",
+            explanation="Review required.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+        )
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        serialized = json.dumps(shared_report)
+        self.assertNotIn("plan.json", serialized)
+        self.assertNotIn(".bak", serialized)
+        self.assertIn("Artifact 2 changed after Artifact 1", shared_report["top_risk"])
+
+    def test_persist_manifest_uses_submitted_artifacts_without_raw_snapshots(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="broken.tf",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="broken.tf",
+                        tool="terraform",
+                        message="Unexpected token",
+                    ),
+                ),
+            ]
+        )
+        assessment = RiskAssessment(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="plan.json changed aws_security_group.main.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=True,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: review the partial analysis.",
+            explanation="The deployment was partially analyzed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            submitted_artifacts=[
+                ("plan.json", b'{"resource_changes": []}'),
+                ("broken.tf", b"resource {"),
+                (".env", b"SECRET=1"),
+                ("notes.txt", b"hello"),
+            ],
+            audit_context={"source_interface": "api"},
+        )
+
+        self.assertIsNotNone(
+            artifact_snapshot_service_module.load_report_artifact(
+                report["id"], "plan.json"
+            )
+        )
+        self.assertIsNone(
+            artifact_snapshot_service_module.load_report_artifact(
+                report["id"], "broken.tf"
+            )
+        )
+        self.assertIsNone(
+            artifact_snapshot_service_module.load_report_artifact(report["id"], ".env")
+        )
+        self.assertIsNone(
+            artifact_snapshot_service_module.load_report_artifact(
+                report["id"], "notes.txt"
+            )
+        )
+        manifest = report["submission_manifest"]
+        self.assertEqual(manifest["submitted_artifact_count"], 4)
+        self.assertEqual(manifest["accepted_artifact_count"], 2)
+        self.assertEqual(manifest["analyzed_artifact_count"], 1)
+        self.assertEqual(manifest["excluded_artifact_count"], 1)
+        self.assertEqual(manifest["sensitive_artifact_count"], 1)
+        self.assertEqual(manifest["failed_artifact_count"], 1)
+        self.assertEqual(report["audit"]["files_analyzed"], ["plan.json"])
+        by_name = {item["name"]: item for item in manifest["items"]}
+        self.assertEqual(
+            by_name["plan.json"]["message"],
+            "Terraform artifact parsed successfully and included in analysis.",
+        )
+        self.assertEqual(by_name[".env"]["status"], "sensitive")
+        self.assertEqual(by_name["notes.txt"]["status"], "excluded")
+        self.assertEqual(by_name["broken.tf"]["status"], "failed")
+        self.assertEqual(
+            by_name["broken.tf"]["message"],
+            "Terraform artifact failed parser validation; analysis coverage is partial.",
+        )
+        self.assertNotIn("Unexpected token", by_name["broken.tf"]["message"])
+
+    def test_failed_artifact_snapshots_are_not_persisted(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="broken.tf",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="broken.tf",
+                        tool="terraform",
+                        message="Unexpected token SECRET=1",
+                    ),
+                ),
+            ]
+        )
+        assessment = RiskAssessment(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="plan.json changed aws_security_group.main.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=True,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: review the partial analysis.",
+            explanation="The deployment was partially analyzed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            artifact_snapshots={
+                "plan.json": b'{"resource_changes": []}',
+                "broken.tf": b"SECRET=1",
+            },
+            audit_context={"source_interface": "api"},
+        )
+
+        self.assertIsNotNone(
+            artifact_snapshot_service_module.load_report_artifact(
+                report["id"], "plan.json"
+            )
+        )
+        self.assertIsNone(
+            artifact_snapshot_service_module.load_report_artifact(
+                report["id"], "broken.tf"
+            )
+        )
+        by_name = {
+            item["name"]: item for item in report["submission_manifest"]["items"]
+        }
+        self.assertEqual(
+            by_name["broken.tf"]["message"],
+            "Terraform artifact failed parser validation; analysis coverage is partial.",
+        )
+        self.assertNotIn("SECRET=1", by_name["broken.tf"]["message"])
+
+    def test_persist_manifest_records_resolved_project_workspace_scope(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        workspace = project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="prod",
+            display_name="Production",
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="plan.json changed aws_security_group.main.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: review the deployment.",
+            explanation="The deployment was analyzed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            project_id=project.id,
+            workspace_id=workspace.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        provenance = report["submission_manifest"]["provenance"]
+        self.assertEqual(provenance["project_id"], project.id)
+        self.assertEqual(provenance["project_key"], "payments")
+        self.assertEqual(provenance["workspace_id"], workspace.id)
+        self.assertEqual(provenance["workspace_key"], "prod")
+        item_provenance = report["submission_manifest"]["items"][0]["provenance"]
+        self.assertEqual(item_provenance["project_key"], "payments")
+        self.assertEqual(item_provenance["workspace_key"], "prod")
+
+    def test_persist_manifest_warns_when_submitted_artifact_context_is_inferred(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="notes.txt",
+                    tool="unsupported",
+                    status="skipped",
+                    issue=ParseIssue(
+                        file_name="notes.txt",
+                        tool="unsupported",
+                        message="Unsupported or unrecognized file excluded from parsing.",
+                    ),
+                ),
+            ]
+        )
+        assessment = RiskAssessment(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="plan.json changed aws_security_group.main.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: review the deployment.",
+            explanation="The deployment was analyzed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+        )
+
+        self.assertIn(
+            "Submission manifest metadata was inferred from available analysis artifacts "
+            "because submitted artifact context was unavailable; excluded or sensitive "
+            "submissions may be missing.",
+            report["warnings"],
+        )
+        by_name = {
+            item["name"]: item for item in report["submission_manifest"]["items"]
+        }
+        self.assertEqual(by_name["notes.txt"]["status"], "excluded")
+        self.assertEqual(
+            by_name["notes.txt"]["message"],
+            "Unsupported or unrecognized file excluded from parsing.",
+        )
+        self.assertTrue(by_name["notes.txt"]["partial"])
+
+    def test_fetch_report_degrades_on_malformed_submission_manifest_json(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="broken.tf",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="broken.tf",
+                        tool="terraform",
+                        message="Unexpected token",
+                    ),
+                ),
+            ]
+        )
+        assessment = RiskAssessment(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="plan.json changed aws_security_group.main.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=True,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: review the partial analysis.",
+            explanation="The deployment was partially analyzed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            submitted_artifacts=[
+                ("plan.json", b'{"resource_changes": []}'),
+                ("broken.tf", b"resource {"),
+                (".env", b"SECRET=1"),
+                ("notes.txt", b"hello"),
+            ],
+            audit_context={"source_interface": "api"},
+        )
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = ? WHERE id = ?",
+                ("{not-valid-json", report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertIsNone(fetched["submission_manifest"])
+        self.assertIn(
+            "Submission manifest metadata was unavailable because persisted JSON was malformed.",
+            fetched["warnings"],
+        )
+        fallback_by_name = {
+            item["name"]: item for item in fetched["submission_manifest_fallback"]
+        }
+        self.assertEqual(fallback_by_name["plan.json"]["status"], "accepted")
+        self.assertEqual(fallback_by_name["broken.tf"]["status"], "failed")
+        self.assertEqual(fallback_by_name[".env"]["status"], "sensitive")
+        self.assertEqual(fallback_by_name["notes.txt"]["status"], "excluded")
+
+    def test_fetch_report_degrades_on_wrong_shape_submission_manifest_json(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = ? WHERE id = ?",
+                ("[]", report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertIsNone(fetched["submission_manifest"])
+        self.assertIn(
+            "Submission manifest metadata was unavailable because persisted JSON had an unexpected shape.",
+            fetched["warnings"],
         )
 
     def test_fetch_shared_analysis_report_requires_password_when_configured(
@@ -1084,6 +1938,384 @@ class ReportServiceTests(unittest.TestCase):
         serialized = json.dumps(comparison)
         self.assertNotIn("prod/network/plan.json", serialized)
         self.assertIn("Artifact 1", serialized)
+
+    def test_fetch_shared_report_comparison_redacts_manifest_only_failed_files(
+        self,
+    ) -> None:
+        parse_files = [
+            ParsedFileResult(
+                file_name="prod/network/plan.json",
+                tool="terraform",
+                status="parsed",
+                changes=[
+                    UnifiedChange(
+                        source_file="prod/network/plan.json",
+                        tool="terraform",
+                        resource_id="aws_security_group.main",
+                        action="modify",
+                        summary="Security group changed.",
+                    )
+                ],
+            ),
+            ParsedFileResult(
+                file_name="prod/network/broken.tf",
+                tool="terraform",
+                status="failed",
+                issue=ParseIssue(
+                    file_name="prod/network/broken.tf",
+                    tool="terraform",
+                    message="Could not parse prod/network/broken.tf",
+                ),
+            ),
+        ]
+        self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="prod/network/broken.tf was excluded from analysis.",
+            findings=[
+                Finding(
+                    finding_id="finding-partial",
+                    analysis_id=0,
+                    title="MEDIUM: prod/network/broken.tf partial coverage",
+                    description="prod/network/broken.tf could not be parsed.",
+                    severity="medium",
+                    category="parser/coverage",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-partial"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-partial",
+                    analysis_id=0,
+                    finding_id="pending:partial",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/broken.tf",
+                    summary="prod/network/broken.tf failed parsing.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-partial"],
+                )
+            ],
+            parse_files=parse_files,
+        )
+        current = self._persist_comparison_report(
+            score=55,
+            severity="high",
+            recommendation="caution",
+            top_risk="prod/network/broken.tf still needs parser review.",
+            findings=[],
+            evidence_items=[],
+            parse_files=parse_files,
+        )
+        report_service_module.configure_report_share(
+            current["id"],
+            password="review-only",
+            redact_filenames=True,
+        )
+
+        comparison = report_service_module.fetch_shared_report_comparison(
+            current["id"],
+            password="review-only",
+        )
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        serialized = json.dumps(comparison)
+        self.assertNotIn("prod/network/broken.tf", serialized)
+        self.assertNotIn("broken.tf", serialized)
+        self.assertIn("Artifact 2", serialized)
+
+    def test_previous_comparable_report_requires_matching_manifest_coverage(
+        self,
+    ) -> None:
+        def parse_files(failed_name: str):
+            return [
+                ParsedFileResult(
+                    file_name="prod/network/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/network/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Security group changed.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name=failed_name,
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name=failed_name,
+                        tool="terraform",
+                        message=f"Could not parse {failed_name}",
+                    ),
+                ),
+            ]
+
+        self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="prod/network/broken-a.tf was excluded.",
+            findings=[],
+            evidence_items=[],
+            parse_files=parse_files("prod/network/broken-a.tf"),
+        )
+        current = self._persist_comparison_report(
+            score=55,
+            severity="high",
+            recommendation="caution",
+            top_risk="prod/network/broken-b.tf was excluded.",
+            findings=[],
+            evidence_items=[],
+            parse_files=parse_files("prod/network/broken-b.tf"),
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNone(comparison)
+
+    def test_previous_comparable_report_matches_equivalent_legacy_report(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="prod/network/plan.json was reviewed.",
+            findings=[],
+            evidence_items=[],
+        )
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = '{}' WHERE id = ?",
+                (previous["id"],),
+            )
+        current = self._persist_comparison_report(
+            score=55,
+            severity="high",
+            recommendation="caution",
+            top_risk="prod/network/plan.json still needs review.",
+            findings=[],
+            evidence_items=[],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(
+            comparison["previous_report"]["id"],
+            previous["id"],
+        )
+
+    def test_previous_comparable_report_requires_matching_artifact_tool(
+        self,
+    ) -> None:
+        self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="plan.json was parsed as Terraform.",
+            findings=[],
+            evidence_items=[],
+            parse_files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform security group changed.",
+                        )
+                    ],
+                )
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=55,
+            severity="high",
+            recommendation="caution",
+            top_risk="plan.json was parsed as CloudFormation.",
+            findings=[],
+            evidence_items=[],
+            parse_files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="cloudformation",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="cloudformation",
+                            resource_id="AWS::EC2::SecurityGroup.Main",
+                            action="modify",
+                            summary="CloudFormation security group changed.",
+                        )
+                    ],
+                )
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNone(comparison)
+
+    def test_legacy_previous_comparable_report_requires_inferred_tool_match(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="plan.json was parsed as Terraform.",
+            findings=[],
+            evidence_items=[],
+            parse_files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform security group changed.",
+                        )
+                    ],
+                )
+            ],
+        )
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = '{}' WHERE id = ?",
+                (previous["id"],),
+            )
+        current = self._persist_comparison_report(
+            score=55,
+            severity="high",
+            recommendation="caution",
+            top_risk="plan.json was parsed as CloudFormation.",
+            findings=[],
+            evidence_items=[],
+            parse_files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="cloudformation",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="cloudformation",
+                            resource_id="AWS::EC2::SecurityGroup.Main",
+                            action="modify",
+                            summary="CloudFormation security group changed.",
+                        )
+                    ],
+                )
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNone(comparison)
+
+    def test_malformed_manifest_reports_are_excluded_from_auto_comparison(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="prod/network/broken-a.tf was excluded.",
+            findings=[],
+            evidence_items=[],
+            parse_files=[
+                ParsedFileResult(
+                    file_name="prod/network/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/network/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform security group changed.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="prod/network/broken-a.tf",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="prod/network/broken-a.tf",
+                        tool="terraform",
+                        message="Could not parse prod/network/broken-a.tf",
+                    ),
+                ),
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=55,
+            severity="high",
+            recommendation="caution",
+            top_risk="prod/network/broken-b.tf was excluded.",
+            findings=[],
+            evidence_items=[],
+            parse_files=[
+                ParsedFileResult(
+                    file_name="prod/network/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="prod/network/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform security group changed.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="prod/network/broken-b.tf",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="prod/network/broken-b.tf",
+                        tool="terraform",
+                        message="Could not parse prod/network/broken-b.tf",
+                    ),
+                ),
+            ],
+        )
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = ? WHERE id IN (?, ?)",
+                ("{not-valid-json", previous["id"], current["id"]),
+            )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNone(comparison)
 
     def test_fetch_shared_report_comparison_requires_previous_report_access(
         self,
@@ -1790,6 +3022,87 @@ class ReportServiceTests(unittest.TestCase):
         by_id = {item["id"]: item for item in history["items"]}
         self.assertNotIn("previous_scan_diff", by_id[int(first["id"])])
         self.assertNotIn("previous_scan_diff", by_id[int(second["id"])])
+
+    def test_previous_scan_diffs_use_immediately_previous_comparable_report(
+        self,
+    ) -> None:
+        first = self._persist_comparison_report(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="First review",
+            findings=[],
+            evidence_items=[],
+        )
+        second = self._persist_comparison_report(
+            score=50,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Second review",
+            findings=[],
+            evidence_items=[],
+        )
+        third = self._persist_comparison_report(
+            score=80,
+            severity="high",
+            recommendation="no-go",
+            top_risk="Third review",
+            findings=[],
+            evidence_items=[],
+        )
+
+        history = report_service_module.fetch_filtered_analysis_history_page()
+
+        by_id = {item["id"]: item for item in history["items"]}
+        self.assertEqual(
+            by_id[int(third["id"])]["previous_scan_diff"]["previous_report_id"],
+            second["id"],
+        )
+        self.assertEqual(
+            by_id[int(second["id"])]["previous_scan_diff"]["previous_report_id"],
+            first["id"],
+        )
+
+    def test_previous_scan_diffs_compute_history_signature_once_per_report(
+        self,
+    ) -> None:
+        reports = [
+            self._persist_comparison_report(
+                score=30 + index,
+                severity="low",
+                recommendation="go",
+                top_risk=f"Review {index}",
+                findings=[],
+                evidence_items=[],
+            )
+            for index in range(5)
+        ]
+        original_history_signature = report_service_module._history_signature
+        call_count = 0
+
+        def counting_history_signature(report):
+            nonlocal call_count
+            call_count += 1
+            return original_history_signature(report)
+
+        with (
+            patch.object(
+                report_service_module,
+                "_history_signature",
+                side_effect=counting_history_signature,
+            ),
+            patch.object(
+                report_service_module,
+                "_comparison_signatures_match",
+                side_effect=AssertionError(
+                    "history annotation must use exact signature index"
+                ),
+            ),
+        ):
+            history = report_service_module.fetch_filtered_analysis_history_page()
+
+        self.assertEqual(history["total_count"], len(reports))
+        self.assertEqual(call_count, len(reports))
 
 
 if __name__ == "__main__":

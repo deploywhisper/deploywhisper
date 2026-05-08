@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -27,7 +28,7 @@ from analysis.risk_scorer import RiskAssessment, RiskContributor
 from evidence.models import Finding
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
-from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
+from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 
 
 class DashboardShellTests(unittest.TestCase):
@@ -264,7 +265,17 @@ class DashboardShellTests(unittest.TestCase):
                             summary="Terraform changed a security group.",
                         )
                     ],
-                )
+                ),
+                ParsedFileResult(
+                    file_name="broken.tf",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="broken.tf",
+                        tool="terraform",
+                        message="Unexpected token",
+                    ),
+                ),
             ]
         )
         assessment = RiskAssessment(
@@ -478,6 +489,157 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("5-second verdict", response.text)
         self.assertIn("Narrative provider unavailable: provider offline", response.text)
         self.assertIn("Narrative unavailable.", response.text)
+
+    def test_report_views_show_manifest_degraded_warning(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group exposure risk",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review security group exposure.",
+            explanation="Review required.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            submitted_artifacts=[
+                ("plan.json", b'{"resource_changes": []}'),
+                ("broken.tf", b"resource {"),
+                (".env", b"SECRET=1"),
+                ("notes.txt", b"hello"),
+            ],
+            audit_context={
+                "source_interface": "ui",
+                "trigger_type": "dashboard_upload",
+            },
+        )
+        warning = (
+            "Submission manifest metadata was unavailable because persisted JSON was "
+            "malformed."
+        )
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = ? WHERE id = ?",
+                ("{not-valid-json", report["id"]),
+            )
+        project_service_module.set_active_project(
+            project_service_module.ensure_default_project().id
+        )
+
+        dashboard_response = self.client.get("/")
+        detail_response = self.client.get(f"/history/{report['id']}")
+
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertIn(warning, dashboard_response.text)
+        self.assertIn(warning, detail_response.text)
+        self.assertIn(
+            "Fallback submission artifacts: plan.json (accepted), broken.tf (failed), .env (sensitive), notes.txt (excluded)",
+            dashboard_response.text,
+        )
+        self.assertIn(
+            "Fallback submission artifacts: plan.json (accepted), broken.tf (failed), .env (sensitive), notes.txt (excluded)",
+            detail_response.text,
+        )
+
+    def test_report_views_show_persisted_partial_manifest_notice(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group exposure risk",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=True,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review security group exposure.",
+            explanation="Review required.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            submitted_artifacts=[
+                ("plan.json", b'{"resource_changes": []}'),
+                (".env", b"SECRET=1"),
+                ("notes.txt", b"hello"),
+            ],
+            audit_context={
+                "source_interface": "ui",
+                "trigger_type": "dashboard_upload",
+            },
+        )
+        project_service_module.set_active_project(
+            project_service_module.ensure_default_project().id
+        )
+
+        dashboard_response = self.client.get("/")
+        detail_response = self.client.get(f"/history/{report['id']}")
+
+        expected_summary = (
+            "Submission manifest: 1 accepted, 1 analyzed, 1 excluded, 0 failed, "
+            "1 sensitive, 2 partial"
+        )
+        expected_notice = (
+            "Partial analysis: 2 submitted artifacts reduced analysis coverage."
+        )
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertIn(expected_summary, dashboard_response.text)
+        self.assertIn(expected_notice, dashboard_response.text)
+        self.assertIn(expected_summary, detail_response.text)
+        self.assertIn(expected_notice, detail_response.text)
 
     def test_dashboard_shows_context_warning_for_low_context_score(self) -> None:
         parse_batch = ParseBatchResult(

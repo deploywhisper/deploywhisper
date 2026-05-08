@@ -29,6 +29,7 @@ from services.project_service import (
 )
 from services.report_service import build_share_report_link, persist_analysis_report
 from services.settings_service import resolve_provider_runtime
+from services.submission_manifest import build_submission_manifest
 from services.topology_service import (
     STALE_AFTER_DAYS,
     get_topology_status,
@@ -57,6 +58,7 @@ def evaluate_evidence(
 def evaluate_parse_batch(
     batch: ParseBatchResult,
     *,
+    partial_context: bool | None = None,
     evidence_items: list[EvidenceItem] | None = None,
     topology: dict | None = None,
     raw_files: dict[str, bytes | None] | None = None,
@@ -65,7 +67,9 @@ def evaluate_parse_batch(
     """Compatibility wrapper that scores extracted evidence for a parse batch."""
     return evaluate_evidence(
         evidence_items or extract_batch_evidence(batch),
-        partial_context=batch.has_partial_context,
+        partial_context=batch.has_partial_context
+        if partial_context is None
+        else partial_context,
         topology=topology,
         raw_files=raw_files,
         completion_client=completion_client,
@@ -185,6 +189,18 @@ def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
         if file_result.status == "parsed":
             changes.extend(file_result.changes)
     return changes
+
+
+def _raw_files_for_parse_batch(
+    files: list[tuple[str, bytes | None]],
+    parse_batch: ParseBatchResult,
+) -> dict[str, bytes | None]:
+    parsed_names = {
+        file_result.file_name
+        for file_result in parse_batch.files
+        if file_result.status == "parsed"
+    }
+    return {name: raw_content for name, raw_content in files if name in parsed_names}
 
 
 def _topology_freshness_days(updated_at: str | None) -> int | None:
@@ -401,6 +417,9 @@ def _report_link(report_id: int | None) -> str | None:
 
 
 def _has_partial_context_signal(report: dict) -> bool:
+    manifest = report.get("submission_manifest")
+    if isinstance(manifest, dict) and manifest.get("partial_analysis"):
+        return True
     context = dict(report.get("context_completeness") or {})
     try:
         if float(context.get("parser_success_rate", 1.0)) < 1.0:
@@ -536,7 +555,7 @@ def build_share_summary(report: dict) -> ShareSummary:
             label="LIMITED CONTEXT",
             summary=(
                 f"LIMITED CONTEXT ({context_summary.score:.2f})"
-                " - one or more artifacts failed to parse cleanly."
+                " - one or more submitted artifacts were not analyzed."
             ),
         )
     requires_attention = (
@@ -651,6 +670,11 @@ def build_analysis_artifacts(
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
+    submission_manifest = build_submission_manifest(files, parse_batch=parse_batch)
+    partial_context = parse_batch.has_partial_context or (
+        submission_manifest.partial_analysis
+    )
+    analysis_raw_files = _raw_files_for_parse_batch(files, parse_batch)
     evidence_items = extract_batch_evidence(parse_batch)
     changes = _collect_changes(parse_batch)
     topology, topology_warning = load_topology(
@@ -661,9 +685,10 @@ def build_analysis_artifacts(
     )
     assessment = evaluate_parse_batch(
         parse_batch,
+        partial_context=partial_context,
         evidence_items=evidence_items,
         topology=topology,
-        raw_files={name: raw_content for name, raw_content in files},
+        raw_files=analysis_raw_files,
         completion_client=completion_client,
     )
     assessment.context_completeness = _build_context_completeness(
@@ -681,9 +706,7 @@ def build_analysis_artifacts(
         ),
     )
     blast_radius = compute_blast_radius(changes, topology, topology_warning)
-    rollback_plan = generate_rollback_plan(
-        changes, partial_context=parse_batch.has_partial_context
-    )
+    rollback_plan = generate_rollback_plan(changes, partial_context=partial_context)
     incident_matches = (
         []
         if project_id is None and project_key is None
@@ -699,7 +722,7 @@ def build_analysis_artifacts(
         assessment.model_copy(deep=True),
         [finding.model_copy(deep=True) for finding in findings],
         completion_client=completion_client,
-        raw_files={name: raw_content for name, raw_content in files},
+        raw_files=analysis_raw_files,
     )
     return AnalysisArtifacts(
         parse_batch=parse_batch,
@@ -783,6 +806,7 @@ def analyze_uploaded_files(
         findings=artifacts.findings,
         evidence_items=artifacts.evidence_items,
         artifact_snapshots={name: raw_content for name, raw_content in files},
+        submitted_artifacts=list(files),
         project_id=resolved_project.id,
         workspace_id=workspace_id,
         workspace_key=workspace_key,

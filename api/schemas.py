@@ -187,6 +187,78 @@ class AuditMetadataData(BaseModel):
     )
 
 
+class SubmissionManifestItemData(BaseModel):
+    name: str = Field(..., description="Normalized artifact name")
+    tool: str = Field(..., description="Detected tool family")
+    status: Literal["accepted", "excluded", "failed", "sensitive"] = Field(
+        ..., description="Final manifest outcome"
+    )
+    intake_status: str = Field(..., description="Upload classification outcome")
+    parse_status: str | None = Field(
+        default=None, description="Parser outcome when parsing was attempted"
+    )
+    message: str = Field(..., description="Human-readable outcome summary")
+    partial: bool = Field(
+        default=False, description="Whether this artifact reduced analysis coverage"
+    )
+    redaction_status: str = Field(
+        default="none", description="Filename/content redaction outcome"
+    )
+    provenance: dict[str, Any] = Field(
+        default_factory=dict, description="Submission source metadata"
+    )
+
+
+class SubmissionManifestData(BaseModel):
+    submitted_artifact_count: int = Field(
+        default=0, description="Number of artifacts submitted"
+    )
+    accepted_artifact_count: int = Field(
+        default=0, description="Artifacts accepted for parser analysis"
+    )
+    analyzed_artifact_count: int = Field(
+        default=0, description="Accepted artifacts parsed into normalized changes"
+    )
+    excluded_artifact_count: int = Field(
+        default=0, description="Artifacts excluded from parser analysis"
+    )
+    sensitive_artifact_count: int = Field(
+        default=0, description="Sensitive artifacts excluded from unsafe handling"
+    )
+    failed_artifact_count: int = Field(
+        default=0, description="Accepted artifacts that failed parser analysis"
+    )
+    partial_artifact_count: int = Field(
+        default=0, description="Artifacts that made the analysis partial"
+    )
+    partial_analysis: bool = Field(
+        default=False, description="Whether the analysis used partial coverage"
+    )
+    provenance: dict[str, Any] = Field(
+        default_factory=dict, description="Submission-level source metadata"
+    )
+    redaction: dict[str, Any] = Field(
+        default_factory=dict, description="Submission-level redaction metadata"
+    )
+    items: list[SubmissionManifestItemData] = Field(default_factory=list)
+
+
+class SubmissionManifestFallbackItemData(BaseModel):
+    name: str = Field(..., description="Artifact name retained outside manifest JSON")
+    tool: str = Field(..., description="Detected or inferred tool family")
+    status: str = Field(..., description="Fallback artifact outcome")
+    intake_status: str = Field(..., description="Upload classification outcome")
+    parse_status: str | None = Field(
+        default=None, description="Parser outcome when parsing was attempted"
+    )
+    partial: bool = Field(
+        default=False, description="Whether this artifact reduced analysis coverage"
+    )
+    redaction_status: str = Field(
+        default="none", description="Filename/content redaction outcome"
+    )
+
+
 class ProjectData(BaseModel):
     id: int = Field(..., description="Stable project/workspace identifier")
     project_key: str = Field(..., description="Stable project/workspace key")
@@ -252,6 +324,14 @@ class PersistedReportData(BaseModel):
     contributors: list["RiskContributorData"] = Field(default_factory=list)
     dashboard_display_duration_seconds: int | None = Field(default=None)
     dashboard_remaining_seconds: int | None = Field(default=None)
+    submission_manifest: SubmissionManifestData | None = Field(
+        default=None,
+        description="Submission manifest metadata, or null when persisted manifest data is unavailable",
+    )
+    submission_manifest_fallback: list[SubmissionManifestFallbackItemData] = Field(
+        default_factory=list,
+        description="Durable artifact identity/status fallback retained outside manifest JSON",
+    )
     audit: AuditMetadataData
 
 

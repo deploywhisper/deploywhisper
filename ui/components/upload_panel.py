@@ -32,7 +32,12 @@ from ui.components.project_workspace_switcher import (
     open_create_project_dialog as show_create_project_dialog,
 )
 from ui.components.blast_radius_graph import render_blast_radius_panel
-from ui.components.report_detail_page import render_reviewer_feedback_panel
+from ui.components.report_detail_page import (
+    format_submission_manifest_fallback_summary,
+    format_submission_manifest_partial_notice,
+    format_submission_manifest_summary,
+    render_reviewer_feedback_panel,
+)
 from ui.components.rollback_plan import render_rollback_plan
 from ui.components.review_accessibility import (
     decorate_modal_card,
@@ -46,7 +51,10 @@ from ui.project_authorization import (
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
 from services.settings_service import check_provider_readiness
 from ui.components.findings_table import render_findings_table
-from ui.formatters.narrative import extract_llm_notice
+from ui.formatters.narrative import (
+    extract_llm_notice,
+    extract_submission_manifest_notice,
+)
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
 
@@ -377,6 +385,23 @@ def build_upload_panel(
                         "Narrative unavailable. Review the deterministic findings and evidence below."
                     ).classes("text-sm dw-warning-text leading-6")
                 ui.label(report["parse_summary"]).classes("text-xs dw-muted")
+                manifest = report.get("submission_manifest") or {}
+                if manifest.get("items"):
+                    ui.label(format_submission_manifest_summary(manifest)).classes(
+                        "text-xs dw-muted"
+                    )
+                    partial_notice = format_submission_manifest_partial_notice(manifest)
+                    if partial_notice:
+                        ui.label(partial_notice).classes(
+                            "text-xs dw-warning-text leading-5"
+                        )
+                fallback_summary = format_submission_manifest_fallback_summary(
+                    report.get("submission_manifest_fallback") or []
+                )
+                if fallback_summary and not manifest.get("items"):
+                    ui.label(fallback_summary).classes(
+                        "text-xs dw-warning-text leading-5 break-all"
+                    )
                 provenance_bits = [
                     f"Risk scoring: {report.get('assessment_source', 'unknown')}",
                     f"Narrative: {report.get('narrative_source', 'unknown')}",
@@ -396,6 +421,13 @@ def build_upload_panel(
                 )
                 if llm_notice:
                     ui.label(llm_notice).classes("text-xs dw-warning-text leading-5")
+                manifest_notice = extract_submission_manifest_notice(
+                    report.get("warnings", [])
+                )
+                if manifest_notice:
+                    ui.label(manifest_notice).classes(
+                        "text-xs dw-warning-text leading-5"
+                    )
                 context = report.get("context_completeness") or {}
                 render_topology_freshness_banner(context)
                 findings = report.get("findings", [])

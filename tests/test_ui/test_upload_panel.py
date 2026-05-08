@@ -6,6 +6,9 @@ import unittest
 from unittest.mock import patch
 
 from ui.components.upload_panel import (
+    format_submission_manifest_fallback_summary,
+    format_submission_manifest_partial_notice,
+    format_submission_manifest_summary,
     process_uploaded_files,
     resolve_initial_project_selection,
     should_clear_pending_uploads,
@@ -109,6 +112,40 @@ class UploadPanelTests(unittest.TestCase):
                 previous_project_id=1,
                 next_project_id=1,
             )
+        )
+
+    def test_submission_manifest_summary_surfaces_partial_state(self) -> None:
+        manifest = {
+            "accepted_artifact_count": 2,
+            "analyzed_artifact_count": 1,
+            "excluded_artifact_count": 1,
+            "failed_artifact_count": 1,
+            "sensitive_artifact_count": 1,
+            "partial_artifact_count": 1,
+            "partial_analysis": True,
+        }
+
+        self.assertEqual(
+            format_submission_manifest_summary(manifest),
+            "Submission manifest: 2 accepted, 1 analyzed, 1 excluded, 1 failed, 1 sensitive, 1 partial",
+        )
+        self.assertEqual(
+            format_submission_manifest_partial_notice(manifest),
+            "Partial analysis: 1 submitted artifact reduced analysis coverage.",
+        )
+
+    def test_submission_manifest_fallback_summary_surfaces_artifact_statuses(
+        self,
+    ) -> None:
+        self.assertEqual(
+            format_submission_manifest_fallback_summary(
+                [
+                    {"name": "plan.json", "status": "accepted"},
+                    {"name": "broken.tf", "status": "failed"},
+                    {"name": ".env", "status": "sensitive"},
+                ]
+            ),
+            "Fallback submission artifacts: plan.json (accepted), broken.tf (failed), .env (sensitive)",
         )
 
 

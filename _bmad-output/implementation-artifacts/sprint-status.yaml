@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-05-07
+# last_updated: 2026-05-08
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-05-07
+last_updated: 2026-05-08
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -59,7 +59,7 @@ development_status:
   epic-1-retrospective: optional
 
   epic-2: in-progress
-  2-1-submission-manifest-and-provenance: ready-for-dev
+  2-1-submission-manifest-and-provenance: done
   2-2-terraform-plan-json-intake: ready-for-dev
   2-3-evidence-item-model-and-extraction: ready-for-dev
   2-4-finding-model-and-evidence-links: ready-for-dev

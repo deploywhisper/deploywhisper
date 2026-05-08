@@ -30,6 +30,7 @@ class ContainerContractTests(unittest.TestCase):
                 "014_add_project_workspace_records.py",
                 "015_add_report_workspace_scope.py",
                 "016_scope_learning_context_records.py",
+                "017_add_submission_manifest_payload.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -45,6 +46,7 @@ class ContainerContractTests(unittest.TestCase):
         workspace_content = migrations[10].read_text(encoding="utf-8")
         report_workspace_content = migrations[11].read_text(encoding="utf-8")
         learning_context_scope_content = migrations[12].read_text(encoding="utf-8")
+        submission_manifest_content = migrations[13].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -103,6 +105,14 @@ class ContainerContractTests(unittest.TestCase):
         self.assertIn('"incident_records"', learning_context_scope_content)
         self.assertIn('"project_id"', learning_context_scope_content)
         self.assertIn('"workspace_id"', learning_context_scope_content)
+        self.assertIn(
+            'down_revision = "016_scope_learning_context_records"',
+            submission_manifest_content,
+        )
+        self.assertIn('"submission_manifest_json"', submission_manifest_content)
+        self.assertIn(
+            '"submission_manifest_fallback_json"', submission_manifest_content
+        )
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())
