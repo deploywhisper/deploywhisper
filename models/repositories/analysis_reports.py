@@ -100,6 +100,8 @@ def create_analysis_report(
             finding_id=str(finding["finding_id"]),
             title=str(finding["title"]),
             description=str(finding["description"]),
+            explanation=str(finding.get("explanation") or finding["description"]),
+            guidance_json=json.dumps(finding.get("guidance", [])),
             severity=str(finding["severity"]),
             category=str(finding["category"]),
             deterministic=bool(finding["deterministic"]),
@@ -108,6 +110,9 @@ def create_analysis_report(
                 str(finding["uncertainty_note"])
                 if finding.get("uncertainty_note") is not None
                 else None
+            ),
+            evidence_classification=str(
+                finding.get("evidence_classification") or "deterministic"
             ),
             evidence_refs_json=json.dumps(finding.get("evidence_refs", [])),
             skill_id=(

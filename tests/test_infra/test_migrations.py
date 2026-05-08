@@ -161,6 +161,9 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("determinism_level", self._table_columns("evidence_items"))
         self.assertIn("redaction_status", self._table_columns("evidence_items"))
         self.assertIn("analysis_id", self._table_columns("findings"))
+        self.assertIn("explanation", self._table_columns("findings"))
+        self.assertIn("guidance_json", self._table_columns("findings"))
+        self.assertIn("evidence_classification", self._table_columns("findings"))
         self.assertIn("analysis_id", self._table_columns("risk_assessments"))
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
         self.assertIn("project_id", self._table_columns("analysis_reports"))
@@ -428,6 +431,113 @@ class MigrationTests(unittest.TestCase):
         self.assertTrue(any(row[2] == "analysis_reports" for row in finding_fks))
         self.assertTrue(any(row[2] == "findings" for row in evidence_fks))
 
+    def test_upgrade_head_backfills_finding_context_for_existing_findings(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "018_add_evidence_identity_fields")
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            sqlite_conn.execute(
+                """
+                INSERT INTO analysis_reports (
+                    id,
+                    project_id,
+                    risk_score,
+                    severity,
+                    recommendation,
+                    top_risk,
+                    report_schema_version,
+                    parse_summary,
+                    narrative_opening,
+                    narrative_explanation,
+                    warnings_json,
+                    contributors_json,
+                    analyzed_files_json,
+                    submission_manifest_json,
+                    submission_manifest_fallback_json,
+                    blast_radius_json,
+                    rollback_plan_json,
+                    share_redact_filenames,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    1,
+                    1,
+                    42,
+                    "medium",
+                    "caution",
+                    "Legacy inferred finding",
+                    "v2",
+                    "1 parsed file",
+                    "CAUTION",
+                    "Review the finding.",
+                    "[]",
+                    "[]",
+                    '["plan.json"]',
+                    "{}",
+                    "[]",
+                    "{}",
+                    "{}",
+                    0,
+                    "2026-05-08T00:00:00+00:00",
+                ),
+            )
+            sqlite_conn.execute(
+                """
+                INSERT INTO findings (
+                    finding_id,
+                    analysis_id,
+                    title,
+                    description,
+                    severity,
+                    category,
+                    deterministic,
+                    confidence,
+                    uncertainty_note,
+                    evidence_refs_json,
+                    skill_id,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "finding-legacy",
+                    1,
+                    "Legacy inferred finding",
+                    "Legacy model-assisted finding.",
+                    "medium",
+                    "cross-tool interaction",
+                    0,
+                    0.55,
+                    "Confidence uses the heuristic floor.",
+                    "[]",
+                    None,
+                    "2026-05-08T00:00:00+00:00",
+                ),
+            )
+            sqlite_conn.commit()
+        finally:
+            sqlite_conn.close()
+
+        command.upgrade(self._config(), "head")
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            row = sqlite_conn.execute(
+                """
+                SELECT explanation, guidance_json, evidence_classification
+                FROM findings
+                WHERE finding_id = 'finding-legacy'
+                """
+            ).fetchone()
+        finally:
+            sqlite_conn.close()
+
+        self.assertEqual(row[0], "Legacy model-assisted finding.")
+        self.assertEqual(row[1], "[]")
+        self.assertEqual(row[2], "model_inferred")
+
     def test_downgrade_to_011_removes_feedback_event_fields(self) -> None:
         command.upgrade(self._config(), "head")
 
@@ -553,7 +663,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "018_add_evidence_identity_fields")
+        self.assertEqual(revision, "019_add_finding_context_fields")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -602,7 +712,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "018_add_evidence_identity_fields")
+        self.assertEqual(revision, "019_add_finding_context_fields")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -628,7 +738,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "018_add_evidence_identity_fields")
+        self.assertEqual(revision, "019_add_finding_context_fields")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -841,7 +951,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "018_add_evidence_identity_fields")
+        self.assertEqual(revision, "019_add_finding_context_fields")
 
 
 if __name__ == "__main__":

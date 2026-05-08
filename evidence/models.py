@@ -16,10 +16,19 @@ EvidenceSourceType = Literal[
     "history",
     "heuristic",
     "skill",
+    "external_scanner",
+    "user_context",
 ]
 EvidenceSourceKind = EvidenceSourceType
 DeterminismLevel = Literal["deterministic", "heuristic", "inferred"]
 EvidenceRedactionStatus = Literal["none", "redacted", "sensitive_blocked"]
+FindingEvidenceClassification = Literal[
+    "deterministic",
+    "derived",
+    "external",
+    "model_inferred",
+    "user_provided",
+]
 
 
 def _validate_string_list(value: list[str]) -> list[str]:
@@ -160,18 +169,43 @@ class Finding(BaseModel):
     )
     title: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
+    explanation: str = Field(
+        default="",
+        description="Reviewer-facing explanation for why the finding matters.",
+    )
+    guidance: list[str] = Field(
+        default_factory=list,
+        description="Verification or remediation guidance for the reviewer.",
+    )
     severity: RiskSeverity
     category: str = Field(..., min_length=1)
     deterministic: bool
     confidence: float = Field(..., ge=0.0, le=1.0)
     uncertainty_note: str | None = Field(default=None, min_length=1)
+    evidence_classification: FindingEvidenceClassification = Field(
+        default="deterministic",
+        description="Dominant support type for the finding evidence.",
+    )
     evidence_refs: list[str] = Field(default_factory=list)
     skill_id: str | None = Field(default=None, min_length=1)
+
+    @field_validator("guidance")
+    @classmethod
+    def _validate_guidance(cls, value: list[str]) -> list[str]:
+        return _validate_string_list(value)
 
     @field_validator("evidence_refs")
     @classmethod
     def _validate_evidence_refs(cls, value: list[str]) -> list[str]:
         return _validate_string_list(value)
+
+    @model_validator(mode="after")
+    def _populate_finding_context_fields(self) -> Finding:
+        if not self.explanation:
+            self.explanation = self.description
+        if not self.deterministic and self.evidence_classification == "deterministic":
+            self.evidence_classification = "model_inferred"
+        return self
 
 
 class RiskAssessment(BaseModel):

@@ -30,6 +30,13 @@ Story 1.4 adds `evidence/mappers.py` to turn scored contributors and interaction
 - inferred findings use a model-stated confidence when available, otherwise a heuristic floor
 - shared API, CLI, and persisted report payloads now expose findings so UI surfaces can render confidence badges consistently
 
+Story 2.4 extends findings with explicit support context:
+
+- `explanation` carries the reviewer-facing reason for the finding, separate from the stable title/description fields
+- `guidance` carries concrete verification or remediation prompts
+- `evidence_classification` distinguishes `deterministic`, `derived`, `external`, `model_inferred`, and `user_provided` support
+- `evidence_refs` remains the durable link from each finding to the persisted evidence items that support it
+
 ## Persistence Shape
 
 The additive persistence layer extends `analysis_reports` with four new tables:

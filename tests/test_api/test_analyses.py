@@ -581,7 +581,11 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(payload["data"]["findings"])
         self.assertTrue(payload["data"]["evidence_items"])
         self.assertEqual(payload["data"]["evidence_items"][0]["analysis_id"], 0)
-        self.assertEqual(payload["data"]["findings"][0]["confidence"], 1.0)
+        self.assertEqual(payload["data"]["findings"][0]["confidence"], 0.55)
+        self.assertEqual(
+            payload["data"]["findings"][0]["evidence_classification"],
+            "model_inferred",
+        )
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
         self.assertEqual(payload["data"]["narrative"]["source"], "llm")
         self.assertTrue(payload["data"]["narrative"]["skills_applied"])

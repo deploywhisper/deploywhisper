@@ -47,6 +47,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "016_scope_learning_context_records",
     "017_add_submission_manifest_payload",
     "018_add_evidence_identity_fields",
+    "019_add_finding_context_fields",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -160,6 +161,20 @@ def _evidence_item_columns(connection) -> set[str]:
     return {
         column["name"] for column in inspect(connection).get_columns("evidence_items")
     }
+
+
+def _finding_columns(connection) -> set[str]:
+    return {column["name"] for column in inspect(connection).get_columns("findings")}
+
+
+def _finding_context_fields_complete(connection) -> bool:
+    columns = _finding_columns(connection)
+    required_columns = {
+        "explanation",
+        "guidance_json",
+        "evidence_classification",
+    }
+    return required_columns.issubset(columns)
 
 
 def _evidence_identity_fields_complete(connection) -> bool:
@@ -511,6 +526,17 @@ def _bootstrap_brownfield_revision() -> None:
             "evidence_items" in tables
             and _evidence_identity_fields_complete(connection)
         )
+        has_finding_context_fields = "findings" in tables and bool(
+            {
+                "explanation",
+                "guidance_json",
+                "evidence_classification",
+            }
+            & _finding_columns(connection)
+        )
+        has_complete_finding_context_fields = (
+            "findings" in tables and _finding_context_fields_complete(connection)
+        )
         has_complete_submission_manifest_payload = (
             has_submission_manifest_payload
             and _analysis_report_submission_manifest_complete(connection)
@@ -537,6 +563,24 @@ def _bootstrap_brownfield_revision() -> None:
                 "Detected a partial evidence identity schema without a complete "
                 "migration history. Manual recovery is required."
             )
+        if has_finding_context_fields and not (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+        ):
+            raise RuntimeError(
+                "Detected a partial finding context schema without a complete "
+                "migration history. Manual recovery is required."
+            )
+        if (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+        ):
+            _write_alembic_revision(connection, "019_add_finding_context_fields")
+            return
         if (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload

@@ -115,6 +115,40 @@ class EvidenceModelTests(unittest.TestCase):
         )
 
         self.assertEqual(finding.model_dump(mode="json")["evidence_refs"], ["ev-001"])
+        self.assertEqual(
+            finding.model_dump(mode="json")["explanation"],
+            "Ingress allows broad access",
+        )
+        self.assertEqual(finding.model_dump(mode="json")["guidance"], [])
+        self.assertEqual(
+            finding.model_dump(mode="json")["evidence_classification"],
+            "deterministic",
+        )
+
+    def test_finding_serializes_explicit_guidance_and_classification(self) -> None:
+        finding = Finding(
+            finding_id="finding-001",
+            analysis_id=7,
+            title="Security group exposure",
+            description="Ingress allows broad access",
+            explanation="Security group ingress allows database access from the internet.",
+            guidance=["Restrict ingress before deployment."],
+            severity="high",
+            category="networking/ingress",
+            deterministic=False,
+            confidence=0.74,
+            evidence_classification="model_inferred",
+            evidence_refs=["ev-001"],
+        )
+
+        payload = finding.model_dump(mode="json")
+
+        self.assertEqual(
+            payload["explanation"],
+            "Security group ingress allows database access from the internet.",
+        )
+        self.assertEqual(payload["guidance"], ["Restrict ingress before deployment."])
+        self.assertEqual(payload["evidence_classification"], "model_inferred")
 
     def test_finding_rejects_invalid_confidence(self) -> None:
         with self.assertRaises(ValidationError):

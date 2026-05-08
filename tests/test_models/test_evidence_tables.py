@@ -89,11 +89,14 @@ class EvidenceTableTests(unittest.TestCase):
                 analysis_id=report.id,
                 title="Security group exposure",
                 description="Ingress allows 0.0.0.0/0 to reach a database subnet.",
+                explanation="Ingress allows database access from the internet.",
                 severity="high",
                 category="networking/ingress",
                 deterministic=True,
                 confidence=0.95,
                 uncertainty_note=None,
+                guidance_json='["Restrict ingress before deployment."]',
+                evidence_classification="deterministic",
                 evidence_refs_json='["ev-001"]',
                 skill_id=None,
             )
@@ -152,6 +155,18 @@ class EvidenceTableTests(unittest.TestCase):
             self.assertIsNotNone(stored)
             self.assertEqual(len(stored.findings), 1)
             self.assertEqual(stored.findings[0].finding_id, "finding-001")
+            self.assertEqual(
+                stored.findings[0].explanation,
+                "Ingress allows database access from the internet.",
+            )
+            self.assertEqual(
+                stored.findings[0].guidance_json,
+                '["Restrict ingress before deployment."]',
+            )
+            self.assertEqual(
+                stored.findings[0].evidence_classification,
+                "deterministic",
+            )
             self.assertEqual(len(stored.findings[0].evidence_items), 1)
             self.assertEqual(
                 stored.findings[0].evidence_items[0].source_ref,

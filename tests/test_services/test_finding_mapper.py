@@ -9,6 +9,7 @@ from analysis.risk_scorer import RiskAssessment, RiskContributor
 from evidence.mappers import (
     INFERRED_CONFIDENCE_FLOOR,
     build_findings,
+    classify_finding_evidence,
     resolve_finding_confidence,
 )
 from evidence.models import EvidenceItem
@@ -95,8 +96,117 @@ class FindingMapperTests(unittest.TestCase):
         self.assertEqual(findings[0].confidence, 1.0)
         self.assertTrue(findings[0].deterministic)
         self.assertEqual(findings[0].evidence_refs, ["ev-001"])
+        self.assertEqual(
+            findings[0].explanation,
+            "Security group changes can affect production ingress.",
+        )
+        self.assertIn(
+            "Review the linked evidence before deployment.",
+            findings[0].guidance,
+        )
+        self.assertEqual(findings[0].evidence_classification, "deterministic")
         self.assertEqual(findings[1].confidence, INFERRED_CONFIDENCE_FLOOR)
         self.assertFalse(findings[1].deterministic)
+        self.assertEqual(findings[1].evidence_classification, "derived")
+        self.assertIn(
+            "Review the linked resources together because the combined change may broaden blast radius.",
+            findings[1].guidance,
+        )
+
+    def test_classify_finding_evidence_distinguishes_supported_evidence_types(
+        self,
+    ) -> None:
+        def evidence_item(
+            *,
+            source_type: str = "artifact",
+            deterministic: bool = True,
+            determinism_level: str = "deterministic",
+        ) -> EvidenceItem:
+            return EvidenceItem(
+                evidence_id=f"ev-{source_type}-{determinism_level}",
+                analysis_id=0,
+                finding_id="pending:chg-001",
+                source_type=source_type,
+                source_ref=f"{source_type}://input.json#resource?action=modify",
+                summary="Evidence summary",
+                severity_hint="medium",
+                deterministic=deterministic,
+                determinism_level=determinism_level,
+                confidence=0.8,
+                related_change_ids=["chg-001"],
+            )
+
+        self.assertEqual(
+            classify_finding_evidence([evidence_item()]),
+            "deterministic",
+        )
+        self.assertEqual(
+            classify_finding_evidence(
+                [
+                    evidence_item(
+                        deterministic=False,
+                        determinism_level="heuristic",
+                    )
+                ]
+            ),
+            "derived",
+        )
+        self.assertEqual(
+            classify_finding_evidence(
+                [
+                    evidence_item(
+                        deterministic=False,
+                        determinism_level="inferred",
+                    )
+                ]
+            ),
+            "model_inferred",
+        )
+        self.assertEqual(
+            classify_finding_evidence([evidence_item(source_type="external_scanner")]),
+            "external",
+        )
+        self.assertEqual(
+            classify_finding_evidence([evidence_item(source_type="user_context")]),
+            "user_provided",
+        )
+
+    def test_build_findings_marks_missing_evidence_as_model_inferred(self) -> None:
+        assessment = RiskAssessment(
+            score=0,
+            severity="low",
+            recommendation="go",
+            top_risk="Terraform plan has no resource changes.",
+            contributors=[
+                RiskContributor(
+                    evidence_id=None,
+                    source_file="empty-plan.json",
+                    tool="terraform",
+                    resource_id="terraform-plan",
+                    action="no-op",
+                    contribution=0,
+                    summary="Terraform plan has no resource changes.",
+                    normalized_action="no-op",
+                    resource_category="generic infrastructure",
+                    blast_radius="unknown",
+                    downstream_scope=None,
+                    security_flags=[],
+                    environment="unknown",
+                    severity="low",
+                    reasoning="No planned changes were detected.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+
+        findings = build_findings(assessment=assessment, evidence_items=[])
+
+        self.assertEqual(findings[0].evidence_refs, [])
+        self.assertFalse(findings[0].deterministic)
+        self.assertEqual(findings[0].evidence_classification, "model_inferred")
+        self.assertEqual(findings[0].confidence, INFERRED_CONFIDENCE_FLOOR)
 
 
 if __name__ == "__main__":

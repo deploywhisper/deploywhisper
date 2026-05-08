@@ -283,11 +283,14 @@ class ReportServiceTests(unittest.TestCase):
                 analysis_id=0,
                 title="HIGH: aws_security_group.main",
                 description="Security group changes can affect production ingress.",
+                explanation="Security group ingress changed in the submitted plan.",
+                guidance=["Review ingress before deployment."],
                 severity="high",
                 category="networking/ingress",
                 deterministic=True,
                 confidence=1.0,
                 uncertainty_note=None,
+                evidence_classification="deterministic",
                 evidence_refs=["ev-001"],
                 skill_id=None,
             )
@@ -369,6 +372,18 @@ class ReportServiceTests(unittest.TestCase):
             "2026-04-18T11:22:33Z",
         )
         self.assertEqual(persisted["findings"][0]["confidence"], 1.0)
+        self.assertEqual(
+            persisted["findings"][0]["explanation"],
+            "Security group ingress changed in the submitted plan.",
+        )
+        self.assertEqual(
+            persisted["findings"][0]["guidance"],
+            ["Review ingress before deployment."],
+        )
+        self.assertEqual(
+            persisted["findings"][0]["evidence_classification"],
+            "deterministic",
+        )
         persisted_evidence_id = persisted["evidence_items"][0]["evidence_id"]
         persisted_finding_id = persisted["findings"][0]["finding_id"]
         self.assertTrue(persisted_evidence_id.startswith("evidence-"))
@@ -410,6 +425,18 @@ class ReportServiceTests(unittest.TestCase):
             {"terraform": 1.0},
         )
         self.assertEqual(fetched["findings"][0]["finding_id"], persisted_finding_id)
+        self.assertEqual(
+            fetched["findings"][0]["explanation"],
+            "Security group ingress changed in the submitted plan.",
+        )
+        self.assertEqual(
+            fetched["findings"][0]["guidance"],
+            ["Review ingress before deployment."],
+        )
+        self.assertEqual(
+            fetched["findings"][0]["evidence_classification"],
+            "deterministic",
+        )
         self.assertEqual(
             fetched["findings"][0]["evidence_refs"], [persisted_evidence_id]
         )

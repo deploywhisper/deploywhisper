@@ -229,6 +229,11 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
                 **finding,
                 "title": _redact_text_value(finding.get("title"), pairs),
                 "description": _redact_text_value(finding.get("description"), pairs),
+                "explanation": _redact_text_value(finding.get("explanation"), pairs),
+                "guidance": [
+                    _redact_text_value(guidance, pairs)
+                    for guidance in (finding.get("guidance") or [])
+                ],
                 "uncertainty_note": _redact_text_value(
                     finding.get("uncertainty_note"), pairs
                 ),
@@ -608,6 +613,9 @@ def _comparison_finding_sort_key(
         evidence_key,
         str(finding.get("severity") or "unknown"),
         f"{float(finding.get('confidence') or 0.0):.6f}",
+        str(finding.get("explanation") or ""),
+        tuple(str(item) for item in (finding.get("guidance") or [])),
+        str(finding.get("evidence_classification") or ""),
         str(finding.get("uncertainty_note") or ""),
         str(finding.get("skill_id") or ""),
     )
@@ -1404,11 +1412,14 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
                 "analysis_id": finding.analysis_id,
                 "title": finding.title,
                 "description": finding.description,
+                "explanation": finding.explanation or finding.description,
+                "guidance": json.loads(finding.guidance_json or "[]"),
                 "severity": finding.severity,
                 "category": finding.category,
                 "deterministic": finding.deterministic,
                 "confidence": finding.confidence,
                 "uncertainty_note": finding.uncertainty_note,
+                "evidence_classification": finding.evidence_classification,
                 "evidence_refs": json.loads(finding.evidence_refs_json or "[]"),
                 "skill_id": finding.skill_id,
             }

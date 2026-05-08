@@ -289,11 +289,16 @@ if "Finding" not in globals():
         )
         title: Mapped[str] = mapped_column(String(255))
         description: Mapped[str] = mapped_column(Text)
+        explanation: Mapped[str] = mapped_column(Text, default="")
+        guidance_json: Mapped[str] = mapped_column(Text, default="[]")
         severity: Mapped[str] = mapped_column(String(20))
         category: Mapped[str] = mapped_column(String(80))
         deterministic: Mapped[bool] = mapped_column(Boolean, default=True)
         confidence: Mapped[float] = mapped_column(Float, default=1.0)
         uncertainty_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+        evidence_classification: Mapped[str] = mapped_column(
+            String(30), default="deterministic"
+        )
         evidence_refs_json: Mapped[str] = mapped_column(Text, default="[]")
         skill_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
         created_at: Mapped[datetime] = mapped_column(
