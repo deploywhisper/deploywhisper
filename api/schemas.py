@@ -673,6 +673,30 @@ class EvidenceItemData(BaseModel):
     finding_id: str = Field(..., description="Owning finding identifier")
     source_type: str = Field(..., description="Evidence source category")
     source_ref: str = Field(..., description="Stable source reference")
+    artifact: str = Field(default="", description="Submitted artifact identifier")
+    location: str = Field(default="", description="Inspectable artifact location")
+    resource: str = Field(default="", description="Changed resource identifier")
+    operation: str = Field(default="", description="Normalized change operation")
+    project_id: int | None = Field(
+        default=None, description="Project identifier for this evidence context"
+    )
+    project_key: str | None = Field(
+        default=None, description="Project key for this evidence context"
+    )
+    workspace_id: int | None = Field(
+        default=None, description="Workspace identifier for this evidence context"
+    )
+    workspace_key: str | None = Field(
+        default=None, description="Workspace key for this evidence context"
+    )
+    source_kind: str = Field(default="artifact", description="Evidence source kind")
+    determinism_level: str = Field(
+        default="deterministic",
+        description="Whether evidence was deterministic, heuristic, or inferred",
+    )
+    redaction_status: str = Field(
+        default="none", description="Evidence redaction status"
+    )
     summary: str = Field(..., description="Evidence summary")
     severity_hint: RiskSeverity = Field(
         ..., description="Severity hint for the evidence"

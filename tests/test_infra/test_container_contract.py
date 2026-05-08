@@ -31,6 +31,7 @@ class ContainerContractTests(unittest.TestCase):
                 "015_add_report_workspace_scope.py",
                 "016_scope_learning_context_records.py",
                 "017_add_submission_manifest_payload.py",
+                "018_add_evidence_identity_fields.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -47,6 +48,7 @@ class ContainerContractTests(unittest.TestCase):
         report_workspace_content = migrations[11].read_text(encoding="utf-8")
         learning_context_scope_content = migrations[12].read_text(encoding="utf-8")
         submission_manifest_content = migrations[13].read_text(encoding="utf-8")
+        evidence_identity_content = migrations[14].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -113,6 +115,13 @@ class ContainerContractTests(unittest.TestCase):
         self.assertIn(
             '"submission_manifest_fallback_json"', submission_manifest_content
         )
+        self.assertIn(
+            'down_revision = "017_add_submission_manifest_payload"',
+            evidence_identity_content,
+        )
+        self.assertIn('"artifact"', evidence_identity_content)
+        self.assertIn('"determinism_level"', evidence_identity_content)
+        self.assertIn('"redaction_status"', evidence_identity_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())

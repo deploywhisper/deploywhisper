@@ -737,7 +737,13 @@ def build_analysis_artifacts(
         submission_manifest.partial_analysis
     )
     analysis_raw_files = _raw_files_for_parse_batch(files, parse_batch)
-    evidence_items = extract_batch_evidence(parse_batch)
+    evidence_items = extract_batch_evidence(
+        parse_batch,
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
     changes = _collect_changes(parse_batch)
     topology, topology_warning = load_topology(
         project_id=project_id,

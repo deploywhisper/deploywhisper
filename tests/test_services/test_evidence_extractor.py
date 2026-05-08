@@ -322,6 +322,47 @@ class EvidenceExtractorTests(unittest.TestCase):
             2,
         )
 
+    def test_extract_batch_evidence_identifies_review_context_fields(self) -> None:
+        changes = parse_terraform(
+            "prod/network/plan.json",
+            b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
+        )
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="prod/network/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=changes,
+                )
+            ]
+        )
+
+        evidence_items = extract_batch_evidence(
+            batch,
+            project_id=12,
+            project_key="platform",
+            workspace_id=34,
+            workspace_key="prod",
+        )
+
+        self.assertEqual(len(evidence_items), 1)
+        evidence_item = evidence_items[0]
+        self.assertEqual(evidence_item.artifact, "prod/network/plan.json")
+        self.assertEqual(
+            evidence_item.location,
+            "prod/network/plan.json#aws_security_group.main",
+        )
+        self.assertEqual(evidence_item.resource, "aws_security_group.main")
+        self.assertEqual(evidence_item.operation, "modify")
+        self.assertEqual(evidence_item.project_id, 12)
+        self.assertEqual(evidence_item.project_key, "platform")
+        self.assertEqual(evidence_item.workspace_id, 34)
+        self.assertEqual(evidence_item.workspace_key, "prod")
+        self.assertEqual(evidence_item.source_kind, "artifact")
+        self.assertEqual(evidence_item.determinism_level, "deterministic")
+        self.assertEqual(evidence_item.redaction_status, "none")
+
 
 if __name__ == "__main__":
     unittest.main()

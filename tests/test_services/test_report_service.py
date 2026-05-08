@@ -416,6 +416,30 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(
             fetched["evidence_items"][0]["finding_id"], persisted_finding_id
         )
+        self.assertEqual(fetched["evidence_items"][0]["artifact"], "plan.json")
+        self.assertEqual(
+            fetched["evidence_items"][0]["location"],
+            "plan.json#aws_security_group.main",
+        )
+        self.assertEqual(
+            fetched["evidence_items"][0]["resource"], "aws_security_group.main"
+        )
+        self.assertEqual(fetched["evidence_items"][0]["operation"], "modify")
+        self.assertEqual(
+            fetched["evidence_items"][0]["project_id"],
+            persisted["project"]["id"],
+        )
+        self.assertEqual(
+            fetched["evidence_items"][0]["project_key"],
+            persisted["project"]["project_key"],
+        )
+        self.assertIsNone(fetched["evidence_items"][0]["workspace_id"])
+        self.assertIsNone(fetched["evidence_items"][0]["workspace_key"])
+        self.assertEqual(fetched["evidence_items"][0]["source_kind"], "artifact")
+        self.assertEqual(
+            fetched["evidence_items"][0]["determinism_level"], "deterministic"
+        )
+        self.assertEqual(fetched["evidence_items"][0]["redaction_status"], "none")
         self.assertEqual(
             fetched["contributors"][0]["evidence_id"], persisted_evidence_id
         )
@@ -537,6 +561,99 @@ class ReportServiceTests(unittest.TestCase):
             history[0]["contributors"][0]["metadata"]["plan_unsupported_fields"],
             ["plan.planned_values"],
         )
+
+    def test_persist_analysis_report_preserves_explicit_evidence_determinism_level(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform aws_security_group.main is the highest-impact change.",
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-heuristic",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="The deployment widens database access and should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        findings = [
+            Finding(
+                finding_id="finding-heuristic",
+                analysis_id=0,
+                title="MEDIUM: aws_security_group.main",
+                description="Security group changes can affect ingress.",
+                severity="medium",
+                category="networking/ingress",
+                deterministic=False,
+                confidence=0.7,
+                uncertainty_note="Severity is inferred from incomplete context.",
+                evidence_refs=["ev-heuristic"],
+            )
+        ]
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-heuristic",
+                analysis_id=0,
+                finding_id="pending:change-heuristic",
+                source_type="artifact",
+                source_ref="terraform://plan.json#aws_security_group.main?action=modify",
+                summary="Terraform changed a security group.",
+                severity_hint="medium",
+                deterministic=False,
+                determinism_level="heuristic",
+                confidence=0.7,
+                related_change_ids=["change-heuristic"],
+            )
+        ]
+
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=findings,
+            evidence_items=evidence_items,
+            audit_context={"source_interface": "api"},
+        )
+        fetched = report_service_module.fetch_analysis_report(persisted["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertEqual(fetched["evidence_items"][0]["determinism_level"], "heuristic")
+        self.assertFalse(fetched["evidence_items"][0]["deterministic"])
 
     def test_persist_analysis_report_allows_repeated_scans_with_same_logical_ids(
         self,

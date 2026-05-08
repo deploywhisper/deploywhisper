@@ -149,6 +149,17 @@ class MigrationTests(unittest.TestCase):
         command.upgrade(self._config(), "head")
 
         self.assertIn("finding_id", self._table_columns("evidence_items"))
+        self.assertIn("artifact", self._table_columns("evidence_items"))
+        self.assertIn("location", self._table_columns("evidence_items"))
+        self.assertIn("resource", self._table_columns("evidence_items"))
+        self.assertIn("operation", self._table_columns("evidence_items"))
+        self.assertIn("project_id", self._table_columns("evidence_items"))
+        self.assertIn("project_key", self._table_columns("evidence_items"))
+        self.assertIn("workspace_id", self._table_columns("evidence_items"))
+        self.assertIn("workspace_key", self._table_columns("evidence_items"))
+        self.assertIn("source_kind", self._table_columns("evidence_items"))
+        self.assertIn("determinism_level", self._table_columns("evidence_items"))
+        self.assertIn("redaction_status", self._table_columns("evidence_items"))
         self.assertIn("analysis_id", self._table_columns("findings"))
         self.assertIn("analysis_id", self._table_columns("risk_assessments"))
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
@@ -542,7 +553,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "017_add_submission_manifest_payload")
+        self.assertEqual(revision, "018_add_evidence_identity_fields")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -591,7 +602,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "017_add_submission_manifest_payload")
+        self.assertEqual(revision, "018_add_evidence_identity_fields")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -617,7 +628,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "017_add_submission_manifest_payload")
+        self.assertEqual(revision, "018_add_evidence_identity_fields")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -830,7 +841,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "017_add_submission_manifest_payload")
+        self.assertEqual(revision, "018_add_evidence_identity_fields")
 
 
 if __name__ == "__main__":
