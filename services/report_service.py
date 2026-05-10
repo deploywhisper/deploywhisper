@@ -82,6 +82,19 @@ _SEVERITY_PREFIX_PATTERN = re.compile(
     r"^\s*(critical|high|medium|low|info|warning|caution)\s*[:\-]\s*",
     flags=re.IGNORECASE,
 )
+_VERDICT_PREFIX_PATTERN = re.compile(
+    r"^\s*(critical|high|medium|low|no-go|go|caution)"
+    r"(?:\s*:\s*|\s+-\s+|"
+    r"\s+(?=(?:because|due|risk|risks|finding|findings|claim|claims|unsupported|"
+    r"severe|exposure|exposures|verdict|verdicts|deployment|database|"
+    r"ingress|review|reviews|blocked|blocker|blockers|issue|issues|"
+    r"incident|incidents|outage|outages|rollback|access|network|"
+    r"security|permission|policy|blast|radius)\b))",
+    flags=re.IGNORECASE,
+)
+_FINDING_SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+_SEVERITY_SCORE_FLOOR = {"low": 0, "medium": 42, "high": 70, "critical": 90}
+_SEVERITY_SCORE_CEILING = {"low": 39, "medium": 69, "high": 89, "critical": 100}
 
 
 def _resolve_project_id(
@@ -1095,6 +1108,22 @@ def _scope_report_entities(
         evidence_item.evidence_id: evidence_item
         for evidence_item in evidence_items or []
     }
+    evidence_claim_owner_by_id: dict[str, str] = {}
+    for evidence_item in evidence_items or []:
+        claimants = [
+            finding
+            for finding in findings or []
+            if evidence_item.evidence_id in finding.evidence_refs
+        ]
+        if claimants:
+            owner = max(
+                claimants,
+                key=lambda finding: _FINDING_SEVERITY_ORDER.get(
+                    finding.severity,
+                    0,
+                ),
+            )
+            evidence_claim_owner_by_id[evidence_item.evidence_id] = owner.finding_id
 
     def _scoped_finding_updates(finding: Finding) -> dict[str, Any]:
         matched_evidence_items = [
@@ -1118,6 +1147,14 @@ def _scope_report_entities(
             updates["evidence_classification"] = "model_inferred"
         return updates
 
+    def _scoped_evidence_finding_id(evidence_item: EvidenceItem) -> str:
+        owner_id = evidence_item.finding_id
+        if owner_id not in finding_id_map:
+            owner_id = evidence_claim_owner_by_id.get(
+                evidence_item.evidence_id, owner_id
+            )
+        return finding_id_map.get(owner_id, owner_id)
+
     scoped_findings = (
         [
             finding.model_copy(update=_scoped_finding_updates(finding))
@@ -1131,10 +1168,7 @@ def _scope_report_entities(
             evidence_item.model_copy(
                 update={
                     "evidence_id": evidence_id_map[evidence_item.evidence_id],
-                    "finding_id": finding_id_map.get(
-                        evidence_item.finding_id,
-                        evidence_item.finding_id,
-                    ),
+                    "finding_id": _scoped_evidence_finding_id(evidence_item),
                 }
             )
             for evidence_item in evidence_items
@@ -1226,6 +1260,552 @@ def _finding_with_evidence_ref(
             matched_evidence_items
         )
     return finding.model_copy(update=updates)
+
+
+def _has_linked_deterministic_evidence(
+    finding: Finding,
+    evidence_by_id: dict[str, EvidenceItem],
+) -> bool:
+    return any(
+        (evidence_item := evidence_by_id.get(evidence_ref)) is not None
+        and evidence_item.deterministic
+        and evidence_item.determinism_level == "deterministic"
+        for evidence_ref in finding.evidence_refs
+    )
+
+
+def _linked_deterministic_evidence_refs(
+    finding: Finding,
+    evidence_by_id: dict[str, EvidenceItem],
+) -> list[str]:
+    return [
+        evidence_ref
+        for evidence_ref in finding.evidence_refs
+        if (evidence_item := evidence_by_id.get(evidence_ref)) is not None
+        and evidence_item.deterministic
+        and evidence_item.determinism_level == "deterministic"
+    ]
+
+
+def _top_risk_contributors_match_finding(
+    contributor_refs: list[str],
+    finding: Finding,
+    evidence_by_id: dict[str, EvidenceItem],
+) -> bool:
+    deterministic_refs = set(
+        _linked_deterministic_evidence_refs(finding, evidence_by_id)
+    )
+    return bool(contributor_refs) and set(contributor_refs).issubset(deterministic_refs)
+
+
+def _downgraded_finding_without_deterministic_evidence(
+    finding: Finding,
+    evidence_by_id: dict[str, EvidenceItem],
+) -> Finding:
+    matched_evidence_items = [
+        evidence_by_id[evidence_ref]
+        for evidence_ref in finding.evidence_refs
+        if evidence_ref in evidence_by_id
+    ]
+    downgraded_title = _VERDICT_PREFIX_PATTERN.sub("", finding.title).strip()
+    if downgraded_title:
+        downgraded_title = f"MEDIUM: {downgraded_title}"
+    else:
+        downgraded_title = f"MEDIUM: {finding.description}"
+    downgrade_note = (
+        "Evidence Law downgraded this finding to medium because it does not link to "
+        "deterministic evidence."
+    )
+    return finding.model_copy(
+        update={
+            "title": downgraded_title,
+            "explanation": downgrade_note,
+            "guidance": [
+                "Review the available linked evidence before deployment.",
+                "Add deterministic evidence before treating this finding as severe.",
+            ],
+            "severity": "medium",
+            "deterministic": False,
+            "confidence": min(finding.confidence, 0.85),
+            "evidence_classification": (
+                classify_finding_evidence(matched_evidence_items)
+                if matched_evidence_items
+                else "model_inferred"
+            ),
+            "uncertainty_note": (
+                finding.uncertainty_note
+                or "Severity was downgraded because high/critical claims require linked deterministic evidence."
+            ),
+        }
+    )
+
+
+def _finding_with_supported_deterministic_evidence(
+    finding: Finding,
+    evidence_by_id: dict[str, EvidenceItem],
+) -> Finding:
+    matched_evidence_items = [
+        evidence_by_id[evidence_ref]
+        for evidence_ref in finding.evidence_refs
+        if evidence_ref in evidence_by_id
+    ]
+    return finding.model_copy(
+        update={
+            "deterministic": True,
+            "evidence_classification": classify_finding_evidence(
+                matched_evidence_items
+            ),
+        }
+    )
+
+
+def _highest_severity_finding(findings: list[Finding]) -> Finding:
+    return max(
+        findings,
+        key=lambda finding: _FINDING_SEVERITY_ORDER.get(finding.severity, 0),
+    )
+
+
+def _finding_risk_summary(finding: Finding) -> str:
+    title = _VERDICT_PREFIX_PATTERN.sub("", finding.title).strip()
+    title = title or finding.description
+    description = finding.description.strip()
+    if description and description != title:
+        return f"{finding.severity.upper()}: {title} - {description}"
+    return f"{finding.severity.upper()}: {title}"
+
+
+def _recommendation_for_severity(severity: str) -> str:
+    if severity in {"high", "critical"}:
+        return "no-go"
+    if severity == "medium":
+        return "caution"
+    return "go"
+
+
+def _recommendation_matches_severity(recommendation: str, severity: str) -> bool:
+    if severity in {"high", "critical"}:
+        return recommendation == "no-go"
+    if severity == "medium":
+        return recommendation in {"go", "caution"}
+    return recommendation == "go"
+
+
+def _reconciled_score_for_severity(score: int, severity: str) -> int:
+    return min(
+        max(score, _SEVERITY_SCORE_FLOOR[severity]),
+        _SEVERITY_SCORE_CEILING[severity],
+    )
+
+
+def _score_matches_severity(score: int, severity: str) -> bool:
+    return _SEVERITY_SCORE_FLOOR[severity] <= score <= _SEVERITY_SCORE_CEILING[severity]
+
+
+def _verdict_label(value: str | None) -> str | None:
+    match = _VERDICT_PREFIX_PATTERN.match(str(value or ""))
+    if match is None:
+        return None
+    return match.group(1).lower()
+
+
+def _verdict_text_contradicts_metadata(
+    value: str | None,
+    severity: str,
+    recommendation: str,
+) -> bool:
+    label = _verdict_label(value)
+    if label is None:
+        return False
+    normalized_severity = str(severity).strip().lower()
+    normalized_recommendation = str(recommendation).strip().lower()
+    if normalized_severity not in _FINDING_SEVERITY_ORDER:
+        return False
+    if label in _FINDING_SEVERITY_ORDER:
+        return label != normalized_severity
+    if label in {"go", "caution", "no-go"}:
+        return label != normalized_recommendation
+    return False
+
+
+def _sanitized_risk_summary(value: str | None, severity: str) -> str:
+    summary = _VERDICT_PREFIX_PATTERN.sub("", str(value or "")).strip()
+    if not summary:
+        summary = "Evidence Law reconciled report verdict text."
+    return f"{severity.upper()}: {summary}"
+
+
+def _contributors_for_evidence_refs(
+    contributors: list[RiskContributor],
+    evidence_refs: list[str],
+) -> list[RiskContributor]:
+    supported_refs = set(evidence_refs)
+    return [
+        contributor
+        for contributor in contributors
+        if contributor.evidence_id in supported_refs
+        or _is_neutral_parser_metadata_contributor(contributor)
+    ]
+
+
+def _is_neutral_parser_metadata_contributor(contributor: RiskContributor) -> bool:
+    return (
+        contributor.evidence_id is None
+        and contributor.contribution <= 0
+        and contributor.severity not in {"high", "critical"}
+        and bool(contributor.metadata)
+    )
+
+
+def _apply_evidence_law_runtime_gate(
+    assessment: RiskAssessment,
+    findings: list[Finding] | None,
+    evidence_items: list[EvidenceItem] | None,
+) -> tuple[RiskAssessment, list[Finding] | None, list[str], str | None]:
+    """Downgrade severe findings that lack linked deterministic evidence."""
+    evidence_by_id = {
+        evidence_item.evidence_id: evidence_item
+        for evidence_item in evidence_items or []
+    }
+    updated_findings: list[Finding] = []
+    downgraded_ids: list[str] = []
+    for finding in findings or []:
+        if finding.severity in {
+            "high",
+            "critical",
+        } and _has_linked_deterministic_evidence(
+            finding,
+            evidence_by_id,
+        ):
+            updated_findings.append(
+                _finding_with_supported_deterministic_evidence(
+                    finding,
+                    evidence_by_id,
+                )
+            )
+            continue
+        if finding.severity in {"high", "critical"}:
+            updated_finding = _downgraded_finding_without_deterministic_evidence(
+                finding,
+                evidence_by_id,
+            )
+            updated_findings.append(updated_finding)
+            downgraded_ids.append(finding.finding_id)
+            continue
+        updated_findings.append(finding)
+
+    supported_severe_findings = [
+        finding
+        for finding in updated_findings
+        if finding.severity in {"high", "critical"}
+        and _has_linked_deterministic_evidence(finding, evidence_by_id)
+    ]
+    unsupported_report_severity = (
+        assessment.severity in {"high", "critical"} and not supported_severe_findings
+    )
+    top_supported_finding = (
+        _highest_severity_finding(supported_severe_findings)
+        if supported_severe_findings
+        else None
+    )
+    overclaimed_report_severity = (
+        assessment.severity in {"high", "critical"}
+        and top_supported_finding is not None
+        and _FINDING_SEVERITY_ORDER[assessment.severity]
+        > _FINDING_SEVERITY_ORDER[top_supported_finding.severity]
+    )
+    underclaimed_report_severity = (
+        top_supported_finding is not None
+        and _FINDING_SEVERITY_ORDER[assessment.severity]
+        < _FINDING_SEVERITY_ORDER[top_supported_finding.severity]
+    )
+    inconsistent_supported_report_metadata = (
+        top_supported_finding is not None
+        and assessment.severity in {"high", "critical"}
+        and (
+            not _recommendation_matches_severity(
+                assessment.recommendation,
+                assessment.severity,
+            )
+            or not _score_matches_severity(assessment.score, assessment.severity)
+        )
+    )
+    inconsistent_top_risk_contributors = (
+        top_supported_finding is not None
+        and assessment.severity in {"high", "critical"}
+        and not _top_risk_contributors_match_finding(
+            assessment.top_risk_contributors,
+            top_supported_finding,
+            evidence_by_id,
+        )
+    )
+    expected_report_recommendation = _recommendation_for_severity(assessment.severity)
+    inconsistent_report_recommendation = not _recommendation_matches_severity(
+        assessment.recommendation,
+        assessment.severity,
+    )
+    inconsistent_report_score = not _score_matches_severity(
+        assessment.score,
+        assessment.severity,
+    )
+    stale_top_risk_verdict_text = _verdict_text_contradicts_metadata(
+        assessment.top_risk,
+        assessment.severity,
+        expected_report_recommendation
+        if inconsistent_report_recommendation
+        else assessment.recommendation,
+    )
+
+    if (
+        not downgraded_ids
+        and not unsupported_report_severity
+        and not overclaimed_report_severity
+        and not underclaimed_report_severity
+        and not inconsistent_supported_report_metadata
+        and not inconsistent_top_risk_contributors
+        and not inconsistent_report_recommendation
+        and not inconsistent_report_score
+        and not stale_top_risk_verdict_text
+    ):
+        return (
+            assessment,
+            updated_findings if findings is not None else findings,
+            [],
+            None,
+        )
+
+    warnings: list[str] = []
+    report_adjustment_warning: str | None = None
+    if downgraded_ids:
+        warnings.append(
+            "Evidence Law downgraded high/critical findings without linked deterministic "
+            f"evidence: {', '.join(downgraded_ids)}."
+        )
+    if unsupported_report_severity:
+        report_adjustment_warning = (
+            "Evidence Law downgraded a high/critical report verdict because no "
+            "supported severe finding had linked deterministic evidence."
+        )
+        warnings.append(report_adjustment_warning)
+    if overclaimed_report_severity and top_supported_finding is not None:
+        report_adjustment_warning = (
+            "Evidence Law downgraded a high/critical report verdict to match the "
+            f"highest linked deterministic finding severity: {top_supported_finding.severity}."
+        )
+        warnings.append(report_adjustment_warning)
+    if underclaimed_report_severity and top_supported_finding is not None:
+        report_adjustment_warning = (
+            "Evidence Law promoted report verdict to match the highest linked "
+            f"deterministic finding severity: {top_supported_finding.severity}."
+        )
+        warnings.append(report_adjustment_warning)
+    if stale_top_risk_verdict_text:
+        stale_text_warning = (
+            "Evidence Law refreshed report verdict text to match reconciled severity "
+            "metadata."
+        )
+        if report_adjustment_warning is None:
+            report_adjustment_warning = stale_text_warning
+        warnings.append(stale_text_warning)
+    if inconsistent_report_recommendation:
+        recommendation_warning = (
+            "Evidence Law reconciled report recommendation to match severity metadata."
+        )
+        if report_adjustment_warning is None:
+            report_adjustment_warning = recommendation_warning
+        warnings.append(recommendation_warning)
+    if inconsistent_report_score:
+        score_warning = (
+            "Evidence Law reconciled report score to match severity metadata."
+        )
+        if report_adjustment_warning is None:
+            report_adjustment_warning = score_warning
+        warnings.append(score_warning)
+    assessment_updates: dict[str, Any] = {
+        "warnings": list(dict.fromkeys([*assessment.warnings, *warnings]))
+    }
+    if unsupported_report_severity:
+        downgraded_target = (
+            f"unsupported severe finding(s) {', '.join(downgraded_ids)}"
+            if downgraded_ids
+            else "unsupported severe report verdict"
+        )
+        assessment_updates.update(
+            {
+                "score": _reconciled_score_for_severity(assessment.score, "medium"),
+                "severity": "medium",
+                "recommendation": "caution",
+                "top_risk": (
+                    f"MEDIUM: Evidence Law downgraded {downgraded_target} "
+                    "pending deterministic evidence."
+                ),
+                "top_risk_contributors": [],
+                "contributors": [],
+            }
+        )
+    elif top_supported_finding is not None and (
+        downgraded_ids
+        or overclaimed_report_severity
+        or underclaimed_report_severity
+        or inconsistent_supported_report_metadata
+        or inconsistent_top_risk_contributors
+        or stale_top_risk_verdict_text
+    ):
+        supported_contributors: list[str] = []
+        for evidence_ref in _linked_deterministic_evidence_refs(
+            top_supported_finding,
+            evidence_by_id,
+        ):
+            if evidence_ref not in supported_contributors:
+                supported_contributors.append(evidence_ref)
+        assessment_updates.update(
+            {
+                "score": _reconciled_score_for_severity(
+                    assessment.score,
+                    top_supported_finding.severity,
+                ),
+                "severity": top_supported_finding.severity
+                if (overclaimed_report_severity or underclaimed_report_severity)
+                else assessment.severity,
+                "recommendation": _recommendation_for_severity(
+                    top_supported_finding.severity
+                    if (overclaimed_report_severity or underclaimed_report_severity)
+                    else assessment.severity
+                ),
+                "top_risk": _finding_risk_summary(top_supported_finding),
+                "top_risk_contributors": supported_contributors,
+                "contributors": _contributors_for_evidence_refs(
+                    list(assessment.contributors),
+                    supported_contributors,
+                ),
+            }
+        )
+    elif downgraded_ids:
+        assessment_updates.update(
+            {
+                "score": _reconciled_score_for_severity(assessment.score, "medium"),
+                "severity": "medium",
+                "recommendation": "caution",
+                "top_risk": (
+                    "MEDIUM: Evidence Law downgraded unsupported severe finding(s) "
+                    f"{', '.join(downgraded_ids)} pending deterministic evidence."
+                ),
+                "top_risk_contributors": [],
+                "contributors": [],
+            }
+        )
+    elif stale_top_risk_verdict_text:
+        assessment_updates.update(
+            {
+                "top_risk": _sanitized_risk_summary(
+                    assessment.top_risk,
+                    assessment.severity,
+                ),
+                "score": _reconciled_score_for_severity(
+                    assessment.score,
+                    assessment.severity,
+                ),
+                "recommendation": expected_report_recommendation
+                if inconsistent_report_recommendation
+                else assessment.recommendation,
+                "top_risk_contributors": []
+                if stale_top_risk_verdict_text and not assessment.top_risk_contributors
+                else assessment.top_risk_contributors,
+                "contributors": assessment.contributors,
+            }
+        )
+    elif inconsistent_report_recommendation or inconsistent_report_score:
+        assessment_updates.update(
+            {
+                "score": _reconciled_score_for_severity(
+                    assessment.score,
+                    assessment.severity,
+                ),
+                "recommendation": expected_report_recommendation
+                if inconsistent_report_recommendation
+                else assessment.recommendation,
+            }
+        )
+    return (
+        assessment.model_copy(update=assessment_updates),
+        updated_findings if findings is not None else findings,
+        downgraded_ids,
+        report_adjustment_warning,
+    )
+
+
+def _narrative_with_evidence_law_runtime_gate(
+    narrative: NarrativeResult,
+    assessment: RiskAssessment,
+    downgraded_ids: list[str],
+    report_adjustment_warning: str | None,
+    findings: list[Finding] | None,
+) -> NarrativeResult:
+    stale_narrative_verdict_text = any(
+        _verdict_text_contradicts_metadata(
+            value,
+            assessment.severity,
+            assessment.recommendation,
+        )
+        for value in (narrative.opening_sentence, narrative.explanation)
+    )
+    if (
+        not downgraded_ids
+        and report_adjustment_warning is None
+        and not stale_narrative_verdict_text
+    ):
+        return narrative
+    remaining_severe = any(
+        finding.severity in {"high", "critical"} for finding in findings or []
+    )
+    warnings: list[str] = []
+    if downgraded_ids:
+        warnings.append(
+            "Evidence Law downgraded unsupported severe finding(s) pending deterministic "
+            f"evidence: {', '.join(downgraded_ids)}."
+        )
+    if report_adjustment_warning is not None:
+        warnings.append(report_adjustment_warning)
+    if stale_narrative_verdict_text:
+        warnings.append(
+            "Evidence Law refreshed report narrative to match reconciled severity "
+            "metadata."
+        )
+    if not warnings:
+        warnings.append(
+            report_adjustment_warning
+            or "Evidence Law reconciled the report verdict to linked deterministic severe evidence."
+        )
+    warning = " ".join(warnings)
+    remaining_severe_findings = [
+        finding
+        for finding in findings or []
+        if finding.severity in {"high", "critical"}
+    ]
+    if remaining_severe:
+        top_remaining_finding = _highest_severity_finding(remaining_severe_findings)
+        opening_sentence = (
+            "NO-GO: deterministic severe risk remains; unsupported or inconsistent "
+            "severe claim(s) were reconciled."
+        )
+        explanation = (
+            "Deterministic severe risk remains: "
+            f"{_finding_risk_summary(top_remaining_finding)}. {warning}"
+        )
+    else:
+        opening_sentence = (
+            "CAUTION: severe risk claims need deterministic evidence."
+            if assessment.recommendation == "caution"
+            else f"{assessment.recommendation.upper()}: report verdict matches available deterministic evidence."
+        )
+        explanation = warning
+    return narrative.model_copy(
+        update={
+            "opening_sentence": opening_sentence,
+            "explanation": explanation,
+            "warnings": list(dict.fromkeys([*narrative.warnings, *warnings])),
+        }
+    )
 
 
 def _repair_assessment_evidence_links(
@@ -1632,6 +2212,23 @@ def persist_analysis_report(
         assessment,
         findings,
         evidence_items,
+    )
+    (
+        assessment,
+        findings,
+        downgraded_finding_ids,
+        report_adjustment_warning,
+    ) = _apply_evidence_law_runtime_gate(
+        assessment,
+        findings,
+        evidence_items,
+    )
+    narrative = _narrative_with_evidence_law_runtime_gate(
+        narrative,
+        assessment,
+        downgraded_finding_ids,
+        report_adjustment_warning,
+        findings,
     )
     assessment, findings, evidence_items = _scope_report_entities(
         assessment,

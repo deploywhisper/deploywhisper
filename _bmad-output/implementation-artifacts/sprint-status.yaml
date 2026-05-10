@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-05-08
+# last_updated: 2026-05-10
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-05-08
+last_updated: 2026-05-10
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -63,7 +63,7 @@ development_status:
   2-2-terraform-plan-json-intake: review
   2-3-evidence-item-model-and-extraction: done
   2-4-finding-model-and-evidence-links: done
-  2-5-evidence-law-runtime-gate: ready-for-dev
+  2-5-evidence-law-runtime-gate: review
   2-6-confidence-uncertainty-and-insufficient-context: ready-for-dev
   2-7-narrative-after-scoring-and-degraded-fallback: ready-for-dev
   2-8-report-schema-versioning: ready-for-dev
