@@ -14,6 +14,7 @@ import models.repositories.analysis_reports as analysis_reports_repository_modul
 import models.tables as tables_module
 import services.report_service as report_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
+from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 
@@ -43,6 +44,10 @@ class ReportTrendTests(unittest.TestCase):
         tool: str,
         source_interface: str = "ui",
     ) -> None:
+        evidence_id = f"ev-{tool}-{severity}"
+        finding_id = f"finding-{tool}-{severity}"
+        resource_id = f"{tool}/resource"
+        severe_report = severity in {"high", "critical"}
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -53,7 +58,7 @@ class ReportTrendTests(unittest.TestCase):
                         UnifiedChange(
                             source_file="input.json",
                             tool=tool,
-                            resource_id=f"{tool}/resource",
+                            resource_id=resource_id,
                             action="modify",
                             summary=f"{tool} change",
                         )
@@ -66,11 +71,13 @@ class ReportTrendTests(unittest.TestCase):
             severity=severity,
             recommendation=recommendation,
             top_risk=f"{tool} change",
+            top_risk_contributors=[evidence_id] if severe_report else [],
             contributors=[
                 RiskContributor(
+                    evidence_id=evidence_id if severe_report else None,
                     source_file="input.json",
                     tool=tool,
-                    resource_id=f"{tool}/resource",
+                    resource_id=resource_id,
                     action="modify",
                     contribution=12,
                     summary=f"{tool} change",
@@ -92,6 +99,39 @@ class ReportTrendTests(unittest.TestCase):
             assessment,
             narrative,
             audit_context={"source_interface": source_interface},
+            findings=[
+                Finding(
+                    finding_id=finding_id,
+                    analysis_id=0,
+                    title=f"{severity.upper()}: {tool} change",
+                    description=f"{tool} change",
+                    severity=severity,
+                    category="generic infrastructure",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=[evidence_id],
+                    skill_id=None,
+                )
+            ]
+            if severe_report
+            else None,
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id=evidence_id,
+                    analysis_id=0,
+                    finding_id=finding_id,
+                    source_type="artifact",
+                    source_ref=f"{tool}://input.json#{resource_id}?action=modify",
+                    summary=f"{tool} change",
+                    severity_hint=severity,
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ]
+            if severe_report
+            else None,
         )
 
     def test_fetch_risk_trends_summarizes_severity_and_tools(self) -> None:

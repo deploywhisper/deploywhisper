@@ -25,7 +25,7 @@ import ui.theme as theme_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from evidence.models import Finding
+from evidence.models import EvidenceItem, Finding
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
@@ -364,6 +364,22 @@ class DashboardShellTests(unittest.TestCase):
                     skill_id=None,
                 )
             ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-001",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
             audit_context={
                 "source_interface": "ui",
                 "trigger_type": "dashboard_upload",
@@ -379,7 +395,7 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("5-second verdict", response.text)
         self.assertIn("Risk score", response.text)
         self.assertIn("dw-verdict-score-value", response.text)
-        self.assertIn('"text":"88"', response.text)
+        self.assertIn('"text":"90"', response.text)
         self.assertIn("STRONG CONTEXT", response.text)
         self.assertNotIn("Know the risk before", response.text)
         self.assertEqual(response.text.count("5-second verdict"), 1)

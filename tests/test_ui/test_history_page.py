@@ -19,7 +19,7 @@ import services.project_service as project_service_module
 import ui.routes.history as history_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.rollback_planner import RollbackPlan, RollbackStep
-from evidence.models import Finding
+from evidence.models import EvidenceItem, Finding
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
@@ -71,7 +71,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
     def _persist_report(
         self,
         *,
-        score: int = 88,
+        score: int = 90,
         severity: str = "critical",
         recommendation: str = "no-go",
         top_risk: str = "Security group exposure risk",
@@ -110,6 +110,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
             context_completeness=context_completeness or {},
             contributors=[
                 RiskContributor(
+                    evidence_id="ev-001",
                     source_file="plan.json",
                     tool="terraform",
                     resource_id="aws_security_group.main",
@@ -176,6 +177,22 @@ class HistoryPageRenderingTests(unittest.TestCase):
                     skill_id=None,
                 )
             ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-001",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint=severity,
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
             audit_context={"source_interface": "ui"},
         )
 
@@ -222,7 +239,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertEqual(compare_response.status_code, 200)
         self.assertIn("Comparison with report #1", compare_response.text)
         self.assertIn("Risk score delta", compare_response.text)
-        self.assertIn("+46", compare_response.text)
+        self.assertIn("+48", compare_response.text)
         self.assertIn("MEDIUM → CRITICAL", compare_response.text)
         self.assertIn("Topology freshness", compare_response.text)
         self.assertIn("12 days old", compare_response.text)
@@ -273,7 +290,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertEqual(compare_response.status_code, 200)
         self.assertIn("Comparison with report #1", compare_response.text)
         self.assertIn("Risk score delta", compare_response.text)
-        self.assertIn("+46", compare_response.text)
+        self.assertIn("+48", compare_response.text)
         self.assertIn("MEDIUM → CRITICAL", compare_response.text)
         self.assertIn("Topology freshness", compare_response.text)
         self.assertIn("12 days old", compare_response.text)
@@ -454,7 +471,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Rescan diff", response.text)
-        self.assertIn("+46 risk vs report #1", response.text)
+        self.assertIn("+48 risk vs report #1", response.text)
         self.assertIn("MEDIUM → CRITICAL", response.text)
         self.assertIn("CAUTION → NO-GO", response.text)
 

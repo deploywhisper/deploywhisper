@@ -38,6 +38,12 @@ Story 2.4 extends findings with explicit support context:
 - `evidence_refs` remains the durable link from each finding to the persisted evidence items that support it
 - When a finding has mixed support, deterministic linked evidence takes precedence in the displayed classification so reviewers can see that at least one hard evidence item supports the finding.
 
+Story 2.5 enforces Evidence Law at report persistence time:
+
+- high and critical findings must link to at least one deterministic evidence item
+- the shared report service downgrades unsupported high/critical findings to medium, caps their confidence at `0.85`, reconciles unsupported report-level severe verdicts to caution, and records an Evidence Law warning
+- the report repository rejects direct persistence payloads that try to save high/critical findings or report-level high/critical verdicts without linked deterministic severe evidence
+
 ## Persistence Shape
 
 The additive persistence layer extends `analysis_reports` with four new tables:

@@ -104,6 +104,91 @@ def _seed_review_report(report_service_module) -> None:
             )
         ]
     )
+    previous_assessment = RiskAssessment(
+        score=42,
+        severity="medium",
+        recommendation="caution",
+        top_risk="Initial security group review",
+        top_risk_contributors=["ev-prev"],
+        contributors=[
+            RiskContributor(
+                evidence_id="ev-prev",
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="aws_security_group.main",
+                action="modify",
+                contribution=20,
+                summary="Initial security group review.",
+                severity="medium",
+            )
+        ],
+        interaction_risks=[],
+        context_completeness=ContextCompleteness(
+            topology_freshness_days=12,
+            topology_last_imported_at="2026-04-18T11:22:33+00:00",
+            incident_index_size=4,
+            parser_success_rate=1.0,
+            parser_success_by_tool={"terraform": 1.0},
+            context_score=0.92,
+        ),
+        partial_context=False,
+        warnings=[],
+        source="heuristic+llm",
+    )
+    previous_narrative = NarrativeResult(
+        opening_sentence="CAUTION: review the security group change.",
+        explanation="Initial review of the security group change.",
+        guidance=["Inspect the evidence backing the finding."],
+        degraded=False,
+        warnings=[],
+        source="llm",
+        provider="ollama",
+        model="ollama/llama3",
+        local_mode=True,
+        skills_applied=["git", "terraform"],
+    )
+    report_service_module.persist_analysis_report(
+        parse_batch,
+        previous_assessment,
+        previous_narrative,
+        findings=[
+            Finding(
+                finding_id="finding-prev",
+                analysis_id=0,
+                title="MEDIUM: aws_security_group.main",
+                description="Initial security group review",
+                severity="medium",
+                category="networking/ingress",
+                deterministic=True,
+                confidence=1.0,
+                uncertainty_note=None,
+                evidence_refs=["ev-prev"],
+                skill_id=None,
+            )
+        ],
+        evidence_items=[
+            EvidenceItem(
+                evidence_id="ev-prev",
+                analysis_id=0,
+                finding_id="finding-prev",
+                source_type="artifact",
+                source_ref="artifact://plan.json#line=10",
+                summary="Security group ingress remains under review.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=["aws_security_group.main"],
+            )
+        ],
+        artifact_snapshots={
+            "plan.json": b'{"resource":"aws_security_group.main","cidr_blocks":["10.0.0.0/8"]}\n'
+        },
+        audit_context={
+            "source_interface": "ui",
+            "trigger_type": "dashboard_upload",
+        },
+        project_key="payments",
+    )
     assessment = RiskAssessment(
         score=88,
         severity="critical",

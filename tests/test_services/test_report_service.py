@@ -99,6 +99,22 @@ class ReportServiceTests(unittest.TestCase):
             "skill_id": None,
         }
 
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                **{
+                    **report_kwargs,
+                    "recommendation": "go",
+                    "top_risk": "Medium security group review.",
+                    "narrative_opening": "GO: medium security group review.",
+                    "narrative_explanation": "Medium severity remains advisory.",
+                },
+                findings_payload=[],
+                evidence_payload=[],
+            )
+            self.assertEqual(report.severity, "medium")
+            self.assertEqual(report.recommendation, "go")
+
         for invalid_fields in (
             {"guidance": "Review ingress before deployment."},
             {"evidence_classification": "unsupported"},
@@ -127,6 +143,122 @@ class ReportServiceTests(unittest.TestCase):
                     evidence_payload=[],
                 )
 
+        heuristic_evidence = {
+            "evidence_id": "ev-heuristic",
+            "analysis_id": 0,
+            "finding_id": "finding-high",
+            "source_type": "artifact",
+            "source_ref": "terraform://plan.json#aws_security_group.main?action=modify",
+            "summary": "Security group exposure",
+            "severity_hint": "high",
+            "deterministic": False,
+            "determinism_level": "heuristic",
+            "confidence": 0.7,
+            "related_change_ids": ["chg-001"],
+        }
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without linked deterministic evidence",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-high",
+                            "severity": "high",
+                            "evidence_refs": ["ev-heuristic"],
+                        }
+                    ],
+                    evidence_payload=[heuristic_evidence],
+                )
+        string_false_evidence = {
+            **heuristic_evidence,
+            "evidence_id": "ev-string-false",
+            "deterministic": "false",
+            "determinism_level": "deterministic",
+        }
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without linked deterministic evidence",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-string-false",
+                            "severity": "high",
+                            "evidence_refs": ["ev-string-false"],
+                        }
+                    ],
+                    evidence_payload=[string_false_evidence],
+                )
+        string_true_evidence = {
+            **heuristic_evidence,
+            "evidence_id": "ev-string-true",
+            "deterministic": "true",
+            "determinism_level": "deterministic",
+        }
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without linked deterministic evidence",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-string-true",
+                            "severity": "high",
+                            "evidence_refs": ["ev-string-true"],
+                        }
+                    ],
+                    evidence_payload=[string_true_evidence],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without a linked deterministic severe finding",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 72,
+                        "severity": "high",
+                        "recommendation": "no-go",
+                        "top_risk": "Unsupported severe report.",
+                    },
+                    findings_payload=[],
+                    evidence_payload=[],
+                )
+        for unnormalized_severity in ("HIGH", " high "):
+            with self.subTest(unnormalized_severity=unnormalized_severity):
+                with database_module.SessionLocal() as session:
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "without a linked deterministic severe finding",
+                    ):
+                        analysis_reports_repository_module.create_analysis_report(
+                            session,
+                            **{
+                                **report_kwargs,
+                                "risk_score": 72,
+                                "severity": unnormalized_severity,
+                                "recommendation": "no-go",
+                                "top_risk": "Unsupported severe report.",
+                            },
+                            findings_payload=[],
+                            evidence_payload=[],
+                        )
+
         evidence = {
             "evidence_id": "ev-001",
             "analysis_id": 0,
@@ -139,6 +271,534 @@ class ReportServiceTests(unittest.TestCase):
             "confidence": 1.0,
             "related_change_ids": ["chg-001"],
         }
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without a linked deterministic severe finding",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 72,
+                        "severity": "high",
+                        "recommendation": "no-go",
+                        "top_risk": "Unsupported severe report.",
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "evidence_refs": ["ev-001"],
+                        }
+                    ],
+                    evidence_payload=[evidence],
+                )
+        string_false_medium_evidence = {
+            **evidence,
+            "evidence_id": "ev-string-false-medium",
+            "deterministic": "false",
+            "determinism_level": "deterministic",
+        }
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                **report_kwargs,
+                findings_payload=[
+                    {
+                        **finding,
+                        "finding_id": "finding-string-false-medium",
+                        "evidence_refs": ["ev-string-false-medium"],
+                    }
+                ],
+                evidence_payload=[string_false_medium_evidence],
+            )
+            stored_evidence = report.findings[0].evidence_items[0]
+            self.assertFalse(stored_evidence.deterministic)
+            self.assertEqual(stored_evidence.determinism_level, "inferred")
+        string_true_medium_evidence = {
+            **evidence,
+            "evidence_id": "ev-string-true-medium",
+            "deterministic": "true",
+            "determinism_level": "deterministic",
+        }
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                **report_kwargs,
+                findings_payload=[
+                    {
+                        **finding,
+                        "finding_id": "finding-string-true-medium",
+                        "evidence_refs": ["ev-string-true-medium"],
+                    }
+                ],
+                evidence_payload=[string_true_medium_evidence],
+            )
+            stored_evidence = report.findings[0].evidence_items[0]
+            self.assertFalse(stored_evidence.deterministic)
+            self.assertEqual(stored_evidence.determinism_level, "inferred")
+        missing_deterministic_evidence = {
+            key: value for key, value in evidence.items() if key != "deterministic"
+        }
+        with database_module.SessionLocal() as session:
+            with self.assertRaises(ValidationError):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-missing-deterministic",
+                            "evidence_refs": ["ev-001"],
+                        }
+                    ],
+                    evidence_payload=[missing_deterministic_evidence],
+                )
+        high_evidence = {
+            **evidence,
+            "evidence_id": "ev-high",
+            "finding_id": "finding-supported-high",
+            "severity_hint": "high",
+        }
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "Top-risk contributor ev-missing does not reference persisted evidence",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 72,
+                        "severity": "high",
+                        "recommendation": "no-go",
+                        "top_risk": "HIGH: supported severe report.",
+                        "narrative_opening": "NO-GO: supported severe report.",
+                        "narrative_explanation": "Deterministic severe evidence supports the report.",
+                        "top_risk_contributors_json": '["ev-missing"]',
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-supported-high",
+                            "severity": "high",
+                            "evidence_refs": ["ev-high"],
+                        }
+                    ],
+                    evidence_payload=[high_evidence],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "High/critical reports must persist top-risk contributor evidence IDs",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 72,
+                        "severity": "high",
+                        "recommendation": "no-go",
+                        "top_risk": "HIGH: supported severe report.",
+                        "narrative_opening": "NO-GO: supported severe report.",
+                        "narrative_explanation": "Deterministic severe evidence supports the report.",
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-supported-high",
+                            "severity": "high",
+                            "evidence_refs": ["ev-high"],
+                        }
+                    ],
+                    evidence_payload=[high_evidence],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "Top-risk contributors must belong to one persisted finding",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 72,
+                        "severity": "high",
+                        "recommendation": "no-go",
+                        "top_risk": "HIGH: supported severe report.",
+                        "narrative_opening": "NO-GO: supported severe report.",
+                        "narrative_explanation": "Deterministic severe evidence supports the report.",
+                        "top_risk_contributors_json": '["ev-high", "ev-medium-cross"]',
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-supported-high",
+                            "severity": "high",
+                            "evidence_refs": ["ev-high"],
+                        },
+                        {
+                            **finding,
+                            "finding_id": "finding-medium-cross",
+                            "severity": "medium",
+                            "evidence_refs": ["ev-medium-cross"],
+                        },
+                    ],
+                    evidence_payload=[
+                        high_evidence,
+                        {
+                            **evidence,
+                            "evidence_id": "ev-medium-cross",
+                            "finding_id": "finding-medium-cross",
+                        },
+                    ],
+                )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                **{
+                    **report_kwargs,
+                    "top_risk": "Shared evidence ownership is canonical.",
+                    "narrative_opening": "CAUTION: shared evidence ownership.",
+                    "narrative_explanation": (
+                        "The evidence owner is explicit even when references are shared."
+                    ),
+                },
+                findings_payload=[
+                    {
+                        **finding,
+                        "finding_id": "finding-shared-one",
+                        "evidence_refs": ["ev-shared"],
+                    },
+                    {
+                        **finding,
+                        "finding_id": "finding-shared-two",
+                        "evidence_refs": ["ev-shared"],
+                    },
+                ],
+                evidence_payload=[
+                    {
+                        **evidence,
+                        "evidence_id": "ev-shared",
+                        "finding_id": "finding-shared-one",
+                    }
+                ],
+            )
+            self.assertEqual(
+                [json.loads(item.evidence_refs_json) for item in report.findings],
+                [["ev-shared"], ["ev-shared"]],
+            )
+            self.assertEqual(
+                report.findings[0].evidence_items[0].evidence_id,
+                "ev-shared",
+            )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "Evidence item ev-shared has ambiguous finding ownership",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "top_risk": "Shared evidence ownership is ambiguous.",
+                        "narrative_opening": "CAUTION: shared evidence ownership.",
+                        "narrative_explanation": (
+                            "Each shared evidence item needs a canonical owner."
+                        ),
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-shared-one",
+                            "evidence_refs": ["ev-shared"],
+                        },
+                        {
+                            **finding,
+                            "finding_id": "finding-shared-two",
+                            "evidence_refs": ["ev-shared"],
+                        },
+                    ],
+                    evidence_payload=[
+                        {
+                            **evidence,
+                            "evidence_id": "ev-shared",
+                            "finding_id": "finding-unreferenced-owner",
+                        }
+                    ],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without a linked deterministic severe finding",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 92,
+                        "severity": "critical",
+                        "recommendation": "no-go",
+                        "top_risk": "Unsupported critical report.",
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-supported-high",
+                            "severity": "high",
+                            "evidence_refs": ["ev-high"],
+                        }
+                    ],
+                    evidence_payload=[high_evidence],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "contradicts linked deterministic evidence",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 72,
+                        "severity": "high",
+                        "recommendation": "no-go",
+                        "top_risk": "Supported severe report.",
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-supported-high",
+                            "severity": "high",
+                            "deterministic": False,
+                            "evidence_classification": "model_inferred",
+                            "evidence_refs": ["ev-high"],
+                        }
+                    ],
+                    evidence_payload=[high_evidence],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "inconsistent verdict metadata",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 42,
+                        "severity": "high",
+                        "recommendation": "go",
+                        "top_risk": "Supported severe report.",
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-supported-high",
+                            "severity": "high",
+                            "evidence_refs": ["ev-high"],
+                        }
+                    ],
+                    evidence_payload=[high_evidence],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "understates linked deterministic severe finding",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 42,
+                        "severity": "medium",
+                        "recommendation": "caution",
+                        "top_risk": "Underclaimed supported severe report.",
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-supported-high",
+                            "severity": "high",
+                            "evidence_refs": ["ev-high"],
+                        }
+                    ],
+                    evidence_payload=[high_evidence],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "Report verdict text contradicts severity metadata",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "top_risk": "CRITICAL: stale severe copy.",
+                        "narrative_opening": "NO-GO: stale severe copy.",
+                        "narrative_explanation": "Unsupported stale severe copy.",
+                    },
+                    findings_payload=[],
+                    evidence_payload=[],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "Report verdict text contradicts severity metadata",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 72,
+                        "severity": "high",
+                        "recommendation": "no-go",
+                        "top_risk": "MEDIUM: stale non-severe copy.",
+                        "narrative_opening": "CAUTION: stale non-severe copy.",
+                        "narrative_explanation": "Supported severe report.",
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-supported-high",
+                            "severity": "high",
+                            "evidence_refs": ["ev-high"],
+                        }
+                    ],
+                    evidence_payload=[high_evidence],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "inconsistent verdict metadata",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "recommendation": "no-go",
+                        "top_risk": "NO-GO: stale non-severe recommendation.",
+                        "narrative_opening": "NO-GO: stale non-severe recommendation.",
+                        "narrative_explanation": "No severe deterministic finding.",
+                    },
+                    findings_payload=[],
+                    evidence_payload=[],
+                )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "Report verdict text contradicts severity metadata",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "top_risk": "GO: stale go copy.",
+                        "narrative_opening": "GO: stale go copy.",
+                        "narrative_explanation": "Review is still required.",
+                    },
+                    findings_payload=[],
+                    evidence_payload=[],
+                )
+        for stale_verdict_text in (
+            "NO-GO deployment review.",
+            "CRITICAL database exposure remains.",
+        ):
+            with self.subTest(stale_verdict_text=stale_verdict_text):
+                with database_module.SessionLocal() as session:
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "Report verdict text contradicts severity metadata",
+                    ):
+                        analysis_reports_repository_module.create_analysis_report(
+                            session,
+                            **{
+                                **report_kwargs,
+                                "top_risk": stale_verdict_text,
+                            },
+                            findings_payload=[],
+                            evidence_payload=[],
+                        )
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "inconsistent verdict metadata",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 95,
+                        "top_risk": "Review remains cautionary.",
+                    },
+                    findings_payload=[],
+                    evidence_payload=[],
+                )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                **{
+                    **report_kwargs,
+                    "top_risk": "High availability rollout requires review.",
+                    "narrative_opening": "Go live review is pending.",
+                    "narrative_explanation": (
+                        "Critical path implementation detail remains under review."
+                    ),
+                },
+                findings_payload=[],
+                evidence_payload=[],
+            )
+            self.assertEqual(
+                report.top_risk,
+                "High availability rollout requires review.",
+            )
+            self.assertEqual(report.narrative_opening, "Go live review is pending.")
+            self.assertEqual(
+                report.narrative_explanation,
+                "Critical path implementation detail remains under review.",
+            )
+        external_evidence = {
+            "evidence_id": "ev-external-high",
+            "analysis_id": 0,
+            "finding_id": "finding-external-high",
+            "source_type": "external_scanner",
+            "source_ref": "scanner://sast.json#rule.high?action=flag",
+            "summary": "External scanner flagged a high risk.",
+            "severity_hint": "high",
+            "deterministic": True,
+            "confidence": 1.0,
+            "related_change_ids": ["chg-001"],
+        }
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                **{
+                    **report_kwargs,
+                    "risk_score": 72,
+                    "severity": "high",
+                    "recommendation": "no-go",
+                    "top_risk": "HIGH: External scanner high risk.",
+                    "narrative_opening": "NO-GO: External scanner high risk.",
+                    "narrative_explanation": "External scanner evidence is deterministic.",
+                    "top_risk_contributors_json": '["ev-external-high"]',
+                },
+                findings_payload=[
+                    {
+                        **finding,
+                        "finding_id": "finding-external-high",
+                        "title": "HIGH: External scanner high risk.",
+                        "severity": "high",
+                        "deterministic": True,
+                        "evidence_classification": "external",
+                        "evidence_refs": ["ev-external-high"],
+                    }
+                ],
+                evidence_payload=[external_evidence],
+            )
+            self.assertEqual(
+                report.findings[0].evidence_classification,
+                "external",
+            )
         with database_module.SessionLocal() as session:
             with self.assertRaisesRegex(
                 ValueError,
@@ -169,29 +829,27 @@ class ReportServiceTests(unittest.TestCase):
                 )
 
         with database_module.SessionLocal() as session:
-            report = analysis_reports_repository_module.create_analysis_report(
-                session,
-                **report_kwargs,
-                findings_payload=[
-                    {
-                        **finding,
-                        "finding_id": "finding-one",
-                        "evidence_refs": ["ev-001"],
-                    },
-                    {
-                        **finding,
-                        "finding_id": "finding-two",
-                        "evidence_refs": ["ev-001"],
-                    },
-                ],
-                evidence_payload=[evidence],
-            )
-
-        self.assertEqual(len(report.findings), 2)
-        self.assertEqual(
-            [json.loads(finding.evidence_refs_json) for finding in report.findings],
-            [["ev-001"], ["ev-001"]],
-        )
+            with self.assertRaisesRegex(
+                ValueError,
+                "Evidence item ev-001 has ambiguous finding ownership",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-one",
+                            "evidence_refs": ["ev-001"],
+                        },
+                        {
+                            **finding,
+                            "finding_id": "finding-two",
+                            "evidence_refs": ["ev-001"],
+                        },
+                    ],
+                    evidence_payload=[evidence],
+                )
 
     def test_scope_report_entities_downgrades_stripped_evidence_classification(
         self,
@@ -316,6 +974,210 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(
             [finding.evidence_classification for finding in scoped_findings],
             ["deterministic", "deterministic"],
+        )
+
+    def test_persist_analysis_report_preserves_shared_evidence_references(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Two findings share one deterministic evidence item.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: shared evidence review.",
+            explanation="One artifact supports multiple related findings.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-shared-one",
+                    analysis_id=0,
+                    title="MEDIUM: shared evidence one",
+                    description="First finding shares deterministic evidence.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.8,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-shared-two",
+                    analysis_id=0,
+                    title="MEDIUM: shared evidence two",
+                    description="Second finding shares deterministic evidence.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.8,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref="terraform://plan.json#aws_security_group.main",
+                    summary="Shared deterministic support.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    source_kind="artifact",
+                    determinism_level="deterministic",
+                )
+            ],
+        )
+
+        persisted_evidence_id = report["evidence_items"][0]["evidence_id"]
+        self.assertEqual(
+            [finding["evidence_refs"] for finding in report["findings"]],
+            [[persisted_evidence_id], [persisted_evidence_id]],
+        )
+        self.assertEqual(
+            report["evidence_items"][0]["finding_id"],
+            report["findings"][0]["finding_id"],
+        )
+
+    def test_persist_analysis_report_prefers_severe_owner_for_generated_shared_evidence(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="HIGH: shared deterministic evidence supports severe ingress risk.",
+            top_risk_contributors=["ev-shared"],
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: shared evidence supports severe ingress risk.",
+            explanation="The same artifact supports related medium and high findings.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-shared-medium",
+                    analysis_id=0,
+                    title="MEDIUM: shared evidence context",
+                    description="Medium finding appears first and shares evidence.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.8,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-shared-high",
+                    analysis_id=0,
+                    title="HIGH: shared evidence severe risk",
+                    description="High finding also links the deterministic evidence.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.9,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref="terraform://plan.json#aws_security_group.main",
+                    summary="Shared deterministic severe support.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    source_kind="artifact",
+                    determinism_level="deterministic",
+                )
+            ],
+        )
+
+        high_finding = next(
+            finding for finding in report["findings"] if finding["severity"] == "high"
+        )
+        persisted_evidence_id = report["evidence_items"][0]["evidence_id"]
+        self.assertEqual(
+            report["evidence_items"][0]["finding_id"], high_finding["finding_id"]
+        )
+        self.assertEqual(report["top_risk_contributors"], [persisted_evidence_id])
+        self.assertEqual(
+            [finding["evidence_refs"] for finding in report["findings"]],
+            [[persisted_evidence_id], [persisted_evidence_id]],
         )
 
     def test_report_finding_maps_resolves_shared_evidence_refs(self) -> None:
@@ -461,6 +1323,1698 @@ class ReportServiceTests(unittest.TestCase):
             report["contributors"][0]["evidence_id"], persisted_evidence_id
         )
         self.assertEqual(report["top_risk_contributors"], [persisted_evidence_id])
+
+    def test_persist_analysis_report_downgrades_severe_finding_without_deterministic_evidence(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="Inferred severe risk.",
+            top_risk_contributors=["ev-stale"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-stale",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=28,
+                    summary="Stale unsupported severe contributor.",
+                    severity="high",
+                    reasoning="Unsupported severe claim.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: inferred severe risk.",
+            explanation="The narrative is not deterministic evidence.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-inferred-high",
+                    analysis_id=0,
+                    title="HIGH: inferred production exposure",
+                    description="Model-inferred exposure without deterministic support.",
+                    explanation="Critical ingress exposure requires immediate action.",
+                    guidance=["Require human review before applying the change."],
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.92,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[],
+        )
+
+        self.assertEqual(report["findings"][0]["severity"], "medium")
+        self.assertEqual(
+            report["findings"][0]["title"], "MEDIUM: inferred production exposure"
+        )
+        self.assertFalse(report["findings"][0]["deterministic"])
+        self.assertLessEqual(report["findings"][0]["confidence"], 0.85)
+        self.assertEqual(
+            report["findings"][0]["explanation"],
+            "Evidence Law downgraded this finding to medium because it does not link to deterministic evidence.",
+        )
+        self.assertEqual(
+            report["findings"][0]["guidance"],
+            [
+                "Review the available linked evidence before deployment.",
+                "Add deterministic evidence before treating this finding as severe.",
+            ],
+        )
+        self.assertNotIn("Critical ingress", report["findings"][0]["explanation"])
+        self.assertNotIn(
+            "Require human review",
+            " ".join(report["findings"][0]["guidance"]),
+        )
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "caution")
+        self.assertLessEqual(report["risk_score"], 69)
+        self.assertEqual(report["top_risk_contributors"], [])
+        self.assertEqual(report["contributors"], [])
+        self.assertNotIn("NO-GO", report["narrative_opening"])
+        self.assertIn("CAUTION", report["narrative_opening"])
+        self.assertIn("Evidence Law downgraded", report["narrative_explanation"])
+        self.assertIn("Evidence Law downgraded", " ".join(report["warnings"]))
+
+    def test_persist_analysis_report_downgrades_severe_report_without_findings(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=91,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Report-level severe risk without evidence.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: unsupported report-level risk.",
+            explanation="Unsupported report-level risk.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+        )
+
+        self.assertEqual(report["findings"], [])
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "caution")
+        self.assertLessEqual(report["risk_score"], 69)
+        self.assertNotIn("NO-GO", report["narrative_opening"])
+        self.assertIn("CAUTION", report["narrative_opening"])
+        self.assertIn("unsupported severe report verdict", report["top_risk"])
+        self.assertIn("Evidence Law downgraded", " ".join(report["warnings"]))
+
+    def test_persist_analysis_report_repoints_partial_downgrade_summary_to_supported_severe_finding(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=82,
+            severity="high",
+            recommendation="no-go",
+            top_risk="HIGH: unsupported inferred exposure.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: unsupported inferred exposure.",
+            explanation="Unsupported inferred exposure is the severe issue.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-unsupported",
+                    analysis_id=0,
+                    title="HIGH: unsupported inferred exposure",
+                    description="Unsupported inferred exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.94,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-supported",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Deterministic security group exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-supported"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-supported",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        severities_by_title = {
+            finding["title"]: finding["severity"] for finding in report["findings"]
+        }
+        self.assertEqual(
+            severities_by_title["MEDIUM: unsupported inferred exposure"],
+            "medium",
+        )
+        self.assertEqual(severities_by_title["HIGH: aws_security_group.main"], "high")
+        self.assertEqual(report["severity"], "high")
+        self.assertEqual(report["recommendation"], "no-go")
+        self.assertIn("aws_security_group.main", report["top_risk"])
+        self.assertNotIn("unsupported inferred exposure", report["top_risk"])
+        self.assertIn("deterministic severe risk remains", report["narrative_opening"])
+        self.assertIn("Evidence Law downgraded", report["narrative_explanation"])
+
+    def test_persist_analysis_report_clears_stale_severe_top_risk_on_medium_assessment(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=52,
+            severity="medium",
+            recommendation="caution",
+            top_risk="CRITICAL: unsupported no-go claim.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: unsupported no-go claim.",
+            explanation="CRITICAL unsupported no-go claim.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-unsupported-critical",
+                    analysis_id=0,
+                    title="CRITICAL: unsupported no-go claim",
+                    description="Unsupported critical claim without deterministic evidence.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.96,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[],
+        )
+
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "caution")
+        self.assertIn("Evidence Law downgraded", report["top_risk"])
+        self.assertNotIn("CRITICAL", report["top_risk"])
+        self.assertNotIn("NO-GO", report["narrative_opening"])
+        self.assertNotIn("CRITICAL", report["narrative_explanation"])
+
+    def test_persist_analysis_report_sanitizes_stale_severe_copy_without_findings(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=52,
+            severity="medium",
+            recommendation="caution",
+            top_risk="CRITICAL: stale no-go copy.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: stale no-go copy.",
+            explanation="CRITICAL stale no-go copy.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[],
+            evidence_items=[],
+        )
+
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "caution")
+        self.assertIn("MEDIUM", report["top_risk"])
+        self.assertNotIn("CRITICAL", report["top_risk"])
+        self.assertIn("CAUTION", report["narrative_opening"])
+        self.assertNotIn("NO-GO", report["narrative_opening"])
+        self.assertNotIn("CRITICAL", report["narrative_explanation"])
+        self.assertIn("Evidence Law", " ".join(report["warnings"]))
+
+    def test_persist_analysis_report_reconciles_non_severe_recommendation_text(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=95,
+            severity="medium",
+            recommendation="no-go",
+            top_risk="NO-GO: stale recommendation copy.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: stale recommendation copy.",
+            explanation="NO-GO stale recommendation copy.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[],
+            evidence_items=[],
+        )
+
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "caution")
+        self.assertEqual(report["risk_score"], 69)
+        self.assertIn("MEDIUM", report["top_risk"])
+        self.assertNotIn("NO-GO", report["top_risk"])
+        self.assertIn("CAUTION", report["narrative_opening"])
+        self.assertNotIn("NO-GO", report["narrative_opening"])
+        self.assertNotIn("NO-GO", report["narrative_explanation"])
+        self.assertIn(
+            "recommendation to match severity",
+            " ".join(report["warnings"]),
+        )
+        self.assertIn("score to match severity", " ".join(report["warnings"]))
+
+    def test_persist_analysis_report_preserves_medium_go_recommendation(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="go",
+            top_risk="Medium security group review.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: medium security group review.",
+            explanation="Medium severity remains advisory.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[],
+            evidence_items=[],
+        )
+
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "go")
+        self.assertEqual(report["risk_score"], 42)
+        self.assertEqual(report["top_risk"], "Medium security group review.")
+        self.assertEqual(
+            report["narrative_opening"],
+            "GO: medium security group review.",
+        )
+        self.assertNotIn("Evidence Law", " ".join(report["warnings"]))
+
+    def test_persist_analysis_report_preserves_medium_go_recommendation_when_reconciling_score(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=95,
+            severity="medium",
+            recommendation="go",
+            top_risk="Medium security group review.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: medium security group review.",
+            explanation="Medium severity remains advisory.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[],
+            evidence_items=[],
+        )
+
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "go")
+        self.assertEqual(report["risk_score"], 69)
+        self.assertEqual(report["top_risk"], "Medium security group review.")
+        self.assertIn("score to match severity", " ".join(report["warnings"]))
+        self.assertNotIn(
+            "recommendation to match severity", " ".join(report["warnings"])
+        )
+
+    def test_persist_analysis_report_preserves_hyphenated_verdict_prose(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=52,
+            severity="medium",
+            recommendation="caution",
+            top_risk="High availability rollout requires review.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="Go live review is pending.",
+            explanation="Critical path implementation detail remains under review.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[],
+            evidence_items=[],
+        )
+
+        self.assertEqual(
+            report["top_risk"], "High availability rollout requires review."
+        )
+        self.assertEqual(report["narrative_opening"], "Go live review is pending.")
+        self.assertEqual(
+            report["narrative_explanation"],
+            "Critical path implementation detail remains under review.",
+        )
+        self.assertNotIn("Evidence Law refreshed", " ".join(report["warnings"]))
+
+    def test_persist_analysis_report_promotes_downgraded_severe_finding_to_medium_assessment(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=18,
+            severity="low",
+            recommendation="go",
+            top_risk="CRITICAL: unsupported no-go claim.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: unsupported no-go claim.",
+            explanation="CRITICAL unsupported no-go claim.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-unsupported-critical",
+                    analysis_id=0,
+                    title="CRITICAL: unsupported no-go claim",
+                    description="Unsupported critical claim without deterministic evidence.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.96,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[],
+        )
+
+        self.assertEqual(report["findings"][0]["severity"], "medium")
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "caution")
+        self.assertGreaterEqual(report["risk_score"], 42)
+        self.assertIn("Evidence Law downgraded", report["top_risk"])
+
+    def test_persist_analysis_report_reconciles_critical_verdict_to_supported_high_finding(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=95,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="CRITICAL: unsupported inferred exposure.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: unsupported inferred exposure.",
+            explanation="Unsupported inferred exposure is the severe issue.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-unsupported-critical",
+                    analysis_id=0,
+                    title="CRITICAL: unsupported inferred exposure",
+                    description="Unsupported inferred exposure.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.97,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-supported-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Deterministic security group exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-supported-high"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-supported-high",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        self.assertEqual(report["severity"], "high")
+        self.assertEqual(report["recommendation"], "no-go")
+        self.assertLessEqual(report["risk_score"], 89)
+        self.assertIn("HIGH: aws_security_group.main", report["top_risk"])
+        self.assertNotIn("CRITICAL", report["top_risk"])
+        self.assertIn(
+            "highest linked deterministic finding severity: high",
+            report["narrative_explanation"],
+        )
+
+    def test_persist_analysis_report_reconciles_overclaimed_critical_verdict_without_finding_downgrade(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=94,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="CRITICAL: reported verdict overstates the supported finding.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: critical report verdict.",
+            explanation="Critical report verdict overstates the supported finding.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-supported-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Deterministic security group exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-supported-high"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-supported-high",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        self.assertEqual(report["severity"], "high")
+        self.assertEqual(report["recommendation"], "no-go")
+        self.assertLessEqual(report["risk_score"], 89)
+        self.assertIn("HIGH: aws_security_group.main", report["top_risk"])
+        self.assertIn("Evidence Law downgraded", report["narrative_explanation"])
+        self.assertNotIn(
+            "Critical report verdict overstates", report["narrative_explanation"]
+        )
+
+    def test_persist_analysis_report_promotes_underclaimed_verdict_to_supported_high_finding(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Medium report verdict understates deterministic severe finding.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: medium report verdict.",
+            explanation="Medium report verdict understates deterministic severe finding.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-supported-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Deterministic security group exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-supported-high"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-supported-high",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        self.assertEqual(report["severity"], "high")
+        self.assertEqual(report["recommendation"], "no-go")
+        self.assertGreaterEqual(report["risk_score"], 70)
+        self.assertIn("HIGH: aws_security_group.main", report["top_risk"])
+        self.assertIn("Evidence Law promoted", " ".join(report["warnings"]))
+        self.assertIn(
+            "Deterministic severe risk remains", report["narrative_explanation"]
+        )
+        self.assertNotIn(
+            "Medium report verdict understates",
+            report["narrative_explanation"],
+        )
+
+    def test_persist_analysis_report_refreshes_stale_non_severe_copy_for_supported_high(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="MEDIUM: stale non-severe copy.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: stale non-severe copy.",
+            explanation="Medium stale non-severe copy.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-supported-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Deterministic security group exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-supported-high"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-supported-high",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        self.assertEqual(report["severity"], "high")
+        self.assertEqual(report["recommendation"], "no-go")
+        self.assertIn("HIGH: aws_security_group.main", report["top_risk"])
+        self.assertNotIn("MEDIUM", report["top_risk"])
+        self.assertIn("deterministic severe risk remains", report["narrative_opening"])
+        self.assertIn("aws_security_group.main", report["narrative_explanation"])
+
+    def test_persist_analysis_report_normalizes_supported_severe_finding_metadata(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="high",
+            recommendation="go",
+            top_risk="HIGH: aws_security_group.main",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: deterministic severe risk.",
+            explanation="Linked deterministic evidence supports the severe finding.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-supported-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Deterministic security group exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=["ev-supported-high"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-supported-high",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        self.assertEqual(report["severity"], "high")
+        self.assertEqual(report["recommendation"], "no-go")
+        self.assertGreaterEqual(report["risk_score"], 70)
+        self.assertTrue(report["findings"][0]["deterministic"])
+        self.assertEqual(
+            report["findings"][0]["evidence_classification"],
+            "deterministic",
+        )
+
+    def test_persist_analysis_report_normalizes_supported_severe_finding_metadata_with_consistent_report(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="HIGH: aws_security_group.main",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: deterministic severe risk.",
+            explanation="Linked deterministic evidence supports the severe finding.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-supported-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Deterministic security group exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=["ev-supported-high"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-supported-high",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        self.assertEqual(report["severity"], "high")
+        self.assertEqual(report["recommendation"], "no-go")
+        self.assertEqual(report["risk_score"], 72)
+        self.assertTrue(report["findings"][0]["deterministic"])
+        self.assertEqual(
+            report["findings"][0]["evidence_classification"],
+            "deterministic",
+        )
+
+    def test_persist_analysis_report_uses_highest_supported_severe_finding_for_partial_downgrade(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=92,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="CRITICAL: unsupported inferred exposure.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: unsupported inferred exposure.",
+            explanation="Unsupported inferred exposure is the severe issue.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-unsupported",
+                    analysis_id=0,
+                    title="CRITICAL: unsupported inferred exposure",
+                    description="Unsupported inferred exposure.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.97,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-supported-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Deterministic security group exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-supported-high"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-supported-critical",
+                    analysis_id=0,
+                    title="CRITICAL: aws_iam_policy.admin",
+                    description="Deterministic admin policy exposure.",
+                    severity="critical",
+                    category="iam/rbac",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-supported-critical"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-supported-high",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-supported-critical",
+                    analysis_id=0,
+                    finding_id="pending:change-2",
+                    source_type="artifact",
+                    source_ref="terraform://plan.json#aws_iam_policy.admin?action=modify",
+                    summary="Terraform changed an admin policy.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-2"],
+                ),
+            ],
+        )
+
+        critical_evidence_id = next(
+            evidence["evidence_id"]
+            for evidence in report["evidence_items"]
+            if "aws_iam_policy.admin" in evidence["source_ref"]
+        )
+        self.assertIn("CRITICAL: aws_iam_policy.admin", report["top_risk"])
+        self.assertNotIn("HIGH: aws_security_group.main", report["top_risk"])
+        self.assertEqual(report["top_risk_contributors"], [critical_evidence_id])
+
+    def test_persist_analysis_report_explains_remaining_supported_severe_risk_after_partial_downgrade(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=82,
+            severity="high",
+            recommendation="no-go",
+            top_risk="HIGH: unsupported inferred exposure.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: unsupported inferred exposure.",
+            explanation="Unsupported inferred exposure is the severe issue.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-unsupported",
+                    analysis_id=0,
+                    title="HIGH: unsupported inferred exposure",
+                    description="Unsupported inferred exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.94,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-supported",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Deterministic security group exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-supported"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-supported",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        self.assertIn(
+            "Deterministic severe risk remains", report["narrative_explanation"]
+        )
+        self.assertIn("aws_security_group.main", report["narrative_explanation"])
+        self.assertIn("Evidence Law downgraded", report["narrative_explanation"])
+        self.assertNotIn(
+            "unsupported inferred exposure is the severe issue",
+            report["narrative_explanation"],
+        )
+
+    def test_persist_analysis_report_rewrites_severity_only_downgraded_title(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="Severity-only title.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: severity-only title.",
+            explanation="Severity-only title.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-severity-only",
+                    analysis_id=0,
+                    title="HIGH:",
+                    description="Bare severity title must not survive downgrade.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.9,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[],
+        )
+
+        self.assertEqual(
+            report["findings"][0]["title"],
+            "MEDIUM: Bare severity title must not survive downgrade.",
+        )
+        self.assertNotIn("HIGH", report["findings"][0]["title"])
+
+    def test_persist_analysis_report_strips_verdict_prefix_from_downgraded_title(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="NO-GO: unsupported severe claim.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: unsupported severe claim.",
+            explanation="Unsupported severe claim.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-verdict-title",
+                    analysis_id=0,
+                    title="NO-GO: unsupported severe claim",
+                    description="Unsupported severe claim.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.9,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[],
+        )
+
+        self.assertEqual(
+            report["findings"][0]["title"],
+            "MEDIUM: unsupported severe claim",
+        )
+        self.assertNotIn("NO-GO", report["findings"][0]["title"])
+
+    def test_persist_analysis_report_strips_unpunctuated_verdict_prefix_from_downgraded_title(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="NO-GO unsupported severe claim.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO unsupported severe claim.",
+            explanation="CRITICAL risk remains without deterministic evidence.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-unpunctuated-verdict-title",
+                    analysis_id=0,
+                    title="NO-GO unsupported severe claim",
+                    description="Unsupported severe claim.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.9,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[],
+        )
+
+        self.assertEqual(
+            report["findings"][0]["title"],
+            "MEDIUM: unsupported severe claim",
+        )
+        self.assertNotIn("NO-GO", report["findings"][0]["title"])
+        self.assertNotIn("NO-GO", report["narrative_opening"])
+        self.assertNotIn("CRITICAL risk remains", report["narrative_explanation"])
+
+    def test_persist_analysis_report_strips_plain_language_verdict_lead_ins(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="NO-GO deployment review remains blocked.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO deployment review remains blocked.",
+            explanation="CRITICAL database exposure remains without deterministic evidence.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-plain-language-verdict-title",
+                    analysis_id=0,
+                    title="HIGH ingress exposure requires review",
+                    description="Unsupported ingress exposure.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=False,
+                    confidence=0.9,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=[],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[],
+        )
+
+        self.assertEqual(
+            report["findings"][0]["title"],
+            "MEDIUM: ingress exposure requires review",
+        )
+        self.assertNotIn("HIGH", report["findings"][0]["title"])
+        self.assertNotIn("NO-GO", report["narrative_opening"])
+        self.assertNotIn("CRITICAL database exposure", report["narrative_explanation"])
+
+    def test_persist_analysis_report_preserves_severe_finding_with_deterministic_evidence(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="Deterministic severe risk.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: deterministic severe risk.",
+            explanation="The linked plan evidence supports the severe finding.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Security group changes can affect production ingress.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-001"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-001",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        self.assertEqual(report["findings"][0]["severity"], "high")
+        self.assertEqual(
+            report["findings"][0]["evidence_classification"],
+            "deterministic",
+        )
+        self.assertNotIn("Evidence Law downgraded", " ".join(report["warnings"]))
+
+    def test_persist_analysis_report_preserves_external_deterministic_severe_finding(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="scanner.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=72,
+            severity="high",
+            recommendation="no-go",
+            top_risk="HIGH: External scanner high risk.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: external scanner high risk.",
+            explanation="External scanner evidence supports the severe finding.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-external-high",
+                    analysis_id=0,
+                    title="HIGH: External scanner high risk.",
+                    description="External scanner reported a deterministic high risk.",
+                    severity="high",
+                    category="external/scanner",
+                    deterministic=False,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_classification="model_inferred",
+                    evidence_refs=["ev-external-high"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-external-high",
+                    analysis_id=0,
+                    finding_id="pending:scanner-1",
+                    source_type="external_scanner",
+                    source_ref="scanner://sast.json#rule.high?action=flag",
+                    summary="External scanner flagged a high risk.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["scanner-1"],
+                )
+            ],
+        )
+
+        self.assertEqual(report["severity"], "high")
+        self.assertEqual(report["findings"][0]["severity"], "high")
+        self.assertTrue(report["findings"][0]["deterministic"])
+        self.assertEqual(report["findings"][0]["evidence_classification"], "external")
 
     def test_persist_analysis_report_rejects_unmatched_single_finding_evidence(
         self,
@@ -989,6 +3543,7 @@ class ReportServiceTests(unittest.TestCase):
             top_risk="prod/network/plan.json changed aws_security_group.main and is the highest-impact change.",
             contributors=[
                 RiskContributor(
+                    evidence_id="ev-001",
                     source_file="prod/network/plan.json",
                     tool="terraform",
                     resource_id="aws_security_group.main",
@@ -1312,13 +3867,15 @@ class ReportServiceTests(unittest.TestCase):
 
         fetched = report_service_module.fetch_analysis_report(persisted["id"])
         self.assertIsNotNone(fetched)
-        self.assertEqual(fetched["risk_score"], 42)
+        self.assertEqual(fetched["risk_score"], 70)
+        self.assertEqual(fetched["severity"], "high")
+        self.assertEqual(fetched["recommendation"], "no-go")
         self.assertEqual(fetched["audit"]["source_interface"], "api")
         self.assertEqual(fetched["audit"]["files_analyzed"], ["plan.json"])
-        self.assertEqual(
-            fetched["narrative_explanation"],
-            "The deployment widens database access and should be reviewed.",
+        self.assertIn(
+            "Deterministic severe risk remains", fetched["narrative_explanation"]
         )
+        self.assertIn("Evidence Law promoted", fetched["narrative_explanation"])
         self.assertEqual(fetched["assessment_source"], "heuristic-only")
         self.assertEqual(fetched["narrative_source"], "llm")
         self.assertEqual(fetched["report_schema_version"], "v2")
@@ -2756,7 +5313,8 @@ class ReportServiceTests(unittest.TestCase):
         assert comparison is not None
         self.assertEqual(comparison["previous_report"]["id"], previous["id"])
         self.assertEqual(comparison["current_report"]["id"], current["id"])
-        self.assertEqual(comparison["risk_score_delta"], 29)
+        self.assertEqual(comparison["current_report"]["risk_score"], 90)
+        self.assertEqual(comparison["risk_score_delta"], 48)
         self.assertEqual(
             comparison["findings"]["added"][0]["title"], "HIGH: aws_db_instance.main"
         )
@@ -3735,6 +6293,37 @@ class ReportServiceTests(unittest.TestCase):
             parse_batch,
             assessment,
             narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-dashboard-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Security group changes can affect production ingress.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-dashboard-high"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-dashboard-high",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
             audit_context={
                 "source_interface": "ui",
                 "trigger_type": "dashboard_upload",
@@ -3753,6 +6342,382 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(active["report_schema_version"], "v2")
         self.assertEqual(active["skills_applied"], ["git", "terraform"])
         self.assertGreater(active["dashboard_remaining_seconds"], 0)
+
+    def test_persist_analysis_report_backfills_supported_severe_top_risk_contributors(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=75,
+            severity="high",
+            recommendation="no-go",
+            top_risk="HIGH: security group exposure risk.",
+            top_risk_contributors=[],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-high",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=75,
+                    summary="Terraform changed a security group.",
+                    severity="high",
+                    reasoning="Security group changes can affect production ingress.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: deterministic severe risk.",
+            explanation="The linked plan evidence supports the severe finding.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-high",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Security group changes can affect production ingress.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-high"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-high",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        persisted_evidence_id = report["evidence_items"][0]["evidence_id"]
+        self.assertEqual(report["top_risk_contributors"], [persisted_evidence_id])
+        self.assertEqual(
+            report["contributors"][0]["evidence_id"], persisted_evidence_id
+        )
+
+    def test_persist_analysis_report_rewrites_cross_finding_top_risk_contributors(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        ),
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_db_instance.primary",
+                            action="modify",
+                            summary="Terraform changed a database.",
+                        ),
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=92,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="CRITICAL: security group exposure risk.",
+            top_risk_contributors=["ev-critical", "ev-high"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-critical",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=80,
+                    summary="Terraform changed a security group.",
+                    severity="critical",
+                    reasoning="Critical ingress exposure.",
+                ),
+                RiskContributor(
+                    evidence_id="ev-high",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_db_instance.primary",
+                    action="modify",
+                    contribution=50,
+                    summary="Terraform changed a database.",
+                    severity="high",
+                    reasoning="High database exposure.",
+                ),
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_iam_role.unlinked",
+                    action="modify",
+                    contribution=40,
+                    summary="Unlinked stale severe rationale.",
+                    severity="critical",
+                    reasoning="This contributor is not tied to selected evidence.",
+                ),
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_iam_policy.unlinked",
+                    action="modify",
+                    contribution=0,
+                    summary="CRITICAL: unsupported inferred admin access.",
+                    reasoning="This zero-impact stale rationale is not parser metadata.",
+                ),
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="data.aws_ami.selected",
+                    action="read",
+                    contribution=0,
+                    summary="Terraform read a data source.",
+                    metadata={"unknown_after_apply": ["id"]},
+                ),
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="NO-GO: deterministic critical risk.",
+            explanation="The linked plan evidence supports the critical finding.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-critical",
+                    analysis_id=0,
+                    title="CRITICAL: aws_security_group.main",
+                    description="Security group changes can affect production ingress.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-critical"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-high",
+                    analysis_id=0,
+                    title="HIGH: aws_db_instance.primary",
+                    description="Database changes can affect production data.",
+                    severity="high",
+                    category="data/service",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-high"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-critical",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-high",
+                    analysis_id=0,
+                    finding_id="pending:change-2",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_db_instance.primary?action=modify"
+                    ),
+                    summary="Terraform changed a database.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-2"],
+                ),
+            ],
+        )
+
+        critical_evidence_id = next(
+            item["evidence_id"]
+            for item in report["evidence_items"]
+            if item["resource"] == "aws_security_group.main"
+        )
+        self.assertEqual(report["top_risk_contributors"], [critical_evidence_id])
+        self.assertEqual(
+            [contributor["evidence_id"] for contributor in report["contributors"]],
+            [critical_evidence_id, None],
+        )
+        self.assertNotIn(
+            "unsupported inferred admin access",
+            " ".join(
+                str(contributor.get("summary") or "")
+                for contributor in report["contributors"]
+            ),
+        )
+        self.assertEqual(
+            report["contributors"][1]["metadata"]["unknown_after_apply"],
+            ["id"],
+        )
+
+    def test_persist_analysis_report_preserves_medium_evidence_links_when_cleaning_verdict_text(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=50,
+            severity="medium",
+            recommendation="caution",
+            top_risk="NO-GO because security group review remains pending.",
+            top_risk_contributors=["ev-medium"],
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-medium",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=20,
+                    summary="Terraform changed a security group.",
+                    severity="medium",
+                    reasoning="Review remains pending.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CRITICAL due to stale narrative copy.",
+            explanation="NO-GO because stale narrative copy remains.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-medium",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group changes require review.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-medium"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-medium",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        persisted_evidence_id = report["evidence_items"][0]["evidence_id"]
+        self.assertNotIn("NO-GO", report["top_risk"])
+        self.assertNotIn("CRITICAL due to", report["narrative_opening"])
+        self.assertEqual(report["top_risk_contributors"], [persisted_evidence_id])
+        self.assertEqual(
+            report["contributors"][0]["evidence_id"], persisted_evidence_id
+        )
 
     def test_fetch_filtered_history_page_omits_evidence_payloads(self) -> None:
         parse_batch = ParseBatchResult(

@@ -144,9 +144,11 @@ test.describe("review keyboard flow", () => {
     expect(seen).toEqual(REVIEW_ORDER);
 
     await page.goto("/history", { waitUntil: "networkidle" });
-    await expect(page.locator(".dw-history-card")).toHaveCount(1);
+    await expect(page.locator(".dw-history-card")).toHaveCount(2);
+    await expect(page.getByText("Rescan diff")).toBeVisible();
+    await expect(page.getByText("+48 risk vs report #1")).toBeVisible();
     await page.locator(".dw-history-card").first().click();
-    await expect(page).toHaveURL(/\/history\/1$/);
+    await expect(page).toHaveURL(/\/history\/2$/);
     await page.waitForFunction(() => window.dwReviewAccessibilityInstalled === true);
     await expect(page.getByText("Analysis report detail")).toBeVisible();
     await expect(page.getByText("Back to History")).toBeVisible();
@@ -161,7 +163,10 @@ test.describe("review keyboard flow", () => {
       page.locator('[data-dw-review-section="blast-radius"]')
     ).toBeVisible();
     await expect(page.locator('[data-dw-review-section="rollback"]')).toBeVisible();
-    await page.getByRole("button", { name: "Back to History" }).click();
-    await expect(page).toHaveURL(/\/history$/);
+    await page.goto("/history/2/compare", { waitUntil: "networkidle" });
+    await expect(page.getByText("Comparison with report #1")).toBeVisible();
+    await expect(page.getByText("Risk score delta")).toBeVisible();
+    await expect(page.getByText("+48")).toBeVisible();
+    await expect(page.getByText(/MEDIUM.*CRITICAL/)).toBeVisible();
   });
 });
