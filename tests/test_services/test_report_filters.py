@@ -14,6 +14,7 @@ import models.repositories.analysis_reports as analysis_reports_repository_modul
 import models.tables as tables_module
 import services.report_service as report_service_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
+from evidence.models import EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 
@@ -43,6 +44,9 @@ class ReportFilterTests(unittest.TestCase):
         top_risk: str,
         source_interface: str = "ui",
     ) -> None:
+        evidence_id = f"ev-{severity}"
+        finding_id = f"finding-{severity}"
+        severe_report = severity in {"high", "critical"}
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -66,8 +70,10 @@ class ReportFilterTests(unittest.TestCase):
             severity=severity,
             recommendation=recommendation,
             top_risk=top_risk,
+            top_risk_contributors=[evidence_id] if severe_report else [],
             contributors=[
                 RiskContributor(
+                    evidence_id=evidence_id if severe_report else None,
                     source_file="plan.json",
                     tool="terraform",
                     resource_id="aws_security_group.main",
@@ -92,6 +98,41 @@ class ReportFilterTests(unittest.TestCase):
             assessment,
             narrative,
             audit_context={"source_interface": source_interface},
+            findings=[
+                Finding(
+                    finding_id=finding_id,
+                    analysis_id=0,
+                    title=f"{severity.upper()}: {top_risk}",
+                    description=top_risk,
+                    severity=severity,
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=[evidence_id],
+                    skill_id=None,
+                )
+            ]
+            if severe_report
+            else None,
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id=evidence_id,
+                    analysis_id=0,
+                    finding_id=finding_id,
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary=top_risk,
+                    severity_hint=severity,
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ]
+            if severe_report
+            else None,
         )
 
     def test_fetch_filtered_analysis_history_filters_by_severity_and_search(
