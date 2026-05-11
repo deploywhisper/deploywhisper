@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import secrets
 import hashlib
@@ -16,10 +17,14 @@ from pydantic import ValidationError
 
 from analysis.blast_radius import BlastRadiusResult
 from analysis.rollback_planner import RollbackPlan
-from analysis.risk_scorer import RiskAssessment, RiskContributor
+from analysis.risk_scorer import (
+    RiskAssessment,
+    RiskContributor,
+    apply_context_uncertainty,
+)
 from api.schemas import IntakeItem, PendingAnalysis
 from evidence.mappers import classify_finding_evidence
-from evidence.models import EvidenceItem, Finding
+from evidence.models import ContextCompleteness, EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 
 from models.database import SessionLocal
@@ -52,6 +57,7 @@ from services.submission_manifest import (
     normalize_manifest_redaction_status,
     normalize_submission_manifest_payload,
 )
+from services.topology_service import STALE_AFTER_DAYS
 
 LEGACY_REPORT_SCHEMA_VERSION = "v1"
 REPORT_SCHEMA_VERSION = "v2"
@@ -95,6 +101,31 @@ _VERDICT_PREFIX_PATTERN = re.compile(
 _FINDING_SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 _SEVERITY_SCORE_FLOOR = {"low": 0, "medium": 42, "high": 70, "critical": 90}
 _SEVERITY_SCORE_CEILING = {"low": 39, "medium": 69, "high": 89, "critical": 100}
+_CONTEXT_JSON_MALFORMED_WARNING = "Context completeness metadata was unavailable because persisted JSON was malformed."
+_CONTEXT_JSON_SHAPE_WARNING = (
+    "Context completeness metadata was unavailable because persisted JSON had an "
+    "unexpected shape."
+)
+_CONTEXT_JSON_INCOMPLETE_WARNING = "Context completeness metadata was unavailable because persisted values were incomplete."
+_CONTEXT_JSON_INVALID_WARNING = "Context completeness metadata was unavailable because persisted values were invalid."
+_CONFIDENCE_INVALID_WARNING = (
+    "Report confidence metadata was invalid and was reset to 0.0."
+)
+_CONTEXT_UNAVAILABLE_UNCERTAINTY = (
+    "Context completeness metadata was unavailable; reviewer verification is "
+    "required before trusting this report."
+)
+_CONTEXT_UNAVAILABLE_TODO = (
+    "Re-run analysis to regenerate context completeness metadata."
+)
+_LEGACY_CONTEXT_CORE_FIELDS = {
+    "topology_freshness_days",
+    "topology_last_imported_at",
+    "incident_index_size",
+    "parser_success_rate",
+    "parser_success_by_tool",
+    "context_score",
+}
 
 
 def _resolve_project_id(
@@ -2023,6 +2054,203 @@ def _load_submission_manifest_fallback_payload(
     return fallback_items
 
 
+def _load_context_completeness_payload(
+    raw_value: str | None,
+) -> tuple[dict, str | None]:
+    if raw_value is None or not str(raw_value).strip():
+        return _unavailable_context_completeness(), _CONTEXT_JSON_INVALID_WARNING
+    try:
+        decoded = json.loads(raw_value)
+    except json.JSONDecodeError:
+        return _unavailable_context_completeness(), _CONTEXT_JSON_MALFORMED_WARNING
+    if not isinstance(decoded, dict):
+        return _unavailable_context_completeness(), _CONTEXT_JSON_SHAPE_WARNING
+    decoded = _upgrade_legacy_context_completeness_payload(decoded)
+    if decoded is None:
+        return _unavailable_context_completeness(), _CONTEXT_JSON_INCOMPLETE_WARNING
+    try:
+        return (
+            ContextCompleteness.model_validate(decoded).model_dump(mode="json"),
+            None,
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _unavailable_context_completeness(), _CONTEXT_JSON_INVALID_WARNING
+
+
+def _context_confidence_level_from_score(context_score: float) -> str:
+    if context_score >= 0.85:
+        return "high"
+    if context_score >= 0.7:
+        return "medium"
+    return "low"
+
+
+def _context_float_value(
+    decoded: dict,
+    key: str,
+    *,
+    missing_default: float,
+    invalid_default: float = 0.0,
+) -> float:
+    if key not in decoded:
+        return missing_default
+    try:
+        value = float(decoded.get(key))
+    except (TypeError, ValueError):
+        return invalid_default
+    if not math.isfinite(value):
+        return invalid_default
+    return max(0.0, min(value, 1.0))
+
+
+def _context_int_value(decoded: dict, key: str) -> int:
+    try:
+        value = int(decoded.get(key, 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(value, 0)
+
+
+def _context_todo_items(value: object) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
+def _normalize_context_completeness_payload(decoded: dict) -> dict:
+    context_score = _context_float_value(decoded, "context_score", missing_default=1.0)
+    parser_success_rate = _context_float_value(
+        decoded, "parser_success_rate", missing_default=1.0
+    )
+    evidence_success_rate = _context_float_value(
+        decoded, "evidence_success_rate", missing_default=1.0
+    )
+    incident_index_size = _context_int_value(decoded, "incident_index_size")
+    topology_freshness_days = decoded.get("topology_freshness_days")
+    if topology_freshness_days is None:
+        topology_gap = "missing"
+    else:
+        try:
+            topology_freshness_days = int(topology_freshness_days)
+            topology_gap = (
+                "stale" if topology_freshness_days > STALE_AFTER_DAYS else None
+            )
+        except (TypeError, ValueError):
+            topology_freshness_days = None
+            topology_gap = "missing"
+
+    normalized = dict(decoded)
+    normalized["context_score"] = context_score
+    normalized["parser_success_rate"] = parser_success_rate
+    normalized["evidence_success_rate"] = evidence_success_rate
+    normalized["incident_index_size"] = incident_index_size
+    normalized["topology_freshness_days"] = topology_freshness_days
+
+    insufficient_context = context_score < 0.7
+    normalized["insufficient_context"] = insufficient_context
+    normalized["confidence_level"] = (
+        "low"
+        if insufficient_context
+        else _context_confidence_level_from_score(context_score)
+    )
+
+    todos = _context_todo_items(normalized.get("context_todos"))
+    if topology_gap == "missing" and not any(
+        "topology" in item.lower() for item in todos
+    ):
+        todos.append("Import or refresh topology context for this project/workspace.")
+    if topology_gap == "stale" and not any(
+        "topology" in item.lower() for item in todos
+    ):
+        todos.append("Refresh stale topology context for this project/workspace.")
+    if incident_index_size == 0 and not any(
+        "incident" in item.lower() for item in todos
+    ):
+        todos.append("Import relevant incident history for this project/workspace.")
+    if parser_success_rate < 1.0 and not any(
+        "parser" in item.lower() for item in todos
+    ):
+        todos.append("Review parser errors and resubmit supported artifacts.")
+    if evidence_success_rate < 1.0 and not any(
+        "evidence" in item.lower() for item in todos
+    ):
+        todos.append("Review evidence extraction gaps for supported artifacts.")
+    if insufficient_context and not todos:
+        todos.append(_CONTEXT_UNAVAILABLE_TODO)
+    normalized["context_todos"] = todos
+
+    uncertainty = str(normalized.get("uncertainty") or "").strip()
+    if insufficient_context and not uncertainty:
+        uncertainty = (
+            "Insufficient context: persisted context metadata was normalized "
+            "because stored values were internally inconsistent."
+        )
+    normalized["uncertainty"] = uncertainty or None
+    return normalized
+
+
+def _upgrade_legacy_context_completeness_payload(decoded: dict) -> dict | None:
+    required_keys = set(ContextCompleteness.model_fields)
+    if required_keys.issubset(decoded):
+        return _normalize_context_completeness_payload(decoded)
+    if not _LEGACY_CONTEXT_CORE_FIELDS.issubset(decoded):
+        return None
+
+    try:
+        legacy_context_score = float(decoded["context_score"])
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(legacy_context_score):
+        return None
+
+    upgraded = dict(decoded)
+    upgraded.setdefault("evidence_success_rate", 1.0)
+    upgraded.setdefault("uncertainty", None)
+    upgraded.setdefault("context_todos", [])
+    upgraded.setdefault("insufficient_context", False)
+    return _normalize_context_completeness_payload(upgraded)
+
+
+def _unavailable_context_completeness() -> dict:
+    return ContextCompleteness(
+        incident_index_size=0,
+        evidence_success_rate=0.0,
+        parser_success_rate=0.0,
+        parser_success_by_tool={},
+        context_score=0.0,
+        confidence_level="low",
+        uncertainty=_CONTEXT_UNAVAILABLE_UNCERTAINTY,
+        context_todos=[_CONTEXT_UNAVAILABLE_TODO],
+        insufficient_context=True,
+    ).model_dump(mode="json")
+
+
+def _load_report_confidence(value: Any) -> tuple[float, str | None]:
+    if value is None:
+        return 0.0, _CONFIDENCE_INVALID_WARNING
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0, _CONFIDENCE_INVALID_WARNING
+    if not math.isfinite(confidence) or confidence < 0.0 or confidence > 1.0:
+        return 0.0, _CONFIDENCE_INVALID_WARNING
+    return confidence, None
+
+
+def _clamp_confidence_to_context(
+    confidence: float, context_completeness: dict
+) -> float:
+    if not context_completeness.get("insufficient_context"):
+        return confidence
+    try:
+        context_score = float(context_completeness.get("context_score", 0.0))
+    except (TypeError, ValueError):
+        context_score = 0.0
+    if not math.isfinite(context_score):
+        context_score = 0.0
+    return round(min(confidence, max(0.0, min(context_score, 1.0))), 2)
+
+
 def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     created_at = report.created_at
     if created_at.tzinfo is None:
@@ -2047,6 +2275,21 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     )
     if manifest_warning is not None and manifest_warning not in warnings:
         warnings.append(manifest_warning)
+    confidence, confidence_warning = _load_report_confidence(
+        report.risk_assessment.confidence
+        if report.risk_assessment is not None
+        else None
+    )
+    if confidence_warning is not None and confidence_warning not in warnings:
+        warnings.append(confidence_warning)
+    context_completeness, context_warning = _load_context_completeness_payload(
+        report.risk_assessment.context_completeness_json
+        if report.risk_assessment is not None
+        else None
+    )
+    if context_warning is not None and context_warning not in warnings:
+        warnings.append(context_warning)
+    confidence = _clamp_confidence_to_context(confidence, context_completeness)
     evidence_items: list[dict[str, Any]] = []
     if include_evidence:
         seen_evidence_ids: set[str] = set()
@@ -2130,11 +2373,8 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
             if report.risk_assessment is not None
             else "[]"
         ),
-        "context_completeness": json.loads(
-            report.risk_assessment.context_completeness_json
-            if report.risk_assessment is not None
-            else "{}"
-        ),
+        "confidence": confidence,
+        "context_completeness": context_completeness,
         "blast_radius": (
             json.loads(report.blast_radius_json or "{}")
             or _default_blast_radius_payload()
@@ -2208,6 +2448,7 @@ def persist_analysis_report(
     submitted_artifacts: list[tuple[str, bytes | None]] | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
+    assessment = apply_context_uncertainty(assessment)
     assessment, findings = _repair_assessment_evidence_links(
         assessment,
         findings,
@@ -2320,6 +2561,7 @@ def persist_analysis_report(
                 risk_score=assessment.score,
                 severity=assessment.severity,
                 recommendation=assessment.recommendation,
+                risk_confidence=assessment.confidence,
                 top_risk=assessment.top_risk,
                 report_schema_version=REPORT_SCHEMA_VERSION,
                 parse_summary=_build_parse_summary(parse_batch),

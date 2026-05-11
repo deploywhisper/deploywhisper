@@ -45,6 +45,18 @@ class HistoryPageHelpersTests(unittest.TestCase):
         self.assertIn("dw-danger-text", recommendation_classes("no-go"))
         self.assertIn("dw-success-text", recommendation_classes("go"))
 
+    def test_history_row_confidence_does_not_fallback_to_finding_confidence(
+        self,
+    ) -> None:
+        from ui.components.analysis_history_row import _report_confidence
+
+        self.assertIsNone(_report_confidence({"findings": [{"confidence": 1.0}]}))
+        self.assertIsNone(
+            _report_confidence(
+                {"confidence": "invalid", "findings": [{"confidence": 1.0}]}
+            )
+        )
+
 
 class HistoryPageRenderingTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -78,6 +90,8 @@ class HistoryPageRenderingTests(unittest.TestCase):
         opening_sentence: str = "Ingress widens access to production resources.",
         finding_description: str = "Security group exposure risk",
         context_completeness: dict | None = None,
+        assessment_confidence: float = 1.0,
+        finding_confidence: float = 1.0,
     ) -> dict:
         parse_batch = ParseBatchResult(
             files=[
@@ -108,6 +122,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
             recommendation=recommendation,
             top_risk=top_risk,
             context_completeness=context_completeness or {},
+            confidence=assessment_confidence,
             contributors=[
                 RiskContributor(
                     evidence_id="ev-001",
@@ -171,7 +186,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
                     severity=severity,
                     category="networking/ingress",
                     deterministic=True,
-                    confidence=1.0,
+                    confidence=finding_confidence,
                     uncertainty_note=None,
                     evidence_refs=["ev-001"],
                     skill_id=None,
@@ -421,10 +436,20 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("45 days old", response.text)
         self.assertIn("STALE 30+", response.text)
         self.assertIn("/settings#topology-context", response.text)
-        self.assertIn("HIGH CONFIDENCE", response.text)
-        self.assertIn('"title":"Confidence 1.00"', response.text)
+        self.assertIn("MEDIUM CONFIDENCE", response.text)
+        self.assertIn('"title":"Confidence 0.82"', response.text)
         self.assertIn("Risk: heuristic+llm", response.text)
         self.assertIn("Narrative: llm", response.text)
+
+    def test_history_page_renders_report_level_confidence(self) -> None:
+        self._persist_report(assessment_confidence=0.52, finding_confidence=1.0)
+
+        response = self.client.get("/history")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("LOW CONFIDENCE", response.text)
+        self.assertIn('"title":"Confidence 0.52"', response.text)
+        self.assertNotIn('"title":"Confidence 1.00"', response.text)
 
     def test_history_page_renders_calibration_snapshot_from_backtest_feed(self) -> None:
         report = self._persist_report(
@@ -493,6 +518,15 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Redacted fields: ingress.0.description", response.text)
         self.assertIn("Unsupported plan fields: plan.planned_values", response.text)
         self.assertNotIn('"data-dw-modal-root":"1"', response.text)
+
+    def test_history_detail_route_renders_report_level_confidence(self) -> None:
+        self._persist_report(assessment_confidence=0.52, finding_confidence=1.0)
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("LOW CONFIDENCE", response.text)
+        self.assertIn('"title":"Confidence 0.52"', response.text)
 
     def test_history_detail_route_shows_topology_freshness_badge(self) -> None:
         self._persist_report(

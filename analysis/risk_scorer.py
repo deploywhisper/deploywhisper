@@ -20,6 +20,7 @@ from parsers.base import (
     normalize_change_action,
 )
 from services.settings_service import resolve_provider_runtime
+from services.topology_service import STALE_AFTER_DAYS
 
 RiskSeverity = Literal["low", "medium", "high", "critical"]
 DeployRecommendation = Literal["go", "caution", "no-go"]
@@ -36,6 +37,14 @@ SEVERITY_SCORE: dict[RiskSeverity, int] = {
     "high": 72,
     "critical": 92,
 }
+INSUFFICIENT_CONTEXT_WARNING = (
+    "Insufficient context: missing or stale topology, parser coverage, evidence "
+    "coverage, or incident history requires reviewer verification before treating "
+    "this result as low risk."
+)
+CONTEXT_REGENERATION_TODO = (
+    "Re-run analysis after improving topology, parser, evidence, or incident context."
+)
 ACTION_BASE_SEVERITY = {
     "no-op": "low",
     "apply": "low",
@@ -106,6 +115,9 @@ class RiskAssessment(BaseModel):
     recommendation: DeployRecommendation = Field(
         ..., description="Advisory recommendation"
     )
+    confidence: float = Field(
+        default=1.0, ge=0.0, le=1.0, description="Overall verdict confidence"
+    )
     top_risk: str = Field(..., description="Most important risk summary")
     top_risk_contributors: list[str] = Field(
         default_factory=list,
@@ -127,6 +139,71 @@ class RiskAssessment(BaseModel):
         default="heuristic-only",
         description="Whether the structured risk assessment was heuristic-only or LLM-assisted",
     )
+
+
+def _context_confidence_level(context_score: float) -> str:
+    if context_score >= 0.85:
+        return "high"
+    if context_score >= 0.7:
+        return "medium"
+    return "low"
+
+
+def _context_followup_todos(context: ContextCompleteness) -> list[str]:
+    todos = list(context.context_todos)
+    if context.topology_freshness_days is None:
+        todos.append("Import or refresh topology context for this project/workspace.")
+    elif context.topology_freshness_days > STALE_AFTER_DAYS:
+        todos.append("Refresh stale topology context for this project/workspace.")
+    if context.incident_index_size == 0:
+        todos.append("Import relevant incident history for this project/workspace.")
+    if context.parser_success_rate < 1.0:
+        todos.append("Review parser errors and resubmit supported artifacts.")
+    if context.evidence_success_rate < 1.0:
+        todos.append("Review evidence extraction gaps for supported artifacts.")
+    if not todos:
+        todos.append(CONTEXT_REGENERATION_TODO)
+    return list(dict.fromkeys(todos))
+
+
+def apply_context_uncertainty(assessment: RiskAssessment) -> RiskAssessment:
+    """Apply context completeness constraints to the overall verdict."""
+    context = assessment.context_completeness
+    if context.context_score < 0.7:
+        context.insufficient_context = True
+        if not context.uncertainty:
+            context.uncertainty = (
+                "Insufficient context: missing or stale topology, parser coverage, "
+                "evidence coverage, or incident history prevents a confident "
+                "low-risk verdict."
+            )
+    context.confidence_level = (
+        "low"
+        if context.insufficient_context
+        else _context_confidence_level(context.context_score)
+    )
+    if context.insufficient_context and not context.context_todos:
+        context.context_todos = _context_followup_todos(context)
+    assessment.confidence = round(
+        min(float(assessment.confidence), context.context_score),
+        2,
+    )
+    if not context.insufficient_context:
+        return assessment
+
+    if INSUFFICIENT_CONTEXT_WARNING not in assessment.warnings:
+        assessment.warnings.append(INSUFFICIENT_CONTEXT_WARNING)
+    if assessment.recommendation == "go":
+        assessment.recommendation = "caution"
+    if assessment.severity == "low":
+        assessment.severity = "medium"
+        assessment.score = max(assessment.score, SEVERITY_SCORE["medium"])
+    if not assessment.top_risk.startswith("INSUFFICIENT CONTEXT:"):
+        assessment.top_risk = (
+            "INSUFFICIENT CONTEXT: Missing or stale context prevents a confident "
+            f"low-risk verdict. {assessment.top_risk}"
+        )
+    return assessment
 
 
 def _normalize_action(action: str) -> str:

@@ -22,9 +22,13 @@ class EvidenceModelTests(unittest.TestCase):
             topology_freshness_days=3,
             topology_last_imported_at="2026-04-20T12:00:00Z",
             incident_index_size=7,
+            evidence_success_rate=0.67,
             parser_success_rate=0.75,
             parser_success_by_tool={"terraform": 1.0, "kubernetes": 0.5},
             context_score=0.8,
+            confidence_level="medium",
+            uncertainty="Kubernetes parser coverage was partial.",
+            context_todos=["Refresh Kubernetes context."],
         )
 
         self.assertEqual(
@@ -33,9 +37,14 @@ class EvidenceModelTests(unittest.TestCase):
                 "topology_freshness_days": 3,
                 "topology_last_imported_at": "2026-04-20T12:00:00Z",
                 "incident_index_size": 7,
+                "evidence_success_rate": 0.67,
                 "parser_success_rate": 0.75,
                 "parser_success_by_tool": {"terraform": 1.0, "kubernetes": 0.5},
                 "context_score": 0.8,
+                "confidence_level": "medium",
+                "uncertainty": "Kubernetes parser coverage was partial.",
+                "context_todos": ["Refresh Kubernetes context."],
+                "insufficient_context": False,
             },
         )
 

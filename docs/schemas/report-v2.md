@@ -74,7 +74,29 @@ without storing raw plan internals in a separate contract.
   "report_schema_version": "v2",
   "severity": "high",
   "recommendation": "no-go",
+  "confidence": 0.62,
   "top_risk": "Security group exposure risk",
+  "context_completeness": {
+    "topology_freshness_days": null,
+    "topology_last_imported_at": null,
+    "incident_index_size": 0,
+    "evidence_success_rate": 0.5,
+    "parser_success_rate": 0.5,
+    "parser_success_by_tool": {
+      "terraform": 1.0,
+      "unsupported": 0.0
+    },
+    "context_score": 0.22,
+    "confidence_level": "low",
+    "uncertainty": "Insufficient context: missing or stale topology, parser coverage, evidence coverage, or incident history prevents a confident low-risk verdict.",
+    "context_todos": [
+      "Import or refresh topology context for this project/workspace.",
+      "Import relevant incident history for this project/workspace.",
+      "Review evidence extraction gaps for supported artifacts.",
+      "Review parser errors and resubmit supported artifacts."
+    ],
+    "insufficient_context": true
+  },
   "rollback_plan": {
     "complexity": "medium",
     "complexity_score": 3,
@@ -212,9 +234,14 @@ without storing raw plan internals in a separate contract.
 
 - Explicit `report_schema_version`
 - evidence-backed findings and `evidence_items`
-- context completeness and traceable contributors
+- context completeness, context TODOs, insufficient-context signals, and traceable contributors
+- report-level confidence derived from available context
 - persisted rollback plans with time estimates and complexity rationale
 - degraded narrative visibility fields
 - submission manifest payloads that record accepted, excluded, failed, partial, sensitive, provenance, and redaction status
 - durable submission manifest fallback identity/status metadata for malformed-manifest recovery
 - parser-normalized change metadata for Terraform plan JSON format and Terraform versions, module paths, replacement paths, unknown-after-apply fields, redacted fields, and unsupported resource/change/plan fields
+
+Story 2.6 adds report-level confidence, context uncertainty, evidence coverage,
+context TODOs, and insufficient-context signals as additive `v2` fields. Broader
+schema-version policy changes remain deferred to Story 2.8.

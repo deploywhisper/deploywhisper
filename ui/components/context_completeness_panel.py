@@ -10,6 +10,7 @@ from ui.components.review_accessibility import (
     register_review_accessibility,
 )
 from ui.formatters.context_completeness import (
+    context_number,
     context_score,
     render_context_completeness_badge,
 )
@@ -20,7 +21,10 @@ def _topology_age_text(context: dict) -> str:
     freshness = context.get("topology_freshness_days")
     if freshness is None:
         return "Unknown"
-    freshness_days = int(freshness)
+    try:
+        freshness_days = int(freshness)
+    except (TypeError, ValueError):
+        return "Unknown"
     if freshness_days == 0:
         return "Imported today"
     unit = "day" if freshness_days == 1 else "days"
@@ -52,7 +56,40 @@ def _topology_needs_settings_fix(context: dict) -> bool:
     freshness = context.get("topology_freshness_days")
     if freshness is None:
         return True
-    return int(freshness) > STALE_AFTER_DAYS
+    try:
+        return int(freshness) > STALE_AFTER_DAYS
+    except (TypeError, ValueError):
+        return True
+
+
+def _context_int(context: dict, key: str) -> int:
+    try:
+        return max(int(context.get(key, 0) or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _context_todo_items(value: object) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _context_warning_action(context: dict, link_target: str) -> tuple[str, str]:
+    todos = " ".join(
+        item.lower() for item in _context_todo_items(context.get("context_todos"))
+    )
+    if _topology_needs_settings_fix(context) or "topology" in todos:
+        return "Fix in settings", link_target
+    if "evidence" in todos:
+        return "Review evidence", "#context-todos"
+    parser_success_rate = context_number(context.get("parser_success_rate"), 1.0)
+    if "parser" in todos or parser_success_rate < 1.0:
+        return "Review artifacts", "#context-todos"
+    incident_index_size = _context_int(context, "incident_index_size")
+    if incident_index_size == 0 or "incident" in todos:
+        return "Review incidents", "#context-todos"
+    return "Review context TODOs", "#context-todos"
 
 
 def render_context_completeness_panel(
@@ -63,10 +100,19 @@ def render_context_completeness_panel(
     """Render reviewer-facing context completeness details."""
     register_review_accessibility()
     details = context or {}
-    parser_success_by_tool = dict(details.get("parser_success_by_tool") or {})
-    low_context = float(details.get("context_score", 1.0)) < 0.7
-    stale_topology = _topology_needs_settings_fix(details)
+    raw_parser_success_by_tool = details.get("parser_success_by_tool")
+    parser_success_by_tool = (
+        dict(raw_parser_success_by_tool)
+        if isinstance(raw_parser_success_by_tool, dict)
+        else {}
+    )
+    context_todos = _context_todo_items(details.get("context_todos"))
+    uncertainty = str(details.get("uncertainty") or "").strip()
     score = context_score(details)
+    low_context = bool(details.get("insufficient_context")) or score < 0.7
+    show_context_warning = low_context or bool(uncertainty)
+    stale_topology = _topology_needs_settings_fix(details)
+    action_label, action_target = _context_warning_action(details, link_target)
 
     with ui.card().classes("w-full dw-panel shadow-none p-4") as panel:
         decorate_review_section(panel, section="context", label="Context completeness")
@@ -74,7 +120,7 @@ def render_context_completeness_panel(
             with ui.column().classes("gap-2 min-w-0 flex-1"):
                 ui.label("Context completeness").classes("text-lg font-medium dw-text")
                 ui.label(
-                    "Review how much topology, incident history, and parser coverage supported this report."
+                    "Review how much topology, evidence, parser, and incident context supported this report."
                 ).classes("text-sm dw-muted leading-6")
             render_context_completeness_badge(details)
         with ui.card().classes("w-full dw-panel-soft shadow-none mt-3"):
@@ -91,17 +137,18 @@ def render_context_completeness_panel(
                     "</div>"
                 )
                 ui.label(
-                    "Higher scores indicate stronger topology freshness, parser coverage, and incident context."
+                    "Higher scores indicate stronger topology freshness, evidence coverage, parser coverage, and incident context."
                 ).classes("text-xs dw-muted leading-5")
 
-        if low_context:
+        if show_context_warning:
             with ui.row().classes(
                 "w-full items-center justify-between gap-3 flex-wrap mt-3 rounded-[18px] border border-[color:var(--dw-accent-line)] bg-[color:var(--dw-accent-soft)] px-4 py-3"
             ):
                 ui.label(
-                    "Context warning: supporting topology or incident history may be stale."
+                    uncertainty
+                    or "Context warning: supporting topology, evidence, parser, or incident context may be incomplete."
                 ).classes("text-sm font-semibold dw-accent-text")
-                ui.link("Fix in settings", link_target).classes(
+                ui.link(action_label, action_target).classes(
                     "text-sm font-semibold dw-accent-text"
                 )
         elif stale_topology:
@@ -128,14 +175,35 @@ def render_context_completeness_panel(
             )
             _metric_card(
                 "Incident index",
-                str(int(details.get("incident_index_size", 0))),
+                str(_context_int(details, "incident_index_size")),
                 "Stored incidents available for similarity matching.",
             )
             _metric_card(
+                "Evidence coverage",
+                f"{context_number(details.get('evidence_success_rate'), 0.0):.2f}",
+                "Fraction of material changes represented by extracted evidence.",
+            )
+            _metric_card(
                 "Parser success",
-                f"{float(details.get('parser_success_rate', 1.0)):.2f}",
+                f"{context_number(details.get('parser_success_rate'), 0.0):.2f}",
                 "Overall fraction of analyzed artifacts parsed successfully.",
             )
+
+        if uncertainty or context_todos:
+            with ui.card().classes("w-full dw-panel-soft shadow-none mt-3"):
+                with ui.column().classes("gap-2 p-3"):
+                    ui.label("Context TODOs").props("id=context-todos").classes(
+                        "text-sm font-semibold dw-text"
+                    )
+                    if uncertainty:
+                        ui.label(uncertainty).classes("text-xs dw-muted leading-5")
+                    if context_todos:
+                        for todo in context_todos:
+                            ui.label(todo).classes("text-xs dw-muted leading-5")
+                    else:
+                        ui.label(
+                            "No context follow-up actions were generated."
+                        ).classes("text-xs dw-muted")
 
         with ui.card().classes("w-full dw-panel-soft shadow-none mt-3"):
             with ui.column().classes("gap-2 p-3"):

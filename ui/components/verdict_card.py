@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from nicegui import ui
 
-from ui.formatters.confidence import render_confidence_badge
+from ui.formatters.confidence import coerce_confidence, render_confidence_badge
 from ui.formatters.context_completeness import render_context_completeness_badge
 from ui.formatters.narrative import extract_llm_notice
 from ui.formatters.recommendations import render_recommendation_label
@@ -17,13 +17,28 @@ from ui.components.review_accessibility import (
 
 
 def _primary_confidence(report: dict) -> float | None:
-    findings = report.get("findings", [])
-    if not findings:
-        return None
+    return coerce_confidence(report.get("confidence"))
+
+
+def _has_limited_context(context: dict) -> bool:
+    if bool(context.get("insufficient_context")):
+        return True
+    if str(context.get("uncertainty") or "").strip():
+        return True
     try:
-        return float(findings[0]["confidence"])
-    except (KeyError, TypeError, ValueError):
-        return None
+        return float(context.get("context_score", 1.0)) < 0.7
+    except (TypeError, ValueError):
+        return False
+
+
+def _context_warning_text(context: dict) -> str:
+    uncertainty = str(context.get("uncertainty") or "").strip()
+    if uncertainty:
+        return uncertainty
+    return (
+        "Context warning: supporting topology, evidence, parser, or incident context "
+        "may be incomplete."
+    )
 
 
 def render_verdict_card(report: dict) -> None:
@@ -69,7 +84,7 @@ def render_verdict_card(report: dict) -> None:
             ui.label("Narrative note: " + llm_notice).classes(
                 "text-sm dw-warning-text leading-5 mt-2"
             )
-        if float(context.get("context_score", 1.0)) < 0.7:
-            ui.label(
-                "Context warning: supporting topology or incident history may be stale."
-            ).classes("text-sm dw-warning-text font-semibold leading-5 mt-1")
+        if _has_limited_context(context):
+            ui.label(_context_warning_text(context)).classes(
+                "text-sm dw-warning-text font-semibold leading-5 mt-1"
+            )

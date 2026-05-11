@@ -24,6 +24,7 @@ from ui.components.findings_table import render_findings_table
 from ui.components.review_accessibility import decorate_review_section
 from ui.components.rollback_plan import render_rollback_plan
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
+from ui.formatters.confidence import coerce_confidence, render_confidence_badge
 from ui.formatters.datetime import format_history_timestamp
 from ui.formatters.narrative import (
     extract_llm_notice,
@@ -596,6 +597,9 @@ def render_report_detail_page(
                         render_recommendation_label(
                             report["recommendation"], size="base"
                         )
+                        confidence = coerce_confidence(report.get("confidence"))
+                        if confidence is not None:
+                            render_confidence_badge(confidence)
                         ui.label(
                             format_history_timestamp(report["created_at"])
                         ).classes("text-sm dw-muted")

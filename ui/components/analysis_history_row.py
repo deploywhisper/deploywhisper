@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from nicegui import ui
 
-from ui.formatters.confidence import render_confidence_badge
+from ui.formatters.confidence import coerce_confidence, render_confidence_badge
 from ui.formatters.datetime import format_history_timestamp
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
@@ -36,6 +36,10 @@ def _freshness_badge_style(level: str) -> str:
         "letter-spacing:0.04em;"
         "text-transform:uppercase;"
     )
+
+
+def _report_confidence(report: dict) -> float | None:
+    return coerce_confidence(report.get("confidence"))
 
 
 def render_analysis_history_row(
@@ -123,10 +127,10 @@ def render_analysis_history_row(
                             != recommendation_transition.split(" → ")[1]
                         ):
                             ui.label(recommendation_transition).classes("dw-muted")
-                findings = report.get("findings", [])
-                if findings:
+                confidence = _report_confidence(report)
+                if confidence is not None:
                     with ui.row().classes("w-full items-center gap-2 flex-wrap"):
-                        render_confidence_badge(findings[0]["confidence"])
+                        render_confidence_badge(confidence)
                 provenance = (
                     f"Risk: {report.get('assessment_source') or 'unknown'} · "
                     f"Narrative: {report.get('narrative_source') or 'unknown'}"
