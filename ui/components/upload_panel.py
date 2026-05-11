@@ -56,6 +56,7 @@ from ui.project_authorization import (
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
 from services.settings_service import check_provider_readiness
 from ui.components.findings_table import render_findings_table
+from ui.formatters.confidence import coerce_confidence, render_confidence_badge
 from ui.formatters.narrative import (
     extract_llm_notice,
     extract_submission_manifest_notice,
@@ -396,6 +397,9 @@ def build_upload_panel(
                         render_recommendation_label(
                             report["recommendation"], size="base"
                         )
+                        confidence = coerce_confidence(report.get("confidence"))
+                        if confidence is not None:
+                            render_confidence_badge(confidence)
                     countdown_label = ui.label("").classes("text-xs dw-muted")
                 ui.label(report["top_risk"]).classes(
                     "text-lg font-medium dw-text leading-6"

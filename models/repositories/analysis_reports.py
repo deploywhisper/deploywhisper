@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -39,6 +40,13 @@ def _normalize_report_severity(severity: str) -> str:
     if normalized_severity not in _FINDING_SEVERITY_ORDER:
         raise ValueError(f"Unsupported report severity {severity!r}.")
     return normalized_severity
+
+
+def _normalize_risk_confidence(confidence: float) -> float:
+    normalized = float(confidence)
+    if not math.isfinite(normalized) or normalized < 0.0 or normalized > 1.0:
+        raise ValueError("Risk confidence must be between 0 and 1.")
+    return normalized
 
 
 def _verdict_label(value: str | None) -> str | None:
@@ -316,6 +324,7 @@ def create_analysis_report(
     severity: str,
     recommendation: str,
     top_risk: str,
+    risk_confidence: float = 1.0,
     report_schema_version: str,
     parse_summary: str,
     narrative_opening: str,
@@ -343,6 +352,7 @@ def create_analysis_report(
     evidence_payload: list[dict[str, Any]] | None = None,
 ) -> AnalysisReport:
     severity = _normalize_report_severity(severity)
+    risk_confidence = _normalize_risk_confidence(risk_confidence)
     evidence_payload = [
         _normalize_evidence_payload(evidence) for evidence in evidence_payload or []
     ]
@@ -424,7 +434,7 @@ def create_analysis_report(
         overall_severity=severity,
         recommendation=recommendation,
         score=risk_score,
-        confidence=1.0,
+        confidence=risk_confidence,
         top_risk_contributors_json=top_risk_contributors_json,
         context_completeness_json=context_completeness_json,
     )

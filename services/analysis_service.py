@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import UTC, datetime
 from typing import Any
 from pydantic import BaseModel, Field
@@ -14,7 +15,11 @@ from analysis.incident_matcher import (
     load_incident_candidates,
 )
 from analysis.risk_engine import score_evidence
-from analysis.risk_scorer import RiskAssessment, score_changes
+from analysis.risk_scorer import (
+    RiskAssessment,
+    apply_context_uncertainty,
+    score_changes,
+)
 from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
 from evidence.extractor import extract_batch_evidence
 from evidence.mappers import build_findings
@@ -289,6 +294,84 @@ def _incident_score(incident_index_size: int) -> float:
     return min(incident_index_size / 10, 1.0)
 
 
+def _context_confidence_level(context_score: float) -> str:
+    if context_score >= 0.85:
+        return "high"
+    if context_score >= 0.7:
+        return "medium"
+    return "low"
+
+
+def _context_todos(
+    *,
+    evidence_success_rate: float,
+    topology_freshness_days: int | None,
+    incident_index_size: int,
+    parser_success_rate: float,
+) -> list[str]:
+    todos: list[str] = []
+    if topology_freshness_days is None:
+        todos.append("Import or refresh topology context for this project/workspace.")
+    elif topology_freshness_days > STALE_AFTER_DAYS:
+        todos.append("Refresh stale topology context for this project/workspace.")
+    if incident_index_size == 0:
+        todos.append("Import relevant incident history for this project/workspace.")
+    if parser_success_rate < 1.0:
+        todos.append("Review parser errors and resubmit supported artifacts.")
+    if evidence_success_rate < 1.0:
+        todos.append("Review evidence extraction gaps for supported artifacts.")
+    return todos
+
+
+def _context_uncertainty(
+    *,
+    context_score: float,
+    evidence_success_rate: float,
+    topology_freshness_days: int | None,
+    incident_index_size: int,
+    parser_success_rate: float,
+) -> str | None:
+    if context_score < 0.7:
+        return (
+            "Insufficient context: missing or stale topology, parser coverage, "
+            "evidence coverage, or incident history prevents a confident "
+            "low-risk verdict."
+        )
+    weak_signals: list[str] = []
+    if topology_freshness_days is None:
+        weak_signals.append("topology context is unavailable")
+    elif topology_freshness_days > STALE_AFTER_DAYS:
+        weak_signals.append("topology context is stale")
+    if incident_index_size == 0:
+        weak_signals.append("incident history is unavailable")
+    if parser_success_rate < 1.0:
+        weak_signals.append("parser coverage is partial")
+    if evidence_success_rate < 1.0:
+        weak_signals.append("evidence coverage is partial")
+    if not weak_signals:
+        return None
+    return "Uncertainty: " + "; ".join(weak_signals) + "."
+
+
+def _evidence_success_rate(
+    changes: list[UnifiedChange], evidence_items: list[EvidenceItem]
+) -> float:
+    material_change_ids = {
+        change.change_id
+        for change in changes
+        if change.change_id and not is_non_mutating_action(change.action)
+    }
+    if not material_change_ids:
+        return 1.0
+    covered_change_ids = {
+        change_id
+        for item in evidence_items
+        for change_id in item.related_change_ids
+        if change_id in material_change_ids
+    }
+    return len(covered_change_ids) / len(material_change_ids)
+
+
 def _parser_success_by_tool(parse_batch: ParseBatchResult) -> dict[str, float]:
     tool_totals: dict[str, int] = {}
     tool_successes: dict[str, int] = {}
@@ -307,6 +390,7 @@ def _parser_success_by_tool(parse_batch: ParseBatchResult) -> dict[str, float]:
 def _build_context_completeness(
     parse_batch: ParseBatchResult,
     *,
+    evidence_items: list[EvidenceItem] | None = None,
     project_id: int | None = None,
     project_key: str | None = None,
     workspace_id: int | None = None,
@@ -330,28 +414,45 @@ def _build_context_completeness(
                 workspace_key=workspace_key,
             )
         )
-    parser_success_rate = round(
-        parse_batch.parsed_count / max(len(parse_batch.files), 1),
-        2,
+    raw_parser_success_rate = parse_batch.parsed_count / max(len(parse_batch.files), 1)
+    parser_success_rate = round(raw_parser_success_rate, 2)
+    evidence_success_rate = _evidence_success_rate(
+        _collect_changes(parse_batch), list(evidence_items or [])
     )
-    context_score = round(
-        min(
-            1.0,
-            (
-                parser_success_rate * 0.45
-                + _freshness_score(topology_freshness_days) * 0.35
-                + _incident_score(incident_index_size) * 0.20
-            ),
+    raw_context_score = min(
+        1.0,
+        (
+            raw_parser_success_rate * 0.35
+            + _freshness_score(topology_freshness_days) * 0.25
+            + _incident_score(incident_index_size) * 0.20
+            + evidence_success_rate * 0.20
         ),
-        2,
+    )
+    context_score = round(raw_context_score, 2)
+    context_todos = _context_todos(
+        evidence_success_rate=evidence_success_rate,
+        topology_freshness_days=topology_freshness_days,
+        incident_index_size=incident_index_size,
+        parser_success_rate=raw_parser_success_rate,
     )
     return ContextCompleteness(
         topology_freshness_days=topology_freshness_days,
         topology_last_imported_at=topology_status.updated_at,
         incident_index_size=incident_index_size,
         parser_success_rate=parser_success_rate,
+        evidence_success_rate=round(evidence_success_rate, 2),
         parser_success_by_tool=_parser_success_by_tool(parse_batch),
         context_score=context_score,
+        confidence_level=_context_confidence_level(raw_context_score),
+        uncertainty=_context_uncertainty(
+            context_score=raw_context_score,
+            evidence_success_rate=evidence_success_rate,
+            topology_freshness_days=topology_freshness_days,
+            incident_index_size=incident_index_size,
+            parser_success_rate=raw_parser_success_rate,
+        ),
+        context_todos=context_todos,
+        insufficient_context=raw_context_score < 0.7,
     )
 
 
@@ -437,10 +538,18 @@ def build_advisory_summary(
     assessment: RiskAssessment, narrative: NarrativeResult
 ) -> AdvisorySummary:
     uncertainty_flags: list[str] = []
+    context_uncertainty = bool(assessment.context_completeness.uncertainty)
+    context_todos = bool(assessment.context_completeness.context_todos)
     if assessment.partial_context:
         uncertainty_flags.append("partial_context")
     if assessment.context_completeness.context_score < 0.7:
         uncertainty_flags.append("low_context_completeness")
+    if assessment.context_completeness.insufficient_context:
+        uncertainty_flags.append("insufficient_context")
+    if context_uncertainty:
+        uncertainty_flags.append("context_uncertainty")
+    if context_todos:
+        uncertainty_flags.append("context_todos")
     if assessment.warnings:
         uncertainty_flags.append("assessment_warnings")
     if narrative.degraded:
@@ -455,6 +564,9 @@ def build_advisory_summary(
             assessment.recommendation != "go"
             or assessment.partial_context
             or assessment.context_completeness.context_score < 0.7
+            or assessment.context_completeness.insufficient_context
+            or context_uncertainty
+            or context_todos
             or bool(assessment.warnings)
             or narrative.degraded
         ),
@@ -483,8 +595,19 @@ def _has_partial_context_signal(report: dict) -> bool:
     if isinstance(manifest, dict) and manifest.get("partial_analysis"):
         return True
     context = dict(report.get("context_completeness") or {})
+    if bool(context.get("insufficient_context")):
+        return True
+    if str(context.get("uncertainty") or "").strip():
+        return True
+    if _context_todo_items(context.get("context_todos")):
+        return True
     try:
         if float(context.get("parser_success_rate", 1.0)) < 1.0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    try:
+        if float(context.get("evidence_success_rate", 1.0)) < 1.0:
             return True
     except (TypeError, ValueError):
         pass
@@ -509,23 +632,69 @@ def _finding_evidence_count(
     return len(finding.get("evidence_refs") or [])
 
 
-def _context_summary(context: dict) -> ShareSummaryContext:
-    score = round(float(context.get("context_score", 1.0)), 2)
-    partial_context = False
+def _context_number(
+    context: dict,
+    key: str,
+    *,
+    missing_default: float,
+    invalid_default: float = 0.0,
+) -> float:
+    if key not in context:
+        return missing_default
     try:
-        partial_context = float(context.get("parser_success_rate", 1.0)) < 1.0
+        value = float(context.get(key))
     except (TypeError, ValueError):
-        partial_context = False
-    label = "LIMITED CONTEXT" if score < 0.7 or partial_context else "STRONG CONTEXT"
-    summary = f"{label} ({score:.2f})" + (
-        " - one or more artifacts failed to parse cleanly."
-        if partial_context
-        else (
-            " - supporting topology or incident history may be stale."
-            if score < 0.7
-            else " - supporting topology and parser coverage look healthy."
-        )
+        return invalid_default
+    if not math.isfinite(value):
+        return invalid_default
+    return max(0.0, min(value, 1.0))
+
+
+def _context_todo_items(value: object) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _context_summary(context: dict) -> ShareSummaryContext:
+    score = round(_context_number(context, "context_score", missing_default=1.0), 2)
+    partial_context = (
+        _context_number(context, "parser_success_rate", missing_default=1.0) < 1.0
     )
+    partial_evidence = (
+        _context_number(context, "evidence_success_rate", missing_default=1.0) < 1.0
+    )
+    insufficient_context = bool(context.get("insufficient_context"))
+    uncertainty = str(context.get("uncertainty") or "").strip()
+    context_todos = bool(_context_todo_items(context.get("context_todos")))
+    label = (
+        "LIMITED CONTEXT"
+        if (
+            score < 0.7
+            or partial_context
+            or partial_evidence
+            or insufficient_context
+            or uncertainty
+            or context_todos
+        )
+        else "STRONG CONTEXT"
+    )
+    if uncertainty:
+        summary = f"{label} ({score:.2f}) - {uncertainty}"
+    else:
+        summary = f"{label} ({score:.2f})" + (
+            " - one or more artifacts failed to parse cleanly."
+            if partial_context
+            else (
+                " - evidence coverage is partial."
+                if partial_evidence
+                else (
+                    " - supporting topology or incident history may be stale."
+                    if score < 0.7 or insufficient_context
+                    else " - supporting topology, evidence, parser, and incident context look healthy."
+                )
+            )
+        )
     return ShareSummaryContext(score=score, label=label, summary=summary)
 
 
@@ -612,18 +781,22 @@ def build_share_summary(report: dict) -> ShareSummary:
     rollback_link = report_link
     partial_context = _has_partial_context_signal(report)
     if partial_context and context_summary.label != "LIMITED CONTEXT":
+        uncertainty = str(
+            dict(report.get("context_completeness") or {}).get("uncertainty") or ""
+        ).strip()
         context_summary = ShareSummaryContext(
             score=context_summary.score,
             label="LIMITED CONTEXT",
             summary=(
-                f"LIMITED CONTEXT ({context_summary.score:.2f})"
-                " - one or more submitted artifacts were not analyzed."
+                f"LIMITED CONTEXT ({context_summary.score:.2f}) - "
+                + (uncertainty or "one or more submitted artifacts were not analyzed.")
             ),
         )
     requires_attention = (
         recommendation != "go"
         or context_summary.score < 0.7
         or partial_context
+        or context_summary.label == "LIMITED CONTEXT"
         or not bool(report.get("narrative_available", True))
         or bool(report.get("warnings"))
     )
@@ -761,11 +934,13 @@ def build_analysis_artifacts(
     )
     assessment.context_completeness = _build_context_completeness(
         parse_batch,
+        evidence_items=evidence_items,
         project_id=project_id,
         project_key=project_key,
         workspace_id=workspace_id,
         workspace_key=workspace_key,
     )
+    assessment = apply_context_uncertainty(assessment)
     findings = build_findings(
         assessment=assessment,
         evidence_items=evidence_items,

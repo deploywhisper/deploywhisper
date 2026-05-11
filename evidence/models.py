@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 RiskSeverity = Literal["low", "medium", "high", "critical"]
 DeployRecommendation = Literal["go", "caution", "no-go"]
+ContextConfidenceLevel = Literal["high", "medium", "low"]
 EvidenceSourceType = Literal[
     "artifact",
     "topology",
@@ -73,9 +74,14 @@ class ContextCompleteness(BaseModel):
     topology_freshness_days: int | None = Field(default=None, ge=0)
     topology_last_imported_at: str | None = Field(default=None, min_length=1)
     incident_index_size: int = Field(default=0, ge=0)
+    evidence_success_rate: float = Field(default=1.0, ge=0.0, le=1.0)
     parser_success_rate: float = Field(default=1.0, ge=0.0, le=1.0)
     parser_success_by_tool: dict[str, float] = Field(default_factory=dict)
     context_score: float = Field(default=1.0, ge=0.0, le=1.0)
+    confidence_level: ContextConfidenceLevel = Field(default="high")
+    uncertainty: str | None = Field(default=None, min_length=1)
+    context_todos: list[str] = Field(default_factory=list)
+    insufficient_context: bool = Field(default=False)
 
     @field_validator("parser_success_by_tool")
     @classmethod
@@ -96,6 +102,11 @@ class ContextCompleteness(BaseModel):
                 )
             cleaned[normalized_name] = numeric_score
         return cleaned
+
+    @field_validator("context_todos")
+    @classmethod
+    def _validate_context_todos(cls, value: list[str]) -> list[str]:
+        return _validate_string_list(value)
 
 
 class SkillReference(BaseModel):

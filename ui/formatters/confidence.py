@@ -2,7 +2,21 @@
 
 from __future__ import annotations
 
+import math
+
 from nicegui import ui
+
+
+def coerce_confidence(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(confidence) or confidence < 0.0 or confidence > 1.0:
+        return None
+    return confidence
 
 
 def confidence_bucket(confidence: float) -> str:

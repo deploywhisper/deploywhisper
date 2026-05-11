@@ -12,6 +12,7 @@ from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.blast_radius import BlastRadiusResult
 from analysis.rollback_planner import RollbackPlan
 from evidence.extractor import extract_batch_evidence
+from evidence.models import EvidenceItem
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 from services.analysis_service import (
@@ -176,6 +177,10 @@ class AnalysisServiceTests(unittest.TestCase):
 
         self.assertEqual(seen_partial_context, [True])
         self.assertTrue(artifacts.assessment.partial_context)
+        self.assertEqual(artifacts.assessment.recommendation, "caution")
+        self.assertLess(artifacts.assessment.confidence, 0.7)
+        self.assertTrue(artifacts.assessment.context_completeness.insufficient_context)
+        self.assertIn("INSUFFICIENT CONTEXT", artifacts.assessment.top_risk)
 
     def _share_report_payload(self) -> dict:
         return {
@@ -343,12 +348,216 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertEqual(artifacts.findings[0].confidence, 1.0)
         self.assertAlmostEqual(
             artifacts.assessment.context_completeness.context_score,
-            0.45,
+            0.55,
+        )
+        self.assertEqual(artifacts.assessment.confidence, 0.55)
+        self.assertEqual(artifacts.assessment.recommendation, "caution")
+        self.assertTrue(artifacts.assessment.context_completeness.insufficient_context)
+        self.assertEqual(
+            artifacts.assessment.context_completeness.confidence_level,
+            "low",
+        )
+        self.assertIn(
+            "insufficient context",
+            artifacts.assessment.context_completeness.uncertainty.lower(),
+        )
+        self.assertIn(
+            "Import or refresh topology context for this project/workspace.",
+            artifacts.assessment.context_completeness.context_todos,
+        )
+        self.assertIn(
+            "Import relevant incident history for this project/workspace.",
+            artifacts.assessment.context_completeness.context_todos,
+        )
+        self.assertEqual(
+            artifacts.assessment.context_completeness.evidence_success_rate,
+            1.0,
         )
         self.assertEqual(
             artifacts.assessment.context_completeness.parser_success_by_tool,
             {"terraform": 1.0},
         )
+
+    def test_build_context_completeness_uses_raw_score_for_thresholds(self) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        ),
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.extra",
+                            action="modify",
+                            summary="Terraform changed another security group.",
+                        ),
+                    ],
+                )
+            ]
+        )
+        evidence_items = extract_batch_evidence(batch)[:1]
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+            ),
+            patch("services.analysis_service._freshness_score", return_value=0.984),
+            patch(
+                "services.analysis_service.load_incident_candidates", return_value=[]
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, evidence_items=evidence_items)
+
+        self.assertEqual(context.context_score, 0.7)
+        self.assertEqual(context.confidence_level, "low")
+        self.assertTrue(context.insufficient_context)
+        self.assertIn("evidence coverage", context.uncertainty)
+        self.assertIn(
+            "Review evidence extraction gaps for supported artifacts.",
+            context.context_todos,
+        )
+
+    def test_build_context_completeness_counts_distinct_evidence_coverage(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            change_id="change-1",
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        ),
+                        UnifiedChange(
+                            change_id="change-2",
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_db_instance.primary",
+                            action="modify",
+                            summary="Terraform changed a database.",
+                        ),
+                    ],
+                )
+            ]
+        )
+        duplicate_evidence = [
+            EvidenceItem(
+                evidence_id="ev-1",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref="artifact://plan.json#aws_security_group.main",
+                artifact="plan.json",
+                location="plan.json#aws_security_group.main",
+                resource="aws_security_group.main",
+                operation="modify",
+                summary="Security group changed.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=["change-1"],
+            ),
+            EvidenceItem(
+                evidence_id="ev-2",
+                analysis_id=0,
+                finding_id="pending:change-1",
+                source_type="artifact",
+                source_ref="artifact://plan.json#aws_security_group.main?duplicate=1",
+                artifact="plan.json",
+                location="plan.json#aws_security_group.main",
+                resource="aws_security_group.main",
+                operation="modify",
+                summary="Security group changed again.",
+                severity_hint="medium",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=["change-1"],
+            ),
+        ]
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates",
+                return_value=[object()] * 10,
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, evidence_items=duplicate_evidence)
+
+        self.assertEqual(context.evidence_success_rate, 0.5)
+        self.assertIn(
+            "Review evidence extraction gaps for supported artifacts.",
+            context.context_todos,
+        )
+        self.assertIn("evidence coverage", context.uncertainty)
+
+    def test_build_context_completeness_uses_raw_parser_rate_for_tiny_gap(
+        self,
+    ) -> None:
+        files = [
+            ParsedFileResult(
+                file_name=f"plan-{index}.json",
+                tool="terraform",
+                status="parsed",
+                changes=[],
+            )
+            for index in range(999)
+        ]
+        files.append(
+            ParsedFileResult(
+                file_name="bad.yaml",
+                tool="kubernetes",
+                status="failed",
+                changes=[],
+            )
+        )
+        batch = ParseBatchResult(files=files)
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates",
+                return_value=[object()] * 10,
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, evidence_items=[])
+
+        self.assertEqual(context.parser_success_rate, 1.0)
+        self.assertFalse(context.insufficient_context)
+        self.assertIn(
+            "Review parser errors and resubmit supported artifacts.",
+            context.context_todos,
+        )
+        self.assertIn("parser coverage", context.uncertainty)
 
     def test_evaluate_parse_batch_preserves_non_mutating_metadata_without_evidence(
         self,
@@ -935,6 +1144,44 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertTrue(advisory.requires_attention)
         self.assertIn("low_context_completeness", advisory.uncertainty_flags)
 
+    def test_build_advisory_summary_requires_attention_for_uncertain_context(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=18,
+            severity="low",
+            recommendation="go",
+            top_risk="Low risk example",
+            contributors=[],
+            interaction_risks=[],
+            context_completeness={
+                "topology_freshness_days": 0,
+                "incident_index_size": 0,
+                "parser_success_rate": 1.0,
+                "evidence_success_rate": 1.0,
+                "context_score": 0.8,
+                "uncertainty": "Uncertainty: incident history is unavailable.",
+                "context_todos": [
+                    "Import relevant incident history for this project/workspace."
+                ],
+            },
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: low risk example.",
+            explanation="All good.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        advisory = build_advisory_summary(assessment, narrative)
+
+        self.assertTrue(advisory.requires_attention)
+        self.assertIn("context_uncertainty", advisory.uncertainty_flags)
+        self.assertIn("context_todos", advisory.uncertainty_flags)
+
     def test_build_share_summary_returns_thread_ready_markdown_and_json_payload(
         self,
     ) -> None:
@@ -998,6 +1245,109 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertEqual(
             summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
         )
+
+    def test_build_share_summary_uses_insufficient_context_at_rounded_boundary(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["context_completeness"] = {
+            "context_score": 0.7,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": True,
+            "uncertainty": "Insufficient context: raw score was below threshold.",
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
+        )
+        self.assertIn("raw score was below threshold", summary.plain_text)
+        self.assertIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_describes_evidence_gap_without_artifact_parse_wording(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["context_completeness"] = {
+            "context_score": 0.74,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 0.5,
+            "insufficient_context": False,
+            "uncertainty": "Uncertainty: evidence coverage is partial.",
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
+        )
+        self.assertIn("evidence coverage is partial", summary.plain_text)
+        self.assertNotIn("submitted artifacts were not analyzed", summary.plain_text)
+
+    def test_build_share_summary_degrades_malformed_context_score(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["context_completeness"] = {
+            "context_score": "oops",
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": False,
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.context_completeness.score, 0.0)
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
+        )
+        self.assertIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_requires_attention_for_context_uncertainty(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["recommendation"] = "go"
+        report["context_completeness"] = {
+            "context_score": 0.82,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": False,
+            "uncertainty": "Uncertainty: topology context is stale.",
+            "context_todos": [
+                "Refresh stale topology context for this project/workspace."
+            ],
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
+        )
+        self.assertIn("topology context is stale", summary.plain_text)
+        self.assertIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_ignores_scalar_context_todos(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["recommendation"] = "go"
+        report["context_completeness"] = {
+            "context_score": 0.92,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": False,
+            "context_todos": "Review parser errors and resubmit supported artifacts.",
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "STRONG CONTEXT"
+        )
+        self.assertNotIn("requires additional human review", summary.plain_text.lower())
 
     def test_build_share_summary_requires_attention_for_manifest_partial_analysis(
         self,

@@ -588,12 +588,25 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
         self.assertEqual(payload["data"]["intake"]["items"][0]["status"], "ready")
         self.assertEqual(payload["data"]["assessment"]["source"], "heuristic+llm")
+        self.assertLess(payload["data"]["assessment"]["confidence"], 0.7)
         self.assertIn("context_completeness", payload["data"]["assessment"])
+        self.assertTrue(
+            payload["data"]["assessment"]["context_completeness"][
+                "insufficient_context"
+            ]
+        )
+        self.assertTrue(
+            payload["data"]["assessment"]["context_completeness"]["context_todos"]
+        )
         self.assertEqual(
             payload["data"]["assessment"]["top_risk_contributors"], ["ev-001"]
         )
         self.assertEqual(
             payload["data"]["persisted_report"]["project"]["project_key"], "payments"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["confidence"],
+            payload["data"]["assessment"]["confidence"],
         )
         self.assertEqual(
             payload["data"]["assessment"]["contributors"][0]["evidence_id"], "ev-001"

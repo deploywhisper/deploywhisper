@@ -130,6 +130,16 @@ class ReportServiceTests(unittest.TestCase):
                         )
 
         with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(ValueError, "Risk confidence"):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    risk_confidence=1.5,
+                    findings_payload=[],
+                    evidence_payload=[],
+                )
+
+        with database_module.SessionLocal() as session:
             with self.assertRaisesRegex(ValueError, "missing evidence item ev-missing"):
                 analysis_reports_repository_module.create_analysis_report(
                     session,
@@ -3700,6 +3710,7 @@ class ReportServiceTests(unittest.TestCase):
             score=42,
             severity="medium",
             recommendation="caution",
+            confidence=0.84,
             top_risk="Terraform aws_security_group.main is the highest-impact change.",
             top_risk_contributors=["ev-001"],
             context_completeness={
@@ -3823,6 +3834,7 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["assessment_source"], "heuristic-only")
         self.assertEqual(persisted["narrative_source"], "llm")
         self.assertEqual(persisted["report_schema_version"], "v2")
+        self.assertEqual(persisted["confidence"], 0.84)
         self.assertEqual(persisted["narrative_provider"], "ollama")
         self.assertEqual(persisted["narrative_model"], "ollama/llama3")
         self.assertEqual(persisted["skills_applied"], ["git", "terraform"])
@@ -3954,6 +3966,68 @@ class ReportServiceTests(unittest.TestCase):
             history[0]["contributors"][0]["metadata"]["redacted_fields"],
             ["ingress.0.description"],
         )
+
+    def test_persist_analysis_report_applies_context_uncertainty_downgrade(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=12,
+            severity="low",
+            recommendation="go",
+            confidence=1.0,
+            top_risk="Terraform change looks low risk.",
+            context_completeness={
+                "topology_freshness_days": None,
+                "incident_index_size": 0,
+                "parser_success_rate": 1.0,
+                "evidence_success_rate": 1.0,
+                "context_score": 0.52,
+            },
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: context is incomplete.",
+            explanation="Reviewer verification is required before trusting low risk.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            audit_context={"source_interface": "api"},
+        )
+
+        self.assertEqual(persisted["risk_score"], 42)
+        self.assertEqual(persisted["severity"], "medium")
+        self.assertEqual(persisted["recommendation"], "caution")
+        self.assertEqual(persisted["confidence"], 0.52)
+        self.assertTrue(persisted["context_completeness"]["insufficient_context"])
+        self.assertIn("INSUFFICIENT CONTEXT", persisted["top_risk"])
+        self.assertIn("Insufficient context", persisted["warnings"][0])
 
     def test_empty_plan_unsupported_fields_from_real_parser_survive_report_fetch(
         self,
@@ -5136,6 +5210,284 @@ class ReportServiceTests(unittest.TestCase):
             "Submission manifest metadata was unavailable because persisted JSON had an unexpected shape.",
             fetched["warnings"],
         )
+
+    def test_fetch_report_degrades_on_malformed_context_completeness_json(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                ("{not-valid-json", report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.0)
+        self.assertTrue(fetched["context_completeness"]["insufficient_context"])
+        self.assertIn(
+            "Re-run analysis to regenerate context completeness metadata.",
+            fetched["context_completeness"]["context_todos"],
+        )
+        self.assertIn(
+            "Context completeness metadata was unavailable because persisted JSON was malformed.",
+            fetched["warnings"],
+        )
+
+    def test_fetch_report_degrades_on_wrong_shape_context_completeness_json(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                ("[]", report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.0)
+        self.assertTrue(fetched["context_completeness"]["insufficient_context"])
+        self.assertIn(
+            "Re-run analysis to regenerate context completeness metadata.",
+            fetched["context_completeness"]["context_todos"],
+        )
+        self.assertIn(
+            "Context completeness metadata was unavailable because persisted JSON had an unexpected shape.",
+            fetched["warnings"],
+        )
+
+    def test_fetch_report_degrades_on_incomplete_context_completeness_json(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (json.dumps({"context_score": 0.96}), report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.0)
+        self.assertTrue(fetched["context_completeness"]["insufficient_context"])
+        self.assertEqual(fetched["context_completeness"]["confidence_level"], "low")
+        self.assertEqual(fetched["confidence"], 0.0)
+        self.assertIn(
+            "Context completeness metadata was unavailable because persisted values were incomplete.",
+            fetched["warnings"],
+        )
+
+    def test_fetch_report_upgrades_legacy_context_completeness_json(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        legacy_context = {
+            "topology_freshness_days": 3,
+            "topology_last_imported_at": "2026-05-08T00:00:00Z",
+            "incident_index_size": 8,
+            "parser_success_rate": 1.0,
+            "parser_success_by_tool": {"terraform": 1.0},
+            "context_score": 0.82,
+        }
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET confidence = ?, context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (0.82, json.dumps(legacy_context), report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        context = fetched["context_completeness"]
+        self.assertEqual(context["context_score"], 0.82)
+        self.assertFalse(context["insufficient_context"])
+        self.assertEqual(context["evidence_success_rate"], 1.0)
+        self.assertEqual(context["confidence_level"], "medium")
+        self.assertEqual(fetched["confidence"], 0.82)
+        self.assertNotIn(
+            "Context completeness metadata was unavailable because persisted values were incomplete.",
+            fetched["warnings"],
+        )
+
+    def test_fetch_report_normalizes_scalar_todos_and_missing_topology_guidance(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        context = {
+            "topology_freshness_days": None,
+            "topology_last_imported_at": None,
+            "incident_index_size": 8,
+            "evidence_success_rate": 1.0,
+            "parser_success_rate": 1.0,
+            "parser_success_by_tool": {"terraform": 1.0},
+            "context_score": 0.92,
+            "confidence_level": "high",
+            "uncertainty": None,
+            "context_todos": "Review parser errors and resubmit supported artifacts.",
+            "insufficient_context": False,
+        }
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET confidence = ?, context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (0.92, json.dumps(context), report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        todos = fetched["context_completeness"]["context_todos"]
+        self.assertEqual(
+            todos,
+            ["Import or refresh topology context for this project/workspace."],
+        )
+        self.assertNotIn("R", todos)
+        self.assertNotIn(
+            "Review parser errors and resubmit supported artifacts.",
+            todos,
+        )
+        self.assertNotIn(
+            "Refresh stale topology context for this project/workspace.",
+            todos,
+        )
+
+    def test_fetch_report_normalizes_inconsistent_context_completeness_json(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        inconsistent_context = {
+            "topology_freshness_days": 3,
+            "topology_last_imported_at": "2026-05-08T00:00:00Z",
+            "incident_index_size": 8,
+            "evidence_success_rate": 1.0,
+            "parser_success_rate": 1.0,
+            "parser_success_by_tool": {"terraform": 1.0},
+            "context_score": 0.52,
+            "confidence_level": "high",
+            "uncertainty": None,
+            "context_todos": [],
+            "insufficient_context": False,
+        }
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET confidence = ?, context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (1.0, json.dumps(inconsistent_context), report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+        shared = report_service_module.fetch_shared_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        self.assertIsNotNone(shared)
+        assert fetched is not None
+        assert shared is not None
+        for payload in (fetched, shared):
+            context = payload["context_completeness"]
+            self.assertEqual(context["context_score"], 0.52)
+            self.assertTrue(context["insufficient_context"])
+            self.assertEqual(context["confidence_level"], "low")
+            self.assertIn("Insufficient context", context["uncertainty"])
+            self.assertIn(
+                "Re-run analysis to regenerate context completeness metadata.",
+                context["context_todos"],
+            )
+            self.assertEqual(payload["confidence"], 0.52)
+
+    def test_fetch_report_degrades_on_partially_populated_context_json(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        legacy_context = {
+            "evidence_success_rate": 1.0,
+            "confidence_level": "high",
+            "context_todos": [],
+            "insufficient_context": False,
+        }
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET confidence = ?, context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (1.0, json.dumps(legacy_context), report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.0)
+        self.assertTrue(fetched["context_completeness"]["insufficient_context"])
+        self.assertEqual(fetched["context_completeness"]["confidence_level"], "low")
+        self.assertEqual(fetched["confidence"], 0.0)
+        self.assertIn(
+            "Context completeness metadata was unavailable because persisted values were incomplete.",
+            fetched["warnings"],
+        )
+
+    def test_fetch_report_degrades_when_risk_assessment_is_missing(self) -> None:
+        report = self._persist_shareable_report()
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "DELETE FROM risk_assessments WHERE analysis_id = ?",
+                (report["id"],),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertEqual(fetched["confidence"], 0.0)
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.0)
+        self.assertTrue(fetched["context_completeness"]["insufficient_context"])
+        self.assertIn(
+            "Report confidence metadata was invalid and was reset to 0.0.",
+            fetched["warnings"],
+        )
+        self.assertIn(
+            "Context completeness metadata was unavailable because persisted values were invalid.",
+            fetched["warnings"],
+        )
+
+    def test_missing_context_completeness_loader_falls_back_to_limited_context(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            None
+        )
+
+        self.assertEqual(context["context_score"], 0.0)
+        self.assertEqual(context["confidence_level"], "low")
+        self.assertTrue(context["insufficient_context"])
+        self.assertEqual(
+            warning,
+            "Context completeness metadata was unavailable because persisted values were invalid.",
+        )
+
+    def test_invalid_report_confidence_loader_falls_back_to_unavailable(self) -> None:
+        for value in (None, "invalid", float("nan"), float("inf"), -0.1, 1.1):
+            with self.subTest(value=value):
+                confidence, warning = report_service_module._load_report_confidence(
+                    value
+                )
+
+                self.assertEqual(confidence, 0.0)
+                self.assertEqual(
+                    warning,
+                    "Report confidence metadata was invalid and was reset to 0.0.",
+                )
 
     def test_fetch_shared_analysis_report_requires_password_when_configured(
         self,

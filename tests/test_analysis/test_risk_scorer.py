@@ -5,11 +5,46 @@ from __future__ import annotations
 import json
 import unittest
 
-from analysis.risk_scorer import score_changes, score_parse_batch
+from analysis.risk_scorer import (
+    RiskAssessment,
+    apply_context_uncertainty,
+    score_changes,
+    score_parse_batch,
+)
 from parsers.base import ParseBatchResult, ParsedFileResult, ParseIssue, UnifiedChange
 
 
 class RiskScorerTests(unittest.TestCase):
+    def test_apply_context_uncertainty_normalizes_low_context_metadata(self) -> None:
+        assessment = RiskAssessment(
+            score=10,
+            severity="low",
+            recommendation="go",
+            top_risk="No deterministic issue detected.",
+            context_completeness={
+                "context_score": 0.52,
+                "confidence_level": "high",
+                "context_todos": [],
+            },
+            partial_context=False,
+        )
+
+        normalized = apply_context_uncertainty(assessment)
+
+        self.assertEqual(normalized.confidence, 0.52)
+        self.assertEqual(normalized.context_completeness.confidence_level, "low")
+        self.assertTrue(normalized.context_completeness.insufficient_context)
+        self.assertEqual(normalized.recommendation, "caution")
+        self.assertEqual(normalized.severity, "medium")
+        self.assertIn(
+            "Import or refresh topology context for this project/workspace.",
+            normalized.context_completeness.context_todos,
+        )
+        self.assertIn(
+            "Import relevant incident history for this project/workspace.",
+            normalized.context_completeness.context_todos,
+        )
+
     def test_score_changes_returns_explainable_contributors(self) -> None:
         assessment = score_changes(
             [

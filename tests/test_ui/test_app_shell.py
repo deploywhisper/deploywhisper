@@ -283,6 +283,7 @@ class DashboardShellTests(unittest.TestCase):
             severity="critical",
             recommendation="no-go",
             top_risk="Security group exposure risk",
+            confidence=0.52,
             contributors=[
                 RiskContributor(
                     source_file="plan.json",
@@ -396,15 +397,15 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Risk score", response.text)
         self.assertIn("dw-verdict-score-value", response.text)
         self.assertIn('"text":"90"', response.text)
-        self.assertIn("STRONG CONTEXT", response.text)
+        self.assertIn("LIMITED CONTEXT", response.text)
         self.assertNotIn("Know the risk before", response.text)
         self.assertEqual(response.text.count("5-second verdict"), 1)
         self.assertIn("Risk scoring: heuristic+llm", response.text)
         self.assertIn("Narrative: llm", response.text)
         self.assertIn("Provider: ollama / ollama/llama3", response.text)
         self.assertIn("Skills: git, terraform", response.text)
-        self.assertIn("HIGH CONFIDENCE", response.text)
-        self.assertIn('"title":"Confidence 1.00"', response.text)
+        self.assertIn("LOW CONFIDENCE", response.text)
+        self.assertIn('"title":"Confidence 0.52"', response.text)
         self.assertIn("Last scan: plan.json · CRITICAL · NO-GO", response.text)
         self.assertIn(
             "1 saved briefing is shaping the current advisory view.", response.text
@@ -685,6 +686,7 @@ class DashboardShellTests(unittest.TestCase):
                 "topology_freshness_days": 45,
                 "topology_last_imported_at": "2026-04-18T11:22:33Z",
                 "incident_index_size": 0,
+                "evidence_success_rate": 1.0,
                 "parser_success_rate": 1.0,
                 "parser_success_by_tool": {"terraform": 1.0},
                 "context_score": 0.52,
@@ -733,6 +735,9 @@ class DashboardShellTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("LIMITED CONTEXT", response.text)
+        self.assertIn("LOW CONFIDENCE", response.text)
+        self.assertIn('"title":"Confidence 0.52"', response.text)
+        self.assertIn("INSUFFICIENT CONTEXT", response.text)
         self.assertIn("Topology freshness", response.text)
         self.assertIn("45 days old", response.text)
         self.assertIn("STALE 30+", response.text)
@@ -743,7 +748,9 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Terraform", response.text)
         self.assertIn("Fix in settings", response.text)
         self.assertIn(
-            "Context warning: supporting topology or incident history may be stale.",
+            "Insufficient context: missing or stale topology, parser coverage, "
+            "evidence coverage, or incident history prevents a confident low-risk "
+            "verdict.",
             response.text,
         )
 

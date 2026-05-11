@@ -286,6 +286,9 @@ class PersistedReportData(BaseModel):
     risk_score: int
     severity: str
     recommendation: str
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Overall verdict confidence"
+    )
     top_risk: str
     report_schema_version: str = Field(
         ..., description="Persisted report schema version"
@@ -730,6 +733,12 @@ class ContextCompletenessData(BaseModel):
     incident_index_size: int = Field(
         default=0, description="Number of incidents available for similarity matching"
     )
+    evidence_success_rate: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Fraction of material changes represented by evidence items",
+    )
     parser_success_rate: float = Field(
         default=1.0, description="Fraction of analyzed files parsed successfully"
     )
@@ -740,6 +749,21 @@ class ContextCompletenessData(BaseModel):
     context_score: float = Field(
         default=1.0, description="Aggregate context completeness score between 0 and 1"
     )
+    confidence_level: Literal["high", "medium", "low"] = Field(
+        default="high",
+        description="Human-readable confidence level derived from context completeness",
+    )
+    uncertainty: str | None = Field(
+        default=None, description="Reviewer-facing uncertainty explanation"
+    )
+    context_todos: list[str] = Field(
+        default_factory=list,
+        description="Actionable context improvements for future reports",
+    )
+    insufficient_context: bool = Field(
+        default=False,
+        description="Whether context is too weak for a confident low-risk verdict",
+    )
 
 
 class AssessmentData(BaseModel):
@@ -747,6 +771,9 @@ class AssessmentData(BaseModel):
     severity: RiskSeverity = Field(..., description="Severity classification")
     recommendation: DeployRecommendation = Field(
         ..., description="Advisory recommendation"
+    )
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Overall verdict confidence"
     )
     top_risk: str = Field(..., description="Most important risk summary")
     top_risk_contributors: list[str] = Field(
@@ -1212,6 +1239,7 @@ def build_analysis_run_data(
             score=assessment.score,
             severity=assessment.severity,
             recommendation=assessment.recommendation,
+            confidence=assessment.confidence,
             top_risk=assessment.top_risk,
             top_risk_contributors=list(assessment.top_risk_contributors),
             context_completeness=_copy_model(
