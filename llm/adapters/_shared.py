@@ -58,6 +58,10 @@ def flatten_gemini_contents(messages: list[dict[str, str]]) -> str:
 
 def request_timeout_seconds(value: Any) -> float:
     """Validate and normalize a hosted-provider request timeout."""
+    if isinstance(value, bool):
+        raise NarrativeProviderError(
+            "Request timeout must be a positive finite number."
+        )
     try:
         timeout = float(value)
     except (TypeError, ValueError) as exc:
@@ -73,7 +77,12 @@ def request_timeout_seconds(value: Any) -> float:
 
 def request_timeout_milliseconds(value: Any) -> int:
     """Return a positive millisecond timeout for SDKs that use millisecond units."""
-    return max(1, math.ceil(request_timeout_seconds(value) * 1000))
+    milliseconds = request_timeout_seconds(value) * 1000
+    if not math.isfinite(milliseconds):
+        raise NarrativeProviderError(
+            "Request timeout must be a positive finite number."
+        )
+    return max(1, math.ceil(milliseconds))
 
 
 def extract_text_content(response: Any) -> str:

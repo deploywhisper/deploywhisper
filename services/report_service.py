@@ -185,6 +185,15 @@ def _share_link_host(host: str) -> str:
     cleaned = str(host).strip()
     if not cleaned:
         return "localhost"
+    if not cleaned.startswith("[") and cleaned.count(":") > 1:
+        candidate_host, separator, candidate_port = cleaned.rpartition(":")
+        if separator and candidate_port.isdigit():
+            try:
+                ipaddress.ip_address(candidate_host)
+            except ValueError:
+                pass
+            else:
+                cleaned = candidate_host
     if cleaned.startswith("[") or cleaned.count(":") == 1:
         try:
             parsed_host = urlsplit(f"//{cleaned}").hostname

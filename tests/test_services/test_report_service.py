@@ -4407,7 +4407,13 @@ class ReportServiceTests(unittest.TestCase):
                     )
 
     def test_share_report_link_strips_embedded_app_host_port(self) -> None:
-        for raw_host in ("localhost:19090", "127.0.0.1:19090", "[::1]:19090"):
+        for raw_host in (
+            "localhost:19090",
+            "127.0.0.1:19090",
+            "[::1]:19090",
+            "2001:db8::1:19090",
+            "fe80::1%lo0:19090",
+        ):
             with self.subTest(raw_host=raw_host):
                 with patch.dict(
                     os.environ,
@@ -4425,6 +4431,10 @@ class ReportServiceTests(unittest.TestCase):
                     expected_host = "127.0.0.1"
                 elif raw_host.startswith("[::1]"):
                     expected_host = "[::1]"
+                elif raw_host.startswith("2001:db8::1"):
+                    expected_host = "[2001:db8::1]"
+                elif raw_host.startswith("fe80::1%lo0"):
+                    expected_host = "[fe80::1%25lo0]"
                 self.assertEqual(
                     share_url,
                     f"http://{expected_host}:18080/reports/42",

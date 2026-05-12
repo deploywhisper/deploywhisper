@@ -267,6 +267,27 @@ class DirectProviderAdapterTests(unittest.TestCase):
 
         mock_openai.assert_not_called()
 
+    @patch("openai.OpenAI")
+    def test_openai_sdk_completion_rejects_boolean_timeout(
+        self,
+        mock_openai: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            OpenAIProviderAdapter()._sdk_completion(
+                model="gpt-4.1-mini",
+                api_base="https://api.openai.com/v1",
+                api_key="sk-test",
+                messages=[{"role": "user", "content": "{}"}],
+                response_format={"type": "json_object"},
+                temperature=0,
+                request_timeout_seconds=True,
+            )
+
+        mock_openai.assert_not_called()
+
     @patch("anthropic.Anthropic")
     def test_anthropic_sdk_completion_prefills_json_on_official_client(
         self,
@@ -416,6 +437,27 @@ class DirectProviderAdapterTests(unittest.TestCase):
                 response_mime_type="application/json",
                 temperature=0,
                 request_timeout_seconds=-1,
+            )
+
+        mock_client_cls.assert_not_called()
+
+    @patch("google.genai.Client")
+    def test_gemini_sdk_completion_rejects_timeout_millisecond_overflow(
+        self,
+        mock_client_cls: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            GeminiProviderAdapter()._sdk_completion(
+                model="gemini-2.0-flash",
+                api_base="",
+                api_key="gm-test",
+                contents="USER:\n{}",
+                response_mime_type="application/json",
+                temperature=0,
+                request_timeout_seconds=1e308,
             )
 
         mock_client_cls.assert_not_called()
