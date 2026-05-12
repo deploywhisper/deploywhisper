@@ -309,7 +309,10 @@ class PersistedReportData(BaseModel):
         default=True, description="Whether narrative text is available"
     )
     narrative_degraded: bool = Field(
-        default=False, description="Whether narrative generation used fallback output"
+        default=False,
+        description=(
+            "Whether narrative output used fallback mode or is inferred unavailable"
+        ),
     )
     narrative_failure_notice: str | None = Field(
         default=None,

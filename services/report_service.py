@@ -187,7 +187,7 @@ def _share_link_host(host: str) -> str:
         return "localhost"
     if not cleaned.startswith("[") and cleaned.count(":") > 1:
         candidate_host, separator, candidate_port = cleaned.rpartition(":")
-        if separator and candidate_port.isdigit():
+        if separator and candidate_port.isdigit() and len(candidate_port) > 4:
             try:
                 ipaddress.ip_address(candidate_host)
             except ValueError:
@@ -216,6 +216,13 @@ def _share_link_host(host: str) -> str:
             address = address.replace("%", "%25", 1)
         return f"[{address}]"
     return parsed.compressed
+
+
+def _known_narrative_source(source: str | None) -> str | None:
+    normalized = source or None
+    if normalized in {"llm", "fallback"}:
+        return normalized
+    return None
 
 
 def _has_visible_narrative_text(value: str) -> bool:
@@ -2376,10 +2383,8 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         report.narrative_opening or ""
     ) or _has_visible_narrative_text(report.narrative_explanation or "")
     narrative_failure_notice = _extract_narrative_failure_notice(warnings)
-    narrative_source = report.narrative_source or None
-    narrative_degraded = narrative_source == "fallback" or (
-        not narrative_available and narrative_source in {None, "llm"}
-    )
+    narrative_source = _known_narrative_source(report.narrative_source)
+    narrative_degraded = narrative_source == "fallback" or not narrative_available
     return {
         "id": report.id,
         "project": build_project_payload(
@@ -2443,7 +2448,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "narrative_degraded": narrative_degraded,
         "narrative_failure_notice": narrative_failure_notice,
         "assessment_source": report.assessment_source,
-        "narrative_source": report.narrative_source,
+        "narrative_source": narrative_source,
         "narrative_provider": report.llm_provider,
         "narrative_model": report.llm_model,
         "narrative_local_mode": report.llm_local_mode == "true"

@@ -103,36 +103,36 @@ def generate_narrative(
     raw_files: dict[str, bytes | None] | None = None,
 ) -> NarrativeResult:
     runtime = resolve_provider_runtime()
-    applied_skills = [
-        skill.name for skill in resolve_skills(assessment, raw_files=raw_files)
-    ]
-    if not settings.narrator_enabled:
-        return _fallback_narrative(
-            assessment,
-            findings,
-            "Narrator disabled by configuration.",
-            provider=runtime["provider"],
-            model=runtime["model"],
-            local_mode=runtime["local_mode"],
-            skills_applied=applied_skills,
-        )
-    if not assessment.contributors:
-        return _fallback_narrative(
-            assessment,
-            findings,
-            provider=runtime["provider"],
-            model=runtime["model"],
-            local_mode=runtime["local_mode"],
-            skills_applied=applied_skills,
-        )
-
-    skill_context = build_skill_context(assessment, raw_files=raw_files)
-    messages = [
-        {"role": "system", "content": build_system_prompt(skill_context)},
-        {"role": "user", "content": build_user_payload(assessment, findings)},
-    ]
-
+    applied_skills: list[str] = []
     try:
+        applied_skills = [
+            skill.name for skill in resolve_skills(assessment, raw_files=raw_files)
+        ]
+        if not settings.narrator_enabled:
+            return _fallback_narrative(
+                assessment,
+                findings,
+                "Narrator disabled by configuration.",
+                provider=runtime["provider"],
+                model=runtime["model"],
+                local_mode=runtime["local_mode"],
+                skills_applied=applied_skills,
+            )
+        if not assessment.contributors:
+            return _fallback_narrative(
+                assessment,
+                findings,
+                provider=runtime["provider"],
+                model=runtime["model"],
+                local_mode=runtime["local_mode"],
+                skills_applied=applied_skills,
+            )
+
+        skill_context = build_skill_context(assessment, raw_files=raw_files)
+        messages = [
+            {"role": "system", "content": build_system_prompt(skill_context)},
+            {"role": "user", "content": build_user_payload(assessment, findings)},
+        ]
         raw_content = generate_completion_with_settings(
             messages,
             provider=runtime["provider"],

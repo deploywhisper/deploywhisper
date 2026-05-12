@@ -4407,13 +4407,15 @@ class ReportServiceTests(unittest.TestCase):
                     )
 
     def test_share_report_link_strips_embedded_app_host_port(self) -> None:
-        for raw_host in (
-            "localhost:19090",
-            "127.0.0.1:19090",
-            "[::1]:19090",
-            "2001:db8::1:19090",
-            "fe80::1%lo0:19090",
-        ):
+        expected_hosts = {
+            "localhost:19090": "localhost",
+            "127.0.0.1:19090": "127.0.0.1",
+            "[::1]:19090": "[::1]",
+            "2001:db8::1:19090": "[2001:db8::1]",
+            "fe80::1%lo0:19090": "[fe80::1%25lo0]",
+            "2001:db8::1:1234": "[2001:db8::1:1234]",
+        }
+        for raw_host, expected_host in expected_hosts.items():
             with self.subTest(raw_host=raw_host):
                 with patch.dict(
                     os.environ,
@@ -4426,15 +4428,6 @@ class ReportServiceTests(unittest.TestCase):
                 ):
                     share_url = report_service_module.build_share_report_link(42)
 
-                expected_host = "localhost"
-                if raw_host.startswith("127.0.0.1"):
-                    expected_host = "127.0.0.1"
-                elif raw_host.startswith("[::1]"):
-                    expected_host = "[::1]"
-                elif raw_host.startswith("2001:db8::1"):
-                    expected_host = "[2001:db8::1]"
-                elif raw_host.startswith("fe80::1%lo0"):
-                    expected_host = "[fe80::1%25lo0]"
                 self.assertEqual(
                     share_url,
                     f"http://{expected_host}:18080/reports/42",
@@ -6772,7 +6765,11 @@ class ReportServiceTests(unittest.TestCase):
             ([], None),
         ]
         for warnings, expected_notice in warning_cases:
-            for narrative_source in (None, ""):
+            for narrative_source, expected_source in (
+                (None, None),
+                ("", None),
+                ("legacy-provider", None),
+            ):
                 with self.subTest(
                     warnings=warnings,
                     narrative_source=narrative_source,
@@ -6817,7 +6814,7 @@ class ReportServiceTests(unittest.TestCase):
                     assert fetched is not None
                     self.assertFalse(fetched["narrative_available"])
                     self.assertTrue(fetched["narrative_degraded"])
-                    self.assertEqual(fetched["narrative_source"], narrative_source)
+                    self.assertEqual(fetched["narrative_source"], expected_source)
                     self.assertEqual(
                         fetched["narrative_failure_notice"],
                         expected_notice,
