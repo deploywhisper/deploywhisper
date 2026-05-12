@@ -74,7 +74,7 @@ class NarratorTests(unittest.TestCase):
         self.assertIn("Narrative provider unavailable", narrative.failure_notice or "")
         self.assertIn("Expecting property name", " ".join(narrative.warnings))
 
-    def test_generate_narrative_skips_skill_resolution_without_contributors(
+    def test_generate_narrative_keeps_clean_fallback_when_skill_resolution_fails(
         self,
     ) -> None:
         assessment = self._assessment().model_copy(update={"contributors": []})
@@ -92,16 +92,49 @@ class NarratorTests(unittest.TestCase):
             patch(
                 "llm.narrator.resolve_skills",
                 side_effect=RuntimeError("skill resolution failed"),
-            ) as mock_resolve_skills,
+            ),
         ):
             narrative = generate_narrative(assessment, [])
 
-        mock_resolve_skills.assert_not_called()
         self.assertFalse(narrative.available)
         self.assertTrue(narrative.degraded)
         self.assertEqual(narrative.source, "fallback")
         self.assertIsNone(narrative.failure_notice)
         self.assertEqual(narrative.skills_applied, [])
+
+    def test_generate_narrative_records_skills_when_narrator_disabled(
+        self,
+    ) -> None:
+        with (
+            patch("llm.narrator.settings", SimpleNamespace(narrator_enabled=False)),
+            patch(
+                "llm.narrator.resolve_provider_runtime",
+                return_value={
+                    "provider": "ollama",
+                    "model": "ollama/llama3",
+                    "api_base": "http://localhost:11434",
+                    "api_key": None,
+                    "local_mode": True,
+                },
+            ),
+            patch(
+                "llm.narrator.resolve_skills",
+                return_value=[SimpleNamespace(name="terraform")],
+            ),
+            patch(
+                "llm.narrator.generate_completion_with_settings",
+                side_effect=AssertionError("provider call should not happen"),
+            ),
+        ):
+            narrative = generate_narrative(self._assessment(), [])
+
+        self.assertFalse(narrative.available)
+        self.assertTrue(narrative.degraded)
+        self.assertEqual(narrative.source, "fallback")
+        self.assertEqual(narrative.provider, "ollama")
+        self.assertEqual(narrative.model, "ollama/llama3")
+        self.assertEqual(narrative.skills_applied, ["terraform"])
+        self.assertIn("Narrator disabled", narrative.failure_notice or "")
 
     def test_generate_narrative_falls_back_when_provider_call_raises(self) -> None:
         def broken_completion(**_: object):

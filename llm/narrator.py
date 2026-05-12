@@ -97,6 +97,17 @@ def _fallback_narrative(
     )
 
 
+def _resolve_skill_names_safely(
+    assessment: RiskAssessment,
+    *,
+    raw_files: dict[str, bytes | None] | None = None,
+) -> list[str]:
+    try:
+        return [skill.name for skill in resolve_skills(assessment, raw_files=raw_files)]
+    except Exception:  # noqa: BLE001
+        return []
+
+
 def generate_narrative(
     assessment: RiskAssessment,
     findings: list[Finding],
@@ -105,6 +116,7 @@ def generate_narrative(
 ) -> NarrativeResult:
     runtime = resolve_provider_runtime()
     if not settings.narrator_enabled:
+        applied_skills = _resolve_skill_names_safely(assessment, raw_files=raw_files)
         return _fallback_narrative(
             assessment,
             findings,
@@ -112,15 +124,18 @@ def generate_narrative(
             provider=runtime["provider"],
             model=runtime["model"],
             local_mode=runtime["local_mode"],
+            skills_applied=applied_skills,
             failure_prefix="Narrative unavailable",
         )
     if not assessment.contributors:
+        applied_skills = _resolve_skill_names_safely(assessment, raw_files=raw_files)
         return _fallback_narrative(
             assessment,
             findings,
             provider=runtime["provider"],
             model=runtime["model"],
             local_mode=runtime["local_mode"],
+            skills_applied=applied_skills,
         )
 
     applied_skills: list[str] = []
