@@ -4371,6 +4371,30 @@ class ReportServiceTests(unittest.TestCase):
             shared_report["evidence_items"][0]["source_ref"],
         )
 
+    def test_share_report_link_normalizes_unspecified_app_host(self) -> None:
+        for raw_host in ("0.0.0.0", "::", " :: ", "[::]"):
+            with self.subTest(raw_host=raw_host):
+                os.environ.pop("APP_BASE_URL", None)
+                os.environ.pop("PUBLIC_APP_URL", None)
+                os.environ["APP_HOST"] = raw_host
+                os.environ["APP_PORT"] = "18080"
+
+                share_url = report_service_module.build_share_report_link(42)
+
+                self.assertEqual(share_url, "http://localhost:18080/reports/42")
+
+    def test_share_report_link_brackets_ipv6_app_host(self) -> None:
+        for raw_host in ("::1", "[::1]"):
+            with self.subTest(raw_host=raw_host):
+                os.environ.pop("APP_BASE_URL", None)
+                os.environ.pop("PUBLIC_APP_URL", None)
+                os.environ["APP_HOST"] = raw_host
+                os.environ["APP_PORT"] = "18080"
+
+                share_url = report_service_module.build_share_report_link(42)
+
+                self.assertEqual(share_url, "http://[::1]:18080/reports/42")
+
     def test_shared_report_redaction_preserves_sensitive_content_exclusion(
         self,
     ) -> None:
@@ -6573,6 +6597,7 @@ class ReportServiceTests(unittest.TestCase):
         )
         self.assertIn("Narrative provider unavailable", " ".join(persisted["warnings"]))
         self.assertFalse(persisted["narrative_available"])
+        self.assertTrue(persisted["narrative_degraded"])
         self.assertEqual(persisted["narrative_source"], "fallback")
         self.assertEqual(persisted["audit"]["llm_provider"], "ollama")
         self.assertEqual(persisted["audit"]["llm_model"], "ollama/llama3")
@@ -6584,6 +6609,70 @@ class ReportServiceTests(unittest.TestCase):
             persisted["narrative_failure_notice"],
             "Narrative provider unavailable: provider offline",
         )
+
+    def test_persist_analysis_report_does_not_mark_empty_llm_narrative_degraded(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            contributors=[
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            available=True,
+            opening_sentence="",
+            explanation="",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+            failure_notice=None,
+            source="llm",
+            provider="ollama",
+            model="ollama/llama3",
+            local_mode=True,
+            skills_applied=["terraform"],
+        )
+
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch, assessment, narrative
+        )
+
+        self.assertFalse(persisted["narrative_available"])
+        self.assertFalse(persisted["narrative_degraded"])
+        self.assertEqual(persisted["narrative_source"], "llm")
+        self.assertIsNone(persisted["narrative_failure_notice"])
 
     def test_fetch_active_dashboard_report_returns_recent_dashboard_upload(
         self,

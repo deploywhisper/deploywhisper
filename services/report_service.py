@@ -8,6 +8,7 @@ import os
 import secrets
 import hashlib
 import hmac
+import ipaddress
 import re
 from datetime import UTC, datetime
 from collections import Counter, defaultdict
@@ -171,12 +172,24 @@ def build_share_report_link(report_id: int | None) -> str | None:
         .rstrip("/")
     )
     if not base_url:
-        host = os.getenv("APP_HOST", "127.0.0.1")
-        if host in {"0.0.0.0", "::"}:
-            host = "localhost"
+        host = _share_link_host(os.getenv("APP_HOST", "127.0.0.1"))
         port = int(os.getenv("APP_PORT", "8080"))
         base_url = f"http://{host}:{port}"
     return f"{base_url}/reports/{report_id}"
+
+
+def _share_link_host(host: str) -> str:
+    cleaned = str(host).strip()
+    ip_literal = cleaned.removeprefix("[").removesuffix("]")
+    try:
+        parsed = ipaddress.ip_address(ip_literal)
+    except ValueError:
+        return cleaned
+    if parsed.is_unspecified:
+        return "localhost"
+    if parsed.version == 6:
+        return f"[{parsed.compressed}]"
+    return parsed.compressed
 
 
 def _hash_share_password(password: str, *, salt: str) -> str:
@@ -2329,6 +2342,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         (report.narrative_opening or "").strip()
         or (report.narrative_explanation or "").strip()
     )
+    narrative_degraded = report.narrative_source == "fallback"
     return {
         "id": report.id,
         "project": build_project_payload(
@@ -2389,6 +2403,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "narrative_opening": report.narrative_opening,
         "narrative_explanation": report.narrative_explanation,
         "narrative_available": narrative_available,
+        "narrative_degraded": narrative_degraded,
         "narrative_failure_notice": _extract_narrative_failure_notice(warnings),
         "assessment_source": report.assessment_source,
         "narrative_source": report.narrative_source,

@@ -2374,6 +2374,7 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertTrue(payload["data"]["assessment"]["partial_context"])
         self.assertFalse(payload["data"]["narrative"]["available"])
         self.assertTrue(payload["data"]["narrative"]["degraded"])
+        self.assertTrue(payload["data"]["persisted_report"]["narrative_degraded"])
         self.assertTrue(payload["data"]["evidence_items"])
         self.assertIn(
             "partial_context", payload["data"]["advisory"]["uncertainty_flags"]

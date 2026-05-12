@@ -308,6 +308,9 @@ class PersistedReportData(BaseModel):
     narrative_available: bool = Field(
         default=True, description="Whether narrative text is available"
     )
+    narrative_degraded: bool = Field(
+        default=False, description="Whether narrative generation used fallback output"
+    )
     narrative_failure_notice: str | None = Field(
         default=None,
         description="Visible explanation when narrative generation was unavailable",

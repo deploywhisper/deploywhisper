@@ -112,6 +112,15 @@ without storing raw plan internals in a separate contract.
     ]
   },
   "parse_summary": "1 parsed, 0 failed, 0 skipped, 1 normalized changes",
+  "narrative_opening": "",
+  "narrative_available": false,
+  "narrative_degraded": true,
+  "narrative_failure_notice": "Narrative provider unavailable: provider offline",
+  "narrative_source": "fallback",
+  "narrative_provider": "ollama",
+  "narrative_model": "ollama/llama3",
+  "narrative_local_mode": true,
+  "skills_applied": ["terraform"],
   "submission_manifest": {
     "submitted_artifact_count": 2,
     "accepted_artifact_count": 1,
