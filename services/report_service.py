@@ -8,9 +8,12 @@ import os
 import secrets
 import hashlib
 import hmac
+import ipaddress
 import re
+import unicodedata
 from datetime import UTC, datetime
 from collections import Counter, defaultdict
+from urllib.parse import urlsplit
 from typing import Any
 
 from pydantic import ValidationError
@@ -67,6 +70,7 @@ _SUBMISSION_MANIFEST_INFERRED_WARNING = (
     "submissions may be missing."
 )
 _AMBIGUOUS_ARTIFACT_REPLACEMENT = "Artifact file"
+_NON_VISIBLE_NARRATIVE_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
 _EXTENSIONLESS_FILE_BASENAMES = {
     "Brewfile",
     "BUILD",
@@ -171,12 +175,93 @@ def build_share_report_link(report_id: int | None) -> str | None:
         .rstrip("/")
     )
     if not base_url:
-        host = os.getenv("APP_HOST", "127.0.0.1")
-        if host in {"0.0.0.0", "::"}:
-            host = "localhost"
+        host = _share_link_host(os.getenv("APP_HOST", "127.0.0.1"))
         port = int(os.getenv("APP_PORT", "8080"))
         base_url = f"http://{host}:{port}"
     return f"{base_url}/reports/{report_id}"
+
+
+def _share_link_host(host: str) -> str:
+    cleaned = str(host).strip()
+    if not cleaned:
+        return "localhost"
+    if "%" in cleaned and not cleaned.startswith("[") and cleaned.count(":") > 1:
+        address_part, scope_part = cleaned.split("%", 1)
+        scope_name, separator, candidate_port = scope_part.rpartition(":")
+        if separator and candidate_port.isdigit() and scope_name:
+            candidate_host = f"{address_part}%{scope_name}"
+            try:
+                ipaddress.ip_address(candidate_host)
+            except ValueError:
+                pass
+            else:
+                cleaned = candidate_host
+    if cleaned.startswith("[") or cleaned.count(":") == 1:
+        try:
+            parsed_host = urlsplit(f"//{cleaned}").hostname
+        except ValueError:
+            parsed_host = None
+        if parsed_host:
+            cleaned = parsed_host
+    if not cleaned.startswith("[") and cleaned.count(":") > 1:
+        ip_literal = cleaned.removeprefix("[").removesuffix("]")
+        try:
+            ipaddress.ip_address(ip_literal)
+        except ValueError:
+            candidate_host, separator, candidate_port = cleaned.rpartition(":")
+            if not (separator and candidate_port.isdigit() and len(candidate_port) > 4):
+                candidate_host = ""
+            try:
+                ipaddress.ip_address(candidate_host)
+            except ValueError:
+                pass
+            else:
+                cleaned = candidate_host
+    ip_literal = cleaned.removeprefix("[").removesuffix("]")
+    try:
+        parsed = ipaddress.ip_address(ip_literal)
+    except ValueError:
+        if cleaned.startswith("[") and cleaned.endswith("]"):
+            return ip_literal
+        return cleaned
+    if parsed.is_unspecified:
+        return "localhost"
+    if parsed.version == 6:
+        address = parsed.compressed
+        if "%" in address and "%25" not in address:
+            address = address.replace("%", "%25", 1)
+        return f"[{address}]"
+    return parsed.compressed
+
+
+def _known_narrative_source(source: str | None) -> str | None:
+    normalized = source or None
+    if normalized in {"llm", "fallback"}:
+        return normalized
+    return None
+
+
+def _has_visible_narrative_text(value: str) -> bool:
+    return any(
+        not character.isspace()
+        and unicodedata.category(character) not in _NON_VISIBLE_NARRATIVE_CATEGORIES
+        for character in value
+    )
+
+
+def _narrative_degraded_from_state(
+    *,
+    explicit_degraded: bool | None,
+    narrative_source: str | None,
+    failure_notice: str | None,
+    narrative_available: bool,
+) -> bool:
+    return (
+        bool(explicit_degraded)
+        or _known_narrative_source(narrative_source) == "fallback"
+        or failure_notice is not None
+        or not narrative_available
+    )
 
 
 def _hash_share_password(password: str, *, salt: str) -> str:
@@ -420,7 +505,12 @@ def _build_audit_metadata(
 
 def _extract_narrative_failure_notice(warnings: list[str]) -> str | None:
     for warning in warnings:
-        if "narrative provider unavailable" in warning.lower():
+        normalized = warning.lower()
+        if (
+            "narrative provider unavailable" in normalized
+            or "narrative setup unavailable" in normalized
+            or normalized.startswith("narrative unavailable:")
+        ):
             return warning
     return None
 
@@ -2325,9 +2415,22 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
                         ),
                     }
                 )
-    narrative_available = bool(
-        (report.narrative_opening or "").strip()
-        or (report.narrative_explanation or "").strip()
+    narrative_available = _has_visible_narrative_text(
+        report.narrative_opening or ""
+    ) or _has_visible_narrative_text(report.narrative_explanation or "")
+    stored_failure_notice = getattr(report, "narrative_failure_notice", None)
+    narrative_failure_notice = (
+        stored_failure_notice
+        if stored_failure_notice is not None
+        else _extract_narrative_failure_notice(warnings)
+    )
+    narrative_source = _known_narrative_source(report.narrative_source)
+    stored_narrative_degraded = getattr(report, "narrative_degraded", None)
+    narrative_degraded = _narrative_degraded_from_state(
+        explicit_degraded=stored_narrative_degraded,
+        narrative_source=narrative_source,
+        failure_notice=narrative_failure_notice,
+        narrative_available=narrative_available,
     )
     return {
         "id": report.id,
@@ -2389,9 +2492,10 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "narrative_opening": report.narrative_opening,
         "narrative_explanation": report.narrative_explanation,
         "narrative_available": narrative_available,
-        "narrative_failure_notice": _extract_narrative_failure_notice(warnings),
+        "narrative_degraded": narrative_degraded,
+        "narrative_failure_notice": narrative_failure_notice,
         "assessment_source": report.assessment_source,
-        "narrative_source": report.narrative_source,
+        "narrative_source": narrative_source,
         "narrative_provider": report.llm_provider,
         "narrative_model": report.llm_model,
         "narrative_local_mode": report.llm_local_mode == "true"
@@ -2477,6 +2581,10 @@ def persist_analysis_report(
         evidence_items,
     )
     audit = _build_audit_metadata(parse_batch, audit_context=audit_context)
+    audit["llm_provider"] = narrative.provider or audit["llm_provider"]
+    audit["llm_model"] = narrative.model or audit["llm_model"]
+    if narrative.local_mode is not None:
+        audit["llm_local_mode"] = narrative.local_mode
     resolved_project_id, resolved_workspace_id = _resolve_report_scope(
         project_id=project_id,
         project_key=project_key,
@@ -2543,6 +2651,15 @@ def persist_analysis_report(
     combined_warnings = list(
         dict.fromkeys([*assessment.warnings, *narrative.warnings, *manifest_warnings])
     )
+    narrative_available = _has_visible_narrative_text(
+        narrative.opening_sentence or ""
+    ) or _has_visible_narrative_text(narrative.explanation or "")
+    narrative_degraded = _narrative_degraded_from_state(
+        explicit_degraded=narrative.degraded,
+        narrative_source=narrative.source,
+        failure_notice=narrative.failure_notice,
+        narrative_available=narrative_available,
+    )
     dashboard_display_duration_seconds = None
     if (
         audit.get("source_interface") == "ui"
@@ -2567,6 +2684,8 @@ def persist_analysis_report(
                 parse_summary=_build_parse_summary(parse_batch),
                 narrative_opening=narrative.opening_sentence or "",
                 narrative_explanation=narrative.explanation or "",
+                narrative_degraded=narrative_degraded,
+                narrative_failure_notice=narrative.failure_notice,
                 warnings_json=json.dumps(combined_warnings),
                 contributors_json=json.dumps(
                     [

@@ -9,6 +9,7 @@ from llm.adapters._shared import (
     extract_text_content,
     flatten_gemini_contents,
     normalize_prefixed_model,
+    request_timeout_milliseconds,
     split_system_messages,
 )
 from llm.adapters.base import (
@@ -44,6 +45,7 @@ class GeminiProviderAdapter:
             "contents": flatten_gemini_contents(non_system_messages),
             "response_mime_type": "application/json",
             "temperature": 0,
+            "request_timeout_seconds": runtime.request_timeout_seconds,
         }
         if system_prompt:
             kwargs["system_instruction"] = system_prompt
@@ -60,8 +62,14 @@ class GeminiProviderAdapter:
         client_kwargs: dict[str, Any] = {}
         if kwargs.get("api_key"):
             client_kwargs["api_key"] = kwargs["api_key"]
+        http_options: dict[str, Any] = {
+            "timeout": request_timeout_milliseconds(
+                kwargs.get("request_timeout_seconds", 30.0)
+            )
+        }
         if kwargs.get("api_base"):
-            client_kwargs["http_options"] = {"base_url": kwargs["api_base"]}
+            http_options["base_url"] = kwargs["api_base"]
+        client_kwargs["http_options"] = http_options
         client = genai.Client(**client_kwargs)
         config: dict[str, Any] = {
             "response_mime_type": kwargs["response_mime_type"],

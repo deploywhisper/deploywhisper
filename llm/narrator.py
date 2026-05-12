@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -15,6 +16,8 @@ from llm.prompts import build_system_prompt, build_user_payload
 from llm.providers import generate_completion_with_settings
 from llm.skill_context import build_skill_context, resolve_skills
 from services.settings_service import resolve_provider_runtime
+
+_NON_VISIBLE_TEXT_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
 
 
 class NarrativeResult(BaseModel):
@@ -54,6 +57,14 @@ class NarrativeResult(BaseModel):
     )
 
 
+def _has_visible_text(value: str) -> bool:
+    return any(
+        not character.isspace()
+        and unicodedata.category(character) not in _NON_VISIBLE_TEXT_CATEGORIES
+        for character in value
+    )
+
+
 def _fallback_narrative(
     assessment: RiskAssessment,
     findings: list[Finding],
@@ -63,11 +74,12 @@ def _fallback_narrative(
     model: str | None = None,
     local_mode: bool | None = None,
     skills_applied: list[str] | None = None,
+    failure_prefix: str = "Narrative provider unavailable",
 ) -> NarrativeResult:
     warnings = list(assessment.warnings)
     failure_notice = None
     if error_message:
-        failure_notice = f"Narrative provider unavailable: {error_message}"
+        failure_notice = f"{failure_prefix}: {error_message}"
         warnings.append(failure_notice)
     return NarrativeResult(
         available=False,
@@ -85,6 +97,17 @@ def _fallback_narrative(
     )
 
 
+def _resolve_skill_names_safely(
+    assessment: RiskAssessment,
+    *,
+    raw_files: dict[str, bytes | None] | None = None,
+) -> list[str]:
+    try:
+        return [skill.name for skill in resolve_skills(assessment, raw_files=raw_files)]
+    except Exception:  # noqa: BLE001
+        return []
+
+
 def generate_narrative(
     assessment: RiskAssessment,
     findings: list[Finding],
@@ -92,10 +115,8 @@ def generate_narrative(
     raw_files: dict[str, bytes | None] | None = None,
 ) -> NarrativeResult:
     runtime = resolve_provider_runtime()
-    applied_skills = [
-        skill.name for skill in resolve_skills(assessment, raw_files=raw_files)
-    ]
     if not settings.narrator_enabled:
+        applied_skills = _resolve_skill_names_safely(assessment, raw_files=raw_files)
         return _fallback_narrative(
             assessment,
             findings,
@@ -104,8 +125,10 @@ def generate_narrative(
             model=runtime["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
+            failure_prefix="Narrative unavailable",
         )
     if not assessment.contributors:
+        applied_skills = _resolve_skill_names_safely(assessment, raw_files=raw_files)
         return _fallback_narrative(
             assessment,
             findings,
@@ -115,11 +138,27 @@ def generate_narrative(
             skills_applied=applied_skills,
         )
 
-    skill_context = build_skill_context(assessment, raw_files=raw_files)
-    messages = [
-        {"role": "system", "content": build_system_prompt(skill_context)},
-        {"role": "user", "content": build_user_payload(assessment, findings)},
-    ]
+    applied_skills: list[str] = []
+    try:
+        applied_skills = [
+            skill.name for skill in resolve_skills(assessment, raw_files=raw_files)
+        ]
+        skill_context = build_skill_context(assessment, raw_files=raw_files)
+        messages = [
+            {"role": "system", "content": build_system_prompt(skill_context)},
+            {"role": "user", "content": build_user_payload(assessment, findings)},
+        ]
+    except Exception as exc:  # noqa: BLE001
+        return _fallback_narrative(
+            assessment,
+            findings,
+            str(exc),
+            provider=runtime["provider"],
+            model=runtime["model"],
+            local_mode=runtime["local_mode"],
+            skills_applied=applied_skills,
+            failure_prefix="Narrative setup unavailable",
+        )
 
     try:
         raw_content = generate_completion_with_settings(
@@ -129,6 +168,7 @@ def generate_narrative(
             api_base=runtime["api_base"],
             api_key=runtime["api_key"],
             local_mode=runtime["local_mode"],
+            request_timeout_seconds=runtime.get("request_timeout_seconds", 30.0),
             completion_client=completion_client,
         )
         payload = json.loads(raw_content)
@@ -163,14 +203,19 @@ def generate_narrative(
                 )
             return sanitized
 
+        opening_sentence = sanitize_scope_claims(payload["opening_sentence"])
+        explanation = sanitize_scope_claims(payload["explanation"])
+        if not (_has_visible_text(opening_sentence) or _has_visible_text(explanation)):
+            raise ValueError("Narrative provider returned empty output.")
+        guidance_payload = payload.get("guidance", [])
+        if not isinstance(guidance_payload, list):
+            raise ValueError("Narrative provider returned invalid guidance payload.")
+
         return NarrativeResult(
             available=True,
-            opening_sentence=sanitize_scope_claims(payload["opening_sentence"]),
-            explanation=sanitize_scope_claims(payload["explanation"]),
-            guidance=[
-                sanitize_scope_claims(item)
-                for item in list(payload.get("guidance", []))
-            ],
+            opening_sentence=opening_sentence,
+            explanation=explanation,
+            guidance=[sanitize_scope_claims(item) for item in guidance_payload],
             degraded=False,
             warnings=list(assessment.warnings),
             failure_notice=None,

@@ -2328,6 +2328,10 @@ class AnalyzeCliTests(unittest.TestCase):
             degraded=True,
             warnings=["Narrative provider unavailable: offline test"],
             failure_notice="Narrative provider unavailable: offline test",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
         )
         output = io.StringIO()
 
@@ -2372,9 +2376,26 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         self.assertEqual(payload["data"]["assessment"]["recommendation"], "no-go")
         self.assertTrue(payload["data"]["assessment"]["partial_context"])
+        self.assertEqual(payload["data"]["advisory"]["recommendation"], "no-go")
+        self.assertEqual(payload["data"]["advisory"]["severity"], "critical")
+        self.assertIn("context_completeness", payload["data"]["assessment"])
+        self.assertIn("context_completeness", payload["data"]["persisted_report"])
+        self.assertIn("rollback_plan", payload["data"]["persisted_report"])
+        self.assertIn("blast_radius", payload["data"]["persisted_report"])
         self.assertFalse(payload["data"]["narrative"]["available"])
         self.assertTrue(payload["data"]["narrative"]["degraded"])
+        self.assertTrue(payload["data"]["persisted_report"]["narrative_degraded"])
+        self.assertEqual(
+            payload["data"]["persisted_report"]["narrative_provider"], "openai"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["narrative_model"], "gpt-4.1-mini"
+        )
+        self.assertFalse(payload["data"]["persisted_report"]["narrative_local_mode"])
         self.assertTrue(payload["data"]["evidence_items"])
+        self.assertTrue(payload["data"]["findings"])
+        self.assertTrue(payload["data"]["persisted_report"]["findings"])
+        self.assertTrue(payload["data"]["persisted_report"]["evidence_items"])
         self.assertIn(
             "partial_context", payload["data"]["advisory"]["uncertainty_flags"]
         )

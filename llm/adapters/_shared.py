@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from typing import Any
 
@@ -53,6 +54,35 @@ def flatten_gemini_contents(messages: list[dict[str, str]]) -> str:
         if content:
             chunks.append(f"{role}:\n{content}")
     return "\n\n".join(chunks)
+
+
+def request_timeout_seconds(value: Any) -> float:
+    """Validate and normalize a hosted-provider request timeout."""
+    if isinstance(value, bool):
+        raise NarrativeProviderError(
+            "Request timeout must be a positive finite number."
+        )
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError) as exc:
+        raise NarrativeProviderError(
+            "Request timeout must be a positive finite number."
+        ) from exc
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise NarrativeProviderError(
+            "Request timeout must be a positive finite number."
+        )
+    return timeout
+
+
+def request_timeout_milliseconds(value: Any) -> int:
+    """Return a positive millisecond timeout for SDKs that use millisecond units."""
+    milliseconds = request_timeout_seconds(value) * 1000
+    if not math.isfinite(milliseconds):
+        raise NarrativeProviderError(
+            "Request timeout must be a positive finite number."
+        )
+    return max(1, math.ceil(milliseconds))
 
 
 def extract_text_content(response: Any) -> str:

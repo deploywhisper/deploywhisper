@@ -46,6 +46,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
         self.assertEqual(captured["api_key"], "sk-test")
         self.assertEqual(captured["response_format"], {"type": "json_object"})
         self.assertEqual(captured["temperature"], 1)
+        self.assertEqual(captured["request_timeout_seconds"], 30.0)
 
     def test_openai_adapter_normalizes_prefixed_model_name(self) -> None:
         captured: dict[str, object] = {}
@@ -204,6 +205,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
         self.assertEqual(captured["model"], "ollama/llama3")
         self.assertEqual(captured["api_base"], "http://localhost:11434")
         self.assertEqual(captured["temperature"], 0)
+        self.assertEqual(captured["request_timeout_seconds"], 30.0)
         self.assertNotIn("api_key", captured)
 
     @patch("openai.OpenAI")
@@ -236,6 +238,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
         mock_openai.assert_called_once_with(
             base_url="https://api.openai.com/v1",
             api_key="sk-test",
+            timeout=30.0,
         )
         mock_client.chat.completions.create.assert_called_once_with(
             model="gpt-4.1-mini",
@@ -243,6 +246,48 @@ class DirectProviderAdapterTests(unittest.TestCase):
             response_format={"type": "json_object"},
             temperature=0,
         )
+
+    @patch("openai.OpenAI")
+    def test_openai_sdk_completion_rejects_invalid_timeout(
+        self,
+        mock_openai: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            OpenAIProviderAdapter()._sdk_completion(
+                model="gpt-4.1-mini",
+                api_base="https://api.openai.com/v1",
+                api_key="sk-test",
+                messages=[{"role": "user", "content": "{}"}],
+                response_format={"type": "json_object"},
+                temperature=0,
+                request_timeout_seconds=0,
+            )
+
+        mock_openai.assert_not_called()
+
+    @patch("openai.OpenAI")
+    def test_openai_sdk_completion_rejects_boolean_timeout(
+        self,
+        mock_openai: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            OpenAIProviderAdapter()._sdk_completion(
+                model="gpt-4.1-mini",
+                api_base="https://api.openai.com/v1",
+                api_key="sk-test",
+                messages=[{"role": "user", "content": "{}"}],
+                response_format={"type": "json_object"},
+                temperature=0,
+                request_timeout_seconds=True,
+            )
+
+        mock_openai.assert_not_called()
 
     @patch("anthropic.Anthropic")
     def test_anthropic_sdk_completion_prefills_json_on_official_client(
@@ -277,6 +322,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
         mock_anthropic.assert_called_once_with(
             base_url="https://api.anthropic.com",
             api_key="sk-test",
+            timeout=30.0,
         )
         mock_client.messages.create.assert_called_once_with(
             model="claude-3-5-sonnet-latest",
@@ -288,6 +334,27 @@ class DirectProviderAdapterTests(unittest.TestCase):
             max_tokens=1024,
             system="Return JSON.",
         )
+
+    @patch("anthropic.Anthropic")
+    def test_anthropic_sdk_completion_rejects_invalid_timeout(
+        self,
+        mock_anthropic: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            AnthropicProviderAdapter()._sdk_completion(
+                model="claude-3-5-sonnet-latest",
+                api_base="https://api.anthropic.com",
+                api_key="sk-test",
+                messages=[{"role": "user", "content": "{}"}],
+                temperature=0,
+                max_tokens=1024,
+                request_timeout_seconds=float("nan"),
+            )
+
+        mock_anthropic.assert_not_called()
 
     @patch("google.genai.Client")
     def test_gemini_sdk_completion_uses_official_client_shape(
@@ -313,7 +380,10 @@ class DirectProviderAdapterTests(unittest.TestCase):
         self.assertEqual(content.text, '{"opening_sentence":"ok"}')
         mock_client_cls.assert_called_once_with(
             api_key="gm-test",
-            http_options={"base_url": "https://generativelanguage.googleapis.com"},
+            http_options={
+                "base_url": "https://generativelanguage.googleapis.com",
+                "timeout": 30000,
+            },
         )
         mock_client.models.generate_content.assert_called_once_with(
             model="gemini-2.0-flash",
@@ -324,6 +394,74 @@ class DirectProviderAdapterTests(unittest.TestCase):
                 "system_instruction": "Return JSON.",
             },
         )
+
+    @patch("google.genai.Client")
+    def test_gemini_sdk_completion_converts_timeout_seconds_to_milliseconds(
+        self,
+        mock_client_cls: MagicMock,
+    ) -> None:
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.models.generate_content.return_value = SimpleNamespace(
+            text='{"opening_sentence":"ok"}'
+        )
+
+        GeminiProviderAdapter()._sdk_completion(
+            model="gemini-2.0-flash",
+            api_base="",
+            api_key="gm-test",
+            contents="USER:\n{}",
+            response_mime_type="application/json",
+            temperature=0,
+            request_timeout_seconds=12.5,
+        )
+
+        mock_client_cls.assert_called_once_with(
+            api_key="gm-test",
+            http_options={"timeout": 12500},
+        )
+
+    @patch("google.genai.Client")
+    def test_gemini_sdk_completion_rejects_invalid_timeout(
+        self,
+        mock_client_cls: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            GeminiProviderAdapter()._sdk_completion(
+                model="gemini-2.0-flash",
+                api_base="",
+                api_key="gm-test",
+                contents="USER:\n{}",
+                response_mime_type="application/json",
+                temperature=0,
+                request_timeout_seconds=-1,
+            )
+
+        mock_client_cls.assert_not_called()
+
+    @patch("google.genai.Client")
+    def test_gemini_sdk_completion_rejects_timeout_millisecond_overflow(
+        self,
+        mock_client_cls: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            GeminiProviderAdapter()._sdk_completion(
+                model="gemini-2.0-flash",
+                api_base="",
+                api_key="gm-test",
+                contents="USER:\n{}",
+                response_mime_type="application/json",
+                temperature=0,
+                request_timeout_seconds=1e308,
+            )
+
+        mock_client_cls.assert_not_called()
 
     @patch("llm.adapters.ollama_adapter.urlopen")
     def test_ollama_sdk_completion_uses_local_http_api(
@@ -342,10 +480,12 @@ class DirectProviderAdapterTests(unittest.TestCase):
             messages=[{"role": "user", "content": "{}"}],
             response_format="json",
             temperature=0,
+            request_timeout_seconds=12.5,
         )
 
         self.assertEqual(content["message"]["content"], '{"opening_sentence":"ok"}')
         request = mock_urlopen.call_args.args[0]
+        self.assertEqual(mock_urlopen.call_args.kwargs["timeout"], 12.5)
         self.assertEqual(request.full_url, "http://localhost:11434/api/chat")
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(
@@ -355,6 +495,26 @@ class DirectProviderAdapterTests(unittest.TestCase):
                 b'"stream": false, "format": "json", "options": {"temperature": 0}}'
             ),
         )
+
+    @patch("llm.adapters.ollama_adapter.urlopen")
+    def test_ollama_sdk_completion_rejects_non_http_api_base(
+        self,
+        mock_urlopen: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Ollama API base must use http or https scheme",
+        ):
+            OllamaProviderAdapter()._sdk_completion(
+                model="ollama/llama3",
+                api_base="file:///tmp/ollama",
+                messages=[{"role": "user", "content": "{}"}],
+                response_format="json",
+                temperature=0,
+                request_timeout_seconds=12.5,
+            )
+
+        mock_urlopen.assert_not_called()
 
     def test_direct_remote_adapters_reject_local_mode(self) -> None:
         adapter = OpenAIProviderAdapter()

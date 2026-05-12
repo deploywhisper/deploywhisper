@@ -19,6 +19,7 @@ class ProviderRuntimeConfig:
     api_base: str
     api_key: str | None = None
     local_mode: bool = False
+    request_timeout_seconds: float = 30.0
 
 
 @dataclass(frozen=True)

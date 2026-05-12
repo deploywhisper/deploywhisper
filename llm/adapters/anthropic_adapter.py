@@ -5,7 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from llm.adapters._shared import extract_text_content, split_system_messages
+from llm.adapters._shared import (
+    extract_text_content,
+    request_timeout_seconds,
+    split_system_messages,
+)
 from llm.adapters.base import (
     NarrativeProviderError,
     ProviderCapabilities,
@@ -41,6 +45,7 @@ class AnthropicProviderAdapter:
             "messages": anthropic_messages,
             "temperature": 0,
             "max_tokens": 1024,
+            "request_timeout_seconds": runtime.request_timeout_seconds,
         }
         if system_prompt:
             kwargs["system"] = system_prompt
@@ -60,7 +65,12 @@ class AnthropicProviderAdapter:
                 "The anthropic SDK is not installed. Install the story-required dependencies."
             ) from exc
 
-        client_kwargs: dict[str, Any] = {"base_url": kwargs["api_base"]}
+        client_kwargs: dict[str, Any] = {
+            "base_url": kwargs["api_base"],
+            "timeout": request_timeout_seconds(
+                kwargs.get("request_timeout_seconds", 30.0)
+            ),
+        }
         if kwargs.get("api_key"):
             client_kwargs["api_key"] = kwargs["api_key"]
         client = Anthropic(**client_kwargs)
