@@ -135,6 +135,24 @@ class SettingsServiceTests(unittest.TestCase):
         self.assertEqual(runtime["provider"], "openai")
         self.assertEqual(runtime["request_timeout_seconds"], 12.5)
 
+    def test_invalid_request_timeout_env_falls_back_without_import_failure(
+        self,
+    ) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "openai",
+                "LLM_REQUEST_TIMEOUT_SECONDS": "not-a-number",
+            },
+            clear=False,
+        ):
+            reload(config_module)
+            reload(settings_service_module)
+            runtime = settings_service_module.resolve_provider_runtime()
+
+        self.assertEqual(runtime["provider"], "openai")
+        self.assertEqual(runtime["request_timeout_seconds"], 30.0)
+
     def test_saving_provider_as_active_switches_single_active_provider(self) -> None:
         settings_service_module.save_provider_settings(
             provider="openai",

@@ -65,7 +65,7 @@ development_status:
   2-4-finding-model-and-evidence-links: done
   2-5-evidence-law-runtime-gate: review
   2-6-confidence-uncertainty-and-insufficient-context: done
-  2-7-narrative-after-scoring-and-degraded-fallback: in-progress
+  2-7-narrative-after-scoring-and-degraded-fallback: done
   2-8-report-schema-versioning: ready-for-dev
   2-9-durable-report-persistence-and-audit-metadata: ready-for-dev
   epic-2-retrospective: optional

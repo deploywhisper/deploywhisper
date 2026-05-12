@@ -4412,10 +4412,11 @@ class ReportServiceTests(unittest.TestCase):
             "127.0.0.1:19090": "127.0.0.1",
             "[::1]:19090": "[::1]",
             "2001:db8::1:19090": "[2001:db8::1]",
-            "fe80::1%lo0:19090": "[fe80::1%25lo0]",
-            "2001:db8::1:8080": "[2001:db8::1]",
-            "fe80::1%lo0:8080": "[fe80::1%25lo0]",
+            "fe80::1%lo0:19090": "[fe80::1%25lo0:19090]",
+            "2001:db8::1:8080": "[2001:db8::1:8080]",
+            "fe80::1%lo0:8080": "[fe80::1%25lo0:8080]",
             "2001:db8::1:1234": "[2001:db8::1:1234]",
+            "fe80::443": "[fe80::443]",
         }
         for raw_host, expected_host in expected_hosts.items():
             with self.subTest(raw_host=raw_host):
@@ -6763,6 +6764,10 @@ class ReportServiceTests(unittest.TestCase):
             (
                 ["Narrative provider unavailable: provider offline"],
                 "Narrative provider unavailable: provider offline",
+            ),
+            (
+                ["Narrative setup unavailable: skill context failed"],
+                "Narrative setup unavailable: skill context failed",
             ),
             ([], None),
         ]

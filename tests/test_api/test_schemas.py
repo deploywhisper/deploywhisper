@@ -27,6 +27,7 @@ class ApiSchemaTests(unittest.TestCase):
             "report_schema_version": "v2",
             "parse_summary": "Parsed 1 file.",
             "narrative_opening": "CAUTION: review the security group update.",
+            "narrative_degraded": False,
             "created_at": "2026-05-11T00:00:00Z",
             "audit": {"files_analyzed": ["plan.json"]},
         }
@@ -42,6 +43,14 @@ class ApiSchemaTests(unittest.TestCase):
         report = PersistedReportData.model_validate(payload)
 
         self.assertEqual(report.confidence, 0.52)
+
+    def test_persisted_report_requires_explicit_narrative_degraded(self) -> None:
+        payload = self._persisted_report_payload()
+        payload["confidence"] = 0.52
+        payload.pop("narrative_degraded")
+
+        with self.assertRaises(ValidationError):
+            PersistedReportData.model_validate(payload)
 
 
 if __name__ == "__main__":

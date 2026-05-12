@@ -608,6 +608,7 @@ class AnalysesApiTests(unittest.TestCase):
             payload["data"]["persisted_report"]["confidence"],
             payload["data"]["assessment"]["confidence"],
         )
+        self.assertFalse(payload["data"]["persisted_report"]["narrative_degraded"])
         self.assertEqual(
             payload["data"]["assessment"]["contributors"][0]["evidence_id"], "ev-001"
         )

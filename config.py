@@ -6,6 +6,16 @@ from dataclasses import dataclass
 import os
 
 
+def _float_env(name: str, default: float) -> float:
+    raw_value = os.getenv(name)
+    if raw_value is None or not raw_value.strip():
+        return default
+    try:
+        return float(raw_value)
+    except ValueError:
+        return default
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "DeployWhisper")
@@ -18,9 +28,7 @@ class Settings:
     llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")
     llm_model: str = os.getenv("LLM_MODEL", "ollama/llama3")
     llm_api_base: str = os.getenv("LLM_API_BASE", "http://localhost:11434")
-    llm_request_timeout_seconds: float = float(
-        os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "30")
-    )
+    llm_request_timeout_seconds: float = _float_env("LLM_REQUEST_TIMEOUT_SECONDS", 30.0)
     narrator_enabled: bool = os.getenv("NARRATOR_ENABLED", "true").lower() == "true"
     topology_path: str = os.getenv(
         "TOPOLOGY_PATH", "data/topology/service_topology.json"

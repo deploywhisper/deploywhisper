@@ -71,21 +71,6 @@ _SUBMISSION_MANIFEST_INFERRED_WARNING = (
 )
 _AMBIGUOUS_ARTIFACT_REPLACEMENT = "Artifact file"
 _NON_VISIBLE_NARRATIVE_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
-_COMMON_EMBEDDED_APP_HOST_PORTS = {
-    "80",
-    "443",
-    "3000",
-    "5000",
-    "5001",
-    "5173",
-    "8000",
-    "8080",
-    "8081",
-    "8443",
-    "8888",
-    "9000",
-    "9090",
-}
 _EXTENSIONLESS_FILE_BASENAMES = {
     "Brewfile",
     "BUILD",
@@ -200,22 +185,6 @@ def _share_link_host(host: str) -> str:
     cleaned = str(host).strip()
     if not cleaned:
         return "localhost"
-    if not cleaned.startswith("[") and cleaned.count(":") > 1:
-        candidate_host, separator, candidate_port = cleaned.rpartition(":")
-        if (
-            separator
-            and candidate_port.isdigit()
-            and (
-                len(candidate_port) > 4
-                or candidate_port in _COMMON_EMBEDDED_APP_HOST_PORTS
-            )
-        ):
-            try:
-                ipaddress.ip_address(candidate_host)
-            except ValueError:
-                pass
-            else:
-                cleaned = candidate_host
     if cleaned.startswith("[") or cleaned.count(":") == 1:
         try:
             parsed_host = urlsplit(f"//{cleaned}").hostname
@@ -223,6 +192,20 @@ def _share_link_host(host: str) -> str:
             parsed_host = None
         if parsed_host:
             cleaned = parsed_host
+    if not cleaned.startswith("[") and cleaned.count(":") > 1:
+        ip_literal = cleaned.removeprefix("[").removesuffix("]")
+        try:
+            ipaddress.ip_address(ip_literal)
+        except ValueError:
+            candidate_host, separator, candidate_port = cleaned.rpartition(":")
+            if not (separator and candidate_port.isdigit() and len(candidate_port) > 4):
+                candidate_host = ""
+            try:
+                ipaddress.ip_address(candidate_host)
+            except ValueError:
+                pass
+            else:
+                cleaned = candidate_host
     ip_literal = cleaned.removeprefix("[").removesuffix("]")
     try:
         parsed = ipaddress.ip_address(ip_literal)
@@ -496,7 +479,12 @@ def _build_audit_metadata(
 
 def _extract_narrative_failure_notice(warnings: list[str]) -> str | None:
     for warning in warnings:
-        if "narrative provider unavailable" in warning.lower():
+        normalized = warning.lower()
+        if (
+            "narrative provider unavailable" in normalized
+            or "narrative setup unavailable" in normalized
+            or normalized.startswith("narrative unavailable:")
+        ):
             return warning
     return None
 
