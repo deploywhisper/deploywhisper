@@ -4372,7 +4372,7 @@ class ReportServiceTests(unittest.TestCase):
         )
 
     def test_share_report_link_normalizes_unspecified_app_host(self) -> None:
-        for raw_host in ("0.0.0.0", "::", " :: ", "[::]"):
+        for raw_host in ("", "   ", "0.0.0.0", "::", " :: ", "[::]"):
             with self.subTest(raw_host=raw_host):
                 with patch.dict(
                     os.environ,

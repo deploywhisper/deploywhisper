@@ -61,9 +61,8 @@ class GeminiProviderAdapter:
         client_kwargs: dict[str, Any] = {}
         if kwargs.get("api_key"):
             client_kwargs["api_key"] = kwargs["api_key"]
-        http_options: dict[str, Any] = {
-            "timeout": kwargs.get("request_timeout_seconds", 30.0)
-        }
+        timeout_seconds = float(kwargs.get("request_timeout_seconds", 30.0))
+        http_options: dict[str, Any] = {"timeout": int(timeout_seconds * 1000)}
         if kwargs.get("api_base"):
             http_options["base_url"] = kwargs["api_base"]
         client_kwargs["http_options"] = http_options

@@ -17,7 +17,7 @@ from llm.providers import generate_completion_with_settings
 from llm.skill_context import build_skill_context, resolve_skills
 from services.settings_service import resolve_provider_runtime
 
-_INVISIBLE_TEXT_CATEGORIES = {"Cc", "Cf"}
+_NON_VISIBLE_TEXT_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
 
 
 class NarrativeResult(BaseModel):
@@ -60,7 +60,7 @@ class NarrativeResult(BaseModel):
 def _has_visible_text(value: str) -> bool:
     return any(
         not character.isspace()
-        and unicodedata.category(character) not in _INVISIBLE_TEXT_CATEGORIES
+        and unicodedata.category(character) not in _NON_VISIBLE_TEXT_CATEGORIES
         for character in value
     )
 

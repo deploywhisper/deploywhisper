@@ -180,6 +180,8 @@ def build_share_report_link(report_id: int | None) -> str | None:
 
 def _share_link_host(host: str) -> str:
     cleaned = str(host).strip()
+    if not cleaned:
+        return "localhost"
     ip_literal = cleaned.removeprefix("[").removesuffix("]")
     try:
         parsed = ipaddress.ip_address(ip_literal)

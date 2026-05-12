@@ -318,7 +318,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
             api_key="gm-test",
             http_options={
                 "base_url": "https://generativelanguage.googleapis.com",
-                "timeout": 30.0,
+                "timeout": 30000,
             },
         )
         mock_client.models.generate_content.assert_called_once_with(
@@ -329,6 +329,32 @@ class DirectProviderAdapterTests(unittest.TestCase):
                 "temperature": 0,
                 "system_instruction": "Return JSON.",
             },
+        )
+
+    @patch("google.genai.Client")
+    def test_gemini_sdk_completion_converts_timeout_seconds_to_milliseconds(
+        self,
+        mock_client_cls: MagicMock,
+    ) -> None:
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.models.generate_content.return_value = SimpleNamespace(
+            text='{"opening_sentence":"ok"}'
+        )
+
+        GeminiProviderAdapter()._sdk_completion(
+            model="gemini-2.0-flash",
+            api_base="",
+            api_key="gm-test",
+            contents="USER:\n{}",
+            response_mime_type="application/json",
+            temperature=0,
+            request_timeout_seconds=12.5,
+        )
+
+        mock_client_cls.assert_called_once_with(
+            api_key="gm-test",
+            http_options={"timeout": 12500},
         )
 
     @patch("llm.adapters.ollama_adapter.urlopen")
