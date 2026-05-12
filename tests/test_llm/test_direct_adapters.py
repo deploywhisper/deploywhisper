@@ -246,6 +246,27 @@ class DirectProviderAdapterTests(unittest.TestCase):
             temperature=0,
         )
 
+    @patch("openai.OpenAI")
+    def test_openai_sdk_completion_rejects_invalid_timeout(
+        self,
+        mock_openai: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            OpenAIProviderAdapter()._sdk_completion(
+                model="gpt-4.1-mini",
+                api_base="https://api.openai.com/v1",
+                api_key="sk-test",
+                messages=[{"role": "user", "content": "{}"}],
+                response_format={"type": "json_object"},
+                temperature=0,
+                request_timeout_seconds=0,
+            )
+
+        mock_openai.assert_not_called()
+
     @patch("anthropic.Anthropic")
     def test_anthropic_sdk_completion_prefills_json_on_official_client(
         self,
@@ -291,6 +312,27 @@ class DirectProviderAdapterTests(unittest.TestCase):
             max_tokens=1024,
             system="Return JSON.",
         )
+
+    @patch("anthropic.Anthropic")
+    def test_anthropic_sdk_completion_rejects_invalid_timeout(
+        self,
+        mock_anthropic: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            AnthropicProviderAdapter()._sdk_completion(
+                model="claude-3-5-sonnet-latest",
+                api_base="https://api.anthropic.com",
+                api_key="sk-test",
+                messages=[{"role": "user", "content": "{}"}],
+                temperature=0,
+                max_tokens=1024,
+                request_timeout_seconds=float("nan"),
+            )
+
+        mock_anthropic.assert_not_called()
 
     @patch("google.genai.Client")
     def test_gemini_sdk_completion_uses_official_client_shape(
@@ -356,6 +398,27 @@ class DirectProviderAdapterTests(unittest.TestCase):
             api_key="gm-test",
             http_options={"timeout": 12500},
         )
+
+    @patch("google.genai.Client")
+    def test_gemini_sdk_completion_rejects_invalid_timeout(
+        self,
+        mock_client_cls: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            GeminiProviderAdapter()._sdk_completion(
+                model="gemini-2.0-flash",
+                api_base="",
+                api_key="gm-test",
+                contents="USER:\n{}",
+                response_mime_type="application/json",
+                temperature=0,
+                request_timeout_seconds=-1,
+            )
+
+        mock_client_cls.assert_not_called()
 
     @patch("llm.adapters.ollama_adapter.urlopen")
     def test_ollama_sdk_completion_uses_local_http_api(

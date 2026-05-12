@@ -8,6 +8,7 @@ from typing import Any, Callable
 from llm.adapters._shared import (
     extract_text_content,
     normalize_prefixed_model,
+    request_timeout_seconds,
 )
 from llm.adapters.base import (
     NarrativeProviderError,
@@ -67,7 +68,9 @@ class OpenAICompatibleProviderAdapter:
 
         client_kwargs: dict[str, Any] = {
             "base_url": kwargs["api_base"],
-            "timeout": kwargs.get("request_timeout_seconds", 30.0),
+            "timeout": request_timeout_seconds(
+                kwargs.get("request_timeout_seconds", 30.0)
+            ),
         }
         if kwargs.get("api_key"):
             client_kwargs["api_key"] = kwargs["api_key"]

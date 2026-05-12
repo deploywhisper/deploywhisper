@@ -10,8 +10,10 @@ import hashlib
 import hmac
 import ipaddress
 import re
+import unicodedata
 from datetime import UTC, datetime
 from collections import Counter, defaultdict
+from urllib.parse import urlsplit
 from typing import Any
 
 from pydantic import ValidationError
@@ -68,6 +70,7 @@ _SUBMISSION_MANIFEST_INFERRED_WARNING = (
     "submissions may be missing."
 )
 _AMBIGUOUS_ARTIFACT_REPLACEMENT = "Artifact file"
+_NON_VISIBLE_NARRATIVE_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
 _EXTENSIONLESS_FILE_BASENAMES = {
     "Brewfile",
     "BUILD",
@@ -182,6 +185,13 @@ def _share_link_host(host: str) -> str:
     cleaned = str(host).strip()
     if not cleaned:
         return "localhost"
+    if cleaned.startswith("[") or cleaned.count(":") == 1:
+        try:
+            parsed_host = urlsplit(f"//{cleaned}").hostname
+        except ValueError:
+            parsed_host = None
+        if parsed_host:
+            cleaned = parsed_host
     ip_literal = cleaned.removeprefix("[").removesuffix("]")
     try:
         parsed = ipaddress.ip_address(ip_literal)
@@ -197,6 +207,14 @@ def _share_link_host(host: str) -> str:
             address = address.replace("%", "%25", 1)
         return f"[{address}]"
     return parsed.compressed
+
+
+def _has_visible_narrative_text(value: str) -> bool:
+    return any(
+        not character.isspace()
+        and unicodedata.category(character) not in _NON_VISIBLE_NARRATIVE_CATEGORIES
+        for character in value
+    )
 
 
 def _hash_share_password(password: str, *, salt: str) -> str:
@@ -2345,14 +2363,13 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
                         ),
                     }
                 )
-    narrative_available = bool(
-        (report.narrative_opening or "").strip()
-        or (report.narrative_explanation or "").strip()
-    )
+    narrative_available = _has_visible_narrative_text(
+        report.narrative_opening or ""
+    ) or _has_visible_narrative_text(report.narrative_explanation or "")
     narrative_failure_notice = _extract_narrative_failure_notice(warnings)
     narrative_source = report.narrative_source or None
     narrative_degraded = narrative_source == "fallback" or (
-        narrative_source is None and not narrative_available
+        not narrative_available and narrative_source in {None, "llm"}
     )
     return {
         "id": report.id,

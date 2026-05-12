@@ -107,6 +107,27 @@ class OpenAICompatibleProviderAdapterTests(unittest.TestCase):
             temperature=0,
         )
 
+    @patch("openai.OpenAI")
+    def test_compatibility_adapter_rejects_invalid_timeout(
+        self,
+        mock_openai: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Request timeout must be a positive finite number",
+        ):
+            OpenAICompatibleProviderAdapter()._sdk_completion(
+                model="grok-2-latest",
+                api_base="https://api.x.ai/v1",
+                api_key="sk-test",
+                messages=[{"role": "user", "content": "{}"}],
+                response_format={"type": "json_object"},
+                temperature=0,
+                request_timeout_seconds="not-a-number",
+            )
+
+        mock_openai.assert_not_called()
+
     def test_capabilities_match_compatibility_expectations(self) -> None:
         capabilities = OpenAICompatibleProviderAdapter().capabilities_for("groq")
 

@@ -4406,6 +4406,30 @@ class ReportServiceTests(unittest.TestCase):
                         f"http://{raw_host.removeprefix('[').removesuffix(']')}:18080/reports/42",
                     )
 
+    def test_share_report_link_strips_embedded_app_host_port(self) -> None:
+        for raw_host in ("localhost:19090", "127.0.0.1:19090", "[::1]:19090"):
+            with self.subTest(raw_host=raw_host):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "APP_BASE_URL": "",
+                        "PUBLIC_APP_URL": "",
+                        "APP_HOST": raw_host,
+                        "APP_PORT": "18080",
+                    },
+                ):
+                    share_url = report_service_module.build_share_report_link(42)
+
+                expected_host = "localhost"
+                if raw_host.startswith("127.0.0.1"):
+                    expected_host = "127.0.0.1"
+                elif raw_host.startswith("[::1]"):
+                    expected_host = "[::1]"
+                self.assertEqual(
+                    share_url,
+                    f"http://{expected_host}:18080/reports/42",
+                )
+
     def test_share_report_link_brackets_ipv6_app_host(self) -> None:
         for raw_host in ("::1", "[::1]"):
             with self.subTest(raw_host=raw_host):
@@ -6788,6 +6812,51 @@ class ReportServiceTests(unittest.TestCase):
                         fetched["narrative_failure_notice"],
                         expected_notice,
                     )
+
+    def test_fetch_analysis_report_marks_invisible_narrative_text_degraded(
+        self,
+    ) -> None:
+        project = project_service_module.ensure_default_project()
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                project_id=project.id,
+                risk_score=42,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Terraform changed a security group.",
+                report_schema_version="v2",
+                parse_summary="1 parsed, 0 failed, 0 skipped, 1 normalized change",
+                narrative_opening="\u200b",
+                narrative_explanation="\u0301",
+                warnings_json="[]",
+                contributors_json="[]",
+                analyzed_files_json='["plan.json"]',
+                submission_manifest_json="{}",
+                submission_manifest_fallback_json="[]",
+                blast_radius_json="{}",
+                rollback_plan_json="{}",
+                llm_provider="openai",
+                llm_model="gpt-4.1-mini",
+                llm_local_mode="false",
+                assessment_source="heuristic-only",
+                narrative_source="llm",
+                narrative_skills_json="[]",
+                source_interface="api",
+                trigger_type="session",
+                trigger_id="legacy-invisible-narrative",
+                dashboard_display_duration_seconds=None,
+                findings_payload=[],
+                evidence_payload=[],
+            )
+            report_id = report.id
+
+        fetched = report_service_module.fetch_analysis_report(report_id)
+
+        assert fetched is not None
+        self.assertFalse(fetched["narrative_available"])
+        self.assertTrue(fetched["narrative_degraded"])
+        self.assertEqual(fetched["narrative_source"], "llm")
 
     def test_fetch_active_dashboard_report_returns_recent_dashboard_upload(
         self,

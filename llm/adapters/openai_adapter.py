@@ -13,6 +13,7 @@ from llm.adapters.base import (
 from llm.adapters._shared import (
     extract_text_content,
     normalize_prefixed_model,
+    request_timeout_seconds,
     supports_only_temperature_one,
 )
 
@@ -62,7 +63,9 @@ class OpenAIProviderAdapter:
 
         client_kwargs: dict[str, Any] = {
             "base_url": kwargs["api_base"],
-            "timeout": kwargs.get("request_timeout_seconds", 30.0),
+            "timeout": request_timeout_seconds(
+                kwargs.get("request_timeout_seconds", 30.0)
+            ),
         }
         if kwargs.get("api_key"):
             client_kwargs["api_key"] = kwargs["api_key"]

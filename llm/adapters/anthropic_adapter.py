@@ -5,7 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from llm.adapters._shared import extract_text_content, split_system_messages
+from llm.adapters._shared import (
+    extract_text_content,
+    request_timeout_seconds,
+    split_system_messages,
+)
 from llm.adapters.base import (
     NarrativeProviderError,
     ProviderCapabilities,
@@ -63,7 +67,9 @@ class AnthropicProviderAdapter:
 
         client_kwargs: dict[str, Any] = {
             "base_url": kwargs["api_base"],
-            "timeout": kwargs.get("request_timeout_seconds", 30.0),
+            "timeout": request_timeout_seconds(
+                kwargs.get("request_timeout_seconds", 30.0)
+            ),
         }
         if kwargs.get("api_key"):
             client_kwargs["api_key"] = kwargs["api_key"]
