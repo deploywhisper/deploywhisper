@@ -198,6 +198,10 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
         self.assertIn("blast_radius_json", self._table_columns("analysis_reports"))
         self.assertIn("rollback_plan_json", self._table_columns("analysis_reports"))
+        self.assertIn("narrative_degraded", self._table_columns("analysis_reports"))
+        self.assertIn(
+            "narrative_failure_notice", self._table_columns("analysis_reports")
+        )
         self.assertIn("share_password_hash", self._table_columns("analysis_reports"))
         self.assertIn("share_password_salt", self._table_columns("analysis_reports"))
         self.assertIn("share_redact_filenames", self._table_columns("analysis_reports"))
@@ -972,7 +976,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "019_add_finding_context_fields")
+        self.assertEqual(revision, "020_add_narrative_state_fields")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1021,7 +1025,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "019_add_finding_context_fields")
+        self.assertEqual(revision, "020_add_narrative_state_fields")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1047,7 +1051,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "019_add_finding_context_fields")
+        self.assertEqual(revision, "020_add_narrative_state_fields")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -1323,7 +1327,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "019_add_finding_context_fields")
+        self.assertEqual(revision, "020_add_narrative_state_fields")
 
 
 if __name__ == "__main__":

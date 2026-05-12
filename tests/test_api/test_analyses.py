@@ -670,6 +670,86 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
 
+    def test_create_analysis_returns_degraded_narrative_provider_metadata(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-degraded",
+            display_name="Payments Degraded",
+        )
+        files = [
+            (
+                "files",
+                (
+                    "plan.json",
+                    b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
+                    "application/json",
+                ),
+            )
+        ]
+        narrative = NarrativeResult(
+            available=False,
+            opening_sentence="",
+            explanation="",
+            guidance=[],
+            degraded=True,
+            warnings=["Narrative provider unavailable: timeout"],
+            failure_notice="Narrative provider unavailable: timeout",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
+            skills_applied=["terraform"],
+        )
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-001",
+                analysis_id=0,
+                finding_id="pending:change-001",
+                source_type="artifact",
+                source_ref="terraform://plan.json#aws_security_group.main?action=modify",
+                summary="Terraform changed a security group.",
+                severity_hint="high",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=["change-001"],
+            )
+        ]
+
+        with (
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=self._analysis_assessment(),
+            ),
+            patch(
+                "services.analysis_service.extract_batch_evidence",
+                return_value=evidence_items,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=narrative,
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=files,
+                data={"project_key": "payments-degraded"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        persisted_report = response.json()["data"]["persisted_report"]
+        self.assertFalse(persisted_report["narrative_available"])
+        self.assertTrue(persisted_report["narrative_degraded"])
+        self.assertEqual(persisted_report["narrative_source"], "fallback")
+        self.assertEqual(persisted_report["narrative_provider"], "openai")
+        self.assertEqual(persisted_report["narrative_model"], "gpt-4.1-mini")
+        self.assertFalse(persisted_report["narrative_local_mode"])
+        self.assertEqual(
+            persisted_report["narrative_failure_notice"],
+            "Narrative provider unavailable: timeout",
+        )
+
     def test_create_analysis_preserves_real_pipeline_metadata_in_persisted_contributors(
         self,
     ) -> None:

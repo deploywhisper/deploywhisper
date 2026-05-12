@@ -74,6 +74,35 @@ class NarratorTests(unittest.TestCase):
         self.assertIn("Narrative provider unavailable", narrative.failure_notice or "")
         self.assertIn("Expecting property name", " ".join(narrative.warnings))
 
+    def test_generate_narrative_skips_skill_resolution_without_contributors(
+        self,
+    ) -> None:
+        assessment = self._assessment().model_copy(update={"contributors": []})
+        with (
+            patch(
+                "llm.narrator.resolve_provider_runtime",
+                return_value={
+                    "provider": "ollama",
+                    "model": "ollama/llama3",
+                    "api_base": "http://localhost:11434",
+                    "api_key": None,
+                    "local_mode": True,
+                },
+            ),
+            patch(
+                "llm.narrator.resolve_skills",
+                side_effect=RuntimeError("skill resolution failed"),
+            ) as mock_resolve_skills,
+        ):
+            narrative = generate_narrative(assessment, [])
+
+        mock_resolve_skills.assert_not_called()
+        self.assertFalse(narrative.available)
+        self.assertTrue(narrative.degraded)
+        self.assertEqual(narrative.source, "fallback")
+        self.assertIsNone(narrative.failure_notice)
+        self.assertEqual(narrative.skills_applied, [])
+
     def test_generate_narrative_falls_back_when_provider_call_raises(self) -> None:
         def broken_completion(**_: object):
             raise RuntimeError("provider offline")

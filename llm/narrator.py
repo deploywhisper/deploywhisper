@@ -104,32 +104,30 @@ def generate_narrative(
     raw_files: dict[str, bytes | None] | None = None,
 ) -> NarrativeResult:
     runtime = resolve_provider_runtime()
+    if not settings.narrator_enabled:
+        return _fallback_narrative(
+            assessment,
+            findings,
+            "Narrator disabled by configuration.",
+            provider=runtime["provider"],
+            model=runtime["model"],
+            local_mode=runtime["local_mode"],
+            failure_prefix="Narrative unavailable",
+        )
+    if not assessment.contributors:
+        return _fallback_narrative(
+            assessment,
+            findings,
+            provider=runtime["provider"],
+            model=runtime["model"],
+            local_mode=runtime["local_mode"],
+        )
+
     applied_skills: list[str] = []
     try:
         applied_skills = [
             skill.name for skill in resolve_skills(assessment, raw_files=raw_files)
         ]
-        if not settings.narrator_enabled:
-            return _fallback_narrative(
-                assessment,
-                findings,
-                "Narrator disabled by configuration.",
-                provider=runtime["provider"],
-                model=runtime["model"],
-                local_mode=runtime["local_mode"],
-                skills_applied=applied_skills,
-                failure_prefix="Narrative unavailable",
-            )
-        if not assessment.contributors:
-            return _fallback_narrative(
-                assessment,
-                findings,
-                provider=runtime["provider"],
-                model=runtime["model"],
-                local_mode=runtime["local_mode"],
-                skills_applied=applied_skills,
-            )
-
         skill_context = build_skill_context(assessment, raw_files=raw_files)
         messages = [
             {"role": "system", "content": build_system_prompt(skill_context)},

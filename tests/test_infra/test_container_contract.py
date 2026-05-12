@@ -33,6 +33,7 @@ class ContainerContractTests(unittest.TestCase):
                 "017_add_submission_manifest_payload.py",
                 "018_add_evidence_identity_fields.py",
                 "019_add_finding_context_fields.py",
+                "020_add_narrative_state_fields.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -51,6 +52,7 @@ class ContainerContractTests(unittest.TestCase):
         submission_manifest_content = migrations[13].read_text(encoding="utf-8")
         evidence_identity_content = migrations[14].read_text(encoding="utf-8")
         finding_context_content = migrations[15].read_text(encoding="utf-8")
+        narrative_state_content = migrations[16].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -131,6 +133,12 @@ class ContainerContractTests(unittest.TestCase):
         self.assertIn('"explanation"', finding_context_content)
         self.assertIn('"guidance_json"', finding_context_content)
         self.assertIn('"evidence_classification"', finding_context_content)
+        self.assertIn(
+            'down_revision = "019_add_finding_context_fields"',
+            narrative_state_content,
+        )
+        self.assertIn('"narrative_degraded"', narrative_state_content)
+        self.assertIn('"narrative_failure_notice"', narrative_state_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())

@@ -185,6 +185,17 @@ def _share_link_host(host: str) -> str:
     cleaned = str(host).strip()
     if not cleaned:
         return "localhost"
+    if "%" in cleaned and not cleaned.startswith("[") and cleaned.count(":") > 1:
+        address_part, scope_part = cleaned.split("%", 1)
+        scope_name, separator, candidate_port = scope_part.rpartition(":")
+        if separator and candidate_port.isdigit() and scope_name:
+            candidate_host = f"{address_part}%{scope_name}"
+            try:
+                ipaddress.ip_address(candidate_host)
+            except ValueError:
+                pass
+            else:
+                cleaned = candidate_host
     if cleaned.startswith("[") or cleaned.count(":") == 1:
         try:
             parsed_host = urlsplit(f"//{cleaned}").hostname
@@ -2392,12 +2403,22 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     narrative_available = _has_visible_narrative_text(
         report.narrative_opening or ""
     ) or _has_visible_narrative_text(report.narrative_explanation or "")
-    narrative_failure_notice = _extract_narrative_failure_notice(warnings)
+    stored_failure_notice = getattr(report, "narrative_failure_notice", None)
+    narrative_failure_notice = (
+        stored_failure_notice
+        if stored_failure_notice is not None
+        else _extract_narrative_failure_notice(warnings)
+    )
     narrative_source = _known_narrative_source(report.narrative_source)
+    stored_narrative_degraded = getattr(report, "narrative_degraded", None)
     narrative_degraded = (
-        narrative_source == "fallback"
-        or narrative_failure_notice is not None
-        or not narrative_available
+        bool(stored_narrative_degraded)
+        if stored_narrative_degraded is not None
+        else (
+            narrative_source == "fallback"
+            or narrative_failure_notice is not None
+            or not narrative_available
+        )
     )
     return {
         "id": report.id,
@@ -2642,6 +2663,8 @@ def persist_analysis_report(
                 parse_summary=_build_parse_summary(parse_batch),
                 narrative_opening=narrative.opening_sentence or "",
                 narrative_explanation=narrative.explanation or "",
+                narrative_degraded=narrative.degraded,
+                narrative_failure_notice=narrative.failure_notice,
                 warnings_json=json.dumps(combined_warnings),
                 contributors_json=json.dumps(
                     [

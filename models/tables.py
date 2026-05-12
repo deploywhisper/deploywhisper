@@ -199,6 +199,10 @@ if "AnalysisReport" not in globals():
         parse_summary: Mapped[str] = mapped_column(Text)
         narrative_opening: Mapped[str] = mapped_column(Text)
         narrative_explanation: Mapped[str] = mapped_column(Text)
+        narrative_degraded: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+        narrative_failure_notice: Mapped[str | None] = mapped_column(
+            Text, nullable=True
+        )
         warnings_json: Mapped[str] = mapped_column(Text, default="[]")
         contributors_json: Mapped[str] = mapped_column(Text, default="[]")
         analyzed_files_json: Mapped[str] = mapped_column(Text, default="[]")

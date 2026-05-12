@@ -2328,6 +2328,10 @@ class AnalyzeCliTests(unittest.TestCase):
             degraded=True,
             warnings=["Narrative provider unavailable: offline test"],
             failure_notice="Narrative provider unavailable: offline test",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
         )
         output = io.StringIO()
 
@@ -2381,6 +2385,13 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertFalse(payload["data"]["narrative"]["available"])
         self.assertTrue(payload["data"]["narrative"]["degraded"])
         self.assertTrue(payload["data"]["persisted_report"]["narrative_degraded"])
+        self.assertEqual(
+            payload["data"]["persisted_report"]["narrative_provider"], "openai"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["narrative_model"], "gpt-4.1-mini"
+        )
+        self.assertFalse(payload["data"]["persisted_report"]["narrative_local_mode"])
         self.assertTrue(payload["data"]["evidence_items"])
         self.assertTrue(payload["data"]["findings"])
         self.assertTrue(payload["data"]["persisted_report"]["findings"])

@@ -4412,9 +4412,9 @@ class ReportServiceTests(unittest.TestCase):
             "127.0.0.1:19090": "127.0.0.1",
             "[::1]:19090": "[::1]",
             "2001:db8::1:19090": "[2001:db8::1]",
-            "fe80::1%lo0:19090": "[fe80::1%25lo0:19090]",
+            "fe80::1%lo0:19090": "[fe80::1%25lo0]",
             "2001:db8::1:8080": "[2001:db8::1:8080]",
-            "fe80::1%lo0:8080": "[fe80::1%25lo0:8080]",
+            "fe80::1%lo0:8080": "[fe80::1%25lo0]",
             "2001:db8::1:1234": "[2001:db8::1:1234]",
             "fe80::443": "[fe80::443]",
         }
@@ -6756,6 +6756,77 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["narrative_provider"], "openai")
         self.assertEqual(persisted["narrative_model"], "gpt-4.1-mini")
         self.assertFalse(persisted["narrative_local_mode"])
+
+    def test_persist_analysis_report_preserves_explicit_narrative_state(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            contributors=[
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            available=True,
+            opening_sentence="CAUTION: visible fallback summary.",
+            explanation="Visible fallback explanation survives persistence.",
+            guidance=[],
+            degraded=True,
+            warnings=[],
+            failure_notice="Narrative provider unavailable: timeout",
+            source="llm",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
+            skills_applied=["terraform"],
+        )
+
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch, assessment, narrative
+        )
+        fetched = report_service_module.fetch_analysis_report(persisted["id"])
+
+        self.assertTrue(persisted["narrative_available"])
+        self.assertTrue(persisted["narrative_degraded"])
+        self.assertEqual(
+            persisted["narrative_failure_notice"],
+            "Narrative provider unavailable: timeout",
+        )
+        self.assertTrue(fetched["narrative_degraded"])
+        self.assertEqual(
+            fetched["narrative_failure_notice"],
+            "Narrative provider unavailable: timeout",
+        )
+        self.assertEqual(fetched["narrative_source"], "llm")
 
     def test_fetch_analysis_report_marks_legacy_unavailable_narrative_degraded(
         self,
