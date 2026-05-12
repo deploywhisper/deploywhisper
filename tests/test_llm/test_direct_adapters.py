@@ -205,6 +205,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
         self.assertEqual(captured["model"], "ollama/llama3")
         self.assertEqual(captured["api_base"], "http://localhost:11434")
         self.assertEqual(captured["temperature"], 0)
+        self.assertEqual(captured["request_timeout_seconds"], 30.0)
         self.assertNotIn("api_key", captured)
 
     @patch("openai.OpenAI")
@@ -479,10 +480,12 @@ class DirectProviderAdapterTests(unittest.TestCase):
             messages=[{"role": "user", "content": "{}"}],
             response_format="json",
             temperature=0,
+            request_timeout_seconds=12.5,
         )
 
         self.assertEqual(content["message"]["content"], '{"opening_sentence":"ok"}')
         request = mock_urlopen.call_args.args[0]
+        self.assertEqual(mock_urlopen.call_args.kwargs["timeout"], 12.5)
         self.assertEqual(request.full_url, "http://localhost:11434/api/chat")
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(
@@ -492,6 +495,26 @@ class DirectProviderAdapterTests(unittest.TestCase):
                 b'"stream": false, "format": "json", "options": {"temperature": 0}}'
             ),
         )
+
+    @patch("llm.adapters.ollama_adapter.urlopen")
+    def test_ollama_sdk_completion_rejects_non_http_api_base(
+        self,
+        mock_urlopen: MagicMock,
+    ) -> None:
+        with self.assertRaisesRegex(
+            NarrativeProviderError,
+            "Ollama API base must use http or https scheme",
+        ):
+            OllamaProviderAdapter()._sdk_completion(
+                model="ollama/llama3",
+                api_base="file:///tmp/ollama",
+                messages=[{"role": "user", "content": "{}"}],
+                response_format="json",
+                temperature=0,
+                request_timeout_seconds=12.5,
+            )
+
+        mock_urlopen.assert_not_called()
 
     def test_direct_remote_adapters_reject_local_mode(self) -> None:
         adapter = OpenAIProviderAdapter()

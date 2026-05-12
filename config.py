@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import os
 
 
@@ -11,9 +12,12 @@ def _float_env(name: str, default: float) -> float:
     if raw_value is None or not raw_value.strip():
         return default
     try:
-        return float(raw_value)
+        parsed = float(raw_value)
     except ValueError:
         return default
+    if not math.isfinite(parsed) or parsed <= 0:
+        return default
+    return parsed
 
 
 @dataclass(frozen=True)

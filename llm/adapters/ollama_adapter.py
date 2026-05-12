@@ -6,12 +6,13 @@ import json
 import logging
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from llm.adapters._shared import (
     extract_text_content,
     normalize_prefixed_model,
+    request_timeout_seconds,
 )
 from llm.adapters.base import (
     NarrativeProviderError,
@@ -40,10 +41,16 @@ class OllamaProviderAdapter:
             "messages": messages,
             "temperature": 0,
             "response_format": "json",
+            "request_timeout_seconds": runtime.request_timeout_seconds,
         }
 
     def _sdk_completion(self, **kwargs: Any) -> Any:
         request_url = urljoin(f"{kwargs['api_base'].rstrip('/')}/", "api/chat")
+        parsed_url = urlparse(request_url)
+        if parsed_url.scheme not in {"http", "https"}:
+            raise NarrativeProviderError(
+                "Ollama API base must use http or https scheme"
+            )
         payload = json.dumps(
             {
                 "model": normalize_prefixed_model(str(kwargs["model"]), "ollama"),
@@ -60,7 +67,13 @@ class OllamaProviderAdapter:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=30) as response:
+            # Bandit B310 is safe here because scheme is restricted above.
+            with urlopen(  # nosec B310
+                request,
+                timeout=request_timeout_seconds(
+                    kwargs.get("request_timeout_seconds", 30.0)
+                ),
+            ) as response:
                 response_body = response.read().decode("utf-8")
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="ignore").strip()
