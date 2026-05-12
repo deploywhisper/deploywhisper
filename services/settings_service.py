@@ -51,6 +51,9 @@ class ProviderSettings(BaseModel):
     model: str = Field(..., description="Configured model")
     api_base: str = Field(..., description="Configured API base")
     api_key: str | None = Field(default=None, description="Configured API key")
+    request_timeout_seconds: float = Field(
+        default=30.0, description="Hosted provider request timeout in seconds"
+    )
     local_mode: bool = Field(
         default=False, description="Whether local-only mode is active"
     )
@@ -225,6 +228,7 @@ def save_provider_settings(
         api_base=api_base,
         api_key=api_key,
         local_mode=local_mode,
+        request_timeout_seconds=settings.llm_request_timeout_seconds,
         capabilities=_provider_capability_summary(provider),
         source="database",
     )
@@ -259,6 +263,7 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                     api_base=api_base.value,
                     api_key=_provider_env_api_key(selected_provider),
                     local_mode=local_mode.value == "true",
+                    request_timeout_seconds=settings.llm_request_timeout_seconds,
                     capabilities=_provider_capability_summary(selected_provider),
                     source="database",
                 )
@@ -279,6 +284,7 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                         api_base=legacy_api_base.value,
                         api_key=_provider_env_api_key(legacy_provider.value),
                         local_mode=legacy_local_mode.value == "true",
+                        request_timeout_seconds=settings.llm_request_timeout_seconds,
                         capabilities=_provider_capability_summary(
                             legacy_provider.value
                         ),
@@ -309,6 +315,7 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
             if requested_provider
             else settings.llm_provider == "ollama"
         ),
+        request_timeout_seconds=settings.llm_request_timeout_seconds,
         capabilities=_provider_capability_summary(selected_provider),
         source="environment",
     )
@@ -325,6 +332,7 @@ def validate_provider_settings(
             api_base=provider_settings.api_base,
             api_key=provider_settings.api_key,
             local_mode=provider_settings.local_mode,
+            request_timeout_seconds=provider_settings.request_timeout_seconds,
             completion_client=completion_client,
         )
         return {
@@ -454,6 +462,7 @@ def resolve_provider_runtime() -> dict:
         "api_base": provider_settings.api_base,
         "local_mode": provider_settings.local_mode,
         "api_key": provider_settings.api_key,
+        "request_timeout_seconds": provider_settings.request_timeout_seconds,
     }
 
 

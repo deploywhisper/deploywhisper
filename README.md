@@ -227,6 +227,7 @@ services:
       LLM_PROVIDER: ollama
       LLM_MODEL: ollama/gemma4:e4b
       LLM_API_BASE: http://host.docker.internal:11434
+      LLM_REQUEST_TIMEOUT_SECONDS: 30
       LLM_API_KEY: ""
       OPENAI_API_KEY: ""
       ANTHROPIC_API_KEY: ""
@@ -268,6 +269,7 @@ services:
       LLM_PROVIDER: openai
       LLM_MODEL: gpt-4.1-mini
       LLM_API_BASE: https://api.openai.com/v1
+      LLM_REQUEST_TIMEOUT_SECONDS: 30
       OPENAI_API_KEY: your-real-key
 ```
 
@@ -302,7 +304,8 @@ docker compose up -d --force-recreate
 
 If provider settings were already saved in the DeployWhisper settings page,
 those non-secret database settings take precedence over `LLM_PROVIDER`,
-`LLM_MODEL`, and `LLM_API_BASE`; API keys still come only from container
+`LLM_MODEL`, and `LLM_API_BASE`; provider request timeout still comes from
+`LLM_REQUEST_TIMEOUT_SECONDS`; API keys still come only from container
 environment variables or runtime secrets. When you select a provider in the
 settings page, DeployWhisper resolves that provider's environment key
 (`GROQ_API_KEY` for Groq, `OPENAI_API_KEY` for OpenAI, or fallback
@@ -450,6 +453,7 @@ DeployWhisper is configured primarily through environment variables and stored n
 - `LLM_PROVIDER`
 - `LLM_MODEL`
 - `LLM_API_BASE`
+- `LLM_REQUEST_TIMEOUT_SECONDS`
 - `LLM_API_KEY`
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`

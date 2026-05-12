@@ -74,11 +74,12 @@ def _fallback_narrative(
     model: str | None = None,
     local_mode: bool | None = None,
     skills_applied: list[str] | None = None,
+    failure_prefix: str = "Narrative provider unavailable",
 ) -> NarrativeResult:
     warnings = list(assessment.warnings)
     failure_notice = None
     if error_message:
-        failure_notice = f"Narrative provider unavailable: {error_message}"
+        failure_notice = f"{failure_prefix}: {error_message}"
         warnings.append(failure_notice)
     return NarrativeResult(
         available=False,
@@ -117,6 +118,7 @@ def generate_narrative(
                 model=runtime["model"],
                 local_mode=runtime["local_mode"],
                 skills_applied=applied_skills,
+                failure_prefix="Narrative unavailable",
             )
         if not assessment.contributors:
             return _fallback_narrative(
@@ -133,6 +135,19 @@ def generate_narrative(
             {"role": "system", "content": build_system_prompt(skill_context)},
             {"role": "user", "content": build_user_payload(assessment, findings)},
         ]
+    except Exception as exc:  # noqa: BLE001
+        return _fallback_narrative(
+            assessment,
+            findings,
+            str(exc),
+            provider=runtime["provider"],
+            model=runtime["model"],
+            local_mode=runtime["local_mode"],
+            skills_applied=applied_skills,
+            failure_prefix="Narrative setup unavailable",
+        )
+
+    try:
         raw_content = generate_completion_with_settings(
             messages,
             provider=runtime["provider"],
@@ -140,6 +155,7 @@ def generate_narrative(
             api_base=runtime["api_base"],
             api_key=runtime["api_key"],
             local_mode=runtime["local_mode"],
+            request_timeout_seconds=runtime.get("request_timeout_seconds", 30.0),
             completion_client=completion_client,
         )
         payload = json.loads(raw_content)

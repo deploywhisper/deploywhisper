@@ -153,6 +153,54 @@ class NarratorTests(unittest.TestCase):
             "Narrative provider unavailable: provider timed out",
         )
 
+    def test_generate_narrative_passes_runtime_timeout_to_provider_call(self) -> None:
+        captured: dict[str, object] = {}
+
+        def completion(**kwargs: object):
+            captured.update(kwargs)
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content=(
+                                '{"opening_sentence": "CAUTION: review the change.", '
+                                '"explanation": "Security group change requires review.", '
+                                '"guidance": []}'
+                            )
+                        )
+                    )
+                ]
+            )
+
+        with (
+            patch(
+                "llm.narrator.resolve_provider_runtime",
+                return_value={
+                    "provider": "openai",
+                    "model": "gpt-4.1-mini",
+                    "api_base": "https://api.openai.com/v1",
+                    "api_key": "sk-test",
+                    "local_mode": False,
+                    "request_timeout_seconds": 12.5,
+                },
+            ),
+            patch(
+                "llm.narrator.resolve_skills",
+                return_value=[SimpleNamespace(name="terraform")],
+            ),
+            patch("llm.narrator.build_skill_context", return_value="skill context"),
+            patch("llm.narrator.build_system_prompt", return_value="system prompt"),
+            patch("llm.narrator.build_user_payload", return_value="{}"),
+        ):
+            narrative = generate_narrative(
+                self._assessment(),
+                [],
+                completion_client=completion,
+            )
+
+        self.assertFalse(narrative.degraded)
+        self.assertEqual(captured["request_timeout_seconds"], 12.5)
+
     def test_generate_narrative_falls_back_when_prompt_building_fails(self) -> None:
         with (
             patch(
@@ -188,6 +236,10 @@ class NarratorTests(unittest.TestCase):
         self.assertEqual(narrative.provider, "openai")
         self.assertEqual(narrative.model, "gpt-4.1-mini")
         self.assertEqual(narrative.skills_applied, ["terraform"])
+        self.assertNotIn(
+            "Narrative provider unavailable", narrative.failure_notice or ""
+        )
+        self.assertIn("Narrative setup unavailable", narrative.failure_notice or "")
         self.assertIn("skill context failed", narrative.failure_notice or "")
 
     def test_generate_narrative_falls_back_when_provider_returns_empty_text(
