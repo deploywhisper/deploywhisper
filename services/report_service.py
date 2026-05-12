@@ -71,6 +71,21 @@ _SUBMISSION_MANIFEST_INFERRED_WARNING = (
 )
 _AMBIGUOUS_ARTIFACT_REPLACEMENT = "Artifact file"
 _NON_VISIBLE_NARRATIVE_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
+_COMMON_EMBEDDED_APP_HOST_PORTS = {
+    "80",
+    "443",
+    "3000",
+    "5000",
+    "5001",
+    "5173",
+    "8000",
+    "8080",
+    "8081",
+    "8443",
+    "8888",
+    "9000",
+    "9090",
+}
 _EXTENSIONLESS_FILE_BASENAMES = {
     "Brewfile",
     "BUILD",
@@ -187,7 +202,14 @@ def _share_link_host(host: str) -> str:
         return "localhost"
     if not cleaned.startswith("[") and cleaned.count(":") > 1:
         candidate_host, separator, candidate_port = cleaned.rpartition(":")
-        if separator and candidate_port.isdigit() and len(candidate_port) > 4:
+        if (
+            separator
+            and candidate_port.isdigit()
+            and (
+                len(candidate_port) > 4
+                or candidate_port in _COMMON_EMBEDDED_APP_HOST_PORTS
+            )
+        ):
             try:
                 ipaddress.ip_address(candidate_host)
             except ValueError:
@@ -2384,7 +2406,11 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     ) or _has_visible_narrative_text(report.narrative_explanation or "")
     narrative_failure_notice = _extract_narrative_failure_notice(warnings)
     narrative_source = _known_narrative_source(report.narrative_source)
-    narrative_degraded = narrative_source == "fallback" or not narrative_available
+    narrative_degraded = (
+        narrative_source == "fallback"
+        or narrative_failure_notice is not None
+        or not narrative_available
+    )
     return {
         "id": report.id,
         "project": build_project_payload(

@@ -4413,6 +4413,8 @@ class ReportServiceTests(unittest.TestCase):
             "[::1]:19090": "[::1]",
             "2001:db8::1:19090": "[2001:db8::1]",
             "fe80::1%lo0:19090": "[fe80::1%25lo0]",
+            "2001:db8::1:8080": "[2001:db8::1]",
+            "fe80::1%lo0:8080": "[fe80::1%25lo0]",
             "2001:db8::1:1234": "[2001:db8::1:1234]",
         }
         for raw_host, expected_host in expected_hosts.items():
@@ -6864,6 +6866,57 @@ class ReportServiceTests(unittest.TestCase):
         self.assertFalse(fetched["narrative_available"])
         self.assertTrue(fetched["narrative_degraded"])
         self.assertEqual(fetched["narrative_source"], "llm")
+
+    def test_fetch_analysis_report_marks_failure_notice_with_visible_text_degraded(
+        self,
+    ) -> None:
+        project = project_service_module.ensure_default_project()
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                project_id=project.id,
+                risk_score=42,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Terraform changed a security group.",
+                report_schema_version="v2",
+                parse_summary="1 parsed, 0 failed, 0 skipped, 1 normalized change",
+                narrative_opening="Fallback summary text",
+                narrative_explanation="Fallback explanation text",
+                warnings_json=json.dumps(
+                    ["Narrative provider unavailable: provider offline"]
+                ),
+                contributors_json="[]",
+                analyzed_files_json='["plan.json"]',
+                submission_manifest_json="{}",
+                submission_manifest_fallback_json="[]",
+                blast_radius_json="{}",
+                rollback_plan_json="{}",
+                llm_provider="ollama",
+                llm_model="ollama/llama3",
+                llm_local_mode="true",
+                assessment_source="heuristic-only",
+                narrative_source=None,
+                narrative_skills_json="[]",
+                source_interface="api",
+                trigger_type="session",
+                trigger_id="legacy-visible-fallback",
+                dashboard_display_duration_seconds=None,
+                findings_payload=[],
+                evidence_payload=[],
+            )
+            report_id = report.id
+
+        fetched = report_service_module.fetch_analysis_report(report_id)
+
+        assert fetched is not None
+        self.assertTrue(fetched["narrative_available"])
+        self.assertTrue(fetched["narrative_degraded"])
+        self.assertEqual(fetched["narrative_source"], None)
+        self.assertEqual(
+            fetched["narrative_failure_notice"],
+            "Narrative provider unavailable: provider offline",
+        )
 
     def test_fetch_active_dashboard_report_returns_recent_dashboard_upload(
         self,
