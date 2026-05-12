@@ -188,7 +188,10 @@ def _share_link_host(host: str) -> str:
     if parsed.is_unspecified:
         return "localhost"
     if parsed.version == 6:
-        return f"[{parsed.compressed}]"
+        address = parsed.compressed
+        if "%" in address:
+            address = address.replace("%", "%25", 1)
+        return f"[{address}]"
     return parsed.compressed
 
 
@@ -2342,7 +2345,10 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         (report.narrative_opening or "").strip()
         or (report.narrative_explanation or "").strip()
     )
-    narrative_degraded = report.narrative_source == "fallback"
+    narrative_failure_notice = _extract_narrative_failure_notice(warnings)
+    narrative_degraded = report.narrative_source == "fallback" or (
+        report.narrative_source is None and narrative_failure_notice is not None
+    )
     return {
         "id": report.id,
         "project": build_project_payload(
@@ -2404,7 +2410,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "narrative_explanation": report.narrative_explanation,
         "narrative_available": narrative_available,
         "narrative_degraded": narrative_degraded,
-        "narrative_failure_notice": _extract_narrative_failure_notice(warnings),
+        "narrative_failure_notice": narrative_failure_notice,
         "assessment_source": report.assessment_source,
         "narrative_source": report.narrative_source,
         "narrative_provider": report.llm_provider,

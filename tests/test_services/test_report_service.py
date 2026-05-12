@@ -4374,26 +4374,48 @@ class ReportServiceTests(unittest.TestCase):
     def test_share_report_link_normalizes_unspecified_app_host(self) -> None:
         for raw_host in ("0.0.0.0", "::", " :: ", "[::]"):
             with self.subTest(raw_host=raw_host):
-                os.environ.pop("APP_BASE_URL", None)
-                os.environ.pop("PUBLIC_APP_URL", None)
-                os.environ["APP_HOST"] = raw_host
-                os.environ["APP_PORT"] = "18080"
+                with patch.dict(
+                    os.environ,
+                    {
+                        "APP_BASE_URL": "",
+                        "PUBLIC_APP_URL": "",
+                        "APP_HOST": raw_host,
+                        "APP_PORT": "18080",
+                    },
+                ):
+                    share_url = report_service_module.build_share_report_link(42)
 
-                share_url = report_service_module.build_share_report_link(42)
-
-                self.assertEqual(share_url, "http://localhost:18080/reports/42")
+                    self.assertEqual(share_url, "http://localhost:18080/reports/42")
 
     def test_share_report_link_brackets_ipv6_app_host(self) -> None:
         for raw_host in ("::1", "[::1]"):
             with self.subTest(raw_host=raw_host):
-                os.environ.pop("APP_BASE_URL", None)
-                os.environ.pop("PUBLIC_APP_URL", None)
-                os.environ["APP_HOST"] = raw_host
-                os.environ["APP_PORT"] = "18080"
+                with patch.dict(
+                    os.environ,
+                    {
+                        "APP_BASE_URL": "",
+                        "PUBLIC_APP_URL": "",
+                        "APP_HOST": raw_host,
+                        "APP_PORT": "18080",
+                    },
+                ):
+                    share_url = report_service_module.build_share_report_link(42)
 
-                share_url = report_service_module.build_share_report_link(42)
+                    self.assertEqual(share_url, "http://[::1]:18080/reports/42")
 
-                self.assertEqual(share_url, "http://[::1]:18080/reports/42")
+    def test_share_report_link_escapes_scoped_ipv6_app_host(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "APP_BASE_URL": "",
+                "PUBLIC_APP_URL": "",
+                "APP_HOST": "fe80::1%lo0",
+                "APP_PORT": "18080",
+            },
+        ):
+            share_url = report_service_module.build_share_report_link(42)
+
+        self.assertEqual(share_url, "http://[fe80::1%25lo0]:18080/reports/42")
 
     def test_shared_report_redaction_preserves_sensitive_content_exclusion(
         self,
@@ -6610,69 +6632,56 @@ class ReportServiceTests(unittest.TestCase):
             "Narrative provider unavailable: provider offline",
         )
 
-    def test_persist_analysis_report_does_not_mark_empty_llm_narrative_degraded(
+    def test_fetch_analysis_report_marks_legacy_failure_notice_degraded(
         self,
     ) -> None:
-        parse_batch = ParseBatchResult(
-            files=[
-                ParsedFileResult(
-                    file_name="plan.json",
-                    tool="terraform",
-                    status="parsed",
-                    changes=[
-                        UnifiedChange(
-                            source_file="plan.json",
-                            tool="terraform",
-                            resource_id="aws_security_group.main",
-                            action="modify",
-                            summary="Terraform changed a security group.",
-                        )
-                    ],
-                )
-            ]
-        )
-        assessment = RiskAssessment(
-            score=42,
-            severity="medium",
-            recommendation="caution",
-            top_risk="Terraform changed a security group.",
-            contributors=[
-                RiskContributor(
-                    source_file="plan.json",
-                    tool="terraform",
-                    resource_id="aws_security_group.main",
-                    action="modify",
-                    contribution=12,
-                    summary="Terraform changed a security group.",
-                )
-            ],
-            interaction_risks=[],
-            partial_context=False,
-            warnings=[],
-        )
-        narrative = NarrativeResult(
-            available=True,
-            opening_sentence="",
-            explanation="",
-            guidance=[],
-            degraded=False,
-            warnings=[],
-            failure_notice=None,
-            source="llm",
-            provider="ollama",
-            model="ollama/llama3",
-            local_mode=True,
-            skills_applied=["terraform"],
-        )
+        project = project_service_module.ensure_default_project()
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                project_id=project.id,
+                risk_score=42,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Terraform changed a security group.",
+                report_schema_version="v2",
+                parse_summary="1 parsed, 0 failed, 0 skipped, 1 normalized change",
+                narrative_opening="",
+                narrative_explanation="",
+                warnings_json=json.dumps(
+                    ["Narrative provider unavailable: provider offline"]
+                ),
+                contributors_json="[]",
+                analyzed_files_json='["plan.json"]',
+                submission_manifest_json="{}",
+                submission_manifest_fallback_json="[]",
+                blast_radius_json="{}",
+                rollback_plan_json="{}",
+                llm_provider="ollama",
+                llm_model="ollama/llama3",
+                llm_local_mode="true",
+                assessment_source="heuristic-only",
+                narrative_source=None,
+                narrative_skills_json="[]",
+                source_interface="api",
+                trigger_type="session",
+                trigger_id="legacy-narrative-source",
+                dashboard_display_duration_seconds=None,
+                findings_payload=[],
+                evidence_payload=[],
+            )
+            report_id = report.id
 
-        persisted = report_service_module.persist_analysis_report(
-            parse_batch, assessment, narrative
-        )
+        fetched = report_service_module.fetch_analysis_report(report_id)
 
-        self.assertFalse(persisted["narrative_available"])
-        self.assertFalse(persisted["narrative_degraded"])
-        self.assertEqual(persisted["narrative_source"], "llm")
-        self.assertIsNone(persisted["narrative_failure_notice"])
+        assert fetched is not None
+        self.assertFalse(fetched["narrative_available"])
+        self.assertTrue(fetched["narrative_degraded"])
+        self.assertIsNone(fetched["narrative_source"])
+        self.assertEqual(
+            fetched["narrative_failure_notice"],
+            "Narrative provider unavailable: provider offline",
+        )
 
     def test_fetch_active_dashboard_report_returns_recent_dashboard_upload(
         self,

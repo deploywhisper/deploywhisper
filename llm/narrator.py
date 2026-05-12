@@ -163,10 +163,15 @@ def generate_narrative(
                 )
             return sanitized
 
+        opening_sentence = sanitize_scope_claims(payload["opening_sentence"])
+        explanation = sanitize_scope_claims(payload["explanation"])
+        if not (opening_sentence.strip() or explanation.strip()):
+            raise ValueError("Narrative provider returned empty output.")
+
         return NarrativeResult(
             available=True,
-            opening_sentence=sanitize_scope_claims(payload["opening_sentence"]),
-            explanation=sanitize_scope_claims(payload["explanation"]),
+            opening_sentence=opening_sentence,
+            explanation=explanation,
             guidance=[
                 sanitize_scope_claims(item)
                 for item in list(payload.get("guidance", []))
