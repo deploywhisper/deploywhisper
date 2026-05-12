@@ -46,6 +46,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
         self.assertEqual(captured["api_key"], "sk-test")
         self.assertEqual(captured["response_format"], {"type": "json_object"})
         self.assertEqual(captured["temperature"], 1)
+        self.assertEqual(captured["request_timeout_seconds"], 30.0)
 
     def test_openai_adapter_normalizes_prefixed_model_name(self) -> None:
         captured: dict[str, object] = {}
@@ -236,6 +237,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
         mock_openai.assert_called_once_with(
             base_url="https://api.openai.com/v1",
             api_key="sk-test",
+            timeout=30.0,
         )
         mock_client.chat.completions.create.assert_called_once_with(
             model="gpt-4.1-mini",
@@ -277,6 +279,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
         mock_anthropic.assert_called_once_with(
             base_url="https://api.anthropic.com",
             api_key="sk-test",
+            timeout=30.0,
         )
         mock_client.messages.create.assert_called_once_with(
             model="claude-3-5-sonnet-latest",
@@ -313,7 +316,10 @@ class DirectProviderAdapterTests(unittest.TestCase):
         self.assertEqual(content.text, '{"opening_sentence":"ok"}')
         mock_client_cls.assert_called_once_with(
             api_key="gm-test",
-            http_options={"base_url": "https://generativelanguage.googleapis.com"},
+            http_options={
+                "base_url": "https://generativelanguage.googleapis.com",
+                "timeout": 30.0,
+            },
         )
         mock_client.models.generate_content.assert_called_once_with(
             model="gemini-2.0-flash",

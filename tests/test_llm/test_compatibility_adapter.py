@@ -50,6 +50,7 @@ class OpenAICompatibleProviderAdapterTests(unittest.TestCase):
         self.assertEqual(captured["api_key"], "sk-test")
         self.assertEqual(captured["response_format"], {"type": "json_object"})
         self.assertEqual(captured["temperature"], 0)
+        self.assertEqual(captured["request_timeout_seconds"], 30.0)
 
     def test_compatibility_adapter_rejects_local_mode(self) -> None:
         adapter = OpenAICompatibleProviderAdapter()
@@ -97,6 +98,7 @@ class OpenAICompatibleProviderAdapterTests(unittest.TestCase):
         mock_openai.assert_called_once_with(
             base_url="https://api.x.ai/v1",
             api_key="sk-test",
+            timeout=30.0,
         )
         mock_client.chat.completions.create.assert_called_once_with(
             model="grok-2-latest",

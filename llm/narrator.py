@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -15,6 +16,8 @@ from llm.prompts import build_system_prompt, build_user_payload
 from llm.providers import generate_completion_with_settings
 from llm.skill_context import build_skill_context, resolve_skills
 from services.settings_service import resolve_provider_runtime
+
+_INVISIBLE_TEXT_CATEGORIES = {"Cc", "Cf"}
 
 
 class NarrativeResult(BaseModel):
@@ -51,6 +54,14 @@ class NarrativeResult(BaseModel):
     skills_applied: list[str] = Field(
         default_factory=list,
         description="Resolved skill names applied to the narrative prompt",
+    )
+
+
+def _has_visible_text(value: str) -> bool:
+    return any(
+        not character.isspace()
+        and unicodedata.category(character) not in _INVISIBLE_TEXT_CATEGORIES
+        for character in value
     )
 
 
@@ -165,7 +176,7 @@ def generate_narrative(
 
         opening_sentence = sanitize_scope_claims(payload["opening_sentence"])
         explanation = sanitize_scope_claims(payload["explanation"])
-        if not (opening_sentence.strip() or explanation.strip()):
+        if not (_has_visible_text(opening_sentence) or _has_visible_text(explanation)):
             raise ValueError("Narrative provider returned empty output.")
 
         return NarrativeResult(

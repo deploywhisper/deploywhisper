@@ -54,6 +54,7 @@ class OpenAICompatibleProviderAdapter:
             "response_format": {"type": "json_object"},
             "temperature": 0,
             "api_key": runtime.api_key,
+            "request_timeout_seconds": runtime.request_timeout_seconds,
         }
 
     def _sdk_completion(self, **kwargs: Any) -> Any:
@@ -64,7 +65,10 @@ class OpenAICompatibleProviderAdapter:
                 "The openai SDK is not installed. Install the story-required dependencies."
             ) from exc
 
-        client_kwargs: dict[str, Any] = {"base_url": kwargs["api_base"]}
+        client_kwargs: dict[str, Any] = {
+            "base_url": kwargs["api_base"],
+            "timeout": kwargs.get("request_timeout_seconds", 30.0),
+        }
         if kwargs.get("api_key"):
             client_kwargs["api_key"] = kwargs["api_key"]
         client = OpenAI(**client_kwargs)

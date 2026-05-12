@@ -51,6 +51,7 @@ def generate_completion_with_settings(
     api_base: str,
     api_key: str | None = None,
     local_mode: bool = False,
+    request_timeout_seconds: float = 30.0,
     completion_client: Callable[..., Any] | None = None,
 ) -> str:
     runtime = ProviderRuntimeConfig(
@@ -59,6 +60,7 @@ def generate_completion_with_settings(
         api_base=api_base,
         api_key=api_key,
         local_mode=local_mode,
+        request_timeout_seconds=request_timeout_seconds,
     )
     adapter = get_provider_adapter(provider)
     return adapter.generate_completion(
@@ -75,6 +77,7 @@ def validate_provider_configuration(
     api_base: str,
     api_key: str | None = None,
     local_mode: bool = False,
+    request_timeout_seconds: float = 30.0,
     completion_client: Callable[..., Any] | None = None,
 ) -> None:
     """Validate provider runtime settings through the adapter contract."""
@@ -84,6 +87,7 @@ def validate_provider_configuration(
         api_base=api_base,
         api_key=api_key,
         local_mode=local_mode,
+        request_timeout_seconds=request_timeout_seconds,
     )
     adapter = get_provider_adapter(provider)
     adapter.validate_configuration(runtime=runtime, completion_client=completion_client)

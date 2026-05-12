@@ -4403,19 +4403,21 @@ class ReportServiceTests(unittest.TestCase):
 
                     self.assertEqual(share_url, "http://[::1]:18080/reports/42")
 
-    def test_share_report_link_escapes_scoped_ipv6_app_host(self) -> None:
-        with patch.dict(
-            os.environ,
-            {
-                "APP_BASE_URL": "",
-                "PUBLIC_APP_URL": "",
-                "APP_HOST": "fe80::1%lo0",
-                "APP_PORT": "18080",
-            },
-        ):
-            share_url = report_service_module.build_share_report_link(42)
+    def test_share_report_link_escapes_scoped_ipv6_app_host_once(self) -> None:
+        for raw_host in ("fe80::1%lo0", "fe80::1%25lo0", "[fe80::1%25lo0]"):
+            with self.subTest(raw_host=raw_host):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "APP_BASE_URL": "",
+                        "PUBLIC_APP_URL": "",
+                        "APP_HOST": raw_host,
+                        "APP_PORT": "18080",
+                    },
+                ):
+                    share_url = report_service_module.build_share_report_link(42)
 
-        self.assertEqual(share_url, "http://[fe80::1%25lo0]:18080/reports/42")
+                self.assertEqual(share_url, "http://[fe80::1%25lo0]:18080/reports/42")
 
     def test_shared_report_redaction_preserves_sensitive_content_exclusion(
         self,
@@ -6632,56 +6634,137 @@ class ReportServiceTests(unittest.TestCase):
             "Narrative provider unavailable: provider offline",
         )
 
-    def test_fetch_analysis_report_marks_legacy_failure_notice_degraded(
+    def test_persist_analysis_report_uses_narrative_provider_metadata(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed a security group.",
+            contributors=[
+                RiskContributor(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform changed a security group.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            available=False,
+            opening_sentence="",
+            explanation="",
+            guidance=[],
+            degraded=True,
+            warnings=["Narrative provider unavailable: provider timed out"],
+            failure_notice="Narrative provider unavailable: provider timed out",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
+            skills_applied=["terraform"],
+        )
+
+        with patch(
+            "services.report_service.resolve_provider_runtime",
+            return_value={
+                "provider": "ollama",
+                "model": "ollama/llama3",
+                "api_base": "http://localhost:11434",
+                "api_key": None,
+                "local_mode": True,
+            },
+        ):
+            persisted = report_service_module.persist_analysis_report(
+                parse_batch, assessment, narrative
+            )
+
+        self.assertEqual(persisted["audit"]["llm_provider"], "openai")
+        self.assertEqual(persisted["audit"]["llm_model"], "gpt-4.1-mini")
+        self.assertFalse(persisted["audit"]["llm_local_mode"])
+        self.assertEqual(persisted["narrative_provider"], "openai")
+        self.assertEqual(persisted["narrative_model"], "gpt-4.1-mini")
+        self.assertFalse(persisted["narrative_local_mode"])
+
+    def test_fetch_analysis_report_marks_legacy_unavailable_narrative_degraded(
         self,
     ) -> None:
-        project = project_service_module.ensure_default_project()
-        with database_module.SessionLocal() as session:
-            report = analysis_reports_repository_module.create_analysis_report(
-                session,
-                project_id=project.id,
-                risk_score=42,
-                severity="medium",
-                recommendation="caution",
-                top_risk="Terraform changed a security group.",
-                report_schema_version="v2",
-                parse_summary="1 parsed, 0 failed, 0 skipped, 1 normalized change",
-                narrative_opening="",
-                narrative_explanation="",
-                warnings_json=json.dumps(
-                    ["Narrative provider unavailable: provider offline"]
-                ),
-                contributors_json="[]",
-                analyzed_files_json='["plan.json"]',
-                submission_manifest_json="{}",
-                submission_manifest_fallback_json="[]",
-                blast_radius_json="{}",
-                rollback_plan_json="{}",
-                llm_provider="ollama",
-                llm_model="ollama/llama3",
-                llm_local_mode="true",
-                assessment_source="heuristic-only",
-                narrative_source=None,
-                narrative_skills_json="[]",
-                source_interface="api",
-                trigger_type="session",
-                trigger_id="legacy-narrative-source",
-                dashboard_display_duration_seconds=None,
-                findings_payload=[],
-                evidence_payload=[],
-            )
-            report_id = report.id
+        warning_cases = [
+            (
+                ["Narrative provider unavailable: provider offline"],
+                "Narrative provider unavailable: provider offline",
+            ),
+            ([], None),
+        ]
+        for warnings, expected_notice in warning_cases:
+            with self.subTest(warnings=warnings):
+                project = project_service_module.ensure_default_project()
+                with database_module.SessionLocal() as session:
+                    report = analysis_reports_repository_module.create_analysis_report(
+                        session,
+                        project_id=project.id,
+                        risk_score=42,
+                        severity="medium",
+                        recommendation="caution",
+                        top_risk="Terraform changed a security group.",
+                        report_schema_version="v2",
+                        parse_summary="1 parsed, 0 failed, 0 skipped, 1 normalized change",
+                        narrative_opening="",
+                        narrative_explanation="",
+                        warnings_json=json.dumps(warnings),
+                        contributors_json="[]",
+                        analyzed_files_json='["plan.json"]',
+                        submission_manifest_json="{}",
+                        submission_manifest_fallback_json="[]",
+                        blast_radius_json="{}",
+                        rollback_plan_json="{}",
+                        llm_provider="ollama",
+                        llm_model="ollama/llama3",
+                        llm_local_mode="true",
+                        assessment_source="heuristic-only",
+                        narrative_source=None,
+                        narrative_skills_json="[]",
+                        source_interface="api",
+                        trigger_type="session",
+                        trigger_id="legacy-narrative-source",
+                        dashboard_display_duration_seconds=None,
+                        findings_payload=[],
+                        evidence_payload=[],
+                    )
+                    report_id = report.id
 
-        fetched = report_service_module.fetch_analysis_report(report_id)
+                fetched = report_service_module.fetch_analysis_report(report_id)
 
-        assert fetched is not None
-        self.assertFalse(fetched["narrative_available"])
-        self.assertTrue(fetched["narrative_degraded"])
-        self.assertIsNone(fetched["narrative_source"])
-        self.assertEqual(
-            fetched["narrative_failure_notice"],
-            "Narrative provider unavailable: provider offline",
-        )
+                assert fetched is not None
+                self.assertFalse(fetched["narrative_available"])
+                self.assertTrue(fetched["narrative_degraded"])
+                self.assertIsNone(fetched["narrative_source"])
+                self.assertEqual(
+                    fetched["narrative_failure_notice"],
+                    expected_notice,
+                )
 
     def test_fetch_active_dashboard_report_returns_recent_dashboard_upload(
         self,

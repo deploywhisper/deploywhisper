@@ -189,7 +189,7 @@ def _share_link_host(host: str) -> str:
         return "localhost"
     if parsed.version == 6:
         address = parsed.compressed
-        if "%" in address:
+        if "%" in address and "%25" not in address:
             address = address.replace("%", "%25", 1)
         return f"[{address}]"
     return parsed.compressed
@@ -2347,7 +2347,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     )
     narrative_failure_notice = _extract_narrative_failure_notice(warnings)
     narrative_degraded = report.narrative_source == "fallback" or (
-        report.narrative_source is None and narrative_failure_notice is not None
+        report.narrative_source is None and not narrative_available
     )
     return {
         "id": report.id,
@@ -2498,6 +2498,10 @@ def persist_analysis_report(
         evidence_items,
     )
     audit = _build_audit_metadata(parse_batch, audit_context=audit_context)
+    audit["llm_provider"] = narrative.provider or audit["llm_provider"]
+    audit["llm_model"] = narrative.model or audit["llm_model"]
+    if narrative.local_mode is not None:
+        audit["llm_local_mode"] = narrative.local_mode
     resolved_project_id, resolved_workspace_id = _resolve_report_scope(
         project_id=project_id,
         project_key=project_key,
