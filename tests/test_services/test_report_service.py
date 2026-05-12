@@ -6828,6 +6828,28 @@ class ReportServiceTests(unittest.TestCase):
         )
         self.assertEqual(fetched["narrative_source"], "llm")
 
+        contradictory_narrative = narrative.model_copy(
+            update={
+                "degraded": False,
+                "source": "fallback",
+                "failure_notice": "Narrative provider unavailable: timeout",
+                "warnings": ["Narrative provider unavailable: timeout"],
+            }
+        )
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch, assessment, contradictory_narrative
+        )
+        fetched = report_service_module.fetch_analysis_report(persisted["id"])
+
+        self.assertTrue(persisted["narrative_degraded"])
+        assert fetched is not None
+        self.assertTrue(fetched["narrative_degraded"])
+        self.assertEqual(fetched["narrative_source"], "fallback")
+        self.assertEqual(
+            fetched["narrative_failure_notice"],
+            "Narrative provider unavailable: timeout",
+        )
+
     def test_fetch_analysis_report_marks_legacy_unavailable_narrative_degraded(
         self,
     ) -> None:
@@ -6897,6 +6919,57 @@ class ReportServiceTests(unittest.TestCase):
                         fetched["narrative_failure_notice"],
                         expected_notice,
                     )
+
+    def test_fetch_analysis_report_does_not_allow_stored_false_to_mask_failure(
+        self,
+    ) -> None:
+        project = project_service_module.ensure_default_project()
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.create_analysis_report(
+                session,
+                project_id=project.id,
+                risk_score=42,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Terraform changed a security group.",
+                report_schema_version="v2",
+                parse_summary="1 parsed, 0 failed, 0 skipped, 1 normalized change",
+                narrative_opening="",
+                narrative_explanation="",
+                narrative_degraded=False,
+                narrative_failure_notice="Narrative provider unavailable: timeout",
+                warnings_json=json.dumps(["Narrative provider unavailable: timeout"]),
+                contributors_json="[]",
+                analyzed_files_json='["plan.json"]',
+                submission_manifest_json="{}",
+                submission_manifest_fallback_json="[]",
+                blast_radius_json="{}",
+                rollback_plan_json="{}",
+                llm_provider="openai",
+                llm_model="gpt-4.1-mini",
+                llm_local_mode="false",
+                assessment_source="heuristic-only",
+                narrative_source="fallback",
+                narrative_skills_json="[]",
+                source_interface="api",
+                trigger_type="session",
+                trigger_id="stored-false-fallback",
+                dashboard_display_duration_seconds=None,
+                findings_payload=[],
+                evidence_payload=[],
+            )
+            report_id = report.id
+
+        fetched = report_service_module.fetch_analysis_report(report_id)
+
+        assert fetched is not None
+        self.assertFalse(fetched["narrative_available"])
+        self.assertTrue(fetched["narrative_degraded"])
+        self.assertEqual(fetched["narrative_source"], "fallback")
+        self.assertEqual(
+            fetched["narrative_failure_notice"],
+            "Narrative provider unavailable: timeout",
+        )
 
     def test_fetch_analysis_report_marks_invisible_narrative_text_degraded(
         self,

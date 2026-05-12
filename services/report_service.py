@@ -249,6 +249,21 @@ def _has_visible_narrative_text(value: str) -> bool:
     )
 
 
+def _narrative_degraded_from_state(
+    *,
+    explicit_degraded: bool | None,
+    narrative_source: str | None,
+    failure_notice: str | None,
+    narrative_available: bool,
+) -> bool:
+    return (
+        bool(explicit_degraded)
+        or _known_narrative_source(narrative_source) == "fallback"
+        or failure_notice is not None
+        or not narrative_available
+    )
+
+
 def _hash_share_password(password: str, *, salt: str) -> str:
     return hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
 
@@ -2411,14 +2426,11 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     )
     narrative_source = _known_narrative_source(report.narrative_source)
     stored_narrative_degraded = getattr(report, "narrative_degraded", None)
-    narrative_degraded = (
-        bool(stored_narrative_degraded)
-        if stored_narrative_degraded is not None
-        else (
-            narrative_source == "fallback"
-            or narrative_failure_notice is not None
-            or not narrative_available
-        )
+    narrative_degraded = _narrative_degraded_from_state(
+        explicit_degraded=stored_narrative_degraded,
+        narrative_source=narrative_source,
+        failure_notice=narrative_failure_notice,
+        narrative_available=narrative_available,
     )
     return {
         "id": report.id,
@@ -2639,6 +2651,15 @@ def persist_analysis_report(
     combined_warnings = list(
         dict.fromkeys([*assessment.warnings, *narrative.warnings, *manifest_warnings])
     )
+    narrative_available = _has_visible_narrative_text(
+        narrative.opening_sentence or ""
+    ) or _has_visible_narrative_text(narrative.explanation or "")
+    narrative_degraded = _narrative_degraded_from_state(
+        explicit_degraded=narrative.degraded,
+        narrative_source=narrative.source,
+        failure_notice=narrative.failure_notice,
+        narrative_available=narrative_available,
+    )
     dashboard_display_duration_seconds = None
     if (
         audit.get("source_interface") == "ui"
@@ -2663,7 +2684,7 @@ def persist_analysis_report(
                 parse_summary=_build_parse_summary(parse_batch),
                 narrative_opening=narrative.opening_sentence or "",
                 narrative_explanation=narrative.explanation or "",
-                narrative_degraded=narrative.degraded,
+                narrative_degraded=narrative_degraded,
                 narrative_failure_notice=narrative.failure_notice,
                 warnings_json=json.dumps(combined_warnings),
                 contributors_json=json.dumps(
