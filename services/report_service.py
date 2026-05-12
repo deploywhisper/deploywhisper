@@ -186,6 +186,8 @@ def _share_link_host(host: str) -> str:
     try:
         parsed = ipaddress.ip_address(ip_literal)
     except ValueError:
+        if cleaned.startswith("[") and cleaned.endswith("]"):
+            return ip_literal
         return cleaned
     if parsed.is_unspecified:
         return "localhost"
@@ -2348,8 +2350,9 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         or (report.narrative_explanation or "").strip()
     )
     narrative_failure_notice = _extract_narrative_failure_notice(warnings)
-    narrative_degraded = report.narrative_source == "fallback" or (
-        report.narrative_source is None and not narrative_available
+    narrative_source = report.narrative_source or None
+    narrative_degraded = narrative_source == "fallback" or (
+        narrative_source is None and not narrative_available
     )
     return {
         "id": report.id,
