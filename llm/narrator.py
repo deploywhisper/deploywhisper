@@ -178,15 +178,15 @@ def generate_narrative(
         explanation = sanitize_scope_claims(payload["explanation"])
         if not (_has_visible_text(opening_sentence) or _has_visible_text(explanation)):
             raise ValueError("Narrative provider returned empty output.")
+        guidance_payload = payload.get("guidance", [])
+        if not isinstance(guidance_payload, list):
+            raise ValueError("Narrative provider returned invalid guidance payload.")
 
         return NarrativeResult(
             available=True,
             opening_sentence=opening_sentence,
             explanation=explanation,
-            guidance=[
-                sanitize_scope_claims(item)
-                for item in list(payload.get("guidance", []))
-            ],
+            guidance=[sanitize_scope_claims(item) for item in guidance_payload],
             degraded=False,
             warnings=list(assessment.warnings),
             failure_notice=None,
