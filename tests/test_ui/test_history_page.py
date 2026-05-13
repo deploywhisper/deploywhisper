@@ -528,6 +528,25 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("LOW CONFIDENCE", response.text)
         self.assertIn('"title":"Confidence 0.52"', response.text)
 
+    def test_history_detail_route_renders_verdict_first_header(self) -> None:
+        self._persist_report()
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Verdict", response.text)
+        self.assertIn("NO-GO · CRITICAL RISK", response.text)
+        self.assertIn("Advisory posture", response.text)
+        self.assertIn("Advisory only", response.text)
+        self.assertIn("Evidence Law", response.text)
+        self.assertIn("Satisfied", response.text)
+        self.assertIn("Confidence", response.text)
+        self.assertIn("High (1.00)", response.text)
+        self.assertIn("Top risk", response.text)
+        self.assertIn("Security group exposure risk", response.text)
+        self.assertIn("Next action", response.text)
+        self.assertIn("Review linked evidence", response.text)
+
     def test_history_detail_route_shows_topology_freshness_badge(self) -> None:
         self._persist_report(
             context_completeness={

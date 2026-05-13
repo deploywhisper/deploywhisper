@@ -7,6 +7,12 @@ from nicegui import ui
 from ui.formatters.confidence import coerce_confidence, render_confidence_badge
 from ui.formatters.context_completeness import render_context_completeness_badge
 from ui.formatters.narrative import extract_llm_notice
+from ui.formatters.report_header import (
+    evidence_law_status,
+    next_action_text,
+    report_confidence_text,
+    report_verdict_text,
+)
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
@@ -41,11 +47,22 @@ def _context_warning_text(context: dict) -> str:
     )
 
 
+def _verdict_signal(label: str, value: str, detail: str) -> None:
+    with ui.element("div").classes("dw-panel-soft min-w-[170px] flex-1 p-3"):
+        with ui.column().classes("gap-1"):
+            ui.label(label).classes(
+                "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
+            )
+            ui.label(value).classes("text-sm font-semibold dw-text leading-5")
+            ui.label(detail).classes("text-xs dw-muted leading-5")
+
+
 def render_verdict_card(report: dict) -> None:
     """Render the above-the-fold verdict card for the current report."""
     register_review_accessibility()
     context = report.get("context_completeness") or {}
     confidence = _primary_confidence(report)
+    evidence_status, evidence_detail = evidence_law_status(report)
     llm_notice = extract_llm_notice(
         report.get("warnings", []), report.get("narrative_failure_notice")
     )
@@ -79,6 +96,33 @@ def render_verdict_card(report: dict) -> None:
                     else:
                         ui.label("CONFIDENCE UNAVAILABLE").classes("text-xs dw-muted")
                     render_context_completeness_badge(context)
+
+        with ui.row().classes("w-full gap-3 flex-wrap mt-3"):
+            _verdict_signal(
+                "Verdict",
+                report_verdict_text(report),
+                "Advisory orientation, not an approval or automatic block.",
+            )
+            _verdict_signal(
+                "Advisory posture",
+                "Advisory only",
+                "Human release review remains responsible for the decision.",
+            )
+            _verdict_signal(
+                "Evidence Law",
+                evidence_status,
+                evidence_detail,
+            )
+            _verdict_signal(
+                "Confidence",
+                report_confidence_text(report),
+                "Overall report confidence captured with the verdict.",
+            )
+            _verdict_signal(
+                "Next action",
+                next_action_text(report, evidence_status),
+                "Suggested human review step before release action.",
+            )
 
         if llm_notice:
             ui.label("Narrative note: " + llm_notice).classes(

@@ -24,11 +24,20 @@ from ui.components.findings_table import render_findings_table
 from ui.components.review_accessibility import decorate_review_section
 from ui.components.rollback_plan import render_rollback_plan
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
-from ui.formatters.confidence import coerce_confidence, render_confidence_badge
+from ui.formatters.confidence import (
+    coerce_confidence,
+    render_confidence_badge,
+)
 from ui.formatters.datetime import format_history_timestamp
 from ui.formatters.narrative import (
     extract_llm_notice,
     extract_submission_manifest_notice,
+)
+from ui.formatters.report_header import (
+    evidence_law_status,
+    next_action_text,
+    report_confidence_text,
+    report_verdict_text,
 )
 from ui.formatters.recommendations import render_recommendation_label
 from ui.formatters.risk_labels import render_risk_badge
@@ -77,6 +86,16 @@ def _detail_stat(label: str, value: str, detail: str) -> None:
                 "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
             )
             ui.label(value).classes("text-lg font-semibold dw-text")
+            ui.label(detail).classes("text-xs dw-muted leading-5")
+
+
+def _header_signal(label: str, value: str, detail: str) -> None:
+    with ui.element("div").classes("dw-panel-soft min-w-[180px] flex-1 p-3"):
+        with ui.column().classes("gap-1"):
+            ui.label(label).classes(
+                "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
+            )
+            ui.label(value).classes("text-base font-semibold dw-text leading-5")
             ui.label(detail).classes("text-xs dw-muted leading-5")
 
 
@@ -585,6 +604,7 @@ def render_report_detail_page(
     context = report.get("context_completeness") or {}
     blast_radius = report.get("blast_radius") or {}
     rollback_plan = report.get("rollback_plan") or {}
+    evidence_status, evidence_detail = evidence_law_status(report)
 
     with ui.card().classes("w-full dw-panel shadow-none p-6") as header_card:
         decorate_review_section(header_card, section="verdict", label="Report header")
@@ -616,25 +636,35 @@ def render_report_detail_page(
                     )
                     ui.label("Risk score").classes("dw-verdict-score-label")
             with ui.row().classes("w-full gap-3 flex-wrap"):
-                _detail_stat(
-                    "Severity",
-                    str(report["severity"]).upper(),
-                    "Highest persisted risk level for this report.",
+                _header_signal(
+                    "Verdict",
+                    report_verdict_text(report),
+                    "Advisory deployment-risk orientation, not an approval or block.",
                 )
-                _detail_stat(
-                    "Recommendation",
-                    str(report["recommendation"]).upper(),
-                    "Advisory release recommendation captured with the report.",
+                _header_signal(
+                    "Advisory posture",
+                    "Advisory only",
+                    "Human release review remains responsible for the decision.",
                 )
-                _detail_stat(
-                    "Created",
-                    format_history_timestamp(report["created_at"]),
-                    "Timestamp of the persisted report.",
+                _header_signal(
+                    "Evidence Law",
+                    evidence_status,
+                    evidence_detail,
                 )
-                _detail_stat(
-                    "Schema",
-                    str(report.get("report_schema_version") or "unknown").upper(),
-                    "Persisted report payload contract version.",
+                _header_signal(
+                    "Confidence",
+                    report_confidence_text(report),
+                    "Overall report confidence captured with the verdict.",
+                )
+                _header_signal(
+                    "Top risk",
+                    str(report.get("top_risk") or "No top risk recorded."),
+                    "Primary risk to inspect before drilling into evidence.",
+                )
+                _header_signal(
+                    "Next action",
+                    next_action_text(report, evidence_status),
+                    "Suggested human review step before release action.",
                 )
 
     _render_summary_and_advisory(report)
