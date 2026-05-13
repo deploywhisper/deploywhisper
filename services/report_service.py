@@ -2052,7 +2052,16 @@ def _evidence_items_with_report_context(
 
 def normalize_report_schema_version(schema_version: object | None) -> str:
     """Return a stable schema version for stored or in-memory reports."""
-    normalized = str(schema_version or "").strip()
+    if schema_version is None:
+        normalized = ""
+    elif isinstance(schema_version, str):
+        normalized = schema_version.strip()
+    else:
+        raise ReportSchemaVersionError(
+            "invalid_report_schema_version",
+            f"Unsupported report schema version: {schema_version!r}",
+            status_code=400,
+        )
     if not normalized:
         return LEGACY_REPORT_SCHEMA_VERSION
     if normalized.startswith("v") and normalized[1:].isdigit():
@@ -3024,10 +3033,14 @@ def fetch_filtered_analysis_history_page(
             serialized_reports = [
                 _serialize_report(report, include_evidence=False) for report in reports
             ]
-            serialized_all_reports = [
-                _serialize_report(report, include_evidence=False)
-                for report in all_reports
-            ]
+            serialized_all_reports = []
+            for report in all_reports:
+                try:
+                    serialized_all_reports.append(
+                        _serialize_report(report, include_evidence=False)
+                    )
+                except ReportSchemaVersionError:
+                    continue
             return (
                 _attach_previous_scan_diffs(serialized_reports, serialized_all_reports),
                 total_count,
