@@ -37,6 +37,7 @@ from services.report_service import REPORT_SCHEMA_VERSION
 from services.report_service import configure_report_share
 from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
+from services.report_service import normalize_report_schema_version
 from services.project_service import (
     ensure_default_project,
     has_restricted_project_scope,
@@ -49,12 +50,15 @@ READ_CHUNK_BYTES = 1024 * 1024
 
 
 def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
+    def schema_major(schema_version: str) -> int:
+        return int(schema_version[1:]) if schema_version.startswith("v") else 0
+
     versions = sorted(
         {
-            str(report.get("report_schema_version"))
+            normalize_report_schema_version(report.get("report_schema_version"))
             for report in reports
-            if report.get("report_schema_version") is not None
-        }
+        },
+        key=schema_major,
     )
     return {
         "report_schema_version": versions[0]

@@ -33,6 +33,7 @@ class ReportSchemaDocumentationTests(unittest.TestCase):
             '"report_schema_version"',
             '"findings"',
             '"evidence_items"',
+            '"report_schema_versions"',
             '"context_completeness"',
             '"narrative_available"',
             '"narrative_degraded"',

@@ -2042,7 +2042,12 @@ def _evidence_items_with_report_context(
 
 def normalize_report_schema_version(schema_version: str | None) -> str:
     """Return a stable schema version for stored or in-memory reports."""
-    return schema_version or LEGACY_REPORT_SCHEMA_VERSION
+    normalized = (schema_version or "").strip()
+    if not normalized:
+        return LEGACY_REPORT_SCHEMA_VERSION
+    if normalized.startswith("v") and normalized[1:].isdigit():
+        return normalized
+    return LEGACY_REPORT_SCHEMA_VERSION
 
 
 def _report_schema_major(schema_version: str) -> int:

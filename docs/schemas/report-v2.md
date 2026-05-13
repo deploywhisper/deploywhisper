@@ -30,10 +30,19 @@ This schema version applies to:
     "app": "DeployWhisper",
     "version": "0.1.0",
     "api_version": "v1",
-    "report_schema_version": "v2"
+    "report_schema_version": "v2",
+    "report_schema_versions": ["v2"]
   }
 }
 ```
+
+Analysis list responses may contain reports written under different report
+schema versions. In that case, `meta.report_schema_version` remains the response
+reader/envelope schema version and `meta.report_schema_versions` lists the
+distinct item schema versions in numeric major-version order, such as
+`["v1", "v2"]`. Consumers that need item-level branching should inspect
+`data[*].report_schema_version` or `meta.report_schema_versions` instead of
+assuming a uniform list.
 
 ### Advisory and share-summary shape
 
