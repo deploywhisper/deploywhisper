@@ -1,6 +1,6 @@
 # Report Schema v2
 
-`report_schema_version: "v2"` is the canonical persisted report contract for DeployWhisper Story 1.8.
+`report_schema_version: "v2"` is the canonical persisted report contract for DeployWhisper Story 2.8.
 
 ## Scope
 
@@ -9,13 +9,16 @@ This schema version applies to:
 - persisted `analysis_reports` rows
 - API analysis payloads and report retrieval payloads
 - CLI analysis payloads
+- share-summary JSON payloads used by PR, benchmark, and agent consumers
 
 ## Core guarantees
 
 1. Every persisted report stores `report_schema_version`.
-2. API envelopes include `report_schema_version` in `meta`.
-3. Stored reports remain readable across upgrades by version-aware readers.
-4. Newer readers are expected to read older schemas when the older schema major version is less than or equal to the reader version.
+2. API and CLI envelopes include `report_schema_version` in `meta`.
+3. Machine-friendly share-summary payloads include `report_schema_version`
+   alongside their own share payload `version`.
+4. Stored reports remain readable across upgrades by version-aware readers.
+5. Newer readers are expected to read older schemas when the older schema major version is less than or equal to the reader version.
 
 ## Envelope examples
 
@@ -28,6 +31,67 @@ This schema version applies to:
     "version": "0.1.0",
     "api_version": "v1",
     "report_schema_version": "v2"
+  }
+}
+```
+
+### Advisory and share-summary shape
+
+API and CLI analysis responses include advisory fields for automation and PR
+comment consumers. `data.advisory.should_block` remains `false`; downstream
+systems may use `requires_attention` and `uncertainty_flags` to decide whether
+to notify humans, but DeployWhisper's canonical contract remains advisory-first.
+
+The share-summary JSON payload has its own `version` because PR comments,
+benchmark reports, and agent integrations may evolve their compact summary shape
+separately from the persisted report. It still carries `report_schema_version`
+so consumers know which full report contract backs the summary.
+
+The share-summary payload `version` remains `v1` for this change because adding
+`report_schema_version` is an additive field. Additive fields are compatible with
+share-summary `v1`; consumers that validate the compact summary should ignore
+unknown fields and branch on `report_schema_version` when they need the backing
+full-report contract.
+
+```json
+{
+  "advisory": {
+    "advisory_only": true,
+    "should_block": false,
+    "requires_attention": true,
+    "severity": "high",
+    "recommendation": "no-go",
+    "partial_context": true,
+    "narrative_degraded": true,
+    "uncertainty_flags": ["partial_context", "narrative_degraded"]
+  },
+  "share_summary": {
+    "advisory_only": true,
+    "should_block": false,
+    "json_payload": {
+      "version": "v1",
+      "report_schema_version": "v2",
+      "report_id": 42,
+      "report_link": "https://deploywhisper.example.com/reports/42",
+      "rollback_link": "https://deploywhisper.example.com/reports/42",
+      "verdict_banner": "DeployWhisper HIGH - NO-GO",
+      "headline": "NO-GO: Security group exposure risk",
+      "top_findings": [
+        {
+          "title": "HIGH: public ingress exposure",
+          "severity": "high",
+          "evidence_count": 2,
+          "confidence": 1.0
+        }
+      ],
+      "evidence_count": 4,
+      "context_completeness": {
+        "score": 0.22,
+        "label": "LIMITED CONTEXT",
+        "summary": "LIMITED CONTEXT (0.22) - reviewer verification required."
+      },
+      "advisory_summary": "This result requires additional human review before release."
+    }
   }
 }
 ```
@@ -247,10 +311,13 @@ without storing raw plan internals in a separate contract.
 - report-level confidence derived from available context
 - persisted rollback plans with time estimates and complexity rationale
 - degraded narrative visibility fields
+- advisory-only automation fields for API, CLI, PR, benchmark, and agent consumers
+- share-summary JSON payloads include the source `report_schema_version`
 - submission manifest payloads that record accepted, excluded, failed, partial, sensitive, provenance, and redaction status
 - durable submission manifest fallback identity/status metadata for malformed-manifest recovery
 - parser-normalized change metadata for Terraform plan JSON format and Terraform versions, module paths, replacement paths, unknown-after-apply fields, redacted fields, and unsupported resource/change/plan fields
 
-Story 2.6 adds report-level confidence, context uncertainty, evidence coverage,
-context TODOs, and insufficient-context signals as additive `v2` fields. Broader
-schema-version policy changes remain deferred to Story 2.8.
+Story 2.6 added report-level confidence, context uncertainty, evidence coverage,
+context TODOs, and insufficient-context signals as additive `v2` fields. Story
+2.8 makes the report schema version explicit for API, CLI, PR, benchmark, and
+agent-facing machine consumers.

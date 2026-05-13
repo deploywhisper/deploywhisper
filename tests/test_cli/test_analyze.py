@@ -630,6 +630,10 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["share_summary"]["json_payload"]["version"], "v1"
         )
         self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["report_schema_version"],
+            "v2",
+        )
+        self.assertEqual(
             payload["data"]["share_summary"]["json_payload"]["report_id"],
             payload["data"]["persisted_report"]["id"],
         )

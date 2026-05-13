@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-05-12
+# last_updated: 2026-05-13
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-05-12
+last_updated: 2026-05-13
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -66,7 +66,7 @@ development_status:
   2-5-evidence-law-runtime-gate: review
   2-6-confidence-uncertainty-and-insufficient-context: done
   2-7-narrative-after-scoring-and-degraded-fallback: done
-  2-8-report-schema-versioning: ready-for-dev
+  2-8-report-schema-versioning: done
   2-9-durable-report-persistence-and-audit-metadata: ready-for-dev
   epic-2-retrospective: optional
 

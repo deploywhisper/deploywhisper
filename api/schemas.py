@@ -109,7 +109,15 @@ class PendingAnalysis(BaseModel):
 
 class CountMetaPayload(MetaPayload):
     report_schema_version: str = Field(
-        ..., description="Report schema version used by returned report payloads"
+        ...,
+        description=(
+            "Report schema version used by returned report payloads when uniform; "
+            "inspect report_schema_versions when multiple versions are present"
+        ),
+    )
+    report_schema_versions: list[str] = Field(
+        default_factory=list,
+        description="Distinct report schema versions present in returned items",
     )
     count: int = Field(..., description="Count of returned items")
     total_count: int | None = Field(
@@ -972,6 +980,10 @@ class ShareSummaryContextData(BaseModel):
 
 class ShareSummaryJsonPayloadData(BaseModel):
     version: str = Field(..., description="Share-summary payload version")
+    report_schema_version: str = Field(
+        ...,
+        description="Report schema version used by the source persisted report",
+    )
     report_id: int | None = Field(default=None, description="Persisted report ID")
     report_link: str | None = Field(default=None, description="Deep link to the report")
     rollback_link: str | None = Field(

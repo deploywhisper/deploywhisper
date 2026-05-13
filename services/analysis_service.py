@@ -33,7 +33,12 @@ from services.project_service import (
     resolve_project_reference,
     resolve_workspace_reference,
 )
-from services.report_service import build_share_report_link, persist_analysis_report
+from services.report_service import (
+    REPORT_SCHEMA_VERSION,
+    build_share_report_link,
+    normalize_report_schema_version,
+    persist_analysis_report,
+)
 from services.settings_service import resolve_provider_runtime
 from services.submission_manifest import build_submission_manifest
 from services.topology_service import (
@@ -231,6 +236,10 @@ class ShareSummaryContext(BaseModel):
 
 class ShareSummaryJsonPayload(BaseModel):
     version: str = Field(default="v1", description="Share-summary payload version")
+    report_schema_version: str = Field(
+        default=REPORT_SCHEMA_VERSION,
+        description="Report schema version used by the source persisted report",
+    )
     report_id: int | None = Field(default=None, description="Persisted report ID")
     report_link: str | None = Field(default=None, description="Deep link to the report")
     rollback_link: str | None = Field(
@@ -806,6 +815,9 @@ def build_share_summary(report: dict) -> ShareSummary:
         else "Standard approval flow is sufficient."
     )
     json_payload = ShareSummaryJsonPayload(
+        report_schema_version=normalize_report_schema_version(
+            report.get("report_schema_version")
+        ),
         report_id=report_id,
         report_link=report_link,
         rollback_link=rollback_link,

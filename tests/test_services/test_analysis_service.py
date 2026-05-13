@@ -185,6 +185,7 @@ class AnalysisServiceTests(unittest.TestCase):
     def _share_report_payload(self) -> dict:
         return {
             "id": 17,
+            "report_schema_version": "v2",
             "severity": "medium",
             "recommendation": "caution",
             "top_risk": "Terraform changed a security group.",
@@ -1199,6 +1200,7 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertIn("Advisory only", summary.plain_text)
         self.assertFalse(summary.should_block)
         self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertEqual(summary.json_payload.report_schema_version, "v2")
         self.assertEqual(summary.json_payload.report_id, 17)
         self.assertEqual(len(summary.json_payload.top_findings), 3)
         self.assertEqual(summary.json_payload.evidence_count, 5)
@@ -1209,6 +1211,26 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertEqual(
             summary.json_payload.context_completeness.label, "STRONG CONTEXT"
         )
+
+    def test_build_share_summary_normalizes_missing_report_schema_as_legacy(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report.pop("report_schema_version")
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.version, "v1")
+        self.assertEqual(summary.json_payload.report_schema_version, "v1")
+
+    def test_build_share_summary_preserves_source_report_schema_version(self) -> None:
+        report = self._share_report_payload()
+        report["report_schema_version"] = "v3"
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.version, "v1")
+        self.assertEqual(summary.json_payload.report_schema_version, "v3")
 
     def test_build_share_summary_falls_back_to_deterministic_headline_without_narrative(
         self,
