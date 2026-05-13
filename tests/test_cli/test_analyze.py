@@ -662,6 +662,16 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["persisted_report"]["audit"]["source_interface"], "cli"
         )
         self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["actor"], "cli_local_user"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["persisted_at"],
+            payload["data"]["persisted_report"]["created_at"],
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["redaction_status"], "none"
+        )
+        self.assertEqual(
             payload["data"]["persisted_report"]["audit"]["trigger_type"], "cli_command"
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 1)
@@ -2255,6 +2265,55 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "analysis_failed")
         self.assertEqual(payload["error"]["message"], "Analysis failed.")
         self.assertEqual(payload["error"]["details"]["reason"], "boom")
+
+    def test_analyze_command_reports_persistence_failures_without_success(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                side_effect=analysis_service_module.AnalysisPersistenceError(
+                    "database is read-only"
+                ),
+            ),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "report_persistence_failed")
+        self.assertEqual(
+            payload["error"]["message"],
+            "Report persistence failed; final analysis success was not returned.",
+        )
+        self.assertEqual(
+            payload["error"]["details"]["reason"],
+            analysis_service_module.AnalysisPersistenceError.public_reason,
+        )
+        self.assertNotIn("database is read-only", stderr.getvalue())
 
     def test_analyze_command_rejects_payloads_over_limit_before_reading_all_bytes(
         self,

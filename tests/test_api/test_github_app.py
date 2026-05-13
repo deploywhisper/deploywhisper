@@ -104,6 +104,8 @@ class GitHubAppRouteTests(unittest.TestCase):
                 "report_id": 17,
                 "report_url": "https://deploywhisper.example.com/reports/17",
                 "note": "ok",
+                "status": "ok",
+                "code": None,
             },
         )()
 
@@ -122,6 +124,57 @@ class GitHubAppRouteTests(unittest.TestCase):
         self.assertTrue(body["data"]["automatic_analysis_triggered"])
         self.assertEqual(body["data"]["check_run_id"], 7)
         self.assertEqual(body["data"]["report_id"], 17)
+        self.assertEqual(body["data"]["status"], "ok")
+        self.assertIsNone(body["data"]["code"])
+
+    @patch("api.routes.github_app.handle_github_app_webhook")
+    def test_webhook_returns_persistence_failure_without_report_identifier(
+        self, handle_github_app_webhook
+    ) -> None:
+        payload = b'{"action":"opened"}'
+        signature = (
+            "sha256="
+            + hmac.new(
+                b"webhook-secret",
+                payload,
+                hashlib.sha256,
+            ).hexdigest()
+        )
+        handle_github_app_webhook.return_value = type(
+            "Result",
+            (),
+            {
+                "event": "pull_request",
+                "action": "opened",
+                "handled": True,
+                "automatic_analysis_triggered": False,
+                "check_run_id": None,
+                "report_id": None,
+                "report_url": None,
+                "note": "Report persistence failed",
+                "status": "failed",
+                "code": "report_persistence_failed",
+            },
+        )()
+
+        response = self.client.post(
+            "/api/v1/github/app/webhook",
+            headers={
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": signature,
+                "Content-Type": "application/json",
+            },
+            content=payload,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["data"]["automatic_analysis_triggered"])
+        self.assertIsNone(body["data"]["check_run_id"])
+        self.assertIsNone(body["data"]["report_id"])
+        self.assertIsNone(body["data"]["report_url"])
+        self.assertEqual(body["data"]["status"], "failed")
+        self.assertEqual(body["data"]["code"], "report_persistence_failed")
 
     @patch("api.routes.github_app.handle_github_app_webhook")
     def test_webhook_acknowledges_project_scope_error(

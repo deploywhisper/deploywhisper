@@ -167,6 +167,7 @@ def build_submission_manifest(
         "source_interface": context.get("source_interface"),
         "trigger_type": context.get("trigger_type"),
         "trigger_id": context.get("trigger_id"),
+        "actor": context.get("actor"),
         "project_id": context.get("project_id"),
         "project_key": context.get("project_key"),
         "workspace_id": context.get("workspace_id"),

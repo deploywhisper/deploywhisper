@@ -19,7 +19,7 @@ from urllib import error, parse, request
 
 from config import settings
 from services.project_service import ProjectResolutionError, resolve_project_reference
-from services.analysis_service import analyze_uploaded_files
+from services.analysis_service import AnalysisPersistenceError, analyze_uploaded_files
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     build_pending_analysis,
@@ -106,6 +106,8 @@ class GitHubWebhookResult:
     report_id: int | None
     report_url: str | None
     note: str
+    status: str = "ok"
+    code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -325,10 +327,12 @@ def handle_github_app_webhook(
     installation_id = int(payload.get("installation", {}).get("id") or 0)
     repository = dict(payload.get("repository") or {})
     pull_request = dict(payload.get("pull_request") or {})
+    sender = dict(payload.get("sender") or {})
     owner = str(repository.get("owner", {}).get("login") or "").strip()
     repo_name = str(repository.get("name") or "").strip()
     pull_number = int(pull_request.get("number") or payload.get("number") or 0)
     head_sha = str(pull_request.get("head", {}).get("sha") or "").strip()
+    actor = str(sender.get("login") or "").strip()
     if (
         not installation_id
         or not owner
@@ -469,6 +473,7 @@ def handle_github_app_webhook(
                 "source_interface": "github_app",
                 "trigger_type": "github_app_pull_request",
                 "trigger_id": f"{owner}/{repo_name}#PR-{pull_number}",
+                "actor": f"github:{actor}" if actor else "github_app",
             },
         )
     except ProjectResolutionError as exc:
@@ -497,6 +502,37 @@ def handle_github_app_webhook(
             code=code,
             message=str(exc),
             config=config,
+        )
+    except AnalysisPersistenceError as exc:
+        note = f"{exc} Reason: {exc.public_reason}"
+        check_run_id = None
+        if config.checks_enabled:
+            try:
+                check_run_id = _create_check_run(
+                    owner=owner,
+                    repo_name=repo_name,
+                    head_sha=head_sha,
+                    installation_token=installation_token,
+                    conclusion="failure",
+                    title=DEFAULT_CHECK_RUN_NAME,
+                    summary=note,
+                    details_url=None,
+                    text=_check_run_text(details_url=None),
+                    api_base_url=config.api_base_url,
+                )
+            except GitHubAppRequestError:
+                note = f"{note} Failure check run could not be created."
+        return GitHubWebhookResult(
+            event=event_name,
+            action=action,
+            handled=True,
+            automatic_analysis_triggered=False,
+            check_run_id=check_run_id,
+            report_id=None,
+            report_url=None,
+            note=note,
+            status="failed",
+            code=exc.code,
         )
     report_id = int(result.persisted_report["id"])
     report_url = build_share_report_link(report_id)

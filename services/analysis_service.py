@@ -171,6 +171,22 @@ class AnalysisRunResult(AnalysisArtifacts):
     persisted_report: dict = Field(..., description="Persisted report metadata")
 
 
+class AnalysisPersistenceError(RuntimeError):
+    """Raised when report persistence fails after deterministic analysis completed."""
+
+    code = "report_persistence_failed"
+    public_reason = (
+        "Report persistence did not complete. Retry the analysis; if it repeats, "
+        "review local application logs and persistence configuration."
+    )
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            "Report persistence failed; final analysis success was not returned."
+        )
+        self.reason = reason
+
+
 class AdvisorySummary(BaseModel):
     advisory_only: bool = Field(
         ..., description="Whether the output is advisory rather than blocking"
@@ -1052,21 +1068,24 @@ def analyze_uploaded_files(
         workspace_key=workspace_key,
         completion_client=completion_client,
     )
-    persisted_report = persist_analysis_report(
-        artifacts.parse_batch,
-        artifacts.assessment,
-        artifacts.narrative,
-        blast_radius=artifacts.blast_radius,
-        rollback_plan=artifacts.rollback_plan,
-        findings=artifacts.findings,
-        evidence_items=artifacts.evidence_items,
-        artifact_snapshots={name: raw_content for name, raw_content in files},
-        submitted_artifacts=list(files),
-        project_id=resolved_project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-        audit_context=audit_context,
-    )
+    try:
+        persisted_report = persist_analysis_report(
+            artifacts.parse_batch,
+            artifacts.assessment,
+            artifacts.narrative,
+            blast_radius=artifacts.blast_radius,
+            rollback_plan=artifacts.rollback_plan,
+            findings=artifacts.findings,
+            evidence_items=artifacts.evidence_items,
+            artifact_snapshots={name: raw_content for name, raw_content in files},
+            submitted_artifacts=list(files),
+            project_id=resolved_project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+            audit_context=audit_context,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise AnalysisPersistenceError(str(exc)) from exc
     return AnalysisRunResult(
         **artifacts.model_dump(), persisted_report=persisted_report
     )

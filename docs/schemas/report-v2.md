@@ -19,6 +19,11 @@ This schema version applies to:
    alongside their own share payload `version`.
 4. Stored reports remain readable across upgrades by version-aware readers.
 5. Newer readers are expected to read older schemas when the older schema major version is less than or equal to the reader version.
+6. Successful analysis responses include a persisted report identifier and
+   audit metadata derived from durable report state. Persistence failures use an
+   explicit `report_persistence_failed` error/status instead of returning
+   success, with sanitized remediation text rather than raw storage-driver
+   details.
 
 ## Envelope examples
 
@@ -49,6 +54,48 @@ Readers canonicalize valid schema versions to `vN` form, so values such as
 non-empty malformed markers are rejected as invalid, and versions newer than the
 current reader schema are rejected until the runtime supports that report
 contract.
+
+### Durable audit metadata
+
+`data.persisted_report.audit` is emitted only after the report has been saved.
+It carries the source surface, trigger, actor, persisted row timestamp,
+redaction state, and delivery metadata for the successful response:
+
+```json
+{
+  "id": 42,
+  "audit": {
+    "source_interface": "api",
+    "trigger_type": "api_request",
+    "trigger_id": "sess-123",
+    "actor": "api-reviewer@example.com",
+    "persisted_at": "2026-05-13T12:00:00+00:00",
+    "redaction_status": "none",
+    "redaction": {
+      "filenames_redacted": false,
+      "sensitive_content_excluded": false
+    },
+    "delivery": {
+      "surface": "api",
+      "trigger_type": "api_request",
+      "trigger_id": "sess-123",
+      "report_id": 42,
+      "status": "persisted"
+    }
+  }
+}
+```
+
+The top-level `id` and `audit.delivery.report_id` identify the persisted
+report. `audit.persisted_at` matches `created_at`: it is the persisted report row
+creation timestamp, not a separate post-artifact timestamp. Successful delivery
+responses emit it only after artifact persistence completes. CLI submissions
+default the actor to `cli_local_user` unless `DEPLOYWHISPER_ACTOR` is set. API
+submissions may send `X-DeployWhisper-Actor`; otherwise the actor is
+`api_client`. GitHub App webhooks use `github:<sender-login>` when the webhook
+sender is available. Actor values are whitespace-normalized, stripped of control
+characters, bounded before persistence, and retained in the manifest fallback so
+the audit actor can still be recovered if manifest JSON is malformed.
 
 ### Advisory and share-summary shape
 
@@ -275,7 +322,8 @@ without storing raw plan internals in a separate contract.
       "intake_status": "ready",
       "parse_status": "parsed",
       "partial": false,
-      "redaction_status": "none"
+      "redaction_status": "none",
+      "actor": "api-reviewer@example.com"
     },
     {
       "name": ".env",
@@ -284,7 +332,8 @@ without storing raw plan internals in a separate contract.
       "intake_status": "sensitive",
       "parse_status": null,
       "partial": true,
-      "redaction_status": "sensitive_blocked"
+      "redaction_status": "sensitive_blocked",
+      "actor": "api-reviewer@example.com"
     }
   ],
   "findings": [],

@@ -193,6 +193,26 @@ class AuditMetadataData(BaseModel):
     trigger_id: str | None = Field(
         default=None, description="Trigger identifier when available"
     )
+    actor: str = Field(
+        default="service_actor",
+        description="Actor or automation identity that submitted the analysis",
+    )
+    persisted_at: str | None = Field(
+        default=None,
+        description=(
+            "Persisted report row creation timestamp; emitted only after final "
+            "artifact persistence succeeds"
+        ),
+    )
+    redaction_status: str = Field(
+        default="unknown", description="Overall redaction state for persisted evidence"
+    )
+    redaction: dict[str, Any] = Field(
+        default_factory=dict, description="Detailed redaction metadata"
+    )
+    delivery: dict[str, Any] = Field(
+        default_factory=dict, description="Delivery metadata for the successful result"
+    )
 
 
 class SubmissionManifestItemData(BaseModel):
@@ -264,6 +284,10 @@ class SubmissionManifestFallbackItemData(BaseModel):
     )
     redaction_status: str = Field(
         default="none", description="Filename/content redaction outcome"
+    )
+    actor: str | None = Field(
+        default=None,
+        description="Fallback submitter identity retained outside manifest JSON",
     )
 
 

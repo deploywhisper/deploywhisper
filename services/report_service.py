@@ -119,6 +119,7 @@ _CONTEXT_UNAVAILABLE_UNCERTAINTY = (
     "Context completeness metadata was unavailable; reviewer verification is "
     "required before trusting this report."
 )
+_AUDIT_ACTOR_MAX_LENGTH = 120
 _CONTEXT_UNAVAILABLE_TODO = (
     "Re-run analysis to regenerate context completeness metadata."
 )
@@ -498,6 +499,9 @@ def _build_audit_metadata(
 ) -> dict[str, Any]:
     runtime = resolve_provider_runtime()
     context = audit_context or {}
+    source_interface = str(context.get("source_interface") or "service")
+    trigger_type = context.get("trigger_type")
+    trigger_id = context.get("trigger_id")
     return {
         "files_analyzed": [
             file_result.file_name
@@ -507,10 +511,129 @@ def _build_audit_metadata(
         "llm_provider": runtime["provider"],
         "llm_model": runtime["model"],
         "llm_local_mode": runtime["local_mode"],
-        "source_interface": context.get("source_interface"),
-        "trigger_type": context.get("trigger_type"),
-        "trigger_id": context.get("trigger_id"),
+        "source_interface": source_interface,
+        "trigger_type": trigger_type,
+        "trigger_id": trigger_id,
+        "actor": _normalize_audit_actor(context.get("actor"), source_interface),
     }
+
+
+def _default_audit_actor(source_interface: str | None) -> str:
+    surface = str(source_interface or "service").strip().lower()
+    defaults = {
+        "api": "api_client",
+        "cli": "cli_local_user",
+        "github_app": "github_app",
+        "ui": "ui_local_user",
+    }
+    return defaults.get(surface, f"{surface or 'service'}_actor")
+
+
+def _normalize_audit_actor(value: Any, source_interface: str | None) -> str:
+    fallback = _default_audit_actor(source_interface)
+    normalized = " ".join(str(value or fallback).split())
+    normalized = "".join(
+        character
+        for character in normalized
+        if not unicodedata.category(character).startswith("C")
+    ).strip()
+    if not normalized:
+        return fallback
+    return normalized[:_AUDIT_ACTOR_MAX_LENGTH]
+
+
+def _redaction_status_from_items(items: Any) -> str | None:
+    if not isinstance(items, list):
+        return None
+    item_statuses = {
+        normalize_manifest_redaction_status(item.get("redaction_status"))
+        for item in items
+        if isinstance(item, dict) and "redaction_status" in item
+    }
+    if not item_statuses:
+        return None
+    if "sensitive_blocked" in item_statuses:
+        return "sensitive_blocked"
+    if "redacted" in item_statuses:
+        return "redacted"
+    return "none"
+
+
+def _report_redaction_status(
+    submission_manifest: dict[str, Any] | None,
+    submission_manifest_fallback: list[dict[str, Any]] | None = None,
+) -> str:
+    if isinstance(submission_manifest, dict):
+        redaction = submission_manifest.get("redaction")
+        has_redaction_metadata = isinstance(redaction, dict) and any(
+            key in redaction
+            for key in ("filenames_redacted", "sensitive_content_excluded")
+        )
+        if isinstance(redaction, dict) and redaction.get("sensitive_content_excluded"):
+            return "sensitive_blocked"
+        item_status = _redaction_status_from_items(submission_manifest.get("items"))
+        if item_status == "sensitive_blocked":
+            return item_status
+        if isinstance(redaction, dict) and redaction.get("filenames_redacted"):
+            return "redacted"
+        if item_status == "redacted":
+            return item_status
+        if item_status == "none" or has_redaction_metadata:
+            return "none"
+    fallback_status = _redaction_status_from_items(submission_manifest_fallback)
+    return fallback_status or "unknown"
+
+
+def _report_redaction_metadata(
+    submission_manifest: dict[str, Any] | None,
+    submission_manifest_fallback: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    if isinstance(submission_manifest, dict):
+        redaction = submission_manifest.get("redaction")
+        if isinstance(redaction, dict) and redaction:
+            return dict(redaction)
+    if submission_manifest_fallback:
+        statuses = {
+            normalize_manifest_redaction_status(item.get("redaction_status"))
+            for item in submission_manifest_fallback
+            if isinstance(item, dict) and "redaction_status" in item
+        }
+        if statuses:
+            return {
+                "filenames_redacted": "redacted" in statuses,
+                "sensitive_content_excluded": "sensitive_blocked" in statuses,
+            }
+    return {}
+
+
+def _delivery_metadata(
+    *,
+    source_interface: str | None,
+    trigger_type: str | None,
+    trigger_id: str | None,
+    report_id: int,
+) -> dict[str, Any]:
+    return {
+        "surface": source_interface,
+        "trigger_type": trigger_type,
+        "trigger_id": trigger_id,
+        "report_id": report_id,
+        "status": "persisted",
+    }
+
+
+def _cleanup_partial_report(report_id: int | None) -> None:
+    if report_id is None:
+        return
+    try:
+        with SessionLocal() as session:
+            delete_analysis_report(session, report_id)
+    except Exception:
+        pass
+    try:
+        delete_report_artifacts(report_id)
+    except Exception:
+        pass
 
 
 def _extract_narrative_failure_notice(warnings: list[str]) -> str | None:
@@ -2134,6 +2257,10 @@ def _load_submission_manifest_payload(
 def _submission_manifest_fallback_items(
     manifest: SubmissionManifest,
 ) -> list[dict[str, Any]]:
+    actor = _normalize_audit_actor(
+        (manifest.provenance or {}).get("actor"),
+        (manifest.provenance or {}).get("source_interface"),
+    )
     return [
         {
             "name": item.name,
@@ -2145,6 +2272,7 @@ def _submission_manifest_fallback_items(
             "redaction_status": normalize_manifest_redaction_status(
                 item.redaction_status
             ),
+            "actor": actor,
         }
         for item in manifest.items
     ]
@@ -2167,24 +2295,41 @@ def _load_submission_manifest_fallback_payload(
         status = str(item.get("status") or "").strip()
         if not name or not status:
             continue
-        fallback_items.append(
-            {
-                "name": name,
-                "tool": str(item.get("tool") or "unknown"),
-                "status": status,
-                "intake_status": str(item.get("intake_status") or "unknown"),
-                "parse_status": (
-                    str(item["parse_status"])
-                    if item.get("parse_status") is not None
-                    else None
-                ),
-                "partial": bool(item.get("partial", False)),
-                "redaction_status": normalize_manifest_redaction_status(
-                    item.get("redaction_status")
-                ),
-            }
-        )
+        fallback_item = {
+            "name": name,
+            "tool": str(item.get("tool") or "unknown"),
+            "status": status,
+            "intake_status": str(item.get("intake_status") or "unknown"),
+            "parse_status": (
+                str(item["parse_status"])
+                if item.get("parse_status") is not None
+                else None
+            ),
+            "partial": bool(item.get("partial", False)),
+        }
+        if "redaction_status" in item:
+            fallback_item["redaction_status"] = normalize_manifest_redaction_status(
+                item.get("redaction_status")
+            )
+        if "actor" in item:
+            fallback_item["actor"] = _normalize_audit_actor(
+                item.get("actor"),
+                None,
+            )
+        fallback_items.append(fallback_item)
     return fallback_items
+
+
+def _actor_from_submission_manifest_fallback(
+    fallback_items: list[dict[str, Any]] | None,
+) -> str | None:
+    for item in fallback_items or []:
+        if not isinstance(item, dict):
+            continue
+        actor = item.get("actor")
+        if actor:
+            return str(actor)
+    return None
 
 
 def _load_context_completeness_payload(
@@ -2388,17 +2533,6 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     created_at = report.created_at
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=UTC)
-    audit = {
-        "files_analyzed": json.loads(report.analyzed_files_json or "[]"),
-        "llm_provider": report.llm_provider,
-        "llm_model": report.llm_model,
-        "llm_local_mode": report.llm_local_mode == "true"
-        if report.llm_local_mode is not None
-        else None,
-        "source_interface": report.source_interface,
-        "trigger_type": report.trigger_type,
-        "trigger_id": report.trigger_id,
-    }
     warnings = json.loads(report.warnings_json or "[]")
     submission_manifest, manifest_warning = _load_submission_manifest_payload(
         getattr(report, "submission_manifest_json", None)
@@ -2406,6 +2540,49 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     submission_manifest_fallback = _load_submission_manifest_fallback_payload(
         getattr(report, "submission_manifest_fallback_json", None)
     )
+    manifest_provenance = (
+        dict(submission_manifest.get("provenance") or {})
+        if isinstance(submission_manifest, dict)
+        else {}
+    )
+    source_interface = report.source_interface or manifest_provenance.get(
+        "source_interface"
+    )
+    trigger_type = report.trigger_type or manifest_provenance.get("trigger_type")
+    trigger_id = report.trigger_id or manifest_provenance.get("trigger_id")
+    actor = _normalize_audit_actor(
+        manifest_provenance.get("actor")
+        or _actor_from_submission_manifest_fallback(submission_manifest_fallback),
+        source_interface,
+    )
+    persisted_at = created_at.isoformat()
+    audit = {
+        "files_analyzed": json.loads(report.analyzed_files_json or "[]"),
+        "llm_provider": report.llm_provider,
+        "llm_model": report.llm_model,
+        "llm_local_mode": report.llm_local_mode == "true"
+        if report.llm_local_mode is not None
+        else None,
+        "source_interface": source_interface,
+        "trigger_type": trigger_type,
+        "trigger_id": trigger_id,
+        "actor": actor,
+        "persisted_at": persisted_at,
+        "redaction_status": _report_redaction_status(
+            submission_manifest,
+            submission_manifest_fallback,
+        ),
+        "redaction": _report_redaction_metadata(
+            submission_manifest,
+            submission_manifest_fallback,
+        ),
+        "delivery": _delivery_metadata(
+            source_interface=source_interface,
+            trigger_type=trigger_type,
+            trigger_id=trigger_id,
+            report_id=int(report.id),
+        ),
+    }
     if manifest_warning is not None and manifest_warning not in warnings:
         warnings.append(manifest_warning)
     confidence, confidence_warning = _load_report_confidence(
@@ -2545,7 +2722,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         if report.llm_local_mode is not None
         else None,
         "skills_applied": json.loads(report.narrative_skills_json or "[]"),
-        "created_at": created_at.isoformat(),
+        "created_at": persisted_at,
         "warnings": warnings,
         "findings": [
             {
@@ -2666,6 +2843,10 @@ def persist_analysis_report(
         parse_batch=parse_batch,
         audit_context={
             **(audit_context or {}),
+            "source_interface": audit["source_interface"],
+            "trigger_type": audit["trigger_type"],
+            "trigger_id": audit["trigger_id"],
+            "actor": audit["actor"],
             "project_id": resolved_project.id,
             "project_key": resolved_project.project_key,
             "workspace_id": resolved_workspace.id if resolved_workspace else None,
@@ -2713,70 +2894,78 @@ def persist_analysis_report(
         )
 
     def operation():
-        with SessionLocal() as session:
-            report = create_analysis_report(
-                session,
-                project_id=resolved_project.id,
-                workspace_id=resolved_workspace_id,
-                risk_score=assessment.score,
-                severity=assessment.severity,
-                recommendation=assessment.recommendation,
-                risk_confidence=assessment.confidence,
-                top_risk=assessment.top_risk,
-                report_schema_version=REPORT_SCHEMA_VERSION,
-                parse_summary=_build_parse_summary(parse_batch),
-                narrative_opening=narrative.opening_sentence or "",
-                narrative_explanation=narrative.explanation or "",
-                narrative_degraded=narrative_degraded,
-                narrative_failure_notice=narrative.failure_notice,
-                warnings_json=json.dumps(combined_warnings),
-                contributors_json=json.dumps(
-                    [
-                        contributor.model_dump()
-                        for contributor in assessment.contributors
-                    ]
-                ),
-                analyzed_files_json=json.dumps(audit["files_analyzed"]),
-                submission_manifest_json=json.dumps(
-                    submission_manifest.model_dump(mode="json")
-                ),
-                submission_manifest_fallback_json=json.dumps(
-                    _submission_manifest_fallback_items(submission_manifest)
-                ),
-                blast_radius_json=json.dumps(
-                    blast_radius.model_dump(mode="json")
-                    if blast_radius is not None
-                    else {}
-                ),
-                rollback_plan_json=json.dumps(
-                    rollback_plan.model_dump(mode="json")
-                    if rollback_plan is not None
-                    else {}
-                ),
-                llm_provider=audit["llm_provider"],
-                llm_model=audit["llm_model"],
-                llm_local_mode="true" if audit["llm_local_mode"] else "false",
-                assessment_source=assessment.source,
-                narrative_source=narrative.source,
-                narrative_skills_json=json.dumps(narrative.skills_applied),
-                source_interface=audit["source_interface"],
-                trigger_type=audit["trigger_type"],
-                trigger_id=audit["trigger_id"],
-                dashboard_display_duration_seconds=dashboard_display_duration_seconds,
-                top_risk_contributors_json=json.dumps(assessment.top_risk_contributors),
-                context_completeness_json=json.dumps(
-                    assessment.context_completeness.model_dump(mode="json")
-                ),
-                findings_payload=[
-                    finding.model_dump(mode="json") for finding in (findings or [])
-                ],
-                evidence_payload=[
-                    evidence_item.model_dump(mode="json")
-                    for evidence_item in (evidence_items or [])
-                ],
-            )
-            save_report_artifacts(report.id, safe_artifact_snapshots)
-            return _serialize_report(report, include_evidence=True)
+        report_id: int | None = None
+        try:
+            with SessionLocal() as session:
+                report = create_analysis_report(
+                    session,
+                    project_id=resolved_project.id,
+                    workspace_id=resolved_workspace_id,
+                    risk_score=assessment.score,
+                    severity=assessment.severity,
+                    recommendation=assessment.recommendation,
+                    risk_confidence=assessment.confidence,
+                    top_risk=assessment.top_risk,
+                    report_schema_version=REPORT_SCHEMA_VERSION,
+                    parse_summary=_build_parse_summary(parse_batch),
+                    narrative_opening=narrative.opening_sentence or "",
+                    narrative_explanation=narrative.explanation or "",
+                    narrative_degraded=narrative_degraded,
+                    narrative_failure_notice=narrative.failure_notice,
+                    warnings_json=json.dumps(combined_warnings),
+                    contributors_json=json.dumps(
+                        [
+                            contributor.model_dump()
+                            for contributor in assessment.contributors
+                        ]
+                    ),
+                    analyzed_files_json=json.dumps(audit["files_analyzed"]),
+                    submission_manifest_json=json.dumps(
+                        submission_manifest.model_dump(mode="json")
+                    ),
+                    submission_manifest_fallback_json=json.dumps(
+                        _submission_manifest_fallback_items(submission_manifest)
+                    ),
+                    blast_radius_json=json.dumps(
+                        blast_radius.model_dump(mode="json")
+                        if blast_radius is not None
+                        else {}
+                    ),
+                    rollback_plan_json=json.dumps(
+                        rollback_plan.model_dump(mode="json")
+                        if rollback_plan is not None
+                        else {}
+                    ),
+                    llm_provider=audit["llm_provider"],
+                    llm_model=audit["llm_model"],
+                    llm_local_mode="true" if audit["llm_local_mode"] else "false",
+                    assessment_source=assessment.source,
+                    narrative_source=narrative.source,
+                    narrative_skills_json=json.dumps(narrative.skills_applied),
+                    source_interface=audit["source_interface"],
+                    trigger_type=audit["trigger_type"],
+                    trigger_id=audit["trigger_id"],
+                    dashboard_display_duration_seconds=dashboard_display_duration_seconds,
+                    top_risk_contributors_json=json.dumps(
+                        assessment.top_risk_contributors
+                    ),
+                    context_completeness_json=json.dumps(
+                        assessment.context_completeness.model_dump(mode="json")
+                    ),
+                    findings_payload=[
+                        finding.model_dump(mode="json") for finding in (findings or [])
+                    ],
+                    evidence_payload=[
+                        evidence_item.model_dump(mode="json")
+                        for evidence_item in (evidence_items or [])
+                    ],
+                )
+                report_id = int(report.id)
+                save_report_artifacts(report_id, safe_artifact_snapshots)
+                return _serialize_report(report, include_evidence=True)
+        except Exception:
+            _cleanup_partial_report(report_id)
+            raise
 
     return _run_with_schema_retry(operation)
 

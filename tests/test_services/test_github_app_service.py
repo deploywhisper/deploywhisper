@@ -164,6 +164,7 @@ class GitHubAppServiceTests(unittest.TestCase):
                     "number": 3,
                     "head": {"sha": "abc123"},
                 },
+                "sender": {"login": "octocat"},
             },
         )
 
@@ -186,6 +187,10 @@ class GitHubAppServiceTests(unittest.TestCase):
         self.assertEqual(
             analyze_uploaded_files.call_args.kwargs["project_key"],
             "deploywhisper-deploywhisper",
+        )
+        self.assertEqual(
+            analyze_uploaded_files.call_args.kwargs["audit_context"]["actor"],
+            "github:octocat",
         )
 
     @patch("integrations.github.app_service._create_check_run")
@@ -449,6 +454,105 @@ class GitHubAppServiceTests(unittest.TestCase):
             )
 
         create_check_run.assert_not_called()
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_reports_persistence_failure(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.side_effect = app_service.AnalysisPersistenceError(
+            "database is read-only"
+        )
+        create_check_run.return_value = 998
+
+        result = app_service.handle_github_app_webhook(
+            event_name="pull_request",
+            payload={
+                "action": "opened",
+                "number": 3,
+                "installation": {"id": 42},
+                "repository": {
+                    "name": "deploywhisper",
+                    "owner": {"login": "deploywhisper"},
+                },
+                "pull_request": {
+                    "number": 3,
+                    "head": {"sha": "abc123"},
+                },
+            },
+        )
+
+        self.assertTrue(result.handled)
+        self.assertFalse(result.automatic_analysis_triggered)
+        self.assertIsNone(result.report_id)
+        self.assertEqual(result.check_run_id, 998)
+        self.assertIn("Report persistence failed", result.note)
+        self.assertIn(app_service.AnalysisPersistenceError.public_reason, result.note)
+        self.assertNotIn("database is read-only", result.note)
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.code, "report_persistence_failed")
+        self.assertEqual(create_check_run.call_args.kwargs["conclusion"], "failure")
+        self.assertNotIn(
+            "database is read-only",
+            create_check_run.call_args.kwargs["summary"],
+        )
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_preserves_persistence_failure_when_check_run_fails(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.side_effect = app_service.AnalysisPersistenceError(
+            "database is read-only"
+        )
+        create_check_run.side_effect = app_service.GitHubAppRequestError(
+            "github upstream failed"
+        )
+
+        result = app_service.handle_github_app_webhook(
+            event_name="pull_request",
+            payload={
+                "action": "opened",
+                "number": 3,
+                "installation": {"id": 42},
+                "repository": {
+                    "name": "deploywhisper",
+                    "owner": {"login": "deploywhisper"},
+                },
+                "pull_request": {
+                    "number": 3,
+                    "head": {"sha": "abc123"},
+                },
+            },
+        )
+
+        self.assertTrue(result.handled)
+        self.assertFalse(result.automatic_analysis_triggered)
+        self.assertIsNone(result.report_id)
+        self.assertIsNone(result.check_run_id)
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.code, "report_persistence_failed")
+        self.assertIn("Report persistence failed", result.note)
+        self.assertIn(app_service.AnalysisPersistenceError.public_reason, result.note)
+        self.assertIn("Failure check run could not be created.", result.note)
+        self.assertNotIn("database is read-only", result.note)
+        self.assertNotIn("github upstream failed", result.note)
 
     @patch("integrations.github.app_service._create_check_run")
     @patch("integrations.github.app_service.analyze_uploaded_files")

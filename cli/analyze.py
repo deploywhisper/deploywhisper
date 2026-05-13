@@ -32,6 +32,7 @@ from services.skill_registry_service import fetch_skill_registry_page
 from services.skill_test_harness_service import run_skill_test_suites
 from services.skill_test_harness_service import iter_built_in_skill_ids
 from services.analysis_service import (
+    AnalysisPersistenceError,
     analyze_uploaded_files,
     build_advisory_summary,
     build_share_summary,
@@ -469,6 +470,7 @@ def _run_analyze(
                         "DEPLOYWHISPER_TRIGGER_TYPE", "cli_command"
                     ),
                     "trigger_id": os.getenv("DEPLOYWHISPER_TRIGGER_ID"),
+                    "actor": os.getenv("DEPLOYWHISPER_ACTOR", "cli_local_user"),
                 },
             )
     except ValueError as exc:
@@ -482,6 +484,16 @@ def _run_analyze(
             stream=sys.stderr,
         )
         return 2
+    except AnalysisPersistenceError as exc:
+        _emit_json(
+            build_error(
+                code=exc.code,
+                message=str(exc),
+                details={"reason": exc.public_reason},
+            ),
+            stream=sys.stderr,
+        )
+        return 1
     except Exception as exc:  # noqa: BLE001
         _emit_json(
             build_error(
