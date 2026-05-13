@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import unittest
 
-from ui.components.findings_table import describe_evidence_item
+from ui.components.findings_table import (
+    describe_evidence_item,
+    finding_row_signals,
+)
 
 
 class FindingsTableEvidenceInspectorTests(unittest.TestCase):
@@ -99,6 +102,65 @@ class FindingsTableEvidenceInspectorTests(unittest.TestCase):
         self.assertEqual(topology_descriptor["source_system"], "payments")
         self.assertEqual(incident_descriptor["source_icon"], "history")
         self.assertEqual(incident_descriptor["source_system"], "checkout")
+
+    def test_finding_row_signals_include_category_evidence_badges_and_law_status(
+        self,
+    ) -> None:
+        signals = finding_row_signals(
+            {
+                "finding_id": "finding-001",
+                "severity": "critical",
+                "category": "networking/ingress",
+                "deterministic": True,
+                "evidence_refs": ["ev-001", "ev-002"],
+            },
+            [
+                {
+                    "evidence_id": "ev-001",
+                    "source_type": "artifact",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                },
+                {
+                    "evidence_id": "ev-002",
+                    "source_type": "topology",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                },
+            ],
+        )
+
+        self.assertEqual(signals["category"], "networking/ingress")
+        self.assertEqual(signals["evidence_count_label"], "2 evidence items")
+        self.assertEqual(signals["evidence_law_label"], "Evidence Law satisfied")
+        self.assertIn("Deterministic", signals["evidence_badges"])
+        self.assertIn("External", signals["evidence_badges"])
+
+    def test_finding_row_signals_flag_severe_findings_without_deterministic_evidence(
+        self,
+    ) -> None:
+        signals = finding_row_signals(
+            {
+                "finding_id": "finding-002",
+                "severity": "high",
+                "category": "",
+                "deterministic": False,
+                "evidence_refs": ["ev-heuristic"],
+            },
+            [
+                {
+                    "evidence_id": "ev-heuristic",
+                    "source_type": "heuristic",
+                    "deterministic": False,
+                    "determinism_level": "heuristic",
+                },
+            ],
+        )
+
+        self.assertEqual(signals["category"], "uncategorized")
+        self.assertEqual(signals["evidence_count_label"], "1 evidence item")
+        self.assertEqual(signals["evidence_law_label"], "Evidence Law needs evidence")
+        self.assertIn("Derived", signals["evidence_badges"])
 
 
 if __name__ == "__main__":

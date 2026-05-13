@@ -738,7 +738,7 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
 }
 
 .dw-findings-col-evidence {
-  width: 84px;
+  width: min(240px, 100%);
 }
 
 .dw-findings-col-confidence {
@@ -751,7 +751,7 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
 
 .dw-findings-grid {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr) 88px 88px 150px 116px;
+  grid-template-columns: 140px minmax(0, 1fr) 88px minmax(220px, 0.7fr) 150px 116px;
   gap: 12px;
   align-items: start;
 }

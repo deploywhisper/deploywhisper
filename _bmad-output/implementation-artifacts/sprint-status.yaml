@@ -72,7 +72,7 @@ development_status:
 
   epic-3: in-progress
   3-1-verdict-first-report-header: done
-  3-2-findings-table-with-evidence-badges: ready-for-dev
+  3-2-findings-table-with-evidence-badges: done
   3-3-evidence-inspector-panel: ready-for-dev
   3-4-confidence-ledger-and-why-not-lower-higher: ready-for-dev
   3-5-context-completeness-and-todo-panel: ready-for-dev

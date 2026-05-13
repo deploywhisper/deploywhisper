@@ -25,6 +25,8 @@ SOURCE_TYPE_META = {
     "heuristic": {"icon": "rule", "label": "Heuristic"},
     "skill": {"icon": "psychology", "label": "Skill"},
 }
+EXTERNAL_SOURCE_TYPES = {"topology", "incident", "history", "scanner", "external"}
+SEVERE_LEVELS = {"high", "critical"}
 
 
 def _parse_fragment(fragment: str) -> tuple[str, dict[str, list[str]]]:
@@ -152,6 +154,111 @@ def _evidence_for_finding(
     ]
 
 
+def _is_deterministic_evidence(evidence_item: dict[str, Any]) -> bool:
+    determinism_level = str(
+        evidence_item.get("determinism_level") or "deterministic"
+    ).lower()
+    return (
+        evidence_item.get("deterministic") is True
+        and determinism_level == "deterministic"
+    )
+
+
+def _source_type(evidence_item: dict[str, Any]) -> str:
+    return str(evidence_item.get("source_type") or "heuristic").lower()
+
+
+def _evidence_count_label(count: int) -> str:
+    noun = "item" if count == 1 else "items"
+    return f"{count} evidence {noun}"
+
+
+def _evidence_badges(
+    finding: dict[str, Any],
+    matched_evidence: list[dict[str, Any]],
+) -> list[str]:
+    badges: list[str] = []
+    if any(_is_deterministic_evidence(item) for item in matched_evidence) or (
+        not matched_evidence and finding.get("deterministic") is True
+    ):
+        badges.append("Deterministic")
+    if (
+        finding.get("deterministic") is not True
+        or any(not _is_deterministic_evidence(item) for item in matched_evidence)
+        or any(
+            _source_type(item) in {"heuristic", "skill"} for item in matched_evidence
+        )
+    ):
+        badges.append("Derived")
+    if any(_source_type(item) in EXTERNAL_SOURCE_TYPES for item in matched_evidence):
+        badges.append("External")
+    return badges or ["Derived"]
+
+
+def _evidence_law_label(
+    finding: dict[str, Any],
+    matched_evidence: list[dict[str, Any]],
+) -> str:
+    if str(finding.get("severity") or "").lower() not in SEVERE_LEVELS:
+        return "Evidence Law not required"
+    if any(_is_deterministic_evidence(item) for item in matched_evidence):
+        return "Evidence Law satisfied"
+    return "Evidence Law needs evidence"
+
+
+def finding_row_signals(
+    finding: dict[str, Any],
+    evidence_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build compact row signals for scanning findings before expanding evidence."""
+    matched_evidence = _evidence_for_finding(finding, evidence_items)
+    category = str(finding.get("category") or "").strip() or "uncategorized"
+    return {
+        "category": category,
+        "evidence_count": len(matched_evidence),
+        "evidence_count_label": _evidence_count_label(len(matched_evidence)),
+        "evidence_badges": _evidence_badges(finding, matched_evidence),
+        "evidence_law_label": _evidence_law_label(finding, matched_evidence),
+    }
+
+
+def _render_row_signal_badge(label: str) -> None:
+    styles = {
+        "Deterministic": (
+            "rgba(83, 194, 107, 0.12)",
+            "#53c26b",
+            "rgba(83, 194, 107, 0.35)",
+        ),
+        "External": (
+            "var(--dw-accent-soft)",
+            "var(--dw-accent)",
+            "var(--dw-accent-line)",
+        ),
+        "Evidence Law satisfied": (
+            "rgba(83, 194, 107, 0.12)",
+            "#53c26b",
+            "rgba(83, 194, 107, 0.35)",
+        ),
+        "Evidence Law needs evidence": (
+            "rgba(207, 63, 63, 0.12)",
+            "#cf3f3f",
+            "rgba(207, 63, 63, 0.35)",
+        ),
+    }
+    background, color, border = styles.get(
+        label,
+        ("rgba(216, 164, 50, 0.12)", "#d8a432", "rgba(216, 164, 50, 0.35)"),
+    )
+    ui.label(label).classes("text-[11px] font-semibold").style(
+        f"background:{background};"
+        f"color:{color};"
+        f"border:1px solid {border};"
+        "border-radius:12px;"
+        "padding:4px 10px;"
+        "line-height:1.1;"
+    )
+
+
 def _tool_from_evidence(
     finding: dict[str, Any], evidence_items: list[dict[str, Any]]
 ) -> str:
@@ -257,6 +364,7 @@ def render_findings_table(
             for index, finding in enumerate(ordered):
                 finding_id = str(finding["finding_id"])
                 matched_evidence = _evidence_for_finding(finding, evidence_items)
+                row_signals = finding_row_signals(finding, evidence_items)
                 tool = _tool_from_evidence(finding, evidence_items)
                 evidence_panel_id = f"evidence-inspector-{finding_id}"
                 row_classes = "w-full dw-findings-row shadow-none dw-findings-row-card"
@@ -292,6 +400,9 @@ def render_findings_table(
                             ui.label(finding["description"]).classes(
                                 "text-xs dw-muted leading-5"
                             )
+                            ui.label(row_signals["category"]).classes(
+                                "text-xs dw-muted"
+                            )
                             if finding.get("uncertainty_note"):
                                 ui.label(finding["uncertainty_note"]).classes(
                                     "text-xs dw-warning-text"
@@ -299,9 +410,16 @@ def render_findings_table(
                         ui.label(tool).classes(
                             "dw-findings-col dw-findings-col-tool text-xs uppercase dw-muted"
                         )
-                        ui.label(str(len(matched_evidence))).classes(
-                            "dw-findings-col dw-findings-col-evidence text-sm font-semibold dw-text"
-                        )
+                        with ui.column().classes(
+                            "dw-findings-col dw-findings-col-evidence items-start gap-1"
+                        ):
+                            ui.label(row_signals["evidence_count_label"]).classes(
+                                "text-sm font-semibold dw-text normal-case"
+                            )
+                            with ui.row().classes("gap-1 flex-wrap"):
+                                for badge in row_signals["evidence_badges"]:
+                                    _render_row_signal_badge(badge)
+                            _render_row_signal_badge(row_signals["evidence_law_label"])
                         with ui.column().classes(
                             "dw-findings-col dw-findings-col-confidence items-start gap-1"
                         ):
