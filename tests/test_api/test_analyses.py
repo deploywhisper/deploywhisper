@@ -133,10 +133,87 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+        self.assertEqual(payload["meta"]["report_schema_versions"], ["v2"])
         self.assertEqual(payload["meta"]["count"], 1)
         self.assertEqual(payload["meta"]["total_count"], 1)
         self.assertEqual(payload["meta"]["page"], 1)
         self.assertEqual(payload["meta"]["page_size"], 50)
+
+    def test_list_analyses_meta_matches_legacy_report_schema(self) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE analysis_reports SET report_schema_version = '' WHERE id = ?",
+                (self.persisted["id"],),
+            )
+
+        response = self.client.get("/api/v1/analyses")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"][0]["report_schema_version"], "v1")
+        self.assertEqual(payload["meta"]["report_schema_version"], "v1")
+        self.assertEqual(payload["meta"]["report_schema_versions"], ["v1"])
+
+    def test_list_analyses_meta_reports_mixed_schema_versions(self) -> None:
+        report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="next-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=10,
+                severity="low",
+                recommendation="go",
+                top_risk="Second report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: second report.",
+                explanation="Second report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE analysis_reports SET report_schema_version = '' WHERE id = ?",
+                (self.persisted["id"],),
+            )
+
+        response = self.client.get("/api/v1/analyses")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+        self.assertEqual(payload["meta"]["report_schema_versions"], ["v1", "v2"])
+        self.assertEqual(
+            {report["report_schema_version"] for report in payload["data"]},
+            {"v1", "v2"},
+        )
+
+    def test_list_analyses_rejects_newer_report_schema_versions(self) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE analysis_reports SET report_schema_version = 'v3' WHERE id = ?",
+                (self.persisted["id"],),
+            )
+
+        response = self.client.get("/api/v1/analyses")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["error"]["code"], "unsupported_report_schema_version"
+        )
 
     def test_list_analyses_defaults_to_unassigned_scope(self) -> None:
         project = project_service_module.create_project(
@@ -191,6 +268,66 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["report_schema_version"], "v2")
         self.assertEqual(payload["data"]["audit"]["llm_provider"], "ollama")
         self.assertEqual(payload["data"]["blast_radius"]["direct_count"], 0)
+
+    def test_get_analysis_meta_matches_legacy_report_schema(self) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE analysis_reports SET report_schema_version = '' WHERE id = ?",
+                (self.persisted["id"],),
+            )
+
+        response = self.client.get(f"/api/v1/analyses/{self.persisted['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["report_schema_version"], "v1")
+        self.assertEqual(payload["meta"]["report_schema_version"], "v1")
+
+    def test_get_analysis_canonicalizes_zero_padded_report_schema_version(
+        self,
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE analysis_reports SET report_schema_version = 'v02' WHERE id = ?",
+                (self.persisted["id"],),
+            )
+
+        response = self.client.get(f"/api/v1/analyses/{self.persisted['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["report_schema_version"], "v2")
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+
+    def test_get_analysis_rejects_malformed_report_schema_version(
+        self,
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE analysis_reports SET report_schema_version = 'legacy' WHERE id = ?",
+                (self.persisted["id"],),
+            )
+
+        response = self.client.get(f"/api/v1/analyses/{self.persisted['id']}")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"]["code"], "invalid_report_schema_version"
+        )
+
+    def test_get_analysis_rejects_newer_report_schema_version(self) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE analysis_reports SET report_schema_version = 'v3' WHERE id = ?",
+                (self.persisted["id"],),
+            )
+
+        response = self.client.get(f"/api/v1/analyses/{self.persisted['id']}")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["error"]["code"], "unsupported_report_schema_version"
+        )
 
     def test_get_analysis_rejects_unknown_project_reference(self) -> None:
         response = self.client.get(
@@ -636,6 +773,10 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertLessEqual(len(payload["data"]["share_summary"]["markdown"]), 1500)
         self.assertEqual(
             payload["data"]["share_summary"]["json_payload"]["version"], "v1"
+        )
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["report_schema_version"],
+            "v2",
         )
         self.assertEqual(
             payload["data"]["share_summary"]["json_payload"]["report_id"],

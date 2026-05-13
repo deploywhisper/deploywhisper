@@ -8,7 +8,7 @@
 **License posture:** Fully open-source (MIT). Self-hosted only. No SaaS product. No hosted control plane. No open-core split. No paid enterprise-only features.  
 **Strategic posture:** Become the open-source safety standard for human-written and AI-generated infrastructure changes before production.
 **v1.0 tightening:** Restores testable performance targets, adds legal/ethical safeguards for sample incident packs, and defines conflict-handling rules for external scanner evidence.
-
+All milestones in this section are part of DeployWhisper V1 scope. The milestone labels describe implementation order and maturity gates, not separate product versions. No item in this section should be interpreted as V2, paid, post-V1, or SaaS-only scope.
 ---
 
 ## 1. Executive Summary
@@ -2485,9 +2485,11 @@ A CNCF reviewer can inspect governance, maintainers, CODEOWNERS, release process
 
 ---
 
-## 32. Scope by Phase
+## 32. V1 Delivery Milestones
 
-### 32.1 Phase 0 - Open-source and execution foundation
+All milestones in this section are part of DeployWhisper V1 scope. The milestone labels describe implementation order and maturity gates, not separate product versions. No item in this section should be interpreted as V2, paid, post-V1, or SaaS-only scope.
+
+### 32.1 V1 Foundation - Open-source and execution foundation
 
 Focus:
 
@@ -2502,7 +2504,7 @@ Focus:
 - Add security policy.
 - Add first demo and examples.
 
-### 32.2 Phase 1 - Trusted Advisory Core
+### 32.2 V1 Core - Trusted Advisory Core
 
 Focus:
 
@@ -2518,7 +2520,7 @@ Focus:
 - CLI/API/web report baseline.
 - Documentation for first analysis and report interpretation.
 
-### 32.3 Phase 1.5 - Workflow, docs, and benchmark proof
+### 32.3 V1 Workflow proof - Workflow, docs, and benchmark proof
 
 Focus:
 
@@ -2533,7 +2535,7 @@ Focus:
 - Sample incident pack.
 - Outcome capture v1.
 
-### 32.4 Phase 2 - Context moat
+### 32.4 V1 Context Expansion - Context moat
 
 Focus:
 
@@ -2548,7 +2550,7 @@ Focus:
 - Deployment outcome learning.
 - External scanner contextualization expansion.
 
-### 32.5 Phase 3 - Agent-native and integration expansion
+### 32.5 V1 Agent and Adapter Expansion - Agent-native and integration expansion
 
 Focus:
 
@@ -2561,7 +2563,7 @@ Focus:
 - 40+ verified Skills.
 - AI safety documentation.
 
-### 32.6 Phase 4 - CNCF and scale readiness
+### 32.6 V1 GA and CNCF Readiness - CNCF and scale readiness
 
 Focus:
 
@@ -2582,7 +2584,7 @@ Focus:
 
 ## 33. Epics
 
-| Epic | Phase | Purpose | Requirement families |
+| Epic | V1 milestone | Purpose | Requirement families |
 |---|---|---|---|
 | Epic 0: Open Governance, Traceability, and Maintainer Ownership | Phase 0 | Remove ambiguity, map owners, prepare community growth | GOV, OSS, traceability, NFR-OSS |
 | Epic 1: Project, Workspace, and RBAC Foundation | Phase 0/1 | Define core boundaries before persistence and connectors harden | PRJ, ADM, NFR-SEC |
@@ -2604,7 +2606,7 @@ Focus:
 
 ## 34. Release Exit Criteria
 
-### 34.1 Phase 0 exit
+### 34.1 V1 Foundation exit
 
 - PRD updated with full open-source and self-hosted-only commitment.
 - Open-core, SaaS, hosted-control-plane, and paid-feature references removed.
@@ -2618,7 +2620,7 @@ Focus:
 - Demo media and sample artifacts available.
 - Documentation IA, quickstart, first-analysis guide, self-hosted install guide, Evidence Law guide, and docs contribution guide exist.
 
-### 34.2 Phase 1 exit
+### 34.2 V1 Core exit
 
 - Mixed-artifact analysis works reliably.
 - Reports contain project scope, evidence, confidence, and uncertainty.
@@ -2631,7 +2633,7 @@ Focus:
 - Report interpretation, Evidence Law, evidence model, project model, configuration, and troubleshooting docs are published.
 - Senior reviewers consider high/critical findings credible in friendly-user workflows.
 
-### 34.3 Phase 1.5 exit
+### 34.3 V1 Workflow proof exit
 
 - GitHub workflow integration live and documented.
 - PR summaries used in real reviews.
@@ -2646,7 +2648,7 @@ Focus:
 - Sample incident pack available.
 - GitHub integration, benchmark, Skills authoring, and day-zero incident docs are published and linked from relevant workflows.
 
-### 34.4 Phase 2 exit
+### 34.4 V1 Context Expansion exit
 
 - Terraform plan and state context improve blast-radius quality.
 - Kubernetes live-state connector available as optional read-only context.
@@ -2658,7 +2660,7 @@ Focus:
 - External scanner contextualization produces useful deployment-risk context.
 - Connector, incident memory, context graph, outcome-capture, and scanner-ingestion docs are published.
 
-### 34.5 Phase 3 exit
+### 34.5 V1 Agent and Adapter Expansion exit
 
 - MCP server alpha or equivalent agent interface available.
 - Agent JSON output stable.
@@ -2669,7 +2671,7 @@ Focus:
 - 40+ verified Skills.
 - Agent, MCP, GitLab/Jenkins/Atlantis/GitOps, integration, and policy-adapter documentation published.
 
-### 34.6 Phase 4 exit
+### 34.6 V1 GA and CNCF Readiness exit
 
 - PostgreSQL path available.
 - Async worker path available.

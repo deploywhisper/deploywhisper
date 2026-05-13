@@ -6601,6 +6601,21 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(
             report_service_module.normalize_report_schema_version(None), "v1"
         )
+        self.assertEqual(
+            report_service_module.normalize_report_schema_version("v02"), "v2"
+        )
+        self.assertEqual(
+            report_service_module.normalize_report_schema_version("v10"), "v10"
+        )
+        with self.assertRaises(ValueError):
+            report_service_module.normalize_report_schema_version("legacy")
+        with self.assertRaises(ValueError):
+            report_service_module.normalize_report_schema_version(False)
+        self.assertEqual(
+            report_service_module.readable_report_schema_version("v2"), "v2"
+        )
+        with self.assertRaises(ValueError):
+            report_service_module.readable_report_schema_version("v3")
         self.assertTrue(report_service_module.can_read_report_schema("v3", "v2"))
         self.assertFalse(report_service_module.can_read_report_schema("v2", "v3"))
 
@@ -8039,6 +8054,40 @@ class ReportServiceTests(unittest.TestCase):
             by_id[int(second["id"])]["previous_scan_diff"]["previous_report_id"],
             first["id"],
         )
+
+    def test_filtered_history_ignores_unreadable_off_page_reports_for_diffs(
+        self,
+    ) -> None:
+        readable = self._persist_comparison_report(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="Readable review",
+            findings=[],
+            evidence_items=[],
+        )
+        unreadable = self._persist_comparison_report(
+            score=90,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Future schema review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.get_analysis_report(
+                session, int(unreadable["id"]), include_evidence=True
+            )
+            assert report is not None
+            report.report_schema_version = "v3"
+            session.commit()
+
+        history = report_service_module.fetch_filtered_analysis_history_page(
+            severity="low"
+        )
+
+        self.assertEqual(history["total_count"], 1)
+        self.assertEqual(history["items"][0]["id"], readable["id"])
 
     def test_previous_scan_diffs_compute_history_signature_once_per_report(
         self,

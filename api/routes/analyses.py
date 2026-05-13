@@ -37,6 +37,7 @@ from services.report_service import REPORT_SCHEMA_VERSION
 from services.report_service import configure_report_share
 from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
+from services.report_service import normalize_report_schema_version
 from services.project_service import (
     ensure_default_project,
     has_restricted_project_scope,
@@ -48,9 +49,30 @@ router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=Api
 READ_CHUNK_BYTES = 1024 * 1024
 
 
+def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
+    def schema_major(schema_version: str) -> int:
+        return int(schema_version[1:]) if schema_version.startswith("v") else 0
+
+    versions = sorted(
+        {
+            normalize_report_schema_version(report.get("report_schema_version"))
+            for report in reports
+        },
+        key=schema_major,
+    )
+    return {
+        "report_schema_version": versions[0]
+        if len(versions) == 1
+        else REPORT_SCHEMA_VERSION,
+        "report_schema_versions": versions,
+    }
+
+
 def _project_api_error(exc: ValueError) -> ApiError:
     code = getattr(exc, "code", "invalid_project_request")
-    status_code = 404 if code in {"project_not_found", "workspace_not_found"} else 400
+    status_code = getattr(exc, "status_code", None) or (
+        404 if code in {"project_not_found", "workspace_not_found"} else 400
+    )
     return ApiError(
         status_code=status_code,
         code=code,
@@ -346,10 +368,11 @@ def list_analyses(
         ):
             raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
+    reports = page_payload["items"]
     return AnalysisListResponse(
-        data=[AnalysisReportData(**report) for report in page_payload["items"]],
+        data=[AnalysisReportData(**report) for report in reports],
         meta=build_report_meta(
-            report_schema_version=REPORT_SCHEMA_VERSION,
+            **_list_report_schema_meta(reports),
             count=len(page_payload["items"]),
             total_count=page_payload["total_count"],
             page=page_payload["page"],
@@ -565,7 +588,10 @@ def get_analysis(
     return AnalysisDetailResponse(
         data=AnalysisReportData(**report),
         meta=build_report_meta(
-            id=report_id, report_schema_version=REPORT_SCHEMA_VERSION
+            id=report_id,
+            report_schema_version=normalize_report_schema_version(
+                report.get("report_schema_version")
+            ),
         ),
     )
 
