@@ -70,6 +70,10 @@ test.describe("review keyboard flow", () => {
   }) => {
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(page.getByText("5-second verdict")).toBeVisible();
+    await expect(page.getByText("Advisory posture").first()).toBeVisible();
+    await expect(page.getByText("Evidence Law").first()).toBeVisible();
+    await expect(page.getByText("Next action").first()).toBeVisible();
+    await expect(page.getByText("Review linked evidence").first()).toBeVisible();
     await page.waitForFunction(() => window.dwReviewAccessibilityInstalled === true);
     await expect(page.getByText("Module: module.network").first()).toBeVisible();
     await expect(
