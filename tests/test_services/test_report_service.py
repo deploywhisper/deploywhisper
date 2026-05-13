@@ -3527,7 +3527,7 @@ class ReportServiceTests(unittest.TestCase):
                 evidence_items=evidence_items,
             )
 
-    def _persist_shareable_report(self) -> dict:
+    def _persist_shareable_report(self, audit_actor: str | None = None) -> dict:
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -3608,8 +3608,14 @@ class ReportServiceTests(unittest.TestCase):
             narrative,
             findings=findings,
             evidence_items=evidence_items,
-            audit_context={"source_interface": "api"},
+            audit_context={
+                "source_interface": "api",
+                **({"actor": audit_actor} if audit_actor is not None else {}),
+            },
         )
+
+    def _persist_shareable_report_with_audit_actor(self, audit_actor: str) -> dict:
+        return self._persist_shareable_report(audit_actor=audit_actor)
 
     def _persist_comparison_report(
         self,
@@ -3823,14 +3829,32 @@ class ReportServiceTests(unittest.TestCase):
                 "source_interface": "api",
                 "trigger_type": "session",
                 "trigger_id": "sess-123",
+                "actor": "reviewer@example.com",
             },
         )
         self.assertIn("id", persisted)
         self.assertEqual(persisted["audit"]["source_interface"], "api")
         self.assertEqual(persisted["audit"]["trigger_type"], "session")
         self.assertEqual(persisted["audit"]["trigger_id"], "sess-123")
+        self.assertEqual(persisted["audit"]["actor"], "reviewer@example.com")
         self.assertEqual(persisted["audit"]["files_analyzed"], ["plan.json"])
         self.assertEqual(persisted["audit"]["llm_provider"], "ollama")
+        self.assertEqual(persisted["audit"]["persisted_at"], persisted["created_at"])
+        self.assertEqual(
+            persisted["audit"]["delivery"],
+            {
+                "surface": "api",
+                "trigger_type": "session",
+                "trigger_id": "sess-123",
+                "report_id": persisted["id"],
+                "status": "persisted",
+            },
+        )
+        self.assertEqual(persisted["audit"]["redaction_status"], "none")
+        self.assertEqual(
+            persisted["submission_manifest"]["provenance"]["actor"],
+            "reviewer@example.com",
+        )
         self.assertEqual(persisted["assessment_source"], "heuristic-only")
         self.assertEqual(persisted["narrative_source"], "llm")
         self.assertEqual(persisted["report_schema_version"], "v2")
@@ -3883,6 +3907,9 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["severity"], "high")
         self.assertEqual(fetched["recommendation"], "no-go")
         self.assertEqual(fetched["audit"]["source_interface"], "api")
+        self.assertEqual(fetched["audit"]["actor"], "reviewer@example.com")
+        self.assertEqual(fetched["audit"]["persisted_at"], fetched["created_at"])
+        self.assertEqual(fetched["audit"]["redaction_status"], "none")
         self.assertEqual(fetched["audit"]["files_analyzed"], ["plan.json"])
         self.assertIn(
             "Deterministic severe risk remains", fetched["narrative_explanation"]
@@ -3899,6 +3926,7 @@ class ReportServiceTests(unittest.TestCase):
             fetched["rollback_plan"]["steps"][0]["title"],
             "Revert aws_security_group.main",
         )
+
         self.assertEqual(
             fetched["context_completeness"]["parser_success_by_tool"],
             {"terraform": 1.0},
@@ -3965,6 +3993,159 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(
             history[0]["contributors"][0]["metadata"]["redacted_fields"],
             ["ingress.0.description"],
+        )
+
+    def test_persist_analysis_report_cleans_up_committed_row_after_artifact_failure(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_instance.main",
+                            action="modify",
+                            summary="Terraform changed an instance.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed an instance.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the instance update.",
+            explanation="The deployment should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.report_service.save_report_artifacts",
+                side_effect=RuntimeError("snapshot disk full"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "snapshot disk full"),
+        ):
+            report_service_module.persist_analysis_report(
+                parse_batch,
+                assessment,
+                narrative,
+                artifact_snapshots={"plan.json": b'{"resource_changes": []}'},
+            )
+
+        with sqlite3.connect(self.db_path) as connection:
+            count = connection.execute(
+                "SELECT COUNT(*) FROM analysis_reports"
+            ).fetchone()[0]
+        self.assertEqual(count, 0)
+
+    def test_persist_analysis_report_cleans_up_row_when_artifact_cleanup_fails(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_instance.main",
+                            action="modify",
+                            summary="Terraform changed an instance.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed an instance.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the instance update.",
+            explanation="The deployment should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.report_service.save_report_artifacts",
+                side_effect=RuntimeError("snapshot disk full"),
+            ),
+            patch(
+                "services.report_service.delete_report_artifacts",
+                side_effect=RuntimeError("cleanup disk full"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "snapshot disk full"),
+        ):
+            report_service_module.persist_analysis_report(
+                parse_batch,
+                assessment,
+                narrative,
+                artifact_snapshots={"plan.json": b'{"resource_changes": []}'},
+            )
+
+        with sqlite3.connect(self.db_path) as connection:
+            count = connection.execute(
+                "SELECT COUNT(*) FROM analysis_reports"
+            ).fetchone()[0]
+        self.assertEqual(count, 0)
+
+    def test_persist_analysis_report_normalizes_actor_metadata(self) -> None:
+        report = self._persist_shareable_report_with_audit_actor(
+            " reviewer@example.com\nInjected: yes\t" + ("x" * 200)
+        )
+
+        self.assertNotIn("\n", report["audit"]["actor"])
+        self.assertNotIn("\t", report["audit"]["actor"])
+        self.assertTrue(report["audit"]["actor"].startswith("reviewer@example.com "))
+        self.assertLessEqual(len(report["audit"]["actor"]), 120)
+
+    def test_fetch_report_recovers_actor_from_submission_manifest_fallback(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report_with_audit_actor("reviewer@example.com")
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = ? WHERE id = ?",
+                ("{not-valid-json", report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertEqual(fetched["audit"]["actor"], "reviewer@example.com")
+        self.assertTrue(fetched["submission_manifest_fallback"])
+        self.assertEqual(
+            fetched["submission_manifest_fallback"][0]["actor"],
+            "reviewer@example.com",
         )
 
     def test_persist_analysis_report_applies_context_uncertainty_downgrade(
@@ -5287,6 +5468,60 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fallback_by_name["broken.tf"]["status"], "failed")
         self.assertEqual(fallback_by_name[".env"]["status"], "sensitive")
         self.assertEqual(fallback_by_name["notes.txt"]["status"], "excluded")
+        self.assertEqual(fetched["audit"]["redaction_status"], "sensitive_blocked")
+        self.assertEqual(
+            fetched["audit"]["redaction"],
+            {
+                "filenames_redacted": False,
+                "sensitive_content_excluded": True,
+            },
+        )
+
+    def test_fetch_report_marks_filename_redacted_manifest_as_redacted(self) -> None:
+        report = self._persist_shareable_report()
+        manifest = dict(report["submission_manifest"])
+        manifest["redaction"] = {
+            "filenames_redacted": True,
+            "sensitive_content_excluded": False,
+        }
+        manifest["items"] = [
+            {**item, "redaction_status": "none"} for item in manifest["items"]
+        ]
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = ? WHERE id = ?",
+                (json.dumps(manifest), report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertEqual(fetched["audit"]["redaction_status"], "redacted")
+        self.assertEqual(
+            fetched["audit"]["redaction"],
+            {
+                "filenames_redacted": True,
+                "sensitive_content_excluded": False,
+            },
+        )
+
+    def test_fetch_report_marks_empty_legacy_manifest_redaction_unknown(self) -> None:
+        report = self._persist_shareable_report()
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE analysis_reports "
+                "SET submission_manifest_json = ?, submission_manifest_fallback_json = ? "
+                "WHERE id = ?",
+                ("{}", "[]", report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        self.assertEqual(fetched["audit"]["redaction_status"], "unknown")
+        self.assertEqual(fetched["audit"]["redaction"], {})
 
     def test_fetch_report_degrades_on_wrong_shape_submission_manifest_json(
         self,

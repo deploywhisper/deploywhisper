@@ -23,6 +23,7 @@ from api.schemas import (
 )
 from config import settings
 from services.analysis_service import (
+    AnalysisPersistenceError,
     analyze_uploaded_files,
     build_advisory_summary,
     build_share_summary,
@@ -417,6 +418,7 @@ async def create_analysis(
         default=None, alias="X-DeployWhisper-Trigger-Type"
     ),
     trigger_id: str | None = Header(default=None, alias="X-DeployWhisper-Trigger-Id"),
+    actor: str | None = Header(default=None, alias="X-DeployWhisper-Actor"),
     authorization: dict[str, object] = Depends(_authorization_context),
 ) -> AnalysisRunResponse:
     if not files:
@@ -499,8 +501,16 @@ async def create_analysis(
                 "source_interface": "api",
                 "trigger_type": trigger_type or "api_request",
                 "trigger_id": trigger_id,
+                "actor": actor or "api_client",
             },
         )
+    except AnalysisPersistenceError as exc:
+        raise ApiError(
+            status_code=500,
+            code=exc.code,
+            message=str(exc),
+            details={"reason": exc.public_reason},
+        ) from exc
     except ValueError as exc:
         raise _project_api_error(exc) from exc
     advisory = build_advisory_summary(result.assessment, result.narrative)

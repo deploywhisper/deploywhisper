@@ -10,7 +10,7 @@ from nicegui import events, run, ui
 from analysis.blast_radius import BlastRadiusResult
 from analysis.rollback_planner import RollbackPlan
 from parsers.registry import detect_tool_type
-from services.analysis_service import analyze_uploaded_files
+from services.analysis_service import AnalysisPersistenceError, analyze_uploaded_files
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     build_pending_analysis,
@@ -117,8 +117,36 @@ def run_uploaded_analysis(
         audit_context={
             "source_interface": "ui",
             "trigger_type": "dashboard_upload",
+            "actor": "ui_local_user",
         },
     )
+
+
+def format_analysis_failure(exc: Exception) -> tuple[str, str, str]:
+    if isinstance(exc, AnalysisPersistenceError):
+        return (
+            "Report persistence failed",
+            exc.public_reason,
+            "Analysis completed, but the report was not saved. Retry the analysis; if it repeats, review local application logs and persistence configuration.",
+        )
+    return (
+        "Analysis failed",
+        str(exc),
+        "Analysis failed. Review the dashboard error card for details.",
+    )
+
+
+def persisted_report_reference(report: dict[str, Any]) -> tuple[str, str] | None:
+    report_id = report.get("id") or (report.get("audit", {}).get("delivery") or {}).get(
+        "report_id"
+    )
+    if report_id is None:
+        return None
+    try:
+        normalized_report_id = int(report_id)
+    except (TypeError, ValueError):
+        return None
+    return f"Saved report #{normalized_report_id}", f"/reports/{normalized_report_id}"
 
 
 def resolve_initial_project_selection(*, has_saved_selection: bool, active_project):
@@ -413,6 +441,12 @@ def build_upload_panel(
                         "Narrative unavailable. Review the deterministic findings and evidence below."
                     ).classes("text-sm dw-warning-text leading-6")
                 ui.label(report["parse_summary"]).classes("text-xs dw-muted")
+                report_reference = persisted_report_reference(report)
+                if report_reference is not None:
+                    reference_label, reference_target = report_reference
+                    ui.link(reference_label, reference_target).classes(
+                        "text-xs dw-link"
+                    )
                 manifest = report.get("submission_manifest") or {}
                 if manifest.get("items"):
                     ui.label(format_submission_manifest_summary(manifest)).classes(
@@ -662,15 +696,16 @@ def build_upload_panel(
             if on_analysis_complete:
                 on_analysis_complete()
         except Exception as exc:  # noqa: BLE001
+            failure_title, failure_message, notification = format_analysis_failure(exc)
             result_mount.clear()
             with result_mount:
                 with ui.card().classes("w-full dw-panel shadow-none p-5"):
-                    ui.label("Analysis failed").classes(
+                    ui.label(failure_title).classes(
                         "text-base font-semibold dw-danger-text"
                     )
-                    ui.label(str(exc)).classes("text-sm dw-muted")
+                    ui.label(failure_message).classes("text-sm dw-muted")
             ui.notify(
-                "Analysis failed. Review the dashboard error card for details.",
+                notification,
                 color="negative",
             )
         finally:

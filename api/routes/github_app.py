@@ -150,6 +150,8 @@ async def github_app_webhook(request: Request) -> dict[str, object]:
             "check_run_id": result.check_run_id,
             "report_id": result.report_id,
             "report_url": result.report_url,
+            "status": getattr(result, "status", "ok"),
+            "code": getattr(result, "code", None),
             "marketplace_url": config.marketplace_url,
             "install_url": config.install_url,
             "advisory_only": True,

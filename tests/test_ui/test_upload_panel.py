@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 from ui.components.upload_panel import (
     build_feedback_rerender_handler,
+    format_analysis_failure,
+    persisted_report_reference,
     format_submission_manifest_fallback_summary,
     format_submission_manifest_partial_notice,
     format_submission_manifest_summary,
@@ -16,6 +18,7 @@ from ui.components.upload_panel import (
     uploads_allowed,
     run_uploaded_analysis,
 )
+from services.analysis_service import AnalysisPersistenceError
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 from ui.components.change_table import (
     format_change_metadata_lines,
@@ -90,6 +93,7 @@ class UploadPanelTests(unittest.TestCase):
             audit_context={
                 "source_interface": "ui",
                 "trigger_type": "dashboard_upload",
+                "actor": "ui_local_user",
             },
         )
 
@@ -107,6 +111,32 @@ class UploadPanelTests(unittest.TestCase):
             getattr(exc_info.exception, "code", ""), "missing_project_scope"
         )
         build_parse_batch.assert_not_called()
+
+    def test_format_analysis_failure_surfaces_persistence_error_actionably(
+        self,
+    ) -> None:
+        title, message, notification = format_analysis_failure(
+            AnalysisPersistenceError("database is read-only")
+        )
+
+        self.assertEqual(title, "Report persistence failed")
+        self.assertEqual(message, AnalysisPersistenceError.public_reason)
+        self.assertIn("report was not saved", notification)
+        self.assertIn("persistence configuration", notification)
+        self.assertNotIn("database is read-only", message)
+        self.assertNotIn("database is read-only", notification)
+        self.assertNotIn("local storage", notification)
+
+    def test_persisted_report_reference_prefers_saved_report_id(self) -> None:
+        self.assertEqual(
+            persisted_report_reference({"id": 42}),
+            ("Saved report #42", "/reports/42"),
+        )
+        self.assertEqual(
+            persisted_report_reference({"audit": {"delivery": {"report_id": "43"}}}),
+            ("Saved report #43", "/reports/43"),
+        )
+        self.assertIsNone(persisted_report_reference({"id": "not-a-number"}))
 
     def test_resolve_initial_project_selection_requires_saved_choice(self) -> None:
         project_id, project_key = resolve_initial_project_selection(

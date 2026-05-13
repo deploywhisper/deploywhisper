@@ -16,6 +16,7 @@ import models.repositories.analysis_reports as analysis_reports_repository_modul
 import models.tables as tables_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
+from services.analysis_service import AnalysisPersistenceError
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from app import create_app
 from evidence.models import EvidenceItem
@@ -715,6 +716,7 @@ class AnalysesApiTests(unittest.TestCase):
                 "/api/v1/analyses",
                 files=files,
                 data={"project_key": "payments"},
+                headers={"X-DeployWhisper-Actor": "api-reviewer@example.com"},
             )
 
         self.assertEqual(response.status_code, 200)
@@ -788,6 +790,17 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["data"]["persisted_report"]["audit"]["source_interface"], "api"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["actor"],
+            "api-reviewer@example.com",
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["persisted_at"],
+            payload["data"]["persisted_report"]["created_at"],
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["audit"]["redaction_status"], "none"
         )
         self.assertEqual(
             payload["data"]["persisted_report"]["audit"]["trigger_type"], "api_request"
@@ -1963,6 +1976,36 @@ class AnalysesApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["error"]["code"], "internal_error")
         self.assertEqual(payload["error"]["message"], "Internal server error.")
+
+    def test_analysis_persistence_failure_uses_actionable_error_envelope(self) -> None:
+        project_service_module.create_project(
+            project_key="payments-persist-failed",
+            display_name="Payments Persist Failed",
+        )
+        client = TestClient(create_app(), raise_server_exceptions=False)
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            side_effect=AnalysisPersistenceError("database is read-only"),
+        ):
+            response = client.post(
+                "/api/v1/analyses",
+                files={"files": ("plan.json", b'{"resource_changes": []}')},
+                data={"project_key": "payments-persist-failed"},
+            )
+
+        self.assertEqual(response.status_code, 500)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "report_persistence_failed")
+        self.assertEqual(
+            payload["error"]["message"],
+            "Report persistence failed; final analysis success was not returned.",
+        )
+        self.assertEqual(
+            payload["error"]["details"]["reason"],
+            AnalysisPersistenceError.public_reason,
+        )
+        self.assertNotIn("database is read-only", response.text)
 
     def test_openapi_documents_analysis_submission_contract(self) -> None:
         response = self.client.get("/openapi.json")

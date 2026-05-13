@@ -67,7 +67,7 @@ development_status:
   2-6-confidence-uncertainty-and-insufficient-context: done
   2-7-narrative-after-scoring-and-degraded-fallback: done
   2-8-report-schema-versioning: done
-  2-9-durable-report-persistence-and-audit-metadata: ready-for-dev
+  2-9-durable-report-persistence-and-audit-metadata: done
   epic-2-retrospective: optional
 
   epic-3: in-progress
