@@ -36,8 +36,8 @@ from services.project_service import (
 from services.report_service import (
     REPORT_SCHEMA_VERSION,
     build_share_report_link,
-    normalize_report_schema_version,
     persist_analysis_report,
+    readable_report_schema_version,
 )
 from services.settings_service import resolve_provider_runtime
 from services.submission_manifest import build_submission_manifest
@@ -815,7 +815,7 @@ def build_share_summary(report: dict) -> ShareSummary:
         else "Standard approval flow is sufficient."
     )
     json_payload = ShareSummaryJsonPayload(
-        report_schema_version=normalize_report_schema_version(
+        report_schema_version=readable_report_schema_version(
             report.get("report_schema_version")
         ),
         report_id=report_id,

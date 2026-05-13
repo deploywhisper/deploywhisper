@@ -44,6 +44,12 @@ distinct item schema versions in numeric major-version order, such as
 `data[*].report_schema_version` or `meta.report_schema_versions` instead of
 assuming a uniform list.
 
+Readers canonicalize valid schema versions to `vN` form, so values such as
+`v02` are emitted as `v2`. Blank historical values are treated as legacy `v1`;
+non-empty malformed markers are rejected as invalid, and versions newer than the
+current reader schema are rejected until the runtime supports that report
+contract.
+
 ### Advisory and share-summary shape
 
 API and CLI analysis responses include advisory fields for automation and PR

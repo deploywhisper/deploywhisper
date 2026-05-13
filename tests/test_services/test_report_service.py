@@ -6602,11 +6602,18 @@ class ReportServiceTests(unittest.TestCase):
             report_service_module.normalize_report_schema_version(None), "v1"
         )
         self.assertEqual(
-            report_service_module.normalize_report_schema_version("legacy"), "v1"
+            report_service_module.normalize_report_schema_version("v02"), "v2"
         )
         self.assertEqual(
             report_service_module.normalize_report_schema_version("v10"), "v10"
         )
+        with self.assertRaises(ValueError):
+            report_service_module.normalize_report_schema_version("legacy")
+        self.assertEqual(
+            report_service_module.readable_report_schema_version("v2"), "v2"
+        )
+        with self.assertRaises(ValueError):
+            report_service_module.readable_report_schema_version("v3")
         self.assertTrue(report_service_module.can_read_report_schema("v3", "v2"))
         self.assertFalse(report_service_module.can_read_report_schema("v2", "v3"))
 

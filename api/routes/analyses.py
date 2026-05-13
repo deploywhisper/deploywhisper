@@ -70,7 +70,9 @@ def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
 
 def _project_api_error(exc: ValueError) -> ApiError:
     code = getattr(exc, "code", "invalid_project_request")
-    status_code = 404 if code in {"project_not_found", "workspace_not_found"} else 400
+    status_code = getattr(exc, "status_code", None) or (
+        404 if code in {"project_not_found", "workspace_not_found"} else 400
+    )
     return ApiError(
         status_code=status_code,
         code=code,
@@ -586,7 +588,10 @@ def get_analysis(
     return AnalysisDetailResponse(
         data=AnalysisReportData(**report),
         meta=build_report_meta(
-            id=report_id, report_schema_version=report["report_schema_version"]
+            id=report_id,
+            report_schema_version=normalize_report_schema_version(
+                report.get("report_schema_version")
+            ),
         ),
     )
 

@@ -132,6 +132,16 @@ _LEGACY_CONTEXT_CORE_FIELDS = {
 }
 
 
+class ReportSchemaVersionError(ValueError):
+    """Raised when a stored report schema version cannot be safely read."""
+
+    def __init__(self, code: str, message: str, status_code: int = 409) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status_code = status_code
+
+
 def _resolve_project_id(
     *,
     project_id: int | None = None,
@@ -2040,14 +2050,33 @@ def _evidence_items_with_report_context(
     ]
 
 
-def normalize_report_schema_version(schema_version: str | None) -> str:
+def normalize_report_schema_version(schema_version: object | None) -> str:
     """Return a stable schema version for stored or in-memory reports."""
-    normalized = (schema_version or "").strip()
+    normalized = str(schema_version or "").strip()
     if not normalized:
         return LEGACY_REPORT_SCHEMA_VERSION
     if normalized.startswith("v") and normalized[1:].isdigit():
-        return normalized
-    return LEGACY_REPORT_SCHEMA_VERSION
+        major = int(normalized[1:])
+        if major >= 1:
+            return f"v{major}"
+    raise ReportSchemaVersionError(
+        "invalid_report_schema_version",
+        f"Unsupported report schema version: {normalized}",
+        status_code=400,
+    )
+
+
+def readable_report_schema_version(schema_version: object | None) -> str:
+    normalized = normalize_report_schema_version(schema_version)
+    if not can_read_report_schema(REPORT_SCHEMA_VERSION, normalized):
+        raise ReportSchemaVersionError(
+            "unsupported_report_schema_version",
+            (
+                f"Report schema version {normalized} is newer than reader schema "
+                f"{REPORT_SCHEMA_VERSION}."
+            ),
+        )
+    return normalized
 
 
 def _report_schema_major(schema_version: str) -> int:
@@ -2473,7 +2502,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "severity": report.severity,
         "recommendation": report.recommendation,
         "top_risk": report.top_risk,
-        "report_schema_version": normalize_report_schema_version(
+        "report_schema_version": readable_report_schema_version(
             getattr(report, "report_schema_version", None)
         ),
         "top_risk_contributors": json.loads(

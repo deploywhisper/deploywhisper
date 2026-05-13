@@ -1223,25 +1223,21 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertEqual(summary.json_payload.version, "v1")
         self.assertEqual(summary.json_payload.report_schema_version, "v1")
 
-    def test_build_share_summary_preserves_source_report_schema_version(self) -> None:
+    def test_build_share_summary_rejects_newer_report_schema_version(self) -> None:
         report = self._share_report_payload()
         report["report_schema_version"] = "v3"
 
-        summary = build_share_summary(report)
+        with self.assertRaises(ValueError):
+            build_share_summary(report)
 
-        self.assertEqual(summary.json_payload.version, "v1")
-        self.assertEqual(summary.json_payload.report_schema_version, "v3")
-
-    def test_build_share_summary_normalizes_malformed_report_schema_as_legacy(
+    def test_build_share_summary_rejects_malformed_report_schema_version(
         self,
     ) -> None:
         report = self._share_report_payload()
         report["report_schema_version"] = "legacy"
 
-        summary = build_share_summary(report)
-
-        self.assertEqual(summary.json_payload.version, "v1")
-        self.assertEqual(summary.json_payload.report_schema_version, "v1")
+        with self.assertRaises(ValueError):
+            build_share_summary(report)
 
     def test_build_share_summary_falls_back_to_deterministic_headline_without_narrative(
         self,
