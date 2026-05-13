@@ -74,6 +74,10 @@ test.describe("review keyboard flow", () => {
     await expect(page.getByText("Evidence Law").first()).toBeVisible();
     await expect(page.getByText("Next action").first()).toBeVisible();
     await expect(page.getByText("Review linked evidence").first()).toBeVisible();
+    await expect(page.getByText("networking/ingress").first()).toBeVisible();
+    await expect(page.getByText("1 evidence item").first()).toBeVisible();
+    await expect(page.getByText("Evidence Law satisfied").first()).toBeVisible();
+    await expect(page.getByText("External").first()).toBeVisible();
     await page.waitForFunction(() => window.dwReviewAccessibilityInstalled === true);
     await expect(page.getByText("Module: module.network").first()).toBeVisible();
     await expect(
