@@ -22,6 +22,7 @@ from ui.components.change_table import format_change_metadata_lines
 from ui.components.confidence_ledger import render_confidence_ledger
 from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
+    render_context_summary_panel,
 )
 from ui.components.findings_table import (
     _evidence_refs,
@@ -814,6 +815,7 @@ def render_report_detail_page(
                 )
 
     _render_summary_and_advisory(report)
+    render_context_summary_panel(context)
     _render_operational_narrative(report)
     render_confidence_ledger(report)
     render_findings_table(

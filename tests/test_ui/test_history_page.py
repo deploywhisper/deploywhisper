@@ -1361,7 +1361,24 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("CAUTION → NO-GO", response.text)
 
     def test_history_detail_route_renders_dedicated_report_page(self) -> None:
-        self._persist_report()
+        self._persist_report(
+            context_completeness={
+                "topology_freshness_days": 45,
+                "topology_last_imported_at": "2026-04-18T11:22:33Z",
+                "incident_index_size": 0,
+                "evidence_success_rate": 0.5,
+                "parser_success_rate": 0.5,
+                "parser_success_by_tool": {"terraform": 0.5},
+                "context_score": 0.52,
+                "confidence_level": "low",
+                "uncertainty": "Insufficient context: topology and parser coverage are incomplete.",
+                "context_todos": [
+                    "Refresh stale topology context for this project/workspace.",
+                    "Review parser errors and resubmit supported artifacts.",
+                ],
+                "insufficient_context": True,
+            }
+        )
 
         response = self.client.get("/history/1")
 
@@ -1372,6 +1389,13 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Revert aws_security_group.main", response.text)
         self.assertIn("Findings table", response.text)
         self.assertIn("Context completeness", response.text)
+        self.assertIn("Summary context check", response.text)
+        self.assertIn("Context follow-ups", response.text)
+        self.assertIn("Refresh stale topology context", response.text)
+        self.assertLess(
+            response.text.index("Summary context check"),
+            response.text.index("Findings table"),
+        )
         self.assertIn("Blast radius", response.text)
         self.assertIn("Audit metadata", response.text)
         self.assertIn("Module: module.network", response.text)

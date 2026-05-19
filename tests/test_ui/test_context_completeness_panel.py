@@ -68,6 +68,43 @@ class ContextCompletenessPanelRenderingTests(unittest.TestCase):
         )
         self.assertIn("/settings", response.text)
 
+    def test_context_panel_links_todos_to_guidance(self) -> None:
+        @ui.page("/_test/context-panel-guidance")
+        def guidance_context_panel_test_page() -> None:
+            from ui.components.context_completeness_panel import (
+                render_context_completeness_panel,
+            )
+
+            render_context_completeness_panel(
+                {
+                    "topology_freshness_days": None,
+                    "incident_index_size": 0,
+                    "evidence_success_rate": 0.5,
+                    "parser_success_rate": 0.5,
+                    "parser_success_by_tool": {"terraform": 0.5},
+                    "context_score": 0.22,
+                    "uncertainty": "Insufficient context: several context sources are missing.",
+                    "context_todos": [
+                        "Import or refresh topology context for this project/workspace.",
+                        "Import relevant incident history for this project/workspace.",
+                        "Review evidence extraction gaps for supported artifacts.",
+                        "Review parser errors and resubmit supported artifacts.",
+                    ],
+                }
+            )
+
+        response = self.client.get("/_test/context-panel-guidance")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Manage topology", response.text)
+        self.assertIn("/settings#topology-context", response.text)
+        self.assertIn("Incident context guide", response.text)
+        self.assertIn("docs/outcome-linking.md", response.text)
+        self.assertIn("Evidence model guide", response.text)
+        self.assertIn("docs/evidence-model.md", response.text)
+        self.assertIn("Report schema guide", response.text)
+        self.assertIn("docs/schemas/report-v2.md", response.text)
+
     def test_context_panel_shows_settings_link_for_stale_topology_even_with_higher_score(
         self,
     ) -> None:

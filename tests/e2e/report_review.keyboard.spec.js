@@ -118,6 +118,10 @@ test.describe("review keyboard flow", () => {
     await expect(page.getByText("Why not lower").first()).toBeVisible();
     await expect(page.getByText("Why not higher").first()).toBeVisible();
     await expect(page.getByText("Uncertainty drivers").first()).toBeVisible();
+    await expect(page.getByText("Summary context check").first()).toBeVisible();
+    await expect(page.getByText("Context follow-ups").first()).toBeVisible();
+    await expect(page.getByText("Manage topology").first()).toBeVisible();
+    await expect(page.getByText("Report schema guide").first()).toBeVisible();
     await expect(page.getByText("networking/ingress").first()).toBeVisible();
     await expect(page.getByText("1 evidence item").first()).toBeVisible();
     await expect(page.getByText("3 evidence items").first()).toBeVisible();
