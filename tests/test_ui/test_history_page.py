@@ -16,6 +16,7 @@ import models.tables as tables_module
 import services.deployment_outcome_service as deployment_outcome_service_module
 import services.report_service as report_service_module
 import services.project_service as project_service_module
+import ui.components.report_detail_page as report_detail_page_module
 import ui.routes.history as history_module
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.rollback_planner import RollbackPlan, RollbackStep
@@ -44,6 +45,591 @@ class HistoryPageHelpersTests(unittest.TestCase):
         self.assertEqual(recommendation_text("no-go"), "NO-GO")
         self.assertIn("dw-danger-text", recommendation_classes("no-go"))
         self.assertIn("dw-success-text", recommendation_classes("go"))
+
+    def test_operational_narrative_suppresses_sensitive_evidence_refs(self) -> None:
+        items = report_detail_page_module._operational_narrative_items(
+            {
+                "report_schema_version": "v2",
+                "top_risk": "Sensitive evidence ref risk",
+                "parse_summary": "Parsed one sensitive artifact.",
+                "contributors": [
+                    {
+                        "contribution": 90,
+                        "resource_id": "aws_iam_policy.admin",
+                        "source_file": "policy.tf",
+                        "normalized_action": "modify",
+                        "tool": "terraform",
+                        "summary": "Policy changed.",
+                        "resource_category": "identity",
+                    }
+                ],
+                "findings": [
+                    {
+                        "finding_id": "finding-sensitive",
+                        "severity": "high",
+                        "confidence": 0.91,
+                        "title": "HIGH: sensitive ref",
+                        "description": "Sensitive evidence ref risk.",
+                        "evidence_refs": "ev-sensitive",
+                    }
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-sensitive",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://secret.env#TOKEN?action=inspect",
+                        "summary": "Sensitive summary.",
+                        "severity_hint": "high",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "sensitive_blocked",
+                    }
+                ],
+                "rollback_plan": {"steps": []},
+            }
+        )
+
+        exact_resource = dict(items)["Exact resource/file"]
+        verify_before_deploy = dict(items)["Verify before deploying"]
+        self.assertIn("Sensitive evidence reference blocked", exact_resource)
+        self.assertNotIn("secret.env", exact_resource)
+        self.assertNotIn("TOKEN", exact_resource)
+        self.assertIn("linked evidence metadata", verify_before_deploy)
+        self.assertNotIn("Sensitive summary", verify_before_deploy)
+
+    def test_operational_narrative_prefers_safe_mixed_redaction_evidence(
+        self,
+    ) -> None:
+        items = report_detail_page_module._operational_narrative_items(
+            {
+                "report_schema_version": "v2",
+                "top_risk": "Mixed evidence ordering risk",
+                "parse_summary": "Parsed mixed evidence.",
+                "contributors": [
+                    {
+                        "contribution": 90,
+                        "resource_id": "aws_security_group.main",
+                        "source_file": "plan.tf",
+                        "normalized_action": "modify",
+                        "tool": "terraform",
+                        "summary": "Security group changed.",
+                        "resource_category": "networking",
+                    }
+                ],
+                "findings": [
+                    {
+                        "finding_id": "finding-mixed",
+                        "severity": "high",
+                        "confidence": 0.91,
+                        "title": "HIGH: mixed evidence",
+                        "description": "Mixed evidence ordering risk.",
+                        "evidence_refs": ["ev-redacted", "ev-safe"],
+                    }
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-redacted",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://redacted-plan.json#aws_security_group.main",
+                        "summary": "Redacted summary.",
+                        "severity_hint": "high",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "redacted",
+                    },
+                    {
+                        "evidence_id": "ev-safe",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://safe-plan.json#L9",
+                        "summary": "Safe summary.",
+                        "severity_hint": "high",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "none",
+                    },
+                ],
+                "rollback_plan": {"steps": []},
+            }
+        )
+
+        exact_resource = dict(items)["Exact resource/file"]
+        self.assertIn("safe-plan.json", exact_resource)
+        self.assertIn("line 9", exact_resource)
+        self.assertNotIn("Evidence reference redacted", exact_resource)
+        self.assertNotIn("redacted-plan.json", exact_resource)
+
+    def test_operational_narrative_does_not_use_unrelated_evidence_when_refs_missing(
+        self,
+    ) -> None:
+        items = report_detail_page_module._operational_narrative_items(
+            {
+                "report_schema_version": "v2",
+                "top_risk": "Missing evidence ordering risk",
+                "parse_summary": "Parsed missing evidence.",
+                "contributors": [
+                    {
+                        "contribution": 95,
+                        "resource_id": "aws_security_group.missing",
+                        "source_file": "missing.tf",
+                        "normalized_action": "modify",
+                        "tool": "terraform",
+                        "summary": "Security group changed.",
+                        "resource_category": "networking",
+                    }
+                ],
+                "findings": [
+                    {
+                        "finding_id": "finding-missing",
+                        "severity": "critical",
+                        "confidence": 0.95,
+                        "title": "CRITICAL: missing evidence",
+                        "description": "Primary finding evidence is unavailable.",
+                        "evidence_refs": ["ev-missing"],
+                    },
+                    {
+                        "finding_id": "finding-safe",
+                        "severity": "low",
+                        "confidence": 0.1,
+                        "title": "LOW: unrelated safe evidence",
+                        "description": "Unrelated finding has safe evidence.",
+                        "evidence_refs": ["ev-safe"],
+                    },
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-safe",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://safe-plan.json#L9",
+                        "summary": "Safe but unrelated summary.",
+                        "severity_hint": "low",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "none",
+                    },
+                ],
+                "rollback_plan": {"steps": []},
+            }
+        )
+
+        exact_resource = dict(items)["Exact resource/file"]
+        self.assertNotIn("Evidence reference:", exact_resource)
+        self.assertNotIn("safe-plan.json", exact_resource)
+        self.assertNotIn("line 9", exact_resource)
+
+    def test_operational_narrative_does_not_use_unrelated_global_fallback(
+        self,
+    ) -> None:
+        items = report_detail_page_module._operational_narrative_items(
+            {
+                "report_schema_version": "v2",
+                "top_risk": "No linked evidence risk",
+                "parse_summary": "Parsed no linked evidence.",
+                "contributors": [
+                    {
+                        "contribution": 95,
+                        "resource_id": "aws_security_group.unlinked",
+                        "source_file": "unlinked.tf",
+                        "normalized_action": "modify",
+                        "tool": "terraform",
+                        "summary": "Security group changed.",
+                        "resource_category": "networking",
+                    }
+                ],
+                "findings": [
+                    {
+                        "finding_id": "finding-unlinked",
+                        "severity": "critical",
+                        "confidence": 0.95,
+                        "title": "CRITICAL: unlinked evidence",
+                        "description": "Primary finding does not link evidence.",
+                    },
+                    {
+                        "finding_id": "finding-safe",
+                        "severity": "low",
+                        "confidence": 0.1,
+                        "title": "LOW: unrelated safe evidence",
+                        "description": "Unrelated finding has safe evidence.",
+                        "evidence_refs": ["ev-safe"],
+                    },
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-safe",
+                        "finding_id": "finding-safe",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://safe-plan.json#L9",
+                        "summary": "Safe but unrelated summary.",
+                        "severity_hint": "low",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "none",
+                    },
+                ],
+                "rollback_plan": {"steps": []},
+            }
+        )
+
+        exact_resource = dict(items)["Exact resource/file"]
+        self.assertNotIn("Evidence reference:", exact_resource)
+        self.assertNotIn("safe-plan.json", exact_resource)
+
+    def test_operational_narrative_allows_single_finding_legacy_fallback(
+        self,
+    ) -> None:
+        items = report_detail_page_module._operational_narrative_items(
+            {
+                "report_schema_version": "v2",
+                "top_risk": "Single finding evidence risk",
+                "parse_summary": "Parsed one finding.",
+                "contributors": [
+                    {
+                        "contribution": 95,
+                        "resource_id": "aws_security_group.single",
+                        "source_file": "single.tf",
+                        "normalized_action": "modify",
+                        "tool": "terraform",
+                        "summary": "Security group changed.",
+                        "resource_category": "networking",
+                    }
+                ],
+                "findings": [
+                    {
+                        "finding_id": "finding-single",
+                        "severity": "critical",
+                        "confidence": 0.95,
+                        "title": "CRITICAL: single evidence",
+                        "description": "Single finding relies on report evidence.",
+                    }
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-single",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://single-plan.json#L7",
+                        "summary": "Single fallback summary.",
+                        "severity_hint": "critical",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "none",
+                    },
+                ],
+                "rollback_plan": {"steps": []},
+            }
+        )
+
+        exact_resource = dict(items)["Exact resource/file"]
+        self.assertIn("single-plan.json", exact_resource)
+        self.assertIn("line 7", exact_resource)
+
+    def test_operational_narrative_treats_malformed_refs_as_unresolved(
+        self,
+    ) -> None:
+        for evidence_refs in ({}, "{}"):
+            with self.subTest(evidence_refs=evidence_refs):
+                items = report_detail_page_module._operational_narrative_items(
+                    {
+                        "report_schema_version": "v2",
+                        "top_risk": "Malformed refs risk",
+                        "parse_summary": "Parsed malformed evidence refs.",
+                        "contributors": [
+                            {
+                                "contribution": 95,
+                                "resource_id": "aws_security_group.malformed",
+                                "source_file": "malformed.tf",
+                                "normalized_action": "modify",
+                                "tool": "terraform",
+                                "summary": "Security group changed.",
+                                "resource_category": "networking",
+                            }
+                        ],
+                        "findings": [
+                            {
+                                "finding_id": "finding-malformed",
+                                "severity": "critical",
+                                "confidence": 0.95,
+                                "title": "CRITICAL: malformed evidence refs",
+                                "description": "Primary finding evidence refs are malformed.",
+                                "evidence_refs": evidence_refs,
+                            },
+                            {
+                                "finding_id": "finding-safe",
+                                "severity": "low",
+                                "confidence": 0.1,
+                                "title": "LOW: unrelated safe evidence",
+                                "description": "Unrelated finding has safe evidence.",
+                                "evidence_refs": ["ev-safe"],
+                            },
+                        ],
+                        "evidence_items": [
+                            {
+                                "evidence_id": "ev-safe",
+                                "source_type": "artifact",
+                                "source_ref": "terraform://safe-plan.json#L9",
+                                "summary": "Safe but unrelated summary.",
+                                "severity_hint": "low",
+                                "deterministic": True,
+                                "confidence": 0.9,
+                                "redaction_status": "none",
+                            },
+                        ],
+                        "rollback_plan": {"steps": []},
+                    }
+                )
+
+                exact_resource = dict(items)["Exact resource/file"]
+                self.assertNotIn("Evidence reference:", exact_resource)
+                self.assertNotIn("safe-plan.json", exact_resource)
+
+    def test_operational_narrative_uses_same_finding_evidence_for_stale_refs(
+        self,
+    ) -> None:
+        items = report_detail_page_module._operational_narrative_items(
+            {
+                "report_schema_version": "v2",
+                "top_risk": "Stale evidence ref risk",
+                "parse_summary": "Parsed stale evidence refs.",
+                "contributors": [
+                    {
+                        "contribution": 95,
+                        "resource_id": "aws_security_group.stale",
+                        "source_file": "stale.tf",
+                        "normalized_action": "modify",
+                        "tool": "terraform",
+                        "summary": "Security group changed.",
+                        "resource_category": "networking",
+                    }
+                ],
+                "findings": [
+                    {
+                        "finding_id": "finding-stale",
+                        "severity": "critical",
+                        "confidence": 0.95,
+                        "title": "CRITICAL: stale evidence ref",
+                        "description": "Primary finding evidence refs are stale.",
+                        "evidence_refs": ["ev-stale"],
+                    },
+                    {
+                        "finding_id": "finding-safe",
+                        "severity": "low",
+                        "confidence": 0.1,
+                        "title": "LOW: unrelated safe evidence",
+                        "description": "Unrelated finding has safe evidence.",
+                        "evidence_refs": ["ev-safe"],
+                    },
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-owned",
+                        "finding_id": "finding-stale",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://owned-plan.json#L12",
+                        "summary": "Owned fallback summary.",
+                        "severity_hint": "critical",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "none",
+                    },
+                    {
+                        "evidence_id": "ev-safe",
+                        "finding_id": "finding-safe",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://safe-plan.json#L9",
+                        "summary": "Safe but unrelated summary.",
+                        "severity_hint": "low",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "none",
+                    },
+                ],
+                "rollback_plan": {"steps": []},
+            }
+        )
+
+        exact_resource = dict(items)["Exact resource/file"]
+        self.assertIn("owned-plan.json", exact_resource)
+        self.assertIn("line 12", exact_resource)
+        self.assertNotIn("safe-plan.json", exact_resource)
+
+    def test_operational_narrative_suppresses_ambiguous_same_finding_fallback(
+        self,
+    ) -> None:
+        items = report_detail_page_module._operational_narrative_items(
+            {
+                "report_schema_version": "v2",
+                "top_risk": "Duplicate stale evidence ref risk",
+                "parse_summary": "Parsed duplicate finding ids.",
+                "contributors": [
+                    {
+                        "contribution": 95,
+                        "resource_id": "aws_security_group.duplicate",
+                        "source_file": "duplicate.tf",
+                        "normalized_action": "modify",
+                        "tool": "terraform",
+                        "summary": "Security group changed.",
+                        "resource_category": "networking",
+                    }
+                ],
+                "findings": [
+                    {
+                        "finding_id": "finding-duplicate",
+                        "severity": "critical",
+                        "confidence": 0.95,
+                        "title": "CRITICAL: duplicate stale evidence ref",
+                        "description": "Primary finding evidence refs are stale.",
+                        "evidence_refs": ["ev-stale"],
+                    },
+                    {
+                        "finding_id": "finding-duplicate",
+                        "severity": "low",
+                        "confidence": 0.1,
+                        "title": "LOW: duplicate id safe evidence",
+                        "description": "Duplicate finding has safe evidence.",
+                        "evidence_refs": ["ev-owned"],
+                    },
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-owned",
+                        "finding_id": "finding-duplicate",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://duplicate-plan.json#L6",
+                        "summary": "Duplicate fallback summary.",
+                        "severity_hint": "low",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "none",
+                    },
+                ],
+                "rollback_plan": {"steps": []},
+            }
+        )
+
+        exact_resource = dict(items)["Exact resource/file"]
+        self.assertNotIn("Evidence reference:", exact_resource)
+        self.assertNotIn("duplicate-plan.json", exact_resource)
+        self.assertNotIn("line 6", exact_resource)
+
+    def test_operational_narrative_uses_same_finding_evidence_for_malformed_refs(
+        self,
+    ) -> None:
+        items = report_detail_page_module._operational_narrative_items(
+            {
+                "report_schema_version": "v2",
+                "top_risk": "Malformed evidence ref risk",
+                "parse_summary": "Parsed malformed evidence refs.",
+                "contributors": [
+                    {
+                        "contribution": 95,
+                        "resource_id": "aws_security_group.malformed",
+                        "source_file": "malformed.tf",
+                        "normalized_action": "modify",
+                        "tool": "terraform",
+                        "summary": "Security group changed.",
+                        "resource_category": "networking",
+                    }
+                ],
+                "findings": [
+                    {
+                        "finding_id": "finding-malformed",
+                        "severity": "critical",
+                        "confidence": 0.95,
+                        "title": "CRITICAL: malformed evidence ref",
+                        "description": "Primary finding evidence refs are malformed.",
+                        "evidence_refs": {},
+                    },
+                    {
+                        "finding_id": "finding-safe",
+                        "severity": "low",
+                        "confidence": 0.1,
+                        "title": "LOW: unrelated safe evidence",
+                        "description": "Unrelated finding has safe evidence.",
+                        "evidence_refs": ["ev-safe"],
+                    },
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-owned",
+                        "finding_id": "finding-malformed",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://owned-malformed-plan.json#L18",
+                        "summary": "Owned fallback summary.",
+                        "severity_hint": "critical",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "none",
+                    },
+                    {
+                        "evidence_id": "ev-safe",
+                        "finding_id": "finding-safe",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://safe-plan.json#L9",
+                        "summary": "Safe but unrelated summary.",
+                        "severity_hint": "low",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "none",
+                    },
+                ],
+                "rollback_plan": {"steps": []},
+            }
+        )
+
+        exact_resource = dict(items)["Exact resource/file"]
+        self.assertIn("owned-malformed-plan.json", exact_resource)
+        self.assertIn("line 18", exact_resource)
+        self.assertNotIn("safe-plan.json", exact_resource)
+
+    def test_operational_narrative_suppresses_unknown_redaction_summary(
+        self,
+    ) -> None:
+        items = report_detail_page_module._operational_narrative_items(
+            {
+                "report_schema_version": "v2",
+                "top_risk": "Unknown redaction summary risk",
+                "parse_summary": "Parsed one future-redaction artifact.",
+                "contributors": [
+                    {
+                        "contribution": 90,
+                        "resource_id": "aws_iam_policy.admin",
+                        "source_file": "policy.tf",
+                        "normalized_action": "modify",
+                        "tool": "terraform",
+                        "summary": "Policy changed.",
+                        "resource_category": "identity",
+                    }
+                ],
+                "findings": [
+                    {
+                        "finding_id": "finding-unknown-redaction",
+                        "severity": "high",
+                        "confidence": 0.91,
+                        "title": "HIGH: unknown redaction",
+                        "description": "Unknown redaction summary risk.",
+                        "evidence_refs": "ev-unknown",
+                    }
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-unknown",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://unknown-secret.json#TOKEN",
+                        "summary": "Unknown redaction summary should not render.",
+                        "severity_hint": "high",
+                        "deterministic": True,
+                        "confidence": 0.9,
+                        "redaction_status": "future_status",
+                    }
+                ],
+                "rollback_plan": {"steps": []},
+            }
+        )
+
+        exact_resource = dict(items)["Exact resource/file"]
+        verify_before_deploy = dict(items)["Verify before deploying"]
+        self.assertIn("Evidence reference unavailable", exact_resource)
+        self.assertNotIn("unknown-secret.json", exact_resource)
+        self.assertIn("linked evidence metadata", verify_before_deploy)
+        self.assertNotIn("Unknown redaction summary", verify_before_deploy)
 
     def test_history_row_confidence_does_not_fallback_to_finding_confidence(
         self,

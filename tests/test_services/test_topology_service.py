@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from importlib import reload
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,6 +26,10 @@ from services.topology_service import (
     run_due_topology_drift_checks,
     save_topology_definition,
 )
+
+
+def _fresh_topology_timestamp() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 class TopologyServiceTests(unittest.TestCase):
@@ -581,7 +586,7 @@ class TopologyServiceTests(unittest.TestCase):
         legacy_path.write_text(
             json.dumps(
                 {
-                    "updated_at": "2026-04-16T00:00:00Z",
+                    "updated_at": _fresh_topology_timestamp(),
                     "services": [
                         {
                             "id": "legacy-api",
@@ -662,7 +667,7 @@ class TopologyServiceTests(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "updated_at": "2026-04-16T00:00:00Z",
+                        "updated_at": _fresh_topology_timestamp(),
                         "services": [
                             {
                                 "id": "api",
@@ -745,7 +750,7 @@ class TopologyServiceTests(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "updated_at": "2026-04-16T00:00:00Z",
+                        "updated_at": _fresh_topology_timestamp(),
                         "services": [
                             {
                                 "id": "api",

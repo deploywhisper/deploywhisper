@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from nicegui import ui
 
 _REVIEW_ACCESSIBILITY_HEAD = """
@@ -29,6 +31,110 @@ _REVIEW_ACCESSIBILITY_HEAD = """
       ) &&
       !element.matches('[data-dw-finding-row="1"]'),
     );
+  const activeElementMovedAway = (initialActiveElement) => {
+    const activeElement = document.activeElement;
+    return Boolean(
+      activeElement &&
+      activeElement !== document.body &&
+      initialActiveElement &&
+      activeElement !== initialActiveElement
+    );
+  };
+  window.dwRestoreFocusWhenReady = ({
+    focusRequestId,
+    initialActiveElement,
+    selector,
+    timeoutMs = 3000,
+  }) => {
+    const startedAt = Date.now();
+    let timeoutId = null;
+    let observer = null;
+    let done = false;
+    const finish = (status) => {
+      if (done) {
+        return;
+      }
+      done = true;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      if (observer) {
+        observer.disconnect();
+      }
+      window.dwFocusRestoreLastStatus = { requestId: focusRequestId, status };
+    };
+    const tryFocus = () => {
+      if (done) {
+        return;
+      }
+      if (window.dwEvidenceFocusRequestId !== focusRequestId) {
+        finish('cancelled');
+        return;
+      }
+      if (activeElementMovedAway(initialActiveElement)) {
+        finish('aborted');
+        return;
+      }
+      const target = document.querySelector(selector);
+      if (target) {
+        target.focus();
+        finish('focused');
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        finish('timeout');
+        return;
+      }
+      timeoutId = window.setTimeout(tryFocus, 50);
+    };
+    observer = new MutationObserver(tryFocus);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['aria-expanded', 'aria-controls', 'id'],
+      childList: true,
+      subtree: true,
+    });
+    tryFocus();
+  };
+  const focusEvidenceToggle = (
+    panelId,
+    expectedExpanded,
+    focusRequestId = (window.dwEvidenceFocusRequestId || 0) + 1,
+    initialActiveElement = document.activeElement,
+  ) => {
+    window.dwEvidenceFocusRequestId = focusRequestId;
+    window.dwRestoreFocusWhenReady({
+      focusRequestId,
+      initialActiveElement,
+      selector: `[data-dw-evidence-toggle="1"][aria-controls="${panelId}"][aria-expanded="${expectedExpanded}"]`,
+    });
+  };
+
+  document.addEventListener(
+    'click',
+    (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const button = target && target.closest('[data-dw-evidence-toggle="1"]');
+      if (!button) {
+        return;
+      }
+      const panelId = button.getAttribute('aria-controls');
+      const expectedExpanded = button.getAttribute('aria-expanded') === 'true' ? 'false' : 'true';
+      const initialActiveElement = document.activeElement;
+      if (panelId) {
+        setTimeout(
+          () => focusEvidenceToggle(
+            panelId,
+            expectedExpanded,
+            (window.dwEvidenceFocusRequestId || 0) + 1,
+            initialActiveElement,
+          ),
+          0,
+        );
+      }
+    },
+    true,
+  );
 
   document.addEventListener(
     'keydown',
@@ -46,7 +152,7 @@ _REVIEW_ACCESSIBILITY_HEAD = """
 
       const target = event.target instanceof Element ? event.target : null;
       const row = target && target.closest('[data-dw-finding-row="1"]');
-      if (!row || (target !== row && isInteractive(target))) {
+      if (!row || target !== row || isInteractive(target)) {
         return;
       }
 
@@ -82,7 +188,7 @@ _REVIEW_ACCESSIBILITY_HEAD = """
       }
       if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
         event.preventDefault();
-        row.click();
+        row.dispatchEvent(new CustomEvent('dw-key-toggle', { bubbles: true }));
       }
     },
     true,
@@ -99,8 +205,11 @@ def register_review_accessibility() -> None:
 
 def decorate_review_section(element, *, section: str, label: str) -> None:
     """Mark a review section as a focusable landmark in natural DOM order."""
+    text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(label))
+    safe_label = re.sub(r" {2,}", " ", text).strip()
+    safe_label = safe_label.replace("\\", "\\\\").replace('"', '\\"')
     element.props(
-        f'tabindex=0 role=region data-dw-review-section="{section}" aria-label="{label}"'
+        f'tabindex=0 role=region data-dw-review-section="{section}" aria-label="{safe_label}"'
     )
     element.classes("dw-review-region")
 
