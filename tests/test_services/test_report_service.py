@@ -4546,11 +4546,86 @@ class ReportServiceTests(unittest.TestCase):
         )
         self.assertEqual(shared_report["audit"]["files_analyzed"], ["Artifact 1"])
         self.assertEqual(shared_report["contributors"][0]["source_file"], "Artifact 1")
+        self.assertIn("confidence_ledger", shared_report)
+        self.assertIn(
+            "Artifact 1", shared_report["confidence_ledger"]["contributors"][0]
+        )
+        self.assertNotIn(
+            "prod/network/plan.json",
+            " ".join(shared_report["confidence_ledger"]["contributors"]),
+        )
         self.assertIn("Artifact 1", shared_report["evidence_items"][0]["source_ref"])
         self.assertNotIn(
             "prod/network/plan.json",
             shared_report["evidence_items"][0]["source_ref"],
         )
+
+    def test_fetch_analysis_report_builds_confidence_ledger_from_legacy_contributors(
+        self,
+    ) -> None:
+        report = self._persist_shareable_report()
+        legacy_contributors = [
+            {
+                "evidence_id": "ev-low",
+                "source_file": "low.json",
+                "tool": "terraform",
+                "resource_id": "hidden.low",
+                "action": "modify",
+                "contribution": "2.5",
+                "summary": "Lower contributor.",
+                "severity": "medium",
+            },
+            {
+                "evidence_id": "ev-top",
+                "source_file": "top.json",
+                "tool": "terraform",
+                "resource_id": "visible.top",
+                "action": "modify",
+                "contribution": "20.5",
+                "summary": "Top contributor.",
+                "severity": "high",
+            },
+            {
+                "evidence_id": "ev-invalid",
+                "source_file": "legacy.json",
+                "tool": "terraform",
+                "resource_id": "invalid.legacy",
+                "action": "modify",
+                "contribution": "unknown",
+                "summary": "Malformed legacy contributor.",
+                "severity": "low",
+            },
+        ]
+        with database_module.SessionLocal() as session:
+            stored = session.get(tables_module.AnalysisReport, report["id"])
+            assert stored is not None
+            stored.contributors_json = json.dumps(legacy_contributors)
+            session.commit()
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        ledger = fetched["confidence_ledger"]
+        self.assertEqual(
+            ledger["contributors"][0],
+            "visible.top · HIGH · contribution 20.5 · top.json",
+        )
+        self.assertIn(
+            "invalid.legacy · LOW · contribution unknown · legacy.json",
+            ledger["contributors"],
+        )
+        self.assertIn("visible.top", ledger["why_not_lower"][0])
+        self.assertTrue(any("visible.top" in item for item in ledger["why_not_higher"]))
+
+    def test_history_summary_ledger_marks_evidence_detail_omitted(self) -> None:
+        self._persist_shareable_report()
+
+        history = report_service_module.fetch_filtered_analysis_history()
+
+        self.assertEqual(len(history), 1)
+        factors = " ".join(history[0]["confidence_ledger"]["confidence_factors"])
+        self.assertNotIn("lacks linked deterministic evidence", factors)
 
     def test_share_report_link_normalizes_unspecified_app_host(self) -> None:
         for raw_host in ("", "   ", "0.0.0.0", "::", " :: ", "[::]"):

@@ -38,6 +38,10 @@ from logging_config import configure_logging
 from models.database import init_db
 from services.artifact_snapshot_service import load_report_artifact
 from services.backtesting_service import run_due_weekly_backtests
+from services.confidence_ledger import (
+    build_confidence_ledger,
+    normalize_confidence_ledger_payload,
+)
 from services.report_service import (
     fetch_analysis_report,
     fetch_shared_analysis_report,
@@ -312,6 +316,58 @@ def _shared_report_severity_change_list(items: list[dict]) -> str:
     return f"<ul class='diff-list'>{''.join(rows)}</ul>"
 
 
+def _shared_report_ledger_list(items: list[str], empty_message: str) -> str:
+    if not items:
+        return f"<p class='empty'>{escape(empty_message)}</p>"
+    return "<ul>" + "".join(f"<li>{escape(str(item))}</li>" for item in items) + "</ul>"
+
+
+def _shared_report_confidence_ledger_html(report: dict) -> str:
+    ledger = normalize_confidence_ledger_payload(
+        report.get("confidence_ledger") or {},
+        fallback_ledger=build_confidence_ledger(report),
+    )
+    sections = [
+        (
+            "Contributors",
+            ledger.get("contributors") or [],
+            "No resource-level contributors were recorded.",
+        ),
+        (
+            "Confidence factors",
+            ledger.get("confidence_factors") or [],
+            "No confidence factors were recorded.",
+        ),
+        (
+            "Why not lower",
+            ledger.get("why_not_lower") or [],
+            "No why-not-lower reasoning was recorded.",
+        ),
+        (
+            "Why not higher",
+            ledger.get("why_not_higher") or [],
+            "No why-not-higher reasoning was recorded.",
+        ),
+        (
+            "Uncertainty drivers",
+            ledger.get("uncertainty_drivers") or [],
+            "No uncertainty drivers were recorded.",
+        ),
+    ]
+    cards = "".join(
+        "<div class='ledger-card'>"
+        f"<h3>{escape(title)}</h3>"
+        f"{_shared_report_ledger_list([str(item) for item in items], empty_message)}"
+        "</div>"
+        for title, items, empty_message in sections
+    )
+    return (
+        "<section class='panel'><h2>Confidence ledger</h2>"
+        "<p class='empty'>Reasoning details derived from the shared report payload.</p>"
+        f"<div class='ledger-grid'>{cards}</div></section>"
+    )
+
+
 def _shared_report_comparison_html(
     report: dict,
     comparison: dict | None,
@@ -489,6 +545,9 @@ def _shared_report_html(
         ".freshness.unknown{background:rgba(69,81,99,0.06);border:1px solid rgba(69,81,99,0.18);}"
         ".freshness-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}"
         ".freshness-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}"
+        ".ledger-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:16px;}"
+        ".ledger-card{background:#fbf8f2;border-radius:16px;padding:18px;}"
+        ".ledger-card h3{margin:0 0 8px;font-size:15px;}"
         "code{display:inline-block;margin-top:6px;padding:4px 6px;border-radius:8px;background:#f1ede5;color:#455163;word-break:break-all;}"
         "a{color:#d96b3d;text-decoration:none;}"
         "</style></head><body><main>"
@@ -515,6 +574,7 @@ def _shared_report_html(
         "</div>"
         f"{_shared_report_comparison_html(report, comparison, show_comparison=show_comparison)}"
         "</section>"
+        f"{_shared_report_confidence_ledger_html(report)}"
         "<section class='panel'><div class='grid'>"
         f"<div><strong>Created</strong><p>{escape(str(report.get('created_at') or ''))}</p></div>"
         f"<div><strong>Share URL</strong><p><a href='{escape(str(share.get('share_url') or ''))}'>{escape(str(share.get('share_url') or ''))}</a></p></div>"

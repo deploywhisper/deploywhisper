@@ -37,6 +37,7 @@ from ui.components.change_table import (
     format_change_metadata_lines,
     render_change_table,
 )
+from ui.components.confidence_ledger import render_confidence_ledger
 from ui.components.report_detail_page import (
     format_submission_manifest_fallback_summary,
     format_submission_manifest_partial_notice,
@@ -492,6 +493,7 @@ def build_upload_panel(
                     )
                 context = report.get("context_completeness") or {}
                 render_topology_freshness_banner(context)
+                render_confidence_ledger(report)
                 if parse_batch is not None:
                     render_change_table(parse_batch)
                 findings = report.get("findings", [])

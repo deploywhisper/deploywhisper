@@ -44,6 +44,40 @@ class ApiSchemaTests(unittest.TestCase):
 
         self.assertEqual(report.confidence, 0.52)
 
+    def test_persisted_report_exposes_confidence_ledger(self) -> None:
+        payload = self._persisted_report_payload()
+        payload["confidence"] = 0.72
+        payload["confidence_ledger"] = {
+            "contributors": ["aws_security_group.main"],
+            "confidence_factors": ["Report confidence is Medium (0.72)."],
+            "why_not_lower": ["Severity stays elevated."],
+            "why_not_higher": ["The risk score is below the next threshold."],
+            "uncertainty_drivers": ["No additional uncertainty drivers were recorded."],
+        }
+
+        report = PersistedReportData.model_validate(payload)
+
+        self.assertEqual(
+            report.confidence_ledger.why_not_higher,
+            ["The risk score is below the next threshold."],
+        )
+
+    def test_persisted_report_normalizes_legacy_confidence_ledger(self) -> None:
+        payload = self._persisted_report_payload()
+        payload["confidence"] = 0.72
+        payload["confidence_ledger"] = {
+            "contributors": "single contributor",
+            "why_not_higher": "single higher reason",
+        }
+
+        report = PersistedReportData.model_validate(payload)
+
+        self.assertEqual(report.confidence_ledger.contributors, ["single contributor"])
+        self.assertEqual(
+            report.confidence_ledger.why_not_higher, ["single higher reason"]
+        )
+        self.assertEqual(report.confidence_ledger.why_not_lower, [])
+
     def test_persisted_report_requires_explicit_narrative_degraded(self) -> None:
         payload = self._persisted_report_payload()
         payload["confidence"] = 0.52

@@ -74,7 +74,7 @@ development_status:
   3-1-verdict-first-report-header: done
   3-2-findings-table-with-evidence-badges: done
   3-3-evidence-inspector-panel: done
-  3-4-confidence-ledger-and-why-not-lower-higher: ready-for-dev
+  3-4-confidence-ledger-and-why-not-lower-higher: done
   3-5-context-completeness-and-todo-panel: ready-for-dev
   3-6-report-diff-after-rerun: ready-for-dev
   3-7-keyboard-and-accessibility-review-pass: ready-for-dev

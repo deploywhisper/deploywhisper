@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import math
 from typing import Any
 from urllib.parse import urlencode
 
@@ -18,6 +19,7 @@ from services.feedback_service import (
 )
 from ui.components.blast_radius_graph import render_blast_radius_panel
 from ui.components.change_table import format_change_metadata_lines
+from ui.components.confidence_ledger import render_confidence_ledger
 from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
 )
@@ -161,10 +163,20 @@ def _primary_contributor(report: dict[str, Any]) -> dict[str, Any] | None:
     return max(
         contributors,
         key=lambda contributor: (
-            int(contributor.get("contribution") or 0),
+            _numeric_sort_value(contributor.get("contribution")),
             str(contributor.get("resource_id") or ""),
         ),
     )
+
+
+def _numeric_sort_value(value: object) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return float("-inf")
+    if not math.isfinite(number):
+        return float("-inf")
+    return number
 
 
 def _primary_finding(report: dict[str, Any]) -> dict[str, Any] | None:
@@ -178,7 +190,7 @@ def _primary_finding(report: dict[str, Any]) -> dict[str, Any] | None:
         findings,
         key=lambda finding: (
             severity_order.get(str(finding.get("severity") or "").lower(), 0),
-            float(finding.get("confidence") or 0.0),
+            coerce_confidence(finding.get("confidence")) or 0.0,
             str(finding.get("title") or ""),
         ),
     )
@@ -446,16 +458,24 @@ def _render_resource_breakdown(report: dict[str, Any]) -> None:
                         "w-full items-start justify-between gap-3 p-4 flex-wrap"
                     ):
                         with ui.column().classes("min-w-0 flex-1 gap-1"):
-                            ui.label(contributor["resource_id"]).classes(
-                                "text-sm font-semibold dw-text"
-                            )
                             ui.label(
-                                f"{contributor['resource_category']} · {contributor['normalized_action']} · "
-                                f"{contributor['environment']} · scope {contributor['downstream_scope']}"
+                                str(
+                                    contributor.get("resource_id") or "unknown resource"
+                                )
+                            ).classes("text-sm font-semibold dw-text")
+                            ui.label(
+                                f"{contributor.get('resource_category') or 'unknown category'} · "
+                                f"{contributor.get('normalized_action') or contributor.get('action') or 'unknown action'} · "
+                                f"{contributor.get('environment') or 'unknown environment'} · "
+                                f"scope {contributor.get('downstream_scope') or 'unknown'}"
                             ).classes("text-xs dw-muted")
-                            ui.label(contributor["reasoning"]).classes(
-                                "text-sm dw-muted leading-6"
-                            )
+                            ui.label(
+                                str(
+                                    contributor.get("reasoning")
+                                    or contributor.get("summary")
+                                    or "No contributor reasoning was recorded."
+                                )
+                            ).classes("text-sm dw-muted leading-6")
                             for metadata_line in format_change_metadata_lines(
                                 contributor.get("metadata") or {}
                             ):
@@ -466,7 +486,7 @@ def _render_resource_breakdown(report: dict[str, Any]) -> None:
                                 ui.label(security_flag).classes(
                                     "text-xs dw-danger-text"
                                 )
-                        render_risk_badge(contributor["severity"])
+                        render_risk_badge(str(contributor.get("severity") or "unknown"))
 
 
 def _render_audit_metadata(report: dict[str, Any]) -> None:
@@ -795,6 +815,7 @@ def render_report_detail_page(
 
     _render_summary_and_advisory(report)
     _render_operational_narrative(report)
+    render_confidence_ledger(report)
     render_findings_table(
         findings,
         evidence_items,
