@@ -15,6 +15,10 @@ from ui.formatters.context_completeness import (
     render_context_completeness_badge,
 )
 from ui.formatters.datetime import format_history_timestamp
+from ui.formatters.topology_freshness import TOPOLOGY_MANAGEMENT_LINK
+
+
+DOCS_BASE_URL = "https://github.com/deploywhisper/deploywhisper/blob/develop"
 
 
 def _topology_age_text(context: dict) -> str:
@@ -92,10 +96,87 @@ def _context_warning_action(context: dict, link_target: str) -> tuple[str, str]:
     return "Review context TODOs", "#context-todos"
 
 
+def _todo_guidance(todo: str, link_target: str) -> tuple[str, str]:
+    todo_text = todo.lower()
+    if "topology" in todo_text:
+        return "Manage topology", link_target
+    if "incident" in todo_text:
+        return "Incident context guide", f"{DOCS_BASE_URL}/docs/outcome-linking.md"
+    if "evidence" in todo_text:
+        return "Evidence model guide", f"{DOCS_BASE_URL}/docs/evidence-model.md"
+    if "parser" in todo_text or "artifact" in todo_text:
+        return "Report schema guide", f"{DOCS_BASE_URL}/docs/schemas/report-v2.md"
+    return "Report context guide", f"{DOCS_BASE_URL}/docs/schemas/report-v2.md"
+
+
+def _render_todo_item(todo: str, link_target: str) -> None:
+    guidance_label, guidance_target = _todo_guidance(todo, link_target)
+    with ui.row().classes(
+        "w-full items-start justify-between gap-3 flex-wrap rounded-[14px] "
+        "border border-[color:var(--dw-line)] px-3 py-2"
+    ):
+        ui.label(todo).classes("text-xs dw-muted leading-5 min-w-0 flex-1")
+        ui.link(guidance_label, guidance_target).classes(
+            "text-xs font-semibold dw-accent-text"
+        )
+
+
+def _has_context_followups(context: dict) -> bool:
+    return (
+        bool(_context_todo_items(context.get("context_todos")))
+        or bool(str(context.get("uncertainty") or "").strip())
+        or bool(context.get("insufficient_context"))
+        or context_score(context) < 0.7
+        or _topology_needs_settings_fix(context)
+        or context_number(context.get("evidence_success_rate"), 1.0) < 1.0
+        or context_number(context.get("parser_success_rate"), 1.0) < 1.0
+        or _context_int(context, "incident_index_size") == 0
+    )
+
+
+def render_context_summary_panel(
+    context: dict | None,
+    *,
+    link_target: str = TOPOLOGY_MANAGEMENT_LINK,
+) -> None:
+    """Render a compact context cue near the report summary."""
+    details = context or {}
+    if not _has_context_followups(details):
+        return
+    context_todos = _context_todo_items(details.get("context_todos"))
+    uncertainty = str(details.get("uncertainty") or "").strip()
+    score = context_score(details)
+
+    with ui.card().classes("w-full dw-panel shadow-none p-4"):
+        with ui.column().classes("gap-3"):
+            with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
+                with ui.column().classes("gap-1 min-w-0 flex-1"):
+                    ui.label("Summary context check").classes(
+                        "text-sm font-semibold dw-text"
+                    )
+                    ui.label(
+                        "Context completeness and TODOs that may change how much confidence to place in this report."
+                    ).classes("text-xs dw-muted leading-5")
+                render_context_completeness_badge(details)
+            if uncertainty:
+                ui.label(uncertainty).classes("text-sm font-semibold dw-accent-text")
+            else:
+                ui.label(f"Context score is {score:.2f} / 1.00.").classes(
+                    "text-sm font-semibold dw-text"
+                )
+            if context_todos:
+                ui.label("Context follow-ups").classes("text-sm font-semibold dw-text")
+                with ui.column().classes("w-full gap-2"):
+                    for todo in context_todos[:4]:
+                        _render_todo_item(todo, link_target)
+            else:
+                ui.label("No context TODOs were generated.").classes("text-xs dw-muted")
+
+
 def render_context_completeness_panel(
     context: dict | None,
     *,
-    link_target: str = "/settings",
+    link_target: str = TOPOLOGY_MANAGEMENT_LINK,
 ) -> None:
     """Render reviewer-facing context completeness details."""
     register_review_accessibility()
@@ -199,7 +280,7 @@ def render_context_completeness_panel(
                         ui.label(uncertainty).classes("text-xs dw-muted leading-5")
                     if context_todos:
                         for todo in context_todos:
-                            ui.label(todo).classes("text-xs dw-muted leading-5")
+                            _render_todo_item(todo, link_target)
                     else:
                         ui.label(
                             "No context follow-up actions were generated."

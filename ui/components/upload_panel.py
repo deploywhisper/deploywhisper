@@ -27,6 +27,7 @@ from services.report_service import (
 )
 from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
+    render_context_summary_panel,
 )
 from ui.components.project_workspace_switcher import (
     build_project_options,
@@ -493,6 +494,7 @@ def build_upload_panel(
                     )
                 context = report.get("context_completeness") or {}
                 render_topology_freshness_banner(context)
+                render_context_summary_panel(context)
                 render_confidence_ledger(report)
                 if parse_batch is not None:
                     render_change_table(parse_batch)
