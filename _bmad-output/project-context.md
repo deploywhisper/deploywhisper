@@ -18,7 +18,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ## Technology Stack & Versions
 
 - Python: code targets Python 3.11 runtime in CI/Docker; `pyproject.toml` currently allows `>=3.10`, so do not introduce syntax that would break 3.10 without intentionally raising the floor.
-- Web runtime: NiceGUI `3.10.0` and FastAPI `0.135.2` share one app in `app.py`.
+- Web runtime: NiceGUI `3.12.0` and FastAPI `0.135.2` share one app in `app.py`.
 - Persistence: SQLAlchemy `2.0.49`, Alembic `1.18.4`, default SQLite database at `data/deploywhisper.db`.
 - Data contracts: Pydantic `2.12.2` models and `Field(...)` metadata.
 - LLM layer: repo-owned provider boundary in `llm/providers.py`; OpenAI, Anthropic, Gemini, and Ollama run through direct adapters under `llm/adapters/`, while OpenRouter, Groq, and xAI use one explicit OpenAI-compatible adapter. The old meta-provider runtime dependency has been removed.

@@ -9,7 +9,7 @@ description = "AI-powered pre-deployment risk intelligence for infrastructure ch
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "nicegui==3.11.0",
+  "nicegui==3.12.0",
   "fastapi==0.136.1",
   "uvicorn==0.46.0",
   "sqlalchemy==2.0.49",

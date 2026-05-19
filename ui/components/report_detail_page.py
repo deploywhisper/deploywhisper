@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlencode
 
@@ -20,7 +21,12 @@ from ui.components.change_table import format_change_metadata_lines
 from ui.components.context_completeness_panel import (
     render_context_completeness_panel,
 )
-from ui.components.findings_table import render_findings_table
+from ui.components.findings_table import (
+    _evidence_refs,
+    _is_legacy_report_schema,
+    describe_evidence_item,
+    render_findings_table,
+)
 from ui.components.review_accessibility import decorate_review_section
 from ui.components.rollback_plan import render_rollback_plan
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
@@ -186,12 +192,130 @@ def _evidence_for_finding(
     ]
     if not evidence_items:
         return None
-    evidence_refs = set(finding.get("evidence_refs") or []) if finding else set()
+    evidence_refs = set(_evidence_refs(finding)) if finding else set()
     if evidence_refs:
-        for item in evidence_items:
-            if item.get("evidence_id") in evidence_refs:
-                return item
-    return evidence_items[0]
+        matched_evidence = [
+            item
+            for item in evidence_items
+            if str(item.get("evidence_id") or "").strip() in evidence_refs
+        ]
+        if matched_evidence:
+            return min(
+                matched_evidence,
+                key=lambda item: _evidence_reference_rank(item, report),
+            )
+    matched_by_finding = _same_finding_evidence_items(
+        finding,
+        evidence_items,
+        _unique_finding_ids(report),
+    )
+    if matched_by_finding:
+        return min(
+            matched_by_finding,
+            key=lambda item: _evidence_reference_rank(item, report),
+        )
+    if evidence_refs:
+        return None
+    if _has_unresolved_evidence_ref_payload(finding):
+        return None
+    if _can_use_report_level_evidence_fallback(report, evidence_items):
+        return evidence_items[0]
+    return None
+
+
+def _can_use_report_level_evidence_fallback(
+    report: dict[str, Any], evidence_items: list[dict[str, Any]]
+) -> bool:
+    findings = [item for item in report.get("findings", []) if isinstance(item, dict)]
+    return len(findings) <= 1 and len(evidence_items) == 1
+
+
+def _unique_finding_ids(report: dict[str, Any]) -> set[str]:
+    id_counts: dict[str, int] = {}
+    for finding in report.get("findings", []):
+        if not isinstance(finding, dict):
+            continue
+        finding_id = str(finding.get("finding_id") or "").strip()
+        if finding_id:
+            id_counts[finding_id] = id_counts.get(finding_id, 0) + 1
+    return {finding_id for finding_id, count in id_counts.items() if count == 1}
+
+
+def _same_finding_evidence_items(
+    finding: dict[str, Any] | None,
+    evidence_items: list[dict[str, Any]],
+    fallback_finding_ids: set[str],
+) -> list[dict[str, Any]]:
+    finding_id = str((finding or {}).get("finding_id") or "").strip()
+    if not finding_id:
+        return []
+    if finding_id not in fallback_finding_ids:
+        return []
+    return [
+        item
+        for item in evidence_items
+        if str(item.get("finding_id") or "").strip() == finding_id
+    ]
+
+
+def _has_unresolved_evidence_ref_payload(finding: dict[str, Any] | None) -> bool:
+    if not finding or "evidence_refs" not in finding:
+        return False
+    raw_refs = finding.get("evidence_refs")
+    if raw_refs is None:
+        return False
+    if isinstance(raw_refs, str):
+        return bool(raw_refs.strip())
+    if isinstance(raw_refs, Mapping):
+        return True
+    try:
+        values = list(raw_refs)
+    except TypeError:
+        return True
+    return any(str(value).strip() for value in values)
+
+
+def _evidence_reference_rank(evidence: dict[str, Any], report: dict[str, Any]) -> int:
+    descriptor = describe_evidence_item(
+        evidence,
+        legacy_missing_redaction_is_none=_is_legacy_report_schema(
+            str(report.get("report_schema_version") or "")
+        ),
+    )
+    redaction_status = str(descriptor["redaction_status"])
+    if redaction_status == "none":
+        return 0
+    if redaction_status == "redacted":
+        return 1
+    if redaction_status == "sensitive_blocked":
+        return 2
+    return 3
+
+
+def _safe_evidence_reference(evidence: dict[str, Any], report: dict[str, Any]) -> str:
+    descriptor = describe_evidence_item(
+        evidence,
+        legacy_missing_redaction_is_none=_is_legacy_report_schema(
+            str(report.get("report_schema_version") or "")
+        ),
+    )
+    if descriptor["redaction_status"] == "none":
+        return str(descriptor["display_source_ref"])
+    if descriptor["redaction_status"] in {"sensitive_blocked", "unknown"}:
+        return str(descriptor["display_source_ref"])
+    return "Evidence reference redacted"
+
+
+def _safe_evidence_summary(evidence: dict[str, Any], report: dict[str, Any]) -> str:
+    descriptor = describe_evidence_item(
+        evidence,
+        legacy_missing_redaction_is_none=_is_legacy_report_schema(
+            str(report.get("report_schema_version") or "")
+        ),
+    )
+    if descriptor["redaction_status"] == "none":
+        return str(evidence.get("summary") or "the top evidence item")
+    return "the linked evidence metadata"
 
 
 def _tool_label(value: object) -> str:
@@ -229,7 +353,9 @@ def _operational_narrative_items(report: dict[str, Any]) -> list[tuple[str, str]
             f"{contributor.get('resource_category') or 'unknown'}."
         )
         if evidence and evidence.get("source_ref"):
-            exact_resource += f" Evidence reference: {evidence['source_ref']}."
+            exact_resource += (
+                f" Evidence reference: {_safe_evidence_reference(evidence, report)}."
+            )
     else:
         what_changed = str(report.get("parse_summary") or report.get("top_risk") or "")
         exact_resource = "Review the findings table for the exact parsed resource and artifact references."
@@ -250,7 +376,7 @@ def _operational_narrative_items(report: dict[str, Any]) -> list[tuple[str, str]
         )
     elif evidence:
         verify_before_deploy = (
-            f"Verify before deploy: confirm {evidence.get('summary') or 'the top evidence item'} "
+            f"Verify before deploy: confirm {_safe_evidence_summary(evidence, report)} "
             "is expected and approved."
         )
     elif finding:
@@ -675,6 +801,7 @@ def render_report_detail_page(
         title="Findings table",
         artifact_names=artifact_names,
         report_id=int(report["id"]),
+        report_schema_version=str(report.get("report_schema_version") or ""),
     )
     render_reviewer_feedback_panel(report, on_feedback_change=on_feedback_change)
     render_context_completeness_panel(context)

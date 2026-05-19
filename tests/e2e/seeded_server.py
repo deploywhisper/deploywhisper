@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import json
 from importlib import import_module, reload
 from pathlib import Path
 
@@ -249,7 +250,7 @@ def _seed_review_report(report_service_module) -> None:
         local_mode=True,
         skills_applied=["git", "terraform"],
     )
-    report_service_module.persist_analysis_report(
+    current_report = report_service_module.persist_analysis_report(
         parse_batch,
         assessment,
         narrative,
@@ -312,7 +313,24 @@ def _seed_review_report(report_service_module) -> None:
                 deterministic=True,
                 confidence=0.86,
                 uncertainty_note="Peak-hour traffic estimate is based on the current incident sample.",
-                evidence_refs=["ev-002"],
+                evidence_refs=[
+                    "ev-002",
+                    "ev-redacted",
+                    "ev-sensitive-blocked",
+                ],
+                skill_id=None,
+            ),
+            Finding(
+                finding_id='finding "003"/legacy',
+                analysis_id=0,
+                title='HIGH: "legacy"\nmissing evidence',
+                description="Legacy imported finding references unavailable evidence",
+                severity="high",
+                category="identity/access",
+                deterministic=False,
+                confidence=0.61,
+                uncertainty_note="Legacy imported evidence reference is unavailable.",
+                evidence_refs=["ev-legacy-safe", "secret/path.env#TOKEN"],
                 skill_id=None,
             ),
         ],
@@ -322,12 +340,13 @@ def _seed_review_report(report_service_module) -> None:
                 analysis_id=0,
                 finding_id="finding-001",
                 source_type="artifact",
-                source_ref="artifact://plan.json#line=12",
+                source_ref="terraform://plan.json#aws_security_group.main?action=modify",
                 summary="Ingress CIDR widened to 0.0.0.0/0.",
                 severity_hint="critical",
                 deterministic=True,
                 confidence=1.0,
                 related_change_ids=["aws_security_group.main"],
+                redaction_status="none",
             ),
             EvidenceItem(
                 evidence_id="ev-002",
@@ -340,6 +359,46 @@ def _seed_review_report(report_service_module) -> None:
                 deterministic=True,
                 confidence=0.86,
                 related_change_ids=["aws_db_instance.primary"],
+                redaction_status="none",
+            ),
+            EvidenceItem(
+                evidence_id="ev-redacted",
+                analysis_id=0,
+                finding_id="finding-002",
+                source_type="artifact",
+                source_ref="terraform://redacted-plan.json#aws_db_instance.primary?action=modify",
+                summary="Redacted database maintenance evidence should not render.",
+                severity_hint="high",
+                deterministic=True,
+                confidence=0.9,
+                related_change_ids=["aws_db_instance.primary"],
+                redaction_status="redacted",
+            ),
+            EvidenceItem(
+                evidence_id="ev-sensitive-blocked",
+                analysis_id=0,
+                finding_id="finding-002",
+                source_type="artifact",
+                source_ref="terraform://browser-secret.env#TOKEN?action=inspect",
+                summary="Sensitive blocked browser summary should not render.",
+                severity_hint="high",
+                deterministic=True,
+                confidence=0.91,
+                related_change_ids=["aws_iam_policy.browser_sensitive"],
+                redaction_status="sensitive_blocked",
+            ),
+            EvidenceItem(
+                evidence_id="ev-legacy-safe",
+                analysis_id=0,
+                finding_id='finding "003"/legacy',
+                source_type="topology",
+                source_ref="topology://legacy-import#service",
+                summary="Legacy topology confirms the imported finding scope.",
+                severity_hint="high",
+                deterministic=True,
+                confidence=0.7,
+                related_change_ids=["legacy-import"],
+                redaction_status="none",
             ),
         ],
         artifact_snapshots={
@@ -353,6 +412,31 @@ def _seed_review_report(report_service_module) -> None:
         },
         project_key="payments",
     )
+    from models.database import SessionLocal
+    from models.tables import Finding as PersistedFinding
+
+    legacy_evidence = next(
+        item
+        for item in current_report["evidence_items"]
+        if item["source_ref"] == "topology://legacy-import#service"
+    )
+    legacy_finding = next(
+        finding
+        for finding in current_report["findings"]
+        if legacy_evidence["evidence_id"] in finding["evidence_refs"]
+    )
+    legacy_evidence_refs = [
+        *legacy_finding["evidence_refs"],
+        "secret/path.env#TOKEN",
+    ]
+    with SessionLocal() as session:
+        session.query(PersistedFinding).filter(
+            PersistedFinding.analysis_id == int(current_report["id"]),
+            PersistedFinding.finding_id == str(legacy_finding["finding_id"]),
+        ).update(
+            {PersistedFinding.evidence_refs_json: json.dumps(legacy_evidence_refs)}
+        )
+        session.commit()
 
 
 def _seed_projects() -> None:
@@ -373,12 +457,116 @@ def _seed_projects() -> None:
     set_active_project(payments_project.id)
 
 
+def _register_e2e_review_routes() -> None:
+    from nicegui import ui
+
+    from ui.components.findings_table import render_findings_table
+
+    @ui.page("/_e2e/missing-evidence")
+    def missing_evidence_page() -> None:
+        render_findings_table(
+            findings=[
+                {
+                    "finding_id": 'finding "missing"/legacy',
+                    "title": 'HIGH: "missing"\nsecret ref',
+                    "description": "Legacy imported finding references unavailable evidence.",
+                    "severity": "high",
+                    "category": "identity/access",
+                    "confidence": 0.94,
+                    "deterministic": False,
+                    "evidence_refs": ["secret/path.env#TOKEN"],
+                },
+                {
+                    "finding_id": "finding-redaction-states",
+                    "title": "HIGH: fail-closed redaction states",
+                    "description": "Imported evidence includes blocked and unknown redaction states.",
+                    "severity": "high",
+                    "category": "identity/access",
+                    "confidence": 0.72,
+                    "deterministic": True,
+                    "evidence_refs": ["ev-e2e-sensitive", "ev-e2e-unknown"],
+                },
+            ],
+            evidence_items=[
+                {
+                    "evidence_id": "ev-e2e-sensitive",
+                    "source_type": "artifact",
+                    "source_ref": "terraform://browser-secret.env#TOKEN?action=inspect",
+                    "artifact": "browser-secret.env",
+                    "resource": "aws_iam_policy.browser_sensitive",
+                    "operation": "inspect",
+                    "source_kind": "artifact",
+                    "summary": "Sensitive blocked browser summary should not render.",
+                    "severity_hint": "high",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "redaction_status": "sensitive_blocked",
+                    "confidence": 0.91,
+                },
+                {
+                    "evidence_id": "ev-e2e-unknown",
+                    "source_type": "artifact",
+                    "source_ref": "terraform://unknown-browser.json#aws_iam_policy.browser_unknown?action=modify",
+                    "artifact": "unknown-browser.json",
+                    "resource": "aws_iam_policy.browser_unknown",
+                    "operation": "modify",
+                    "source_kind": "artifact",
+                    "summary": "Future redaction browser summary should not render.",
+                    "severity_hint": "high",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "redaction_status": "future_status",
+                    "confidence": 0.89,
+                },
+            ],
+            title="E2E missing evidence findings",
+        )
+
+    @ui.page("/_e2e/v1-evidence")
+    def v1_evidence_page() -> None:
+        render_findings_table(
+            findings=[
+                {
+                    "finding_id": "finding-v1-browser",
+                    "title": "HIGH: legacy browser evidence",
+                    "description": "Legacy report evidence predates redaction metadata.",
+                    "severity": "high",
+                    "category": "identity/access",
+                    "confidence": 0.88,
+                    "deterministic": True,
+                    "evidence_refs": ["ev-v1-browser"],
+                },
+            ],
+            evidence_items=[
+                {
+                    "evidence_id": "ev-v1-browser",
+                    "source_type": "artifact",
+                    "source_ref": "terraform://legacy-plan.json#L7",
+                    "artifact": "legacy-plan.json",
+                    "resource": "aws_iam_policy.legacy_browser",
+                    "operation": "modify",
+                    "source_kind": "artifact",
+                    "summary": "Legacy browser summary remains visible.",
+                    "severity_hint": "high",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "confidence": 0.88,
+                },
+            ],
+            artifact_names=["legacy-plan.json"],
+            report_id=44,
+            title="E2E v1 evidence findings",
+            report_schema_version="v1",
+        )
+
+
 def main() -> None:
     database_module, report_service_module = _reload_runtime()
     database_module.init_db()
     _seed_projects()
     _seed_review_report(report_service_module)
     app_module = import_module("app")
+    _register_e2e_review_routes()
     app_module.run()
 
 

@@ -505,6 +505,9 @@ def build_upload_panel(
                             title="Findings table",
                             artifact_names=artifact_names,
                             report_id=int(report["id"]),
+                            report_schema_version=str(
+                                report.get("report_schema_version") or ""
+                            ),
                         )
                         render_reviewer_feedback_panel(
                             report,
