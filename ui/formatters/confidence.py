@@ -2,29 +2,11 @@
 
 from __future__ import annotations
 
-import math
-
 from nicegui import ui
-
-
-def coerce_confidence(value: object) -> float | None:
-    if value is None:
-        return None
-    try:
-        confidence = float(value)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(confidence) or confidence < 0.0 or confidence > 1.0:
-        return None
-    return confidence
-
-
-def confidence_bucket(confidence: float) -> str:
-    if confidence >= 0.85:
-        return "high"
-    if confidence >= 0.60:
-        return "medium"
-    return "low"
+from services.confidence_ledger import (
+    confidence_bucket as confidence_bucket,
+    coerce_confidence as coerce_confidence,
+)
 
 
 def _confidence_style(bucket: str) -> str:

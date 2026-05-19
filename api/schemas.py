@@ -6,7 +6,9 @@ from typing import Any, Literal
 
 from config import settings
 from evidence.models import FindingEvidenceClassification
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
+
+from services.confidence_ledger import normalize_confidence_ledger_payload
 
 
 class MetaPayload(BaseModel):
@@ -309,6 +311,34 @@ class ProjectData(BaseModel):
     updated_at: str = Field(..., description="Last update timestamp")
 
 
+class ConfidenceLedgerData(BaseModel):
+    contributors: list[str] = Field(
+        default_factory=list,
+        description="Reviewer-facing contributor lines backing the verdict",
+    )
+    confidence_factors: list[str] = Field(
+        default_factory=list,
+        description="Confidence signals used to interpret the verdict",
+    )
+    why_not_lower: list[str] = Field(
+        default_factory=list,
+        description="Evidence-backed reasons the verdict is not lower",
+    )
+    why_not_higher: list[str] = Field(
+        default_factory=list,
+        description="Evidence-backed reasons the verdict is not higher",
+    )
+    uncertainty_drivers: list[str] = Field(
+        default_factory=list,
+        description="Context and evidence limitations affecting certainty",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_payload(cls, data: Any) -> dict[str, list[str]]:
+        return normalize_confidence_ledger_payload(data)
+
+
 class PersistedReportData(BaseModel):
     id: int
     project: ProjectData = Field(..., description="Owning project/workspace")
@@ -363,6 +393,10 @@ class PersistedReportData(BaseModel):
     findings: list["FindingData"] = Field(default_factory=list)
     evidence_items: list["EvidenceItemData"] = Field(default_factory=list)
     contributors: list["RiskContributorData"] = Field(default_factory=list)
+    confidence_ledger: ConfidenceLedgerData = Field(
+        default_factory=ConfidenceLedgerData,
+        description="Shared confidence ledger and why-not boundary explanations",
+    )
     dashboard_display_duration_seconds: int | None = Field(default=None)
     dashboard_remaining_seconds: int | None = Field(default=None)
     submission_manifest: SubmissionManifestData | None = Field(
@@ -824,6 +858,10 @@ class AssessmentData(BaseModel):
     )
     contributors: list[RiskContributorData] = Field(
         default_factory=list, description="Score contributors"
+    )
+    confidence_ledger: ConfidenceLedgerData = Field(
+        default_factory=ConfidenceLedgerData,
+        description="Shared confidence ledger and why-not boundary explanations",
     )
     interaction_risks: list[InteractionRiskData] = Field(
         default_factory=list, description="Cross-tool interaction findings"
@@ -1291,6 +1329,9 @@ def build_analysis_run_data(
                 _copy_model(contributor, RiskContributorData)
                 for contributor in assessment.contributors
             ],
+            confidence_ledger=ConfidenceLedgerData.model_validate(
+                persisted_report.get("confidence_ledger", {})
+            ),
             interaction_risks=[
                 _copy_model(interaction_risk, InteractionRiskData)
                 for interaction_risk in assessment.interaction_risks

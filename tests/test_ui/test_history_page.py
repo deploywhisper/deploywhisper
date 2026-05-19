@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -24,6 +25,10 @@ from evidence.models import EvidenceItem, Finding
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
+from services.confidence_ledger import (
+    build_confidence_ledger,
+    normalize_confidence_ledger_payload,
+)
 from ui.formatters.datetime import format_history_timestamp
 from ui.formatters.recommendations import recommendation_classes, recommendation_text
 from ui.routes.history import page_selection_state
@@ -631,6 +636,275 @@ class HistoryPageHelpersTests(unittest.TestCase):
         self.assertIn("linked evidence metadata", verify_before_deploy)
         self.assertNotIn("Unknown redaction summary", verify_before_deploy)
 
+    def test_confidence_ledger_builds_grounded_reasoning_sections(self) -> None:
+        ledger = build_confidence_ledger(
+            {
+                "risk_score": 76,
+                "severity": "high",
+                "recommendation": "caution",
+                "confidence": 0.72,
+                "top_risk": "Security group exposure risk",
+                "warnings": ["Narrative degraded: provider unavailable."],
+                "narrative_available": False,
+                "contributors": [
+                    {
+                        "resource_id": "aws_security_group.main",
+                        "source_file": "plan.json",
+                        "normalized_action": "modify",
+                        "resource_category": "networking",
+                        "severity": "high",
+                        "contribution": 20,
+                        "reasoning": "Ingress is exposed to the internet.",
+                    }
+                ],
+                "findings": [
+                    {
+                        "title": "HIGH: aws_security_group.main",
+                        "severity": "high",
+                        "confidence": 0.68,
+                        "deterministic": True,
+                        "uncertainty_note": "Parser coverage is partial.",
+                    }
+                ],
+                "context_completeness": {
+                    "context_score": 0.64,
+                    "confidence_level": "low",
+                    "uncertainty": "Uncertainty: topology context is stale.",
+                },
+            }
+        )
+
+        self.assertEqual(
+            ledger["contributors"][0],
+            "aws_security_group.main · HIGH · contribution 20 · plan.json",
+        )
+        self.assertIn(
+            "Report confidence is Medium (0.72).", ledger["confidence_factors"]
+        )
+        self.assertIn(
+            "Context confidence is low with score 0.64.",
+            ledger["confidence_factors"],
+        )
+        self.assertTrue(
+            any("Severity stays elevated" in item for item in ledger["why_not_lower"])
+        )
+        self.assertTrue(
+            any("not higher" in item.lower() for item in ledger["why_not_higher"])
+        )
+        self.assertIn(
+            "Uncertainty: topology context is stale.", ledger["uncertainty_drivers"]
+        )
+        self.assertIn("Parser coverage is partial.", ledger["uncertainty_drivers"])
+
+    def test_confidence_ledger_tolerates_legacy_contributor_payloads(
+        self,
+    ) -> None:
+        ledger = build_confidence_ledger(
+            {
+                "risk_score": 76,
+                "severity": "high",
+                "confidence": 0.72,
+                "contributors": [
+                    {
+                        "resource_id": "hidden.low",
+                        "source_file": "low.json",
+                        "severity": "medium",
+                        "contribution": "2.5",
+                    },
+                    {
+                        "resource_id": "visible.top",
+                        "source_file": "top.json",
+                        "severity": "high",
+                        "contribution": "20.5",
+                    },
+                    {
+                        "resource_id": "invalid.legacy",
+                        "source_file": "legacy.json",
+                        "severity": "low",
+                        "contribution": "unknown",
+                    },
+                ],
+                "findings": [
+                    {
+                        "title": "HIGH: visible.top",
+                        "severity": "high",
+                        "confidence": 0.68,
+                        "deterministic": True,
+                    }
+                ],
+                "context_completeness": {
+                    "context_score": 0.72,
+                    "confidence_level": "medium",
+                },
+            }
+        )
+
+        self.assertEqual(
+            ledger["contributors"][0],
+            "visible.top · HIGH · contribution 20.5 · top.json",
+        )
+        self.assertIn(
+            "invalid.legacy · LOW · contribution unknown · legacy.json",
+            ledger["contributors"],
+        )
+        self.assertIn("visible.top", ledger["why_not_lower"][0])
+        self.assertTrue(
+            any(
+                "below the CRITICAL threshold of 90" in item
+                for item in ledger["why_not_higher"]
+            )
+        )
+        self.assertTrue(any("visible.top" in item for item in ledger["why_not_higher"]))
+
+    def test_confidence_ledger_uses_canonical_thresholds_without_false_below_claims(
+        self,
+    ) -> None:
+        low_ledger = build_confidence_ledger(
+            {
+                "risk_score": 41,
+                "severity": "low",
+                "confidence": 0.72,
+                "contributors": [],
+                "findings": [],
+                "context_completeness": {},
+            }
+        )
+        medium_ledger = build_confidence_ledger(
+            {
+                "risk_score": 70,
+                "severity": "medium",
+                "confidence": 0.72,
+                "contributors": [],
+                "findings": [
+                    {
+                        "title": "MEDIUM: change",
+                        "severity": "medium",
+                        "confidence": 0.72,
+                        "deterministic": True,
+                    }
+                ],
+                "context_completeness": {},
+            }
+        )
+
+        self.assertTrue(
+            any(
+                "below the MEDIUM threshold of 42" in item
+                for item in low_ledger["why_not_higher"]
+            )
+        )
+        self.assertFalse(
+            any(
+                "below the HIGH threshold" in item
+                for item in medium_ledger["why_not_higher"]
+            )
+        )
+        self.assertTrue(
+            any(
+                "persisted MEDIUM verdict" in item
+                for item in medium_ledger["why_not_higher"]
+            )
+        )
+
+    def test_confidence_ledger_filters_administrative_warnings_from_uncertainty(
+        self,
+    ) -> None:
+        ledger = build_confidence_ledger(
+            {
+                "risk_score": 76,
+                "severity": "high",
+                "confidence": 0.72,
+                "warnings": [
+                    "Evidence Law reconciled report score to match severity metadata.",
+                    "Submission manifest metadata was inferred from available analysis artifacts.",
+                    "Context completeness metadata was unavailable because persisted JSON was malformed.",
+                ],
+                "contributors": [],
+                "findings": [],
+                "context_completeness": {},
+            }
+        )
+
+        uncertainty = " ".join(ledger["uncertainty_drivers"])
+        self.assertNotIn("Evidence Law reconciled", uncertainty)
+        self.assertNotIn("Submission manifest metadata", uncertainty)
+        self.assertIn("Context completeness metadata", uncertainty)
+
+    def test_confidence_ledger_marks_evidence_detail_omitted_for_summary_payloads(
+        self,
+    ) -> None:
+        ledger = build_confidence_ledger(
+            {
+                "risk_score": 76,
+                "severity": "high",
+                "confidence": 0.72,
+                "contributors": [],
+                "findings": [
+                    {
+                        "title": "HIGH: change",
+                        "severity": "high",
+                        "confidence": 0.72,
+                        "deterministic": True,
+                        "evidence_refs": ["ev-001"],
+                    }
+                ],
+                "context_completeness": {},
+            },
+            evidence_detail_available=False,
+        )
+
+        factors = " ".join(ledger["confidence_factors"])
+        why_not_higher = " ".join(ledger["why_not_higher"])
+        self.assertIn("Evidence Law: Detail omitted", factors)
+        self.assertNotIn("lacks linked deterministic evidence", factors)
+        self.assertNotIn("Evidence Law does not provide support", why_not_higher)
+
+    def test_confidence_ledger_normalizes_malformed_ledger_sections(self) -> None:
+        fallback = {
+            "contributors": ["fallback contributor"],
+            "confidence_factors": ["fallback confidence"],
+            "why_not_lower": ["fallback lower"],
+            "why_not_higher": ["fallback higher"],
+            "uncertainty_drivers": ["fallback uncertainty"],
+        }
+
+        ledger = normalize_confidence_ledger_payload(
+            {
+                "contributors": "single contributor",
+                "confidence_factors": [],
+                "why_not_higher": "single why-not-higher reason",
+            },
+            fallback_ledger=fallback,
+        )
+        html = app_module._shared_report_confidence_ledger_html(
+            {"confidence_ledger": {"why_not_higher": "single reason"}}
+        )
+        fallback_html = app_module._shared_report_confidence_ledger_html(
+            {
+                "risk_score": 76,
+                "severity": "high",
+                "confidence": 0.72,
+                "contributors": [
+                    {
+                        "resource_id": "fallback.top",
+                        "source_file": "plan.json",
+                        "severity": "high",
+                        "contribution": 20,
+                    }
+                ],
+                "findings": [],
+                "context_completeness": {},
+            }
+        )
+
+        self.assertEqual(ledger["contributors"], ["single contributor"])
+        self.assertEqual(ledger["confidence_factors"], ["fallback confidence"])
+        self.assertEqual(ledger["why_not_lower"], ["fallback lower"])
+        self.assertEqual(ledger["why_not_higher"], ["single why-not-higher reason"])
+        self.assertIn("<li>single reason</li>", html)
+        self.assertNotIn("<li>s</li>", html)
+        self.assertIn("fallback.top", fallback_html)
+
     def test_history_row_confidence_does_not_fallback_to_finding_confidence(
         self,
     ) -> None:
@@ -1133,6 +1407,67 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Next action", response.text)
         self.assertIn("Review linked evidence", response.text)
 
+    def test_history_detail_route_renders_confidence_ledger(self) -> None:
+        self._persist_report(
+            assessment_confidence=0.72,
+            finding_confidence=0.68,
+            context_completeness={
+                "topology_freshness_days": 45,
+                "topology_last_imported_at": "2026-04-18T11:22:33Z",
+                "incident_index_size": 7,
+                "parser_success_rate": 0.8,
+                "parser_success_by_tool": {"terraform": 0.8},
+                "context_score": 0.64,
+                "confidence_level": "low",
+                "uncertainty": "Uncertainty: topology context is stale.",
+            },
+        )
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Confidence ledger", response.text)
+        self.assertIn("Why not lower", response.text)
+        self.assertIn("Why not higher", response.text)
+        self.assertIn("Uncertainty drivers", response.text)
+        self.assertIn("Report confidence is Medium (0.64).", response.text)
+        self.assertIn(
+            "Context confidence is low with score 0.64.",
+            response.text,
+        )
+        self.assertIn("aws_security_group.main", response.text)
+        self.assertIn("Uncertainty: topology context is stale.", response.text)
+
+    def test_history_detail_route_tolerates_legacy_contributor_values(self) -> None:
+        report = self._persist_report()
+        with database_module.SessionLocal() as session:
+            stored = session.get(tables_module.AnalysisReport, report["id"])
+            assert stored is not None
+            stored.contributors_json = json.dumps(
+                [
+                    {
+                        "resource_id": "legacy.invalid",
+                        "source_file": "legacy.json",
+                        "severity": "low",
+                        "contribution": "unknown",
+                    },
+                    {
+                        "resource_id": "legacy.decimal",
+                        "source_file": "top.json",
+                        "severity": "high",
+                        "contribution": "20.5",
+                    },
+                ]
+            )
+            session.commit()
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("legacy.decimal", response.text)
+        self.assertIn("Confidence ledger", response.text)
+        self.assertIn("Why not lower", response.text)
+
     def test_history_detail_route_shows_topology_freshness_badge(self) -> None:
         self._persist_report(
             context_completeness={
@@ -1162,6 +1497,10 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Shared DeployWhisper report", response.text)
         self.assertIn("Analysis report", response.text)
+        self.assertIn("Confidence ledger", response.text)
+        self.assertIn("Why not lower", response.text)
+        self.assertIn("Why not higher", response.text)
+        self.assertIn("aws_security_group.main", response.text)
         self.assertNotIn("Delete selected", response.text)
 
     def test_public_report_route_shows_topology_freshness_without_internal_settings_link(

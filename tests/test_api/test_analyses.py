@@ -957,6 +957,15 @@ class AnalysesApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
+        for ledger in (
+            payload["data"]["assessment"]["confidence_ledger"],
+            payload["data"]["persisted_report"]["confidence_ledger"],
+        ):
+            self.assertGreater(len(ledger["contributors"]), 0)
+            self.assertGreater(len(ledger["confidence_factors"]), 0)
+            self.assertGreater(len(ledger["why_not_lower"]), 0)
+            self.assertGreater(len(ledger["why_not_higher"]), 0)
+            self.assertGreater(len(ledger["uncertainty_drivers"]), 0)
         contributors = {
             contributor["resource_id"]: contributor
             for contributor in payload["data"]["persisted_report"]["contributors"]
@@ -979,6 +988,12 @@ class AnalysesApiTests(unittest.TestCase):
             params={"project_key": "payments"},
         )
         self.assertEqual(detail.status_code, 200)
+        detail_ledger = detail.json()["data"]["confidence_ledger"]
+        self.assertGreater(len(detail_ledger["contributors"]), 0)
+        self.assertGreater(len(detail_ledger["confidence_factors"]), 0)
+        self.assertGreater(len(detail_ledger["why_not_lower"]), 0)
+        self.assertGreater(len(detail_ledger["why_not_higher"]), 0)
+        self.assertGreater(len(detail_ledger["uncertainty_drivers"]), 0)
         detail_contributors = {
             contributor["resource_id"]: contributor
             for contributor in detail.json()["data"]["contributors"]

@@ -9,6 +9,7 @@ import json
 from importlib import import_module, reload
 from pathlib import Path
 
+import nicegui.nicegui as nicegui_runtime
 import nicegui.run as nicegui_run
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +31,7 @@ def _safe_nicegui_setup() -> None:
 
 
 nicegui_run.setup = _safe_nicegui_setup
+nicegui_runtime.run.setup = _safe_nicegui_setup
 
 
 def _load_runtime_modules() -> tuple[object, object, object, object, object]:

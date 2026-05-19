@@ -2,6 +2,7 @@ const { test, expect } = require("@playwright/test");
 
 const REVIEW_ORDER = [
   "verdict",
+  "confidence-ledger",
   "findings",
   "evidence",
   "context",
@@ -113,6 +114,10 @@ test.describe("review keyboard flow", () => {
     await expect(page.getByText("Evidence Law").first()).toBeVisible();
     await expect(page.getByText("Next action").first()).toBeVisible();
     await expect(page.getByText("Review linked evidence").first()).toBeVisible();
+    await expect(page.getByText("Confidence ledger").first()).toBeVisible();
+    await expect(page.getByText("Why not lower").first()).toBeVisible();
+    await expect(page.getByText("Why not higher").first()).toBeVisible();
+    await expect(page.getByText("Uncertainty drivers").first()).toBeVisible();
     await expect(page.getByText("networking/ingress").first()).toBeVisible();
     await expect(page.getByText("1 evidence item").first()).toBeVisible();
     await expect(page.getByText("3 evidence items").first()).toBeVisible();
@@ -280,6 +285,12 @@ test.describe("review keyboard flow", () => {
     await page.waitForFunction(() => window.dwReviewAccessibilityInstalled === true);
 
     await page.locator('[data-dw-review-section="verdict"]').focus();
+    const confidenceLedgerSection = await tabUntilSection(
+      page,
+      "confidence-ledger",
+      8
+    );
+    expect(confidenceLedgerSection).toBe("confidence-ledger");
     const findingsSection = await tabUntilSection(page, "findings", 8);
     expect(findingsSection).toBe("findings");
 
@@ -312,7 +323,7 @@ test.describe("review keyboard flow", () => {
       expandedBeforeInspectorKeys
     );
 
-    const seen = ["verdict", "findings", "evidence"];
+    const seen = ["verdict", "confidence-ledger", "findings", "evidence"];
     for (let step = 0; step < 40; step += 1) {
       await page.keyboard.press("Tab");
       const target = await activeReviewTarget(page);
@@ -343,6 +354,12 @@ test.describe("review keyboard flow", () => {
       page.getByText("Unsupported plan fields: plan.planned_values").first()
     ).toBeVisible();
     await expect(page.locator('[data-dw-modal-root="1"]')).toHaveCount(0);
+    await expect(
+      page.locator('[data-dw-review-section="confidence-ledger"]')
+    ).toBeVisible();
+    await expect(page.getByText("Confidence ledger").first()).toBeVisible();
+    await expect(page.getByText("Why not lower").first()).toBeVisible();
+    await expect(page.getByText("Why not higher").first()).toBeVisible();
     await expect(page.locator('[data-dw-review-section="findings"]')).toBeVisible();
     await expect(page.locator('[data-dw-review-section="context"]')).toBeVisible();
     await expect(

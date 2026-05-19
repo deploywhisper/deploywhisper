@@ -46,6 +46,11 @@ from services.artifact_snapshot_service import (
     delete_report_artifacts,
     save_report_artifacts,
 )
+from services.confidence_ledger import (
+    LEDGER_KEYS,
+    build_confidence_ledger,
+    normalize_confidence_ledger_payload,
+)
 from services.project_service import (
     build_project_payload,
     build_workspace_payload,
@@ -415,8 +420,27 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
             }
             for evidence_item in (report.get("evidence_items") or [])
         ],
+        "confidence_ledger": _redact_confidence_ledger(
+            report.get("confidence_ledger") or {},
+            pairs,
+        ),
     }
     return redacted
+
+
+def _redact_confidence_ledger(
+    ledger: dict[str, Any],
+    pairs: list[tuple[str, str]],
+) -> dict[str, list[str]]:
+    normalized = normalize_confidence_ledger_payload(ledger)
+    return {
+        key: [
+            str(_redact_text_value(item, pairs))
+            for item in normalized[key]
+            if str(item).strip()
+        ]
+        for key in LEDGER_KEYS
+    }
 
 
 def _redact_submission_manifest_file_names(
@@ -2652,7 +2676,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         failure_notice=narrative_failure_notice,
         narrative_available=narrative_available,
     )
-    return {
+    payload = {
         "id": report.id,
         "project": build_project_payload(
             {
@@ -2753,6 +2777,11 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         ),
         "audit": audit,
     }
+    payload["confidence_ledger"] = build_confidence_ledger(
+        payload,
+        evidence_detail_available=include_evidence,
+    )
+    return payload
 
 
 def persist_analysis_report(
