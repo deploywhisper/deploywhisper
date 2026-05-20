@@ -59,7 +59,9 @@ def render_rollback_plan(plan: RollbackPlan) -> None:
         decorate_review_section(panel, section="rollback", label="Rollback plan")
         with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
             with ui.column().classes("gap-1 min-w-0 flex-1"):
-                ui.label("Rollback plan").classes("text-lg font-medium dw-text")
+                ui.label("Rollback plan").classes("text-lg font-medium dw-text").props(
+                    "role=heading aria-level=2"
+                )
                 ui.label(
                     f"Complexity: {plan.complexity_score}/5 ({plan.complexity})"
                 ).classes("text-sm dw-muted")

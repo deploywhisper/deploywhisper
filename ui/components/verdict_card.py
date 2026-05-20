@@ -71,7 +71,9 @@ def render_verdict_card(report: dict) -> None:
         decorate_review_section(card, section="verdict", label="Verdict card")
         with ui.row().classes("w-full items-start justify-between gap-5 flex-wrap"):
             with ui.column().classes("gap-3 min-w-0 flex-1"):
-                ui.label("5-second verdict").classes("dw-eyebrow")
+                ui.label("5-second verdict").classes("dw-eyebrow").props(
+                    "role=heading aria-level=2"
+                )
                 with ui.row().classes("items-start gap-4 flex-wrap"):
                     with ui.column().classes("dw-verdict-score-block shrink-0 gap-1"):
                         ui.label(str(report.get("risk_score", "—"))).classes(

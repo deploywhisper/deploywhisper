@@ -556,12 +556,16 @@ Run the local CI-equivalent checks:
 bash scripts/ci-local.sh
 ```
 
-Run the browser keyboard smoke for the review flow:
+Run the browser keyboard/accessibility smoke for the review flow:
 
 ```bash
 npm install
 npm run test:ui-review
 ```
+
+This validates the seeded report review route with keyboard navigation, review
+section focus order, landmarks, labels, and live status announcements for
+evidence inspector open/close changes.
 
 Run the real macOS VoiceOver smoke on a GUI-enabled Mac:
 
@@ -689,7 +693,7 @@ The CI pipeline is backend-focused and intentionally skips frontend-style burn-i
 
 For accessibility-sensitive UI changes, the repo also ships an opt-in macOS verification lane:
 
-- `npm run test:ui-review` exercises the seeded review flow with Playwright keyboard automation.
+- `npm run test:ui-review` exercises the seeded review flow with Playwright keyboard automation, including review landmarks and status announcements.
 - `npm run test:ui-review:voiceover` exercises the same flow with real VoiceOver on macOS after `npm run setup:ui-review`.
 - `RUN_UI_A11Y=1 bash scripts/ci-local.sh` appends both lanes locally when Node dependencies are installed. The VoiceOver step auto-skips on non-macOS hosts.
 

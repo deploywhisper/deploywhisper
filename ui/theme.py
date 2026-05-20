@@ -511,7 +511,7 @@ code,
 }
 
 .dw-eyebrow {
-  color: var(--dw-accent);
+  color: var(--dw-accent-contrast);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -537,7 +537,7 @@ code,
 }
 
 .dw-accent-text {
-  color: var(--dw-accent);
+  color: var(--dw-accent-contrast);
 }
 
 .dw-warning-text {
@@ -1056,8 +1056,12 @@ def build_navigation_shell(
         with ui.column().classes("dw-topbar-shell w-full"):
             with ui.row().classes("dw-topbar-primary w-full justify-between flex-wrap"):
                 build_brand_lockup(compact=True)
-                with ui.row().classes(
-                    "dw-topbar-nav items-center gap-1 flex-wrap grow justify-center max-md:w-full"
+                with (
+                    ui.row()
+                    .classes(
+                        "dw-topbar-nav items-center gap-1 flex-wrap grow justify-center max-md:w-full"
+                    )
+                    .props('role=navigation aria-label="Primary navigation"')
                 ):
                     for label, href, key in nav_items:
                         classes = "dw-nav-link no-underline"

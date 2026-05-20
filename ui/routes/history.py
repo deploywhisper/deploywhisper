@@ -120,7 +120,11 @@ def build_history_page() -> None:
         card_checkboxes: dict[int, Any] = {}
         selection_sync = {"active": False}
 
-        with ui.column().classes("dw-main-content dw-shell gap-5"):
+        with (
+            ui.column()
+            .classes("dw-main-content dw-shell gap-5")
+            .props('role=main aria-label="Analysis history workspace"')
+        ):
             with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
                 build_page_header(
                     eyebrow="History",
@@ -576,8 +580,17 @@ def build_history_detail_page(report_id: int, *, show_comparison: bool = False) 
             if authorization_error is not None or not show_comparison
             else fetch_report_comparison(report_id, project_id=active_project_id)
         )
+        main_label = (
+            "Analysis report unavailable"
+            if report is None
+            else "Analysis report workspace"
+        )
 
-        with ui.column().classes("dw-main-content dw-shell gap-5"):
+        with (
+            ui.column()
+            .classes("dw-main-content dw-shell gap-5")
+            .props(f'role=main aria-label="{main_label}"')
+        ):
             with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
                 if report is None:
                     build_page_header(
