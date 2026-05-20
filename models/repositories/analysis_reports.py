@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 import math
 import re
-from datetime import UTC, datetime, timedelta
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from evidence.models import EvidenceItem as EvidenceItemPayload
@@ -34,6 +34,83 @@ _VERDICT_PREFIX_PATTERN = re.compile(
     r"security|permission|policy|blast|radius)\b))",
     flags=re.IGNORECASE,
 )
+
+
+def _escape_like_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _json_tool_like_patterns(toolchain: str) -> list[str]:
+    normalized = toolchain.strip().lower()
+    if not normalized:
+        return []
+    encoded = _escape_like_value(json.dumps(normalized)[1:-1])
+    return [f'%"tool":"{encoded}"%', f'%"tool": "{encoded}"%']
+
+
+def _toolchain_predicate(toolchain: str):
+    patterns = _json_tool_like_patterns(toolchain)
+    if not patterns:
+        return None
+    predicates = []
+    for column in (
+        AnalysisReport.contributors_json,
+        AnalysisReport.submission_manifest_json,
+        AnalysisReport.submission_manifest_fallback_json,
+        AnalysisReport.analyzed_files_json,
+    ):
+        lowered = func.lower(column)
+        predicates.extend(lowered.like(pattern, escape="\\") for pattern in patterns)
+    return or_(*predicates)
+
+
+def _narrative_source_not_fallback_predicate():
+    return or_(
+        AnalysisReport.narrative_source.is_(None),
+        AnalysisReport.narrative_source != "fallback",
+    )
+
+
+def _narrative_available_predicate():
+    return or_(
+        func.length(func.trim(func.coalesce(AnalysisReport.narrative_opening, ""))) > 0,
+        func.length(func.trim(func.coalesce(AnalysisReport.narrative_explanation, "")))
+        > 0,
+    )
+
+
+def _narrative_failure_notice_predicate():
+    return (
+        func.length(
+            func.trim(func.coalesce(AnalysisReport.narrative_failure_notice, ""))
+        )
+        > 0
+    )
+
+
+def _analysis_status_predicate(analysis_status: str):
+    if analysis_status == "complete":
+        return and_(
+            _narrative_source_not_fallback_predicate(),
+            or_(
+                AnalysisReport.narrative_degraded.is_(False),
+                AnalysisReport.narrative_degraded.is_(None),
+            ),
+            not_(_narrative_failure_notice_predicate()),
+            _narrative_available_predicate(),
+        )
+    if analysis_status == "degraded":
+        return and_(
+            _narrative_source_not_fallback_predicate(),
+            or_(
+                AnalysisReport.narrative_degraded.is_(True),
+                _narrative_failure_notice_predicate(),
+                not_(_narrative_available_predicate()),
+            ),
+        )
+    if analysis_status == "fallback":
+        return AnalysisReport.narrative_source == "fallback"
+    return None
 
 
 def _normalize_report_severity(severity: str) -> str:
@@ -571,6 +648,10 @@ def list_analysis_reports(
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
+    toolchain: str | None = None,
+    analysis_status: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     report_schema_versions: Sequence[str] | None = None,
     limit: int | None = None,
     offset: int | None = None,
@@ -589,6 +670,18 @@ def list_analysis_reports(
         stmt = stmt.where(AnalysisReport.severity == severity)
     if recommendation:
         stmt = stmt.where(AnalysisReport.recommendation == recommendation)
+    if created_from is not None:
+        stmt = stmt.where(AnalysisReport.created_at >= created_from)
+    if created_to is not None:
+        stmt = stmt.where(AnalysisReport.created_at <= created_to)
+    if toolchain:
+        predicate = _toolchain_predicate(toolchain)
+        if predicate is not None:
+            stmt = stmt.where(predicate)
+    if analysis_status:
+        predicate = _analysis_status_predicate(analysis_status)
+        if predicate is not None:
+            stmt = stmt.where(predicate)
     if search:
         like = f"%{search}%"
         stmt = stmt.where(
@@ -622,6 +715,10 @@ def count_analysis_reports(
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
+    toolchain: str | None = None,
+    analysis_status: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     report_schema_versions: Sequence[str] | None = None,
 ) -> int:
     stmt = select(func.count()).select_from(AnalysisReport)
@@ -633,6 +730,18 @@ def count_analysis_reports(
         stmt = stmt.where(AnalysisReport.severity == severity)
     if recommendation:
         stmt = stmt.where(AnalysisReport.recommendation == recommendation)
+    if created_from is not None:
+        stmt = stmt.where(AnalysisReport.created_at >= created_from)
+    if created_to is not None:
+        stmt = stmt.where(AnalysisReport.created_at <= created_to)
+    if toolchain:
+        predicate = _toolchain_predicate(toolchain)
+        if predicate is not None:
+            stmt = stmt.where(predicate)
+    if analysis_status:
+        predicate = _analysis_status_predicate(analysis_status)
+        if predicate is not None:
+            stmt = stmt.where(predicate)
     if search:
         like = f"%{search}%"
         stmt = stmt.where(

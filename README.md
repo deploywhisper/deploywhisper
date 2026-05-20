@@ -118,7 +118,7 @@ What users can use today:
 - **Local-first safety posture**: keep raw IaC processing local, avoid storing provider API keys in the database, exclude sensitive files from unsafe handling, and keep every verdict advisory rather than automatically blocking a release.
 - **Evidence-backed confidence**: trace the report back to findings, resource-level contributors, uploaded artifact references, confidence factors, why-not-lower/higher reasoning, parser coverage, topology freshness, context TODOs, and warning signals when context is limited.
 - **Blast-radius and rollback context**: use service-topology input to explain likely downstream impact and generate rollback steps with complexity scoring.
-- **Analysis history**: review saved reports later, filter previous analyses, inspect audit metadata, and compare repeated scans of the same artifact set with new, resolved, persistent, severity-changed, and context-changed findings.
+- **Analysis history**: review saved reports later, filter previous analyses by project, workspace, time range, risk verdict, toolchain, and analysis status, inspect audit metadata, and compare repeated scans of the same artifact set with new, resolved, persistent, severity-changed, and context-changed findings.
 - **Provider and admin settings UI**: configure LLM provider metadata, upload topology context, manage custom AI Skills, and see provider readiness before running analysis.
 - **REST API and CLI access**: run the same analysis pipeline from `/api/v1` endpoints or the headless CLI for local automation and CI workflows.
 - **Shareable reports**: create read-only report links, optionally protect sensitive shared reports with a password, redact filenames, and compare shared reruns when previous scans exist.
@@ -396,11 +396,25 @@ GET /api/v1/analyses
 
 Supports filtering by:
 
+- `project_id`
+- `project_key`
+- `workspace_id`
+- `workspace_key`
 - `severity`
 - `recommendation`
 - `search`
+- `toolchain`
+- `analysis_status` (`complete`, `degraded`, or `fallback`)
+- `created_from` (timezone-aware ISO 8601 timestamp)
+- `created_to` (timezone-aware ISO 8601 timestamp)
 - `page`
 - `page_size`
+
+Example:
+
+```http
+GET /api/v1/analyses?project_key=payments&workspace_key=prod&toolchain=terraform&analysis_status=complete&created_from=2026-05-01T00:00:00Z&created_to=2026-05-20T00:00:00Z
+```
 
 ### Fetch One Analysis
 

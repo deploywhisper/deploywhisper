@@ -78,7 +78,7 @@ development_status:
   3-5-context-completeness-and-todo-panel: done
   3-6-report-diff-after-rerun: done
   3-7-keyboard-and-accessibility-review-pass: done
-  3-8-historical-report-search-and-filtering: ready-for-dev
+  3-8-historical-report-search-and-filtering: done
   epic-3-retrospective: optional
 
   epic-4: in-progress

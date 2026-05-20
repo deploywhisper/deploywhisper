@@ -46,6 +46,16 @@ class HistoryPageHelpersTests(unittest.TestCase):
         self.assertEqual(page_selection_state({1, 2, 3}, {1}), (False, 1))
         self.assertEqual(page_selection_state({1, 2, 3}, {1, 2, 3, 4}), (True, 3))
 
+    def test_history_toolchain_options_keeps_empty_default(self) -> None:
+        self.assertEqual(
+            history_module._history_toolchain_options(["kubernetes", "terraform"]),
+            {
+                "": "Any toolchain",
+                "kubernetes": "Kubernetes",
+                "terraform": "Terraform",
+            },
+        )
+
     def test_recommendation_helpers_preserve_semantic_go_no_go_styling(self) -> None:
         self.assertEqual(recommendation_text("no-go"), "NO-GO")
         self.assertIn("dw-danger-text", recommendation_classes("no-go"))
@@ -938,6 +948,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         database_module.engine.dispose()
         os.environ.pop("APP_BASE_URL", None)
         os.environ.pop("DATABASE_URL", None)
+        os.environ.pop("DEPLOYWHISPER_PROJECT_KEYS", None)
         self.tempdir.cleanup()
 
     def _persist_report(
@@ -952,17 +963,21 @@ class HistoryPageRenderingTests(unittest.TestCase):
         context_completeness: dict | None = None,
         assessment_confidence: float = 1.0,
         finding_confidence: float = 1.0,
+        project_id: int | None = None,
+        workspace_id: int | None = None,
+        tool: str = "terraform",
     ) -> dict:
+        source_file = "plan.json" if tool == "terraform" else f"{tool}-review.yaml"
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
-                    file_name="plan.json",
-                    tool="terraform",
+                    file_name=source_file,
+                    tool=tool,
                     status="parsed",
                     changes=[
                         UnifiedChange(
-                            source_file="plan.json",
-                            tool="terraform",
+                            source_file=source_file,
+                            tool=tool,
                             resource_id="aws_security_group.main",
                             action="modify",
                             summary="Security group exposure risk",
@@ -986,8 +1001,8 @@ class HistoryPageRenderingTests(unittest.TestCase):
             contributors=[
                 RiskContributor(
                     evidence_id="ev-001",
-                    source_file="plan.json",
-                    tool="terraform",
+                    source_file=source_file,
+                    tool=tool,
                     resource_id="aws_security_group.main",
                     action="modify",
                     contribution=20,
@@ -1069,7 +1084,99 @@ class HistoryPageRenderingTests(unittest.TestCase):
                 )
             ],
             audit_context={"source_interface": "ui"},
+            project_id=project_id,
+            workspace_id=workspace_id,
         )
+
+    def test_history_page_exposes_filters_and_row_metadata(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        prod = project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+            environment="prod",
+        )
+        self._persist_report(
+            score=91,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Payments production ingress widened.",
+            opening_sentence="NO-GO: payments production ingress widened.",
+            project_id=project.id,
+            workspace_id=prod.id,
+            tool="terraform",
+        )
+        legacy_report = self._persist_report(
+            score=63,
+            severity="high",
+            recommendation="caution",
+            top_risk="Legacy Ansible release metadata changed.",
+            opening_sentence="CAUTION: legacy Ansible release metadata changed.",
+            project_id=project.id,
+            workspace_id=prod.id,
+            tool="ansible",
+        )
+        with database_module.SessionLocal() as session:
+            report = session.get(
+                tables_module.AnalysisReport,
+                legacy_report["id"],
+            )
+            report.report_schema_version = "v999"
+            session.commit()
+        project_service_module.set_active_project(project.id)
+
+        response = self.client.get("/history")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Search top risk or summary", response.text)
+        self.assertIn("Project filter", response.text)
+        self.assertIn("Workspace", response.text)
+        self.assertIn("Time range", response.text)
+        self.assertIn("Risk verdict", response.text)
+        self.assertIn("Toolchain", response.text)
+        self.assertIn("Analysis status", response.text)
+        self.assertIn("Payments", response.text)
+        self.assertIn("Production", response.text)
+        self.assertIn("Tools: terraform", response.text)
+        self.assertIn("Schema: v2", response.text)
+        self.assertIn("Status: complete", response.text)
+        self.assertNotIn("Ansible", response.text)
+
+    def test_history_page_scopes_unselected_project_to_authorized_project(
+        self,
+    ) -> None:
+        payments = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        platform = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        self._persist_report(
+            top_risk="Payments production ingress widened.",
+            opening_sentence="NO-GO: payments production ingress widened.",
+            project_id=payments.id,
+        )
+        self._persist_report(
+            top_risk="Platform production ingress widened.",
+            opening_sentence="NO-GO: platform production ingress widened.",
+            project_id=platform.id,
+            tool="kubernetes",
+        )
+        project_service_module.clear_active_project_selection()
+        os.environ["DEPLOYWHISPER_PROJECT_KEYS"] = "payments"
+        try:
+            response = self.client.get("/history")
+        finally:
+            os.environ.pop("DEPLOYWHISPER_PROJECT_KEYS", None)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("NO-GO: payments production ingress widened.", response.text)
+        self.assertNotIn("NO-GO: platform production ingress widened.", response.text)
 
     def test_public_report_route_shows_compare_button_and_diff_view(self) -> None:
         self._persist_report(

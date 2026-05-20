@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from nicegui import ui
 
 from services.backtesting_service import fetch_calibration_dashboard_seed
+from services.project_service import ProjectResolutionError, list_workspaces
 from services.report_service import (
     fetch_analysis_report,
     fetch_filtered_analysis_history_page,
+    fetch_history_toolchains,
     fetch_report_comparison,
     fetch_risk_trends,
     remove_analysis_report,
@@ -23,6 +26,7 @@ from ui.components.review_accessibility import (
 )
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
 from ui.project_authorization import resolve_authorized_ui_active_project
+from ui.project_authorization import load_authorized_ui_projects
 from ui.theme import apply_theme, build_navigation_shell, build_page_header
 
 
@@ -45,6 +49,10 @@ def resolve_history_active_project():
 def resolve_history_project_context():
     """Return the effective project and any authorization setup error."""
     _, active_project, authorization_error = resolve_authorized_ui_active_project()
+    if active_project is None and authorization_error is None:
+        projects, authorization_error = load_authorized_ui_projects()
+        if authorization_error is None and len(projects) == 1:
+            active_project = projects[0]
     return active_project, authorization_error
 
 
@@ -75,6 +83,39 @@ def _empty_calibration_dashboard_seed() -> dict[str, Any]:
     }
 
 
+def _history_workspace_options(project_key: str | None) -> dict[str, str]:
+    if project_key is None:
+        return {"": "All workspaces"}
+    try:
+        workspaces = list_workspaces(project_key=project_key)
+    except ProjectResolutionError:
+        return {"": "All workspaces"}
+    options = {"": "All workspaces"}
+    options.update(
+        {workspace.workspace_key: workspace.display_name for workspace in workspaces}
+    )
+    return options
+
+
+def _history_time_bounds(value: str | None) -> tuple[datetime | None, datetime | None]:
+    now = datetime.now(UTC)
+    if value == "24h":
+        return now - timedelta(hours=24), now
+    if value == "7d":
+        return now - timedelta(days=7), now
+    if value == "30d":
+        return now - timedelta(days=30), now
+    if value == "90d":
+        return now - timedelta(days=90), now
+    return None, None
+
+
+def _history_toolchain_options(toolchains: list[str]) -> dict[str, str]:
+    options = {"": "Any toolchain"}
+    options.update({str(tool): str(tool).title() for tool in toolchains})
+    return options
+
+
 def build_history_page() -> None:
     """Render a scanable history view with direct report retrieval."""
     apply_theme()
@@ -93,9 +134,10 @@ def build_history_page() -> None:
     def render_history_content() -> None:
         active_project, authorization_error = resolve_history_project_context()
         active_project_id = active_project.id if active_project is not None else None
+        has_history_scope = authorization_error is None and active_project is not None
         reports_page = (
             _empty_history_page()
-            if authorization_error is not None
+            if not has_history_scope
             else fetch_filtered_analysis_history_page(
                 project_id=active_project_id,
                 page=1,
@@ -107,13 +149,21 @@ def build_history_page() -> None:
         total_report_count = reports_page["total_count"]
         trends = (
             _empty_risk_trends()
-            if authorization_error is not None
+            if not has_history_scope
             else fetch_risk_trends(project_id=active_project_id)
         )
         calibration = (
             _empty_calibration_dashboard_seed()
-            if authorization_error is not None
+            if not has_history_scope
             else fetch_calibration_dashboard_seed(project_id=active_project_id)
+        )
+        history_toolchains = (
+            []
+            if not has_history_scope
+            else fetch_history_toolchains(
+                project_id=active_project_id,
+                skip_unreadable_schema=True,
+            )
         )
         selected_ids: set[int] = set()
         page_state = {"page": 1, "page_size": 5}
@@ -132,9 +182,13 @@ def build_history_page() -> None:
                     subtitle=(
                         authorization_error
                         if authorization_error is not None
-                        else "Review earlier deploy briefings, audit metadata, and risk trends."
+                        else "Select a project to review historical reports."
                         if active_project is None
-                        else f"Project-scoped history for {active_project.display_name} ({active_project.project_key})."
+                        else (
+                            "Project-scoped history for "
+                            f"{active_project.display_name} "
+                            f"({active_project.project_key})."
+                        )
                     ),
                     back_href="/",
                     back_label="Back to dashboard",
@@ -175,6 +229,86 @@ def build_history_page() -> None:
                 .props("outlined dense clearable prepend-icon=search")
                 .classes("w-full dw-search-input")
             )
+            with ui.card().classes("w-full dw-panel shadow-none p-4"):
+                with ui.column().classes("gap-3"):
+                    with ui.row().classes("w-full items-start gap-4 flex-wrap"):
+                        with ui.column().classes("gap-0 min-w-[220px] flex-1"):
+                            ui.label("Project filter").classes("dw-eyebrow mb-1")
+                            ui.label(
+                                "Select a project"
+                                if active_project is None
+                                else (
+                                    f"{active_project.display_name} "
+                                    f"({active_project.project_key})"
+                                )
+                            ).classes("text-sm font-medium dw-text leading-5")
+                        workspace_select = (
+                            ui.select(
+                                _history_workspace_options(
+                                    active_project.project_key
+                                    if active_project is not None
+                                    else None
+                                ),
+                                value="",
+                                label="Workspace",
+                            )
+                            .props("outlined dense emit-value map-options")
+                            .classes("min-w-[180px] flex-1")
+                        )
+                        time_range_select = (
+                            ui.select(
+                                {
+                                    "": "Any time",
+                                    "24h": "Last 24 hours",
+                                    "7d": "Last 7 days",
+                                    "30d": "Last 30 days",
+                                    "90d": "Last 90 days",
+                                },
+                                value="",
+                                label="Time range",
+                            )
+                            .props("outlined dense emit-value map-options")
+                            .classes("min-w-[170px] flex-1")
+                        )
+                        severity_select = (
+                            ui.select(
+                                {
+                                    "": "Any risk",
+                                    "critical": "Critical",
+                                    "high": "High",
+                                    "medium": "Medium",
+                                    "low": "Low",
+                                },
+                                value="",
+                                label="Risk verdict",
+                            )
+                            .props("outlined dense emit-value map-options")
+                            .classes("min-w-[170px] flex-1")
+                        )
+                    with ui.row().classes("w-full items-start gap-4 flex-wrap"):
+                        toolchain_select = (
+                            ui.select(
+                                _history_toolchain_options(history_toolchains),
+                                value="",
+                                label="Toolchain",
+                            )
+                            .props("outlined dense emit-value map-options")
+                            .classes("min-w-[170px] flex-1")
+                        )
+                        status_select = (
+                            ui.select(
+                                {
+                                    "": "Any status",
+                                    "complete": "Complete",
+                                    "degraded": "Degraded",
+                                    "fallback": "Fallback",
+                                },
+                                value="",
+                                label="Analysis status",
+                            )
+                            .props("outlined dense emit-value map-options")
+                            .classes("min-w-[170px] flex-1")
+                        )
             actions_row = ui.row().classes(
                 "w-full items-center justify-between gap-4 flex-wrap"
             )
@@ -182,12 +316,21 @@ def build_history_page() -> None:
 
             def refresh_data(query: str | None = None) -> list[dict]:
                 nonlocal reports, trends, total_report_count, calibration
+                created_from, created_to = _history_time_bounds(
+                    str(time_range_select.value or "")
+                )
                 page_payload = (
                     _empty_history_page()
-                    if authorization_error is not None
+                    if not has_history_scope
                     else fetch_filtered_analysis_history_page(
                         project_id=active_project_id,
+                        workspace_key=str(workspace_select.value or "") or None,
+                        severity=str(severity_select.value or "") or None,
                         search=query,
+                        toolchain=str(toolchain_select.value or "") or None,
+                        analysis_status=str(status_select.value or "") or None,
+                        created_from=created_from,
+                        created_to=created_to,
                         page=page_state["page"],
                         page_size=page_state["page_size"],
                         skip_unreadable_schema=True,
@@ -197,12 +340,12 @@ def build_history_page() -> None:
                 total_report_count = page_payload["total_count"]
                 trends = (
                     _empty_risk_trends()
-                    if authorization_error is not None
+                    if not has_history_scope
                     else fetch_risk_trends(project_id=active_project_id)
                 )
                 calibration = (
                     _empty_calibration_dashboard_seed()
-                    if authorization_error is not None
+                    if not has_history_scope
                     else fetch_calibration_dashboard_seed(project_id=active_project_id)
                 )
                 max_page = max(
@@ -210,6 +353,26 @@ def build_history_page() -> None:
                 )
                 page_state["page"] = min(page_state["page"], max_page)
                 return reports
+
+            def current_workspace_key() -> str | None:
+                return str(workspace_select.value or "") or None
+
+            def sync_toolchain_options() -> None:
+                selected_toolchain = str(toolchain_select.value or "")
+                scoped_toolchains = (
+                    []
+                    if not has_history_scope
+                    else fetch_history_toolchains(
+                        project_id=active_project_id,
+                        workspace_key=current_workspace_key(),
+                        skip_unreadable_schema=True,
+                    )
+                )
+                options = _history_toolchain_options(scoped_toolchains)
+                toolchain_select.set_options(options)
+                if selected_toolchain and selected_toolchain not in options:
+                    toolchain_select.value = ""
+                toolchain_select.update()
 
             def current_page_reports() -> list[dict]:
                 return reports
@@ -381,11 +544,21 @@ def build_history_page() -> None:
             def apply_filters() -> None:
                 query = search_input.value.strip() if search_input.value else None
                 page_state["page"] = 1
+                selected_ids.clear()
                 refresh_data(query)
                 render_history()
                 render_actions()
 
+            def apply_workspace_filter() -> None:
+                sync_toolchain_options()
+                apply_filters()
+
             search_input.on("update:model-value", lambda *_: apply_filters())
+            workspace_select.on_value_change(lambda *_: apply_workspace_filter())
+            time_range_select.on_value_change(lambda *_: apply_filters())
+            severity_select.on_value_change(lambda *_: apply_filters())
+            toolchain_select.on_value_change(lambda *_: apply_filters())
+            status_select.on_value_change(lambda *_: apply_filters())
             render_history()
             render_actions()
 

@@ -1450,8 +1450,8 @@ class ReportServiceTests(unittest.TestCase):
         )
         assessment = RiskAssessment(
             score=91,
-            severity="critical",
-            recommendation="no-go",
+            severity="medium",
+            recommendation="caution",
             top_risk="Report-level severe risk without evidence.",
             contributors=[],
             interaction_risks=[],
@@ -9206,6 +9206,427 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(scoped_page["items"][0]["id"], prod_report["id"])
         self.assertEqual(scoped_page["items"][0]["workspace"]["workspace_key"], "prod")
         self.assertIsNone(wrong_workspace)
+
+    def test_fetch_history_filters_by_time_toolchain_and_analysis_status(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        prod = project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+            environment="prod",
+        )
+        staging = project_service_module.create_workspace(
+            project_key=project.project_key,
+            workspace_key="staging",
+            display_name="Staging",
+            environment="staging",
+        )
+
+        prod_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="prod-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=91,
+                severity="critical",
+                recommendation="no-go",
+                top_risk="Production ingress widened.",
+                contributors=[
+                    RiskContributor(
+                        source_file="prod-plan.json",
+                        tool="terraform",
+                        resource_id="aws_security_group.main",
+                        action="modify",
+                        contribution=20,
+                        summary="Production ingress widened.",
+                    )
+                ],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="NO-GO: production ingress widened.",
+                explanation="Production report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+                source="llm",
+            ),
+            project_id=project.id,
+            workspace_id=prod.id,
+            audit_context={"source_interface": "api"},
+        )
+        staging_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="staging-rollout.yaml",
+                        tool="kubernetes",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=35,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Staging rollout image changed.",
+                contributors=[
+                    RiskContributor(
+                        source_file="staging-rollout.yaml",
+                        tool="kubernetes",
+                        resource_id="deployment/payments",
+                        action="modify",
+                        contribution=12,
+                        summary="Staging rollout image changed.",
+                    )
+                ],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="CAUTION: staging rollout image changed.",
+                explanation="Fallback report.",
+                guidance=[],
+                degraded=True,
+                warnings=["Narrative used fallback mode."],
+                source="fallback",
+            ),
+            project_id=project.id,
+            workspace_id=staging.id,
+            audit_context={"source_interface": "api"},
+        )
+        degraded_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="staging-policy.yaml",
+                        tool="kubernetes",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=44,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Staging policy degraded narrative.",
+                contributors=[
+                    RiskContributor(
+                        source_file="staging-policy.yaml",
+                        tool="kubernetes",
+                        resource_id="network-policy/payments",
+                        action="modify",
+                        contribution=10,
+                        summary="Staging policy degraded narrative.",
+                    )
+                ],
+                interaction_risks=[],
+                partial_context=True,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="CAUTION: degraded narrative.",
+                explanation="LLM report degraded by partial context.",
+                guidance=[],
+                degraded=True,
+                warnings=["Narrative degraded by partial context."],
+                source="llm",
+            ),
+            project_id=project.id,
+            workspace_id=staging.id,
+            audit_context={"source_interface": "api"},
+        )
+        legacy_degraded_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="legacy-policy.yaml",
+                        tool="kubernetes",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=46,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Legacy narrative failure notice.",
+                contributors=[
+                    RiskContributor(
+                        source_file="legacy-policy.yaml",
+                        tool="kubernetes",
+                        resource_id="network-policy/legacy",
+                        action="modify",
+                        contribution=10,
+                        summary="Legacy narrative failure notice.",
+                    )
+                ],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="CAUTION: legacy narrative failure notice.",
+                explanation="Legacy report serialized as degraded by failure notice.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+                source="llm",
+            ),
+            project_id=project.id,
+            workspace_id=staging.id,
+            audit_context={"source_interface": "api"},
+        )
+        misleading_tool_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="terraform-notes.yaml",
+                        tool="kubernetes",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=43,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Kubernetes notes changed.",
+                contributors=[
+                    RiskContributor(
+                        source_file="terraform-notes.yaml",
+                        tool="kubernetes",
+                        resource_id="deployment/notes",
+                        action="modify",
+                        contribution=8,
+                        summary="Kubernetes notes changed.",
+                    )
+                ],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="CAUTION: kubernetes notes changed.",
+                explanation="Kubernetes report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+                source="llm",
+            ),
+            project_id=project.id,
+            workspace_id=prod.id,
+            audit_context={"source_interface": "api"},
+        )
+        old_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="old-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=18,
+                severity="low",
+                recommendation="go",
+                top_risk="Old production review.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: old production review.",
+                explanation="Old report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+                source="llm",
+            ),
+            project_id=project.id,
+            workspace_id=prod.id,
+            audit_context={"source_interface": "api"},
+        )
+        unreadable_schema_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="legacy-release.yaml",
+                        tool="ansible",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=63,
+                severity="high",
+                recommendation="caution",
+                top_risk="Legacy release metadata changed.",
+                contributors=[
+                    RiskContributor(
+                        source_file="legacy-release.yaml",
+                        tool="ansible",
+                        resource_id="release/payments",
+                        action="modify",
+                        contribution=12,
+                        summary="Legacy release metadata changed.",
+                    )
+                ],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="CAUTION: legacy release metadata changed.",
+                explanation="Legacy report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+                source="llm",
+            ),
+            project_id=project.id,
+            workspace_id=prod.id,
+            audit_context={"source_interface": "api"},
+        )
+        with database_module.SessionLocal() as session:
+            session.get(
+                tables_module.AnalysisReport, prod_report["id"]
+            ).created_at = datetime(2026, 5, 18, 12, 0, tzinfo=UTC)
+            session.get(
+                tables_module.AnalysisReport, staging_report["id"]
+            ).created_at = datetime(2026, 5, 19, 12, 0, tzinfo=UTC)
+            session.get(
+                tables_module.AnalysisReport, degraded_report["id"]
+            ).created_at = datetime(2026, 5, 19, 13, 0, tzinfo=UTC)
+            legacy_degraded = session.get(
+                tables_module.AnalysisReport, legacy_degraded_report["id"]
+            )
+            legacy_degraded.created_at = datetime(2026, 5, 19, 13, 30, tzinfo=UTC)
+            legacy_degraded.narrative_degraded = None
+            legacy_degraded.narrative_failure_notice = "LLM narrative unavailable."
+            session.get(
+                tables_module.AnalysisReport, misleading_tool_report["id"]
+            ).created_at = datetime(2026, 5, 19, 14, 0, tzinfo=UTC)
+            old = session.get(tables_module.AnalysisReport, old_report["id"])
+            old.created_at = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
+            old.contributors_json = "[]"
+            old.analyzed_files_json = "[]"
+            old.submission_manifest_json = "{}"
+            old.submission_manifest_fallback_json = json.dumps(
+                [
+                    {
+                        "name": "legacy-template.yaml",
+                        "tool": "cloudformation",
+                        "status": "accepted",
+                    }
+                ]
+            )
+            legacy = session.get(
+                tables_module.AnalysisReport, unreadable_schema_report["id"]
+            )
+            legacy.created_at = datetime(2026, 5, 19, 15, 0, tzinfo=UTC)
+            legacy.report_schema_version = "v999"
+            session.commit()
+
+        filtered = report_service_module.fetch_filtered_analysis_history_page(
+            project_key=project.project_key,
+            workspace_key=prod.workspace_key,
+            severity="medium",
+            recommendation="caution",
+            toolchain="terraform",
+            analysis_status="complete",
+            created_from=datetime(2026, 5, 1, tzinfo=UTC),
+            created_to=datetime(2026, 5, 20, tzinfo=UTC),
+            skip_unreadable_schema=True,
+        )
+        degraded = report_service_module.fetch_filtered_analysis_history_page(
+            project_key=project.project_key,
+            toolchain="kubernetes",
+            analysis_status="degraded",
+            skip_unreadable_schema=True,
+        )
+        fallback = report_service_module.fetch_filtered_analysis_history_page(
+            project_key=project.project_key,
+            toolchain="kubernetes",
+            analysis_status="fallback",
+            skip_unreadable_schema=True,
+        )
+        fallback_manifest_tool = (
+            report_service_module.fetch_filtered_analysis_history_page(
+                project_key=project.project_key,
+                toolchain="cloudformation",
+                skip_unreadable_schema=True,
+            )
+        )
+        toolchains = report_service_module.fetch_history_toolchains(
+            project_key=project.project_key,
+        )
+        readable_toolchains = report_service_module.fetch_history_toolchains(
+            project_key=project.project_key,
+            skip_unreadable_schema=True,
+        )
+        staging_toolchains = report_service_module.fetch_history_toolchains(
+            project_key=project.project_key,
+            workspace_key=staging.workspace_key,
+            skip_unreadable_schema=True,
+        )
+
+        self.assertEqual(filtered["total_count"], 1)
+        self.assertEqual(filtered["items"][0]["id"], prod_report["id"])
+        self.assertEqual(filtered["items"][0]["tool_mix"], ["terraform"])
+        self.assertEqual(filtered["items"][0]["analysis_status"], "complete")
+        self.assertEqual(degraded["total_count"], 2)
+        self.assertEqual(
+            {item["id"] for item in degraded["items"]},
+            {degraded_report["id"], legacy_degraded_report["id"]},
+        )
+        self.assertTrue(
+            all(item["tool_mix"] == ["kubernetes"] for item in degraded["items"])
+        )
+        self.assertTrue(
+            all(item["analysis_status"] == "degraded" for item in degraded["items"])
+        )
+        self.assertEqual(fallback["total_count"], 1)
+        self.assertEqual(fallback["items"][0]["id"], staging_report["id"])
+        self.assertEqual(fallback["items"][0]["tool_mix"], ["kubernetes"])
+        self.assertEqual(fallback["items"][0]["analysis_status"], "fallback")
+        self.assertEqual(fallback_manifest_tool["total_count"], 1)
+        self.assertEqual(fallback_manifest_tool["items"][0]["id"], old_report["id"])
+        self.assertEqual(
+            fallback_manifest_tool["items"][0]["tool_mix"],
+            ["cloudformation"],
+        )
+        self.assertEqual(
+            toolchains,
+            ["ansible", "cloudformation", "kubernetes", "terraform"],
+        )
+        self.assertEqual(
+            readable_toolchains,
+            ["cloudformation", "kubernetes", "terraform"],
+        )
+        self.assertEqual(staging_toolchains, ["kubernetes"])
 
     def test_previous_scan_diffs_do_not_cross_project_boundaries(self) -> None:
         payments = project_service_module.create_project(
