@@ -6,9 +6,10 @@ import json
 import math
 import re
 from datetime import UTC, datetime, timedelta
+from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from evidence.models import EvidenceItem as EvidenceItemPayload
@@ -570,6 +571,7 @@ def list_analysis_reports(
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
+    report_schema_versions: Sequence[str] | None = None,
     limit: int | None = None,
     offset: int | None = None,
     include_evidence: bool = False,
@@ -594,6 +596,16 @@ def list_analysis_reports(
             | AnalysisReport.narrative_opening.ilike(like)
             | AnalysisReport.parse_summary.ilike(like)
         )
+    if report_schema_versions is not None:
+        schema_versions = tuple(report_schema_versions)
+        schema_predicate = AnalysisReport.report_schema_version.in_(schema_versions)
+        if "v1" in schema_versions:
+            schema_predicate = or_(
+                schema_predicate,
+                AnalysisReport.report_schema_version.is_(None),
+                AnalysisReport.report_schema_version == "",
+            )
+        stmt = stmt.where(schema_predicate)
     if offset:
         stmt = stmt.offset(offset)
     if limit is not None:
@@ -610,6 +622,7 @@ def count_analysis_reports(
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
+    report_schema_versions: Sequence[str] | None = None,
 ) -> int:
     stmt = select(func.count()).select_from(AnalysisReport)
     if project_id is not None:
@@ -627,6 +640,16 @@ def count_analysis_reports(
             | AnalysisReport.narrative_opening.ilike(like)
             | AnalysisReport.parse_summary.ilike(like)
         )
+    if report_schema_versions is not None:
+        schema_versions = tuple(report_schema_versions)
+        schema_predicate = AnalysisReport.report_schema_version.in_(schema_versions)
+        if "v1" in schema_versions:
+            schema_predicate = or_(
+                schema_predicate,
+                AnalysisReport.report_schema_version.is_(None),
+                AnalysisReport.report_schema_version == "",
+            )
+        stmt = stmt.where(schema_predicate)
     return int(session.execute(stmt).scalar_one())
 
 

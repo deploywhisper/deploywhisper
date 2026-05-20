@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-05-19
+# last_updated: 2026-05-20
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-05-19
+last_updated: 2026-05-20
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -76,7 +76,7 @@ development_status:
   3-3-evidence-inspector-panel: done
   3-4-confidence-ledger-and-why-not-lower-higher: done
   3-5-context-completeness-and-todo-panel: done
-  3-6-report-diff-after-rerun: ready-for-dev
+  3-6-report-diff-after-rerun: done
   3-7-keyboard-and-accessibility-review-pass: ready-for-dev
   3-8-historical-report-search-and-filtering: ready-for-dev
   epic-3-retrospective: optional

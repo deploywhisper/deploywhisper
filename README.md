@@ -118,7 +118,7 @@ What users can use today:
 - **Local-first safety posture**: keep raw IaC processing local, avoid storing provider API keys in the database, exclude sensitive files from unsafe handling, and keep every verdict advisory rather than automatically blocking a release.
 - **Evidence-backed confidence**: trace the report back to findings, resource-level contributors, uploaded artifact references, confidence factors, why-not-lower/higher reasoning, parser coverage, topology freshness, context TODOs, and warning signals when context is limited.
 - **Blast-radius and rollback context**: use service-topology input to explain likely downstream impact and generate rollback steps with complexity scoring.
-- **Analysis history**: review saved reports later, filter previous analyses, inspect audit metadata, and compare repeated scans of the same artifact set.
+- **Analysis history**: review saved reports later, filter previous analyses, inspect audit metadata, and compare repeated scans of the same artifact set with new, resolved, persistent, severity-changed, and context-changed findings.
 - **Provider and admin settings UI**: configure LLM provider metadata, upload topology context, manage custom AI Skills, and see provider readiness before running analysis.
 - **REST API and CLI access**: run the same analysis pipeline from `/api/v1` endpoints or the headless CLI for local automation and CI workflows.
 - **Shareable reports**: create read-only report links, optionally protect sensitive shared reports with a password, redact filenames, and compare shared reruns when previous scans exist.
@@ -634,9 +634,10 @@ Shared report links now resolve to `/reports/{id}` read-only pages. For sensitiv
 reports, configure password protection and opt-in file-name redaction via
 `POST /api/v1/analyses/{id}/share` with the `X-DeployWhisper-Share-Token`
 header. Set `DEPLOYWHISPER_SHARE_TOKEN` before exposing that management API.
-When a prior scan exists for the same analyzed artifact set, the shared report
-page also exposes a `Compare with previous` view with risk-score, findings, and
-evidence deltas.
+When a prior comparable report exists in the same project, workspace, and
+workflow context, the shared report page also exposes a `Compare with previous`
+view with risk-score, new, resolved, persistent, severity-changed,
+context-changed, and evidence deltas.
 
 ### GitHub App Mode
 
