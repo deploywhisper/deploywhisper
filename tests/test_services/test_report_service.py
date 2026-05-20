@@ -3627,6 +3627,7 @@ class ReportServiceTests(unittest.TestCase):
         findings: list[Finding],
         evidence_items: list[EvidenceItem],
         parse_files: list[ParsedFileResult] | None = None,
+        audit_context: dict[str, object] | None = None,
     ) -> dict:
         parsed_files = parse_files or [
             ParsedFileResult(
@@ -3685,7 +3686,8 @@ class ReportServiceTests(unittest.TestCase):
             narrative,
             findings=findings,
             evidence_items=evidence_items,
-            audit_context={"source_interface": "api", "trigger_type": "pull_request"},
+            audit_context=audit_context
+            or {"source_interface": "api", "trigger_type": "pull_request"},
         )
 
     def test_persist_analysis_report_stores_and_returns_metadata(self) -> None:
@@ -6003,7 +6005,7 @@ class ReportServiceTests(unittest.TestCase):
                     finding_id="finding-shared",
                     analysis_id=0,
                     title="CRITICAL: aws_security_group.main",
-                    description="Security group ingress is broader than expected.",
+                    description="Security group ingress now exposes database reachability.",
                     severity="critical",
                     category="networking/ingress",
                     deterministic=True,
@@ -6088,6 +6090,22 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(
             comparison["findings"]["severity_changed"][0]["current_severity"],
             "critical",
+        )
+        self.assertEqual(
+            comparison["findings"]["persistent"][0]["title"],
+            "CRITICAL: aws_security_group.main",
+        )
+        self.assertEqual(
+            comparison["findings"]["context_changed"][0]["title"],
+            "CRITICAL: aws_security_group.main",
+        )
+        self.assertIn(
+            "Evidence changed",
+            comparison["findings"]["context_changed"][0]["changes"],
+        )
+        self.assertIn(
+            "Description changed",
+            comparison["findings"]["context_changed"][0]["changes"],
         )
         self.assertIn(
             "terraform://prod/network/plan.json#L26",
@@ -6342,9 +6360,918 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(comparison["current_report"]["id"], current["id"])
         self.assertEqual(comparison["findings"]["added"], [])
         self.assertEqual(comparison["findings"]["removed"], [])
+        self.assertEqual(len(comparison["findings"]["persistent"]), 2)
+        self.assertEqual(comparison["findings"]["context_changed"], [])
         self.assertEqual(comparison["findings"]["severity_changed"], [])
         self.assertEqual(comparison["evidence"]["added"], [])
         self.assertEqual(comparison["evidence"]["removed"], [])
+
+    def test_fetch_report_comparison_does_not_mispair_duplicate_title_category_findings(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Two same-title findings exist.",
+            findings=[
+                Finding(
+                    finding_id="finding-persistent",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Ingress exposure remains persistent.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-persistent"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-removed",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="SSH exposure was removed.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-removed"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-persistent",
+                    analysis_id=0,
+                    finding_id="pending:persistent",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-removed",
+                    analysis_id=0,
+                    finding_id="pending:removed",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L22",
+                    summary="Port 22 remains reachable.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-2"],
+                ),
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=71,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="One same-title finding persists and one is new.",
+            findings=[
+                Finding(
+                    finding_id="finding-persistent",
+                    analysis_id=0,
+                    title="CRITICAL: aws_security_group.main",
+                    description="Ingress exposure remains persistent.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-persistent"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-added",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Database exposure is newly reachable.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.93,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-added"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-persistent",
+                    analysis_id=0,
+                    finding_id="pending:persistent",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-added",
+                    analysis_id=0,
+                    finding_id="pending:added",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L40",
+                    summary="Port 3306 is newly reachable.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=0.93,
+                    related_change_ids=["change-4"],
+                ),
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], previous["id"])
+        self.assertEqual(
+            [item["description"] for item in comparison["findings"]["persistent"]],
+            ["Ingress exposure remains persistent."],
+        )
+        self.assertEqual(
+            [item["description"] for item in comparison["findings"]["removed"]],
+            ["SSH exposure was removed."],
+        )
+        self.assertEqual(
+            [item["description"] for item in comparison["findings"]["added"]],
+            ["Database exposure is newly reachable."],
+        )
+
+    def test_fetch_report_comparison_matches_duplicate_same_description_by_evidence(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Two same-description findings exist.",
+            findings=[
+                Finding(
+                    finding_id="finding-persistent",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-persistent"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-removed",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-removed"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-persistent",
+                    analysis_id=0,
+                    finding_id="pending:persistent",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-removed",
+                    analysis_id=0,
+                    finding_id="pending:removed",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L22",
+                    summary="Port 22 remains reachable.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-2"],
+                ),
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=71,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="One same-description finding persists and one is new.",
+            findings=[
+                Finding(
+                    finding_id="finding-persistent",
+                    analysis_id=0,
+                    title="CRITICAL: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-persistent"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-added",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.93,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-added"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-persistent",
+                    analysis_id=0,
+                    finding_id="pending:persistent",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-added",
+                    analysis_id=0,
+                    finding_id="pending:added",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L40",
+                    summary="Port 3306 is newly reachable.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=0.93,
+                    related_change_ids=["change-4"],
+                ),
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], previous["id"])
+        self.assertEqual(len(comparison["findings"]["persistent"]), 1)
+        self.assertEqual(len(comparison["findings"]["removed"]), 1)
+        self.assertEqual(len(comparison["findings"]["added"]), 1)
+        self.assertIn(
+            "terraform://prod/network/plan.json#L22",
+            {item["source_ref"] for item in comparison["evidence"]["removed"]},
+        )
+        self.assertIn(
+            "terraform://prod/network/plan.json#L40",
+            {item["source_ref"] for item in comparison["evidence"]["added"]},
+        )
+
+    def test_fetch_report_comparison_uses_optimal_evidence_matching(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Two overlapping findings require stable pairing.",
+            findings=[
+                Finding(
+                    finding_id="finding-alpha",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.alpha",
+                    description="Alpha ingress remains broad.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.92,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-alpha-one", "ev-alpha-two"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-beta",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.beta",
+                    description="Beta ingress remains broad.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-beta"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-alpha-one",
+                    analysis_id=0,
+                    finding_id="pending:alpha",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Alpha ingress includes SSH.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.92,
+                    related_change_ids=["change-alpha-one"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-alpha-two",
+                    analysis_id=0,
+                    finding_id="pending:alpha",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L18",
+                    summary="Alpha ingress includes database access.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.92,
+                    related_change_ids=["change-alpha-two"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-beta",
+                    analysis_id=0,
+                    finding_id="pending:beta",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L22",
+                    summary="Beta ingress includes admin access.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-beta"],
+                ),
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=71,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Both overlapping findings still require review.",
+            findings=[
+                Finding(
+                    finding_id="finding-cross",
+                    analysis_id=0,
+                    title="CRITICAL: aws_security_group.cross",
+                    description="Beta ingress remains broad.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.94,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-cross-alpha", "ev-cross-beta"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-alpha-tail",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.alpha",
+                    description="Database access remains broad.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.93,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-alpha-two"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-cross-alpha",
+                    analysis_id=0,
+                    finding_id="pending:cross",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Alpha ingress still includes SSH.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=0.94,
+                    related_change_ids=["change-alpha-one"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-cross-beta",
+                    analysis_id=0,
+                    finding_id="pending:cross",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L22",
+                    summary="Beta ingress still includes admin access.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=0.94,
+                    related_change_ids=["change-beta"],
+                ),
+                EvidenceItem(
+                    evidence_id="ev-alpha-two",
+                    analysis_id=0,
+                    finding_id="pending:alpha-tail",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L18",
+                    summary="Alpha ingress still includes database access.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=0.93,
+                    related_change_ids=["change-alpha-two"],
+                ),
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], previous["id"])
+        self.assertEqual(comparison["findings"]["added"], [])
+        self.assertEqual(comparison["findings"]["removed"], [])
+        self.assertEqual(len(comparison["findings"]["persistent"]), 2)
+
+    def test_fetch_report_comparison_caps_dense_evidence_matching(
+        self,
+    ) -> None:
+        previous_findings = []
+        previous_evidence = []
+        current_findings = []
+        current_evidence = []
+        for index in range(9):
+            description = f"Dense overlap finding {index} remains broad."
+            previous_findings.append(
+                Finding(
+                    finding_id=f"previous-dense-{index}",
+                    analysis_id=0,
+                    title="MEDIUM: duplicate dense ingress",
+                    description=description,
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=[f"previous-dense-ev-{index}"],
+                    skill_id=None,
+                )
+            )
+            previous_evidence.append(
+                EvidenceItem(
+                    evidence_id=f"previous-dense-ev-{index}",
+                    analysis_id=0,
+                    finding_id=f"pending:previous-dense-{index}",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#shared",
+                    summary="Shared dense ingress evidence.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-dense"],
+                )
+            )
+            current_findings.append(
+                Finding(
+                    finding_id=f"current-dense-{index}",
+                    analysis_id=0,
+                    title="MEDIUM: duplicate dense ingress",
+                    description=description,
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=[f"current-dense-ev-{index}"],
+                    skill_id=None,
+                )
+            )
+            current_evidence.append(
+                EvidenceItem(
+                    evidence_id=f"current-dense-ev-{index}",
+                    analysis_id=0,
+                    finding_id=f"pending:current-dense-{index}",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#shared",
+                    summary="Shared dense ingress evidence.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-dense"],
+                )
+            )
+        self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Dense overlap findings require bounded matching.",
+            findings=previous_findings,
+            evidence_items=previous_evidence,
+        )
+        current = self._persist_comparison_report(
+            score=43,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Dense overlap findings remain bounded.",
+            findings=current_findings,
+            evidence_items=current_evidence,
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["findings"]["added"], [])
+        self.assertEqual(comparison["findings"]["removed"], [])
+        self.assertEqual(len(comparison["findings"]["persistent"]), 9)
+        self.assertTrue(comparison["summary"]["approximate_matching"])
+        self.assertEqual(
+            comparison["summary"]["warnings"],
+            [
+                "Dense duplicate evidence matching used deterministic approximate pairing."
+            ],
+        )
+
+    def test_evidence_identity_counts_preserve_repeated_identities(self) -> None:
+        repeated_items = [
+            {
+                "source_type": "artifact",
+                "source_ref": "terraform://prod/network/plan.json#shared",
+                "artifact": "",
+                "location": "",
+                "resource": "aws_security_group.main",
+                "operation": "modify",
+                "related_change_ids": ["change-dense"],
+                "summary": f"Repeated occurrence {index}",
+            }
+            for index in range(2)
+        ]
+
+        identity_counts = report_service_module._evidence_identity_counts(
+            repeated_items
+        )
+
+        self.assertEqual(sum(identity_counts.values()), 2)
+        self.assertEqual(len(identity_counts), 1)
+
+    def test_fetch_report_comparison_pairs_title_category_drift_by_evidence(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group ingress requires review.",
+            findings=[
+                Finding(
+                    finding_id="finding-shared",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=71,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Public ingress now requires release review.",
+            findings=[
+                Finding(
+                    finding_id="finding-shared",
+                    analysis_id=0,
+                    title="CRITICAL: aws_security_group.public",
+                    description="Security group ingress is broader than expected.",
+                    severity="critical",
+                    category="security/network",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], previous["id"])
+        self.assertEqual(comparison["findings"]["added"], [])
+        self.assertEqual(comparison["findings"]["removed"], [])
+        self.assertEqual(len(comparison["findings"]["persistent"]), 1)
+        self.assertEqual(len(comparison["findings"]["context_changed"]), 1)
+        self.assertEqual(
+            comparison["findings"]["context_changed"][0]["changes"],
+            ["Title changed", "Category changed"],
+        )
+
+    def test_fetch_report_comparison_does_not_pair_different_findings_on_same_evidence(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Database encryption requires review.",
+            findings=[
+                Finding(
+                    finding_id="finding-encryption",
+                    analysis_id=0,
+                    title="MEDIUM: database encryption disabled",
+                    description="Database encryption is disabled.",
+                    severity="medium",
+                    category="storage/encryption",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/database/plan.json#L14",
+                    summary="Database resource changed.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-db"],
+                )
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=71,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Public database ingress requires review.",
+            findings=[
+                Finding(
+                    finding_id="finding-ingress",
+                    analysis_id=0,
+                    title="CRITICAL: public database ingress",
+                    description="Database ingress is public.",
+                    severity="critical",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.94,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-shared"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-shared",
+                    analysis_id=0,
+                    finding_id="pending:shared",
+                    source_type="artifact",
+                    source_ref="terraform://prod/database/plan.json#L14",
+                    summary="Database resource changed.",
+                    severity_hint="critical",
+                    deterministic=True,
+                    confidence=0.94,
+                    related_change_ids=["change-db"],
+                )
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], previous["id"])
+        self.assertEqual(comparison["findings"]["persistent"], [])
+        self.assertEqual(comparison["findings"]["context_changed"], [])
+        self.assertEqual(
+            [item["description"] for item in comparison["findings"]["removed"]],
+            ["Database encryption is disabled."],
+        )
+        self.assertEqual(
+            [item["description"] for item in comparison["findings"]["added"]],
+            ["Database ingress is public."],
+        )
+
+    def test_fetch_report_comparison_does_not_pair_singletons_without_identity(
+        self,
+    ) -> None:
+        self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Old singleton finding.",
+            findings=[
+                Finding(
+                    finding_id="finding-old",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="SSH exposure was removed.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.91,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-old"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-old",
+                    analysis_id=0,
+                    finding_id="pending:old",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L22",
+                    summary="Port 22 remains reachable.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=0.91,
+                    related_change_ids=["change-2"],
+                )
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=71,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="New singleton finding.",
+            findings=[
+                Finding(
+                    finding_id="finding-new",
+                    analysis_id=0,
+                    title="HIGH: aws_security_group.main",
+                    description="Database exposure is newly reachable.",
+                    severity="high",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.93,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-new"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-new",
+                    analysis_id=0,
+                    finding_id="pending:new",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L40",
+                    summary="Port 3306 is newly reachable.",
+                    severity_hint="high",
+                    deterministic=True,
+                    confidence=0.93,
+                    related_change_ids=["change-4"],
+                )
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["findings"]["persistent"], [])
+        self.assertEqual(
+            [item["description"] for item in comparison["findings"]["removed"]],
+            ["SSH exposure was removed."],
+        )
+        self.assertEqual(
+            [item["description"] for item in comparison["findings"]["added"]],
+            ["Database exposure is newly reachable."],
+        )
+
+    def test_fetch_report_comparison_ignores_guidance_reordering(self) -> None:
+        self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Guidance order one.",
+            findings=[
+                Finding(
+                    finding_id="finding-guidance",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    guidance=["Review ingress.", "Confirm owner."],
+                    evidence_refs=["ev-guidance"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-guidance",
+                    analysis_id=0,
+                    finding_id="pending:guidance",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+        current = self._persist_comparison_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Guidance order two.",
+            findings=[
+                Finding(
+                    finding_id="finding-guidance",
+                    analysis_id=0,
+                    title="MEDIUM: aws_security_group.main",
+                    description="Security group ingress is broader than expected.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=1.0,
+                    uncertainty_note=None,
+                    guidance=["Confirm owner.", "Review ingress."],
+                    evidence_refs=["ev-guidance"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-guidance",
+                    analysis_id=0,
+                    finding_id="pending:guidance",
+                    source_type="artifact",
+                    source_ref="terraform://prod/network/plan.json#L14",
+                    summary="Ingress stays open to the VPC.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ],
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["findings"]["context_changed"], [])
 
     def test_fetch_shared_report_comparison_respects_filename_redaction(self) -> None:
         self._persist_comparison_report(
@@ -8325,6 +9252,281 @@ class ReportServiceTests(unittest.TestCase):
         self.assertNotIn("previous_scan_diff", by_id[int(first["id"])])
         self.assertNotIn("previous_scan_diff", by_id[int(second["id"])])
 
+    def test_previous_scan_diffs_do_not_cross_workflow_contexts(self) -> None:
+        first = self._persist_comparison_report(
+            score=40,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Interactive review",
+            findings=[],
+            evidence_items=[],
+            audit_context={"source_interface": "api", "trigger_type": "session"},
+        )
+        second = self._persist_comparison_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Pull request review",
+            findings=[],
+            evidence_items=[],
+            audit_context={"source_interface": "api", "trigger_type": "pull_request"},
+        )
+
+        comparison = report_service_module.fetch_report_comparison(second["id"])
+        explicit_comparison = report_service_module.fetch_report_comparison(
+            second["id"],
+            previous_report_id=first["id"],
+        )
+        history = report_service_module.fetch_filtered_analysis_history_page()
+        by_id = {item["id"]: item for item in history["items"]}
+
+        self.assertIsNone(comparison)
+        self.assertIsNone(explicit_comparison)
+        self.assertNotIn("previous_scan_diff", by_id[int(second["id"])])
+
+    def test_previous_scan_diffs_do_not_cross_trigger_ids(self) -> None:
+        first = self._persist_comparison_report(
+            score=40,
+            severity="medium",
+            recommendation="caution",
+            top_risk="First pull request review",
+            findings=[],
+            evidence_items=[],
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "pull_request",
+                "trigger_id": "pr-41",
+            },
+        )
+        second = self._persist_comparison_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Second pull request review",
+            findings=[],
+            evidence_items=[],
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "pull_request",
+                "trigger_id": "pr-42",
+            },
+        )
+
+        comparison = report_service_module.fetch_report_comparison(second["id"])
+        explicit_comparison = report_service_module.fetch_report_comparison(
+            second["id"],
+            previous_report_id=first["id"],
+        )
+        history = report_service_module.fetch_filtered_analysis_history_page()
+        by_id = {item["id"]: item for item in history["items"]}
+
+        self.assertIsNone(comparison)
+        self.assertIsNone(explicit_comparison)
+        self.assertNotIn("previous_scan_diff", by_id[int(second["id"])])
+
+    def test_previous_scan_diffs_normalize_workflow_contexts(self) -> None:
+        first = self._persist_comparison_report(
+            score=40,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Interactive review",
+            findings=[],
+            evidence_items=[],
+            audit_context={
+                "source_interface": " API ",
+                "trigger_type": " Session ",
+                "trigger_id": " RUN-123 ",
+            },
+        )
+        second = self._persist_comparison_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Same workflow review",
+            findings=[],
+            evidence_items=[],
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "session",
+                "trigger_id": "run-123",
+            },
+        )
+
+        comparison = report_service_module.fetch_report_comparison(second["id"])
+        explicit_comparison = report_service_module.fetch_report_comparison(
+            second["id"],
+            previous_report_id=first["id"],
+        )
+        history = report_service_module.fetch_filtered_analysis_history_page()
+        by_id = {item["id"]: item for item in history["items"]}
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], first["id"])
+        self.assertIsNotNone(explicit_comparison)
+        self.assertEqual(
+            by_id[int(second["id"])]["previous_scan_diff"]["previous_report_id"],
+            first["id"],
+        )
+
+    def test_previous_scan_diffs_match_legacy_blank_workflow_context(
+        self,
+    ) -> None:
+        first = self._persist_comparison_report(
+            score=40,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Legacy review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.get_analysis_report(
+                session,
+                int(first["id"]),
+                include_evidence=True,
+            )
+            assert report is not None
+            report.source_interface = None
+            report.trigger_type = None
+            report.trigger_id = None
+            report.submission_manifest_json = "{}"
+            session.commit()
+        second = self._persist_comparison_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Current workflow review",
+            findings=[],
+            evidence_items=[],
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "pull_request",
+                "trigger_id": "pr-42",
+            },
+        )
+
+        comparison = report_service_module.fetch_report_comparison(second["id"])
+        explicit_comparison = report_service_module.fetch_report_comparison(
+            second["id"],
+            previous_report_id=first["id"],
+        )
+        history = report_service_module.fetch_filtered_analysis_history_page()
+        by_id = {item["id"]: item for item in history["items"]}
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], first["id"])
+        self.assertIsNotNone(explicit_comparison)
+        self.assertEqual(
+            by_id[int(second["id"])]["previous_scan_diff"]["previous_report_id"],
+            first["id"],
+        )
+
+    def test_previous_scan_diffs_prefer_exact_context_over_legacy_blank(
+        self,
+    ) -> None:
+        exact = self._persist_comparison_report(
+            score=40,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Exact workflow review",
+            findings=[],
+            evidence_items=[],
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "pull_request",
+                "trigger_id": "pr-42",
+            },
+        )
+        legacy = self._persist_comparison_report(
+            score=55,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Legacy blank workflow review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.get_analysis_report(
+                session,
+                int(legacy["id"]),
+                include_evidence=True,
+            )
+            assert report is not None
+            report.source_interface = None
+            report.trigger_type = None
+            report.trigger_id = None
+            report.submission_manifest_json = "{}"
+            session.commit()
+        current = self._persist_comparison_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Current workflow review",
+            findings=[],
+            evidence_items=[],
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "pull_request",
+                "trigger_id": "pr-42",
+            },
+        )
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+        history = report_service_module.fetch_filtered_analysis_history_page()
+        by_id = {item["id"]: item for item in history["items"]}
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], exact["id"])
+        self.assertEqual(
+            by_id[int(current["id"])]["previous_scan_diff"]["previous_report_id"],
+            exact["id"],
+        )
+
+    def test_previous_scan_diffs_do_not_treat_partial_context_as_wildcard(
+        self,
+    ) -> None:
+        first = self._persist_comparison_report(
+            score=40,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Pull request review",
+            findings=[],
+            evidence_items=[],
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "pull_request",
+                "trigger_id": "pr-42",
+            },
+        )
+        second = self._persist_comparison_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Partial workflow review",
+            findings=[],
+            evidence_items=[],
+            audit_context={
+                "source_interface": "api",
+                "trigger_type": "pull_request",
+                "trigger_id": "",
+            },
+        )
+
+        comparison = report_service_module.fetch_report_comparison(second["id"])
+        explicit_comparison = report_service_module.fetch_report_comparison(
+            second["id"],
+            previous_report_id=first["id"],
+        )
+        history = report_service_module.fetch_filtered_analysis_history_page()
+        by_id = {item["id"]: item for item in history["items"]}
+
+        self.assertIsNone(comparison)
+        self.assertIsNone(explicit_comparison)
+        self.assertNotIn("previous_scan_diff", by_id[int(second["id"])])
+
     def test_previous_scan_diffs_use_immediately_previous_comparable_report(
         self,
     ) -> None:
@@ -8393,11 +9595,244 @@ class ReportServiceTests(unittest.TestCase):
             session.commit()
 
         history = report_service_module.fetch_filtered_analysis_history_page(
-            severity="low"
+            severity="low",
+            skip_unreadable_schema=True,
         )
 
         self.assertEqual(history["total_count"], 1)
         self.assertEqual(history["items"][0]["id"], readable["id"])
+
+    def test_filtered_history_ignores_visible_unreadable_reports(self) -> None:
+        readable = self._persist_comparison_report(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="Readable review",
+            findings=[],
+            evidence_items=[],
+        )
+        unreadable = self._persist_comparison_report(
+            score=90,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Future schema review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.get_analysis_report(
+                session,
+                int(unreadable["id"]),
+                include_evidence=True,
+            )
+            assert report is not None
+            report.report_schema_version = "v3"
+            session.commit()
+
+        history = report_service_module.fetch_filtered_analysis_history_page(
+            skip_unreadable_schema=True
+        )
+
+        item_ids = {item["id"] for item in history["items"]}
+        self.assertIn(readable["id"], item_ids)
+        self.assertNotIn(unreadable["id"], item_ids)
+
+    def test_filtered_history_backfills_after_visible_unreadable_reports(
+        self,
+    ) -> None:
+        readable = self._persist_comparison_report(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="Readable review",
+            findings=[],
+            evidence_items=[],
+        )
+        unreadable = self._persist_comparison_report(
+            score=90,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Future schema review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.get_analysis_report(
+                session,
+                int(unreadable["id"]),
+                include_evidence=True,
+            )
+            assert report is not None
+            report.report_schema_version = "v3"
+            session.commit()
+
+        history = report_service_module.fetch_filtered_analysis_history_page(
+            page=1,
+            page_size=1,
+            skip_unreadable_schema=True,
+        )
+
+        self.assertEqual(history["total_count"], 1)
+        self.assertEqual([item["id"] for item in history["items"]], [readable["id"]])
+
+    def test_filtered_history_includes_legacy_blank_schema_reports(self) -> None:
+        blank_schema = self._persist_comparison_report(
+            score=31,
+            severity="low",
+            recommendation="go",
+            top_risk="Blank schema legacy review",
+            findings=[],
+            evidence_items=[],
+        )
+        future_schema = self._persist_comparison_report(
+            score=90,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Future schema review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            for report_id, schema_version in (
+                (blank_schema["id"], ""),
+                (future_schema["id"], "v3"),
+            ):
+                report = analysis_reports_repository_module.get_analysis_report(
+                    session,
+                    int(report_id),
+                    include_evidence=True,
+                )
+                assert report is not None
+                report.report_schema_version = schema_version
+            session.commit()
+
+        history = report_service_module.fetch_filtered_analysis_history_page(
+            skip_unreadable_schema=True
+        )
+
+        self.assertEqual(history["total_count"], 1)
+        self.assertEqual(
+            {item["id"] for item in history["items"]},
+            {blank_schema["id"]},
+        )
+
+    def test_fetch_report_comparison_uses_legacy_blank_schema_previous_report(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="Legacy previous review",
+            findings=[],
+            evidence_items=[],
+        )
+        current = self._persist_comparison_report(
+            score=45,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Current readable review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.get_analysis_report(
+                session,
+                int(previous["id"]),
+                include_evidence=True,
+            )
+            assert report is not None
+            report.report_schema_version = ""
+            session.commit()
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], previous["id"])
+
+    def test_filtered_history_skip_unreadable_keeps_database_pagination(
+        self,
+    ) -> None:
+        for index in range(3):
+            self._persist_comparison_report(
+                score=30 + index,
+                severity="low",
+                recommendation="go",
+                top_risk=f"Readable review {index}",
+                findings=[],
+                evidence_items=[],
+            )
+        original_list_analysis_reports = report_service_module.list_analysis_reports
+        list_calls: list[dict[str, object]] = []
+
+        def recording_list_analysis_reports(*args, **kwargs):
+            list_calls.append(dict(kwargs))
+            return original_list_analysis_reports(*args, **kwargs)
+
+        with patch.object(
+            report_service_module,
+            "list_analysis_reports",
+            side_effect=recording_list_analysis_reports,
+        ):
+            history = report_service_module.fetch_filtered_analysis_history_page(
+                page=2,
+                page_size=1,
+                skip_unreadable_schema=True,
+            )
+
+        paged_calls = [
+            call
+            for call in list_calls
+            if call.get("limit") == 1 and call.get("offset") == 1
+        ]
+        self.assertEqual(history["total_count"], 3)
+        self.assertEqual(len(history["items"]), 1)
+        self.assertEqual(len(paged_calls), 1)
+        self.assertIsNotNone(paged_calls[0].get("report_schema_versions"))
+
+    def test_fetch_report_comparison_ignores_unreadable_off_path_reports(
+        self,
+    ) -> None:
+        previous = self._persist_comparison_report(
+            score=30,
+            severity="low",
+            recommendation="go",
+            top_risk="Readable previous review",
+            findings=[],
+            evidence_items=[],
+        )
+        unreadable = self._persist_comparison_report(
+            score=90,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Future schema review",
+            findings=[],
+            evidence_items=[],
+        )
+        current = self._persist_comparison_report(
+            score=45,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Readable current review",
+            findings=[],
+            evidence_items=[],
+        )
+        with database_module.SessionLocal() as session:
+            report = analysis_reports_repository_module.get_analysis_report(
+                session,
+                int(unreadable["id"]),
+                include_evidence=True,
+            )
+            assert report is not None
+            report.report_schema_version = "v3"
+            session.commit()
+
+        comparison = report_service_module.fetch_report_comparison(current["id"])
+
+        self.assertIsNotNone(comparison)
+        assert comparison is not None
+        self.assertEqual(comparison["previous_report"]["id"], previous["id"])
 
     def test_previous_scan_diffs_compute_history_signature_once_per_report(
         self,

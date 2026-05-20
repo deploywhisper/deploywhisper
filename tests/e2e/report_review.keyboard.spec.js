@@ -374,7 +374,10 @@ test.describe("review keyboard flow", () => {
     await expect(page.getByText("Comparison with report #1")).toBeVisible();
     await expect(page.getByText("Risk score delta")).toBeVisible();
     await expect(page.getByText("+48")).toBeVisible();
-    await expect(page.getByText(/MEDIUM.*CRITICAL/)).toBeVisible();
+    await expect(page.getByText("MEDIUM → CRITICAL", { exact: true })).toBeVisible();
+    await expect(page.getByText("Persistent findings", { exact: true })).toBeVisible();
+    await expect(page.getByText("Changed context", { exact: true })).toBeVisible();
+    await expect(page.getByText("Evidence changed")).toBeVisible();
   });
 
   test("opens unavailable evidence with sanitized legacy finding ids", async ({

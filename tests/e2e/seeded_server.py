@@ -175,7 +175,7 @@ def _seed_review_report(report_service_module) -> None:
                 analysis_id=0,
                 finding_id="finding-prev",
                 source_type="artifact",
-                source_ref="artifact://plan.json#line=10",
+                source_ref="terraform://plan.json#aws_security_group.main?action=modify",
                 summary="Security group ingress remains under review.",
                 severity_hint="medium",
                 deterministic=True,

@@ -100,6 +100,7 @@ def build_history_page() -> None:
                 project_id=active_project_id,
                 page=1,
                 page_size=5,
+                skip_unreadable_schema=True,
             )
         )
         reports = reports_page["items"]
@@ -185,6 +186,7 @@ def build_history_page() -> None:
                         search=query,
                         page=page_state["page"],
                         page_size=page_state["page_size"],
+                        skip_unreadable_schema=True,
                     )
                 )
                 reports = page_payload["items"]
@@ -449,7 +451,7 @@ def _render_history_report_comparison(
                     f"Comparison with report #{int(comparison['previous_report']['id'])}"
                 ).classes("text-xl font-semibold dw-text")
                 ui.label(
-                    "Side-by-side changes against the previous saved scan of the same analyzed artifacts."
+                    "Side-by-side changes against the previous comparable report in the same project, workspace, and workflow context."
                 ).classes("text-sm dw-muted leading-6")
             with ui.column().classes("gap-1 shrink-0"):
                 ui.label("Risk score delta").classes(
@@ -461,6 +463,10 @@ def _render_history_report_comparison(
                 ui.label(
                     f"{int(comparison['previous_report']['risk_score'])} -> {int(comparison['current_report']['risk_score'])}"
                 ).classes("text-xs dw-muted")
+        for warning in comparison.get("summary", {}).get("warnings") or []:
+            ui.label(f"Comparison warning: {warning}").classes(
+                "text-sm dw-warning-text leading-6"
+            )
         with ui.row().classes("w-full gap-4 flex-wrap mt-2"):
             with ui.card().classes("dw-panel-soft shadow-none min-w-[260px] flex-1"):
                 with ui.column().classes("gap-2 p-4"):
@@ -474,14 +480,14 @@ def _render_history_report_comparison(
                         comparison["previous_report"].get("context_completeness") or {}
                     )
                     _render_history_comparison_items(
-                        "Findings removed",
+                        "Resolved findings",
                         comparison["findings"]["removed"],
-                        empty_message="No findings were removed.",
+                        empty_message="No resolved findings were found.",
                     )
                     _render_history_comparison_items(
-                        "Evidence removed",
+                        "Evidence resolved",
                         comparison["evidence"]["removed"],
-                        empty_message="No evidence was removed.",
+                        empty_message="No evidence was resolved.",
                     )
             with ui.card().classes("dw-panel-soft shadow-none min-w-[260px] flex-1"):
                 with ui.column().classes("gap-2 p-4"):
@@ -495,15 +501,22 @@ def _render_history_report_comparison(
                         comparison["current_report"].get("context_completeness") or {}
                     )
                     _render_history_comparison_items(
-                        "Findings added",
+                        "New findings",
                         comparison["findings"]["added"],
-                        empty_message="No findings were added.",
+                        empty_message="No new findings were found.",
                     )
                     _render_history_comparison_items(
                         "Evidence added",
                         comparison["evidence"]["added"],
                         empty_message="No evidence was added.",
                     )
+        with ui.card().classes("w-full dw-panel-soft shadow-none mt-4"):
+            with ui.column().classes("gap-3 p-4"):
+                _render_history_comparison_items(
+                    "Persistent findings",
+                    comparison["findings"]["persistent"],
+                    empty_message="No findings persisted across both reports.",
+                )
         with ui.card().classes("w-full dw-panel-soft shadow-none mt-4"):
             with ui.column().classes("gap-3 p-4"):
                 ui.label("Severity changes").classes("text-sm font-semibold dw-text")
@@ -526,6 +539,13 @@ def _render_history_report_comparison(
                                 f"{str(item.get('previous_severity') or 'unknown').upper()} → "
                                 f"{str(item.get('current_severity') or 'unknown').upper()}"
                             ).classes("text-sm font-semibold dw-text")
+        with ui.card().classes("w-full dw-panel-soft shadow-none mt-4"):
+            with ui.column().classes("gap-3 p-4"):
+                _render_history_comparison_items(
+                    "Changed context",
+                    comparison["findings"]["context_changed"],
+                    empty_message="No persistent findings changed evidence or context.",
+                )
 
 
 def build_history_detail_page(report_id: int, *, show_comparison: bool = False) -> None:

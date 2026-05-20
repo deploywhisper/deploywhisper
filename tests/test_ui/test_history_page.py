@@ -1113,9 +1113,18 @@ class HistoryPageRenderingTests(unittest.TestCase):
 
         self.assertEqual(compare_response.status_code, 200)
         self.assertIn("Comparison with report #1", compare_response.text)
+        self.assertIn(
+            "previous comparable report in the same project, workspace, and workflow context",
+            compare_response.text,
+        )
         self.assertIn("Risk score delta", compare_response.text)
         self.assertIn("+48", compare_response.text)
         self.assertIn("MEDIUM → CRITICAL", compare_response.text)
+        self.assertIn("Resolved findings", compare_response.text)
+        self.assertIn("Evidence resolved", compare_response.text)
+        self.assertIn("New findings", compare_response.text)
+        self.assertIn("Persistent findings", compare_response.text)
+        self.assertIn("Changed context", compare_response.text)
         self.assertIn("Topology freshness", compare_response.text)
         self.assertIn("12 days old", compare_response.text)
         self.assertIn("95 days old", compare_response.text)
@@ -1164,9 +1173,18 @@ class HistoryPageRenderingTests(unittest.TestCase):
 
         self.assertEqual(compare_response.status_code, 200)
         self.assertIn("Comparison with report #1", compare_response.text)
+        self.assertIn(
+            "previous comparable report in the same project, workspace, and workflow context",
+            compare_response.text,
+        )
         self.assertIn("Risk score delta", compare_response.text)
         self.assertIn("+48", compare_response.text)
         self.assertIn("MEDIUM → CRITICAL", compare_response.text)
+        self.assertIn("Resolved findings", compare_response.text)
+        self.assertIn("Evidence resolved", compare_response.text)
+        self.assertIn("New findings", compare_response.text)
+        self.assertIn("Persistent findings", compare_response.text)
+        self.assertIn("Changed context", compare_response.text)
         self.assertIn("Topology freshness", compare_response.text)
         self.assertIn("12 days old", compare_response.text)
         self.assertIn("95 days old", compare_response.text)
@@ -1268,10 +1286,79 @@ class HistoryPageRenderingTests(unittest.TestCase):
 
         self.assertEqual(compare_response.status_code, 200)
         self.assertIn(
-            "The previous comparable report is not available in this shared context.",
+            "The previous shared report requires a password before comparison.",
             compare_response.text,
         )
         self.assertNotIn("Comparison with report #1", compare_response.text)
+
+        unlocked_response = self.client.post(
+            "/reports/1/unlock",
+            data={
+                "password": "previous-only",
+                "next": "/reports/2?compare=previous#report-comparison",
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(unlocked_response.status_code, 200)
+        self.assertIn("Comparison with report #1", unlocked_response.text)
+
+    def test_public_report_compare_allows_same_password_protected_reruns(
+        self,
+    ) -> None:
+        self._persist_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Initial security group review",
+            opening_sentence="Initial review of the security group change.",
+            finding_description="Security group exposure risk",
+        )
+        report_service_module.configure_report_share(
+            1,
+            password="shared-secret",
+            redact_filenames=False,
+        )
+        self._persist_report(
+            score=88,
+            severity="critical",
+            recommendation="no-go",
+            top_risk="Security group exposure risk",
+            opening_sentence="Ingress widens access to production resources.",
+            finding_description="Security group exposure risk",
+        )
+        report_service_module.configure_report_share(
+            2,
+            password="shared-secret",
+            redact_filenames=False,
+        )
+
+        current_unlock = self.client.post(
+            "/reports/2/unlock",
+            data={
+                "password": "shared-secret",
+                "next": "/reports/2?compare=previous#report-comparison",
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(current_unlock.status_code, 200)
+        self.assertIn(
+            "The previous shared report requires a password before comparison.",
+            current_unlock.text,
+        )
+        previous_unlock = self.client.post(
+            "/reports/1/unlock",
+            data={
+                "password": "shared-secret",
+                "next": "/reports/2?compare=previous#report-comparison",
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(previous_unlock.status_code, 200)
+        self.assertIn("Comparison with report #1", previous_unlock.text)
+        self.assertIn("Risk score delta", previous_unlock.text)
 
     def test_history_page_renders_toolbar_and_report_actions(self) -> None:
         self._persist_report(
@@ -1595,7 +1682,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         cookie_header = response.headers.get("set-cookie", "")
         self.assertIn("Secure", cookie_header)
         self.assertIn("HttpOnly", cookie_header)
-        self.assertIn("Path=/reports/1", cookie_header)
+        self.assertIn("Path=/reports", cookie_header)
 
     def test_history_page_keeps_legacy_query_parameter_as_detail_fallback(self) -> None:
         self._persist_report()

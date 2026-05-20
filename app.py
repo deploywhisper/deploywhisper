@@ -44,6 +44,7 @@ from services.confidence_ledger import (
 )
 from services.report_service import (
     fetch_analysis_report,
+    fetch_previous_comparable_report,
     fetch_shared_analysis_report,
     fetch_shared_report_comparison,
 )
@@ -207,11 +208,29 @@ def skill_manifest_schema_document() -> JSONResponse:
     )
 
 
-def _shared_report_prompt_html(report_id: int, *, invalid_password: bool) -> str:
+def _safe_report_redirect(value: str | None, *, fallback_report_id: int) -> str:
+    target = str(value or "").strip()
+    if target.startswith("/reports/") and not target.startswith("//"):
+        return target
+    return f"/reports/{fallback_report_id}"
+
+
+def _shared_report_prompt_html(
+    report_id: int,
+    *,
+    invalid_password: bool,
+    message: str | None = None,
+    return_to: str | None = None,
+) -> str:
     message = (
         "Incorrect password. Try again."
         if invalid_password
-        else "This shared report requires a password."
+        else message or "This shared report requires a password."
+    )
+    return_to_field = (
+        f"<input type='hidden' name='next' value='{escape(return_to, quote=True)}' />"
+        if return_to
+        else ""
     )
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
@@ -230,6 +249,7 @@ def _shared_report_prompt_html(report_id: int, *, invalid_password: bool) -> str
         "<h1>Shared DeployWhisper report</h1>"
         f"<p class='{'error' if invalid_password else ''}'>{escape(message)}</p>"
         f"<form method='post' action='/reports/{report_id}/unlock'>"
+        f"{return_to_field}"
         "<label for='password'>Password required</label>"
         "<input id='password' name='password' type='password' autocomplete='current-password' />"
         "<button type='submit'>Open shared report</button>"
@@ -424,12 +444,16 @@ def _shared_report_comparison_html(
         if score_delta < 0
         else "delta-flat"
     )
+    warning_html = "".join(
+        f"<p class='diff-meta'><strong>Comparison warning:</strong> {escape(str(warning))}</p>"
+        for warning in (comparison.get("summary", {}).get("warnings") or [])
+    )
     comparison_section = (
         "<section class='panel' id='report-comparison'>"
         "<div class='comparison-header'>"
         "<div>"
         f"<div class='eyebrow'>Comparison</div><h2>Comparison with report #{int(comparison['previous_report']['id'])}</h2>"
-        "<p>Side-by-side changes against the previous scan of the same analyzed artifacts.</p>"
+        "<p>Side-by-side changes against the previous comparable report in the same project, workspace, and workflow context.</p>"
         "</div>"
         "<div class='delta-card'>"
         "<div class='delta-label'>Risk score delta</div>"
@@ -437,31 +461,36 @@ def _shared_report_comparison_html(
         f"<div class='delta-meta'>{int(comparison['previous_report']['risk_score'])} → {int(comparison['current_report']['risk_score'])}</div>"
         "</div>"
         "</div>"
+        f"{warning_html}"
         "<div class='comparison-grid'>"
         "<section class='comparison-column'>"
         "<h3>Previous report</h3>"
         f"<p class='diff-meta'>Report #{int(comparison['previous_report']['id'])} · {escape(str(comparison['previous_report']['severity']).upper())} · {escape(str(comparison['previous_report']['recommendation']).upper())}</p>"
         "<p class='diff-meta'><strong>Topology freshness</strong></p>"
         f"<p class='diff-meta'>{escape(previous_freshness_age)} <span class='diff-chip'>{escape(previous_freshness_badge)}</span></p>"
-        "<h4>Findings removed</h4>"
-        f"{_shared_report_diff_list(comparison['findings']['removed'], empty_message='No findings were removed.')}"
-        "<h4>Evidence removed</h4>"
-        f"{_shared_report_diff_list(comparison['evidence']['removed'], empty_message='No evidence was removed.', include_severity=False)}"
+        "<h4>Resolved findings</h4>"
+        f"{_shared_report_diff_list(comparison['findings']['removed'], empty_message='No resolved findings were found.')}"
+        "<h4>Evidence resolved</h4>"
+        f"{_shared_report_diff_list(comparison['evidence']['removed'], empty_message='No evidence was resolved.', include_severity=False)}"
         "</section>"
         "<section class='comparison-column'>"
         "<h3>Current report</h3>"
         f"<p class='diff-meta'>Report #{int(comparison['current_report']['id'])} · {escape(str(comparison['current_report']['severity']).upper())} · {escape(str(comparison['current_report']['recommendation']).upper())}</p>"
         "<p class='diff-meta'><strong>Topology freshness</strong></p>"
         f"<p class='diff-meta'>{escape(current_freshness_age)} <span class='diff-chip'>{escape(current_freshness_badge)}</span></p>"
-        "<h4>Findings added</h4>"
-        f"{_shared_report_diff_list(comparison['findings']['added'], empty_message='No findings were added.')}"
+        "<h4>New findings</h4>"
+        f"{_shared_report_diff_list(comparison['findings']['added'], empty_message='No new findings were found.')}"
         "<h4>Evidence added</h4>"
         f"{_shared_report_diff_list(comparison['evidence']['added'], empty_message='No evidence was added.', include_severity=False)}"
         "</section>"
         "</div>"
         "<section class='comparison-severity'>"
+        "<h3>Persistent findings</h3>"
+        f"{_shared_report_diff_list(comparison['findings']['persistent'], empty_message='No findings persisted across both reports.')}"
         "<h3>Severity changes</h3>"
         f"{_shared_report_severity_change_list(comparison['findings']['severity_changed'])}"
+        "<h3>Changed context</h3>"
+        f"{_shared_report_diff_list(comparison['findings']['context_changed'], empty_message='No persistent findings changed evidence or context.')}"
         "</section>"
         "</section>"
     )
@@ -606,6 +635,11 @@ def shared_report_view(
             content=_shared_report_prompt_html(
                 report_id,
                 invalid_password=False,
+                return_to=(
+                    f"/reports/{report_id}?compare=previous#report-comparison"
+                    if compare == "previous"
+                    else None
+                ),
             )
         )
     shared_report = fetch_shared_analysis_report(
@@ -616,9 +650,33 @@ def shared_report_view(
         raise StarletteHTTPException(status_code=404, detail="Report not found")
     comparison = None
     if compare == "previous":
+        previous_report = fetch_previous_comparable_report(report_id)
+        previous_password_required = bool(
+            previous_report and previous_report.get("share_password_hash")
+        )
+        if previous_password_required and not _has_valid_share_cookie(
+            previous_report,
+            request,
+        ):
+            return HTMLResponse(
+                content=_shared_report_prompt_html(
+                    int(previous_report["id"]),
+                    invalid_password=False,
+                    message=(
+                        "The previous shared report requires a password before "
+                        "comparison."
+                    ),
+                    return_to=f"/reports/{report_id}?compare=previous#report-comparison",
+                )
+            )
+        previous_access_granted = previous_report is not None and (
+            not previous_password_required
+            or _has_valid_share_cookie(previous_report, request)
+        )
         comparison = fetch_shared_report_comparison(
             report_id,
             bypass_password=password_required,
+            previous_bypass_password=previous_access_granted,
         )
     return HTMLResponse(
         content=_shared_report_html(
@@ -630,23 +688,34 @@ def shared_report_view(
 
 
 @fastapi_app.post("/reports/{report_id}/unlock", include_in_schema=False)
-def unlock_shared_report(report_id: int, password: str = Form(...)) -> RedirectResponse:
+def unlock_shared_report(
+    report_id: int,
+    password: str = Form(...),
+    next: str | None = Form(None),
+) -> RedirectResponse:
     """Validate a shared-report password and issue an HttpOnly access cookie."""
     shared_report = fetch_shared_analysis_report(report_id, password=password)
     if shared_report is None:
         return HTMLResponse(
-            content=_shared_report_prompt_html(report_id, invalid_password=True),
+            content=_shared_report_prompt_html(
+                report_id,
+                invalid_password=True,
+                return_to=_safe_report_redirect(next, fallback_report_id=report_id),
+            ),
             status_code=401,
         )
     report = fetch_analysis_report(report_id)
     if report is None:
         raise StarletteHTTPException(status_code=404, detail="Report not found")
-    response = RedirectResponse(url=f"/reports/{report_id}", status_code=303)
+    response = RedirectResponse(
+        url=_safe_report_redirect(next, fallback_report_id=report_id),
+        status_code=303,
+    )
     response.set_cookie(
         _share_cookie_name(report_id),
         _share_cookie_value(report),
         httponly=True,
-        path=f"/reports/{report_id}",
+        path="/reports",
         secure=_share_cookie_secure(shared_report),
         samesite="lax",
     )
