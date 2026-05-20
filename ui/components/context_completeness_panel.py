@@ -153,7 +153,7 @@ def render_context_summary_panel(
                 with ui.column().classes("gap-1 min-w-0 flex-1"):
                     ui.label("Summary context check").classes(
                         "text-sm font-semibold dw-text"
-                    )
+                    ).props("role=heading aria-level=3")
                     ui.label(
                         "Context completeness and TODOs that may change how much confidence to place in this report."
                     ).classes("text-xs dw-muted leading-5")
@@ -199,7 +199,9 @@ def render_context_completeness_panel(
         decorate_review_section(panel, section="context", label="Context completeness")
         with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
             with ui.column().classes("gap-2 min-w-0 flex-1"):
-                ui.label("Context completeness").classes("text-lg font-medium dw-text")
+                ui.label("Context completeness").classes(
+                    "text-lg font-medium dw-text"
+                ).props("role=heading aria-level=2")
                 ui.label(
                     "Review how much topology, evidence, parser, and incident context supported this report."
                 ).classes("text-sm dw-muted leading-6")

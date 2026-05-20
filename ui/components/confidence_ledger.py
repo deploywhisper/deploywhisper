@@ -44,7 +44,9 @@ def render_confidence_ledger(report: dict[str, Any]) -> None:
         )
         with ui.column().classes("gap-4"):
             with ui.column().classes("gap-1"):
-                ui.label("Confidence ledger").classes("text-lg font-medium dw-text")
+                ui.label("Confidence ledger").classes(
+                    "text-lg font-medium dw-text"
+                ).props("role=heading aria-level=2")
                 ui.label(
                     "Reasoning details that explain the verdict using persisted evidence, contributors, confidence, and context quality."
                 ).classes("text-sm dw-muted leading-6")

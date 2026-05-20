@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const zlib = require("zlib");
 
 const REVIEW_ORDER = [
   "verdict",
@@ -104,21 +105,257 @@ async function expectDelayedEvidenceFocusDoesNotStealUserFocus(page) {
     .toBe("dw-focus-steal-sentinel");
 }
 
+function parseCssColor(value) {
+  const match = String(value).match(/rgba?\(([^)]+)\)/i);
+  if (!match) {
+    return null;
+  }
+  const parts = match[1]
+    .split(/[,/ ]+/)
+    .filter(Boolean)
+    .map((part) => Number.parseFloat(part));
+  if (parts.length < 3 || parts.slice(0, 3).some(Number.isNaN)) {
+    return null;
+  }
+  return parts.slice(0, 3).map((part) => Math.max(0, Math.min(255, part)));
+}
+
+function luminance(color) {
+  const channels = color.map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastRatio(foreground, background) {
+  const light = Math.max(luminance(foreground), luminance(background));
+  const dark = Math.min(luminance(foreground), luminance(background));
+  return (light + 0.05) / (dark + 0.05);
+}
+
+function decodePng(buffer) {
+  const signature = "89504e470d0a1a0a";
+  if (buffer.subarray(0, 8).toString("hex") !== signature) {
+    throw new Error("Expected PNG screenshot");
+  }
+
+  const idatChunks = [];
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  let offset = 8;
+
+  while (offset < buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString("ascii", offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    const data = buffer.subarray(dataStart, dataEnd);
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+      interlace = data[12];
+    } else if (type === "IDAT") {
+      idatChunks.push(data);
+    } else if (type === "IEND") {
+      break;
+    }
+    offset = dataEnd + 4;
+  }
+
+  if (bitDepth !== 8 || interlace !== 0 || ![2, 6].includes(colorType)) {
+    throw new Error(
+      `Unsupported PNG format: bitDepth=${bitDepth} colorType=${colorType} interlace=${interlace}`
+    );
+  }
+
+  const bytesPerPixel = colorType === 6 ? 4 : 3;
+  const stride = width * bytesPerPixel;
+  const inflated = zlib.inflateSync(Buffer.concat(idatChunks));
+  const pixels = new Uint8Array(width * height * 4);
+  let sourceOffset = 0;
+  let previous = new Uint8Array(stride);
+
+  const paeth = (left, up, upLeft) => {
+    const predictor = left + up - upLeft;
+    const leftDistance = Math.abs(predictor - left);
+    const upDistance = Math.abs(predictor - up);
+    const upLeftDistance = Math.abs(predictor - upLeft);
+    if (leftDistance <= upDistance && leftDistance <= upLeftDistance) {
+      return left;
+    }
+    return upDistance <= upLeftDistance ? up : upLeft;
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    const filter = inflated[sourceOffset];
+    sourceOffset += 1;
+    const row = new Uint8Array(stride);
+    for (let x = 0; x < stride; x += 1) {
+      const raw = inflated[sourceOffset + x];
+      const left = x >= bytesPerPixel ? row[x - bytesPerPixel] : 0;
+      const up = previous[x] || 0;
+      const upLeft = x >= bytesPerPixel ? previous[x - bytesPerPixel] || 0 : 0;
+      let value = raw;
+      if (filter === 1) {
+        value += left;
+      } else if (filter === 2) {
+        value += up;
+      } else if (filter === 3) {
+        value += Math.floor((left + up) / 2);
+      } else if (filter === 4) {
+        value += paeth(left, up, upLeft);
+      } else if (filter !== 0) {
+        throw new Error(`Unsupported PNG filter: ${filter}`);
+      }
+      row[x] = value & 0xff;
+    }
+    sourceOffset += stride;
+    for (let x = 0; x < width; x += 1) {
+      const sourceIndex = x * bytesPerPixel;
+      const pixelIndex = (y * width + x) * 4;
+      pixels[pixelIndex] = row[sourceIndex];
+      pixels[pixelIndex + 1] = row[sourceIndex + 1];
+      pixels[pixelIndex + 2] = row[sourceIndex + 2];
+      pixels[pixelIndex + 3] = colorType === 6 ? row[sourceIndex + 3] : 255;
+    }
+    previous = row;
+  }
+
+  return { width, height, pixels };
+}
+
+function renderedBackgroundFromScreenshot(buffer) {
+  const { width, height, pixels } = decodePng(buffer);
+  const edgeSize = Math.min(3, Math.ceil(Math.min(width, height) / 2));
+  const buckets = new Map();
+
+  const addPixel = (x, y) => {
+    const index = (y * width + x) * 4;
+    if (pixels[index + 3] === 0) {
+      return;
+    }
+    const color = [pixels[index], pixels[index + 1], pixels[index + 2]];
+    const key = color.map((channel) => Math.round(channel / 4) * 4).join(",");
+    const bucket = buckets.get(key) || { count: 0, total: [0, 0, 0] };
+    bucket.count += 1;
+    bucket.total[0] += color[0];
+    bucket.total[1] += color[1];
+    bucket.total[2] += color[2];
+    buckets.set(key, bucket);
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (
+        x < edgeSize ||
+        y < edgeSize ||
+        x >= width - edgeSize ||
+        y >= height - edgeSize
+      ) {
+        addPixel(x, y);
+      }
+    }
+  }
+
+  const background = [...buckets.values()].sort((left, right) => {
+    return right.count - left.count;
+  })[0];
+  if (!background) {
+    throw new Error("Could not sample rendered background pixels");
+  }
+  return {
+    background: background.total.map((total) => total / background.count),
+    height,
+    width,
+  };
+}
+
+async function expectRenderedTextContrast(locator, minimumRatio = 4.5) {
+  const style = await locator.evaluate((element) => {
+    const computed = window.getComputedStyle(element);
+    return {
+      color: computed.color,
+      text: element.textContent?.trim() || element.getAttribute("aria-label") || "",
+    };
+  });
+  const foreground = parseCssColor(style.color);
+  if (!foreground) {
+    throw new Error(`Could not parse foreground color: ${style.color}`);
+  }
+  const screenshot = await locator.screenshot();
+  const { background, height, width } = renderedBackgroundFromScreenshot(screenshot);
+  const result = {
+    background: `rgb(${background.map(Math.round).join(", ")})`,
+    foreground: style.color,
+    ratio: contrastRatio(foreground, background),
+    size: `${width}x${height}`,
+    text: style.text,
+  };
+  expect(
+    result.ratio,
+    `${result.text} contrast ${result.foreground} on rendered ${result.background} (${result.size})`
+  ).toBeGreaterThanOrEqual(minimumRatio);
+}
+
 test.describe("review keyboard flow", () => {
   test("tabs through review sections in order and supports arrow/escape controls", async ({
     page,
   }) => {
     await page.goto("/", { waitUntil: "networkidle" });
+    await expect(
+      page.getByRole("navigation", { name: "Primary navigation" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("main", { name: "Deployment review workspace" })
+    ).toBeVisible();
+    const reviewStatus = page.getByRole("status", {
+      name: "Review status updates",
+    });
+    await expect(reviewStatus).toBeAttached();
+    await page.evaluate(() => {
+      window.dwAnnounceReviewStatus("stale evidence status");
+      window.dwAnnounceReviewStatus("latest evidence status");
+    });
+    await expect(reviewStatus).toHaveText("latest evidence status");
     await expect(page.getByText("5-second verdict")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "5-second verdict" })
+    ).toBeVisible();
     await expect(page.getByText("Advisory posture").first()).toBeVisible();
     await expect(page.getByText("Evidence Law").first()).toBeVisible();
     await expect(page.getByText("Next action").first()).toBeVisible();
     await expect(page.getByText("Review linked evidence").first()).toBeVisible();
     await expect(page.getByText("Confidence ledger").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Confidence ledger" }).first()
+    ).toBeVisible();
     await expect(page.getByText("Why not lower").first()).toBeVisible();
     await expect(page.getByText("Why not higher").first()).toBeVisible();
     await expect(page.getByText("Uncertainty drivers").first()).toBeVisible();
     await expect(page.getByText("Summary context check").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Summary context check" }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Findings table" }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Context completeness" }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Blast radius" }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Rollback plan" }).first()
+    ).toBeVisible();
     await expect(page.getByText("Context follow-ups").first()).toBeVisible();
     await expect(page.getByText("Manage topology").first()).toBeVisible();
     await expect(page.getByText("Report schema guide").first()).toBeVisible();
@@ -128,6 +365,9 @@ test.describe("review keyboard flow", () => {
     await expect(page.getByText("Evidence Law satisfied").first()).toBeVisible();
     await expect(page.getByText("External").first()).toBeVisible();
     await page.waitForFunction(() => window.dwReviewAccessibilityInstalled === true);
+    await expectRenderedTextContrast(page.getByRole("link", { name: "Dashboard" }));
+    await expectRenderedTextContrast(page.getByText("5-second verdict").first());
+    await expectRenderedTextContrast(page.getByText("Confidence ledger").first());
     await expectDelayedEvidenceFocusDoesNotStealUserFocus(page);
     await expect(page.getByText("Module: module.network").first()).toBeVisible();
     await expect(
@@ -154,8 +394,14 @@ test.describe("review keyboard flow", () => {
     const firstPanelId = await firstFinding.getAttribute("aria-controls");
     expect(firstPanelId).toMatch(/^evidence-inspector-/);
     await page.keyboard.press("Enter");
+    await expect(reviewStatus).toHaveText(
+      /Evidence inspector opened for CRITICAL: aws_security_group\.main/
+    );
     const firstEvidenceInspector = page.locator(`[id="${firstPanelId}"]`);
     await expect(firstEvidenceInspector).toBeVisible();
+    await expect(
+      firstEvidenceInspector.getByRole("heading", { name: "Evidence inspector" })
+    ).toBeVisible();
     await expect(firstFinding).toBeFocused();
     await expect(
       firstEvidenceInspector.getByText("Ingress CIDR widened to 0.0.0.0/0.")
@@ -178,6 +424,9 @@ test.describe("review keyboard flow", () => {
     await expect(evidenceInspector).toBeVisible();
     await expect(focusedFinding).toBeFocused();
     await page.keyboard.press("Space");
+    await expect(reviewStatus).toHaveText(
+      /Evidence inspector closed for HIGH: aws_db_instance\.primary/
+    );
     await expect(evidenceInspector).toBeHidden();
     await expect(focusedFinding).toBeFocused();
     await page.keyboard.press("ArrowUp");
@@ -244,6 +493,9 @@ test.describe("review keyboard flow", () => {
     await expect(focusedFinding).toHaveAttribute("aria-expanded", "false");
     await expect(focusedFinding).toBeFocused();
     await page.keyboard.press("Space");
+    await expect(reviewStatus).toHaveText(
+      /Evidence inspector opened for HIGH: aws_db_instance\.primary/
+    );
     await expect(evidenceInspector).toBeVisible();
     await expect(focusedFinding).toHaveAttribute("aria-expanded", "true");
     await expect(focusedFinding).toBeFocused();
@@ -345,12 +597,24 @@ test.describe("review keyboard flow", () => {
     expect(seen).toEqual(REVIEW_ORDER);
 
     await page.goto("/history", { waitUntil: "networkidle" });
+    await expect(
+      page.getByRole("navigation", { name: "Primary navigation" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("main", { name: "Analysis history workspace" })
+    ).toBeVisible();
     await expect(page.locator(".dw-history-card")).toHaveCount(2);
     await expect(page.getByText("Rescan diff")).toBeVisible();
     await expect(page.getByText("+48 risk vs report #1")).toBeVisible();
     await page.locator(".dw-history-card").first().click();
     await expect(page).toHaveURL(/\/history\/2$/);
     await page.waitForFunction(() => window.dwReviewAccessibilityInstalled === true);
+    await expect(
+      page.getByRole("navigation", { name: "Primary navigation" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("main", { name: "Analysis report workspace" })
+    ).toBeVisible();
     await expect(page.getByText("Analysis report detail")).toBeVisible();
     await expect(page.getByText("Back to History")).toBeVisible();
     await expect(page.getByText("Module: module.network").first()).toBeVisible();
@@ -370,7 +634,18 @@ test.describe("review keyboard flow", () => {
       page.locator('[data-dw-review-section="blast-radius"]')
     ).toBeVisible();
     await expect(page.locator('[data-dw-review-section="rollback"]')).toBeVisible();
+    await page.goto("/history/999", { waitUntil: "networkidle" });
+    await expect(
+      page.getByRole("main", { name: "Analysis report unavailable" })
+    ).toBeVisible();
+    await expect(page.getByText("Analysis report not found")).toBeVisible();
     await page.goto("/history/2/compare", { waitUntil: "networkidle" });
+    await expect(
+      page.getByRole("navigation", { name: "Primary navigation" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("main", { name: "Analysis report workspace" })
+    ).toBeVisible();
     await expect(page.getByText("Comparison with report #1")).toBeVisible();
     await expect(page.getByText("Risk score delta")).toBeVisible();
     await expect(page.getByText("+48")).toBeVisible();

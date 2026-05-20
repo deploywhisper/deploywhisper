@@ -678,6 +678,10 @@ def render_findings_table(
         id(finding): _finding_row_key(finding, index)
         for index, finding in enumerate(findings)
     }
+    finding_title_by_row_key = {
+        finding_row_keys[id(finding)]: str(finding.get("title") or "Untitled finding")
+        for finding in findings
+    }
     fallback_finding_ids = _unique_finding_ids(findings)
     expanded_ids: set[str] = {
         finding_row_keys[id(finding)]
@@ -743,6 +747,12 @@ def render_findings_table(
         if not was_expanded:
             expanded_ids.add(finding_id)
         render_rows()
+        title = finding_title_by_row_key.get(finding_id, "Untitled finding")
+        action = "closed" if was_expanded else "opened"
+        ui.run_javascript(
+            "window.dwAnnounceReviewStatus && "
+            f"window.dwAnnounceReviewStatus({json.dumps(f'Evidence inspector {action} for {title}')})"
+        )
         if focus_target == "row":
             restore_row_focus(evidence_panel_id)
         elif focus_target == "button":
@@ -926,7 +936,7 @@ def render_findings_table(
                             )
                             ui.label("Evidence inspector").classes(
                                 "text-sm font-semibold dw-text mt-2"
-                            )
+                            ).props("role=heading aria-level=3")
                             _render_missing_evidence_notice(missing_evidence_refs)
                             if not matched_evidence and not missing_evidence_refs:
                                 ui.label(
@@ -1043,7 +1053,9 @@ def render_findings_table(
         findings_card.props('data-dw-findings-table="1"')
         decorate_review_section(findings_card, section="findings", label=title)
         with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
-            ui.label(title).classes("text-lg font-medium dw-text")
+            ui.label(title).classes("text-lg font-medium dw-text").props(
+                "role=heading aria-level=2"
+            )
             ui.label(
                 "Severity, evidence count, confidence, and deterministic status stay visible while evidence expands inline."
             ).classes("text-xs dw-muted")

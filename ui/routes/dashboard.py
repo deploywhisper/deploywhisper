@@ -73,7 +73,11 @@ def build_dashboard() -> None:
             project = current_project()
             return project.id if project is not None else None
 
-        with ui.column().classes("dw-main-content dw-shell gap-5"):
+        with (
+            ui.column()
+            .classes("dw-main-content dw-shell gap-5")
+            .props('role=main aria-label="Deployment review workspace"')
+        ):
             briefing_mount = None
             stats_mount = None
             result_mount = None

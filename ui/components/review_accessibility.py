@@ -13,6 +13,17 @@ _REVIEW_ACCESSIBILITY_HEAD = """
   outline: 2px solid var(--dw-accent);
   outline-offset: 4px;
 }
+.dw-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 </style>
 <script>
 (() => {
@@ -20,6 +31,43 @@ _REVIEW_ACCESSIBILITY_HEAD = """
     return;
   }
   window.dwReviewAccessibilityInstalled = true;
+
+  const ensureStatusRegion = () => {
+    let region = document.getElementById('dw-review-status');
+    if (region) {
+      return region;
+    }
+    region = document.createElement('div');
+    region.id = 'dw-review-status';
+    region.className = 'dw-sr-only';
+    region.setAttribute('role', 'status');
+    region.setAttribute('aria-live', 'polite');
+    region.setAttribute('aria-atomic', 'true');
+    region.setAttribute('aria-label', 'Review status updates');
+    document.body.appendChild(region);
+    return region;
+  };
+  window.dwAnnounceReviewStatus = (message) => {
+    const region = ensureStatusRegion();
+    const sequence = (window.dwReviewStatusSequence || 0) + 1;
+    window.dwReviewStatusSequence = sequence;
+    if (window.dwReviewStatusTimer) {
+      window.clearTimeout(window.dwReviewStatusTimer);
+    }
+    region.textContent = '';
+    window.dwReviewStatusTimer = window.setTimeout(() => {
+      if (window.dwReviewStatusSequence !== sequence) {
+        return;
+      }
+      region.textContent = String(message || '');
+      window.dwReviewStatusTimer = null;
+    }, 20);
+  };
+  if (document.body) {
+    ensureStatusRegion();
+  } else {
+    window.addEventListener('DOMContentLoaded', ensureStatusRegion, { once: true });
+  }
 
   const isVisible = (element) =>
     Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
