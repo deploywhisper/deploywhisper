@@ -2369,6 +2369,15 @@ def _score_matches_severity(score: int, severity: str) -> bool:
     return _SEVERITY_SCORE_FLOOR[severity] <= score <= _SEVERITY_SCORE_CEILING[severity]
 
 
+def _text_claims_severe_risk(value: str | None) -> bool:
+    normalized = str(value or "").strip().lower()
+    if not normalized:
+        return False
+    return _verdict_label(normalized) in {"high", "critical", "no-go"} or bool(
+        re.search(r"\bsevere\b", normalized)
+    )
+
+
 def _verdict_label(value: str | None) -> str | None:
     match = _VERDICT_PREFIX_PATTERN.match(str(value or ""))
     if match is None:
@@ -2467,8 +2476,12 @@ def _apply_evidence_law_runtime_gate(
         if finding.severity in {"high", "critical"}
         and _has_linked_deterministic_evidence(finding, evidence_by_id)
     ]
+    report_level_severe_signal = assessment.severity in {"high", "critical"} or (
+        assessment.score >= _SEVERITY_SCORE_FLOOR["high"]
+        and _text_claims_severe_risk(assessment.top_risk)
+    )
     unsupported_report_severity = (
-        assessment.severity in {"high", "critical"} and not supported_severe_findings
+        report_level_severe_signal and not supported_severe_findings
     )
     top_supported_finding = (
         _highest_severity_finding(supported_severe_findings)
