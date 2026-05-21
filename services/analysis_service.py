@@ -283,6 +283,15 @@ def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
     return changes
 
 
+def _normalize_incident_matches(matches: list[IncidentMatch]) -> list[IncidentMatch]:
+    return [
+        IncidentMatch.model_validate(match.model_dump())
+        if isinstance(match, BaseModel)
+        else IncidentMatch.model_validate(match)
+        for match in matches
+    ]
+
+
 def _raw_files_for_parse_batch(
     files: list[tuple[str, bytes | None]],
     parse_batch: ParseBatchResult,
@@ -978,7 +987,7 @@ def build_analysis_artifacts(
     )
     blast_radius = compute_blast_radius(changes, topology, topology_warning)
     rollback_plan = generate_rollback_plan(changes, partial_context=partial_context)
-    incident_matches = (
+    incident_matches = _normalize_incident_matches(
         []
         if project_id is None and project_key is None
         else find_incident_matches(
@@ -1075,6 +1084,7 @@ def analyze_uploaded_files(
             artifacts.narrative,
             blast_radius=artifacts.blast_radius,
             rollback_plan=artifacts.rollback_plan,
+            incident_matches=artifacts.incident_matches,
             findings=artifacts.findings,
             evidence_items=artifacts.evidence_items,
             artifact_snapshots={name: raw_content for name, raw_content in files},

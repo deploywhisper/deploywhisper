@@ -241,6 +241,73 @@ def _unsupported_fields(resource: dict[str, Any], change: dict[str, Any]) -> lis
     ]
 
 
+def _string_values(*values: Any) -> list[str]:
+    normalized: list[str] = []
+    for value in values:
+        if isinstance(value, list):
+            normalized.extend(str(item) for item in value if item is not None)
+        elif value is not None:
+            normalized.append(str(value))
+    return normalized
+
+
+def _int_or_none(value: Any) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalized_ingress_rule(rule: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "protocol": str(rule.get("protocol") or rule.get("ip_protocol") or ""),
+        "from_port": _int_or_none(rule.get("from_port")),
+        "to_port": _int_or_none(rule.get("to_port")),
+        "cidr_blocks": _string_values(rule.get("cidr_blocks"), rule.get("cidr_ipv4")),
+        "ipv6_cidr_blocks": _string_values(
+            rule.get("ipv6_cidr_blocks"), rule.get("cidr_ipv6")
+        ),
+    }
+
+
+def _network_ingress_rules(
+    resource: dict[str, Any], change: dict[str, Any]
+) -> list[dict[str, Any]]:
+    after = change.get("after")
+    if not isinstance(after, dict):
+        return []
+    resource_type = str(resource.get("type") or "").lower()
+
+    if resource_type == "aws_security_group_rule":
+        if str(after.get("type") or "").lower() != "ingress":
+            return []
+        normalized = _normalized_ingress_rule(after)
+        if normalized["cidr_blocks"] or normalized["ipv6_cidr_blocks"]:
+            return [normalized]
+        return []
+
+    if resource_type == "aws_vpc_security_group_ingress_rule":
+        normalized = _normalized_ingress_rule(after)
+        if normalized["cidr_blocks"] or normalized["ipv6_cidr_blocks"]:
+            return [normalized]
+        return []
+
+    ingress = after.get("ingress")
+    if not isinstance(ingress, list):
+        return []
+
+    rules: list[dict[str, Any]] = []
+    for rule in ingress:
+        if not isinstance(rule, dict):
+            continue
+        normalized = _normalized_ingress_rule(rule)
+        if normalized["cidr_blocks"] or normalized["ipv6_cidr_blocks"]:
+            rules.append(normalized)
+    return rules
+
+
 def _plan_metadata(
     resource: dict[str, Any],
     change: dict[str, Any],
@@ -270,6 +337,9 @@ def _plan_metadata(
         ),
         "unsupported_fields": _unsupported_fields(resource, change),
     }
+    ingress_rules = _network_ingress_rules(resource, change)
+    if ingress_rules:
+        metadata["network_ingress_rules"] = ingress_rules
     if include_plan_unsupported_fields:
         metadata["plan_unsupported_fields"] = _unsupported_plan_fields(payload)
     return metadata

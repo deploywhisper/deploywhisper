@@ -19,6 +19,7 @@ import models.tables as tables_module
 import services.report_service as report_service_module
 import services.analysis_service as analysis_service_module
 import services.project_service as project_service_module
+from analysis.incident_matcher import IncidentMatch
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from cli.analyze import main
 from importlib import reload
@@ -590,12 +591,33 @@ class AnalyzeCliTests(unittest.TestCase):
             warnings=[],
         )
         output = io.StringIO()
+        incident_match = IncidentMatch(
+            incident_id=0,
+            match_type="public_risk_pattern",
+            public_pattern_id="public-ingress-wide-open",
+            title="Wide-open administrative ingress",
+            severity="high",
+            source_file="plan.json",
+            incident_date=None,
+            similarity=0.86,
+            confidence=0.86,
+            reason="The change exposes administrative ingress publicly.",
+            evidence=["plan.json: aws_security_group.main (modify) - public SSH"],
+            verification_guidance=[
+                "Confirm public CIDR is intentional.",
+                "Restrict ingress to trusted networks.",
+            ],
+            summary="Public risk pattern match: wide-open administrative ingress.",
+        )
 
         with (
             patch(
                 "services.analysis_service.generate_narrative", return_value=narrative
             ),
-            patch("services.analysis_service.find_incident_matches", return_value=[]),
+            patch(
+                "services.analysis_service.find_incident_matches",
+                return_value=[incident_match],
+            ),
             patch(
                 "sys.argv",
                 [
@@ -619,6 +641,19 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
         self.assertIn("context_completeness", payload["data"]["assessment"])
+        self.assertEqual(
+            payload["data"]["incident_matches"][0]["public_pattern_id"],
+            "public-ingress-wide-open",
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["incident_matches"][0][
+                "public_pattern_id"
+            ],
+            "public-ingress-wide-open",
+        )
+        self.assertTrue(
+            payload["data"]["persisted_report"]["incident_matches"][0]["evidence"]
+        )
         self.assertTrue(payload["data"]["findings"])
         self.assertEqual(payload["data"]["findings"][0]["confidence"], 1.0)
         self.assertFalse(payload["data"]["advisory"]["should_block"])

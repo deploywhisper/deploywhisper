@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from nicegui import ui
 
 from analysis.blast_radius import BlastRadiusResult
+from analysis.incident_matcher import IncidentMatch
 from analysis.rollback_planner import RollbackPlan
 from services.feedback_service import (
     FeedbackError,
@@ -30,6 +31,7 @@ from ui.components.findings_table import (
     describe_evidence_item,
     render_findings_table,
 )
+from ui.components.incident_match_card import render_incident_matches
 from ui.components.review_accessibility import decorate_review_section
 from ui.components.rollback_plan import render_rollback_plan
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
@@ -818,6 +820,12 @@ def render_report_detail_page(
     render_context_summary_panel(context)
     _render_operational_narrative(report)
     render_confidence_ledger(report)
+    render_incident_matches(
+        [
+            IncidentMatch.model_validate(match)
+            for match in (report.get("incident_matches") or [])
+        ]
+    )
     render_findings_table(
         findings,
         evidence_items,

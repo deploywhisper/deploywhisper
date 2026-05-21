@@ -98,6 +98,135 @@ class TerraformParserTests(unittest.TestCase):
         self.assertIn("changes network access rules", change.summary)
         self.assertNotIn("Plan metadata:", change.summary)
 
+    def test_parse_terraform_plan_json_extracts_ingress_rule_facts(self) -> None:
+        raw = b"""{
+  "resource_changes": [
+    {
+      "address": "aws_security_group.admin",
+      "type": "aws_security_group",
+      "change": {
+        "actions": ["update"],
+        "after": {
+          "ingress": [
+            {
+              "protocol": "tcp",
+              "from_port": 22,
+              "to_port": 22,
+              "cidr_blocks": ["0.0.0.0/0"],
+              "ipv6_cidr_blocks": ["::/0"]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}"""
+
+        changes = parse_terraform("tfplan.json", raw)
+
+        self.assertEqual(
+            changes[0].metadata["network_ingress_rules"],
+            [
+                {
+                    "protocol": "tcp",
+                    "from_port": 22,
+                    "to_port": 22,
+                    "cidr_blocks": ["0.0.0.0/0"],
+                    "ipv6_cidr_blocks": ["::/0"],
+                }
+            ],
+        )
+
+    def test_parse_terraform_plan_json_extracts_standalone_ingress_rule_facts(
+        self,
+    ) -> None:
+        raw = b"""{
+  "resource_changes": [
+    {
+      "address": "aws_security_group_rule.ssh",
+      "type": "aws_security_group_rule",
+      "change": {
+        "actions": ["create"],
+        "after": {
+          "type": "ingress",
+          "protocol": "tcp",
+          "from_port": 22,
+          "to_port": 22,
+          "cidr_blocks": ["0.0.0.0/0"],
+          "ipv6_cidr_blocks": ["::/0"]
+        }
+      }
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.rdp",
+      "type": "aws_vpc_security_group_ingress_rule",
+      "change": {
+        "actions": ["create"],
+        "after": {
+          "ip_protocol": "tcp",
+          "from_port": 3389,
+          "to_port": 3389,
+          "cidr_ipv4": "0.0.0.0/0",
+          "cidr_ipv6": "::/0"
+        }
+      }
+    }
+  ]
+}"""
+
+        changes = parse_terraform("tfplan.json", raw)
+
+        self.assertEqual(
+            changes[0].metadata["network_ingress_rules"],
+            [
+                {
+                    "protocol": "tcp",
+                    "from_port": 22,
+                    "to_port": 22,
+                    "cidr_blocks": ["0.0.0.0/0"],
+                    "ipv6_cidr_blocks": ["::/0"],
+                }
+            ],
+        )
+        self.assertEqual(
+            changes[1].metadata["network_ingress_rules"],
+            [
+                {
+                    "protocol": "tcp",
+                    "from_port": 3389,
+                    "to_port": 3389,
+                    "cidr_blocks": ["0.0.0.0/0"],
+                    "ipv6_cidr_blocks": ["::/0"],
+                }
+            ],
+        )
+
+    def test_parse_terraform_plan_json_ignores_standalone_egress_rule_facts(
+        self,
+    ) -> None:
+        raw = b"""{
+  "resource_changes": [
+    {
+      "address": "aws_security_group_rule.outbound",
+      "type": "aws_security_group_rule",
+      "change": {
+        "actions": ["create"],
+        "after": {
+          "type": "egress",
+          "protocol": "tcp",
+          "from_port": 22,
+          "to_port": 22,
+          "cidr_blocks": ["0.0.0.0/0"]
+        }
+      }
+    }
+  ]
+}"""
+
+        changes = parse_terraform("tfplan.json", raw)
+
+        self.assertNotIn("network_ingress_rules", changes[0].metadata)
+
     def test_parse_terraform_plan_json_trims_resource_addresses(self) -> None:
         raw = b"""{
   "resource_changes": [

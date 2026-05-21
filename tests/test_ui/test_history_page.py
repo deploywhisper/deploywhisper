@@ -32,6 +32,7 @@ from services.confidence_ledger import (
 from ui.formatters.datetime import format_history_timestamp
 from ui.formatters.recommendations import recommendation_classes, recommendation_text
 from ui.routes.history import page_selection_state
+from analysis.incident_matcher import IncidentMatch
 
 
 class HistoryPageHelpersTests(unittest.TestCase):
@@ -966,6 +967,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         project_id: int | None = None,
         workspace_id: int | None = None,
         tool: str = "terraform",
+        incident_matches: list[IncidentMatch] | None = None,
     ) -> dict:
         source_file = "plan.json" if tool == "terraform" else f"{tool}-review.yaml"
         parse_batch = ParseBatchResult(
@@ -1086,6 +1088,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
             audit_context={"source_interface": "ui"},
             project_id=project_id,
             workspace_id=workspace_id,
+            incident_matches=incident_matches,
         )
 
     def test_history_page_exposes_filters_and_row_metadata(self) -> None:
@@ -1237,6 +1240,40 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("95 days old", compare_response.text)
         self.assertIn("CURRENT", compare_response.text)
         self.assertIn("CRITICAL 90+", compare_response.text)
+
+    def test_public_report_route_renders_incident_matches(self) -> None:
+        report = self._persist_report(
+            incident_matches=[
+                IncidentMatch(
+                    incident_id=0,
+                    match_type="public_risk_pattern",
+                    public_pattern_id="public-ingress-wide-open",
+                    title="Wide-open administrative ingress",
+                    severity="high",
+                    source_file="plan.json",
+                    incident_date=None,
+                    similarity=0.86,
+                    confidence=0.86,
+                    reason="The change exposes administrative ingress publicly.",
+                    evidence=[
+                        "plan.json: aws_security_group.main (modify) - public SSH"
+                    ],
+                    verification_guidance=["Confirm public CIDR is intentional."],
+                    summary=(
+                        "Public risk pattern match: wide-open administrative ingress."
+                    ),
+                )
+            ],
+        )
+
+        response = self.client.get(f"/reports/{report['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Incident and risk pattern similarity", response.text)
+        self.assertIn("Public risk pattern", response.text)
+        self.assertIn("86% confidence", response.text)
+        self.assertIn("Evidence:", response.text)
+        self.assertIn("Confirm public CIDR is intentional.", response.text)
 
     def test_history_detail_route_shows_compare_button_and_diff_view(self) -> None:
         self._persist_report(

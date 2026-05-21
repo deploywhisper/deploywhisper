@@ -20,6 +20,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from analysis.blast_radius import BlastRadiusResult
+from analysis.incident_matcher import IncidentMatch
 from analysis.rollback_planner import RollbackPlan
 from analysis.risk_scorer import (
     RiskAssessment,
@@ -694,6 +695,16 @@ def _default_rollback_plan_payload() -> dict[str, Any]:
         ),
         "warning": None,
     }
+
+
+def _load_incident_matches_payload(raw_value: str | None) -> list[dict[str, Any]]:
+    try:
+        decoded = json.loads(raw_value or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(decoded, list):
+        return []
+    return [item for item in decoded if isinstance(item, dict)]
 
 
 def _pending_analysis_from_parse_batch(
@@ -3495,6 +3506,9 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
             json.loads(getattr(report, "rollback_plan_json", "") or "{}")
             or _default_rollback_plan_payload()
         ),
+        "incident_matches": _load_incident_matches_payload(
+            getattr(report, "incident_matches_json", None)
+        ),
         "parse_summary": report.parse_summary,
         "submission_manifest": submission_manifest,
         "submission_manifest_fallback": submission_manifest_fallback,
@@ -3555,6 +3569,7 @@ def persist_analysis_report(
     narrative: NarrativeResult,
     blast_radius: BlastRadiusResult | None = None,
     rollback_plan: RollbackPlan | None = None,
+    incident_matches: list[IncidentMatch] | None = None,
     findings: list[Finding] | None = None,
     evidence_items: list[EvidenceItem] | None = None,
     artifact_snapshots: dict[str, bytes | None] | None = None,
@@ -3729,6 +3744,12 @@ def persist_analysis_report(
                         rollback_plan.model_dump(mode="json")
                         if rollback_plan is not None
                         else {}
+                    ),
+                    incident_matches_json=json.dumps(
+                        [
+                            match.model_dump(mode="json")
+                            for match in (incident_matches or [])
+                        ]
                     ),
                     llm_provider=audit["llm_provider"],
                     llm_model=audit["llm_model"],

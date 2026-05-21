@@ -212,6 +212,7 @@ if "AnalysisReport" not in globals():
         )
         blast_radius_json: Mapped[str] = mapped_column(Text, default="{}")
         rollback_plan_json: Mapped[str] = mapped_column(Text, default="{}")
+        incident_matches_json: Mapped[str] = mapped_column(Text, default="[]")
         llm_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
         llm_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
         llm_local_mode: Mapped[str | None] = mapped_column(String(10), nullable=True)

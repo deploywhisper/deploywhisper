@@ -6,7 +6,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from api.schemas import PersistedReportData
+from api.schemas import IncidentMatchData, PersistedReportData
 
 
 class ApiSchemaTests(unittest.TestCase):
@@ -85,6 +85,29 @@ class ApiSchemaTests(unittest.TestCase):
 
         with self.assertRaises(ValidationError):
             PersistedReportData.model_validate(payload)
+
+    def test_incident_match_schema_exposes_public_risk_pattern_context(self) -> None:
+        match = IncidentMatchData.model_validate(
+            {
+                "incident_id": 0,
+                "match_type": "public_risk_pattern",
+                "public_pattern_id": "public-ingress-wide-open",
+                "title": "Wide-open administrative ingress",
+                "severity": "high",
+                "source_file": "plan.json",
+                "incident_date": None,
+                "similarity": 0.86,
+                "confidence": 0.86,
+                "reason": "Public ingress matched a built-in failure mode.",
+                "evidence": ["plan.json: aws_security_group.ssh"],
+                "verification_guidance": ["Restrict SSH ingress."],
+                "summary": "Public risk pattern match.",
+            }
+        )
+
+        self.assertEqual(match.match_type, "public_risk_pattern")
+        self.assertEqual(match.public_pattern_id, "public-ingress-wide-open")
+        self.assertEqual(match.verification_guidance, ["Restrict SSH ingress."])
 
 
 if __name__ == "__main__":
