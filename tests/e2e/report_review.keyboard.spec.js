@@ -604,6 +604,15 @@ test.describe("review keyboard flow", () => {
       page.getByRole("main", { name: "Analysis history workspace" })
     ).toBeVisible();
     await expect(page.locator(".dw-history-card")).toHaveCount(2);
+    await expect(page.getByText("Project filter", { exact: true })).toBeVisible();
+    await expect(page.getByText("Workspace", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Time range", { exact: true })).toBeVisible();
+    await expect(page.getByText("Risk verdict", { exact: true })).toBeVisible();
+    await expect(page.getByText("Toolchain", { exact: true })).toBeVisible();
+    await expect(page.getByText("Analysis status", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Tools: /).first()).toBeVisible();
+    await expect(page.getByText("Schema: v2").first()).toBeVisible();
+    await expect(page.getByText(/Status: /).first()).toBeVisible();
     await expect(page.getByText("Rescan diff")).toBeVisible();
     await expect(page.getByText("+48 risk vs report #1")).toBeVisible();
     await page.locator(".dw-history-card").first().click();

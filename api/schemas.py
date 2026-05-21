@@ -355,6 +355,14 @@ class PersistedReportData(BaseModel):
     report_schema_version: str = Field(
         ..., description="Persisted report schema version"
     )
+    tool_mix: list[str] = Field(
+        default_factory=list,
+        description="Supported toolchains represented in this persisted report",
+    )
+    analysis_status: Literal["complete", "degraded", "fallback"] = Field(
+        default="complete",
+        description="High-level persisted analysis completion/degradation status",
+    )
     top_risk_contributors: list[str] = Field(default_factory=list)
     context_completeness: "ContextCompletenessData" = Field(
         default_factory=lambda: ContextCompletenessData()

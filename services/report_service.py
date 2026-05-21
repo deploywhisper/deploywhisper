@@ -2369,6 +2369,15 @@ def _score_matches_severity(score: int, severity: str) -> bool:
     return _SEVERITY_SCORE_FLOOR[severity] <= score <= _SEVERITY_SCORE_CEILING[severity]
 
 
+def _text_claims_severe_risk(value: str | None) -> bool:
+    normalized = str(value or "").strip().lower()
+    if not normalized:
+        return False
+    return _verdict_label(normalized) in {"high", "critical", "no-go"} or bool(
+        re.search(r"\bsevere\b", normalized)
+    )
+
+
 def _verdict_label(value: str | None) -> str | None:
     match = _VERDICT_PREFIX_PATTERN.match(str(value or ""))
     if match is None:
@@ -2467,8 +2476,12 @@ def _apply_evidence_law_runtime_gate(
         if finding.severity in {"high", "critical"}
         and _has_linked_deterministic_evidence(finding, evidence_by_id)
     ]
+    report_level_severe_signal = assessment.severity in {"high", "critical"} or (
+        assessment.score >= _SEVERITY_SCORE_FLOOR["high"]
+        and _text_claims_severe_risk(assessment.top_risk)
+    )
     unsupported_report_severity = (
-        assessment.severity in {"high", "critical"} and not supported_severe_findings
+        report_level_severe_signal and not supported_severe_findings
     )
     top_supported_finding = (
         _highest_severity_finding(supported_severe_findings)
@@ -2949,6 +2962,50 @@ def _readable_report_schema_versions() -> tuple[str, ...]:
     )
 
 
+def _history_tool_mix(
+    contributors: list[dict[str, Any]],
+    submission_manifest: dict[str, Any],
+    analyzed_files: list[dict[str, Any]] | None = None,
+    submission_manifest_fallback: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    tools: set[str] = set()
+    for contributor in contributors:
+        tool = str(contributor.get("tool") or "").strip().lower()
+        if tool:
+            tools.add(tool)
+    for item in submission_manifest.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        tool = str(item.get("tool") or "").strip().lower()
+        if tool:
+            tools.add(tool)
+    for analyzed_file in analyzed_files or []:
+        if not isinstance(analyzed_file, dict):
+            continue
+        tool = str(analyzed_file.get("tool") or "").strip().lower()
+        if tool:
+            tools.add(tool)
+    for fallback_item in submission_manifest_fallback or []:
+        if not isinstance(fallback_item, dict):
+            continue
+        tool = str(fallback_item.get("tool") or "").strip().lower()
+        if tool and tool != "unknown":
+            tools.add(tool)
+    return sorted(tools)
+
+
+def _history_analysis_status(
+    *,
+    narrative_degraded: bool,
+    narrative_source: str | None,
+) -> str:
+    if narrative_source == "fallback":
+        return "fallback"
+    if narrative_degraded:
+        return "degraded"
+    return "complete"
+
+
 def _load_submission_manifest_payload(
     raw_value: str | None,
 ) -> tuple[dict[str, Any] | None, str | None]:
@@ -3254,12 +3311,14 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=UTC)
     warnings = json.loads(report.warnings_json or "[]")
+    contributors = json.loads(report.contributors_json or "[]")
     submission_manifest, manifest_warning = _load_submission_manifest_payload(
         getattr(report, "submission_manifest_json", None)
     )
     submission_manifest_fallback = _load_submission_manifest_fallback_payload(
         getattr(report, "submission_manifest_fallback_json", None)
     )
+    analyzed_files = json.loads(report.analyzed_files_json or "[]")
     manifest_provenance = (
         dict(submission_manifest.get("provenance") or {})
         if isinstance(submission_manifest, dict)
@@ -3277,7 +3336,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     )
     persisted_at = created_at.isoformat()
     audit = {
-        "files_analyzed": json.loads(report.analyzed_files_json or "[]"),
+        "files_analyzed": analyzed_files,
         "llm_provider": report.llm_provider,
         "llm_model": report.llm_model,
         "llm_local_mode": report.llm_local_mode == "true"
@@ -3411,6 +3470,16 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "report_schema_version": readable_report_schema_version(
             getattr(report, "report_schema_version", None)
         ),
+        "tool_mix": _history_tool_mix(
+            contributors,
+            submission_manifest or {},
+            analyzed_files,
+            submission_manifest_fallback,
+        ),
+        "analysis_status": _history_analysis_status(
+            narrative_degraded=narrative_degraded,
+            narrative_source=narrative_source,
+        ),
         "top_risk_contributors": json.loads(
             report.risk_assessment.top_risk_contributors_json
             if report.risk_assessment is not None
@@ -3464,7 +3533,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
             for finding in report.findings
         ],
         "evidence_items": evidence_items,
-        "contributors": json.loads(report.contributors_json or "[]"),
+        "contributors": contributors,
         "dashboard_display_duration_seconds": report.dashboard_display_duration_seconds,
         "share_password_hash": getattr(report, "share_password_hash", None),
         "share_password_salt": getattr(report, "share_password_salt", None),
@@ -3883,6 +3952,10 @@ def fetch_filtered_analysis_history(
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
+    toolchain: str | None = None,
+    analysis_status: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
 ) -> list[dict]:
     page = fetch_filtered_analysis_history_page(
         project_id=project_id,
@@ -3892,6 +3965,10 @@ def fetch_filtered_analysis_history(
         severity=severity,
         recommendation=recommendation,
         search=search,
+        toolchain=toolchain,
+        analysis_status=analysis_status,
+        created_from=created_from,
+        created_to=created_to,
     )
     return page["items"]
 
@@ -3905,6 +3982,10 @@ def fetch_filtered_analysis_history_page(
     severity: str | None = None,
     recommendation: str | None = None,
     search: str | None = None,
+    toolchain: str | None = None,
+    analysis_status: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     page: int = 1,
     page_size: int = 50,
     skip_unreadable_schema: bool = False,
@@ -3939,6 +4020,10 @@ def fetch_filtered_analysis_history_page(
                     severity=severity,
                     recommendation=recommendation,
                     search=search,
+                    toolchain=toolchain,
+                    analysis_status=analysis_status,
+                    created_from=created_from,
+                    created_to=created_to,
                     report_schema_versions=readable_schema_versions,
                     limit=page_size,
                     offset=offset,
@@ -3959,6 +4044,10 @@ def fetch_filtered_analysis_history_page(
                     severity=severity,
                     recommendation=recommendation,
                     search=search,
+                    toolchain=toolchain,
+                    analysis_status=analysis_status,
+                    created_from=created_from,
+                    created_to=created_to,
                     report_schema_versions=readable_schema_versions,
                 )
             else:
@@ -3969,6 +4058,10 @@ def fetch_filtered_analysis_history_page(
                     severity=severity,
                     recommendation=recommendation,
                     search=search,
+                    toolchain=toolchain,
+                    analysis_status=analysis_status,
+                    created_from=created_from,
+                    created_to=created_to,
                     limit=page_size,
                     offset=offset,
                     include_evidence=False,
@@ -3988,6 +4081,10 @@ def fetch_filtered_analysis_history_page(
                     severity=severity,
                     recommendation=recommendation,
                     search=search,
+                    toolchain=toolchain,
+                    analysis_status=analysis_status,
+                    created_from=created_from,
+                    created_to=created_to,
                 )
             return (
                 _attach_previous_scan_diffs(serialized_reports, serialized_all_reports),
@@ -4001,6 +4098,63 @@ def fetch_filtered_analysis_history_page(
         "page": page,
         "page_size": page_size,
     }
+
+
+def fetch_history_toolchains(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+    skip_unreadable_schema: bool = False,
+) -> list[str]:
+    """Return distinct structured tool names for the authorized history scope."""
+    resolved_project_id, resolved_workspace_id = _resolve_report_scope(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    readable_schema_versions = (
+        _readable_report_schema_versions() if skip_unreadable_schema else None
+    )
+
+    def operation():
+        with SessionLocal() as session:
+            reports = list_analysis_reports(
+                session,
+                project_id=resolved_project_id,
+                workspace_id=resolved_workspace_id,
+                report_schema_versions=readable_schema_versions,
+                include_evidence=False,
+            )
+            tools: set[str] = set()
+            for report in reports:
+                try:
+                    contributors = json.loads(report.contributors_json or "[]")
+                    analyzed_files = json.loads(report.analyzed_files_json or "[]")
+                except json.JSONDecodeError:
+                    contributors = []
+                    analyzed_files = []
+                submission_manifest, _ = _load_submission_manifest_payload(
+                    getattr(report, "submission_manifest_json", None)
+                )
+                submission_manifest_fallback = (
+                    _load_submission_manifest_fallback_payload(
+                        getattr(report, "submission_manifest_fallback_json", None)
+                    )
+                )
+                tools.update(
+                    _history_tool_mix(
+                        contributors if isinstance(contributors, list) else [],
+                        submission_manifest or {},
+                        analyzed_files if isinstance(analyzed_files, list) else [],
+                        submission_manifest_fallback,
+                    )
+                )
+            return sorted(tools)
+
+    return _run_with_schema_retry(operation)
 
 
 def fetch_risk_trends(

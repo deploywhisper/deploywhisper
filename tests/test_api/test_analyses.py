@@ -6,6 +6,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from importlib import reload
 from pathlib import Path
 from unittest.mock import patch
@@ -478,6 +479,172 @@ class AnalysesApiTests(unittest.TestCase):
         payload = scoped_list_response.json()
         self.assertEqual(payload["meta"]["total_count"], 1)
         self.assertEqual(payload["data"][0]["workspace"]["workspace_key"], "prod")
+
+    def test_list_analyses_filters_history_facets_without_cross_project_leaks(
+        self,
+    ) -> None:
+        payments = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        prod = project_service_module.create_workspace(
+            project_key=payments.project_key,
+            workspace_key="prod",
+            display_name="Production",
+            environment="prod",
+        )
+        platform = project_service_module.create_project(
+            project_key="platform",
+            display_name="Platform",
+        )
+        payments_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments-prod.tfplan",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=91,
+                severity="critical",
+                recommendation="no-go",
+                top_risk="Payments production ingress widened.",
+                contributors=[
+                    RiskContributor(
+                        source_file="payments-prod.tfplan",
+                        tool="terraform",
+                        resource_id="aws_security_group.payments",
+                        action="modify",
+                        contribution=30,
+                        summary="Payments production ingress widened.",
+                    )
+                ],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="NO-GO: payments production ingress widened.",
+                explanation="Payments production report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+                source="llm",
+            ),
+            project_id=payments.id,
+            workspace_id=prod.id,
+            audit_context={"source_interface": "api"},
+        )
+        report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="platform-rollout.yaml",
+                        tool="kubernetes",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=92,
+                severity="critical",
+                recommendation="no-go",
+                top_risk="Platform production ingress widened.",
+                contributors=[
+                    RiskContributor(
+                        source_file="platform-rollout.yaml",
+                        tool="kubernetes",
+                        resource_id="deployment/platform",
+                        action="modify",
+                        contribution=30,
+                        summary="Platform production ingress widened.",
+                    )
+                ],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="NO-GO: platform production ingress widened.",
+                explanation="Platform production report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+                source="llm",
+            ),
+            project_id=platform.id,
+            audit_context={"source_interface": "api"},
+        )
+        with database_module.SessionLocal() as session:
+            session.get(
+                tables_module.AnalysisReport, payments_report["id"]
+            ).created_at = datetime(2026, 5, 18, 12, 0, tzinfo=UTC)
+            session.commit()
+
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={
+                "project_key": payments.project_key,
+                "workspace_key": prod.workspace_key,
+                "severity": "medium",
+                "recommendation": "caution",
+                "toolchain": "terraform",
+                "analysis_status": "complete",
+                "created_from": "2026-05-01T00:00:00Z",
+                "created_to": "2026-05-20T00:00:00Z",
+            },
+        )
+        foreign_response = self.client.get(
+            "/api/v1/analyses",
+            params={"project_key": platform.project_key},
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": payments.project_key,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["total_count"], 1)
+        self.assertEqual(payload["data"][0]["id"], payments_report["id"])
+        self.assertEqual(payload["data"][0]["project"]["project_key"], "payments")
+        self.assertEqual(payload["data"][0]["workspace"]["workspace_key"], "prod")
+        self.assertEqual(payload["data"][0]["tool_mix"], ["terraform"])
+        self.assertEqual(payload["data"][0]["analysis_status"], "complete")
+        self.assertNotIn("Platform production ingress widened.", response.text)
+        self.assertEqual(foreign_response.status_code, 200)
+        self.assertEqual(foreign_response.json()["meta"]["total_count"], 0)
+        self.assertEqual(foreign_response.json()["data"], [])
+        self.assertNotIn("Platform production ingress widened.", foreign_response.text)
+
+    def test_list_analyses_rejects_naive_history_time_bounds(self) -> None:
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={"created_from": "2026-05-01T00:00:00"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"]["code"],
+            "invalid_history_time_bound",
+        )
+
+    def test_list_analyses_rejects_invalid_analysis_status(self) -> None:
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={"analysis_status": "degradded"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"]["code"],
+            "invalid_analysis_status",
+        )
 
     def test_configure_share_is_disabled_without_management_token(self) -> None:
         response = self.client.post(
@@ -1378,8 +1545,9 @@ class AnalysesApiTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["meta"]["total_count"], 0)
+        self.assertEqual(response.json()["data"], [])
 
     def test_analysis_reads_mask_conflicting_project_reference_for_scoped_actor(
         self,
@@ -1414,10 +1582,9 @@ class AnalysesApiTests(unittest.TestCase):
             headers=headers,
         )
 
-        self.assertEqual(list_response.status_code, 403)
-        self.assertEqual(
-            list_response.json()["error"]["code"], "project_scope_forbidden"
-        )
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.json()["meta"]["total_count"], 0)
+        self.assertEqual(list_response.json()["data"], [])
         self.assertEqual(detail_response.status_code, 403)
         self.assertEqual(
             detail_response.json()["error"]["code"], "project_scope_forbidden"
@@ -1476,11 +1643,9 @@ class AnalysesApiTests(unittest.TestCase):
             headers=headers,
         )
 
-        self.assertEqual(list_response.status_code, 403)
-        self.assertEqual(
-            list_response.json()["error"]["code"], "project_scope_forbidden"
-        )
-        self.assertNotIn("payments", list_response.json()["error"]["message"])
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.json()["meta"]["total_count"], 0)
+        self.assertEqual(list_response.json()["data"], [])
         self.assertEqual(detail_response.status_code, 403)
         self.assertEqual(
             detail_response.json()["error"]["code"], "project_scope_forbidden"

@@ -42,6 +42,20 @@ def _report_confidence(report: dict) -> float | None:
     return coerce_confidence(report.get("confidence"))
 
 
+def _scope_label(report: dict) -> str:
+    project = report.get("project") or {}
+    workspace = report.get("workspace") or {}
+    project_label = str(
+        project.get("display_name") or project.get("project_key") or "Unassigned"
+    )
+    if not workspace:
+        return f"Project: {project_label} · Workspace: All"
+    workspace_label = str(
+        workspace.get("display_name") or workspace.get("workspace_key") or "Workspace"
+    )
+    return f"Project: {project_label} · Workspace: {workspace_label}"
+
+
 def render_analysis_history_row(
     report: dict, on_open, *, on_toggle=None, on_delete=None, selected: bool = False
 ):
@@ -79,6 +93,18 @@ def render_analysis_history_row(
                 )
                 if summary:
                     ui.label(summary).classes("text-xs dw-muted leading-5")
+                tool_mix = report.get("tool_mix") or ["unknown"]
+                with ui.row().classes(
+                    "w-full items-center gap-2 flex-wrap text-[11px] leading-5"
+                ):
+                    ui.label(_scope_label(report)).classes("dw-muted")
+                    ui.label(f"Tools: {', '.join(tool_mix)}").classes("dw-muted")
+                    ui.label(
+                        f"Schema: {report.get('report_schema_version') or 'unknown'}"
+                    ).classes("dw-muted")
+                    ui.label(
+                        f"Status: {report.get('analysis_status') or 'complete'}"
+                    ).classes("dw-muted")
                 context = report.get("context_completeness") or {}
                 with ui.row().classes("w-full items-center gap-2 flex-wrap"):
                     ui.label("Topology freshness").classes(

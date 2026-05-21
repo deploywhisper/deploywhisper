@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import os
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
@@ -48,6 +49,7 @@ from services.project_service import resolve_project_reference
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
+_HISTORY_ANALYSIS_STATUSES = {"complete", "degraded", "fallback"}
 
 
 def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
@@ -117,6 +119,53 @@ def _project_scope_forbidden_error() -> ApiError:
         code="project_scope_forbidden",
         message="Caller is not authorized for the requested project.",
     )
+
+
+def _normalize_history_bound(
+    value: datetime | None, *, field_name: str
+) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ApiError(
+            status_code=400,
+            code="invalid_history_time_bound",
+            message=f"{field_name} must include a timezone offset.",
+        )
+    return value.astimezone(UTC)
+
+
+def _normalize_history_analysis_status(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized not in _HISTORY_ANALYSIS_STATUSES:
+        raise ApiError(
+            status_code=400,
+            code="invalid_analysis_status",
+            message=("analysis_status must be one of: complete, degraded, fallback."),
+        )
+    return normalized
+
+
+def _empty_analysis_list_response(*, page: int, page_size: int) -> AnalysisListResponse:
+    return AnalysisListResponse(
+        data=[],
+        meta=build_report_meta(
+            report_schema_version=REPORT_SCHEMA_VERSION,
+            report_schema_versions=[],
+            count=0,
+            total_count=0,
+            page=page,
+            page_size=page_size,
+        ),
+    )
+
+
+def _should_return_empty_history_for_scope_error(exc: PermissionError) -> bool:
+    return getattr(exc, "code", None) == "project_scope_forbidden"
 
 
 def _should_mask_project_reference_error(
@@ -322,6 +371,10 @@ def list_analyses(
     severity: str | None = Query(default=None),
     recommendation: str | None = Query(default=None),
     search: str | None = Query(default=None),
+    toolchain: str | None = Query(default=None),
+    analysis_status: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
     authorization: dict[str, object] = Depends(_authorization_context),
@@ -345,6 +398,15 @@ def list_analyses(
             project_id=project_id,
             project_key=project_key,
         )
+        created_from = _normalize_history_bound(
+            created_from,
+            field_name="created_from",
+        )
+        created_to = _normalize_history_bound(
+            created_to,
+            field_name="created_to",
+        )
+        analysis_status = _normalize_history_analysis_status(analysis_status)
         page_payload = fetch_filtered_analysis_history_page(
             project_id=project_id,
             project_key=project_key,
@@ -353,11 +415,21 @@ def list_analyses(
             severity=severity,
             recommendation=recommendation,
             search=search,
+            toolchain=toolchain,
+            analysis_status=analysis_status,
+            created_from=created_from,
+            created_to=created_to,
             page=page,
             page_size=page_size,
         )
     except PermissionError as exc:
+        if _should_return_empty_history_for_scope_error(exc):
+            return _empty_analysis_list_response(page=page, page_size=page_size)
         _raise_authorization_error(exc)
+    except ApiError as exc:
+        if exc.code == "project_scope_forbidden":
+            return _empty_analysis_list_response(page=page, page_size=page_size)
+        raise
     except ValueError as exc:
         if _should_mask_project_reference_error(
             authorization=authorization,
@@ -367,7 +439,7 @@ def list_analyses(
             authorization=authorization,
             exc=exc,
         ):
-            raise _project_scope_forbidden_error() from exc
+            return _empty_analysis_list_response(page=page, page_size=page_size)
         raise _project_api_error(exc) from exc
     reports = page_payload["items"]
     return AnalysisListResponse(
