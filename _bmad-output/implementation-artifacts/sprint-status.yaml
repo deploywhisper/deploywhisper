@@ -85,7 +85,7 @@ development_status:
   4-1-public-risk-pattern-library-v1: done
   4-2-safe-sample-incident-pack: done
   4-3-incident-import-for-markdown-yaml-and-json: done
-  4-4-incident-similarity-with-match-explanation: ready-for-dev
+  4-4-incident-similarity-with-match-explanation: done
   4-5-reviewer-feedback-capture: ready-for-dev
   4-6-deployment-outcome-capture: ready-for-dev
   4-7-incident-ingestion-management-and-indexing: ready-for-dev

@@ -3837,10 +3837,14 @@ class ReportServiceTests(unittest.TestCase):
                     incident_date=None,
                     similarity=0.86,
                     confidence=0.86,
+                    confidence_label="high",
                     reason="The change exposes administrative ingress publicly.",
                     evidence=[
                         "plan.json: aws_security_group.main (modify) - public SSH"
                     ],
+                    matched_signals=["0.0.0.0/0", "ssh"],
+                    affected_services=["aws_security_group.main"],
+                    prevention_notes=["Use trusted administrative access."],
                     verification_guidance=[
                         "Confirm public CIDR is intentional.",
                         "Restrict ingress to trusted networks.",
@@ -3896,6 +3900,19 @@ class ReportServiceTests(unittest.TestCase):
             "public-ingress-wide-open",
         )
         self.assertEqual(persisted["incident_matches"][0]["confidence"], 0.86)
+        self.assertEqual(persisted["incident_matches"][0]["confidence_label"], "high")
+        self.assertEqual(
+            persisted["incident_matches"][0]["matched_signals"],
+            ["0.0.0.0/0", "ssh"],
+        )
+        self.assertEqual(
+            persisted["incident_matches"][0]["affected_services"],
+            ["aws_security_group.main"],
+        )
+        self.assertEqual(
+            persisted["incident_matches"][0]["prevention_notes"],
+            ["Use trusted administrative access."],
+        )
         self.assertTrue(persisted["incident_matches"][0]["evidence"])
         self.assertEqual(
             persisted["rollback_plan"]["steps"][0]["estimated_minutes"], 15
@@ -3964,6 +3981,19 @@ class ReportServiceTests(unittest.TestCase):
                 "Confirm public CIDR is intentional.",
                 "Restrict ingress to trusted networks.",
             ],
+        )
+        self.assertEqual(fetched["incident_matches"][0]["confidence_label"], "high")
+        self.assertEqual(
+            fetched["incident_matches"][0]["matched_signals"],
+            ["0.0.0.0/0", "ssh"],
+        )
+        self.assertEqual(
+            fetched["incident_matches"][0]["affected_services"],
+            ["aws_security_group.main"],
+        )
+        self.assertEqual(
+            fetched["incident_matches"][0]["prevention_notes"],
+            ["Use trusted administrative access."],
         )
         self.assertEqual(
             fetched["rollback_plan"]["steps"][0]["title"],

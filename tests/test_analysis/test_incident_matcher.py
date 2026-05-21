@@ -106,6 +106,229 @@ class IncidentMatcherTests(unittest.TestCase):
         self.assertGreaterEqual(matches[0].confidence, 0.8)
         self.assertTrue(matches[0].verification_guidance)
 
+    def test_organization_match_explains_signals_services_and_prevention(
+        self,
+    ) -> None:
+        incident_service_module.ingest_incident_document(
+            "checkout-ingress.md",
+            "\n".join(
+                [
+                    "# Checkout ingress exposure",
+                    "Date: 2026-04-20",
+                    "Severity: high",
+                    "The checkout-api and edge-router exposed administrative ingress.",
+                    "## Affected services",
+                    "- checkout-api",
+                    "- edge-router",
+                    "## Prevention notes",
+                    "- Require expiry checks before public ingress changes.",
+                    "- Restrict administrative access to trusted CIDRs.",
+                ]
+            ),
+            project_id=self.project.id,
+        )
+        changes = [
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="aws_security_group.checkout_admin",
+                action="modify",
+                summary=(
+                    "Terraform opens checkout-api administrative ingress on "
+                    "edge-router from 0.0.0.0/0 on port 22."
+                ),
+            )
+        ]
+
+        matches = incident_matcher_module.find_incident_matches(
+            changes,
+            project_id=self.project.id,
+        )
+
+        organization_match = next(
+            match for match in matches if match.match_type == "organization_incident"
+        )
+        self.assertEqual(organization_match.title, "Checkout ingress exposure")
+        self.assertIn("checkout-api", organization_match.matched_signals)
+        self.assertEqual(
+            organization_match.affected_services, ["checkout-api", "edge-router"]
+        )
+        self.assertIn(
+            "Require expiry checks before public ingress changes.",
+            organization_match.prevention_notes,
+        )
+        self.assertEqual(organization_match.confidence_label, "high")
+        self.assertIn("organization-specific", organization_match.reason)
+        self.assertTrue(
+            any(match.match_type == "public_risk_pattern" for match in matches)
+        )
+
+    def test_weak_organization_signal_is_labeled_low_confidence(self) -> None:
+        incident_service_module.ingest_incident_document(
+            "checkout-cache.md",
+            "\n".join(
+                [
+                    "# Checkout cache warmup",
+                    "Severity: low",
+                    "Checkout cache warmup created latency during a deploy.",
+                    "## Affected services",
+                    "- checkout-api",
+                    "## Prevention notes",
+                    "- Warm caches before checkout deploys.",
+                ]
+            ),
+            project_id=self.project.id,
+        )
+        changes = [
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="module.checkout.aws_appautoscaling_target.api",
+                action="modify",
+                summary="Checkout service capacity tuning for the next deploy.",
+            )
+        ]
+
+        matches = incident_matcher_module.find_incident_matches(
+            changes,
+            project_id=self.project.id,
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].match_type, "organization_incident")
+        self.assertEqual(matches[0].confidence_label, "low")
+        self.assertIn("Low-confidence", matches[0].summary)
+        self.assertIn("checkout", matches[0].matched_signals)
+
+    def test_incident_match_derives_legacy_confidence_label_from_numeric_string(
+        self,
+    ) -> None:
+        match = incident_matcher_module.IncidentMatch.model_validate(
+            {
+                "incident_id": 17,
+                "match_type": "organization_incident",
+                "title": "Checkout ingress exposure",
+                "severity": "high",
+                "source_file": "checkout-ingress.md",
+                "incident_date": None,
+                "similarity": 0.86,
+                "confidence": "0.86",
+                "reason": "Legacy persisted payload.",
+                "evidence": ["matched signals: checkout-api"],
+                "verification_guidance": ["Compare against prior incident."],
+                "summary": "Legacy organization incident match.",
+            }
+        )
+
+        self.assertEqual(match.confidence, 0.86)
+        self.assertEqual(match.confidence_label, "high")
+
+    def test_recent_high_severity_incident_without_signals_does_not_match(
+        self,
+    ) -> None:
+        incident_service_module.ingest_incident_document(
+            "database-outage.md",
+            "\n".join(
+                [
+                    "# Database outage",
+                    "Date: 2026-05-20",
+                    "Severity: high",
+                    "Postgres failover caused write loss during recovery.",
+                ]
+            ),
+            project_id=self.project.id,
+        )
+        changes = [
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="aws_security_group.docs",
+                action="modify",
+                summary="Open web documentation port for public preview.",
+            )
+        ]
+
+        matches = incident_matcher_module.find_incident_matches(
+            changes,
+            project_id=self.project.id,
+        )
+
+        self.assertEqual(matches, [])
+
+    def test_short_service_name_does_not_substring_match_resource_identifier(
+        self,
+    ) -> None:
+        incident_service_module.ingest_incident_document(
+            "api-incident.md",
+            "\n".join(
+                [
+                    "# API outage",
+                    "Severity: high",
+                    "A generic API failed during deployment.",
+                    "## Affected services",
+                    "- api",
+                    "## Prevention notes",
+                    "- Stage generic API rollouts.",
+                ]
+            ),
+            project_id=self.project.id,
+        )
+        changes = [
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="module.payments.aws_lambda_function.graphql_api",
+                action="modify",
+                summary="Tune GraphQL function memory for payments.",
+            )
+        ]
+
+        matches = incident_matcher_module.find_incident_matches(
+            changes,
+            project_id=self.project.id,
+        )
+
+        self.assertEqual(matches, [])
+
+    def test_organization_match_accepts_common_explanation_heading_variants(
+        self,
+    ) -> None:
+        incident_service_module.ingest_incident_document(
+            "checkout-variant.md",
+            "\n".join(
+                [
+                    "# Checkout deploy incident",
+                    "Severity: medium",
+                    "Checkout rollout missed canary checks.",
+                    "## Affected service:",
+                    "- checkout-api",
+                    "## Prevention notes:",
+                    "- Run canary checks before checkout rollout.",
+                ]
+            ),
+            project_id=self.project.id,
+        )
+        changes = [
+            UnifiedChange(
+                source_file="plan.json",
+                tool="terraform",
+                resource_id="module.checkout.aws_ecs_service.api",
+                action="modify",
+                summary="Checkout service rollout capacity change.",
+            )
+        ]
+
+        matches = incident_matcher_module.find_incident_matches(
+            changes,
+            project_id=self.project.id,
+        )
+
+        self.assertEqual(matches[0].affected_services, ["checkout-api"])
+        self.assertEqual(
+            matches[0].prevention_notes,
+            ["Run canary checks before checkout rollout."],
+        )
+
     def test_find_incident_matches_detects_structured_terraform_ingress(
         self,
     ) -> None:

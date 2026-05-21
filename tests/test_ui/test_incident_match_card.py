@@ -19,6 +19,26 @@ def incident_match_card_test_page() -> None:
     render_incident_matches(
         [
             IncidentMatch(
+                incident_id=17,
+                match_type="organization_incident",
+                title="Checkout ingress exposure",
+                severity="high",
+                source_file="checkout-ingress.md",
+                incident_date="2026-04-20",
+                similarity=0.78,
+                confidence=0.78,
+                confidence_label="high",
+                reason="The change shares organization-specific incident signals.",
+                evidence=["overlap: checkout-api, ingress"],
+                matched_signals=["checkout-api", "ingress"],
+                affected_services=["checkout-api", "edge-router"],
+                prevention_notes=["Restrict administrative access to trusted CIDRs."],
+                verification_guidance=[
+                    "Compare the current change path against the prior incident timeline."
+                ],
+                summary="High-confidence organization-specific incident match.",
+            ),
+            IncidentMatch(
                 incident_id=0,
                 match_type="public_risk_pattern",
                 public_pattern_id="public-ingress-wide-open",
@@ -30,12 +50,15 @@ def incident_match_card_test_page() -> None:
                 confidence=0.86,
                 reason="The change exposes administrative ingress publicly.",
                 evidence=["plan.json: aws_security_group.main (modify) - public SSH"],
+                matched_signals=["0.0.0.0/0", "ssh"],
+                affected_services=["aws_security_group.main"],
+                prevention_notes=["Use a trusted administrative access path."],
                 verification_guidance=[
                     "Confirm public CIDR is intentional.",
                     "Restrict ingress to trusted networks.",
                 ],
                 summary="Public risk pattern match: wide-open administrative ingress.",
-            )
+            ),
         ]
     )
 
@@ -43,6 +66,33 @@ def incident_match_card_test_page() -> None:
 @ui.page("/_test/incident-match-card-empty")
 def incident_match_card_empty_test_page() -> None:
     render_incident_matches([])
+
+
+@ui.page("/_test/incident-match-card-public-only")
+def incident_match_card_public_only_test_page() -> None:
+    render_incident_matches(
+        [
+            IncidentMatch(
+                incident_id=0,
+                match_type="public_risk_pattern",
+                public_pattern_id="public-ingress-wide-open",
+                title="Wide-open administrative ingress",
+                severity="high",
+                source_file="plan.json",
+                incident_date=None,
+                similarity=0.86,
+                confidence=0.86,
+                confidence_label="high",
+                reason="The change exposes administrative ingress publicly.",
+                evidence=["plan.json: aws_security_group.main (modify) - public SSH"],
+                matched_signals=["0.0.0.0/0", "ssh"],
+                affected_services=["aws_security_group.main"],
+                prevention_notes=["Use a trusted administrative access path."],
+                verification_guidance=["Confirm public CIDR is intentional."],
+                summary="Public risk pattern match: wide-open administrative ingress.",
+            )
+        ]
+    )
 
 
 @ui.page("/_test/report-detail-incident-matches")
@@ -100,7 +150,12 @@ class IncidentMatchCardRenderingTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Incident and risk pattern similarity", response.text)
+        self.assertIn("Organization incident", response.text)
         self.assertIn("Public risk pattern", response.text)
+        self.assertIn("Matched signals:", response.text)
+        self.assertIn("checkout-api", response.text)
+        self.assertIn("Affected services:", response.text)
+        self.assertIn("Prevention notes:", response.text)
         self.assertIn("86% confidence", response.text)
         self.assertIn("Evidence:", response.text)
         self.assertIn("aws_security_group.main", response.text)
@@ -112,7 +167,16 @@ class IncidentMatchCardRenderingTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Incident and risk pattern similarity", response.text)
-        self.assertIn("No similar incidents found.", response.text)
+        self.assertIn("No organization-specific incident match found.", response.text)
+
+    def test_public_only_card_does_not_claim_prior_incident(self) -> None:
+        response = self.client.get("/_test/incident-match-card-public-only")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Public risk pattern", response.text)
+        self.assertIn("No organization-specific incident match found.", response.text)
+        self.assertIn("not prior incidents", response.text)
+        self.assertNotIn("Organization incident", response.text)
 
     def test_report_detail_renders_persisted_public_risk_pattern(self) -> None:
         response = self.client.get("/_test/report-detail-incident-matches")

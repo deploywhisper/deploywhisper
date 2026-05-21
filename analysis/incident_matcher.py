@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from parsers.base import UnifiedChange, normalize_change_action
 from services.incident_service import get_incident_records
@@ -31,17 +31,42 @@ class IncidentMatch(BaseModel):
     confidence: float = Field(
         default=0.0, description="Confidence that this memory signal applies."
     )
+    confidence_label: Literal["high", "medium", "low"] = Field(
+        default="low", description="Human-readable confidence bucket."
+    )
     reason: str = Field(
         default="", description="Why the incident or public pattern matched."
     )
     evidence: list[str] = Field(
         default_factory=list, description="Concrete evidence supporting the match."
     )
+    matched_signals: list[str] = Field(
+        default_factory=list,
+        description="Specific tokens, services, or risk signals that matched.",
+    )
+    affected_services: list[str] = Field(
+        default_factory=list,
+        description="Services affected in the matched incident or pattern.",
+    )
+    prevention_notes: list[str] = Field(
+        default_factory=list,
+        description="Prevention guidance from the incident or public pattern.",
+    )
     verification_guidance: list[str] = Field(
         default_factory=list,
         description="Human verification steps before acting on the match.",
     )
     summary: str = Field(..., description="Short operational explanation")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_confidence_label(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or value.get("confidence_label"):
+            return value
+        return {
+            **value,
+            "confidence_label": _confidence_label(value.get("confidence", 0.0)),
+        }
 
 
 def load_incident_candidates(
@@ -78,6 +103,20 @@ STOP_WORDS = {
     "delete",
     "destroy",
     "service",
+}
+
+LOW_CONFIDENCE_FLOOR = 0.05
+GENERIC_SERVICE_SEGMENTS = {
+    "api",
+    "app",
+    "auth",
+    "backend",
+    "frontend",
+    "job",
+    "service",
+    "server",
+    "web",
+    "worker",
 }
 
 
@@ -137,6 +176,97 @@ def _evidence_line(change: UnifiedChange) -> str:
         f"{change.source_file}: {change.resource_id} "
         f"({normalize_change_action(change.action)}) - {change.summary}"
     )
+
+
+def _confidence_label(confidence: Any) -> Literal["high", "medium", "low"]:
+    try:
+        numeric_confidence = float(confidence or 0.0)
+    except (TypeError, ValueError):
+        numeric_confidence = 0.0
+    if numeric_confidence >= 0.5:
+        return "high"
+    if numeric_confidence >= 0.35:
+        return "medium"
+    return "low"
+
+
+def _extract_markdown_list_section(content: str, section_title: str) -> list[str]:
+    lines = content.splitlines()
+    in_section = False
+    values: list[str] = []
+    wanted = _section_title_aliases(section_title)
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            title = _normalize_section_title(stripped.lstrip("#").strip())
+            if in_section and title not in wanted:
+                break
+            in_section = title in wanted
+            continue
+        if not in_section or not stripped:
+            continue
+        if stripped.startswith(("- ", "* ")):
+            values.append(stripped[2:].strip())
+        elif not values:
+            values.append(stripped)
+    return values
+
+
+def _normalize_section_title(title: str) -> str:
+    normalized = re.sub(r"[_:-]+", " ", title.casefold())
+    normalized = re.sub(r"\s+", " ", normalized).strip(" .")
+    return normalized
+
+
+def _section_title_aliases(section_title: str) -> set[str]:
+    normalized = _normalize_section_title(section_title)
+    aliases = {normalized}
+    if normalized.endswith("s"):
+        aliases.add(normalized[:-1])
+    else:
+        aliases.add(f"{normalized}s")
+    return aliases
+
+
+def _sorted_signals(signals: set[str], limit: int = 8) -> list[str]:
+    return sorted(signals, key=lambda signal: (len(signal), signal), reverse=True)[
+        :limit
+    ]
+
+
+def _text_segments(text: str) -> set[str]:
+    return {segment for segment in re.findall(r"[a-z0-9]+", text.casefold()) if segment}
+
+
+def _meaningful_service_segments(service: str) -> set[str]:
+    return {
+        segment
+        for segment in _text_segments(service)
+        if len(segment) > 2 and segment not in GENERIC_SERVICE_SEGMENTS
+    }
+
+
+def _service_matches_change(service: str, change_text: str) -> bool:
+    normalized = service.strip().casefold()
+    if not normalized:
+        return False
+    if normalized in _tokenize(change_text):
+        return True
+    meaningful_segments = _meaningful_service_segments(normalized)
+    if not meaningful_segments:
+        return False
+    return meaningful_segments <= _text_segments(change_text)
+
+
+def _affected_service_bonus(
+    affected_services: list[str], change_text: str
+) -> tuple[float, list[str]]:
+    matched_services = [
+        service
+        for service in affected_services
+        if _service_matches_change(service, change_text)
+    ]
+    return min(len(matched_services) * 0.18, 0.35), matched_services
 
 
 def _matches_wide_open_ingress(change: UnifiedChange) -> bool:
@@ -244,11 +374,22 @@ def find_public_risk_pattern_matches(
                     incident_date=None,
                     similarity=0.86,
                     confidence=0.86,
+                    confidence_label="high",
                     reason=(
                         "The change appears to expose administrative or data-plane "
                         "network access to the public internet."
                     ),
                     evidence=[_evidence_line(change)],
+                    matched_signals=[
+                        signal
+                        for signal in ["0.0.0.0/0", "::/0", "ssh", "rdp", "ingress"]
+                        if signal in _change_text(change)
+                    ],
+                    affected_services=[change.resource_id],
+                    prevention_notes=[
+                        "Use a trusted administrative access path instead of broad public ingress.",
+                        "Time-bound any exception and verify compensating controls before deployment.",
+                    ],
                     verification_guidance=[
                         "Confirm whether the public CIDR is intentional and time-bound.",
                         "Restrict administrative ingress to trusted networks or a managed access path.",
@@ -272,11 +413,21 @@ def find_public_risk_pattern_matches(
                     incident_date=None,
                     similarity=0.82,
                     confidence=0.82,
+                    confidence_label="high",
                     reason=(
                         "The change appears to destroy or replace a stateful resource "
                         "where data loss or prolonged recovery is a common failure mode."
                     ),
                     evidence=[_evidence_line(change)],
+                    matched_signals=[
+                        normalize_change_action(change.action),
+                        _resource_type(change),
+                    ],
+                    affected_services=[change.resource_id],
+                    prevention_notes=[
+                        "Require a tested backup, restore, or migration path before deployment.",
+                        "Confirm retention and deletion protection match the intended recovery posture.",
+                    ],
                     verification_guidance=[
                         "Confirm a tested backup, restore, or migration path exists.",
                         "Check retention, deletion protection, and rollback timing.",
@@ -332,7 +483,7 @@ def _recency_bonus(incident_date: str | None) -> float:
 
 def find_incident_matches(
     changes: list[UnifiedChange],
-    min_similarity: float = 0.2,
+    min_similarity: float = LOW_CONFIDENCE_FLOOR,
     *,
     project_id: int | None = None,
     project_key: str | None = None,
@@ -360,12 +511,13 @@ def find_incident_matches(
 
     matches: list[IncidentMatch] = []
     for candidate in candidates:
+        content = candidate.get("content", "")
         incident_text = " ".join(
             [
                 candidate.get("title", ""),
                 candidate.get("severity", ""),
                 candidate.get("source_file", ""),
-                candidate.get("content", ""),
+                content,
             ]
         )
         incident_tokens = _tokenize(incident_text)
@@ -373,15 +525,27 @@ def find_incident_matches(
             continue
         overlap = change_tokens & incident_tokens
         union = change_tokens | incident_tokens
+        affected_services = _extract_markdown_list_section(content, "Affected services")
+        service_bonus, matched_services = _affected_service_bonus(
+            affected_services, change_text
+        )
+        if not overlap and not matched_services:
+            continue
         similarity = len(overlap) / max(len(union), 1)
         similarity = min(
             1.0,
             similarity
             + _severity_bonus(candidate.get("severity", "unknown"))
-            + _recency_bonus(candidate.get("incident_date")),
+            + _recency_bonus(candidate.get("incident_date"))
+            + service_bonus,
         )
         if similarity < min_similarity:
             continue
+        rounded_similarity = round(similarity, 2)
+        matched_signals = _sorted_signals(overlap | set(matched_services))
+        confidence_label = _confidence_label(rounded_similarity)
+        prevention_notes = _extract_markdown_list_section(content, "Prevention notes")
+        label_prefix = f"{confidence_label.title()}-confidence"
         matches.append(
             IncidentMatch(
                 incident_id=candidate["id"],
@@ -391,23 +555,28 @@ def find_incident_matches(
                 severity=candidate["severity"],
                 source_file=candidate["source_file"],
                 incident_date=candidate.get("incident_date"),
-                similarity=round(similarity, 2),
-                confidence=round(similarity, 2),
+                similarity=rounded_similarity,
+                confidence=rounded_similarity,
+                confidence_label=confidence_label,
                 reason=(
                     "The current change shares deployment tokens with an "
-                    "organization-specific incident record."
+                    "organization-specific prior incident record."
                 ),
                 evidence=[
-                    f"overlap: {', '.join(sorted(overlap)[:8])}",
+                    f"matched signals: {', '.join(matched_signals)}",
                     f"incident source: {candidate['source_file']}",
                 ],
+                matched_signals=matched_signals,
+                affected_services=matched_services or affected_services,
+                prevention_notes=prevention_notes,
                 verification_guidance=[
                     "Compare the current change path against the prior incident timeline.",
                     "Confirm whether the same affected service, dependency, or rollback path applies.",
                 ],
                 summary=(
-                    f"Similar to prior incident '{candidate['title']}' "
-                    f"({candidate['severity']}) with {round(similarity * 100)}% token overlap."
+                    f"{label_prefix} organization-specific incident match: "
+                    f"'{candidate['title']}' ({candidate['severity']}) at "
+                    f"{round(similarity * 100)}% confidence."
                 ),
             )
         )

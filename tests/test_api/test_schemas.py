@@ -98,8 +98,12 @@ class ApiSchemaTests(unittest.TestCase):
                 "incident_date": None,
                 "similarity": 0.86,
                 "confidence": 0.86,
+                "confidence_label": "high",
                 "reason": "Public ingress matched a built-in failure mode.",
                 "evidence": ["plan.json: aws_security_group.ssh"],
+                "matched_signals": ["0.0.0.0/0", "ssh"],
+                "affected_services": ["aws_security_group.ssh"],
+                "prevention_notes": ["Use trusted administrative access."],
                 "verification_guidance": ["Restrict SSH ingress."],
                 "summary": "Public risk pattern match.",
             }
@@ -107,7 +111,32 @@ class ApiSchemaTests(unittest.TestCase):
 
         self.assertEqual(match.match_type, "public_risk_pattern")
         self.assertEqual(match.public_pattern_id, "public-ingress-wide-open")
+        self.assertEqual(match.confidence_label, "high")
+        self.assertEqual(match.matched_signals, ["0.0.0.0/0", "ssh"])
+        self.assertEqual(match.affected_services, ["aws_security_group.ssh"])
+        self.assertEqual(match.prevention_notes, ["Use trusted administrative access."])
         self.assertEqual(match.verification_guidance, ["Restrict SSH ingress."])
+
+    def test_incident_match_schema_derives_legacy_confidence_label(self) -> None:
+        match = IncidentMatchData.model_validate(
+            {
+                "incident_id": 0,
+                "match_type": "public_risk_pattern",
+                "public_pattern_id": "public-ingress-wide-open",
+                "title": "Wide-open administrative ingress",
+                "severity": "high",
+                "source_file": "plan.json",
+                "incident_date": None,
+                "similarity": 0.86,
+                "confidence": 0.86,
+                "reason": "Public ingress matched a built-in failure mode.",
+                "evidence": ["plan.json: aws_security_group.ssh"],
+                "verification_guidance": ["Restrict SSH ingress."],
+                "summary": "Public risk pattern match.",
+            }
+        )
+
+        self.assertEqual(match.confidence_label, "high")
 
 
 if __name__ == "__main__":
