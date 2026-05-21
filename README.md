@@ -79,6 +79,7 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 - Blast radius analysis using a project-scoped service-topology graph with a shared multi-source import foundation
 - Rollback plan generation with complexity signaling
 - **Day-zero risk patterns**: fresh installs can flag built-in public risk patterns such as wide-open administrative ingress or stateful resource deletion, separately labeled from organization incident memory.
+- **Safe sample incident pack**: optional synthetic incidents for demos, with provenance and limitations documented in `docs/sample-incident-pack.md`.
 - Incident-history matching for operational memory
 - API, CLI, and web entrypoints over one shared analysis pipeline
 - Local-first security model that keeps raw IaC local and avoids persisting API keys
