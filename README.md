@@ -47,7 +47,7 @@ DeployWhisper helps platform engineers, DevOps teams, and SREs review deployment
 
 DeployWhisper exists because deployment risk is rarely visible in a single file. A Terraform change might look safe on its own, a Kubernetes manifest might look routine on its own, and a Jenkins pipeline change might look minor on its own, but the real risk often appears only when those artifacts are reviewed together.
 
-DeployWhisper treats deployment review as a context problem. It combines multi-tool parsing, local-first analysis, tool-specific AI Skills, incident-memory matching, and advisory summaries so teams can make better go/no-go decisions before changes reach production.
+DeployWhisper treats deployment review as a context problem. It combines multi-tool parsing, local-first analysis, tool-specific AI Skills, public risk pattern matching, incident-memory matching, and advisory summaries so teams can make better go/no-go decisions before changes reach production.
 
 The current implementation is built as a pure-Python application with:
 
@@ -61,7 +61,7 @@ The current implementation is built as a pure-Python application with:
 1. Upload one or more supported deployment artifacts.
 2. DeployWhisper detects the tool type and filters unsupported or sensitive inputs.
 3. Parsers normalize changes into a shared internal model.
-4. The analysis pipeline scores risk, computes blast radius, generates rollback guidance, and checks incident similarity.
+4. The analysis pipeline scores risk, computes blast radius, generates rollback guidance, and checks built-in public risk patterns plus incident similarity.
 5. A narrative layer produces a plain-English deploy briefing.
 6. The report is persisted with audit metadata before it is shown in the UI or returned through the API or CLI.
 
@@ -78,6 +78,7 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 - Advisory-only output with explicit human-review posture
 - Blast radius analysis using a project-scoped service-topology graph with a shared multi-source import foundation
 - Rollback plan generation with complexity signaling
+- **Day-zero risk patterns**: fresh installs can flag built-in public risk patterns such as wide-open administrative ingress or stateful resource deletion, separately labeled from organization incident memory.
 - Incident-history matching for operational memory
 - API, CLI, and web entrypoints over one shared analysis pipeline
 - Local-first security model that keeps raw IaC local and avoids persisting API keys
@@ -112,7 +113,7 @@ review layer before infrastructure changes are shipped.
 
 What users can use today:
 
-- **Web review workflow**: upload deployment artifacts in the NiceGUI dashboard and get a persisted advisory report with risk score, severity, recommendation, findings, evidence, context quality, blast radius, rollback guidance, and audit metadata.
+- **Web review workflow**: upload deployment artifacts in the NiceGUI dashboard and get a persisted advisory report with risk score, severity, recommendation, findings, evidence, public risk pattern/incident matches, context quality, blast radius, rollback guidance, and audit metadata.
 - **Multi-tool analysis**: analyze Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation inputs through one shared pipeline instead of reviewing every tool in isolation.
 - **LLM-assisted narrative**: connect deterministic scoring with plain-English deployment guidance using Ollama, OpenAI, Anthropic, Gemini, OpenRouter, Groq, or xAI provider settings.
 - **Local-first safety posture**: keep raw IaC processing local, avoid storing provider API keys in the database, exclude sensitive files from unsafe handling, and keep every verdict advisory rather than automatically blocking a release.

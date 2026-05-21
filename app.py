@@ -388,6 +388,47 @@ def _shared_report_confidence_ledger_html(report: dict) -> str:
     )
 
 
+def _shared_report_incident_matches_html(report: dict) -> str:
+    matches = report.get("incident_matches") or []
+    if not matches:
+        return (
+            "<section class='panel'><h2>Incident and risk pattern similarity</h2>"
+            "<p class='empty'>No similar incidents found.</p></section>"
+        )
+
+    rows = []
+    for match in matches:
+        evidence_html = _shared_report_ledger_list(
+            [f"Evidence: {item}" for item in (match.get("evidence") or [])],
+            "No evidence was recorded for this match.",
+        )
+        guidance_html = _shared_report_ledger_list(
+            [str(item) for item in (match.get("verification_guidance") or [])],
+            "No verification guidance was recorded for this match.",
+        )
+        match_type = (
+            "Public risk pattern"
+            if match.get("match_type") == "public_risk_pattern"
+            else "Organization incident"
+        )
+        confidence = round(float(match.get("confidence") or 0) * 100)
+        rows.append(
+            "<li>"
+            f"<strong>{escape(str(match.get('title') or 'Incident match'))}</strong>"
+            f" <span class='badge'>{escape(match_type)}</span>"
+            f" <span class='badge'>{confidence}% confidence</span>"
+            f"<p>{escape(str(match.get('summary') or ''))}</p>"
+            f"<p>{escape(str(match.get('reason') or ''))}</p>"
+            f"{evidence_html}"
+            f"{guidance_html}"
+            "</li>"
+        )
+    return (
+        "<section class='panel'><h2>Incident and risk pattern similarity</h2>"
+        f"<ul>{''.join(rows)}</ul></section>"
+    )
+
+
 def _shared_report_comparison_html(
     report: dict,
     comparison: dict | None,
@@ -604,6 +645,7 @@ def _shared_report_html(
         f"{_shared_report_comparison_html(report, comparison, show_comparison=show_comparison)}"
         "</section>"
         f"{_shared_report_confidence_ledger_html(report)}"
+        f"{_shared_report_incident_matches_html(report)}"
         "<section class='panel'><div class='grid'>"
         f"<div><strong>Created</strong><p>{escape(str(report.get('created_at') or ''))}</p></div>"
         f"<div><strong>Share URL</strong><p><a href='{escape(str(share.get('share_url') or ''))}'>{escape(str(share.get('share_url') or ''))}</a></p></div>"

@@ -13,6 +13,7 @@ from ui.components.upload_panel import (
     format_submission_manifest_partial_notice,
     format_submission_manifest_summary,
     process_uploaded_files,
+    render_report_incident_matches,
     resolve_initial_project_selection,
     should_clear_pending_uploads,
     uploads_allowed,
@@ -366,6 +367,12 @@ class UploadPanelTests(unittest.TestCase):
         )
         self.assertIn("No mutating normalized changes available.", fake_ui.labels)
         self.assertNotIn("Terraform plan has no resource changes.", fake_ui.labels)
+
+    def test_report_incident_matches_preserves_empty_state(self) -> None:
+        with patch("ui.components.upload_panel.render_incident_matches") as render_mock:
+            render_report_incident_matches({"incident_matches": []})
+
+        render_mock.assert_called_once_with([])
 
     def test_change_table_surfaces_hidden_non_mutating_metadata_by_file(
         self,

@@ -400,6 +400,7 @@ class PersistedReportData(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     findings: list["FindingData"] = Field(default_factory=list)
     evidence_items: list["EvidenceItemData"] = Field(default_factory=list)
+    incident_matches: list["IncidentMatchData"] = Field(default_factory=list)
     contributors: list["RiskContributorData"] = Field(default_factory=list)
     confidence_ledger: ConfidenceLedgerData = Field(
         default_factory=ConfidenceLedgerData,
@@ -937,6 +938,13 @@ class RollbackPlanData(BaseModel):
 
 class IncidentMatchData(BaseModel):
     incident_id: int = Field(..., description="Matched incident identifier")
+    match_type: Literal["organization_incident", "public_risk_pattern"] = Field(
+        default="organization_incident",
+        description="Whether the match came from org incident memory or public patterns.",
+    )
+    public_pattern_id: str | None = Field(
+        default=None, description="Built-in public risk pattern identifier."
+    )
     title: str = Field(..., description="Incident title")
     severity: str = Field(..., description="Incident severity")
     source_file: str = Field(..., description="Incident source file")
@@ -944,6 +952,19 @@ class IncidentMatchData(BaseModel):
         default=None, description="Incident date if available"
     )
     similarity: float = Field(..., description="Similarity score between 0 and 1")
+    confidence: float = Field(
+        default=0.0, description="Confidence that this memory signal applies."
+    )
+    reason: str = Field(
+        default="", description="Why the incident or public pattern matched."
+    )
+    evidence: list[str] = Field(
+        default_factory=list, description="Concrete evidence supporting the match."
+    )
+    verification_guidance: list[str] = Field(
+        default_factory=list,
+        description="Human verification steps before acting on the match.",
+    )
     summary: str = Field(..., description="Short operational explanation")
 
 

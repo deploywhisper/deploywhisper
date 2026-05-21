@@ -50,6 +50,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "018_add_evidence_identity_fields",
     "019_add_finding_context_fields",
     "020_add_narrative_state_fields",
+    "021_add_incident_matches_payload",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -375,6 +376,20 @@ def _analysis_report_narrative_state_complete(connection) -> bool:
     )
 
 
+def _analysis_report_incident_matches_complete(connection) -> bool:
+    column_map = {
+        column["name"]: column
+        for column in inspect(connection).get_columns("analysis_reports")
+    }
+    incident_matches_column = column_map.get("incident_matches_json")
+    return (
+        incident_matches_column is not None
+        and incident_matches_column["type"]._type_affinity is String
+        and incident_matches_column.get("nullable") is False
+        and incident_matches_column.get("default") is None
+    )
+
+
 def _learning_context_scope_complete(connection) -> bool:
     inspector = inspect(connection)
     workspace_unique_columns = {
@@ -588,6 +603,11 @@ def _bootstrap_brownfield_revision() -> None:
             has_narrative_state_fields
             and _analysis_report_narrative_state_complete(connection)
         )
+        has_incident_matches_payload = "incident_matches_json" in report_columns
+        has_complete_incident_matches_payload = (
+            has_incident_matches_payload
+            and _analysis_report_incident_matches_complete(connection)
+        )
         if scoped_learning_columns_present and not has_complete_learning_context_scope:
             raise RuntimeError(
                 "Detected a partial learning/context scope schema without a complete "
@@ -631,6 +651,28 @@ def _bootstrap_brownfield_revision() -> None:
                 "Detected a partial narrative state schema without a complete "
                 "migration history. Manual recovery is required."
             )
+        if has_incident_matches_payload and not (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+        ):
+            raise RuntimeError(
+                "Detected a partial incident matches payload schema without a complete "
+                "migration history. Manual recovery is required."
+            )
+        if (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+        ):
+            _write_alembic_revision(connection, "021_add_incident_matches_payload")
+            return
         if (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload

@@ -428,6 +428,7 @@ def create_analysis_report(
     narrative_failure_notice: str | None = None,
     top_risk_contributors_json: str = "[]",
     context_completeness_json: str = "{}",
+    incident_matches_json: str = "[]",
     findings_payload: list[dict[str, Any]] | None = None,
     evidence_payload: list[dict[str, Any]] | None = None,
 ) -> AnalysisReport:
@@ -456,6 +457,7 @@ def create_analysis_report(
         submission_manifest_fallback_json=submission_manifest_fallback_json,
         blast_radius_json=blast_radius_json,
         rollback_plan_json=rollback_plan_json,
+        incident_matches_json=incident_matches_json,
         llm_provider=llm_provider,
         llm_model=llm_model,
         llm_local_mode=llm_local_mode,

@@ -182,6 +182,104 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertTrue(artifacts.assessment.context_completeness.insufficient_context)
         self.assertIn("INSUFFICIENT CONTEXT", artifacts.assessment.top_risk)
 
+    def test_build_analysis_artifacts_labels_public_pattern_when_incidents_empty(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=68,
+            severity="high",
+            recommendation="caution",
+            top_risk="Public ingress requires review.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        blast_radius = BlastRadiusResult(
+            affected=[],
+            direct_count=0,
+            transitive_count=0,
+            warning=None,
+            unmatched_resources=[],
+        )
+        rollback_plan = RollbackPlan(steps=[], complexity="low", warning=None)
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review public ingress.",
+            explanation="The deployment should be reviewed.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.build_parse_batch",
+                return_value=ParseBatchResult(
+                    files=[
+                        ParsedFileResult(
+                            file_name="plan.json",
+                            tool="terraform",
+                            status="parsed",
+                            changes=[
+                                UnifiedChange(
+                                    source_file="plan.json",
+                                    tool="terraform",
+                                    resource_id="aws_security_group.ssh",
+                                    action="modify",
+                                    summary=(
+                                        "Terraform opened SSH ingress from "
+                                        "0.0.0.0/0 on port 22."
+                                    ),
+                                )
+                            ],
+                        )
+                    ]
+                ),
+            ),
+            patch("services.analysis_service.extract_batch_evidence", return_value=[]),
+            patch("services.analysis_service.load_topology", return_value=({}, None)),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at=None),
+            ),
+            patch(
+                "services.analysis_service.load_incident_candidates", return_value=[]
+            ),
+            patch(
+                "analysis.incident_matcher.load_incident_candidates", return_value=[]
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.compute_blast_radius",
+                return_value=blast_radius,
+            ),
+            patch(
+                "services.analysis_service.generate_rollback_plan",
+                return_value=rollback_plan,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
+        ):
+            artifacts = build_analysis_artifacts(
+                [("plan.json", b"{}")],
+                project_id=123,
+            )
+
+        self.assertEqual(len(artifacts.incident_matches), 1)
+        self.assertEqual(
+            artifacts.incident_matches[0].match_type,
+            "public_risk_pattern",
+        )
+        self.assertEqual(
+            artifacts.incident_matches[0].public_pattern_id,
+            "public-ingress-wide-open",
+        )
+        self.assertTrue(artifacts.incident_matches[0].verification_guidance)
+
     def _share_report_payload(self) -> dict:
         return {
             "id": 17,

@@ -198,6 +198,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
         self.assertIn("blast_radius_json", self._table_columns("analysis_reports"))
         self.assertIn("rollback_plan_json", self._table_columns("analysis_reports"))
+        self.assertIn("incident_matches_json", self._table_columns("analysis_reports"))
         self.assertIn("narrative_degraded", self._table_columns("analysis_reports"))
         self.assertIn(
             "narrative_failure_notice", self._table_columns("analysis_reports")
@@ -976,7 +977,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "020_add_narrative_state_fields")
+        self.assertEqual(revision, "021_add_incident_matches_payload")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1025,7 +1026,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "020_add_narrative_state_fields")
+        self.assertEqual(revision, "021_add_incident_matches_payload")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1051,13 +1052,31 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "020_add_narrative_state_fields")
+        self.assertEqual(revision, "021_add_incident_matches_payload")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
         self.assertIn("workspace_id", columns)
         self.assertIn("submission_manifest_json", columns)
         self.assertIn("submission_manifest_fallback_json", columns)
+
+    def test_init_db_accepts_current_incident_matches_revision(self) -> None:
+        command.upgrade(self._config(), "head")
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+        database_module.init_db()
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            revision = sqlite_conn.execute(
+                "SELECT version_num FROM alembic_version"
+            ).fetchone()[0]
+        finally:
+            sqlite_conn.close()
+
+        self.assertEqual(revision, "021_add_incident_matches_payload")
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
         command.upgrade(self._config(), "014_add_project_workspace_records")
@@ -1327,7 +1346,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "020_add_narrative_state_fields")
+        self.assertEqual(revision, "021_add_incident_matches_payload")
 
 
 if __name__ == "__main__":

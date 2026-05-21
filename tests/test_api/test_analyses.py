@@ -18,6 +18,7 @@ import models.tables as tables_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
 from services.analysis_service import AnalysisPersistenceError
+from analysis.incident_matcher import IncidentMatch
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from app import create_app
 from evidence.models import EvidenceItem
@@ -865,6 +866,25 @@ class AnalysesApiTests(unittest.TestCase):
             )
         ]
 
+        incident_match = IncidentMatch(
+            incident_id=0,
+            match_type="public_risk_pattern",
+            public_pattern_id="public-ingress-wide-open",
+            title="Wide-open administrative ingress",
+            severity="high",
+            source_file="plan.json",
+            incident_date=None,
+            similarity=0.86,
+            confidence=0.86,
+            reason="The change exposes administrative ingress publicly.",
+            evidence=["plan.json: aws_security_group.main (modify) - public SSH"],
+            verification_guidance=[
+                "Confirm public CIDR is intentional.",
+                "Restrict ingress to trusted networks.",
+            ],
+            summary="Public risk pattern match: wide-open administrative ingress.",
+        )
+
         with (
             patch(
                 "services.analysis_service.evaluate_parse_batch",
@@ -877,7 +897,10 @@ class AnalysesApiTests(unittest.TestCase):
             patch(
                 "services.analysis_service.generate_narrative", return_value=narrative
             ),
-            patch("services.analysis_service.find_incident_matches", return_value=[]),
+            patch(
+                "services.analysis_service.find_incident_matches",
+                return_value=[incident_match],
+            ),
         ):
             response = self.client.post(
                 "/api/v1/analyses",
@@ -913,6 +936,23 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["confidence"],
             payload["data"]["assessment"]["confidence"],
+        )
+        self.assertEqual(
+            payload["data"]["incident_matches"][0]["public_pattern_id"],
+            "public-ingress-wide-open",
+        )
+        self.assertEqual(
+            payload["data"]["incident_matches"][0]["confidence"],
+            0.86,
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["incident_matches"][0][
+                "public_pattern_id"
+            ],
+            "public-ingress-wide-open",
+        )
+        self.assertTrue(
+            payload["data"]["persisted_report"]["incident_matches"][0]["evidence"]
         )
         self.assertFalse(payload["data"]["persisted_report"]["narrative_degraded"])
         self.assertEqual(

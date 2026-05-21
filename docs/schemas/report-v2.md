@@ -338,6 +338,28 @@ without storing raw plan internals in a separate contract.
   ],
   "findings": [],
   "evidence_items": [],
+  "incident_matches": [
+    {
+      "incident_id": 0,
+      "match_type": "public_risk_pattern",
+      "public_pattern_id": "public-ingress-wide-open",
+      "title": "Wide-open administrative ingress",
+      "severity": "high",
+      "source_file": "plan.json",
+      "incident_date": null,
+      "similarity": 0.86,
+      "confidence": 0.86,
+      "reason": "The change appears to expose administrative or data-plane network access to the public internet.",
+      "evidence": [
+        "plan.json: aws_security_group.web (modify) - Terraform opened SSH ingress from 0.0.0.0/0 on port 22."
+      ],
+      "verification_guidance": [
+        "Confirm whether the public CIDR is intentional and time-bound.",
+        "Restrict administrative ingress to trusted networks or a managed access path."
+      ],
+      "summary": "Public risk pattern match: wide-open administrative ingress has caused common deployment incidents."
+    }
+  ],
   "contributors": [
     {
       "source_file": "plan.json",
@@ -360,6 +382,15 @@ without storing raw plan internals in a separate contract.
   }
 }
 ```
+
+### Analysis run incident and pattern matches
+
+Live API/CLI analysis responses and persisted report retrieval payloads include
+`incident_matches`. Matches from stored organization incident memory use
+`match_type: "organization_incident"`. Built-in day-zero risk patterns use
+`match_type: "public_risk_pattern"` and include `public_pattern_id`, `reason`,
+`evidence`, `confidence`, and `verification_guidance` so consumers can
+distinguish public guidance from a prior incident in their own environment.
 
 ## Compatibility contract
 

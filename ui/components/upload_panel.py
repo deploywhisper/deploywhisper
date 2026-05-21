@@ -8,6 +8,7 @@ from typing import Any
 from nicegui import events, run, ui
 
 from analysis.blast_radius import BlastRadiusResult
+from analysis.incident_matcher import IncidentMatch
 from analysis.rollback_planner import RollbackPlan
 from parsers.registry import detect_tool_type
 from services.analysis_service import AnalysisPersistenceError, analyze_uploaded_files
@@ -39,6 +40,7 @@ from ui.components.change_table import (
     render_change_table,
 )
 from ui.components.confidence_ledger import render_confidence_ledger
+from ui.components.incident_match_card import render_incident_matches
 from ui.components.report_detail_page import (
     format_submission_manifest_fallback_summary,
     format_submission_manifest_partial_notice,
@@ -195,6 +197,16 @@ def build_feedback_rerender_handler(
         )
 
     return rerender
+
+
+def render_report_incident_matches(report: dict[str, Any]) -> None:
+    """Render incident matches from a report, including the empty state."""
+    render_incident_matches(
+        [
+            IncidentMatch.model_validate(match)
+            for match in (report.get("incident_matches") or [])
+        ]
+    )
 
 
 def build_upload_panel(
@@ -496,6 +508,7 @@ def build_upload_panel(
                 render_topology_freshness_banner(context)
                 render_context_summary_panel(context)
                 render_confidence_ledger(report)
+                render_report_incident_matches(report)
                 if parse_batch is not None:
                     render_change_table(parse_batch)
                 findings = report.get("findings", [])
@@ -678,6 +691,9 @@ def build_upload_panel(
             display_report["narrative_provider"] = narrative.provider
             display_report["narrative_model"] = narrative.model
             display_report["skills_applied"] = list(narrative.skills_applied)
+            display_report["incident_matches"] = [
+                match.model_dump() for match in result.incident_matches
+            ]
 
             render_result_card(
                 display_report,

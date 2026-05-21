@@ -21,6 +21,7 @@ import services.project_service as project_service_module
 import services.report_service as report_service_module
 import services.settings_service as settings_service_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
+from analysis.incident_matcher import IncidentMatch
 from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from evidence.models import EvidenceItem, Finding
@@ -3825,6 +3826,28 @@ class ReportServiceTests(unittest.TestCase):
             narrative,
             blast_radius=blast_radius,
             rollback_plan=rollback_plan,
+            incident_matches=[
+                IncidentMatch(
+                    incident_id=0,
+                    match_type="public_risk_pattern",
+                    public_pattern_id="public-ingress-wide-open",
+                    title="Wide-open administrative ingress",
+                    severity="high",
+                    source_file="plan.json",
+                    incident_date=None,
+                    similarity=0.86,
+                    confidence=0.86,
+                    reason="The change exposes administrative ingress publicly.",
+                    evidence=[
+                        "plan.json: aws_security_group.main (modify) - public SSH"
+                    ],
+                    verification_guidance=[
+                        "Confirm public CIDR is intentional.",
+                        "Restrict ingress to trusted networks.",
+                    ],
+                    summary="Public risk pattern match: wide-open administrative ingress.",
+                )
+            ],
             findings=findings,
             evidence_items=evidence_items,
             audit_context={
@@ -3867,6 +3890,13 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["context_completeness"]["context_score"], 0.84)
         self.assertEqual(persisted["blast_radius"]["direct_count"], 1)
         self.assertEqual(persisted["rollback_plan"]["complexity_score"], 3)
+        self.assertEqual(len(persisted["incident_matches"]), 1)
+        self.assertEqual(
+            persisted["incident_matches"][0]["public_pattern_id"],
+            "public-ingress-wide-open",
+        )
+        self.assertEqual(persisted["incident_matches"][0]["confidence"], 0.86)
+        self.assertTrue(persisted["incident_matches"][0]["evidence"])
         self.assertEqual(
             persisted["rollback_plan"]["steps"][0]["estimated_minutes"], 15
         )
@@ -3924,6 +3954,17 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fetched["top_risk_contributors"], [persisted_evidence_id])
         self.assertEqual(fetched["context_completeness"]["topology_freshness_days"], 12)
         self.assertEqual(fetched["blast_radius"]["affected"][0]["label"], "Database")
+        self.assertEqual(
+            fetched["incident_matches"][0]["public_pattern_id"],
+            "public-ingress-wide-open",
+        )
+        self.assertEqual(
+            fetched["incident_matches"][0]["verification_guidance"],
+            [
+                "Confirm public CIDR is intentional.",
+                "Restrict ingress to trusted networks.",
+            ],
+        )
         self.assertEqual(
             fetched["rollback_plan"]["steps"][0]["title"],
             "Revert aws_security_group.main",
