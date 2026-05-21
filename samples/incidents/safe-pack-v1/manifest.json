@@ -1,0 +1,23 @@
+{
+  "pack_id": "safe-sample-incidents-v1",
+  "title": "Safe Sample Incident Pack v1",
+  "sample": true,
+  "loaded_by_default": false,
+  "provenance": "Original synthetic incidents authored for public documentation and demos. They are not derived from customer data, real organization postmortems, or private incident records.",
+  "limitations": [
+    "The records are designed to demonstrate incident-memory matching, not to represent production incident frequency.",
+    "Service names, timelines, and remediation details are fictional and intentionally generic.",
+    "The pack is optional and must be explicitly loaded into a project scope."
+  ],
+  "records": [
+    {
+      "source_file": "public-admin-ingress.md"
+    },
+    {
+      "source_file": "stateful-cache-replacement.md"
+    },
+    {
+      "source_file": "gitops-ordering-window.md"
+    }
+  ]
+}
