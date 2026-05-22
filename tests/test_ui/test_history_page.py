@@ -1149,6 +1149,9 @@ class HistoryPageRenderingTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Search top risk or summary", response.text)
+        self.assertIn("dw-history-filter-row", response.text)
+        self.assertIn("dw-history-project-filter-field", response.text)
+        self.assertIn("dw-history-filter-control", response.text)
         self.assertIn("Project filter", response.text)
         self.assertIn("Workspace", response.text)
         self.assertIn("Time range", response.text)

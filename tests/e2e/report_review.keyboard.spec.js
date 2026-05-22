@@ -305,6 +305,42 @@ async function expectRenderedTextContrast(locator, minimumRatio = 4.5) {
   ).toBeGreaterThanOrEqual(minimumRatio);
 }
 
+async function expectHistoryFiltersAligned(page) {
+  const metrics = await page.locator(".dw-history-filter-row").first().evaluate(
+    (grid) =>
+      Array.from(grid.children).map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          top: Math.round(rect.top),
+          bottom: Math.round(rect.bottom),
+          height: Math.round(rect.height),
+        };
+      })
+  );
+  expect(metrics).toHaveLength(4);
+  const first = metrics[0];
+  for (const metric of metrics.slice(1)) {
+    expect(Math.abs(metric.top - first.top)).toBeLessThanOrEqual(2);
+    expect(Math.abs(metric.bottom - first.bottom)).toBeLessThanOrEqual(2);
+    expect(Math.abs(metric.height - first.height)).toBeLessThanOrEqual(2);
+  }
+}
+
+async function selectHistoryFilter(page, label, option) {
+  const field = page
+    .locator(".dw-history-filter-control")
+    .filter({ hasText: label })
+    .first();
+  await field.click();
+  const popupOption = page
+    .locator(".q-menu .q-item")
+    .filter({ hasText: option })
+    .first();
+  await expect(popupOption).toBeVisible();
+  await popupOption.click();
+  await expect(field).toContainText(option);
+}
+
 test.describe("review keyboard flow", () => {
   test("tabs through review sections in order and supports arrow/escape controls", async ({
     page,
@@ -610,6 +646,11 @@ test.describe("review keyboard flow", () => {
     await expect(page.getByText("Risk verdict", { exact: true })).toBeVisible();
     await expect(page.getByText("Toolchain", { exact: true })).toBeVisible();
     await expect(page.getByText("Analysis status", { exact: true })).toBeVisible();
+    await expectHistoryFiltersAligned(page);
+    await selectHistoryFilter(page, "Time range", "Last 90 days");
+    await selectHistoryFilter(page, "Risk verdict", "Critical");
+    await selectHistoryFilter(page, "Toolchain", "Terraform");
+    await selectHistoryFilter(page, "Analysis status", "Complete");
     await expect(page.getByText(/Tools: /).first()).toBeVisible();
     await expect(page.getByText("Schema: v2").first()).toBeVisible();
     await expect(page.getByText(/Status: /).first()).toBeVisible();

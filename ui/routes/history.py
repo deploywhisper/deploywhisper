@@ -231,9 +231,11 @@ def build_history_page() -> None:
             )
             with ui.card().classes("w-full dw-panel shadow-none p-4"):
                 with ui.column().classes("gap-3"):
-                    with ui.row().classes("w-full items-start gap-4 flex-wrap"):
-                        with ui.column().classes("gap-0 min-w-[220px] flex-1"):
-                            ui.label("Project filter").classes("dw-eyebrow mb-1")
+                    with ui.row().classes("dw-history-filter-row"):
+                        with ui.column().classes(
+                            "dw-history-project-filter-field min-w-[220px] flex-1 gap-1"
+                        ):
+                            ui.label("Project filter").classes("dw-eyebrow")
                             ui.label(
                                 "Select a project"
                                 if active_project is None
@@ -241,7 +243,7 @@ def build_history_page() -> None:
                                     f"{active_project.display_name} "
                                     f"({active_project.project_key})"
                                 )
-                            ).classes("text-sm font-medium dw-text leading-5")
+                            ).classes("text-sm font-medium dw-text leading-5 truncate")
                         workspace_select = (
                             ui.select(
                                 _history_workspace_options(
@@ -252,8 +254,8 @@ def build_history_page() -> None:
                                 value="",
                                 label="Workspace",
                             )
-                            .props("outlined dense emit-value map-options")
-                            .classes("min-w-[180px] flex-1")
+                            .props("outlined dense")
+                            .classes("dw-history-filter-control min-w-[170px] flex-1")
                         )
                         time_range_select = (
                             ui.select(
@@ -267,8 +269,8 @@ def build_history_page() -> None:
                                 value="",
                                 label="Time range",
                             )
-                            .props("outlined dense emit-value map-options")
-                            .classes("min-w-[170px] flex-1")
+                            .props("outlined dense")
+                            .classes("dw-history-filter-control min-w-[170px] flex-1")
                         )
                         severity_select = (
                             ui.select(
@@ -282,18 +284,18 @@ def build_history_page() -> None:
                                 value="",
                                 label="Risk verdict",
                             )
-                            .props("outlined dense emit-value map-options")
-                            .classes("min-w-[170px] flex-1")
+                            .props("outlined dense")
+                            .classes("dw-history-filter-control min-w-[170px] flex-1")
                         )
-                    with ui.row().classes("w-full items-start gap-4 flex-wrap"):
+                    with ui.row().classes("dw-history-filter-row"):
                         toolchain_select = (
                             ui.select(
                                 _history_toolchain_options(history_toolchains),
                                 value="",
                                 label="Toolchain",
                             )
-                            .props("outlined dense emit-value map-options")
-                            .classes("min-w-[170px] flex-1")
+                            .props("outlined dense")
+                            .classes("dw-history-filter-control min-w-[170px] flex-1")
                         )
                         status_select = (
                             ui.select(
@@ -306,8 +308,8 @@ def build_history_page() -> None:
                                 value="",
                                 label="Analysis status",
                             )
-                            .props("outlined dense emit-value map-options")
-                            .classes("min-w-[170px] flex-1")
+                            .props("outlined dense")
+                            .classes("dw-history-filter-control min-w-[170px] flex-1")
                         )
             actions_row = ui.row().classes(
                 "w-full items-center justify-between gap-4 flex-wrap"
@@ -549,16 +551,33 @@ def build_history_page() -> None:
                 render_history()
                 render_actions()
 
-            def apply_workspace_filter() -> None:
+            def sync_select_value(select, event) -> None:
+                if hasattr(event, "value"):
+                    select.value = event.value
+
+            def apply_select_filter(select, event) -> None:
+                sync_select_value(select, event)
+                apply_filters()
+
+            def apply_workspace_filter(event) -> None:
+                sync_select_value(workspace_select, event)
                 sync_toolchain_options()
                 apply_filters()
 
             search_input.on("update:model-value", lambda *_: apply_filters())
-            workspace_select.on_value_change(lambda *_: apply_workspace_filter())
-            time_range_select.on_value_change(lambda *_: apply_filters())
-            severity_select.on_value_change(lambda *_: apply_filters())
-            toolchain_select.on_value_change(lambda *_: apply_filters())
-            status_select.on_value_change(lambda *_: apply_filters())
+            workspace_select.on_value_change(apply_workspace_filter)
+            time_range_select.on_value_change(
+                lambda event: apply_select_filter(time_range_select, event)
+            )
+            severity_select.on_value_change(
+                lambda event: apply_select_filter(severity_select, event)
+            )
+            toolchain_select.on_value_change(
+                lambda event: apply_select_filter(toolchain_select, event)
+            )
+            status_select.on_value_change(
+                lambda event: apply_select_filter(status_select, event)
+            )
             render_history()
             render_actions()
 

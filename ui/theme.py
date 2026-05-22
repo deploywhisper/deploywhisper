@@ -289,6 +289,27 @@ code,
   overflow: visible;
 }
 
+.dw-history-project-filter-field {
+  min-height: 40px;
+  padding: 6px 12px 7px;
+  border: 1px solid var(--dw-line-strong);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dw-surface-strong) 78%, transparent);
+  justify-content: center;
+  min-width: 0;
+}
+
+.dw-history-filter-row {
+  align-items: stretch;
+  gap: 14px;
+  width: 100%;
+}
+
+.dw-history-filter-control {
+  min-width: 0;
+  width: 100%;
+}
+
 .dw-project-search-input {
   min-width: 320px;
   flex: 1 1 360px;
