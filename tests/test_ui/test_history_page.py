@@ -15,6 +15,7 @@ import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
 import services.deployment_outcome_service as deployment_outcome_service_module
+import services.feedback_service as feedback_service_module
 import services.report_service as report_service_module
 import services.project_service as project_service_module
 import ui.components.report_detail_page as report_detail_page_module
@@ -940,6 +941,8 @@ class HistoryPageRenderingTests(unittest.TestCase):
         reload(analysis_reports_repository_module)
         reload(project_service_module)
         reload(report_service_module)
+        reload(feedback_service_module)
+        reload(report_detail_page_module)
         reload(history_module)
         reload(app_module)
         database_module.init_db()
@@ -968,6 +971,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         workspace_id: int | None = None,
         tool: str = "terraform",
         incident_matches: list[IncidentMatch] | None = None,
+        include_finding: bool = True,
     ) -> dict:
         source_file = "plan.json" if tool == "terraform" else f"{tool}-review.yaml"
         parse_batch = ParseBatchResult(
@@ -1033,6 +1037,45 @@ class HistoryPageRenderingTests(unittest.TestCase):
             local_mode=True,
             skills_applied=["git", "terraform"],
         )
+        findings = (
+            [
+                Finding(
+                    finding_id="finding-001",
+                    analysis_id=0,
+                    title=f"{severity.upper()}: aws_security_group.main",
+                    description=finding_description,
+                    severity=severity,
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=finding_confidence,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-001"],
+                    skill_id=None,
+                )
+            ]
+            if include_finding
+            else []
+        )
+        evidence_items = (
+            [
+                EvidenceItem(
+                    evidence_id="ev-001",
+                    analysis_id=0,
+                    finding_id="pending:change-1",
+                    source_type="artifact",
+                    source_ref=(
+                        "terraform://plan.json#aws_security_group.main?action=modify"
+                    ),
+                    summary="Terraform changed a security group.",
+                    severity_hint=severity,
+                    deterministic=True,
+                    confidence=1.0,
+                    related_change_ids=["change-1"],
+                )
+            ]
+            if include_finding
+            else []
+        )
         return report_service_module.persist_analysis_report(
             parse_batch,
             assessment,
@@ -1054,37 +1097,8 @@ class HistoryPageRenderingTests(unittest.TestCase):
                 ),
                 warning=None,
             ),
-            findings=[
-                Finding(
-                    finding_id="finding-001",
-                    analysis_id=0,
-                    title=f"{severity.upper()}: aws_security_group.main",
-                    description=finding_description,
-                    severity=severity,
-                    category="networking/ingress",
-                    deterministic=True,
-                    confidence=finding_confidence,
-                    uncertainty_note=None,
-                    evidence_refs=["ev-001"],
-                    skill_id=None,
-                )
-            ],
-            evidence_items=[
-                EvidenceItem(
-                    evidence_id="ev-001",
-                    analysis_id=0,
-                    finding_id="pending:change-1",
-                    source_type="artifact",
-                    source_ref=(
-                        "terraform://plan.json#aws_security_group.main?action=modify"
-                    ),
-                    summary="Terraform changed a security group.",
-                    severity_hint=severity,
-                    deterministic=True,
-                    confidence=1.0,
-                    related_change_ids=["change-1"],
-                )
-            ],
+            findings=findings,
+            evidence_items=evidence_items,
             audit_context={"source_interface": "ui"},
             project_id=project_id,
             workspace_id=workspace_id,
@@ -1353,7 +1367,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Reviewer feedback", response.text)
         self.assertIn("Thumbs up", response.text)
-        self.assertIn("Thumbs down", response.text)
+        self.assertIn("Mark noisy", response.text)
         self.assertIn("False positive reason", response.text)
         self.assertIn("Missed finding note", response.text)
         self.assertIn("Why is it risky?", response.text)
@@ -1365,6 +1379,90 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn(
             "Review the security group change before deployment.", response.text
         )
+
+    def test_history_detail_route_labels_false_positive_without_noisy_status(
+        self,
+    ) -> None:
+        report = self._persist_report()
+        feedback_service_module.record_finding_feedback(
+            analysis_id=report["id"],
+            finding_id=report["findings"][0]["finding_id"],
+            useful=False,
+            false_positive_flag=True,
+            false_positive_reason="Compensating control already approved.",
+        )
+
+        response = self.client.get(f"/history/{report['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Latest vote: false positive", response.text)
+        self.assertNotIn("Latest vote: noisy", response.text)
+
+    def test_history_detail_route_shows_finding_scoped_missed_note(self) -> None:
+        report = self._persist_report()
+        feedback_service_module.record_false_negative_feedback(
+            analysis_id=report["id"],
+            finding_id=report["findings"][0]["finding_id"],
+            note="Missed rollback alarm dependency.",
+        )
+
+        response = self.client.get(f"/history/{report['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Latest note: Missed rollback alarm dependency.", response.text)
+
+    def test_history_detail_route_shows_legacy_report_level_missed_note(self) -> None:
+        report = self._persist_report()
+        with database_module.SessionLocal() as session:
+            session.add(
+                tables_module.FeedbackEvent(
+                    project_id=report["project"]["id"],
+                    workspace_id=(
+                        report["workspace"]["id"]
+                        if report.get("workspace") is not None
+                        else None
+                    ),
+                    analysis_id=report["id"],
+                    false_negative_note="Legacy report-level missed rollback dependency.",
+                    outcome_label="missed",
+                )
+            )
+            session.commit()
+
+        response = self.client.get(f"/history/{report['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Report-level missed finding notes", response.text)
+        self.assertIn(
+            "Legacy note: Legacy report-level missed rollback dependency.",
+            response.text,
+        )
+
+    def test_history_detail_route_shows_report_level_missed_note_for_clean_report(
+        self,
+    ) -> None:
+        report = self._persist_report(
+            severity="low",
+            recommendation="go",
+            top_risk="No findings detected.",
+            opening_sentence="GO: no findings detected.",
+            include_finding=False,
+        )
+        feedback_service_module.record_false_negative_feedback(
+            analysis_id=report["id"],
+            note="Missed cross-service rollback dependency.",
+        )
+
+        response = self.client.get(f"/history/{report['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Report-level missed finding note", response.text)
+        self.assertIn("Missed finding note", response.text)
+        self.assertIn(
+            "Latest note: Missed cross-service rollback dependency.",
+            response.text,
+        )
+        self.assertIn("Save missed finding note", response.text)
 
     def test_history_detail_route_hides_report_from_other_active_project(self) -> None:
         self._persist_report()

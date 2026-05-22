@@ -413,7 +413,7 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Findings table", response.text)
         self.assertIn("Reviewer feedback", response.text)
         self.assertIn("Thumbs up", response.text)
-        self.assertIn("Thumbs down", response.text)
+        self.assertIn("Mark noisy", response.text)
         self.assertIn("Missed finding note", response.text)
         self.assertIn("Severity", response.text)
         self.assertIn("Evidence", response.text)

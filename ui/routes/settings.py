@@ -35,6 +35,7 @@ def _empty_feedback_summary() -> dict[str, Any]:
     return {
         "current_state": {
             "useful_count": 0,
+            "noisy_count": 0,
             "not_useful_count": 0,
             "false_positive_count": 0,
             "missed_finding_count": 0,
@@ -616,14 +617,17 @@ def build_settings_page() -> None:
                     "text-lg font-medium dw-text"
                 )
                 ui.label(
-                    "Admin-facing summary of the latest reviewer feedback state for the active project."
+                    "Admin-facing all-workspaces summary of the latest reviewer feedback state for the active project."
                 ).classes("text-sm dw-muted")
                 with ui.row().classes("w-full items-stretch gap-2 flex-wrap mt-3"):
                     metrics = [
                         ("Useful", feedback_summary["current_state"]["useful_count"]),
                         (
-                            "Not useful",
-                            feedback_summary["current_state"]["not_useful_count"],
+                            "Noisy",
+                            feedback_summary["current_state"].get(
+                                "noisy_count",
+                                feedback_summary["current_state"]["not_useful_count"],
+                            ),
                         ),
                         (
                             "False positives",

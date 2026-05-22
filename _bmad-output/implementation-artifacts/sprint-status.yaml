@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-05-21
+# last_updated: 2026-05-22
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-05-21
+last_updated: 2026-05-22
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -86,7 +86,7 @@ development_status:
   4-2-safe-sample-incident-pack: done
   4-3-incident-import-for-markdown-yaml-and-json: done
   4-4-incident-similarity-with-match-explanation: done
-  4-5-reviewer-feedback-capture: ready-for-dev
+  4-5-reviewer-feedback-capture: done
   4-6-deployment-outcome-capture: ready-for-dev
   4-7-incident-ingestion-management-and-indexing: ready-for-dev
   epic-4-retrospective: optional

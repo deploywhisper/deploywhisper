@@ -108,6 +108,11 @@ def record_finding_feedback(
             "invalid_feedback_request",
             "False positive reason requires false_positive_flag=True.",
         )
+    if false_positive_flag and useful:
+        raise FeedbackError(
+            "invalid_feedback_request",
+            "False positive feedback requires useful=False.",
+        )
     with SessionLocal() as session:
         report = get_analysis_report(session, analysis_id, include_evidence=False)
         if report is None:
@@ -122,11 +127,7 @@ def record_finding_feedback(
                 f"Finding not found on analysis report {analysis_id}: {normalized_finding_id}.",
             )
         outcome_label = (
-            "false_positive"
-            if false_positive_flag
-            else "useful"
-            if useful
-            else "not_useful"
+            "false_positive" if false_positive_flag else "useful" if useful else "noisy"
         )
         event = create_feedback_event(
             session,
@@ -147,9 +148,11 @@ def record_finding_feedback(
 def record_false_negative_feedback(
     *,
     analysis_id: int,
+    finding_id: str | None = None,
     note: str,
     reviewer_role: str = "reviewer",
 ) -> dict[str, Any]:
+    normalized_finding_id = str(finding_id or "").strip()
     normalized_note = _normalize_optional_text(note)
     if normalized_note is None:
         raise FeedbackError(
@@ -163,11 +166,27 @@ def record_false_negative_feedback(
                 "analysis_not_found",
                 f"Analysis report not found: {analysis_id}.",
             )
+        finding_ids = {finding.finding_id for finding in report.findings}
+        if normalized_finding_id:
+            if normalized_finding_id not in finding_ids:
+                raise FeedbackError(
+                    "finding_not_found",
+                    f"Finding not found on analysis report {analysis_id}: {normalized_finding_id}.",
+                )
+            stored_finding_id: str | None = normalized_finding_id
+        elif finding_ids:
+            raise FeedbackError(
+                "invalid_feedback_request",
+                "finding_id is required when a report has findings.",
+            )
+        else:
+            stored_finding_id = None
         event = create_feedback_event(
             session,
             project_id=report.project_id,
             workspace_id=report.workspace_id,
             analysis_id=analysis_id,
+            finding_id=stored_finding_id,
             reviewer_role=reviewer_role,
             false_negative_note=normalized_note,
             outcome_label="missed",
@@ -185,15 +204,26 @@ def fetch_report_feedback_state(analysis_id: int) -> dict[str, Any]:
             )
         events = list_feedback_events(session, analysis_id=analysis_id)
     finding_feedback: dict[str, dict[str, Any]] = {}
+    false_negative_by_finding: dict[str, dict[str, Any]] = {}
     false_negative_notes: list[dict[str, Any]] = []
     for event in events:
         serialized = _serialize_event(event)
-        if event.finding_id is not None and event.finding_id not in finding_feedback:
+        if (
+            event.finding_id is not None
+            and event.false_negative_note is None
+            and event.finding_id not in finding_feedback
+        ):
             finding_feedback[event.finding_id] = serialized
         if event.false_negative_note:
             false_negative_notes.append(serialized)
+            if (
+                event.finding_id is not None
+                and event.finding_id not in false_negative_by_finding
+            ):
+                false_negative_by_finding[event.finding_id] = serialized
     return {
         "finding_feedback": finding_feedback,
+        "false_negative_by_finding": false_negative_by_finding,
         "false_negative_notes": false_negative_notes,
     }
 
@@ -219,10 +249,10 @@ def fetch_feedback_summary(
         )
 
     latest_finding_feedback: dict[tuple[int | None, str], Any] = {}
-    latest_false_negative_by_report: dict[int | None, Any] = {}
+    latest_false_negative_by_scope: dict[tuple[int | None, str | None], Any] = {}
     recent_notes: list[dict[str, Any]] = []
     for event in events:
-        if event.finding_id is not None:
+        if event.finding_id is not None and event.false_negative_note is None:
             latest_finding_feedback.setdefault(
                 (event.analysis_id, event.finding_id), event
             )
@@ -237,7 +267,9 @@ def fetch_feedback_summary(
                     }
                 )
         if event.false_negative_note:
-            latest_false_negative_by_report.setdefault(event.analysis_id, event)
+            latest_false_negative_by_scope.setdefault(
+                (event.analysis_id, event.finding_id), event
+            )
             recent_notes.append(
                 {
                     "type": "missed_finding",
@@ -250,7 +282,12 @@ def fetch_feedback_summary(
 
     latest_events = list(latest_finding_feedback.values())
     useful_count = sum(1 for event in latest_events if event.useful is True)
-    not_useful_count = sum(1 for event in latest_events if event.useful is False)
+    noisy_count = sum(
+        1
+        for event in latest_events
+        if event.useful is False and not bool(event.false_positive_flag)
+    )
+    not_useful_count = noisy_count
     false_positive_count = sum(
         1 for event in latest_events if bool(event.false_positive_flag)
     )
@@ -260,9 +297,10 @@ def fetch_feedback_summary(
         "project": build_project_payload(project),
         "current_state": {
             "useful_count": useful_count,
+            "noisy_count": noisy_count,
             "not_useful_count": not_useful_count,
             "false_positive_count": false_positive_count,
-            "missed_finding_count": len(latest_false_negative_by_report),
+            "missed_finding_count": len(latest_false_negative_by_scope),
         },
         "totals": {
             "events_recorded": len(events),
