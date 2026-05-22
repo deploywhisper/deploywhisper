@@ -68,6 +68,8 @@ class SettingsPageTests(unittest.TestCase):
         self.assertIn("Drift check cadence", response.text)
         self.assertIn("Topology drift", response.text)
         self.assertIn("Reviewer feedback summary", response.text)
+        self.assertIn("all-workspaces summary", response.text)
+        self.assertIn("Noisy", response.text)
 
     def test_settings_page_lists_drift_resource_names(self) -> None:
         project = project_service_module.create_project(

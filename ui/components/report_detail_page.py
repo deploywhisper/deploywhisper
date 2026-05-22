@@ -599,11 +599,14 @@ def render_reviewer_feedback_panel(
 ) -> None:
     feedback_state = fetch_report_feedback_state(int(report["id"]))
     latest_finding_feedback = feedback_state["finding_feedback"]
-    latest_false_negative = (
-        feedback_state["false_negative_notes"][0]
-        if feedback_state["false_negative_notes"]
-        else None
+    latest_false_negative_by_finding = feedback_state.get(
+        "false_negative_by_finding", {}
     )
+    legacy_false_negative_notes = [
+        note
+        for note in feedback_state.get("false_negative_notes", [])
+        if note.get("finding_id") is None
+    ]
 
     def submit_finding_feedback(
         *,
@@ -629,10 +632,11 @@ def render_reviewer_feedback_panel(
         if on_feedback_change is not None:
             on_feedback_change()
 
-    def submit_false_negative(note_input) -> None:
+    def submit_false_negative(*, finding_id: str | None = None, note_input) -> None:
         try:
             record_false_negative_feedback(
                 analysis_id=int(report["id"]),
+                finding_id=finding_id,
                 note=note_input.value,
             )
         except FeedbackError as exc:
@@ -657,6 +661,9 @@ def render_reviewer_feedback_panel(
             for finding in report.get("findings", []):
                 finding_id = str(finding["finding_id"])
                 current_feedback = latest_finding_feedback.get(finding_id)
+                current_missed_feedback = latest_false_negative_by_finding.get(
+                    finding_id
+                )
                 with ui.card().classes("w-full dw-panel-soft shadow-none"):
                     with ui.column().classes("gap-3 p-4"):
                         ui.label(finding["title"]).classes(
@@ -664,12 +671,12 @@ def render_reviewer_feedback_panel(
                         )
                         if current_feedback is not None:
                             status_bits = []
-                            if current_feedback.get("useful") is True:
+                            if current_feedback.get("false_positive_flag"):
+                                status_bits.append("Latest vote: false positive")
+                            elif current_feedback.get("useful") is True:
                                 status_bits.append("Latest vote: useful")
                             elif current_feedback.get("useful") is False:
-                                status_bits.append("Latest vote: not useful")
-                            if current_feedback.get("false_positive_flag"):
-                                status_bits.append("Marked false positive")
+                                status_bits.append("Latest vote: noisy")
                             ui.label(" · ".join(status_bits)).classes(
                                 "text-xs dw-muted"
                             )
@@ -682,7 +689,7 @@ def render_reviewer_feedback_panel(
                                 ),
                             ).props("outline no-caps").classes("dw-theme-button")
                             ui.button(
-                                "Thumbs down",
+                                "Mark noisy",
                                 on_click=lambda fid=finding_id: submit_finding_feedback(
                                     finding_id=fid,
                                     useful=False,
@@ -711,34 +718,88 @@ def render_reviewer_feedback_panel(
                                 )
                             ),
                         ).props("outline no-caps").classes("dw-danger-button")
-            with ui.card().classes("w-full dw-panel-soft shadow-none"):
-                with ui.column().classes("gap-3 p-4"):
-                    ui.label("Missed finding note").classes(
-                        "text-sm font-semibold dw-text"
-                    )
-                    if latest_false_negative is not None:
-                        ui.label(
-                            "Latest note: "
-                            + str(latest_false_negative["false_negative_note"])
-                        ).classes("text-xs dw-muted")
-                    missed_note = (
-                        ui.textarea(
-                            label="Missed finding note",
-                            value=(
-                                latest_false_negative.get("false_negative_note")
-                                if latest_false_negative is not None
-                                else ""
-                            ),
+                        ui.label("Missed finding note").classes(
+                            "text-sm font-semibold dw-text"
                         )
-                        .props("outlined autogrow")
-                        .classes("w-full")
-                    )
-                    ui.button(
-                        "Save missed finding note",
-                        on_click=lambda note_input=missed_note: submit_false_negative(
-                            note_input
-                        ),
-                    ).props("outline no-caps").classes("dw-theme-button")
+                        if current_missed_feedback is not None:
+                            ui.label(
+                                "Latest note: "
+                                + str(current_missed_feedback["false_negative_note"])
+                            ).classes("text-xs dw-muted")
+                        missed_note = (
+                            ui.textarea(
+                                label="Missed finding note",
+                                value=(
+                                    current_missed_feedback.get("false_negative_note")
+                                    if current_missed_feedback is not None
+                                    else ""
+                                ),
+                            )
+                            .props("outlined autogrow")
+                            .classes("w-full")
+                        )
+                        ui.button(
+                            "Save missed finding note",
+                            on_click=lambda fid=finding_id, note_input=missed_note: (
+                                submit_false_negative(
+                                    finding_id=fid,
+                                    note_input=note_input,
+                                )
+                            ),
+                        ).props("outline no-caps").classes("dw-theme-button")
+            if not report.get("findings"):
+                current_report_missed_feedback = (
+                    legacy_false_negative_notes[0]
+                    if legacy_false_negative_notes
+                    else None
+                )
+                with ui.card().classes("w-full dw-panel-soft shadow-none"):
+                    with ui.column().classes("gap-3 p-4"):
+                        ui.label("Report-level missed finding note").classes(
+                            "text-sm font-semibold dw-text"
+                        )
+                        ui.label(
+                            "Record an important risk that this report did not surface."
+                        ).classes("text-sm dw-muted")
+                        if current_report_missed_feedback is not None:
+                            ui.label(
+                                "Latest note: "
+                                + str(
+                                    current_report_missed_feedback[
+                                        "false_negative_note"
+                                    ]
+                                )
+                            ).classes("text-xs dw-muted")
+                        report_missed_note = (
+                            ui.textarea(
+                                label="Missed finding note",
+                                value=(
+                                    current_report_missed_feedback.get(
+                                        "false_negative_note"
+                                    )
+                                    if current_report_missed_feedback is not None
+                                    else ""
+                                ),
+                            )
+                            .props("outlined autogrow")
+                            .classes("w-full")
+                        )
+                        ui.button(
+                            "Save missed finding note",
+                            on_click=lambda note_input=report_missed_note: (
+                                submit_false_negative(note_input=note_input)
+                            ),
+                        ).props("outline no-caps").classes("dw-theme-button")
+            if legacy_false_negative_notes and report.get("findings"):
+                with ui.card().classes("w-full dw-panel-soft shadow-none"):
+                    with ui.column().classes("gap-3 p-4"):
+                        ui.label("Report-level missed finding notes").classes(
+                            "text-sm font-semibold dw-text"
+                        )
+                        for note in legacy_false_negative_notes:
+                            ui.label(
+                                "Legacy note: " + str(note["false_negative_note"])
+                            ).classes("text-xs dw-muted leading-5")
 
 
 def render_report_detail_page(
