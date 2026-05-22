@@ -120,6 +120,75 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
+    def _index_sql(self, index_name: str) -> str:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            row = sqlite_conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+                (index_name,),
+            ).fetchone()
+        finally:
+            sqlite_conn.close()
+        return str(row[0] if row else "")
+
+    def _assert_incident_ingestion_source_schema(self) -> None:
+        columns = self._table_columns("incident_ingestion_sources")
+        self.assertTrue(
+            {
+                "id",
+                "project_id",
+                "workspace_id",
+                "source_file",
+                "status",
+                "indexed_count",
+                "rejected_count",
+                "redaction_status",
+                "failure_summaries_json",
+                "index_version",
+                "last_indexed_at",
+                "created_at",
+                "updated_at",
+            }.issubset(columns)
+        )
+        unique_columns = self._unique_constraint_columns("incident_ingestion_sources")
+        self.assertIn(
+            ("project_id", "workspace_id", "source_file"),
+            unique_columns,
+        )
+        self.assertIn(("project_id", "source_file"), unique_columns)
+        partial_index_sql = self._index_sql(
+            "uq_incident_ingestion_sources_project_source"
+        )
+        self.assertIn("workspace_id IS NULL", partial_index_sql)
+        foreign_key_groups = self._foreign_key_groups("incident_ingestion_sources")
+        self.assertIn(
+            {
+                "constrained_columns": ["project_id"],
+                "referred_table": "projects",
+                "referred_columns": ["id"],
+                "ondelete": "CASCADE",
+            },
+            foreign_key_groups,
+        )
+        self.assertIn(
+            {
+                "constrained_columns": ["workspace_id"],
+                "referred_table": "project_workspaces",
+                "referred_columns": ["id"],
+                "ondelete": "SET NULL",
+            },
+            foreign_key_groups,
+        )
+        self.assertIn(
+            {
+                "constrained_columns": ["project_id", "workspace_id"],
+                "referred_table": "project_workspaces",
+                "referred_columns": ["project_id", "id"],
+                "ondelete": "NO ACTION",
+            },
+            foreign_key_groups,
+        )
+
     def _create_project_workspace_table(
         self,
         *,
@@ -978,7 +1047,9 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "022_add_deployment_outcome_notes")
+        self.assertIn("incident_ingestion_sources", tables)
+        self._assert_incident_ingestion_source_schema()
+        self.assertEqual(revision, "023_add_incident_ingestion_sources")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1027,7 +1098,9 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "022_add_deployment_outcome_notes")
+        self.assertIn("incident_ingestion_sources", tables)
+        self._assert_incident_ingestion_source_schema()
+        self.assertEqual(revision, "023_add_incident_ingestion_sources")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1053,13 +1126,14 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "022_add_deployment_outcome_notes")
+        self.assertEqual(revision, "023_add_incident_ingestion_sources")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
         self.assertIn("workspace_id", columns)
         self.assertIn("submission_manifest_json", columns)
         self.assertIn("submission_manifest_fallback_json", columns)
+        self._assert_incident_ingestion_source_schema()
 
     def test_init_db_accepts_current_incident_matches_revision(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1077,7 +1151,8 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "022_add_deployment_outcome_notes")
+        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self._assert_incident_ingestion_source_schema()
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
         command.upgrade(self._config(), "014_add_project_workspace_records")
@@ -1231,6 +1306,150 @@ class MigrationTests(unittest.TestCase):
         ):
             database_module.init_db()
 
+    def test_init_db_rejects_partial_incident_ingestion_source_constraints(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "head")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("PRAGMA foreign_keys=OFF")
+        sqlite_conn.execute(
+            "ALTER TABLE incident_ingestion_sources RENAME TO "
+            "incident_ingestion_sources_old"
+        )
+        sqlite_conn.execute("DROP TABLE incident_ingestion_sources_old")
+        sqlite_conn.execute(
+            """
+            CREATE TABLE incident_ingestion_sources (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                workspace_id INTEGER,
+                source_file VARCHAR(255) NOT NULL,
+                status VARCHAR(20) NOT NULL,
+                indexed_count INTEGER NOT NULL,
+                rejected_count INTEGER NOT NULL,
+                redaction_status VARCHAR(40) NOT NULL,
+                failure_summaries_json TEXT NOT NULL,
+                index_version VARCHAR(120),
+                last_indexed_at DATETIME,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                UNIQUE(project_id, workspace_id, source_file)
+            )
+            """
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_incident_ingestion_sources_project_id "
+            "ON incident_ingestion_sources (project_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_incident_ingestion_sources_workspace_id "
+            "ON incident_ingestion_sources (workspace_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE UNIQUE INDEX uq_incident_ingestion_sources_project_source "
+            "ON incident_ingestion_sources (project_id, source_file) "
+            "WHERE workspace_id IS NULL"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        from sqlalchemy import create_engine
+
+        validation_engine = create_engine(self.database_url, future=True)
+        try:
+            with validation_engine.connect() as connection:
+                self.assertFalse(
+                    database_module._incident_ingestion_sources_schema_complete(
+                        connection
+                    )
+                )
+        finally:
+            validation_engine.dispose()
+        with self.assertRaisesRegex(
+            RuntimeError, "partial incident ingestion source schema"
+        ):
+            database_module.init_db()
+
+    def test_init_db_rejects_full_incident_ingestion_project_source_unique_index(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "head")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("PRAGMA foreign_keys=OFF")
+        sqlite_conn.execute(
+            "ALTER TABLE incident_ingestion_sources RENAME TO "
+            "incident_ingestion_sources_old"
+        )
+        sqlite_conn.execute("DROP TABLE incident_ingestion_sources_old")
+        sqlite_conn.execute(
+            """
+            CREATE TABLE incident_ingestion_sources (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                workspace_id INTEGER,
+                source_file VARCHAR(255) NOT NULL,
+                status VARCHAR(20) NOT NULL
+                    CHECK (status IN ('indexed', 'failed', 'removed')),
+                indexed_count INTEGER NOT NULL,
+                rejected_count INTEGER NOT NULL,
+                redaction_status VARCHAR(40) NOT NULL,
+                failure_summaries_json TEXT NOT NULL,
+                index_version VARCHAR(120),
+                last_indexed_at DATETIME,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY(workspace_id)
+                    REFERENCES project_workspaces(id) ON DELETE SET NULL,
+                FOREIGN KEY(project_id, workspace_id)
+                    REFERENCES project_workspaces(project_id, id),
+                UNIQUE(project_id, workspace_id, source_file)
+            )
+            """
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_incident_ingestion_sources_project_id "
+            "ON incident_ingestion_sources (project_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_incident_ingestion_sources_workspace_id "
+            "ON incident_ingestion_sources (workspace_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE UNIQUE INDEX uq_incident_ingestion_sources_project_source "
+            "ON incident_ingestion_sources (project_id, source_file)"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        from sqlalchemy import create_engine
+
+        validation_engine = create_engine(self.database_url, future=True)
+        try:
+            with validation_engine.connect() as connection:
+                self.assertFalse(
+                    database_module._incident_ingestion_sources_schema_complete(
+                        connection
+                    )
+                )
+        finally:
+            validation_engine.dispose()
+        with self.assertRaisesRegex(
+            RuntimeError, "partial incident ingestion source schema"
+        ):
+            database_module.init_db()
+
     def test_init_db_rejects_partial_project_workspace_schema(self) -> None:
         command.upgrade(self._config(), "013_add_incident_analysis_reference")
         sqlite_conn = sqlite3.connect(self.db_path)
@@ -1364,7 +1583,8 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "022_add_deployment_outcome_notes")
+        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self._assert_incident_ingestion_source_schema()
 
 
 if __name__ == "__main__":

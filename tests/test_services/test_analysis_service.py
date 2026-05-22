@@ -25,6 +25,16 @@ from services.analysis_service import (
 )
 
 
+def _incident_snapshot(count: int = 0) -> dict:
+    freshness = "current" if count else "empty"
+    return {
+        "incident_index_size": count,
+        "incident_index_version": f"incidents:{count}:test",
+        "incident_index_last_indexed_at": ("2026-05-20T00:00:00Z" if count else None),
+        "incident_index_freshness_status": freshness,
+    }
+
+
 class AnalysisServiceTests(unittest.TestCase):
     def test_analyze_uploaded_files_requires_explicit_project_scope_before_parsing(
         self,
@@ -87,8 +97,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at=None),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates",
-                return_value=[],
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(0),
             ),
             patch(
                 "services.analysis_service.evaluate_parse_batch",
@@ -145,8 +155,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at=None),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates",
-                return_value=[],
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(0),
             ),
             patch(
                 "services.analysis_service.evaluate_parse_batch",
@@ -243,7 +253,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at=None),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates", return_value=[]
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(0),
             ),
             patch(
                 "analysis.incident_matcher.load_incident_candidates", return_value=[]
@@ -397,8 +408,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at=None),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates",
-                return_value=[],
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(0),
             ),
             patch(
                 "services.analysis_service.evaluate_parse_batch",
@@ -512,7 +523,8 @@ class AnalysisServiceTests(unittest.TestCase):
             ),
             patch("services.analysis_service._freshness_score", return_value=0.984),
             patch(
-                "services.analysis_service.load_incident_candidates", return_value=[]
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(0),
             ),
         ):
             context = build_analysis_artifacts.__globals__[
@@ -599,8 +611,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates",
-                return_value=[object()] * 10,
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(10),
             ),
         ):
             context = build_analysis_artifacts.__globals__[
@@ -608,11 +620,50 @@ class AnalysisServiceTests(unittest.TestCase):
             ](batch, evidence_items=duplicate_evidence)
 
         self.assertEqual(context.evidence_success_rate, 0.5)
+        self.assertEqual(context.incident_index_version, "incidents:unscoped")
+        self.assertEqual(context.incident_index_freshness_status, "empty")
         self.assertIn(
             "Review evidence extraction gaps for supported artifacts.",
             context.context_todos,
         )
         self.assertIn("evidence coverage", context.uncertainty)
+
+    def test_build_context_completeness_degrades_when_incident_snapshot_fails(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                side_effect=RuntimeError("incident snapshot unavailable"),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, project_id=123)
+
+        self.assertEqual(context.incident_index_size, 0)
+        self.assertEqual(context.incident_index_version, "incidents:unknown")
+        self.assertEqual(context.incident_index_freshness_status, "stale")
+        self.assertIn(
+            "Import relevant incident history for this project/workspace.",
+            context.context_todos,
+        )
+        self.assertIn("incident history", context.uncertainty)
 
     def test_build_context_completeness_uses_raw_parser_rate_for_tiny_gap(
         self,
@@ -642,8 +693,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates",
-                return_value=[object()] * 10,
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(10),
             ),
         ):
             context = build_analysis_artifacts.__globals__[
@@ -915,8 +966,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at="2026-04-18T11:22:33Z"),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates",
-                return_value=[{"id": 1}, {"id": 2}],
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(2),
             ),
             patch(
                 "services.analysis_service.evaluate_parse_batch",
@@ -1016,8 +1067,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at="2026-04-18T00:00:00Z"),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates",
-                return_value=[{"id": 1}, {"id": 2}, {"id": 3}],
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(3),
             ),
             patch(
                 "services.analysis_service.evaluate_parse_batch",
@@ -1101,8 +1152,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at="2025-01-01T00:00:00Z"),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates",
-                return_value=[],
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(0),
             ),
             patch(
                 "services.analysis_service.evaluate_parse_batch",
@@ -1578,8 +1629,8 @@ class AnalysisServiceTests(unittest.TestCase):
                 return_value=SimpleNamespace(updated_at="2026-04-18T00:00:00Z"),
             ),
             patch(
-                "services.analysis_service.load_incident_candidates",
-                return_value=[],
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(0),
             ),
             patch(
                 "services.analysis_service.evaluate_parse_batch",

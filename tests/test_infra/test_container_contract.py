@@ -36,6 +36,7 @@ class ContainerContractTests(unittest.TestCase):
                 "020_add_narrative_state_fields.py",
                 "021_add_incident_matches_payload.py",
                 "022_add_deployment_outcome_notes.py",
+                "023_add_incident_ingestion_sources.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -57,6 +58,7 @@ class ContainerContractTests(unittest.TestCase):
         narrative_state_content = migrations[16].read_text(encoding="utf-8")
         incident_matches_content = migrations[17].read_text(encoding="utf-8")
         deployment_notes_content = migrations[18].read_text(encoding="utf-8")
+        incident_ingestion_sources_content = migrations[19].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -113,6 +115,7 @@ class ContainerContractTests(unittest.TestCase):
             learning_context_scope_content,
         )
         self.assertIn('"incident_records"', learning_context_scope_content)
+        self.assertIn("incident_ingestion_sources", incident_ingestion_sources_content)
         self.assertIn('"project_id"', learning_context_scope_content)
         self.assertIn('"workspace_id"', learning_context_scope_content)
         self.assertIn(
@@ -153,6 +156,10 @@ class ContainerContractTests(unittest.TestCase):
             deployment_notes_content,
         )
         self.assertIn('"notes"', deployment_notes_content)
+        self.assertIn(
+            'down_revision = "022_add_deployment_outcome_notes"',
+            incident_ingestion_sources_content,
+        )
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())

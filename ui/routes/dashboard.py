@@ -8,6 +8,7 @@ from services.report_service import fetch_active_dashboard_report
 from ui.components.upload_panel import build_upload_panel
 from ui.components.verdict_card import render_verdict_card
 from ui.routes.history import build_history_detail_page, build_history_page
+from ui.routes.incidents import build_incidents_page
 from ui.routes.settings import build_settings_page
 from services.report_service import fetch_dashboard_briefing, fetch_dashboard_stats
 from ui.project_authorization import resolve_authorized_ui_active_project
@@ -336,3 +337,8 @@ def history_detail_compare_page(report_id: int) -> None:
 @ui.page("/settings")
 def settings_page() -> None:
     build_settings_page()
+
+
+@ui.page("/incidents")
+def incidents_page() -> None:
+    build_incidents_page()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from importlib import import_module
 from pathlib import Path
+import re
 
 from alembic import command
 from alembic.config import Config
@@ -52,6 +53,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "020_add_narrative_state_fields",
     "021_add_incident_matches_payload",
     "022_add_deployment_outcome_notes",
+    "023_add_incident_ingestion_sources",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -158,6 +160,13 @@ def _feedback_event_columns(connection) -> set[str]:
 def _incident_record_columns(connection) -> set[str]:
     return {
         column["name"] for column in inspect(connection).get_columns("incident_records")
+    }
+
+
+def _incident_ingestion_source_columns(connection) -> set[str]:
+    return {
+        column["name"]
+        for column in inspect(connection).get_columns("incident_ingestion_sources")
     }
 
 
@@ -391,6 +400,120 @@ def _analysis_report_incident_matches_complete(connection) -> bool:
     )
 
 
+def _index_has_workspace_null_predicate(index: dict) -> bool:
+    dialect_options = index.get("dialect_options") or {}
+    predicate_sql = " ".join(
+        str(predicate)
+        for predicate in (
+            dialect_options.get("sqlite_where"),
+            dialect_options.get("postgresql_where"),
+        )
+        if predicate is not None
+    )
+    normalized = re.sub(r"\s+", " ", predicate_sql).lower().replace('"', "")
+    return "workspace_id is null" in normalized
+
+
+def _incident_ingestion_project_source_index_complete(index: dict) -> bool:
+    return (
+        index.get("unique")
+        and (index.get("column_names") or []) == ["project_id", "source_file"]
+        and _index_has_workspace_null_predicate(index)
+    )
+
+
+def _incident_ingestion_sources_schema_complete(connection) -> bool:
+    inspector = inspect(connection)
+    column_map = {
+        column["name"]: column
+        for column in inspector.get_columns("incident_ingestion_sources")
+    }
+    required_columns = {
+        "id",
+        "project_id",
+        "workspace_id",
+        "source_file",
+        "status",
+        "indexed_count",
+        "rejected_count",
+        "redaction_status",
+        "failure_summaries_json",
+        "index_version",
+        "last_indexed_at",
+        "created_at",
+        "updated_at",
+    }
+    required_non_nullable_columns = {
+        "project_id",
+        "source_file",
+        "status",
+        "indexed_count",
+        "rejected_count",
+        "redaction_status",
+        "failure_summaries_json",
+        "created_at",
+        "updated_at",
+    }
+    has_required_nullability = all(
+        column_name in column_map and column_map[column_name].get("nullable") is False
+        for column_name in required_non_nullable_columns
+    )
+    foreign_keys = inspector.get_foreign_keys("incident_ingestion_sources")
+    has_project_fk = any(
+        foreign_key.get("referred_table") == "projects"
+        and (foreign_key.get("constrained_columns") or []) == ["project_id"]
+        and (foreign_key.get("referred_columns") or []) == ["id"]
+        and (foreign_key.get("options") or {}).get("ondelete") == "CASCADE"
+        for foreign_key in foreign_keys
+    )
+    has_workspace_fk = any(
+        foreign_key.get("referred_table") == "project_workspaces"
+        and (foreign_key.get("constrained_columns") or []) == ["workspace_id"]
+        and (foreign_key.get("referred_columns") or []) == ["id"]
+        and (foreign_key.get("options") or {}).get("ondelete") == "SET NULL"
+        for foreign_key in foreign_keys
+    )
+    has_workspace_scope_fk = any(
+        foreign_key.get("referred_table") == "project_workspaces"
+        and (foreign_key.get("constrained_columns") or [])
+        == ["project_id", "workspace_id"]
+        and (foreign_key.get("referred_columns") or []) == ["project_id", "id"]
+        for foreign_key in foreign_keys
+    )
+    check_sql = " ".join(
+        str(constraint.get("sqltext") or "")
+        for constraint in inspector.get_check_constraints("incident_ingestion_sources")
+    )
+    has_status_check = all(
+        value in check_sql for value in ("indexed", "failed", "removed")
+    )
+    unique_columns = {
+        tuple(unique.get("column_names") or [])
+        for unique in inspector.get_unique_constraints("incident_ingestion_sources")
+    }
+    indexed_columns = {
+        tuple(index.get("column_names") or [])
+        for index in inspector.get_indexes("incident_ingestion_sources")
+    }
+    has_project_source_unique_index = any(
+        _incident_ingestion_project_source_index_complete(index)
+        for index in inspector.get_indexes("incident_ingestion_sources")
+    )
+    return (
+        required_columns.issubset(column_map)
+        and has_required_nullability
+        and bool(column_map.get("id", {}).get("primary_key"))
+        and has_project_fk
+        and has_workspace_fk
+        and has_workspace_scope_fk
+        and has_status_check
+        and ("project_id", "workspace_id", "source_file") in unique_columns
+        and has_project_source_unique_index
+        and ("project_id",) in indexed_columns
+        and ("workspace_id",) in indexed_columns
+    )
+
+
 def _learning_context_scope_complete(connection) -> bool:
     inspector = inspect(connection)
     workspace_unique_columns = {
@@ -610,6 +733,25 @@ def _bootstrap_brownfield_revision() -> None:
             and _analysis_report_incident_matches_complete(connection)
         )
         has_deployment_outcome_notes = "notes" in deployment_outcome_columns
+        has_incident_ingestion_sources = "incident_ingestion_sources" in tables
+        has_complete_incident_ingestion_sources = (
+            has_incident_ingestion_sources
+            and _incident_ingestion_sources_schema_complete(connection)
+        )
+        if has_incident_ingestion_sources and not (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+            and has_deployment_outcome_notes
+            and has_complete_incident_ingestion_sources
+        ):
+            raise RuntimeError(
+                "Detected a partial incident ingestion source schema without a "
+                "complete migration history. Manual recovery is required."
+            )
         if scoped_learning_columns_present and not has_complete_learning_context_scope:
             raise RuntimeError(
                 "Detected a partial learning/context scope schema without a complete "
@@ -677,6 +819,18 @@ def _bootstrap_brownfield_revision() -> None:
                 "Detected a partial deployment outcome notes schema without a complete "
                 "migration history. Manual recovery is required."
             )
+        if (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+            and has_deployment_outcome_notes
+            and has_complete_incident_ingestion_sources
+        ):
+            _write_alembic_revision(connection, "023_add_incident_ingestion_sources")
+            return
         if (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload

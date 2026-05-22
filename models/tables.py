@@ -11,10 +11,12 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -69,6 +71,68 @@ if "IncidentRecord" not in globals():
         workspace: Mapped["ProjectWorkspace | None"] = relationship(
             back_populates="incident_records",
             foreign_keys=[workspace_id],
+        )
+
+
+if "IncidentIngestionSource" not in globals():
+
+    class IncidentIngestionSource(Base):
+        """Durable ingestion status for one incident source in a project scope."""
+
+        __tablename__ = "incident_ingestion_sources"
+        __table_args__ = (
+            UniqueConstraint(
+                "project_id",
+                "workspace_id",
+                "source_file",
+                name="uq_incident_ingestion_sources_scope_source",
+            ),
+            Index(
+                "uq_incident_ingestion_sources_project_source",
+                "project_id",
+                "source_file",
+                unique=True,
+                sqlite_where=text("workspace_id IS NULL"),
+                postgresql_where=text("workspace_id IS NULL"),
+            ),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                name="fk_incident_ingestion_sources_project_workspace_scope",
+            ),
+            CheckConstraint(
+                "status IN ('indexed', 'failed', 'removed')",
+                name="ck_incident_ingestion_sources_status",
+            ),
+        )
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        workspace_id: Mapped[int | None] = mapped_column(
+            ForeignKey("project_workspaces.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        )
+        source_file: Mapped[str] = mapped_column(String(255))
+        status: Mapped[str] = mapped_column(String(20), default="indexed")
+        indexed_count: Mapped[int] = mapped_column(Integer, default=0)
+        rejected_count: Mapped[int] = mapped_column(Integer, default=0)
+        redaction_status: Mapped[str] = mapped_column(String(40), default="unknown")
+        failure_summaries_json: Mapped[str] = mapped_column(Text, default="[]")
+        index_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+        last_indexed_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True),
+            default=lambda: datetime.now(UTC),
+            onupdate=lambda: datetime.now(UTC),
         )
 
 

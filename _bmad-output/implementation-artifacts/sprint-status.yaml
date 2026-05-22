@@ -88,7 +88,7 @@ development_status:
   4-4-incident-similarity-with-match-explanation: done
   4-5-reviewer-feedback-capture: done
   4-6-deployment-outcome-capture: review
-  4-7-incident-ingestion-management-and-indexing: ready-for-dev
+  4-7-incident-ingestion-management-and-indexing: done
   epic-4-retrospective: optional
 
   epic-5: in-progress
