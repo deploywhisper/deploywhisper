@@ -1,0 +1,42 @@
+---
+name: Demo checkout rollback and containment workflow
+hosts: checkout_release_hosts
+gather_facts: false
+vars:
+  release_id: "demo-2026-05-22"
+  maintenance_window: "30m"
+tasks:
+  - name: Pause checkout traffic through public ingress
+    ansible.builtin.command:
+      cmd: kubectl scale deployment checkout-api -n demo-prod --replicas=2
+
+  - name: Restore trusted admin CIDR
+    amazon.aws.ec2_security_group:
+      name: demo-checkout-admin
+      description: Administrative access for checkout maintenance
+      region: us-east-1
+      rules:
+        - proto: tcp
+          ports:
+            - 22
+          cidr_ip: 203.0.113.10/32
+
+  - name: Re-enable database protection flags
+    ansible.builtin.debug:
+      msg: "Set publicly_accessible=false, deletion_protection=true, and backup_retention_period=7 for demo-checkout-db."
+
+  - name: Run checkout smoke test
+    ansible.builtin.uri:
+      url: "https://checkout.demo.example.com/health"
+      method: GET
+      status_code: 200
+
+  - name: Record rollback evidence
+    ansible.builtin.copy:
+      dest: "/tmp/deploywhisper-demo-rollback-{{ release_id }}.txt"
+      mode: "0640"
+      content: |
+        Synthetic rollback evidence for DeployWhisper UI demo.
+        Release: {{ release_id }}
+        Maintenance window: {{ maintenance_window }}
+        Result: pending operator verification

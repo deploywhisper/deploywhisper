@@ -1,0 +1,53 @@
+{
+  "updated_at": "2026-05-22T00:00:00Z",
+  "services": [
+    {
+      "id": "edge-gateway",
+      "label": "Edge Gateway",
+      "resource_keys": [
+        "Ingress/checkout-web",
+        "Service/checkout-api",
+        "resource/PublicAlbSecurityGroup"
+      ],
+      "downstream": ["customer-web", "checkout-api"]
+    },
+    {
+      "id": "customer-web",
+      "label": "Customer Web",
+      "resource_keys": [
+        "aws_s3_bucket_public_access_block.assets",
+        "resource/PaymentsAuditBucket"
+      ],
+      "downstream": ["checkout-api"]
+    },
+    {
+      "id": "checkout-api",
+      "label": "Checkout API",
+      "resource_keys": [
+        "aws_security_group.checkout_admin",
+        "Deployment/checkout-api",
+        "NetworkPolicy/checkout-allow-all-egress",
+        "aws_eks_node_group.checkout_workers"
+      ],
+      "downstream": ["payments-worker", "data-store"]
+    },
+    {
+      "id": "payments-worker",
+      "label": "Payments Worker",
+      "resource_keys": [
+        "Deployment/payments-worker",
+        "aws_iam_policy.deploy_runner",
+        "resource/DeployRunnerPolicy"
+      ],
+      "downstream": ["data-store"]
+    },
+    {
+      "id": "data-store",
+      "label": "Checkout Data Store",
+      "resource_keys": [
+        "aws_db_instance.checkout"
+      ],
+      "downstream": []
+    }
+  ]
+}

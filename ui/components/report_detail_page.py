@@ -101,13 +101,22 @@ def _detail_stat(label: str, value: str, detail: str) -> None:
 
 
 def _header_signal(label: str, value: str, detail: str) -> None:
-    with ui.element("div").classes("dw-panel-soft min-w-[180px] flex-1 p-3"):
-        with ui.column().classes("gap-1"):
+    signal_key = label.lower().replace(" ", "-")
+    with (
+        ui.element("div")
+        .classes("dw-panel-soft dw-report-signal p-3")
+        .props(f'data-dw-report-signal="{signal_key}"')
+    ):
+        with ui.column().classes("gap-1 min-w-0"):
             ui.label(label).classes(
                 "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
             )
-            ui.label(value).classes("text-base font-semibold dw-text leading-5")
-            ui.label(detail).classes("text-xs dw-muted leading-5")
+            ui.label(value).classes(
+                "dw-report-signal-value text-base font-semibold dw-text leading-5"
+            ).props(f'data-dw-report-signal-value="{signal_key}"')
+            ui.label(detail).classes(
+                "dw-report-signal-detail text-xs dw-muted leading-5"
+            ).props(f'data-dw-report-signal-detail="{signal_key}"')
 
 
 def _render_summary_and_advisory(report: dict[str, Any]) -> None:
@@ -834,8 +843,8 @@ def render_report_detail_page(
                             format_history_timestamp(report["created_at"])
                         ).classes("text-sm dw-muted")
                     ui.label(report["top_risk"]).classes(
-                        "text-2xl font-semibold dw-text leading-tight"
-                    )
+                        "dw-report-title-risk text-2xl font-semibold dw-text leading-tight"
+                    ).props('data-dw-report-heading="top-risk"')
                     ui.label(
                         "Full advisory context for the saved deployment report, including evidence, context quality, blast radius, and rollback guidance."
                     ).classes("text-sm dw-muted leading-6")
@@ -845,7 +854,7 @@ def render_report_detail_page(
                         "dw-verdict-score-value"
                     )
                     ui.label("Risk score").classes("dw-verdict-score-label")
-            with ui.row().classes("w-full gap-3 flex-wrap"):
+            with ui.element("div").classes("dw-report-signal-grid w-full"):
                 _header_signal(
                     "Verdict",
                     report_verdict_text(report),

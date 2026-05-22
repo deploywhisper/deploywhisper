@@ -733,7 +733,10 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
   line-height: 1.25;
   font-weight: 600;
   letter-spacing: -0.04em;
-  max-width: 18ch;
+  max-width: min(58ch, 100%);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
 }
 
 .dw-findings-row {
@@ -824,6 +827,37 @@ html[data-dw-theme="light"] .dw-dashboard-headline .dw-gradient {
   border: 1px solid var(--dw-line);
   background: color-mix(in srgb, var(--dw-surface-soft) 90%, transparent);
   text-align: center;
+}
+
+.dw-report-title-risk {
+  max-width: min(72ch, 100%);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.dw-report-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.dw-report-signal {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dw-report-signal-value,
+.dw-report-signal-detail {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
 }
 
 .dw-detail-list-row {

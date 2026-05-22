@@ -341,6 +341,75 @@ async function selectHistoryFilter(page, label, option) {
   await expect(field).toContainText(option);
 }
 
+async function expectReportSummaryCardsReadable(page) {
+  const failures = await page.evaluate(() => {
+    const result = [];
+    const viewportWidth = document.documentElement.clientWidth;
+    if (document.documentElement.scrollWidth > viewportWidth + 2) {
+      result.push(
+        `page has horizontal overflow: ${document.documentElement.scrollWidth} > ${viewportWidth}`
+      );
+    }
+
+    const cards = Array.from(
+      document.querySelectorAll("[data-dw-report-signal]")
+    );
+    if (cards.length === 0) {
+      result.push("no report signal cards found");
+      return result;
+    }
+
+    for (const card of cards) {
+      const cardRect = card.getBoundingClientRect();
+      const key = card.getAttribute("data-dw-report-signal") || "unknown";
+      if (cardRect.width <= 0 || cardRect.height <= 0) {
+        result.push(`${key} card has empty bounds`);
+      }
+      for (const text of card.querySelectorAll(
+        ".dw-report-signal-value, .dw-report-signal-detail"
+      )) {
+        const textRect = text.getBoundingClientRect();
+        if (text.scrollWidth > text.clientWidth + 2) {
+          result.push(
+            `${key} text overflows horizontally: ${text.scrollWidth} > ${text.clientWidth}`
+          );
+        }
+        if (textRect.right > cardRect.right + 2) {
+          result.push(`${key} text spills outside card right edge`);
+        }
+        if (textRect.bottom > cardRect.bottom + 2) {
+          result.push(`${key} text spills outside card bottom edge`);
+        }
+      }
+    }
+
+    const rects = cards.map((card) => ({
+      key: card.getAttribute("data-dw-report-signal") || "unknown",
+      rect: card.getBoundingClientRect(),
+    }));
+    for (let index = 0; index < rects.length; index += 1) {
+      for (
+        let otherIndex = index + 1;
+        otherIndex < rects.length;
+        otherIndex += 1
+      ) {
+        const a = rects[index];
+        const b = rects[otherIndex];
+        const separated =
+          a.rect.right <= b.rect.left + 1 ||
+          b.rect.right <= a.rect.left + 1 ||
+          a.rect.bottom <= b.rect.top + 1 ||
+          b.rect.bottom <= a.rect.top + 1;
+        if (!separated) {
+          result.push(`${a.key} card overlaps ${b.key} card`);
+        }
+      }
+    }
+    return result;
+  });
+  expect(failures).toEqual([]);
+}
+
 test.describe("review keyboard flow", () => {
   test("tabs through review sections in order and supports arrow/escape controls", async ({
     page,
@@ -703,6 +772,57 @@ test.describe("review keyboard flow", () => {
     await expect(page.getByText("Persistent findings", { exact: true })).toBeVisible();
     await expect(page.getByText("Changed context", { exact: true })).toBeVisible();
     await expect(page.getByText("Evidence changed")).toBeVisible();
+  });
+
+  test("keeps report summary cards readable with long dynamic content", async ({
+    page,
+  }) => {
+    const longRisk =
+      "CRITICAL: aws_eks_node_group.checkout_workers - Terraform aws_eks_node_group.checkout_workers is a replace change in the compute/workload category targeting production. It may affect 3 downstream service(s) or resource groups. Security flags: Open security group rule detected (protocol -1 / 0.0.0.0/0).";
+    const longAction =
+      "Review linked evidence and rollback readiness before release, confirm owner acknowledgement, validate topology impact, and record the human decision.";
+    const scenarios = [
+      { width: 390, height: 900, zoom: "1" },
+      { width: 768, height: 1024, zoom: "1" },
+      { width: 1366, height: 900, zoom: "1" },
+      { width: 1920, height: 1080, zoom: "1.25" },
+    ];
+
+    for (const scenario of scenarios) {
+      await page.setViewportSize({
+        width: scenario.width,
+        height: scenario.height,
+      });
+      await page.goto("/history/1", { waitUntil: "networkidle" });
+      await page.evaluate(
+        ({ risk, action, zoom }) => {
+          document.body.style.zoom = zoom;
+          const heading = document.querySelector(
+            '[data-dw-report-heading="top-risk"]'
+          );
+          if (heading) {
+            heading.textContent = risk;
+          }
+          const topRisk = document.querySelector(
+            '[data-dw-report-signal-value="top-risk"]'
+          );
+          if (topRisk) {
+            topRisk.textContent = risk;
+          }
+          const nextAction = document.querySelector(
+            '[data-dw-report-signal-value="next-action"]'
+          );
+          if (nextAction) {
+            nextAction.textContent = action;
+          }
+        },
+        { risk: longRisk, action: longAction, zoom: scenario.zoom }
+      );
+      await expect(
+        page.locator('[data-dw-report-signal="top-risk"]')
+      ).toBeVisible();
+      await expectReportSummaryCardsReadable(page);
+    }
   });
 
   test("opens unavailable evidence with sanitized legacy finding ids", async ({

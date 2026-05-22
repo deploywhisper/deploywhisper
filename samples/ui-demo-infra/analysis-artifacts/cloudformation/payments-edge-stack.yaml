@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Synthetic payments edge stack for DeployWhisper UI demos.
+
+Parameters:
+  VpcId:
+    Type: String
+    Default: vpc-demo1234
+
+Resources:
+  PublicAlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public ALB ingress for payments edge
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Service
+          Value: edge-gateway
+
+  PaymentsAuditBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: demo-payments-audit-logs
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      VersioningConfiguration:
+        Status: Suspended
+
+  DeployRunnerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: demo-payments-deploy-runner
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - cloudformation:*
+              - iam:PassRole
+              - s3:*
+            Resource: "*"
+
+Outputs:
+  EdgeSecurityGroupId:
+    Description: Synthetic edge security group.
+    Value: !Ref PublicAlbSecurityGroup

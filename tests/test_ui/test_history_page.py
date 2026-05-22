@@ -1763,6 +1763,28 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Next action", response.text)
         self.assertIn("Review linked evidence", response.text)
 
+    def test_history_detail_route_marks_summary_cards_as_wrapping_grid(self) -> None:
+        long_top_risk = (
+            "CRITICAL: aws_eks_node_group.checkout_workers - Terraform "
+            "aws_eks_node_group.checkout_workers is a replace change in the "
+            "compute/workload category targeting production. It may affect 3 "
+            "downstream service(s) or resource groups."
+        )
+        self._persist_report(
+            top_risk=long_top_risk,
+            assessment_confidence=0.8,
+        )
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("dw-report-signal-grid", response.text)
+        self.assertIn("dw-report-signal", response.text)
+        self.assertIn("dw-report-signal-value", response.text)
+        self.assertIn('"data-dw-report-signal":"top-risk"', response.text)
+        self.assertIn('"data-dw-report-signal":"next-action"', response.text)
+        self.assertIn('"data-dw-report-heading":"top-risk"', response.text)
+
     def test_history_detail_route_renders_confidence_ledger(self) -> None:
         self._persist_report(
             assessment_confidence=0.72,
