@@ -30,6 +30,7 @@ from api.routes.analyses import router as analyses_router
 from api.routes.deployments import router as deployments_router
 from api.routes.github_app import router as github_app_router
 from api.routes.health import router as health_router
+from api.routes.incidents import router as incidents_router
 from api.routes.projects import router as projects_router
 from api.routes.settings import router as context_router
 from api.routes.skills import router as skills_router
@@ -110,6 +111,7 @@ fastapi_app.include_router(github_app_router)
 fastapi_app.include_router(projects_router)
 fastapi_app.include_router(context_router)
 fastapi_app.include_router(skills_router)
+fastapi_app.include_router(incidents_router)
 
 
 if not hasattr(fastapi_app, "_deploywhisper_original_lifespan_context"):

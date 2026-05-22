@@ -12,7 +12,6 @@ from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
 from analysis.incident_matcher import (
     IncidentMatch,
     find_incident_matches,
-    load_incident_candidates,
 )
 from analysis.risk_engine import score_evidence
 from analysis.risk_scorer import (
@@ -41,6 +40,7 @@ from services.report_service import (
 )
 from services.settings_service import resolve_provider_runtime
 from services.submission_manifest import build_submission_manifest
+from services.incident_service import get_incident_index_snapshot
 from services.topology_service import (
     STALE_AFTER_DAYS,
     get_topology_status,
@@ -439,14 +439,28 @@ def _build_context_completeness(
     topology_freshness_days = _topology_freshness_days(topology_status.updated_at)
     if project_id is None and project_key is None:
         incident_index_size = 0
+        incident_index_snapshot = {
+            "incident_index_version": "incidents:unscoped",
+            "incident_index_last_indexed_at": None,
+            "incident_index_freshness_status": "empty",
+        }
     else:
-        incident_index_size = len(
-            load_incident_candidates(
+        try:
+            incident_index_snapshot = get_incident_index_snapshot(
                 project_id=project_id,
                 project_key=project_key,
                 workspace_id=workspace_id,
                 workspace_key=workspace_key,
             )
+        except Exception:
+            incident_index_snapshot = {
+                "incident_index_size": 0,
+                "incident_index_version": "incidents:unknown",
+                "incident_index_last_indexed_at": None,
+                "incident_index_freshness_status": "stale",
+            }
+        incident_index_size = int(
+            incident_index_snapshot.get("incident_index_size") or 0
         )
     raw_parser_success_rate = parse_batch.parsed_count / max(len(parse_batch.files), 1)
     parser_success_rate = round(raw_parser_success_rate, 2)
@@ -473,6 +487,15 @@ def _build_context_completeness(
         topology_freshness_days=topology_freshness_days,
         topology_last_imported_at=topology_status.updated_at,
         incident_index_size=incident_index_size,
+        incident_index_version=str(
+            incident_index_snapshot.get("incident_index_version") or "incidents:empty"
+        ),
+        incident_index_last_indexed_at=incident_index_snapshot.get(
+            "incident_index_last_indexed_at"
+        ),
+        incident_index_freshness_status=str(
+            incident_index_snapshot.get("incident_index_freshness_status") or "empty"
+        ),
         parser_success_rate=parser_success_rate,
         evidence_success_rate=round(evidence_success_rate, 2),
         parser_success_by_tool=_parser_success_by_tool(parse_batch),

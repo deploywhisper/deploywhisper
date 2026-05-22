@@ -18,13 +18,14 @@ import models.repositories.analysis_reports as analysis_reports_repository_modul
 import models.tables as tables_module
 import services.artifact_snapshot_service as artifact_snapshot_service_module
 import services.project_service as project_service_module
+import services.incident_service as incident_service_module
 import services.report_service as report_service_module
 import services.settings_service as settings_service_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.incident_matcher import IncidentMatch
 from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from evidence.models import EvidenceItem, Finding
+from evidence.models import ContextCompleteness, EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 from parsers.terraform_parser import parse_terraform
@@ -44,6 +45,7 @@ class ReportServiceTests(unittest.TestCase):
         reload(analysis_reports_repository_module)
         reload(artifact_snapshot_service_module)
         reload(project_service_module)
+        reload(incident_service_module)
         reload(settings_service_module)
         reload(report_service_module)
         database_module.init_db()
@@ -4068,6 +4070,159 @@ class ReportServiceTests(unittest.TestCase):
             ["ingress.0.description"],
         )
 
+    def test_fetch_analysis_report_marks_incident_index_snapshot_stale(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        incident_service_module.ingest_incident_document(
+            "checkout-a.md",
+            "# Checkout A\nSeverity: high\nRedaction status: redacted\n",
+            project_id=project.id,
+        )
+        snapshot = incident_service_module.get_incident_index_snapshot(
+            project_id=project.id
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group review.",
+            contributors=[],
+            interaction_risks=[],
+            context_completeness=ContextCompleteness(
+                context_score=0.9,
+                incident_index_size=int(snapshot["incident_index_size"] or 0),
+                incident_index_version=str(snapshot["incident_index_version"]),
+                incident_index_last_indexed_at=snapshot[
+                    "incident_index_last_indexed_at"
+                ],
+                incident_index_freshness_status=str(
+                    snapshot["incident_index_freshness_status"]
+                ),
+            ),
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="Review the ingress change.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        incident_service_module.ingest_incident_document(
+            "checkout-b.md",
+            "# Checkout B\nSeverity: medium\nRedaction status: redacted\n",
+            project_id=project.id,
+        )
+        fetched = report_service_module.fetch_analysis_report(persisted["id"])
+
+        self.assertIsNotNone(fetched)
+        self.assertEqual(
+            fetched["context_completeness"]["incident_index_freshness_status"],
+            "stale",
+        )
+        self.assertEqual(
+            fetched["context_completeness"]["incident_index_version"],
+            snapshot["incident_index_version"],
+        )
+
+    def test_fetch_analysis_report_marks_incident_index_stale_when_lookup_fails(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group review.",
+            contributors=[],
+            interaction_risks=[],
+            context_completeness=ContextCompleteness(
+                context_score=0.9,
+                incident_index_size=1,
+                incident_index_version="incidents:1:old",
+                incident_index_last_indexed_at="2026-05-20T00:00:00Z",
+                incident_index_freshness_status="current",
+            ),
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="Review the ingress change.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        with patch(
+            "services.incident_service.get_incident_index_snapshot",
+            side_effect=RuntimeError("snapshot unavailable"),
+        ):
+            fetched = report_service_module.fetch_analysis_report(persisted["id"])
+
+        self.assertIsNotNone(fetched)
+        self.assertEqual(
+            fetched["context_completeness"]["incident_index_freshness_status"],
+            "stale",
+        )
+
     def test_persist_analysis_report_cleans_up_committed_row_after_artifact_failure(
         self,
     ) -> None:
@@ -5795,6 +5950,8 @@ class ReportServiceTests(unittest.TestCase):
         self.assertFalse(context["insufficient_context"])
         self.assertEqual(context["evidence_success_rate"], 1.0)
         self.assertEqual(context["confidence_level"], "medium")
+        self.assertEqual(context["incident_index_version"], "incidents:unknown")
+        self.assertEqual(context["incident_index_freshness_status"], "unknown")
         self.assertEqual(fetched["confidence"], 0.82)
         self.assertNotIn(
             "Context completeness metadata was unavailable because persisted values were incomplete.",

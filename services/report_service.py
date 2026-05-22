@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import json
-import math
-import os
-import secrets
 import hashlib
 import hmac
 import ipaddress
+import json
+import logging
+import math
+import os
 import re
+import secrets
 import unicodedata
-from datetime import UTC, datetime
 from collections import Counter, defaultdict
+from datetime import UTC, datetime
 from functools import lru_cache
 from urllib.parse import urlsplit
 from typing import Any
@@ -78,6 +79,7 @@ _SUBMISSION_MANIFEST_INFERRED_WARNING = (
 )
 _AMBIGUOUS_ARTIFACT_REPLACEMENT = "Artifact file"
 _NON_VISIBLE_NARRATIVE_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
+logger = logging.getLogger(__name__)
 _EVIDENCE_MATCHING_EXACT_COMPONENT_LIMIT = 8
 _EXTENSIONLESS_FILE_BASENAMES = {
     "Brewfile",
@@ -656,11 +658,11 @@ def _cleanup_partial_report(report_id: int | None) -> None:
         with SessionLocal() as session:
             delete_analysis_report(session, report_id)
     except Exception:
-        pass
+        logger.debug("Failed to clean up partial report row", exc_info=True)
     try:
         delete_report_artifacts(report_id)
     except Exception:
-        pass
+        logger.debug("Failed to clean up partial report artifacts", exc_info=True)
 
 
 def _extract_narrative_failure_notice(warnings: list[str]) -> str | None:
@@ -3210,6 +3212,18 @@ def _normalize_context_completeness_payload(decoded: dict) -> dict:
     normalized["parser_success_rate"] = parser_success_rate
     normalized["evidence_success_rate"] = evidence_success_rate
     normalized["incident_index_size"] = incident_index_size
+    normalized["incident_index_version"] = str(
+        decoded.get("incident_index_version") or "incidents:unknown"
+    )
+    normalized["incident_index_last_indexed_at"] = (
+        str(decoded["incident_index_last_indexed_at"])
+        if decoded.get("incident_index_last_indexed_at")
+        else None
+    )
+    incident_freshness_status = decoded.get("incident_index_freshness_status")
+    if not incident_freshness_status:
+        incident_freshness_status = "unknown" if incident_index_size > 0 else "empty"
+    normalized["incident_index_freshness_status"] = str(incident_freshness_status)
     normalized["topology_freshness_days"] = topology_freshness_days
 
     insufficient_context = context_score < 0.7
@@ -3317,6 +3331,34 @@ def _clamp_confidence_to_context(
     return round(min(confidence, max(0.0, min(context_score, 1.0))), 2)
 
 
+def _context_with_incident_index_freshness(report, context_completeness: dict) -> dict:
+    stored_version = str(context_completeness.get("incident_index_version") or "")
+    if not stored_version or stored_version in {
+        "incidents:unknown",
+        "incidents:unscoped",
+    }:
+        return context_completeness
+    if getattr(report, "project_id", None) is None:
+        return context_completeness
+    try:
+        from services.incident_service import get_incident_index_snapshot
+
+        current = get_incident_index_snapshot(
+            project_id=report.project_id,
+            workspace_id=report.workspace_id,
+        )
+    except Exception:
+        updated = dict(context_completeness)
+        updated["incident_index_freshness_status"] = "stale"
+        return updated
+    current_version = str(current.get("incident_index_version") or "")
+    if current_version and current_version != stored_version:
+        updated = dict(context_completeness)
+        updated["incident_index_freshness_status"] = "stale"
+        return updated
+    return context_completeness
+
+
 def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     created_at = report.created_at
     if created_at.tzinfo is None:
@@ -3386,6 +3428,10 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         report.risk_assessment.context_completeness_json
         if report.risk_assessment is not None
         else None
+    )
+    context_completeness = _context_with_incident_index_freshness(
+        report,
+        context_completeness,
     )
     if context_warning is not None and context_warning not in warnings:
         warnings.append(context_warning)

@@ -7,8 +7,10 @@ import os
 from services.project_service import (
     ProjectRecord,
     ProjectAuthorizationError,
+    ProjectAuthorizationResult,
     clear_active_project_selection,
     create_project,
+    authorize_project_action,
     filter_projects_by_authorization,
     get_active_project,
     has_active_project_selection,
@@ -147,4 +149,34 @@ def create_authorized_ui_project(
         description=description,
         repository_url=repository_url,
         default_branch=default_branch,
+    )
+
+
+def authorize_ui_project_capability(
+    *,
+    capability: str,
+    project_key: str | None = None,
+) -> ProjectAuthorizationResult:
+    """Check a UI actor capability using the local process actor contract."""
+    authorization = ui_project_authorization_from_env()
+    return authorize_project_action(
+        role=authorization["role"],
+        capability=capability,
+        project_key=project_key,
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+
+
+def require_ui_project_capability(
+    *,
+    capability: str,
+    project_key: str | None = None,
+) -> ProjectAuthorizationResult:
+    """Require a UI actor capability using the local process actor contract."""
+    authorization = ui_project_authorization_from_env()
+    return require_project_permission(
+        role=authorization["role"],
+        capability=capability,
+        project_key=project_key,
+        allowed_project_keys=authorization["allowed_project_keys"],
     )

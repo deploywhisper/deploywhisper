@@ -259,7 +259,11 @@ def render_context_completeness_panel(
             _metric_card(
                 "Incident index",
                 str(_context_int(details, "incident_index_size")),
-                "Stored incidents available for similarity matching.",
+                "Version {version} · freshness {freshness}".format(
+                    version=details.get("incident_index_version") or "unknown",
+                    freshness=details.get("incident_index_freshness_status")
+                    or "unknown",
+                ),
             )
             _metric_card(
                 "Evidence coverage",

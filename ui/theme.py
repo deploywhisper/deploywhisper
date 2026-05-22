@@ -12,6 +12,7 @@ from services.project_service import (
     ProjectRecord,
 )
 from ui.project_authorization import (
+    authorize_ui_project_capability,
     load_authorized_ui_projects,
     resolve_authorized_active_project_selection,
     set_authorized_ui_project,
@@ -1048,8 +1049,15 @@ def build_navigation_shell(
     nav_items = (
         ("Dashboard", "/", "dashboard"),
         ("Skills", "/skills", "skills"),
+        ("Incidents", "/incidents", "incidents"),
         ("History", "/history", "history"),
         ("Settings", "/settings", "settings"),
+    )
+    nav_items = tuple(
+        item
+        for item in nav_items
+        if item[2] != "incidents"
+        or authorize_ui_project_capability(capability="incident.manage").allowed
     )
 
     with ui.element("div").classes("dw-header-stack"):
