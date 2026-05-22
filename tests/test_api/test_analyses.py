@@ -876,8 +876,12 @@ class AnalysesApiTests(unittest.TestCase):
             incident_date=None,
             similarity=0.86,
             confidence=0.86,
+            confidence_label="high",
             reason="The change exposes administrative ingress publicly.",
             evidence=["plan.json: aws_security_group.main (modify) - public SSH"],
+            matched_signals=["0.0.0.0/0", "ssh"],
+            affected_services=["aws_security_group.main"],
+            prevention_notes=["Use trusted administrative access."],
             verification_guidance=[
                 "Confirm public CIDR is intentional.",
                 "Restrict ingress to trusted networks.",
@@ -946,6 +950,22 @@ class AnalysesApiTests(unittest.TestCase):
             0.86,
         )
         self.assertEqual(
+            payload["data"]["incident_matches"][0]["confidence_label"],
+            "high",
+        )
+        self.assertEqual(
+            payload["data"]["incident_matches"][0]["matched_signals"],
+            ["0.0.0.0/0", "ssh"],
+        )
+        self.assertEqual(
+            payload["data"]["incident_matches"][0]["affected_services"],
+            ["aws_security_group.main"],
+        )
+        self.assertEqual(
+            payload["data"]["incident_matches"][0]["prevention_notes"],
+            ["Use trusted administrative access."],
+        )
+        self.assertEqual(
             payload["data"]["persisted_report"]["incident_matches"][0][
                 "public_pattern_id"
             ],
@@ -953,6 +973,30 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertTrue(
             payload["data"]["persisted_report"]["incident_matches"][0]["evidence"]
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["incident_matches"][0][
+                "confidence_label"
+            ],
+            "high",
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["incident_matches"][0][
+                "matched_signals"
+            ],
+            ["0.0.0.0/0", "ssh"],
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["incident_matches"][0][
+                "affected_services"
+            ],
+            ["aws_security_group.main"],
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["incident_matches"][0][
+                "prevention_notes"
+            ],
+            ["Use trusted administrative access."],
         )
         self.assertFalse(payload["data"]["persisted_report"]["narrative_degraded"])
         self.assertEqual(

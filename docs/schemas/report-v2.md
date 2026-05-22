@@ -349,9 +349,16 @@ without storing raw plan internals in a separate contract.
       "incident_date": null,
       "similarity": 0.86,
       "confidence": 0.86,
+      "confidence_label": "high",
       "reason": "The change appears to expose administrative or data-plane network access to the public internet.",
       "evidence": [
         "plan.json: aws_security_group.web (modify) - Terraform opened SSH ingress from 0.0.0.0/0 on port 22."
+      ],
+      "matched_signals": ["0.0.0.0/0", "ssh", "ingress"],
+      "affected_services": ["aws_security_group.web"],
+      "prevention_notes": [
+        "Use a trusted administrative access path instead of broad public ingress.",
+        "Time-bound any exception and verify compensating controls before deployment."
       ],
       "verification_guidance": [
         "Confirm whether the public CIDR is intentional and time-bound.",
@@ -389,8 +396,11 @@ Live API/CLI analysis responses and persisted report retrieval payloads include
 `incident_matches`. Matches from stored organization incident memory use
 `match_type: "organization_incident"`. Built-in day-zero risk patterns use
 `match_type: "public_risk_pattern"` and include `public_pattern_id`, `reason`,
-`evidence`, `confidence`, and `verification_guidance` so consumers can
-distinguish public guidance from a prior incident in their own environment.
+`evidence`, `confidence`, `confidence_label`, `matched_signals`,
+`affected_services`, `prevention_notes`, and `verification_guidance` so
+consumers can distinguish public guidance from a prior incident in their own
+environment. Public risk pattern matches are general failure-mode guidance and
+must not be presented as organization-specific incident history.
 
 ## Compatibility contract
 

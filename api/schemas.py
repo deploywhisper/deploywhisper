@@ -955,17 +955,46 @@ class IncidentMatchData(BaseModel):
     confidence: float = Field(
         default=0.0, description="Confidence that this memory signal applies."
     )
+    confidence_label: Literal["high", "medium", "low"] = Field(
+        default="low", description="Human-readable confidence bucket."
+    )
     reason: str = Field(
         default="", description="Why the incident or public pattern matched."
     )
     evidence: list[str] = Field(
         default_factory=list, description="Concrete evidence supporting the match."
     )
+    matched_signals: list[str] = Field(
+        default_factory=list,
+        description="Specific tokens, services, or risk signals that matched.",
+    )
+    affected_services: list[str] = Field(
+        default_factory=list,
+        description="Services affected in the matched incident or pattern.",
+    )
+    prevention_notes: list[str] = Field(
+        default_factory=list,
+        description="Prevention guidance from the incident or public pattern.",
+    )
     verification_guidance: list[str] = Field(
         default_factory=list,
         description="Human verification steps before acting on the match.",
     )
     summary: str = Field(..., description="Short operational explanation")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_confidence_label(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or value.get("confidence_label"):
+            return value
+        confidence = float(value.get("confidence") or 0.0)
+        if confidence >= 0.5:
+            label: Literal["high", "medium", "low"] = "high"
+        elif confidence >= 0.35:
+            label = "medium"
+        else:
+            label = "low"
+        return {**value, "confidence_label": label}
 
 
 class NarrativeData(BaseModel):
