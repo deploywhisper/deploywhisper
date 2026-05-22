@@ -237,7 +237,9 @@ def _run_skill_lint(path_arg: str) -> int:
             sys.stderr.write(f"- {issue}\n")
         return 2
 
-    assert document.manifest is not None
+    if document.manifest is None:
+        sys.stderr.write(f"{path}: missing skill manifest v1\n")
+        return 2
     print(
         f"{path}: valid skill manifest v1 "
         f"({document.manifest.name}@{document.manifest.version})"
@@ -644,6 +646,7 @@ def _run_outcome_record(args: argparse.Namespace) -> int:
             linked_incident_id=args.linked_incident_id,
             environment=args.environment,
             summary=args.summary,
+            notes=args.notes,
             project_id=args.project_id,
             project_key=args.project_key,
             workspace_id=args.workspace_id,
@@ -943,7 +946,7 @@ def build_parser() -> argparse.ArgumentParser:
     outcome_record_parser.add_argument(
         "--outcome",
         required=True,
-        help="Deployment result: success, failure, or rolled_back.",
+        help="Deployment result: success, failure, rolled_back, or rollback.",
     )
     outcome_record_parser.add_argument(
         "--deployed-at",
@@ -961,6 +964,10 @@ def build_parser() -> argparse.ArgumentParser:
     outcome_record_parser.add_argument(
         "--summary",
         help="Optional operator summary for the deployment outcome.",
+    )
+    outcome_record_parser.add_argument(
+        "--notes",
+        help="Optional operator notes for the deployment outcome.",
     )
     outcome_record_parser.add_argument(
         "--project",

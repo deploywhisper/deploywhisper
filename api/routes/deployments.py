@@ -294,6 +294,7 @@ def create_deployment_outcome_route(
             linked_incident_id=payload.linked_incident_id,
             environment=payload.environment,
             summary=payload.summary,
+            notes=payload.notes,
             project_id=payload.project_id,
             project_key=payload.project_key,
             workspace_id=payload.workspace_id,

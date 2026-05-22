@@ -1053,6 +1053,8 @@ class AnalyzeCliTests(unittest.TestCase):
                     "success",
                     "--deployed-at",
                     "2026-04-30T08:15:00Z",
+                    "--notes",
+                    "Deployment succeeded after review.",
                 ],
             ),
             redirect_stdout(output),
@@ -1066,6 +1068,8 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(payload["data"]["analysis_id"], persisted["id"])
         self.assertEqual(payload["data"]["project"]["project_key"], "payments")
         self.assertEqual(payload["data"]["outcome"], "success")
+        self.assertIsNone(payload["data"]["summary"])
+        self.assertEqual(payload["data"]["notes"], "Deployment succeeded after review.")
 
     def test_outcome_record_command_reports_unknown_analysis_with_structured_error(
         self,

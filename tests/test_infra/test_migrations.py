@@ -193,6 +193,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("payload_json", self._table_columns("topology_versions"))
         self.assertIn("deployed_at", self._table_columns("deployment_outcomes"))
         self.assertIn("linked_incident_id", self._table_columns("deployment_outcomes"))
+        self.assertIn("notes", self._table_columns("deployment_outcomes"))
         self.assertIn("finding_id", self._table_columns("feedback_events"))
         self.assertIn("false_positive_reason", self._table_columns("feedback_events"))
         self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
@@ -977,7 +978,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
         self.assertIn("topology_versions", tables)
-        self.assertEqual(revision, "021_add_incident_matches_payload")
+        self.assertEqual(revision, "022_add_deployment_outcome_notes")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1026,7 +1027,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("findings", tables)
         self.assertIn("evidence_items", tables)
         self.assertIn("projects", tables)
-        self.assertEqual(revision, "021_add_incident_matches_payload")
+        self.assertEqual(revision, "022_add_deployment_outcome_notes")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1052,7 +1053,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "021_add_incident_matches_payload")
+        self.assertEqual(revision, "022_add_deployment_outcome_notes")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -1076,7 +1077,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "021_add_incident_matches_payload")
+        self.assertEqual(revision, "022_add_deployment_outcome_notes")
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
         command.upgrade(self._config(), "014_add_project_workspace_records")
@@ -1213,6 +1214,23 @@ class MigrationTests(unittest.TestCase):
         ):
             database_module.init_db()
 
+    def test_init_db_rejects_partial_deployment_outcome_notes_schema(self) -> None:
+        command.upgrade(self._config(), "011_add_deployment_outcome_fields")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("ALTER TABLE deployment_outcomes ADD COLUMN notes TEXT")
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(
+            RuntimeError, "partial deployment outcome notes schema"
+        ):
+            database_module.init_db()
+
     def test_init_db_rejects_partial_project_workspace_schema(self) -> None:
         command.upgrade(self._config(), "013_add_incident_analysis_reference")
         sqlite_conn = sqlite3.connect(self.db_path)
@@ -1346,7 +1364,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "021_add_incident_matches_payload")
+        self.assertEqual(revision, "022_add_deployment_outcome_notes")
 
 
 if __name__ == "__main__":

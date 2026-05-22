@@ -14,7 +14,8 @@ curl -X POST http://localhost:8080/api/v1/deployments/outcomes \
     "analysis_id": 42,
     "outcome": "success",
     "deployed_at": "2026-04-30T08:15:00Z",
-    "environment": "prod"
+    "environment": "prod",
+    "notes": "Deployment succeeded after review."
   }'
 ```
 
@@ -30,7 +31,8 @@ Project and workspace filters are also supported for scoped history views:
 curl "http://localhost:8080/api/v1/deployments/outcomes?project_key=payments&workspace_key=prod"
 ```
 
-Supported outcome values are `success`, `failure`, and `rolled_back`.
+Supported outcome values are `success`, `failure`, `rolled_back`, and `rollback`.
+`rollback` is accepted as an input alias and stored as the canonical `rolled_back` outcome.
 Set `DEPLOYWHISPER_OUTCOME_TOKEN` (or `APP_DEPLOYMENT_OUTCOME_TOKEN`) on the server before using the ingestion endpoint.
 
 ## CLI
@@ -44,7 +46,8 @@ deploywhisper outcome record \
   --deployed-at 2026-04-30T08:15:00Z \
   --project payments \
   --workspace prod \
-  --environment prod
+  --environment prod \
+  --notes "Deployment succeeded after review."
 ```
 
 `--deployed-at` is optional for the CLI path; when omitted, DeployWhisper records the current UTC timestamp.

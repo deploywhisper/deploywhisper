@@ -508,6 +508,7 @@ if "DeploymentOutcome" not in globals():
         environment: Mapped[str | None] = mapped_column(String(80), nullable=True)
         outcome_label: Mapped[str] = mapped_column(String(40), default="unknown")
         summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+        notes: Mapped[str | None] = mapped_column(Text, nullable=True)
         deployed_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
         )
