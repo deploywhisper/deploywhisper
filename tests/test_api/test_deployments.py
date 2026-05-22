@@ -18,6 +18,8 @@ from analysis.risk_scorer import RiskAssessment
 from app import create_app
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
+from models.database import SessionLocal
+from models.repositories.incident_records import create_incident_record
 from parsers.base import ParseBatchResult, ParsedFileResult
 
 
@@ -78,31 +80,93 @@ class DeploymentOutcomesApiTests(unittest.TestCase):
         self.tempdir.cleanup()
 
     def test_webhook_endpoint_records_and_lists_deployment_outcomes(self) -> None:
+        workspace = project_service_module.create_workspace(
+            project_key=self.project.project_key,
+            workspace_key="prod",
+            display_name="Production",
+        )
+        scoped_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="payments-prod.tf",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=52,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Production outcome test report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="CAUTION: production outcome test report.",
+                explanation="Production outcome test report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            project_id=self.project.id,
+            workspace_id=workspace.id,
+            audit_context={"source_interface": "api"},
+        )
+        with SessionLocal() as session:
+            incident = create_incident_record(
+                session,
+                title="Payments rollback",
+                severity="high",
+                source_file="payments-incident.md",
+                incident_date="2026-04-30",
+                project_id=self.project.id,
+                workspace_id=workspace.id,
+                content="Payments deploy rolled back after elevated errors.",
+            )
+
         response = self.client.post(
             "/api/v1/deployments/outcomes",
             headers={"X-DeployWhisper-Outcome-Token": "outcome-secret"},
             json={
-                "analysis_id": self.persisted_report["id"],
-                "outcome": "success",
+                "analysis_id": scoped_report["id"],
+                "outcome": "rollback",
                 "deployed_at": "2026-04-30T08:15:00Z",
+                "linked_incident_id": incident.id,
                 "environment": "prod",
+                "summary": "Rollback completed.",
+                "notes": "Rollback completed after checkout errors.",
             },
         )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["data"]["analysis_id"], self.persisted_report["id"])
+        self.assertEqual(payload["data"]["analysis_id"], scoped_report["id"])
         self.assertEqual(payload["data"]["project"]["project_key"], "payments")
-        self.assertEqual(payload["data"]["outcome"], "success")
+        self.assertEqual(payload["data"]["workspace"]["workspace_key"], "prod")
+        self.assertEqual(payload["data"]["outcome"], "rolled_back")
+        self.assertEqual(payload["data"]["linked_incident_id"], incident.id)
+        self.assertEqual(payload["data"]["summary"], "Rollback completed.")
+        self.assertEqual(
+            payload["data"]["notes"], "Rollback completed after checkout errors."
+        )
 
         list_response = self.client.get(
             "/api/v1/deployments/outcomes",
-            params={"analysis_id": self.persisted_report["id"]},
+            params={"analysis_id": scoped_report["id"]},
         )
         self.assertEqual(list_response.status_code, 200)
         list_payload = list_response.json()
         self.assertEqual(list_payload["meta"]["count"], 1)
-        self.assertEqual(list_payload["data"][0]["outcome"], "success")
+        self.assertEqual(list_payload["data"][0]["outcome"], "rolled_back")
+        self.assertEqual(
+            list_payload["data"][0]["notes"],
+            "Rollback completed after checkout errors.",
+        )
 
     def test_webhook_endpoint_returns_standard_error_for_unknown_analysis(self) -> None:
         response = self.client.post(

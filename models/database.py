@@ -51,6 +51,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "019_add_finding_context_fields",
     "020_add_narrative_state_fields",
     "021_add_incident_matches_payload",
+    "022_add_deployment_outcome_notes",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -608,6 +609,7 @@ def _bootstrap_brownfield_revision() -> None:
             has_incident_matches_payload
             and _analysis_report_incident_matches_complete(connection)
         )
+        has_deployment_outcome_notes = "notes" in deployment_outcome_columns
         if scoped_learning_columns_present and not has_complete_learning_context_scope:
             raise RuntimeError(
                 "Detected a partial learning/context scope schema without a complete "
@@ -663,6 +665,29 @@ def _bootstrap_brownfield_revision() -> None:
                 "Detected a partial incident matches payload schema without a complete "
                 "migration history. Manual recovery is required."
             )
+        if has_deployment_outcome_notes and not (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+        ):
+            raise RuntimeError(
+                "Detected a partial deployment outcome notes schema without a complete "
+                "migration history. Manual recovery is required."
+            )
+        if (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+            and has_deployment_outcome_notes
+        ):
+            _write_alembic_revision(connection, "022_add_deployment_outcome_notes")
+            return
         if (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload

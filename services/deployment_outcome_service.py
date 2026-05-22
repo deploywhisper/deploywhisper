@@ -19,7 +19,12 @@ from services.backtesting_service import invalidate_backtesting_snapshot
 from services.project_service import ensure_default_project, normalize_project_key
 from services.project_service import resolve_workspace_reference
 
-ALLOWED_DEPLOYMENT_OUTCOMES = {"success", "failure", "rolled_back"}
+DEPLOYMENT_OUTCOME_ALIASES = {
+    "success": "success",
+    "failure": "failure",
+    "rolled_back": "rolled_back",
+    "rollback": "rolled_back",
+}
 
 
 class DeploymentOutcomeError(ValueError):
@@ -33,12 +38,13 @@ class DeploymentOutcomeError(ValueError):
 
 def _normalize_outcome(value: str) -> str:
     normalized = str(value or "").strip().lower().replace("-", "_")
-    if normalized not in ALLOWED_DEPLOYMENT_OUTCOMES:
+    try:
+        return DEPLOYMENT_OUTCOME_ALIASES[normalized]
+    except KeyError as exc:
         raise DeploymentOutcomeError(
             "invalid_deployment_outcome",
-            "Outcome must be one of: success, failure, rolled_back.",
-        )
-    return normalized
+            "Outcome must be one of: success, failure, rolled_back, rollback.",
+        ) from exc
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -112,6 +118,7 @@ def _serialize_deployment_outcome(outcome) -> dict[str, Any]:
         "linked_incident_id": outcome.linked_incident_id,
         "environment": outcome.environment,
         "summary": outcome.summary,
+        "notes": outcome.notes,
         "created_at": _isoformat_utc(outcome.created_at),
     }
 
@@ -183,6 +190,7 @@ def record_deployment_outcome(
     linked_incident_id: int | None = None,
     environment: str | None = None,
     summary: str | None = None,
+    notes: str | None = None,
     project_id: int | None = None,
     project_key: str | None = None,
     workspace_id: int | None = None,
@@ -192,6 +200,8 @@ def record_deployment_outcome(
     del source_interface
     normalized_outcome = _normalize_outcome(outcome)
     normalized_timestamp = _coerce_timestamp(deployed_at)
+    normalized_summary = _normalize_optional_text(summary)
+    normalized_notes = _normalize_optional_text(notes)
     linked_project_id: int | None = None
 
     with SessionLocal() as session:
@@ -255,7 +265,8 @@ def record_deployment_outcome(
             deployed_at=normalized_timestamp,
             linked_incident_id=linked_incident_id,
             environment=_normalize_optional_text(environment),
-            summary=_normalize_optional_text(summary),
+            summary=normalized_summary,
+            notes=normalized_notes,
         )
         payload = _serialize_deployment_outcome(recorded)
     if linked_project_id is not None:

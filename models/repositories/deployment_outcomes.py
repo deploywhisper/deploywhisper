@@ -28,6 +28,7 @@ def create_deployment_outcome(
     linked_incident_id: int | None = None,
     environment: str | None = None,
     summary: str | None = None,
+    notes: str | None = None,
 ) -> DeploymentOutcome:
     outcome = DeploymentOutcome(
         project_id=project_id,
@@ -38,6 +39,7 @@ def create_deployment_outcome(
         linked_incident_id=linked_incident_id,
         environment=environment,
         summary=summary,
+        notes=notes,
     )
     session.add(outcome)
     session.commit()

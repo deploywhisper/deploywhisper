@@ -35,6 +35,7 @@ class ContainerContractTests(unittest.TestCase):
                 "019_add_finding_context_fields.py",
                 "020_add_narrative_state_fields.py",
                 "021_add_incident_matches_payload.py",
+                "022_add_deployment_outcome_notes.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -55,6 +56,7 @@ class ContainerContractTests(unittest.TestCase):
         finding_context_content = migrations[15].read_text(encoding="utf-8")
         narrative_state_content = migrations[16].read_text(encoding="utf-8")
         incident_matches_content = migrations[17].read_text(encoding="utf-8")
+        deployment_notes_content = migrations[18].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -146,6 +148,11 @@ class ContainerContractTests(unittest.TestCase):
             incident_matches_content,
         )
         self.assertIn('"incident_matches_json"', incident_matches_content)
+        self.assertIn(
+            'down_revision = "021_add_incident_matches_payload"',
+            deployment_notes_content,
+        )
+        self.assertIn('"notes"', deployment_notes_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())

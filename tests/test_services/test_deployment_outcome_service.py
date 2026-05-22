@@ -105,6 +105,7 @@ class DeploymentOutcomeServiceTests(unittest.TestCase):
             linked_incident_id=incident.id,
             environment="prod",
             summary="Rollback completed after checkout errors.",
+            notes="Operator notes captured during post-deploy review.",
             source_interface="api",
         )
 
@@ -117,7 +118,43 @@ class DeploymentOutcomeServiceTests(unittest.TestCase):
         self.assertEqual(
             recorded["summary"], "Rollback completed after checkout errors."
         )
+        self.assertEqual(
+            recorded["notes"], "Operator notes captured during post-deploy review."
+        )
         self.assertEqual(recorded["deployed_at"], "2026-04-30T08:15:00+00:00")
+
+    def test_record_deployment_outcome_accepts_notes_and_rollback_alias(
+        self,
+    ) -> None:
+        with SessionLocal() as session:
+            incident = create_incident_record(
+                session,
+                title="Payments rollback",
+                severity="high",
+                source_file="payments-incident.md",
+                incident_date="2026-04-30",
+                project_id=self.project.id,
+                workspace_id=self.workspace.id,
+                content="Payments deploy rolled back after elevated errors.",
+            )
+
+        recorded = deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=self.persisted_report["id"],
+            outcome="rollback",
+            deployed_at="2026-04-30T09:45:00Z",
+            linked_incident_id=incident.id,
+            environment="prod",
+            notes="Rollback captured from deployment review notes.",
+        )
+
+        self.assertEqual(recorded["outcome"], "rolled_back")
+        self.assertEqual(recorded["linked_incident_id"], incident.id)
+        self.assertEqual(recorded["project"]["project_key"], "payments")
+        self.assertEqual(recorded["workspace"]["workspace_key"], "prod")
+        self.assertIsNone(recorded["summary"])
+        self.assertEqual(
+            recorded["notes"], "Rollback captured from deployment review notes."
+        )
 
     def test_record_deployment_outcome_rejects_mismatched_project_reference(
         self,

@@ -91,6 +91,7 @@ RiskSeverity = Literal["low", "medium", "high", "critical"]
 DeployRecommendation = Literal["go", "caution", "no-go"]
 RollbackComplexity = Literal["low", "medium", "high"]
 DeploymentOutcomeLabel = Literal["success", "failure", "rolled_back"]
+DeploymentOutcomeInputLabel = Literal["success", "failure", "rolled_back", "rollback"]
 
 
 class IntakeItem(BaseModel):
@@ -495,7 +496,7 @@ class WorkspaceResponse(BaseModel):
 
 class DeploymentOutcomeCreateRequest(BaseModel):
     analysis_id: int = Field(..., description="Analysis identifier for the deployment.")
-    outcome: DeploymentOutcomeLabel = Field(
+    outcome: DeploymentOutcomeInputLabel = Field(
         ..., description="Final deployment result for the analyzed change."
     )
     deployed_at: str = Field(..., description="Deployment completion timestamp.")
@@ -510,6 +511,10 @@ class DeploymentOutcomeCreateRequest(BaseModel):
     summary: str | None = Field(
         default=None,
         description="Optional operator summary for the deployment outcome.",
+    )
+    notes: str | None = Field(
+        default=None,
+        description="Optional operator notes for the deployment outcome.",
     )
     project_id: int | None = Field(
         default=None, description="Optional numeric project identifier."
@@ -547,6 +552,7 @@ class DeploymentOutcomeData(BaseModel):
         default=None, description="Optional environment label."
     )
     summary: str | None = Field(default=None, description="Optional operator summary.")
+    notes: str | None = Field(default=None, description="Optional operator notes.")
     created_at: str = Field(..., description="Outcome record creation timestamp.")
 
 
