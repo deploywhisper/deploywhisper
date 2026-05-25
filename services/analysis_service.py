@@ -647,12 +647,62 @@ def _report_link(report_id: int | None) -> str | None:
     return build_share_report_link(report_id)
 
 
-def _has_partial_context_signal(report: dict) -> bool:
-    manifest = report.get("submission_manifest")
-    if isinstance(manifest, dict) and manifest.get("partial_analysis"):
+def _truthy_bool_signal(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, int | float):
+        if not math.isfinite(float(value)):
+            return False
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off", ""}:
+            return False
+    return False
+
+
+def _mapping_or_empty(value: object) -> dict:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _manifest_item_has_partial_context_signal(item: object) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if _truthy_bool_signal(item.get("partial")):
         return True
-    context = dict(report.get("context_completeness") or {})
-    if bool(context.get("insufficient_context")):
+    status = str(item.get("status") or "").strip().lower()
+    if status in {"failed", "excluded", "sensitive"}:
+        return True
+    parse_status = str(item.get("parse_status") or "").strip().lower()
+    return bool(parse_status and parse_status != "parsed")
+
+
+def _has_partial_context_signal(report: dict) -> bool:
+    if _truthy_bool_signal(report.get("partial_context")):
+        return True
+    advisory = report.get("advisory")
+    if isinstance(advisory, dict) and _truthy_bool_signal(
+        advisory.get("partial_context")
+    ):
+        return True
+    manifest = report.get("submission_manifest")
+    if isinstance(manifest, dict):
+        if _truthy_bool_signal(manifest.get("partial_analysis")):
+            return True
+        for item in manifest.get("items") or []:
+            if _manifest_item_has_partial_context_signal(item):
+                return True
+    for item in report.get("submission_manifest_fallback") or []:
+        if _manifest_item_has_partial_context_signal(item):
+            return True
+    context = _mapping_or_empty(report.get("context_completeness"))
+    if _truthy_bool_signal(context.get("partial_context")):
+        return True
+    if _truthy_bool_signal(context.get("insufficient_context")):
         return True
     if str(context.get("uncertainty") or "").strip():
         return True
@@ -663,15 +713,58 @@ def _has_partial_context_signal(report: dict) -> bool:
             return True
     except (TypeError, ValueError):
         pass
-    try:
-        if float(context.get("evidence_success_rate", 1.0)) < 1.0:
-            return True
-    except (TypeError, ValueError):
-        pass
     warnings = [str(warning).lower() for warning in (report.get("warnings") or [])]
     return any(
         "partial context" in warning or "failed to parse" in warning
         for warning in warnings
+    )
+
+
+def _has_context_attention_signal(report: dict) -> bool:
+    if _has_partial_context_signal(report):
+        return True
+    context = _mapping_or_empty(report.get("context_completeness"))
+    try:
+        return float(context.get("evidence_success_rate", 1.0)) < 1.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _advisory_requires_attention_signal(report: dict) -> bool | None:
+    advisory = report.get("advisory")
+    if not isinstance(advisory, dict) or "requires_attention" not in advisory:
+        return None
+    return _truthy_bool_signal(advisory.get("requires_attention"))
+
+
+def _warning_requires_attention_signal(warning: object) -> bool:
+    normalized = str(warning or "").strip().lower()
+    return bool(normalized and not normalized.startswith("narrative"))
+
+
+def _has_warning_attention_signal(report: dict) -> bool:
+    return any(
+        _warning_requires_attention_signal(warning)
+        for warning in (report.get("warnings") or [])
+    )
+
+
+def _context_summary_from_report(report: dict) -> ShareSummaryContext:
+    context = _mapping_or_empty(report.get("context_completeness"))
+    context_summary = _context_summary(context)
+    if (
+        not _has_partial_context_signal(report)
+        or context_summary.label == "LIMITED CONTEXT"
+    ):
+        return context_summary
+    uncertainty = str(context.get("uncertainty") or "").strip()
+    return ShareSummaryContext(
+        score=context_summary.score,
+        label="LIMITED CONTEXT",
+        summary=(
+            f"LIMITED CONTEXT ({context_summary.score:.2f}) - "
+            + (uncertainty or "one or more submitted artifacts were not analyzed.")
+        ),
     )
 
 
@@ -721,7 +814,7 @@ def _context_summary(context: dict) -> ShareSummaryContext:
     partial_evidence = (
         _context_number(context, "evidence_success_rate", missing_default=1.0) < 1.0
     )
-    insufficient_context = bool(context.get("insufficient_context"))
+    insufficient_context = _truthy_bool_signal(context.get("insufficient_context"))
     uncertainty = str(context.get("uncertainty") or "").strip()
     context_todos = bool(_context_todo_items(context.get("context_todos")))
     label = (
@@ -832,30 +925,26 @@ def build_share_summary(report: dict) -> ShareSummary:
     evidence_count = len(report.get("evidence_items") or [])
     blast_radius_summary = _blast_radius_summary(report)
     rollback_summary = _rollback_summary(report)
-    context_summary = _context_summary(dict(report.get("context_completeness") or {}))
+    context_summary = _context_summary_from_report(report)
     report_id = int(report["id"]) if report.get("id") is not None else None
     report_link = _report_link(report_id)
     rollback_link = report_link
-    partial_context = _has_partial_context_signal(report)
-    if partial_context and context_summary.label != "LIMITED CONTEXT":
-        uncertainty = str(
-            dict(report.get("context_completeness") or {}).get("uncertainty") or ""
-        ).strip()
-        context_summary = ShareSummaryContext(
-            score=context_summary.score,
-            label="LIMITED CONTEXT",
-            summary=(
-                f"LIMITED CONTEXT ({context_summary.score:.2f}) - "
-                + (uncertainty or "one or more submitted artifacts were not analyzed.")
-            ),
-        )
+    partial_context = _has_context_attention_signal(report)
+    narrative_available = _truthy_bool_signal(report.get("narrative_available", True))
+    narrative_degraded = _truthy_bool_signal(report.get("narrative_degraded"))
+    advisory_requires_attention = _advisory_requires_attention_signal(report)
     requires_attention = (
-        recommendation != "go"
-        or context_summary.score < 0.7
-        or partial_context
-        or context_summary.label == "LIMITED CONTEXT"
-        or not bool(report.get("narrative_available", True))
-        or bool(report.get("warnings"))
+        advisory_requires_attention
+        if advisory_requires_attention is not None
+        else (
+            recommendation != "go"
+            or context_summary.score < 0.7
+            or partial_context
+            or context_summary.label == "LIMITED CONTEXT"
+            or not narrative_available
+            or narrative_degraded
+            or _has_warning_attention_signal(report)
+        )
     )
     uncertainty_summary = (
         "This result requires additional human review before release."

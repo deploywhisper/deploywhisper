@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
+from pydantic import ValidationError
 
 from api.errors import ApiError, ApiRoute
 from api.schemas import (
@@ -15,6 +16,7 @@ from api.schemas import (
     AnalysisListResponse,
     AnalysisReportData,
     AnalysisRunResponse,
+    AdvisorySummaryData,
     AnalysisShareConfigData,
     AnalysisShareConfigRequest,
     AnalysisShareConfigResponse,
@@ -26,7 +28,6 @@ from config import settings
 from services.analysis_service import (
     AnalysisPersistenceError,
     analyze_uploaded_files,
-    build_advisory_summary,
     build_share_summary,
     resolve_analysis_project_scope,
 )
@@ -36,6 +37,7 @@ from services.intake_service import (
     uniquify_artifact_names,
 )
 from services.report_service import REPORT_SCHEMA_VERSION
+from services.report_service import build_report_advisory_payload
 from services.report_service import configure_report_share
 from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
@@ -69,6 +71,33 @@ def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
         else REPORT_SCHEMA_VERSION,
         "report_schema_versions": versions,
     }
+
+
+def _analysis_run_advisory(result) -> AdvisorySummaryData:
+    persisted_report = result.persisted_report
+    try:
+        fallback_payload = (
+            build_report_advisory_payload(persisted_report)
+            if isinstance(persisted_report, dict)
+            else {}
+        )
+    except (TypeError, ValueError) as exc:
+        raise ApiError(
+            status_code=500,
+            code="analysis_advisory_contract_invalid",
+            message="Analysis advisory contract validation failed.",
+        ) from exc
+    try:
+        advisory = AdvisorySummaryData.model_validate(fallback_payload)
+    except ValidationError as exc:
+        raise ApiError(
+            status_code=500,
+            code="analysis_advisory_contract_invalid",
+            message="Analysis advisory contract validation failed.",
+        ) from exc
+    if isinstance(persisted_report, dict):
+        persisted_report["advisory"] = advisory.model_dump(mode="json")
+    return advisory
 
 
 def _project_api_error(exc: ValueError) -> ApiError:
@@ -362,7 +391,17 @@ async def _read_upload_files_with_limit(
     return uniquify_artifact_names(buffered)
 
 
-@router.get("", response_model=AnalysisListResponse)
+@router.get(
+    "",
+    response_model=AnalysisListResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        405: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
 def list_analyses(
     project_id: int | None = Query(default=None),
     project_key: str | None = Query(default=None),
@@ -459,6 +498,7 @@ def list_analyses(
     response_model=AnalysisRunResponse,
     responses={
         400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
         413: {"model": ErrorResponse},
         405: {"model": ErrorResponse},
@@ -585,7 +625,7 @@ async def create_analysis(
         ) from exc
     except ValueError as exc:
         raise _project_api_error(exc) from exc
-    advisory = build_advisory_summary(result.assessment, result.narrative)
+    advisory = _analysis_run_advisory(result)
     share_summary = build_share_summary(result.persisted_report)
     return AnalysisRunResponse(
         data=build_analysis_run_data(
@@ -608,6 +648,8 @@ async def create_analysis(
     "/{report_id}",
     response_model=AnalysisDetailResponse,
     responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
         405: {"model": ErrorResponse},
         422: {"model": ErrorResponse},

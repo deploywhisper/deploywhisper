@@ -26,6 +26,7 @@ def build_meta(**extra: Any) -> dict[str, Any]:
 
 def build_report_meta(*, report_schema_version: str, **extra: Any) -> dict[str, Any]:
     """Build metadata for report-bearing API responses."""
+    extra.setdefault("api_version", "v1")
     return build_meta(report_schema_version=report_schema_version, **extra)
 
 
@@ -111,6 +112,9 @@ class PendingAnalysis(BaseModel):
 
 
 class CountMetaPayload(MetaPayload):
+    api_version: str = Field(
+        default="v1", description="Versioned API contract identifier"
+    )
     report_schema_version: str = Field(
         ...,
         description=(
@@ -131,6 +135,9 @@ class CountMetaPayload(MetaPayload):
 
 
 class ResourceMetaPayload(MetaPayload):
+    api_version: str = Field(
+        default="v1", description="Versioned API contract identifier"
+    )
     report_schema_version: str = Field(
         ..., description="Report schema version used by the returned payload"
     )
@@ -396,6 +403,9 @@ class PersistedReportData(BaseModel):
     narrative_provider: str | None = Field(default=None)
     narrative_model: str | None = Field(default=None)
     narrative_local_mode: bool | None = Field(default=None)
+    advisory: "AdvisorySummaryData" = Field(
+        ..., description="Stable advisory recommendation contract for automation"
+    )
     skills_applied: list[str] = Field(default_factory=list)
     created_at: str
     warnings: list[str] = Field(default_factory=list)
@@ -850,6 +860,10 @@ class ContextCompletenessData(BaseModel):
     insufficient_context: bool = Field(
         default=False,
         description="Whether context is too weak for a confident low-risk verdict",
+    )
+    partial_context: bool = Field(
+        default=False,
+        description="Whether analysis context was explicitly marked partial upstream",
     )
 
 
@@ -1343,6 +1357,16 @@ def _copy_model(model: BaseModel, schema_type: type[BaseModel]) -> BaseModel:
     return schema_type.model_validate(model.model_dump())
 
 
+def _copy_payload(payload: Any, schema_type: type[BaseModel]) -> BaseModel:
+    return schema_type.model_validate(payload)
+
+
+def _copy_payload_list(items: Any, schema_type: type[BaseModel]) -> list[BaseModel]:
+    if not isinstance(items, list):
+        return []
+    return [_copy_payload(item, schema_type) for item in items]
+
+
 def build_analysis_run_data(
     *,
     intake: PendingAnalysis,
@@ -1352,13 +1376,13 @@ def build_analysis_run_data(
 ) -> AnalysisRunData:
     parse_batch = result.parse_batch
     assessment = result.assessment
-    findings = result.findings
-    evidence_items = result.evidence_items
     blast_radius = result.blast_radius
     rollback_plan = result.rollback_plan
-    incident_matches = result.incident_matches
     narrative = result.narrative
     persisted_report = result.persisted_report
+    persisted_context = ContextCompletenessData.model_validate(
+        persisted_report.get("context_completeness", {})
+    )
 
     return AnalysisRunData(
         intake=PendingAnalysis.model_validate(intake.model_dump()),
@@ -1380,19 +1404,23 @@ def build_analysis_run_data(
             ]
         ),
         assessment=AssessmentData(
-            score=assessment.score,
-            severity=assessment.severity,
-            recommendation=assessment.recommendation,
-            confidence=assessment.confidence,
-            top_risk=assessment.top_risk,
-            top_risk_contributors=list(assessment.top_risk_contributors),
-            context_completeness=_copy_model(
-                assessment.context_completeness, ContextCompletenessData
+            score=int(persisted_report.get("risk_score", assessment.score)),
+            severity=persisted_report.get("severity", assessment.severity),
+            recommendation=persisted_report.get(
+                "recommendation", assessment.recommendation
             ),
-            contributors=[
-                _copy_model(contributor, RiskContributorData)
-                for contributor in assessment.contributors
-            ],
+            confidence=float(persisted_report.get("confidence", assessment.confidence)),
+            top_risk=str(persisted_report.get("top_risk", assessment.top_risk)),
+            top_risk_contributors=list(
+                persisted_report.get(
+                    "top_risk_contributors", assessment.top_risk_contributors
+                )
+                or []
+            ),
+            context_completeness=persisted_context,
+            contributors=_copy_payload_list(
+                persisted_report.get("contributors"), RiskContributorData
+            ),
             confidence_ledger=ConfidenceLedgerData.model_validate(
                 persisted_report.get("confidence_ledger", {})
             ),
@@ -1400,34 +1428,43 @@ def build_analysis_run_data(
                 _copy_model(interaction_risk, InteractionRiskData)
                 for interaction_risk in assessment.interaction_risks
             ],
-            partial_context=assessment.partial_context,
-            warnings=list(assessment.warnings),
-            source=assessment.source,
+            partial_context=persisted_context.partial_context,
+            warnings=list(persisted_report.get("warnings") or []),
+            source=persisted_report.get("assessment_source") or assessment.source,
         ),
-        findings=[_copy_model(finding, FindingData) for finding in findings],
-        evidence_items=[
-            _copy_model(evidence_item, EvidenceItemData)
-            for evidence_item in evidence_items
-        ],
-        blast_radius=BlastRadiusData(
-            affected=[
-                _copy_model(node, ImpactNodeData) for node in blast_radius.affected
-            ],
-            direct_count=blast_radius.direct_count,
-            transitive_count=blast_radius.transitive_count,
-            warning=blast_radius.warning,
-            unmatched_resources=list(blast_radius.unmatched_resources),
+        findings=_copy_payload_list(persisted_report.get("findings"), FindingData),
+        evidence_items=_copy_payload_list(
+            persisted_report.get("evidence_items"), EvidenceItemData
         ),
-        rollback_plan=RollbackPlanData(
-            steps=[_copy_model(step, RollbackStepData) for step in rollback_plan.steps],
-            complexity=rollback_plan.complexity,
-            complexity_score=rollback_plan.complexity_score,
-            complexity_explanation=rollback_plan.complexity_explanation,
-            warning=rollback_plan.warning,
+        blast_radius=BlastRadiusData.model_validate(
+            persisted_report.get("blast_radius")
+            or {
+                "affected": [
+                    _copy_model(node, ImpactNodeData).model_dump()
+                    for node in blast_radius.affected
+                ],
+                "direct_count": blast_radius.direct_count,
+                "transitive_count": blast_radius.transitive_count,
+                "warning": blast_radius.warning,
+                "unmatched_resources": list(blast_radius.unmatched_resources),
+            }
         ),
-        incident_matches=[
-            _copy_model(match, IncidentMatchData) for match in incident_matches
-        ],
+        rollback_plan=RollbackPlanData.model_validate(
+            persisted_report.get("rollback_plan")
+            or {
+                "steps": [
+                    _copy_model(step, RollbackStepData).model_dump()
+                    for step in rollback_plan.steps
+                ],
+                "complexity": rollback_plan.complexity,
+                "complexity_score": rollback_plan.complexity_score,
+                "complexity_explanation": rollback_plan.complexity_explanation,
+                "warning": rollback_plan.warning,
+            }
+        ),
+        incident_matches=_copy_payload_list(
+            persisted_report.get("incident_matches"), IncidentMatchData
+        ),
         narrative=_copy_model(narrative, NarrativeData),
         advisory=_copy_model(advisory, AdvisorySummaryData),
         share_summary=_copy_model(share_summary, ShareSummaryData),

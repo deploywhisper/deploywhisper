@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -1549,6 +1550,100 @@ class AnalysisServiceTests(unittest.TestCase):
             summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
         )
         self.assertIn("submitted artifacts were not analyzed", summary.plain_text)
+
+    def test_build_share_summary_requires_attention_for_stored_partial_context(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["context_completeness"] = {
+            "context_score": 0.94,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": False,
+            "partial_context": True,
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
+        )
+        self.assertIn("submitted artifacts were not analyzed", summary.plain_text)
+        self.assertIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_normalizes_false_like_context_booleans(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["narrative_available"] = "true"
+        report["narrative_degraded"] = "false"
+        report["context_completeness"] = {
+            "context_score": 0.94,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": "false",
+            "partial_context": "false",
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "STRONG CONTEXT"
+        )
+        self.assertNotIn("requires additional human review", summary.plain_text.lower())
+        self.assertIn("Standard approval flow is sufficient", summary.plain_text)
+
+    def test_build_share_summary_normalizes_false_like_narrative_availability(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["narrative_available"] = "false"
+        report["narrative_degraded"] = "false"
+        report["warnings"] = []
+        report["context_completeness"] = {
+            "context_score": 0.94,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": "false",
+            "partial_context": "false",
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "STRONG CONTEXT"
+        )
+        self.assertIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_ignores_non_finite_boolean_signals(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["narrative_available"] = "true"
+        report["narrative_degraded"] = math.nan
+        report["context_completeness"] = {
+            "context_score": 0.94,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": math.inf,
+            "partial_context": math.nan,
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "STRONG CONTEXT"
+        )
+        self.assertNotIn("requires additional human review", summary.plain_text.lower())
+        self.assertIn("Standard approval flow is sufficient", summary.plain_text)
 
     def test_build_share_summary_falls_back_to_local_report_link_without_public_base_url(
         self,

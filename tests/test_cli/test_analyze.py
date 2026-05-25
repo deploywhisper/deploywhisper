@@ -2414,6 +2414,8 @@ class AnalyzeCliTests(unittest.TestCase):
                     action="delete",
                     contribution=24,
                     summary="Terraform changed a security group.",
+                    normalized_action="destroy",
+                    severity="critical",
                 )
             ],
             interaction_risks=[],

@@ -17,11 +17,18 @@ import models.repositories.analysis_reports as analysis_reports_repository_modul
 import models.tables as tables_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
+from analysis.blast_radius import BlastRadiusResult
 from services.analysis_service import AnalysisPersistenceError
+from services.analysis_service import AnalysisRunResult
+from analysis.rollback_planner import RollbackPlan
 from analysis.incident_matcher import IncidentMatch
-from analysis.risk_scorer import RiskAssessment, RiskContributor
+from analysis.risk_scorer import (
+    INSUFFICIENT_CONTEXT_WARNING,
+    RiskAssessment,
+    RiskContributor,
+)
 from app import create_app
-from evidence.models import EvidenceItem
+from evidence.models import ContextCompleteness, EvidenceItem
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
@@ -76,6 +83,13 @@ class AnalysesApiTests(unittest.TestCase):
                 )
             ],
             interaction_risks=[],
+            context_completeness=ContextCompleteness(
+                topology_freshness_days=0,
+                topology_last_imported_at="2026-05-25T00:00:00Z",
+                incident_index_size=1,
+                incident_index_version="incidents:unknown",
+                incident_index_freshness_status="current",
+            ),
             partial_context=False,
             warnings=[],
         )
@@ -131,16 +145,77 @@ class AnalysesApiTests(unittest.TestCase):
         os.environ.pop("DEPLOYWHISPER_SHARE_TOKEN", None)
         self.tempdir.cleanup()
 
+    def _analysis_result_with_persisted_report(
+        self,
+        persisted_report: dict,
+        *,
+        assessment: RiskAssessment | None = None,
+        narrative: NarrativeResult | None = None,
+    ) -> AnalysisRunResult:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        return AnalysisRunResult(
+            parse_batch=parse_batch,
+            evidence_items=[],
+            findings=[],
+            assessment=assessment
+            or self._analysis_assessment(
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk metadata-only update.",
+            ),
+            blast_radius=BlastRadiusResult(
+                affected=[],
+                direct_count=0,
+                transitive_count=0,
+            ),
+            rollback_plan=RollbackPlan(
+                steps=[],
+                complexity="low",
+                complexity_score=1,
+            ),
+            incident_matches=[],
+            narrative=narrative
+            or NarrativeResult(
+                opening_sentence="GO: low risk metadata-only update.",
+                explanation="Review can follow the standard approval flow.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            persisted_report=persisted_report,
+        )
+
     def test_list_analyses_returns_persisted_reports(self) -> None:
         response = self.client.get("/api/v1/analyses")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
+        self.assertEqual(payload["meta"]["api_version"], "v1")
         self.assertEqual(payload["meta"]["report_schema_version"], "v2")
         self.assertEqual(payload["meta"]["report_schema_versions"], ["v2"])
         self.assertEqual(payload["meta"]["count"], 1)
         self.assertEqual(payload["meta"]["total_count"], 1)
         self.assertEqual(payload["meta"]["page"], 1)
         self.assertEqual(payload["meta"]["page_size"], 50)
+        self.assertEqual(payload["data"][0]["advisory"]["advisory_only"], True)
+        self.assertFalse(payload["data"][0]["advisory"]["should_block"])
+        self.assertEqual(payload["data"][0]["advisory"]["recommendation"], "caution")
 
     def test_list_analyses_meta_matches_legacy_report_schema(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -267,10 +342,220 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["data"]["id"], self.persisted["id"])
+        self.assertEqual(payload["meta"]["api_version"], "v1")
         self.assertEqual(payload["meta"]["report_schema_version"], "v2")
         self.assertEqual(payload["data"]["report_schema_version"], "v2")
+        self.assertEqual(payload["data"]["advisory"]["advisory_only"], True)
+        self.assertFalse(payload["data"]["advisory"]["should_block"])
+        self.assertTrue(payload["data"]["advisory"]["requires_attention"])
+        self.assertEqual(payload["data"]["advisory"]["recommendation"], "caution")
         self.assertEqual(payload["data"]["audit"]["llm_provider"], "ollama")
         self.assertEqual(payload["data"]["blast_radius"]["direct_count"], 0)
+
+    def test_get_analysis_preserves_go_advisory_with_narrative_warning(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="low-risk-plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="low-risk-plan.json",
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.logs",
+                            action="modify",
+                            summary="Terraform adjusted log bucket tags.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=12,
+            severity="low",
+            recommendation="go",
+            top_risk="Low risk tag update.",
+            contributors=[
+                RiskContributor(
+                    source_file="low-risk-plan.json",
+                    tool="terraform",
+                    resource_id="aws_s3_bucket.logs",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform adjusted log bucket tags.",
+                    severity="low",
+                    reasoning="Low risk tag update.",
+                )
+            ],
+            interaction_risks=[],
+            context_completeness=ContextCompleteness(
+                topology_freshness_days=0,
+                topology_last_imported_at="2026-05-25T00:00:00Z",
+                incident_index_size=1,
+                incident_index_version="incidents:unknown",
+                incident_index_freshness_status="current",
+            ),
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: low risk tag update.",
+            explanation="Review can follow the standard approval flow.",
+            guidance=[],
+            degraded=False,
+            warnings=["Narrative provider warning."],
+            source="llm",
+        )
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            submitted_artifacts=[("low-risk-plan.json", b"{}")],
+        )
+
+        response = self.client.get(f"/api/v1/analyses/{persisted['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        advisory = response.json()["data"]["advisory"]
+        self.assertEqual(advisory["recommendation"], "go")
+        self.assertFalse(advisory["should_block"])
+        self.assertFalse(advisory["requires_attention"])
+        self.assertNotIn("assessment_warnings", advisory["uncertainty_flags"])
+        self.assertIn("narrative_warnings", advisory["uncertainty_flags"])
+
+    def test_list_analyses_preserves_go_advisory_with_narrative_warning(self) -> None:
+        persisted = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="low-risk-list-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[
+                            UnifiedChange(
+                                source_file="low-risk-list-plan.json",
+                                tool="terraform",
+                                resource_id="aws_s3_bucket.logs",
+                                action="modify",
+                                summary="Terraform adjusted log bucket tags.",
+                            )
+                        ],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk tag update.",
+                contributors=[],
+                interaction_risks=[],
+                context_completeness=ContextCompleteness(
+                    topology_freshness_days=0,
+                    topology_last_imported_at="2026-05-25T00:00:00Z",
+                    incident_index_size=1,
+                    incident_index_version="incidents:unknown",
+                    incident_index_freshness_status="current",
+                ),
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: low risk tag update.",
+                explanation="Review can follow the standard approval flow.",
+                guidance=[],
+                degraded=False,
+                warnings=["Narrative provider warning."],
+                source="llm",
+            ),
+            submitted_artifacts=[("low-risk-list-plan.json", b"{}")],
+        )
+
+        response = self.client.get("/api/v1/analyses")
+
+        self.assertEqual(response.status_code, 200)
+        reports = response.json()["data"]
+        report = next(item for item in reports if item["id"] == persisted["id"])
+        advisory = report["advisory"]
+        self.assertEqual(advisory["recommendation"], "go")
+        self.assertFalse(advisory["requires_attention"])
+        self.assertNotIn("assessment_warnings", advisory["uncertainty_flags"])
+        self.assertIn("narrative_warnings", advisory["uncertainty_flags"])
+
+    def test_get_analysis_flags_insufficient_context_as_assessment_warning(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="low-context-plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="low-context-plan.json",
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.logs",
+                            action="modify",
+                            summary="Terraform adjusted log bucket tags.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=12,
+            severity="low",
+            recommendation="go",
+            top_risk="Low risk tag update.",
+            contributors=[
+                RiskContributor(
+                    source_file="low-context-plan.json",
+                    tool="terraform",
+                    resource_id="aws_s3_bucket.logs",
+                    action="modify",
+                    contribution=12,
+                    summary="Terraform adjusted log bucket tags.",
+                    severity="low",
+                    reasoning="Low risk tag update.",
+                )
+            ],
+            interaction_risks=[],
+            context_completeness=ContextCompleteness(
+                context_score=0.4,
+                confidence_level="low",
+                insufficient_context=True,
+            ),
+            partial_context=False,
+            warnings=[INSUFFICIENT_CONTEXT_WARNING],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: low risk tag update.",
+            explanation="Review can follow the standard approval flow.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+            source="llm",
+        )
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            submitted_artifacts=[("low-context-plan.json", b"{}")],
+        )
+
+        response = self.client.get(f"/api/v1/analyses/{persisted['id']}")
+
+        self.assertEqual(response.status_code, 200)
+        advisory = response.json()["data"]["advisory"]
+        self.assertTrue(advisory["requires_attention"])
+        self.assertIn("assessment_warnings", advisory["uncertainty_flags"])
+        self.assertNotIn(
+            "narrative_warnings",
+            advisory["uncertainty_flags"],
+            response.json()["data"]["warnings"],
+        )
 
     def test_get_analysis_meta_matches_legacy_report_schema(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -932,7 +1217,8 @@ class AnalysesApiTests(unittest.TestCase):
             payload["data"]["assessment"]["context_completeness"]["context_todos"]
         )
         self.assertEqual(
-            payload["data"]["assessment"]["top_risk_contributors"], ["ev-001"]
+            payload["data"]["assessment"]["top_risk_contributors"],
+            payload["data"]["persisted_report"]["top_risk_contributors"],
         )
         self.assertEqual(
             payload["data"]["persisted_report"]["project"]["project_key"], "payments"
@@ -1000,17 +1286,36 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertFalse(payload["data"]["persisted_report"]["narrative_degraded"])
         self.assertEqual(
-            payload["data"]["assessment"]["contributors"][0]["evidence_id"], "ev-001"
+            payload["data"]["assessment"]["contributors"],
+            payload["data"]["persisted_report"]["contributors"],
         )
         self.assertTrue(payload["data"]["findings"])
         self.assertTrue(payload["data"]["evidence_items"])
-        self.assertEqual(payload["data"]["evidence_items"][0]["analysis_id"], 0)
+        self.assertEqual(
+            payload["data"]["findings"],
+            payload["data"]["persisted_report"]["findings"],
+        )
+        self.assertEqual(
+            payload["data"]["evidence_items"],
+            payload["data"]["persisted_report"]["evidence_items"],
+        )
+        self.assertEqual(
+            payload["data"]["assessment"]["context_completeness"],
+            payload["data"]["persisted_report"]["context_completeness"],
+        )
+        self.assertEqual(
+            payload["data"]["evidence_items"][0]["analysis_id"],
+            payload["data"]["persisted_report"]["id"],
+        )
         self.assertEqual(payload["data"]["findings"][0]["confidence"], 1.0)
         self.assertEqual(
             payload["data"]["findings"][0]["evidence_classification"],
             "deterministic",
         )
-        self.assertEqual(payload["data"]["findings"][0]["evidence_refs"], ["ev-001"])
+        self.assertEqual(
+            payload["data"]["findings"][0]["evidence_refs"],
+            payload["data"]["persisted_report"]["findings"][0]["evidence_refs"],
+        )
         self.assertEqual(
             payload["data"]["findings"][0]["explanation"],
             "Security group exposure risk",
@@ -1021,6 +1326,14 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(payload["data"]["narrative"]["skills_applied"])
         self.assertFalse(payload["data"]["advisory"]["should_block"])
         self.assertTrue(payload["data"]["advisory"]["requires_attention"])
+        self.assertEqual(
+            payload["data"]["advisory"],
+            payload["data"]["persisted_report"]["advisory"],
+        )
+        self.assertIn("context_todos", payload["data"]["advisory"]["uncertainty_flags"])
+        self.assertIn(
+            "assessment_warnings", payload["data"]["advisory"]["uncertainty_flags"]
+        )
         self.assertIn("Advisory only", payload["data"]["share_summary"]["markdown"])
         self.assertEqual(payload["data"]["share_summary"]["recommendation"], "no-go")
         self.assertLessEqual(len(payload["data"]["share_summary"]["markdown"]), 1500)
@@ -1066,6 +1379,17 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["report_schema_version"], "v2"
         )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["advisory"]["advisory_only"],
+            True,
+        )
+        self.assertFalse(
+            payload["data"]["persisted_report"]["advisory"]["should_block"]
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["advisory"]["recommendation"],
+            payload["data"]["advisory"]["recommendation"],
+        )
         self.assertIn("blast_radius", payload["data"]["persisted_report"])
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertTrue(payload["data"]["persisted_report"]["evidence_items"])
@@ -1074,6 +1398,233 @@ class AnalysesApiTests(unittest.TestCase):
             persisted_evidence_id,
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
+
+    def test_create_analysis_preserves_go_advisory_with_narrative_warning(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="safe-change",
+            display_name="Safe Change",
+        )
+        narrative = NarrativeResult(
+            opening_sentence="GO: low risk tag update.",
+            explanation="Review can follow the standard approval flow.",
+            guidance=[],
+            degraded=False,
+            warnings=["Narrative provider warning."],
+            source="llm",
+        )
+        evidence_items = [
+            EvidenceItem(
+                evidence_id="ev-001",
+                analysis_id=0,
+                finding_id="pending:change-001",
+                source_type="artifact",
+                source_ref="terraform://low-risk-plan.json#aws_s3_bucket.logs?action=modify",
+                summary="Terraform adjusted log bucket tags.",
+                severity_hint="low",
+                deterministic=True,
+                confidence=1.0,
+                related_change_ids=["change-001"],
+            )
+        ]
+
+        with (
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=RiskAssessment(
+                    score=12,
+                    severity="low",
+                    recommendation="go",
+                    top_risk="Low risk tag update.",
+                    top_risk_contributors=["ev-001"],
+                    contributors=[
+                        RiskContributor(
+                            evidence_id="ev-001",
+                            source_file="low-risk-plan.json",
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.logs",
+                            action="modify",
+                            contribution=12,
+                            summary="Terraform adjusted log bucket tags.",
+                            severity="low",
+                            reasoning="Low risk tag update.",
+                        )
+                    ],
+                    interaction_risks=[],
+                    context_completeness=ContextCompleteness(
+                        topology_freshness_days=0,
+                        topology_last_imported_at="2026-05-25T00:00:00Z",
+                        incident_index_size=1,
+                        incident_index_version="incidents:unknown",
+                        incident_index_freshness_status="current",
+                    ),
+                    partial_context=False,
+                    warnings=[],
+                    source="heuristic+llm",
+                ),
+            ),
+            patch(
+                "services.analysis_service.extract_batch_evidence",
+                return_value=evidence_items,
+            ),
+            patch(
+                "services.analysis_service._build_context_completeness",
+                return_value=ContextCompleteness(
+                    topology_freshness_days=0,
+                    topology_last_imported_at="2026-05-25T00:00:00Z",
+                    incident_index_size=1,
+                    incident_index_version="incidents:unknown",
+                    incident_index_freshness_status="current",
+                ),
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=[
+                    (
+                        "files",
+                        (
+                            "low-risk-plan.json",
+                            b'{"resource_changes": []}',
+                            "application/json",
+                        ),
+                    )
+                ],
+                data={"project_key": "safe-change"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["api_version"], "v1")
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+        advisory = payload["data"]["advisory"]
+        self.assertEqual(advisory, payload["data"]["persisted_report"]["advisory"])
+        self.assertEqual(advisory["recommendation"], "go")
+        self.assertFalse(advisory["requires_attention"])
+        self.assertNotIn("assessment_warnings", advisory["uncertainty_flags"])
+        self.assertIn("narrative_warnings", advisory["uncertainty_flags"])
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["advisory_summary"],
+            "Standard approval flow is sufficient.",
+        )
+        self.assertNotIn(
+            "requires additional human review",
+            payload["data"]["share_summary"]["plain_text"].lower(),
+        )
+
+    def test_create_analysis_rebuilds_stale_valid_persisted_advisory(self) -> None:
+        project_service_module.create_project(
+            project_key="payments-stale-advisory",
+            display_name="Payments Stale Advisory",
+        )
+        persisted_report = dict(self.persisted)
+        persisted_report["severity"] = "low"
+        persisted_report["recommendation"] = "go"
+        persisted_report["top_risk"] = "Low risk metadata-only update."
+        persisted_report["warnings"] = []
+        persisted_report["narrative_available"] = True
+        persisted_report["narrative_degraded"] = False
+        persisted_report["context_completeness"] = {
+            **dict(persisted_report["context_completeness"]),
+            "context_score": 0.95,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": False,
+            "partial_context": False,
+        }
+        persisted_report["advisory"] = {
+            "advisory_only": True,
+            "should_block": False,
+            "requires_attention": True,
+            "severity": "high",
+            "recommendation": "no-go",
+            "top_risk": "Stale advisory from an older report state.",
+            "partial_context": True,
+            "narrative_degraded": False,
+            "uncertainty_flags": ["partial_context"],
+        }
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files={"files": ("plan.json", b'{"resource_changes": []}')},
+                data={"project_key": "payments-stale-advisory"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        advisory = payload["data"]["advisory"]
+        self.assertEqual(advisory["severity"], "low")
+        self.assertEqual(advisory["recommendation"], "go")
+        self.assertFalse(advisory["requires_attention"])
+        self.assertFalse(advisory["partial_context"])
+        self.assertEqual(payload["data"]["persisted_report"]["advisory"], advisory)
+
+    def test_create_analysis_share_summary_matches_advisory_partial_context(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-partial-summary",
+            display_name="Payments Partial Summary",
+        )
+        persisted_report = dict(self.persisted)
+        persisted_report["severity"] = "low"
+        persisted_report["recommendation"] = "go"
+        persisted_report["top_risk"] = "Low risk metadata-only update."
+        persisted_report["warnings"] = []
+        persisted_report["narrative_available"] = True
+        persisted_report["narrative_degraded"] = False
+        persisted_report["context_completeness"] = {
+            **dict(persisted_report["context_completeness"]),
+            "context_score": 0.95,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": False,
+            "partial_context": False,
+        }
+        persisted_report["submission_manifest_fallback"] = [
+            {
+                "name": "plan.json",
+                "tool": "terraform",
+                "status": "accepted",
+                "intake_status": "accepted",
+                "parse_status": "failed",
+                "partial": False,
+                "redaction_status": "none",
+            }
+        ]
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files={"files": ("plan.json", b'{"resource_changes": []}')},
+                data={"project_key": "payments-partial-summary"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["data"]["advisory"]["partial_context"])
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["context_completeness"][
+                "label"
+            ],
+            "LIMITED CONTEXT",
+        )
+        self.assertIn(
+            "submitted artifacts were not analyzed",
+            payload["data"]["share_summary"]["plain_text"],
+        )
 
     def test_create_analysis_returns_degraded_narrative_provider_metadata(
         self,
@@ -2271,12 +2822,104 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertNotIn("database is read-only", response.text)
 
+    def test_create_analysis_falls_back_when_persisted_advisory_is_invalid(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-invalid-advisory",
+            display_name="Payments Invalid Advisory",
+        )
+        persisted_report = dict(self.persisted)
+        persisted_report["severity"] = "low"
+        persisted_report["recommendation"] = "go"
+        persisted_report["top_risk"] = "Low risk metadata-only update."
+        persisted_report["context_completeness"] = {
+            **dict(persisted_report["context_completeness"]),
+            "context_score": 0.92,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 0.5,
+            "insufficient_context": False,
+            "partial_context": False,
+        }
+        persisted_report["advisory"] = {
+            "advisory_only": True,
+            "should_block": False,
+            "requires_attention": False,
+            "severity": "minor",
+            "recommendation": "ship",
+            "top_risk": "Invalid legacy advisory.",
+            "partial_context": False,
+            "narrative_degraded": False,
+            "uncertainty_flags": [],
+        }
+        client = TestClient(create_app(), raise_server_exceptions=False)
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ):
+            response = client.post(
+                "/api/v1/analyses",
+                files={"files": ("plan.json", b'{"resource_changes": []}')},
+                data={"project_key": "payments-invalid-advisory"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["advisory"]["severity"], "low")
+        self.assertEqual(payload["data"]["advisory"]["recommendation"], "go")
+        self.assertTrue(payload["data"]["advisory"]["requires_attention"])
+        self.assertFalse(payload["data"]["advisory"]["partial_context"])
+        self.assertIn("evidence_gaps", payload["data"]["advisory"]["uncertainty_flags"])
+        self.assertEqual(
+            payload["data"]["persisted_report"]["advisory"],
+            payload["data"]["advisory"],
+        )
+
+    def test_create_analysis_invalid_advisory_context_uses_error_envelope(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-invalid-advisory-context",
+            display_name="Payments Invalid Advisory Context",
+        )
+        persisted_report = dict(self.persisted)
+        persisted_report["context_completeness"] = ["bad"]
+        persisted_report["advisory"] = {
+            "advisory_only": True,
+            "should_block": False,
+            "requires_attention": False,
+            "severity": "minor",
+            "recommendation": "ship",
+            "top_risk": "Invalid legacy advisory.",
+            "partial_context": False,
+            "narrative_degraded": False,
+            "uncertainty_flags": [],
+        }
+        client = TestClient(create_app(), raise_server_exceptions=False)
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ):
+            response = client.post(
+                "/api/v1/analyses",
+                files={"files": ("plan.json", b'{"resource_changes": []}')},
+                data={"project_key": "payments-invalid-advisory-context"},
+            )
+
+        self.assertEqual(response.status_code, 500)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "analysis_advisory_contract_invalid")
+
     def test_openapi_documents_analysis_submission_contract(self) -> None:
         response = self.client.get("/openapi.json")
 
         self.assertEqual(response.status_code, 200)
         schema = response.json()
+        analyses_get = schema["paths"]["/api/v1/analyses"]["get"]
         analyses_post = schema["paths"]["/api/v1/analyses"]["post"]
+        analyses_detail = schema["paths"]["/api/v1/analyses/{report_id}"]["get"]
         request_body_schema = analyses_post["requestBody"]["content"][
             "multipart/form-data"
         ]["schema"]
@@ -2287,6 +2930,16 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertIn("AnalysisRunResponse", str(analyses_post["responses"]["200"]))
         self.assertIn("ErrorResponse", str(analyses_post["responses"]["400"]))
+        for responses in (
+            analyses_get["responses"],
+            analyses_post["responses"],
+            analyses_detail["responses"],
+        ):
+            with self.subTest(responses=responses):
+                self.assertIn("ErrorResponse", str(responses["400"]))
+                self.assertIn("ErrorResponse", str(responses["403"]))
+                self.assertIn("ErrorResponse", str(responses["422"]))
+                self.assertIn("ErrorResponse", str(responses["500"]))
         self.assertNotIn("ParseBatchResult", schema["components"]["schemas"])
         self.assertNotIn("RiskAssessment", schema["components"]["schemas"])
 
