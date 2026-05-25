@@ -363,6 +363,16 @@ class AnalysisServiceTests(unittest.TestCase):
             },
         }
 
+    def _satisfy_share_payload_evidence_law(self, report: dict) -> None:
+        for evidence, evidence_id in zip(
+            report["evidence_items"],
+            ["ev-001", "ev-002", "ev-003", "ev-004", "ev-005"],
+            strict=True,
+        ):
+            evidence["evidence_id"] = evidence_id
+            evidence["deterministic"] = True
+            evidence["determinism_level"] = "deterministic"
+
     def test_build_analysis_artifacts_extracts_evidence_items(self) -> None:
         assessment = RiskAssessment(
             score=42,
@@ -1544,6 +1554,7 @@ class AnalysisServiceTests(unittest.TestCase):
         self,
     ) -> None:
         report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
         report["recommendation"] = "go"
         report["context_completeness"] = {
             "context_score": 0.92,
@@ -1609,6 +1620,7 @@ class AnalysisServiceTests(unittest.TestCase):
         self,
     ) -> None:
         report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
         report["severity"] = "low"
         report["recommendation"] = "go"
         report["narrative_available"] = "true"
@@ -1657,6 +1669,7 @@ class AnalysisServiceTests(unittest.TestCase):
         self,
     ) -> None:
         report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
         report["severity"] = "low"
         report["recommendation"] = "go"
         report["narrative_available"] = "true"
