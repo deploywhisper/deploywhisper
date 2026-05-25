@@ -789,6 +789,16 @@ def _finding_evidence_count(
     return len(finding.get("evidence_refs") or [])
 
 
+def _share_finding_confidence(value: object) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(confidence):
+        return 0.0
+    return max(0.0, min(confidence, 1.0))
+
+
 def _context_number(
     context: dict,
     key: str,
@@ -902,7 +912,7 @@ def _share_findings(report: dict) -> list[ShareSummaryFinding]:
         findings,
         key=lambda item: (
             -_finding_severity_rank(str(item.get("severity", ""))),
-            -float(item.get("confidence", 0.0)),
+            -_share_finding_confidence(item.get("confidence")),
             str(item.get("title", "")),
         ),
     )
@@ -911,7 +921,7 @@ def _share_findings(report: dict) -> list[ShareSummaryFinding]:
             title=_shorten(str(finding.get("title", "")), 72),
             severity=str(finding.get("severity", "medium")),
             evidence_count=_finding_evidence_count(finding, evidence_items),
-            confidence=round(float(finding.get("confidence", 0.0)), 2),
+            confidence=round(_share_finding_confidence(finding.get("confidence")), 2),
         )
         for finding in sorted_findings[:3]
     ]
@@ -958,7 +968,10 @@ def build_share_summary(
             or _has_warning_attention_signal(report)
         )
     )
-    requires_attention = baseline_requires_attention or evidence_status != "Satisfied"
+    requires_attention = baseline_requires_attention or evidence_status in {
+        "Needs review",
+        "Reconciled",
+    }
     uncertainty_summary = (
         "This result requires additional human review before release."
         if requires_attention

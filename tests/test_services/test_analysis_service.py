@@ -1395,6 +1395,9 @@ class AnalysisServiceTests(unittest.TestCase):
 
     def test_build_share_summary_can_mark_evidence_detail_omitted(self) -> None:
         report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["advisory"] = {"requires_attention": False}
 
         summary = build_share_summary(report, evidence_detail_available=False)
 
@@ -1403,6 +1406,22 @@ class AnalysisServiceTests(unittest.TestCase):
             "Evidence rows are not included",
             summary.json_payload.evidence_law_detail,
         )
+        self.assertNotIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_normalizes_malformed_finding_confidence(self) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["advisory"] = {"requires_attention": False}
+        report["findings"][0]["confidence"] = "oops"
+        report["findings"][1]["confidence"] = math.nan
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.top_findings[0].confidence, 0.0)
+        self.assertEqual(summary.json_payload.top_findings[1].confidence, 0.0)
+        self.assertNotIn("NaN", summary.json_payload.model_dump_json())
 
     def test_build_share_summary_normalizes_missing_report_schema_as_legacy(
         self,

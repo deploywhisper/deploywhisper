@@ -839,6 +839,19 @@ class AnalyzeCliTests(unittest.TestCase):
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
+        narrative = NarrativeResult(
+            available=False,
+            opening_sentence="",
+            explanation="",
+            guidance=["Review deterministic advisory output."],
+            degraded=True,
+            warnings=["Narrative provider unavailable: offline test"],
+            failure_notice="Narrative provider unavailable: offline test",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
+        )
         output = io.StringIO()
 
         def passthrough_analyze_uploaded_files(
@@ -864,6 +877,9 @@ class AnalyzeCliTests(unittest.TestCase):
             patch(
                 "cli.analyze.analyze_uploaded_files",
                 side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
             ),
             patch(
                 "sys.argv",
@@ -1070,13 +1086,19 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         self.assertEqual(payload["meta"]["report_schema_version"], "v2")
         self.assertFalse(payload["data"]["advisory"]["should_block"])
+        self.assertFalse(payload["data"]["narrative"]["available"])
+        self.assertTrue(payload["data"]["narrative"]["degraded"])
+        self.assertTrue(payload["data"]["persisted_report"]["narrative_degraded"])
         self.assertIn(
             payload["data"]["advisory"]["recommendation"],
             {"go", "caution", "no-go"},
         )
-        self.assertIn(
-            "DeployWhisper",
+        self.assertEqual(
             payload["data"]["share_summary"]["json_payload"]["verdict_banner"],
+            (
+                f"DeployWhisper {payload['data']['advisory']['severity'].upper()} · "
+                f"{payload['data']['advisory']['recommendation'].upper()}"
+            ),
         )
         self.assertIn(
             payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
@@ -1090,6 +1112,9 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"]
         )
         self.assertIn("top_findings", payload["data"]["share_summary"]["json_payload"])
+        self.assertTrue(
+            payload["data"]["share_summary"]["json_payload"]["top_findings"]
+        )
         self.assertIn("uncertainty_flags", payload["data"]["advisory"])
 
     def test_outcome_record_command_records_deployment_result(self) -> None:

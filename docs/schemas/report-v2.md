@@ -119,6 +119,10 @@ adding `report_schema_version` and Evidence Law summary fields is additive.
 Additive fields are compatible with share-summary `v1`; consumers that validate
 the compact summary should ignore unknown fields and branch on
 `report_schema_version` when they need the backing full-report contract.
+Evidence Law status values are `Satisfied`, `Needs review`, `Reconciled`, and
+`Detail omitted`. CLI/API analysis responses include evidence detail and should
+not emit `Detail omitted`; compact report-list style views may use it when
+evidence rows were intentionally excluded.
 
 ```json
 {
