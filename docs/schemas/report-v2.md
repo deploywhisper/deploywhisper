@@ -143,6 +143,8 @@ full-report contract.
       "report_link": "https://deploywhisper.example.com/reports/42",
       "rollback_link": "https://deploywhisper.example.com/reports/42",
       "verdict_banner": "DeployWhisper HIGH - NO-GO",
+      "evidence_law_status": "Satisfied",
+      "evidence_law_detail": "High and critical findings are backed by deterministic evidence.",
       "headline": "NO-GO: Security group exposure risk",
       "top_findings": [
         {

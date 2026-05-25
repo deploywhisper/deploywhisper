@@ -1130,6 +1130,12 @@ class ShareSummaryJsonPayloadData(BaseModel):
         default=None, description="Deep link to the rollback view"
     )
     verdict_banner: str = Field(..., description="Verdict banner")
+    evidence_law_status: str = Field(
+        ..., description="Evidence Law verification status for severe claims"
+    )
+    evidence_law_detail: str = Field(
+        ..., description="Human-readable Evidence Law verification detail"
+    )
     headline: str = Field(..., description="Top summary line")
     top_findings: list[ShareSummaryFindingData] = Field(
         default_factory=list, description="Top findings to surface"

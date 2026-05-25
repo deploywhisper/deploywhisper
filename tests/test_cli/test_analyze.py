@@ -1002,6 +1002,73 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["persisted_report"]["project"]["project_key"], "payments"
         )
 
+    def test_analyze_command_accepts_project_workspace_key(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="prod",
+            display_name="Production",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+
+        def passthrough_analyze_uploaded_files(
+            files,
+            completion_client=None,
+            audit_context=None,
+            project_id=None,
+            project_key=None,
+            workspace_id=None,
+            workspace_key=None,
+        ):
+            return analysis_service_module.analyze_uploaded_files(
+                files,
+                completion_client=completion_client,
+                audit_context=audit_context,
+                project_id=project_id,
+                project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
+            )
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    "--workspace",
+                    "prod",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(
+            payload["data"]["persisted_report"]["project"]["project_key"], "payments"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["workspace"]["workspace_key"], "prod"
+        )
+
     def test_outcome_record_command_records_deployment_result(self) -> None:
         project = project_service_module.create_project(
             project_key="payments",
@@ -2482,6 +2549,15 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertTrue(payload["data"]["assessment"]["partial_context"])
         self.assertEqual(payload["data"]["advisory"]["recommendation"], "no-go")
         self.assertEqual(payload["data"]["advisory"]["severity"], "critical")
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
+            "Satisfied",
+        )
+        self.assertIn(
+            "deterministic evidence",
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"],
+        )
+        self.assertIn("Evidence Law", payload["data"]["share_summary"]["plain_text"])
         self.assertIn("context_completeness", payload["data"]["assessment"])
         self.assertIn("context_completeness", payload["data"]["persisted_report"])
         self.assertIn("rollback_plan", payload["data"]["persisted_report"])

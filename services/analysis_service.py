@@ -41,6 +41,7 @@ from services.report_service import (
 from services.settings_service import resolve_provider_runtime
 from services.submission_manifest import build_submission_manifest
 from services.incident_service import get_incident_index_snapshot
+from services.confidence_ledger import evidence_law_status
 from services.topology_service import (
     STALE_AFTER_DAYS,
     get_topology_status,
@@ -262,6 +263,12 @@ class ShareSummaryJsonPayload(BaseModel):
         default=None, description="Deep link to the report rollback view"
     )
     verdict_banner: str = Field(..., description="Verdict banner for PR comments")
+    evidence_law_status: str = Field(
+        ..., description="Evidence Law verification status for severe claims"
+    )
+    evidence_law_detail: str = Field(
+        ..., description="Human-readable Evidence Law verification detail"
+    )
     headline: str = Field(..., description="Top summary line")
     top_findings: list[ShareSummaryFinding] = Field(
         default_factory=list, description="Top findings to surface"
@@ -923,6 +930,7 @@ def build_share_summary(report: dict) -> ShareSummary:
     verdict_banner = f"DeployWhisper {severity.upper()} · {recommendation.upper()}"
     top_findings = _share_findings(report)
     evidence_count = len(report.get("evidence_items") or [])
+    evidence_status, evidence_detail = evidence_law_status(report)
     blast_radius_summary = _blast_radius_summary(report)
     rollback_summary = _rollback_summary(report)
     context_summary = _context_summary_from_report(report)
@@ -959,6 +967,8 @@ def build_share_summary(report: dict) -> ShareSummary:
         report_link=report_link,
         rollback_link=rollback_link,
         verdict_banner=verdict_banner,
+        evidence_law_status=evidence_status,
+        evidence_law_detail=evidence_detail,
         headline=headline,
         top_findings=top_findings,
         evidence_count=evidence_count,
@@ -985,6 +995,7 @@ def build_share_summary(report: dict) -> ShareSummary:
                 if rollback_link
                 else f"- Rollback: {rollback_summary}"
             ),
+            f"- Evidence Law: {evidence_status} - {evidence_detail}",
             f"- Context: {context_summary.summary}",
             f"- Advisory only: {uncertainty_summary}",
         ]
@@ -1007,6 +1018,7 @@ def build_share_summary(report: dict) -> ShareSummary:
                     if rollback_link
                     else f"- Rollback: {_shorten(rollback_summary, 120)}"
                 ),
+                f"- Evidence Law: {evidence_status} - {_shorten(evidence_detail, 100)}",
                 f"- Context: {context_summary.label} ({context_summary.score:.2f})",
                 f"- Advisory only: {uncertainty_summary}",
             ]
@@ -1018,6 +1030,7 @@ def build_share_summary(report: dict) -> ShareSummary:
             f"Findings: {len(top_findings)} shown / {len(report.get('findings') or [])} total and {evidence_count} evidence items.",
             f"Blast radius: {blast_radius_summary}.",
             f"Rollback: {rollback_summary}.",
+            f"Evidence Law: {evidence_status} - {evidence_detail}.",
             (
                 f"Rollback link: {rollback_link}."
                 if rollback_link

@@ -6,7 +6,7 @@ DeployWhisper remains advisory in automation contexts.
 - `data.advisory.requires_attention` tells the pipeline or PR bot whether humans should take a closer look
 - `data.share_summary` provides a ready-to-render PR / approval-thread summary in both `markdown` and `plain_text`
 - `data.share_summary.markdown` is capped at 1,500 characters for GitHub PR comment fit
-- `data.share_summary.json_payload` provides the machine-friendly summary variant, including `report_schema_version`, top findings, evidence count, context completeness, and report / rollback links
+- `data.share_summary.json_payload` provides the machine-friendly summary variant, including `report_schema_version`, Evidence Law status, top findings, evidence count, context completeness, and report / rollback links
 - Share-summary report links always resolve to an absolute `/reports/{id}` URL; set `APP_BASE_URL` when you need those links to point at a public/reverse-proxied DeployWhisper instance instead of the local app host/port
 - Sensitive shared reports can opt into password protection and file-name redaction through `POST /api/v1/analyses/{id}/share`
 - The share-configuration API is disabled unless `DEPLOYWHISPER_SHARE_TOKEN` is set; callers must send that value in `X-DeployWhisper-Share-Token`
@@ -38,6 +38,7 @@ advisory = payload["data"]["advisory"]
 summary = payload["data"]["share_summary"]
 print(summary["markdown"])
 print(summary["json_payload"]["report_schema_version"])
+print(summary["json_payload"]["evidence_law_status"])
 print(summary["json_payload"]["rollback_link"])
 print("DeployWhisper blocking decision:", advisory["should_block"])
 PY

@@ -1347,10 +1347,17 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertIn("Primary Database", summary.blast_radius_summary)
         self.assertIn("3/5", summary.rollback_summary)
         self.assertIn("Advisory only", summary.markdown)
+        self.assertIn("Evidence Law", summary.markdown)
         self.assertIn("Advisory only", summary.plain_text)
+        self.assertIn("Evidence Law", summary.plain_text)
         self.assertFalse(summary.should_block)
         self.assertLessEqual(len(summary.markdown), 1500)
         self.assertEqual(summary.json_payload.report_schema_version, "v2")
+        self.assertEqual(summary.json_payload.evidence_law_status, "Needs review")
+        self.assertIn(
+            "lacks linked deterministic evidence",
+            summary.json_payload.evidence_law_detail,
+        )
         self.assertEqual(summary.json_payload.report_id, 17)
         self.assertEqual(len(summary.json_payload.top_findings), 3)
         self.assertEqual(summary.json_payload.evidence_count, 5)
