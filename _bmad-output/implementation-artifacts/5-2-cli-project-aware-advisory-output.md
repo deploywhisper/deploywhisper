@@ -35,6 +35,7 @@ So that local and CI workflows can consume the same core report.
 - [x] [Review][Patch] Preserve omitted-detail Evidence Law status for compact summaries [services/analysis_service.py:920]
 - [x] [Review][Patch] Assert the full advisory contract on the project/workspace CLI path [tests/test_cli/test_analyze.py:1005]
 - [x] [Review][Patch] Correct docs for actual Evidence Law surfaces and verdict banner format [docs/project-workspaces.md:31]
+- [x] [Review Rerun][Patch] Assert Evidence Law detail on the project/workspace CLI path [tests/test_cli/test_analyze.py:1005]
 
 ## Dev Notes
 
@@ -102,6 +103,7 @@ GPT-5 Codex
 - Added deterministic CLI coverage for project/workspace keyed analysis output and high-risk advisory output without relying on narrative availability.
 - Updated operator/schema docs for the CLI/API advisory contract. UI validation not applicable; no UI route, NiceGUI component, rendered page, browser interaction, keyboard behavior, or accessibility semantics changed.
 - BMad code review follow-ups resolved: unsatisfied Evidence Law now forces human-review guidance, compact summaries can surface omitted evidence detail, project/workspace CLI coverage asserts the advisory contract, and docs no longer overstate list/detail Evidence Law fields.
+- BMad code review rerun follow-up resolved: project/workspace CLI coverage now asserts the Evidence Law detail field as part of the advisory contract.
 
 ### File List
 
@@ -119,3 +121,4 @@ GPT-5 Codex
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-05-25: Implemented CLI/API project-aware advisory output with first-class Evidence Law status in shared summaries.
 - 2026-05-25: Addressed BMad code review findings and marked story ready for closure.
+- 2026-05-25: Reran BMad code review and tightened project/workspace CLI Evidence Law detail coverage.

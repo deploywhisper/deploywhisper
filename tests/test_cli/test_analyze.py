@@ -1082,6 +1082,13 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
             {"Satisfied", "Needs review", "Reconciled", "Detail omitted"},
         )
+        self.assertIsInstance(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"],
+            str,
+        )
+        self.assertTrue(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"]
+        )
         self.assertIn("top_findings", payload["data"]["share_summary"]["json_payload"])
         self.assertIn("uncertainty_flags", payload["data"]["advisory"])
 
