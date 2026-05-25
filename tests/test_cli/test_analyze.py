@@ -1080,7 +1080,7 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         self.assertIn(
             payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
-            {"Satisfied", "Needs review", "Reconciled", "Detail omitted"},
+            {"Satisfied", "Needs review", "Reconciled"},
         )
         self.assertIsInstance(
             payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"],

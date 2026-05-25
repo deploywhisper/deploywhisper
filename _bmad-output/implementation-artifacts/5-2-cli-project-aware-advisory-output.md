@@ -36,6 +36,7 @@ So that local and CI workflows can consume the same core report.
 - [x] [Review][Patch] Assert the full advisory contract on the project/workspace CLI path [tests/test_cli/test_analyze.py:1005]
 - [x] [Review][Patch] Correct docs for actual Evidence Law surfaces and verdict banner format [docs/project-workspaces.md:31]
 - [x] [Review Rerun][Patch] Assert Evidence Law detail on the project/workspace CLI path [tests/test_cli/test_analyze.py:1005]
+- [x] [Review Rerun][Patch] Fold unsatisfied Evidence Law into the advisory attention contract [services/report_service.py:3477]
 
 ## Dev Notes
 
@@ -95,6 +96,7 @@ GPT-5 Codex
 - Red test confirmed missing first-class Evidence Law output: `./.venv/bin/python -m unittest tests.test_services.test_analysis_service.AnalysisServiceTests.test_build_share_summary_returns_thread_ready_markdown_and_json_payload tests.test_cli.test_analyze.AnalyzeCliTests.test_analyze_command_preserves_advisory_output_for_high_risk_results -q`
 - Focused green regression run: `./.venv/bin/python -m unittest tests.test_services.test_analysis_service.AnalysisServiceTests.test_build_share_summary_returns_thread_ready_markdown_and_json_payload tests.test_api.test_analyses.AnalysesApiTests.test_create_analysis_returns_structured_result tests.test_cli.test_analyze.AnalyzeCliTests.test_analyze_command_preserves_advisory_output_for_high_risk_results tests.test_cli.test_analyze.AnalyzeCliTests.test_analyze_command_accepts_project_workspace_key -q`
 - Repo validation: `./.venv/bin/ruff check .`; `./.venv/bin/ruff format --check .`; `./.venv/bin/bandit -r api/ services/ cli/ --severity-level high --confidence-level high -x tests/`; `./.venv/bin/python -m unittest discover -q`
+- Review rerun validation: `./.venv/bin/python -m unittest tests.test_services.test_report_service.ReportServiceTests.test_report_advisory_builder_requires_attention_for_evidence_law_gap tests.test_services.test_report_service.ReportServiceTests.test_report_advisory_builder_normalizes_false_like_boolean_strings tests.test_services.test_report_service.ReportServiceTests.test_report_advisory_builder_ignores_non_finite_boolean_signals -q`; `./.venv/bin/python -m unittest tests.test_cli.test_analyze.AnalyzeCliTests.test_analyze_command_accepts_project_workspace_key -q`; `./.venv/bin/python -m unittest discover -q`; `bash scripts/ci-local.sh` all passed.
 
 ### Completion Notes List
 
@@ -104,6 +106,7 @@ GPT-5 Codex
 - Updated operator/schema docs for the CLI/API advisory contract. UI validation not applicable; no UI route, NiceGUI component, rendered page, browser interaction, keyboard behavior, or accessibility semantics changed.
 - BMad code review follow-ups resolved: unsatisfied Evidence Law now forces human-review guidance, compact summaries can surface omitted evidence detail, project/workspace CLI coverage asserts the advisory contract, and docs no longer overstate list/detail Evidence Law fields.
 - BMad code review rerun follow-up resolved: project/workspace CLI coverage now asserts the Evidence Law detail field as part of the advisory contract.
+- BMad code review rerun follow-up resolved: unsatisfied Evidence Law now also sets advisory attention and an uncertainty flag for CI consumers that branch on `data.advisory.requires_attention`.
 
 ### File List
 
@@ -122,3 +125,4 @@ GPT-5 Codex
 - 2026-05-25: Implemented CLI/API project-aware advisory output with first-class Evidence Law status in shared summaries.
 - 2026-05-25: Addressed BMad code review findings and marked story ready for closure.
 - 2026-05-25: Reran BMad code review and tightened project/workspace CLI Evidence Law detail coverage.
+- 2026-05-25: Reran BMad code review and aligned Evidence Law gaps with advisory attention output.

@@ -52,6 +52,7 @@ from services.artifact_snapshot_service import (
 from services.confidence_ledger import (
     LEDGER_KEYS,
     build_confidence_ledger,
+    evidence_law_status,
     normalize_confidence_ledger_payload,
 )
 from services.project_service import (
@@ -3474,7 +3475,9 @@ def _normalized_advisory_severity(value: object) -> str:
     return normalized
 
 
-def _build_report_advisory_payload(report: dict[str, Any]) -> dict[str, Any]:
+def _build_report_advisory_payload(
+    report: dict[str, Any], *, evidence_detail_available: bool = True
+) -> dict[str, Any]:
     context = _require_mapping(
         report.get("context_completeness") or {},
         field_name="context_completeness",
@@ -3508,6 +3511,10 @@ def _build_report_advisory_payload(report: dict[str, Any]) -> dict[str, Any]:
         default=True,
     )
     recommendation = _normalized_advisory_recommendation(report.get("recommendation"))
+    evidence_status, _ = evidence_law_status(
+        report, evidence_detail_available=evidence_detail_available
+    )
+    evidence_law_requires_attention = evidence_status in {"Needs review", "Reconciled"}
 
     uncertainty_flags: list[str] = []
     if partial_context:
@@ -3528,6 +3535,8 @@ def _build_report_advisory_payload(report: dict[str, Any]) -> dict[str, Any]:
         uncertainty_flags.append("narrative_degraded")
     if narrative_warnings:
         uncertainty_flags.append("narrative_warnings")
+    if evidence_law_requires_attention:
+        uncertainty_flags.append("evidence_law_needs_review")
 
     return {
         "advisory_only": True,
@@ -3542,6 +3551,7 @@ def _build_report_advisory_payload(report: dict[str, Any]) -> dict[str, Any]:
             or evidence_gap
             or bool(attention_warnings)
             or narrative_degraded
+            or evidence_law_requires_attention
         ),
         "severity": _normalized_advisory_severity(report.get("severity")),
         "recommendation": recommendation,
@@ -3552,8 +3562,12 @@ def _build_report_advisory_payload(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_report_advisory_payload(report: dict[str, Any]) -> dict[str, Any]:
-    return _build_report_advisory_payload(report)
+def build_report_advisory_payload(
+    report: dict[str, Any], *, evidence_detail_available: bool = True
+) -> dict[str, Any]:
+    return _build_report_advisory_payload(
+        report, evidence_detail_available=evidence_detail_available
+    )
 
 
 def _serialize_report(report, *, include_evidence: bool = True) -> dict:
@@ -3805,7 +3819,9 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         ),
         "audit": audit,
     }
-    payload["advisory"] = _build_report_advisory_payload(payload)
+    payload["advisory"] = _build_report_advisory_payload(
+        payload, evidence_detail_available=include_evidence
+    )
     payload["confidence_ledger"] = build_confidence_ledger(
         payload,
         evidence_detail_available=include_evidence,
