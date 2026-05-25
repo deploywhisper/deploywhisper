@@ -917,7 +917,9 @@ def _share_findings(report: dict) -> list[ShareSummaryFinding]:
     ]
 
 
-def build_share_summary(report: dict) -> ShareSummary:
+def build_share_summary(
+    report: dict, *, evidence_detail_available: bool = True
+) -> ShareSummary:
     """Build a markdown + JSON share summary from the persisted report object."""
     severity = str(report.get("severity", "medium"))
     recommendation = str(report.get("recommendation", "caution"))
@@ -930,7 +932,9 @@ def build_share_summary(report: dict) -> ShareSummary:
     verdict_banner = f"DeployWhisper {severity.upper()} · {recommendation.upper()}"
     top_findings = _share_findings(report)
     evidence_count = len(report.get("evidence_items") or [])
-    evidence_status, evidence_detail = evidence_law_status(report)
+    evidence_status, evidence_detail = evidence_law_status(
+        report, evidence_detail_available=evidence_detail_available
+    )
     blast_radius_summary = _blast_radius_summary(report)
     rollback_summary = _rollback_summary(report)
     context_summary = _context_summary_from_report(report)
@@ -941,7 +945,7 @@ def build_share_summary(report: dict) -> ShareSummary:
     narrative_available = _truthy_bool_signal(report.get("narrative_available", True))
     narrative_degraded = _truthy_bool_signal(report.get("narrative_degraded"))
     advisory_requires_attention = _advisory_requires_attention_signal(report)
-    requires_attention = (
+    baseline_requires_attention = (
         advisory_requires_attention
         if advisory_requires_attention is not None
         else (
@@ -954,6 +958,7 @@ def build_share_summary(report: dict) -> ShareSummary:
             or _has_warning_attention_signal(report)
         )
     )
+    requires_attention = baseline_requires_attention or evidence_status != "Satisfied"
     uncertainty_summary = (
         "This result requires additional human review before release."
         if requires_attention

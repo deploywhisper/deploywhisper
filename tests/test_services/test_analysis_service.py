@@ -1369,6 +1369,31 @@ class AnalysisServiceTests(unittest.TestCase):
             summary.json_payload.context_completeness.label, "STRONG CONTEXT"
         )
 
+    def test_build_share_summary_requires_attention_for_unsatisfied_evidence_law(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["context_completeness"] = {"context_score": 0.84}
+        report["advisory"] = {"requires_attention": False}
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.evidence_law_status, "Needs review")
+        self.assertIn("requires additional human review", summary.uncertainty_summary)
+
+    def test_build_share_summary_can_mark_evidence_detail_omitted(self) -> None:
+        report = self._share_report_payload()
+
+        summary = build_share_summary(report, evidence_detail_available=False)
+
+        self.assertEqual(summary.json_payload.evidence_law_status, "Detail omitted")
+        self.assertIn(
+            "Evidence rows are not included",
+            summary.json_payload.evidence_law_detail,
+        )
+
     def test_build_share_summary_normalizes_missing_report_schema_as_legacy(
         self,
     ) -> None:

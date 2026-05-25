@@ -93,7 +93,7 @@ development_status:
 
   epic-5: in-progress
   5-1-versioned-api-report-contract: done
-  5-2-cli-project-aware-advisory-output: review
+  5-2-cli-project-aware-advisory-output: done
   5-3-github-action-integration-contract: ready-for-dev
   5-4-pr-comment-formatter: ready-for-dev
   5-5-rerun-on-commit-and-report-comparison: ready-for-dev

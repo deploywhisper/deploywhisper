@@ -114,11 +114,11 @@ benchmark reports, and agent integrations may evolve their compact summary shape
 separately from the persisted report. It still carries `report_schema_version`
 so consumers know which full report contract backs the summary.
 
-The share-summary payload `version` remains `v1` for this change because adding
-`report_schema_version` is an additive field. Additive fields are compatible with
-share-summary `v1`; consumers that validate the compact summary should ignore
-unknown fields and branch on `report_schema_version` when they need the backing
-full-report contract.
+The share-summary payload `version` remains `v1` for these changes because
+adding `report_schema_version` and Evidence Law summary fields is additive.
+Additive fields are compatible with share-summary `v1`; consumers that validate
+the compact summary should ignore unknown fields and branch on
+`report_schema_version` when they need the backing full-report contract.
 
 ```json
 {
@@ -142,7 +142,7 @@ full-report contract.
       "report_id": 42,
       "report_link": "https://deploywhisper.example.com/reports/42",
       "rollback_link": "https://deploywhisper.example.com/reports/42",
-      "verdict_banner": "DeployWhisper HIGH - NO-GO",
+      "verdict_banner": "DeployWhisper HIGH · NO-GO",
       "evidence_law_status": "Satisfied",
       "evidence_law_detail": "High and critical findings are backed by deterministic evidence.",
       "headline": "NO-GO: Security group exposure risk",

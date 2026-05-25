@@ -1068,6 +1068,22 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["workspace"]["workspace_key"], "prod"
         )
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+        self.assertFalse(payload["data"]["advisory"]["should_block"])
+        self.assertIn(
+            payload["data"]["advisory"]["recommendation"],
+            {"go", "caution", "no-go"},
+        )
+        self.assertIn(
+            "DeployWhisper",
+            payload["data"]["share_summary"]["json_payload"]["verdict_banner"],
+        )
+        self.assertIn(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
+            {"Satisfied", "Needs review", "Reconciled", "Detail omitted"},
+        )
+        self.assertIn("top_findings", payload["data"]["share_summary"]["json_payload"])
+        self.assertIn("uncertainty_flags", payload["data"]["advisory"])
 
     def test_outcome_record_command_records_deployment_result(self) -> None:
         project = project_service_module.create_project(

@@ -28,7 +28,7 @@ For setup-specific modeling guidance, see the [Project Model Guide](./concepts/p
   - `POST /api/v1/analyses` also accepts optional `workspace_key` or `workspace_id` to attach a run to a project-local workspace/environment
   - `GET /api/v1/analyses?project_key=<key>&workspace_key=<workspace>` lists reports for one workspace
   - `GET /api/v1/analyses/<id>?project_key=<key>&workspace_key=<workspace>` returns a report only when the requested scope matches
-  - Analysis submit/list/detail responses expose `meta.api_version`, `meta.report_schema_version`, project/workspace scope, evidence, findings, Evidence Law status, context completeness, narrative status, and the advisory recommendation contract.
+  - Analysis submit responses expose `meta.api_version`, `meta.report_schema_version`, project/workspace scope, evidence, findings, Evidence Law status, context completeness, narrative status, and the advisory recommendation contract. List/detail responses expose the persisted report shape with project/workspace scope, evidence, findings, context completeness, narrative status, and advisory posture.
   - `GET /api/v1/context/topology?project_key=<key>` reads project-scoped topology status
   - `POST /api/v1/context/topology` stores project-scoped topology JSON with `project_key` or `project_id`
   - Project, analysis, report, topology context, and deployment outcome routes accept `X-DeployWhisper-Project-Role` and `X-DeployWhisper-Project-Keys` as the lightweight actor contract. Omitting both preserves local self-hosted admin behavior.
@@ -38,7 +38,7 @@ For setup-specific modeling guidance, see the [Project Model Guide](./concepts/p
   - `deploywhisper project roles`
   - `deploywhisper project workspace create <project-key> <workspace-key> <display-name>`
   - `deploywhisper project workspace list <project-key>`
-  - `deploywhisper analyze --project <key> [--workspace <workspace>] <artifact...>` or `deploywhisper analyze --project-id <id> [--workspace-id <id>] <artifact...>` returns the same advisory JSON contract, including verdict, Evidence Law status, top findings, uncertainty, report schema version, and advisory posture.
+  - `deploywhisper analyze --project <key> [--workspace <workspace>] <artifact...>` or `deploywhisper analyze --project-id <id> [--workspace-id <id>] <artifact...>` returns the same submit advisory JSON contract, including verdict, Evidence Law status, top findings, uncertainty, report schema version, and advisory posture.
   - `deploywhisper topology import --from custom --source <topology.json> --project <key>`
   - `deploywhisper topology import --from terraform --source <state-or-uri> --project <key>`
   - The topology import command now routes through a shared source registry and returns a normalized import result with accepted, skipped, partially parsed, and unsupported resources.

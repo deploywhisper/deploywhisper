@@ -1,6 +1,6 @@
 # Story 5.2: CLI Project-Aware Advisory Output
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -28,6 +28,13 @@ So that local and CI workflows can consume the same core report.
 - [x] Add or update deterministic regression coverage for the changed behavior. (AC: all)
 - [x] Update relevant docs or examples if the story changes user-visible, operator, API, CLI, integration, or contribution behavior. (AC: all)
 - [x] Run required validation and record commands/results in the Dev Agent Record. (AC: all)
+
+### Review Findings
+
+- [x] [Review][Patch] Treat unsatisfied Evidence Law as requiring human attention [services/analysis_service.py:944]
+- [x] [Review][Patch] Preserve omitted-detail Evidence Law status for compact summaries [services/analysis_service.py:920]
+- [x] [Review][Patch] Assert the full advisory contract on the project/workspace CLI path [tests/test_cli/test_analyze.py:1005]
+- [x] [Review][Patch] Correct docs for actual Evidence Law surfaces and verdict banner format [docs/project-workspaces.md:31]
 
 ## Dev Notes
 
@@ -94,6 +101,7 @@ GPT-5 Codex
 - Included Evidence Law status in markdown and plain-text share summaries while preserving the advisory-only `should_block=false` posture.
 - Added deterministic CLI coverage for project/workspace keyed analysis output and high-risk advisory output without relying on narrative availability.
 - Updated operator/schema docs for the CLI/API advisory contract. UI validation not applicable; no UI route, NiceGUI component, rendered page, browser interaction, keyboard behavior, or accessibility semantics changed.
+- BMad code review follow-ups resolved: unsatisfied Evidence Law now forces human-review guidance, compact summaries can surface omitted evidence detail, project/workspace CLI coverage asserts the advisory contract, and docs no longer overstate list/detail Evidence Law fields.
 
 ### File List
 
@@ -110,3 +118,4 @@ GPT-5 Codex
 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-05-25: Implemented CLI/API project-aware advisory output with first-class Evidence Law status in shared summaries.
+- 2026-05-25: Addressed BMad code review findings and marked story ready for closure.
