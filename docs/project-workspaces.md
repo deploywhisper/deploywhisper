@@ -28,6 +28,7 @@ For setup-specific modeling guidance, see the [Project Model Guide](./concepts/p
   - `POST /api/v1/analyses` also accepts optional `workspace_key` or `workspace_id` to attach a run to a project-local workspace/environment
   - `GET /api/v1/analyses?project_key=<key>&workspace_key=<workspace>` lists reports for one workspace
   - `GET /api/v1/analyses/<id>?project_key=<key>&workspace_key=<workspace>` returns a report only when the requested scope matches
+  - Analysis submit/list/detail responses expose `meta.api_version`, `meta.report_schema_version`, project/workspace scope, evidence, findings, context completeness, narrative status, and the advisory recommendation contract.
   - `GET /api/v1/context/topology?project_key=<key>` reads project-scoped topology status
   - `POST /api/v1/context/topology` stores project-scoped topology JSON with `project_key` or `project_id`
   - Project, analysis, report, topology context, and deployment outcome routes accept `X-DeployWhisper-Project-Role` and `X-DeployWhisper-Project-Keys` as the lightweight actor contract. Omitting both preserves local self-hosted admin behavior.

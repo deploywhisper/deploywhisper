@@ -430,6 +430,12 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
             pairs,
         ),
     }
+    advisory = report.get("advisory")
+    if isinstance(advisory, dict):
+        redacted["advisory"] = {
+            **advisory,
+            "top_risk": _redact_text_value(advisory.get("top_risk"), pairs),
+        }
     return redacted
 
 
@@ -3095,7 +3101,7 @@ def _load_submission_manifest_fallback_payload(
                 if item.get("parse_status") is not None
                 else None
             ),
-            "partial": bool(item.get("partial", False)),
+            "partial": _persisted_bool_value(item.get("partial")),
         }
         if "redaction_status" in item:
             fallback_item["redaction_status"] = normalize_manifest_redaction_status(
@@ -3185,6 +3191,30 @@ def _context_todo_items(value: object) -> list[str]:
     return [str(item) for item in value if str(item).strip()]
 
 
+def _persisted_bool_value(value: object, *, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, int | float):
+        if not math.isfinite(float(value)):
+            return default
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off", ""}:
+            return False
+    return default
+
+
+def _require_mapping(value: object, *, field_name: str) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be an object")
+    return dict(value)
+
+
 def _normalize_context_completeness_payload(decoded: dict) -> dict:
     context_score = _context_float_value(decoded, "context_score", missing_default=1.0)
     parser_success_rate = _context_float_value(
@@ -3258,6 +3288,9 @@ def _normalize_context_completeness_payload(decoded: dict) -> dict:
     if insufficient_context and not todos:
         todos.append(_CONTEXT_UNAVAILABLE_TODO)
     normalized["context_todos"] = todos
+    normalized["partial_context"] = _persisted_bool_value(
+        normalized.get("partial_context")
+    )
 
     uncertainty = str(normalized.get("uncertainty") or "").strip()
     if insufficient_context and not uncertainty:
@@ -3359,6 +3392,170 @@ def _context_with_incident_index_freshness(report, context_completeness: dict) -
     return context_completeness
 
 
+def _context_with_partial_context_signal(
+    context_completeness: dict,
+    *,
+    submission_manifest: dict | None,
+    submission_manifest_fallback: list[dict[str, Any]] | None,
+    warnings: list[str],
+) -> dict:
+    partial_context = _report_has_partial_context_signal(
+        {
+            "context_completeness": context_completeness,
+            "submission_manifest": submission_manifest,
+            "submission_manifest_fallback": submission_manifest_fallback or [],
+            "warnings": warnings,
+        }
+    )
+    if partial_context == _persisted_bool_value(
+        context_completeness.get("partial_context")
+    ):
+        return context_completeness
+    updated = dict(context_completeness)
+    updated["partial_context"] = partial_context
+    return updated
+
+
+def _manifest_item_has_partial_context_signal(item: object) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if _persisted_bool_value(item.get("partial")):
+        return True
+    status = str(item.get("status") or "").strip().lower()
+    if status in {"failed", "excluded", "sensitive"}:
+        return True
+    parse_status = str(item.get("parse_status") or "").strip().lower()
+    return bool(parse_status and parse_status != "parsed")
+
+
+def _report_has_partial_context_signal(report: dict[str, Any]) -> bool:
+    if _persisted_bool_value(report.get("partial_context")):
+        return True
+    manifest = report.get("submission_manifest")
+    if isinstance(manifest, dict):
+        if _persisted_bool_value(manifest.get("partial_analysis")):
+            return True
+        for item in manifest.get("items") or []:
+            if _manifest_item_has_partial_context_signal(item):
+                return True
+    for item in report.get("submission_manifest_fallback") or []:
+        if _manifest_item_has_partial_context_signal(item):
+            return True
+    context = dict(report.get("context_completeness") or {})
+    if _persisted_bool_value(context.get("partial_context")):
+        return True
+    if _context_float_value(context, "parser_success_rate", missing_default=1.0) < 1.0:
+        return True
+    warnings = [str(warning).lower() for warning in (report.get("warnings") or [])]
+    return any(
+        "partial context" in warning or "failed to parse" in warning
+        for warning in warnings
+    )
+
+
+def _report_warning_requires_advisory_attention(warning: object) -> bool:
+    normalized = str(warning or "").strip().lower()
+    if not normalized:
+        return False
+    return not normalized.startswith("narrative")
+
+
+def _normalized_advisory_recommendation(value: object) -> str:
+    normalized = str(value or "caution").strip().lower()
+    if normalized not in {"go", "caution", "no-go"}:
+        return "caution"
+    return normalized
+
+
+def _normalized_advisory_severity(value: object) -> str:
+    normalized = str(value or "medium").strip().lower()
+    if normalized not in {"low", "medium", "high", "critical"}:
+        return "medium"
+    return normalized
+
+
+def _build_report_advisory_payload(report: dict[str, Any]) -> dict[str, Any]:
+    context = _require_mapping(
+        report.get("context_completeness") or {},
+        field_name="context_completeness",
+    )
+    context_score = _context_float_value(context, "context_score", missing_default=1.0)
+    context_uncertainty = bool(str(context.get("uncertainty") or "").strip())
+    context_todos = bool(_context_todo_items(context.get("context_todos")))
+    insufficient_context = _persisted_bool_value(context.get("insufficient_context"))
+    partial_context = _report_has_partial_context_signal(report)
+    evidence_gap = (
+        _context_float_value(context, "evidence_success_rate", missing_default=1.0)
+        < 1.0
+    )
+    warnings = [
+        warning for warning in (report.get("warnings") or []) if str(warning).strip()
+    ]
+    attention_warnings = [
+        warning
+        for warning in warnings
+        if _report_warning_requires_advisory_attention(warning)
+    ]
+    narrative_warnings = [
+        warning
+        for warning in warnings
+        if not _report_warning_requires_advisory_attention(warning)
+    ]
+    narrative_degraded = _persisted_bool_value(
+        report.get("narrative_degraded")
+    ) or not _persisted_bool_value(
+        report.get("narrative_available"),
+        default=True,
+    )
+    recommendation = _normalized_advisory_recommendation(report.get("recommendation"))
+
+    uncertainty_flags: list[str] = []
+    if partial_context:
+        uncertainty_flags.append("partial_context")
+    if context_score < 0.7:
+        uncertainty_flags.append("low_context_completeness")
+    if insufficient_context:
+        uncertainty_flags.append("insufficient_context")
+    if context_uncertainty:
+        uncertainty_flags.append("context_uncertainty")
+    if context_todos:
+        uncertainty_flags.append("context_todos")
+    if evidence_gap:
+        uncertainty_flags.append("evidence_gaps")
+    if attention_warnings:
+        uncertainty_flags.append("assessment_warnings")
+    if narrative_degraded:
+        uncertainty_flags.append("narrative_degraded")
+    if narrative_warnings:
+        uncertainty_flags.append("narrative_warnings")
+
+    return {
+        "advisory_only": True,
+        "should_block": False,
+        "requires_attention": (
+            recommendation != "go"
+            or partial_context
+            or context_score < 0.7
+            or insufficient_context
+            or context_uncertainty
+            or context_todos
+            or evidence_gap
+            or bool(attention_warnings)
+            or narrative_degraded
+        ),
+        "severity": _normalized_advisory_severity(report.get("severity")),
+        "recommendation": recommendation,
+        "top_risk": str(report.get("top_risk") or ""),
+        "partial_context": partial_context,
+        "narrative_degraded": narrative_degraded,
+        "uncertainty_flags": uncertainty_flags,
+    }
+
+
+def build_report_advisory_payload(report: dict[str, Any]) -> dict[str, Any]:
+    return _build_report_advisory_payload(report)
+
+
 def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     created_at = report.created_at
     if created_at.tzinfo is None:
@@ -3435,6 +3632,12 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     )
     if context_warning is not None and context_warning not in warnings:
         warnings.append(context_warning)
+    context_completeness = _context_with_partial_context_signal(
+        context_completeness,
+        submission_manifest=submission_manifest,
+        submission_manifest_fallback=submission_manifest_fallback,
+        warnings=warnings,
+    )
     confidence = _clamp_confidence_to_context(confidence, context_completeness)
     evidence_items: list[dict[str, Any]] = []
     if include_evidence:
@@ -3521,8 +3724,8 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
             else None
         ),
         "risk_score": report.risk_score,
-        "severity": report.severity,
-        "recommendation": report.recommendation,
+        "severity": _normalized_advisory_severity(report.severity),
+        "recommendation": _normalized_advisory_recommendation(report.recommendation),
         "top_risk": report.top_risk,
         "report_schema_version": readable_report_schema_version(
             getattr(report, "report_schema_version", None)
@@ -3602,6 +3805,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         ),
         "audit": audit,
     }
+    payload["advisory"] = _build_report_advisory_payload(payload)
     payload["confidence_ledger"] = build_confidence_ledger(
         payload,
         evidence_detail_available=include_evidence,
@@ -3811,7 +4015,10 @@ def persist_analysis_report(
                         assessment.top_risk_contributors
                     ),
                     context_completeness_json=json.dumps(
-                        assessment.context_completeness.model_dump(mode="json")
+                        {
+                            **assessment.context_completeness.model_dump(mode="json"),
+                            "partial_context": assessment.partial_context,
+                        }
                     ),
                     findings_payload=[
                         finding.model_dump(mode="json") for finding in (findings or [])
@@ -4094,10 +4301,10 @@ def fetch_filtered_analysis_history_page(
                     report_schema_versions=readable_schema_versions,
                     limit=page_size,
                     offset=offset,
-                    include_evidence=False,
+                    include_evidence=True,
                 )
                 serialized_reports = [
-                    _serialize_report(report, include_evidence=False)
+                    _serialize_report(report, include_evidence=True)
                     for report in reports
                 ]
                 serialized_all_reports = [
@@ -4131,10 +4338,10 @@ def fetch_filtered_analysis_history_page(
                     created_to=created_to,
                     limit=page_size,
                     offset=offset,
-                    include_evidence=False,
+                    include_evidence=True,
                 )
                 serialized_reports = [
-                    _serialize_report(report, include_evidence=False)
+                    _serialize_report(report, include_evidence=True)
                     for report in reports
                 ]
                 serialized_all_reports = [

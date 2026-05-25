@@ -28,6 +28,17 @@ class ApiSchemaTests(unittest.TestCase):
             "parse_summary": "Parsed 1 file.",
             "narrative_opening": "CAUTION: review the security group update.",
             "narrative_degraded": False,
+            "advisory": {
+                "advisory_only": True,
+                "should_block": False,
+                "requires_attention": True,
+                "severity": "medium",
+                "recommendation": "caution",
+                "top_risk": "Terraform changed a security group.",
+                "partial_context": False,
+                "narrative_degraded": False,
+                "uncertainty_flags": [],
+            },
             "created_at": "2026-05-11T00:00:00Z",
             "audit": {"files_analyzed": ["plan.json"]},
         }

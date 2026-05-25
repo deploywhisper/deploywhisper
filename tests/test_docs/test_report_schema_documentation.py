@@ -30,6 +30,7 @@ class ReportSchemaDocumentationTests(unittest.TestCase):
                 self.assertIn(consumer, content)
 
         for field in (
+            '"api_version"',
             '"report_schema_version"',
             '"findings"',
             '"evidence_items"',
@@ -40,6 +41,7 @@ class ReportSchemaDocumentationTests(unittest.TestCase):
             '"narrative_failure_notice"',
             '"advisory_only"',
             '"should_block"',
+            '"top_risk"',
         ):
             with self.subTest(field=field):
                 self.assertIn(field, content)

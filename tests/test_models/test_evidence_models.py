@@ -48,6 +48,7 @@ class EvidenceModelTests(unittest.TestCase):
                 "uncertainty": "Kubernetes parser coverage was partial.",
                 "context_todos": ["Refresh Kubernetes context."],
                 "insufficient_context": False,
+                "partial_context": False,
             },
         )
 

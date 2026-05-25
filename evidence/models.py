@@ -85,6 +85,7 @@ class ContextCompleteness(BaseModel):
     uncertainty: str | None = Field(default=None, min_length=1)
     context_todos: list[str] = Field(default_factory=list)
     insufficient_context: bool = Field(default=False)
+    partial_context: bool = Field(default=False)
 
     @field_validator("parser_success_by_tool")
     @classmethod

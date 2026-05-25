@@ -15,11 +15,13 @@ This schema version applies to:
 
 1. Every persisted report stores `report_schema_version`.
 2. API and CLI envelopes include `report_schema_version` in `meta`.
-3. Machine-friendly share-summary payloads include `report_schema_version`
+3. Report-bearing `/api/v1` analysis envelopes include `api_version: "v1"`
+   in `meta` alongside the report schema version.
+4. Machine-friendly share-summary payloads include `report_schema_version`
    alongside their own share payload `version`.
-4. Stored reports remain readable across upgrades by version-aware readers.
-5. Newer readers are expected to read older schemas when the older schema major version is less than or equal to the reader version.
-6. Successful analysis responses include a persisted report identifier and
+5. Stored reports remain readable across upgrades by version-aware readers.
+6. Newer readers are expected to read older schemas when the older schema major version is less than or equal to the reader version.
+7. Successful analysis responses include a persisted report identifier and
    audit metadata derived from durable report state. Persistence failures use an
    explicit `report_persistence_failed` error/status instead of returning
    success, with sanitized remediation text rather than raw storage-driver
@@ -100,7 +102,10 @@ the audit actor can still be recovered if manifest JSON is malformed.
 ### Advisory and share-summary shape
 
 API and CLI analysis responses include advisory fields for automation and PR
-comment consumers. `data.advisory.should_block` remains `false`; downstream
+comment consumers. API report list/detail payloads also include
+`data[*].advisory` / `data.advisory` derived from persisted report state, so
+retrieval clients do not have to reconstruct DeployWhisper's advisory posture
+from lower-level report fields. `should_block` remains `false`; downstream
 systems may use `requires_attention` and `uncertainty_flags` to decide whether
 to notify humans, but DeployWhisper's canonical contract remains advisory-first.
 
@@ -123,6 +128,7 @@ full-report contract.
     "requires_attention": true,
     "severity": "high",
     "recommendation": "no-go",
+    "top_risk": "Security group exposure risk",
     "partial_context": true,
     "narrative_degraded": true,
     "uncertainty_flags": ["partial_context", "narrative_degraded"]
@@ -221,7 +227,8 @@ without storing raw plan internals in a separate contract.
       "Review evidence extraction gaps for supported artifacts.",
       "Review parser errors and resubmit supported artifacts."
     ],
-    "insufficient_context": true
+    "insufficient_context": true,
+    "partial_context": true
   },
   "rollback_plan": {
     "complexity": "medium",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import sqlite3
 import tempfile
@@ -5376,6 +5377,10 @@ class ReportServiceTests(unittest.TestCase):
         self.assertNotIn("plan.json", serialized)
         self.assertNotIn(".bak", serialized)
         self.assertIn("Artifact 2 changed after Artifact 1", shared_report["top_risk"])
+        self.assertIn(
+            "Artifact 2 changed after Artifact 1",
+            shared_report["advisory"]["top_risk"],
+        )
 
     def test_persist_manifest_uses_submitted_artifacts_without_raw_snapshots(
         self,
@@ -5771,6 +5776,9 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(fallback_by_name["broken.tf"]["status"], "failed")
         self.assertEqual(fallback_by_name[".env"]["status"], "sensitive")
         self.assertEqual(fallback_by_name["notes.txt"]["status"], "excluded")
+        self.assertTrue(fetched["context_completeness"]["partial_context"])
+        self.assertTrue(fetched["advisory"]["partial_context"])
+        self.assertIn("partial_context", fetched["advisory"]["uncertainty_flags"])
         self.assertEqual(fetched["audit"]["redaction_status"], "sensitive_blocked")
         self.assertEqual(
             fetched["audit"]["redaction"],
@@ -9033,7 +9041,7 @@ class ReportServiceTests(unittest.TestCase):
             report["contributors"][0]["evidence_id"], persisted_evidence_id
         )
 
-    def test_fetch_filtered_history_page_omits_evidence_payloads(self) -> None:
+    def test_fetch_filtered_history_page_includes_evidence_payloads(self) -> None:
         parse_batch = ParseBatchResult(
             files=[
                 ParsedFileResult(
@@ -9118,7 +9126,474 @@ class ReportServiceTests(unittest.TestCase):
             page=1, page_size=5
         )
 
-        self.assertEqual(page["items"][0]["evidence_items"], [])
+        self.assertEqual(
+            page["items"][0]["evidence_items"][0]["source_ref"],
+            "terraform://plan.json#aws_security_group.main?action=modify",
+        )
+
+    def test_fetch_filtered_history_page_uses_lightweight_scope_for_diff_candidates(
+        self,
+    ) -> None:
+        scope_report = object()
+        page_report = object()
+
+        def serialize(report: object, *, include_evidence: bool = True) -> dict:
+            evidence_items = [{"evidence_id": "page-ev"}] if include_evidence else []
+            return {
+                "id": 2 if report is page_report else 1,
+                "project": {"id": 1, "project_key": "unassigned"},
+                "workspace": None,
+                "risk_score": 12,
+                "severity": "low",
+                "recommendation": "go",
+                "created_at": "2026-05-25T00:00:00+00:00",
+                "audit": {
+                    "files_analyzed": ["plan.json"],
+                    "source_interface": "api",
+                    "trigger_type": "api_request",
+                    "trigger_id": "review-fix",
+                },
+                "submission_manifest": {
+                    "items": [
+                        {
+                            "name": "plan.json",
+                            "tool": "terraform",
+                            "status": "accepted",
+                            "intake_status": "ready",
+                            "parse_status": "parsed",
+                            "partial": False,
+                        }
+                    ]
+                },
+                "evidence_items": evidence_items,
+            }
+
+        with (
+            patch.object(
+                report_service_module,
+                "list_analysis_reports",
+                side_effect=[[scope_report], [page_report]],
+            ) as list_reports,
+            patch.object(
+                report_service_module,
+                "_serialize_report",
+                side_effect=serialize,
+            ) as serialize_report,
+            patch.object(
+                report_service_module,
+                "count_analysis_reports",
+                return_value=1,
+            ),
+        ):
+            page = report_service_module.fetch_filtered_analysis_history_page(
+                page=1, page_size=1
+            )
+
+        self.assertEqual(
+            page["items"][0]["evidence_items"], [{"evidence_id": "page-ev"}]
+        )
+        self.assertFalse(list_reports.call_args_list[0].kwargs["include_evidence"])
+        self.assertTrue(list_reports.call_args_list[1].kwargs["include_evidence"])
+        self.assertTrue(serialize_report.call_args_list[0].kwargs["include_evidence"])
+        self.assertFalse(serialize_report.call_args_list[1].kwargs["include_evidence"])
+
+    def test_persisted_advisory_keeps_evidence_gap_separate_from_partial_context(
+        self,
+    ) -> None:
+        report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[
+                            UnifiedChange(
+                                source_file="plan.json",
+                                tool="terraform",
+                                resource_id="aws_s3_bucket.logs",
+                                action="modify",
+                                summary="Terraform adjusted log bucket tags.",
+                            )
+                        ],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk tag update.",
+                contributors=[],
+                interaction_risks=[],
+                context_completeness=ContextCompleteness(
+                    context_score=0.8,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=0.5,
+                ),
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: low risk tag update.",
+                explanation="Review can follow the standard approval flow.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+
+        advisory = report_service_module.fetch_analysis_report(report["id"])["advisory"]
+
+        self.assertFalse(advisory["partial_context"])
+        self.assertNotIn("partial_context", advisory["uncertainty_flags"])
+        self.assertIn("evidence_gaps", advisory["uncertainty_flags"])
+        self.assertTrue(advisory["requires_attention"])
+
+    def test_persisted_advisory_honors_manifest_item_partial_context(
+        self,
+    ) -> None:
+        report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[
+                            UnifiedChange(
+                                source_file="plan.json",
+                                tool="terraform",
+                                resource_id="aws_s3_bucket.logs",
+                                action="modify",
+                                summary="Terraform adjusted log bucket tags.",
+                            )
+                        ],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk tag update.",
+                contributors=[],
+                interaction_risks=[],
+                context_completeness=ContextCompleteness(
+                    context_score=1.0,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                ),
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: low risk tag update.",
+                explanation="Review can follow the standard approval flow.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+        manifest = dict(report["submission_manifest"])
+        manifest["partial_analysis"] = False
+        manifest["items"][0]["partial"] = True
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE analysis_reports SET submission_manifest_json = ? WHERE id = ?",
+                (json.dumps(manifest), report["id"]),
+            )
+
+        advisory = report_service_module.fetch_analysis_report(report["id"])["advisory"]
+
+        self.assertTrue(advisory["partial_context"])
+        self.assertIn("partial_context", advisory["uncertainty_flags"])
+        self.assertTrue(advisory["requires_attention"])
+
+    def test_persisted_advisory_honors_stored_partial_context_signal(self) -> None:
+        report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[
+                            UnifiedChange(
+                                source_file="plan.json",
+                                tool="terraform",
+                                resource_id="aws_s3_bucket.logs",
+                                action="modify",
+                                summary="Terraform adjusted log bucket tags.",
+                            )
+                        ],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk tag update.",
+                contributors=[],
+                interaction_risks=[],
+                context_completeness=ContextCompleteness(
+                    context_score=1.0,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                ),
+                partial_context=True,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: low risk tag update.",
+                explanation="Review can follow the standard approval flow.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+        advisory = fetched["advisory"]
+
+        self.assertTrue(fetched["context_completeness"]["partial_context"])
+        self.assertTrue(advisory["partial_context"])
+        self.assertIn("partial_context", advisory["uncertainty_flags"])
+        self.assertTrue(advisory["requires_attention"])
+
+    def test_persisted_advisory_treats_false_like_strings_as_false(self) -> None:
+        report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk metadata-only update.",
+                contributors=[],
+                interaction_risks=[],
+                context_completeness=ContextCompleteness(
+                    context_score=1.0,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                ),
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: low risk metadata-only update.",
+                explanation="Review can follow the standard approval flow.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+        context = dict(report["context_completeness"])
+        context["partial_context"] = "false"
+        fallback_items = [
+            {
+                "name": "plan.json",
+                "tool": "terraform",
+                "status": "accepted",
+                "intake_status": "accepted",
+                "parse_status": "parsed",
+                "partial": "0",
+            }
+        ]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE risk_assessments SET context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (json.dumps(context), report["id"]),
+            )
+            conn.execute(
+                "UPDATE analysis_reports "
+                "SET submission_manifest_json = ?, submission_manifest_fallback_json = ? "
+                "WHERE id = ?",
+                ("{not-valid-json", json.dumps(fallback_items), report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+        advisory = fetched["advisory"]
+
+        self.assertFalse(fetched["context_completeness"]["partial_context"])
+        self.assertFalse(fetched["submission_manifest_fallback"][0]["partial"])
+        self.assertFalse(advisory["partial_context"])
+        self.assertNotIn("partial_context", advisory["uncertainty_flags"])
+
+    def test_report_advisory_builder_normalizes_false_like_boolean_strings(
+        self,
+    ) -> None:
+        advisory = report_service_module.build_report_advisory_payload(
+            {
+                "severity": "low",
+                "recommendation": "go",
+                "top_risk": "Low risk metadata-only update.",
+                "context_completeness": {
+                    "context_score": 1.0,
+                    "parser_success_rate": 1.0,
+                    "evidence_success_rate": 1.0,
+                    "insufficient_context": "false",
+                    "partial_context": "false",
+                },
+                "narrative_available": "true",
+                "narrative_degraded": "false",
+                "warnings": [],
+            }
+        )
+
+        self.assertFalse(advisory["requires_attention"])
+        self.assertFalse(advisory["narrative_degraded"])
+        self.assertNotIn("insufficient_context", advisory["uncertainty_flags"])
+        self.assertNotIn("narrative_degraded", advisory["uncertainty_flags"])
+
+    def test_report_advisory_builder_ignores_non_finite_boolean_signals(
+        self,
+    ) -> None:
+        advisory = report_service_module.build_report_advisory_payload(
+            {
+                "severity": "low",
+                "recommendation": "go",
+                "top_risk": "Low risk metadata-only update.",
+                "context_completeness": {
+                    "context_score": 1.0,
+                    "parser_success_rate": 1.0,
+                    "evidence_success_rate": 1.0,
+                    "insufficient_context": math.inf,
+                    "partial_context": math.nan,
+                },
+                "narrative_available": "true",
+                "narrative_degraded": math.nan,
+                "warnings": [],
+            }
+        )
+
+        self.assertFalse(advisory["requires_attention"])
+        self.assertFalse(advisory["partial_context"])
+        self.assertFalse(advisory["narrative_degraded"])
+        self.assertNotIn("insufficient_context", advisory["uncertainty_flags"])
+        self.assertNotIn("partial_context", advisory["uncertainty_flags"])
+        self.assertNotIn("narrative_degraded", advisory["uncertainty_flags"])
+
+    def test_legacy_context_partial_context_matches_recovered_manifest_signal(
+        self,
+    ) -> None:
+        report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk metadata-only update.",
+                contributors=[],
+                interaction_risks=[],
+                context_completeness=ContextCompleteness(
+                    context_score=1.0,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                ),
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: low risk metadata-only update.",
+                explanation="Review can follow the standard approval flow.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+        context = dict(report["context_completeness"])
+        context.pop("partial_context", None)
+        fallback_items = [
+            {
+                "name": "broken.tf",
+                "tool": "terraform",
+                "status": "failed",
+                "intake_status": "accepted",
+                "parse_status": "failed",
+            }
+        ]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE risk_assessments SET context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (json.dumps(context), report["id"]),
+            )
+            conn.execute(
+                "UPDATE analysis_reports "
+                "SET submission_manifest_json = ?, submission_manifest_fallback_json = ? "
+                "WHERE id = ?",
+                ("{not-valid-json", json.dumps(fallback_items), report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+
+        self.assertTrue(fetched["context_completeness"]["partial_context"])
+        self.assertTrue(fetched["advisory"]["partial_context"])
+        self.assertIn("partial_context", fetched["advisory"]["uncertainty_flags"])
+
+    def test_persisted_advisory_normalizes_legacy_severity_values(self) -> None:
+        report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=75,
+                severity="high",
+                recommendation="no-go",
+                top_risk="Security group exposure.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="NO-GO: security group exposure.",
+                explanation="Review before deployment.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE analysis_reports SET severity = ?, recommendation = ? WHERE id = ?",
+                ("HIGH", "NO-GO", report["id"]),
+            )
+
+        fetched = report_service_module.fetch_analysis_report(report["id"])
+        advisory = fetched["advisory"]
+
+        self.assertEqual(fetched["severity"], "high")
+        self.assertEqual(fetched["recommendation"], "no-go")
+        self.assertEqual(advisory["severity"], "high")
+        self.assertEqual(advisory["recommendation"], "no-go")
 
     def test_persist_analysis_report_raises_when_evidence_cannot_attach_to_finding(
         self,
