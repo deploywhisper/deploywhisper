@@ -10,7 +10,7 @@ import os
 import sys
 from pathlib import Path
 from api.errors import build_error
-from api.schemas import build_analysis_run_data, build_meta
+from api.schemas import AdvisorySummaryData, build_analysis_run_data, build_meta
 from integrations.github.init_service import (
     GitHubInitError,
     collect_github_init_options,
@@ -34,7 +34,6 @@ from services.skill_test_harness_service import iter_built_in_skill_ids
 from services.analysis_service import (
     AnalysisPersistenceError,
     analyze_uploaded_files,
-    build_advisory_summary,
     build_share_summary,
     resolve_analysis_project_scope,
 )
@@ -51,13 +50,30 @@ from services.intake_service import (
     build_pending_analysis,
     uniquify_artifact_names,
 )
-from services.report_service import REPORT_SCHEMA_VERSION, fetch_analysis_report
+from services.report_service import (
+    REPORT_SCHEMA_VERSION,
+    build_report_advisory_payload,
+    fetch_analysis_report,
+)
 from services.topology_service import get_topology_status, import_topology_source
 
 
 def _emit_json(payload: dict, *, stream) -> None:
     stream.write(json.dumps(payload))
     stream.write("\n")
+
+
+def _analysis_run_advisory(result) -> AdvisorySummaryData:
+    persisted_report = result.persisted_report
+    fallback_payload = (
+        build_report_advisory_payload(persisted_report)
+        if isinstance(persisted_report, dict)
+        else {}
+    )
+    advisory = AdvisorySummaryData.model_validate(fallback_payload)
+    if isinstance(persisted_report, dict):
+        persisted_report["advisory"] = advisory.model_dump(mode="json")
+    return advisory
 
 
 def _split_env_project_keys(value: str | None) -> list[str] | None:
@@ -510,7 +526,7 @@ def _run_analyze(
         "data": build_analysis_run_data(
             intake=pending_analysis,
             result=result,
-            advisory=build_advisory_summary(result.assessment, result.narrative),
+            advisory=_analysis_run_advisory(result),
             share_summary=build_share_summary(result.persisted_report),
         ).model_dump(),
         "meta": build_meta(
