@@ -72,8 +72,8 @@ invent a separate report contract.
 | --- | --- |
 | `report-id` | `data.persisted_report.id` |
 | `report-link` | `data.share_summary.json_payload.report_link` |
-| `severity` | `data.advisory.severity` |
-| `recommendation` | `data.advisory.recommendation` |
+| `severity` | `data.advisory.severity`, falling back to `data.share_summary.severity` when advisory is blank |
+| `recommendation` | `data.advisory.recommendation`, falling back to `data.share_summary.recommendation` when advisory is blank |
 | `share-summary-json` | JSON-encoded `data.share_summary.json_payload` |
 | `share-summary-markdown` | `data.share_summary.markdown` |
 | `comment-id` | GitHub PR comment identifier returned by the external action |
