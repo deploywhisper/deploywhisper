@@ -1,6 +1,6 @@
 # Story 5.5: Rerun-on-Commit and Report Comparison
 
-Status: review
+Status: in-progress
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -35,6 +35,11 @@ So that I can see whether changes resolved or introduced risk.
 - [x] [Review][Patch] Reruns that resolve all findings or introduce findings after a clean previous scan suppress the finding-delta summary instead of showing all-resolved or all-new results [/private/tmp/deploywhisper-analyze-action/action_runtime.py:687]
 - [x] [Review][Patch] Finding comparison truncates metadata to the first 12 findings before computing deltas, so larger reruns can hide or miscount new, resolved, and persistent findings [/private/tmp/deploywhisper-analyze-action/action_runtime.py:650]
 - [x] [Review][Patch] Finding identity ignores stable finding ids and collapses duplicate title/category findings, which can misclassify changed wording or duplicate resources as new/resolved/persistent incorrectly [/private/tmp/deploywhisper-analyze-action/action_runtime.py:635]
+- [ ] [Review][Patch] Legacy scan markers without `finding_keys` are truncated to 6 findings before delta comparison, undercounting resolved and persistent findings from older comments [/private/tmp/deploywhisper-analyze-action/action_runtime.py:515]
+- [ ] [Review][Patch] Current scan markers capped at 32 keys can misclassify retained previous findings beyond the cap as new findings instead of avoiding or qualifying exact counts [/private/tmp/deploywhisper-analyze-action/action_runtime.py:710]
+- [ ] [Review][Patch] Delta example lines can render `UNKNOWN Untitled finding` when the changed finding key has no stored label, so the PR comment does not actually identify the new or resolved finding [/private/tmp/deploywhisper-analyze-action/action_runtime.py:740]
+- [ ] [Review][Patch] Existing upstream finding keys are truncated to 16 characters instead of compact-hashed, so distinct long keys with the same prefix collapse into one comparison identity [/private/tmp/deploywhisper-analyze-action/action_runtime.py:668]
+- [ ] [Review][Patch] Fallback identity still collapses distinct no-ID findings with the same title and category, hiding duplicate-resource new/resolved changes [/private/tmp/deploywhisper-analyze-action/action_runtime.py:676]
 
 ## Dev Notes
 
@@ -93,6 +98,7 @@ GPT-5 Codex
 
 - 2026-05-26: Implemented in required action repo, not in `deploywhisper/deploywhisper` source code: `/private/tmp/deploywhisper-analyze-action` branch `feature/5-5-rerun-report-comparison`, commit `ae4ab59`.
 - 2026-05-26: Addressed all 4 code-review patch findings in required action repo commit `7d266c6`: bounded marker metadata, preserved all-new/all-resolved deltas, compared up to compact key capacity before label truncation, and used stable finding ids for identity.
+- 2026-05-26: Re-ran `bmad-code-review` on Story 5.5 after commit `7d266c6`; review found 5 remaining patch findings around legacy marker truncation, capped comparison accuracy, unlabeled delta examples, long-key collisions, and no-ID duplicate fallback identity.
 - Red test: `python3 -m unittest tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_highlights_new_resolved_and_persistent_findings -q` failed before implementation because PR comments did not include finding-level deltas.
 - Focused green test: `python3 -m unittest tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_highlights_new_resolved_and_persistent_findings tests.test_action_runtime.UpsertPrCommentTests.test_extract_comment_metadata_reads_previous_scan_marker -q` passed.
 - Review-fix focused validation: `python3 -m unittest tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_highlights_new_resolved_and_persistent_findings tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_reports_all_resolved_and_all_new_findings tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_uses_stable_ids_for_changed_titles_and_duplicates tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_counts_more_than_twelve_findings_before_truncating_labels tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_keeps_hidden_metadata_within_comment_budget tests.test_action_runtime.UpsertPrCommentTests.test_extract_comment_metadata_reads_previous_scan_marker -q` passed with 6 tests.
@@ -127,3 +133,4 @@ GPT-5 Codex
 - 2026-05-26: Implemented rerun finding comparison in the external analyze-action runtime and moved story to review.
 - 2026-05-26: Code review found 4 patch issues and moved story back to in-progress.
 - 2026-05-26: Fixed all 4 code-review patch findings in the external analyze-action runtime and moved story back to review.
+- 2026-05-26: Re-run code review found 5 remaining patch issues and moved story back to in-progress.
