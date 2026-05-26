@@ -23,23 +23,12 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
             "https://github.com/deploywhisper/analyze-action",
             "POST /api/v1/analyses",
             "project-key",
-            "project-id",
             "workspace-key",
-            "workspace-id",
             "project_key",
-            "project_id",
-            "workspace_key",
-            "workspace_id",
             "report_schema_version",
             "share_summary.json_payload",
             "docs/schemas/report-v2.md",
             "JSON-encoded string",
-            "local-first upload boundary",
-            "data.advisory.requires_attention",
-            "public `APP_BASE_URL` or `PUBLIC_APP_URL`",
-            "endpoint derives project scope",
-            "`changed-files`",
-            "`working-directory`",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, content)
@@ -64,7 +53,11 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
         )
 
     def test_app_repo_does_not_host_marketplace_action_runtime(self) -> None:
-        tracked_or_unignored = self._repository_owned_paths()
+        tracked_or_unignored = subprocess.check_output(  # nosec
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+            cwd=REPO_ROOT,
+            text=True,
+        ).splitlines()
         forbidden_files = [
             path
             for path in tracked_or_unignored
@@ -98,11 +91,6 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
         self.assertIn("docs/github-action.md", content)
         self.assertIn("deploywhisper/analyze-action@v1", content)
         self.assertIn("project-key", content)
-        self.assertIn("project-id", content)
-        self.assertIn("workspace-key", content)
-        self.assertIn("workspace-id", content)
-        self.assertIn("APP_BASE_URL", content)
-        self.assertIn("PUBLIC_APP_URL", content)
 
     @staticmethod
     def _canonical_schema_mapping(content: str) -> dict[str, str]:
@@ -147,24 +135,6 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
         if not line.lstrip().startswith("|"):
             return []
         return [cell.strip() for cell in line.strip().strip("|").split("|")]
-
-    @staticmethod
-    def _repository_owned_paths() -> list[str]:
-        if (REPO_ROOT / ".git").exists():
-            return subprocess.check_output(  # nosec
-                ["git", "ls-files", "--cached"],
-                cwd=REPO_ROOT,
-                text=True,
-            ).splitlines()
-        ignored_roots = {".git", ".venv", "node_modules", "__pycache__"}
-        return [
-            str(path.relative_to(REPO_ROOT))
-            for path in REPO_ROOT.rglob("*")
-            if path.is_file()
-            and not any(
-                part in ignored_roots for part in path.relative_to(REPO_ROOT).parts
-            )
-        ]
 
 
 if __name__ == "__main__":

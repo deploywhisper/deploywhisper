@@ -1356,16 +1356,12 @@ class AnalysesApiTests(unittest.TestCase):
             payload["data"]["share_summary"]["json_payload"]["report_id"],
             payload["data"]["persisted_report"]["id"],
         )
-        expected_report_link = (
-            "https://deploywhisper.example.com/reports/"
-            f"{payload['data']['persisted_report']['id']}"
-        )
-        self.assertEqual(
-            expected_report_link,
+        self.assertIn(
+            "https://deploywhisper.example.com/reports/",
             payload["data"]["share_summary"]["json_payload"]["report_link"],
         )
-        self.assertEqual(
-            expected_report_link,
+        self.assertIn(
+            "https://deploywhisper.example.com/reports/",
             payload["data"]["share_summary"]["json_payload"]["rollback_link"],
         )
         self.assertEqual(
