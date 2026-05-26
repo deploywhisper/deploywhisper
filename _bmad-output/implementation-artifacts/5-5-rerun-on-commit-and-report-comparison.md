@@ -112,6 +112,9 @@ GPT-5 Codex
 - 2026-05-26: Addressed all 4 final re-review patch findings in required action repo commit `be3db00`: compact keyset metadata now supports exact comparison for medium-sized reports, 13-32 finding labels are retained when comment budget allows, truncation flags require real JSON booleans, same-file no-ID fallback identity includes line-level discriminators, and final comment compaction preserves visible delta lines.
 - 2026-05-26: Re-ran `bmad-code-review` on Story 5.5 after commit `be3db00`; review found 4 patch findings around >64 previous-report comparison degradation, 33-64 label omission, ordered evidence-ref fallback identity, and punctuation-erasing fallback identity.
 - 2026-05-26: Addressed all 4 latest review patch findings in required action repo commit `d53de5b`: compact key capacity now covers previous markers above 64 findings, label retention uses the available label budget instead of dropping labels above 32 findings, evidence refs are sorted/deduplicated for no-ID fallback identities, and fallback identity hashing preserves discriminator punctuation.
+- 2026-05-26: Merged required action repo branch `feature/5-5-rerun-report-comparison` into `deploywhisper/analyze-action` main at commit `3b37ed7`, then force-updated marketplace tags `v1` and `v1.0.0` so both peeled refs resolve to `3b37ed72bfb2d201030bef873268f2170794b160`.
+- 2026-05-26: Updated GitHub release `v1.0.0` notes for the marketplace listing with Story 5.5 rerun comparison capabilities, usage snippets for `@v1` and `@v1.0.0`, and the latest validation evidence.
+- 2026-05-26: Updated `deploywhisper/action-smoke-consumer` documentation commit `b2ae1e4` so the manual smoke refs are documented as `deploywhisper/analyze-action@v1.0.0` and `deploywhisper/analyze-action@v1`.
 - Red test: `python3 -m unittest tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_highlights_new_resolved_and_persistent_findings -q` failed before implementation because PR comments did not include finding-level deltas.
 - Focused green test: `python3 -m unittest tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_highlights_new_resolved_and_persistent_findings tests.test_action_runtime.UpsertPrCommentTests.test_extract_comment_metadata_reads_previous_scan_marker -q` passed.
 - Review-fix focused validation: `python3 -m unittest tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_highlights_new_resolved_and_persistent_findings tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_reports_all_resolved_and_all_new_findings tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_uses_stable_ids_for_changed_titles_and_duplicates tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_counts_more_than_twelve_findings_before_truncating_labels tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_keeps_hidden_metadata_within_comment_budget tests.test_action_runtime.UpsertPrCommentTests.test_extract_comment_metadata_reads_previous_scan_marker -q` passed with 6 tests.
@@ -129,6 +132,9 @@ GPT-5 Codex
 - Live smoke-consumer validation: `deploywhisper/action-smoke-consumer` workflow run `26463827370` passed on branch `smoke/story-5-5-action-branch`; the workflow used `deploywhisper/analyze-action@feature/5-5-rerun-report-comparison`, downloaded action SHA `f8d8b3c4c3566f9124a02af9d692736c18580758`, and asserted successful manual outputs for report IDs `52` and `53`.
 - Final live smoke-consumer validation: `deploywhisper/action-smoke-consumer` workflow run `26464659540` passed on branch `smoke/story-5-5-action-branch`; the workflow used `deploywhisper/analyze-action@feature/5-5-rerun-report-comparison`, downloaded action SHA `be3db000956ea1f70ad0b0e15e5266748f6fdf5e`, and asserted successful manual outputs for report IDs `54` and `55`.
 - Latest live smoke-consumer validation: `deploywhisper/action-smoke-consumer` workflow run `26465289925` passed on branch `smoke/story-5-5-action-branch`; the workflow used `deploywhisper/analyze-action@feature/5-5-rerun-report-comparison`, downloaded action SHA `d53de5ba4c8c7022e5930c7b89f33dfc7a3f3a37`, and asserted successful manual outputs for report IDs `56` and `57`.
+- Release merge validation: `python3 -m unittest discover -s tests -q` passed with 57 tests on `deploywhisper/analyze-action` main merge commit `3b37ed7`; `python3 -m py_compile action_runtime.py tests/test_action_runtime.py`, `PYTHONPATH=/private/tmp/deploywhisper-analyze-action python3 /private/tmp/deploywhisper-analyze-action/run_action.py --help`, and `git diff --check HEAD~1..HEAD` also passed.
+- Marketplace tag validation: `git ls-remote --tags git@github.com:deploywhisper/analyze-action.git v1 'v1^{}' v1.0.0 'v1.0.0^{}'` showed both peeled refs resolving to `3b37ed72bfb2d201030bef873268f2170794b160`.
+- Published v1/v1.0.0 smoke validation: `deploywhisper/action-smoke-consumer` workflow run `26465666321` passed on `main`; setup logs downloaded `deploywhisper/analyze-action@v1.0.0` and `deploywhisper/analyze-action@v1` at SHA `3b37ed72bfb2d201030bef873268f2170794b160`, and manual outputs created report IDs `58` and `59`.
 - Main repository regression: `./.venv/bin/python -m unittest discover -q` passed with 445 tests and 1 skipped.
 - Main repository review-fix validation: `git diff --check` passed, and `./.venv/bin/python -m unittest discover -q` passed with 445 tests and 1 skipped.
 - Main repository re-review validation: `git diff --check` passed, and `./.venv/bin/python -m unittest discover -q` passed with 445 tests and 1 skipped.
@@ -143,6 +149,8 @@ GPT-5 Codex
 - Resolved re-review findings by preventing capped previous markers from emitting false exact counts, preserving legacy marker comparison beyond the display-label limit, hashing long explicit keys, and adding resource/location fallback discrimination for duplicate no-ID findings.
 - Resolved final re-review findings by increasing compact comparison capacity with packed keysets, preserving medium-sized marker labels, strictly parsing truncation flags, adding line-level fallback discriminators, and keeping visible finding-delta lines through final 2,000-character compaction.
 - Resolved latest review findings by expanding compact key capacity above 64 findings, keeping labels for 33-64 finding scans as budget allows, canonicalizing ordered evidence references, and preserving discriminator punctuation in no-ID fallback hashes.
+- Released the latest reviewed action code through `deploywhisper/analyze-action` main and updated Marketplace-facing `v1`/`v1.0.0` tags plus GitHub release notes.
+- Confirmed `deploywhisper/action-smoke-consumer` uses and documents `deploywhisper/analyze-action@v1.0.0` and `deploywhisper/analyze-action@v1` for published scan validation.
 - Kept existing score/severity comparison, same-commit rerun note, advisory-only behavior, single-comment update behavior, and 2,000-character comment cap.
 - Updated action README behavior docs to describe new/resolved/persistent finding comparison.
 
@@ -153,6 +161,7 @@ GPT-5 Codex
 - `/private/tmp/deploywhisper-analyze-action/action_runtime.py`
 - `/private/tmp/deploywhisper-analyze-action/tests/test_action_runtime.py`
 - `/private/tmp/deploywhisper-analyze-action/README.md`
+- `/private/tmp/deploywhisper-action-smoke-consumer/README.md`
 
 ## Change Log
 
@@ -166,3 +175,4 @@ GPT-5 Codex
 - 2026-05-26: Fixed all 4 final re-review patch findings in the external analyze-action runtime, passed action and smoke-consumer validation, and moved story back to review.
 - 2026-05-26: Re-run code review found 4 remaining patch issues and moved story back to in-progress.
 - 2026-05-26: Fixed all 4 latest review patch findings in the external analyze-action runtime, passed action and smoke-consumer validation, and moved story back to review.
+- 2026-05-26: Merged the latest action code to `deploywhisper/analyze-action` main, updated `v1`/`v1.0.0` marketplace tags and release notes, updated smoke-consumer docs, and passed published `v1`/`v1.0.0` smoke validation.
