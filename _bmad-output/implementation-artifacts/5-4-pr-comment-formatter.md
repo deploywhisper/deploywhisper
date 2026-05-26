@@ -1,6 +1,6 @@
 # Story 5.4: PR Comment Formatter
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -142,3 +142,4 @@ GPT-5.4
 - 2026-05-26: Code review found 5 patch findings; story returned to in-progress for fixes.
 - 2026-05-26: Fixed all 5 code-review findings in `deploywhisper/analyze-action` and revalidated through `deploywhisper/action-smoke-consumer`.
 - 2026-05-26: Fixed 3 follow-up code-review findings in `deploywhisper/analyze-action` and revalidated through `deploywhisper/action-smoke-consumer`.
+- 2026-05-26: BMad code review rerun passed clean; Story 5.4 marked done.
