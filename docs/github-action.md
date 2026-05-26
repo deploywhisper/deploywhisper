@@ -91,6 +91,11 @@ context completeness, and report/rollback links. Consumers that need to branch
 on persisted report shape should use `report_schema_version` and the
 `docs/schemas/report-v2.md` contract rather than parsing PR comment text.
 
+For PR comments that include externally shareable report links, configure a
+public `APP_BASE_URL` or `PUBLIC_APP_URL` on the DeployWhisper server. Without a
+public base URL, the server falls back to its local host/port and the action may
+emit report links that are only usable from the server network.
+
 ## Input Boundary
 
 The external action may accept convenience inputs such as:

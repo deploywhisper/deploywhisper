@@ -783,6 +783,8 @@ def _run_github_init(args: argparse.Namespace) -> int:
             api_endpoint=args.api_endpoint,
             enable_github_app=args.github_app,
             base_branch=args.base_branch,
+            project_key=args.project_key,
+            workspace_key=args.workspace_key,
             github_owner=args.github_owner,
             github_app_name=args.github_app_name,
             github_app_slug=args.github_app_slug,
@@ -1073,6 +1075,14 @@ def build_parser() -> argparse.ArgumentParser:
     github_init_parser.add_argument(
         "--base-branch",
         help="Base branch that should receive the generated PR.",
+    )
+    github_init_parser.add_argument(
+        "--project-key",
+        help="Project key to pass to the external GitHub Action. Omit when the API endpoint derives project scope.",
+    )
+    github_init_parser.add_argument(
+        "--workspace-key",
+        help="Optional workspace/environment key to pass to the external GitHub Action.",
     )
     github_init_parser.add_argument(
         "--github-app",

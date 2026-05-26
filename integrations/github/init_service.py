@@ -32,6 +32,8 @@ class GitHubInitOptions:
     api_endpoint: str
     enable_github_app: bool
     base_branch: str
+    project_key: str | None = None
+    workspace_key: str | None = None
     github_owner: str | None = None
     github_app_name: str | None = None
     github_app_slug: str | None = None
@@ -57,6 +59,8 @@ def collect_github_init_options(
     workflow_path: str | None,
     api_endpoint: str | None,
     enable_github_app: bool | None,
+    project_key: str | None,
+    workspace_key: str | None,
     github_owner: str | None,
     github_app_name: str | None,
     github_app_slug: str | None,
@@ -80,6 +84,16 @@ def collect_github_init_options(
     api_value = _prompt_required(
         "DeployWhisper API endpoint",
         default=(api_endpoint or _default_api_endpoint()),
+        input_fn=input_fn,
+    )
+    project_key_value = _prompt_optional(
+        "Project key, or leave blank if the API endpoint derives project scope",
+        default=project_key,
+        input_fn=input_fn,
+    )
+    workspace_key_value = _prompt_optional(
+        "Workspace key, or leave blank when not needed",
+        default=workspace_key,
         input_fn=input_fn,
     )
     base_branch_value = _prompt_required(
@@ -130,6 +144,8 @@ def collect_github_init_options(
         api_endpoint=api_value,
         enable_github_app=advanced_requested,
         base_branch=base_branch_value,
+        project_key=project_key_value,
+        workspace_key=workspace_key_value,
         github_owner=owner_value,
         github_app_name=app_name_value,
         github_app_slug=app_slug_value,
@@ -230,6 +246,15 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
 
 def _render_workflow(options: GitHubInitOptions) -> str:
     api_endpoint = options.api_endpoint.strip()
+    scope_inputs = ""
+    if options.project_key:
+        scope_inputs += (
+            f"\n                  project-key: {options.project_key.strip()}"
+        )
+    if options.workspace_key:
+        scope_inputs += (
+            f"\n                  workspace-key: {options.workspace_key.strip()}"
+        )
     return dedent(
         f"""\
         name: DeployWhisper
@@ -254,7 +279,7 @@ def _render_workflow(options: GitHubInitOptions) -> str:
               - uses: deploywhisper/analyze-action@v1
                 with:
                   api-url: ${{{{ env.DEPLOYWHISPER_API_URL }}}}
-                  api-token: ${{{{ secrets.DEPLOYWHISPER_API_TOKEN }}}}
+                  api-token: ${{{{ secrets.DEPLOYWHISPER_API_TOKEN }}}}{scope_inputs}
         """
     )
 
@@ -283,7 +308,25 @@ def _render_readme_section(
         "",
         f"- `DEPLOYWHISPER_API_URL={options.api_endpoint}`",
         "- `DEPLOYWHISPER_API_TOKEN=<optional bearer token>`",
+        "- Configure `APP_BASE_URL` or `PUBLIC_APP_URL` on the DeployWhisper server so PR comments expose shareable `/reports/{id}` links",
     ]
+    if options.project_key:
+        lines.extend(
+            [
+                f"- Configured project key: `{options.project_key}`",
+                "- The workflow passes `project-key` directly to the external action.",
+            ]
+        )
+    else:
+        lines.append(
+            "- Project scope: this workflow assumes the configured API endpoint derives project scope from repository context; otherwise add a `project-key` or `project-id` action input before merging"
+        )
+    if options.workspace_key:
+        lines.append(f"- Configured workspace key: `{options.workspace_key}`")
+    else:
+        lines.append(
+            "- Workspace scope: optional; add `workspace-key` or `workspace-id` only when your project uses a workspace/environment lane"
+        )
     if options.enable_github_app:
         lines.extend(
             [
@@ -387,6 +430,13 @@ def _default_public_base_url() -> str:
 def _prompt_required(prompt: str, *, default: str, input_fn) -> str:
     raw = input_fn(f"{prompt} [{default}]: ").strip()
     return raw or default
+
+
+def _prompt_optional(prompt: str, *, default: str | None, input_fn) -> str | None:
+    suffix = f" [{default}]" if default else ""
+    raw = input_fn(f"{prompt}{suffix}: ").strip()
+    value = raw or default
+    return value.strip() if value else None
 
 
 def _prompt_yes_no(prompt: str, *, default: bool, input_fn) -> bool:

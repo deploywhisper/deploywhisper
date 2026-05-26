@@ -649,7 +649,7 @@ What the action does:
   - `comment-url`
   - `comment-updated`
 
-Optional inputs:
+Required and optional inputs:
 
 - `api-token`: bearer token for protected DeployWhisper APIs
 - `project-key` or `project-id`: required unless your DeployWhisper integration endpoint derives project scope from repository context
@@ -661,6 +661,9 @@ Shared report links now resolve to `/reports/{id}` read-only pages. For sensitiv
 reports, configure password protection and opt-in file-name redaction via
 `POST /api/v1/analyses/{id}/share` with the `X-DeployWhisper-Share-Token`
 header. Set `DEPLOYWHISPER_SHARE_TOKEN` before exposing that management API.
+Configure a public `APP_BASE_URL` or `PUBLIC_APP_URL` on the DeployWhisper
+server before publishing report links into GitHub PR comments; otherwise links
+fall back to the server's local host/port.
 When a prior comparable report exists in the same project, workspace, and
 workflow context, the shared report page also exposes a `Compare with previous`
 view with risk-score, new, resolved, persistent, severity-changed,

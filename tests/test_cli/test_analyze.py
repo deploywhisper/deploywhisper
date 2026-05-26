@@ -672,12 +672,16 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["share_summary"]["json_payload"]["report_id"],
             payload["data"]["persisted_report"]["id"],
         )
-        self.assertIn(
-            "https://deploywhisper.example.com/reports/",
+        expected_report_link = (
+            "https://deploywhisper.example.com/reports/"
+            f"{payload['data']['persisted_report']['id']}"
+        )
+        self.assertEqual(
+            expected_report_link,
             payload["data"]["share_summary"]["json_payload"]["report_link"],
         )
-        self.assertIn(
-            "https://deploywhisper.example.com/reports/",
+        self.assertEqual(
+            expected_report_link,
             payload["data"]["share_summary"]["json_payload"]["rollback_link"],
         )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
@@ -2735,6 +2739,8 @@ class AnalyzeCliTests(unittest.TestCase):
             api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
             enable_github_app=False,
             base_branch="develop",
+            project_key=None,
+            workspace_key=None,
         )
         run_github_init.return_value = GitHubInitResult(
             repo_path="/tmp/example-repo",
@@ -2771,6 +2777,8 @@ class AnalyzeCliTests(unittest.TestCase):
             api_endpoint=None,
             enable_github_app=None,
             base_branch=None,
+            project_key=None,
+            workspace_key=None,
             github_owner=None,
             github_app_name=None,
             github_app_slug=None,
