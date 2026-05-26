@@ -95,7 +95,7 @@ development_status:
   5-1-versioned-api-report-contract: done
   5-2-cli-project-aware-advisory-output: done
   5-3-github-action-integration-contract: done
-  5-4-pr-comment-formatter: review
+  5-4-pr-comment-formatter: in-progress
   5-5-rerun-on-commit-and-report-comparison: ready-for-dev
   5-6-future-adapter-output-contract: ready-for-dev
   epic-5-retrospective: optional

@@ -1,6 +1,6 @@
 # Story 5.4: PR Comment Formatter
 
-Status: review
+Status: in-progress
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -36,6 +36,9 @@ So that I can understand risk without opening the full UI.
 - [x] [Review][Patch] Pattern match summary can report `none returned` when malformed leading entries hide later valid matches [/private/tmp/deploywhisper-analyze-action/action_runtime.py:671]
 - [x] [Review][Patch] PR comment renderer interpolates unescaped markdown/HTML text and unsafe link schemes [/private/tmp/deploywhisper-analyze-action/action_runtime.py:813]
 - [x] [Review][Patch] `Uncertainty:` falls back to advisory boilerplate instead of uncertainty-specific signals [/private/tmp/deploywhisper-analyze-action/action_runtime.py:755]
+- [ ] [Review][Patch] Non-dict API response sections can still crash the action before the hardened formatter runs [/private/tmp/deploywhisper-analyze-action/action_runtime.py:1344]
+- [ ] [Review][Patch] Newly rendered comment fields still interpolate unsanitized markdown/control text [/private/tmp/deploywhisper-analyze-action/action_runtime.py:714]
+- [ ] [Review][Patch] Non-finite parser success rates can crash scanner context rendering [/private/tmp/deploywhisper-analyze-action/action_runtime.py:800]
 
 ## Dev Notes
 
