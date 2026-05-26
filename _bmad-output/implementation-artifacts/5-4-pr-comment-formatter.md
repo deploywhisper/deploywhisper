@@ -1,6 +1,6 @@
 # Story 5.4: PR Comment Formatter
 
-Status: in-progress
+Status: review
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -36,9 +36,9 @@ So that I can understand risk without opening the full UI.
 - [x] [Review][Patch] Pattern match summary can report `none returned` when malformed leading entries hide later valid matches [/private/tmp/deploywhisper-analyze-action/action_runtime.py:671]
 - [x] [Review][Patch] PR comment renderer interpolates unescaped markdown/HTML text and unsafe link schemes [/private/tmp/deploywhisper-analyze-action/action_runtime.py:813]
 - [x] [Review][Patch] `Uncertainty:` falls back to advisory boilerplate instead of uncertainty-specific signals [/private/tmp/deploywhisper-analyze-action/action_runtime.py:755]
-- [ ] [Review][Patch] Non-dict API response sections can still crash the action before the hardened formatter runs [/private/tmp/deploywhisper-analyze-action/action_runtime.py:1344]
-- [ ] [Review][Patch] Newly rendered comment fields still interpolate unsanitized markdown/control text [/private/tmp/deploywhisper-analyze-action/action_runtime.py:714]
-- [ ] [Review][Patch] Non-finite parser success rates can crash scanner context rendering [/private/tmp/deploywhisper-analyze-action/action_runtime.py:800]
+- [x] [Review][Patch] Non-dict API response sections can still crash the action before the hardened formatter runs [/private/tmp/deploywhisper-analyze-action/action_runtime.py:1344]
+- [x] [Review][Patch] Newly rendered comment fields still interpolate unsanitized markdown/control text [/private/tmp/deploywhisper-analyze-action/action_runtime.py:714]
+- [x] [Review][Patch] Non-finite parser success rates can crash scanner context rendering [/private/tmp/deploywhisper-analyze-action/action_runtime.py:800]
 
 ## Dev Notes
 
@@ -96,8 +96,10 @@ GPT-5.4
 ### Debug Log References
 
 - Implemented in canonical action repo `deploywhisper/analyze-action`, branch `feature/5-4-pr-comment-formatter`, commits `4748d9f` and `8764724`.
+- Review edge fixes implemented in canonical action repo `deploywhisper/analyze-action`, branch `feature/5-4-pr-comment-formatter`, commit `744a571`.
 - Live smoke validation used canonical consumer repo `deploywhisper/action-smoke-consumer`, temporary PR `#8`, workflow run `26455287510`, rerun job `77888153317`.
 - Review-fix live smoke validation used canonical consumer repo `deploywhisper/action-smoke-consumer`, temporary PR `#9`, workflow run `26456848533`.
+- Review edge-fix live smoke validation used canonical consumer repo `deploywhisper/action-smoke-consumer`, temporary PR `#10`, workflow run `26457945837`.
 
 ### Completion Notes List
 
@@ -106,11 +108,13 @@ GPT-5.4
 - Preserved the existing 2,000-character comment cap, scan metadata marker, same-commit rerun delta, and Python-stdlib-only action runtime.
 - Updated the action README behavior section to document the expanded PR comment content.
 - Resolved all five code-review patch findings: malformed payloads now degrade, Evidence Law fallback requires verified linked evidence, malformed pattern-match entries no longer hide later valid matches, rendered comment text/links are sanitized, and the `Uncertainty:` line no longer reuses advisory boilerplate.
+- Resolved the three follow-up code-review patch findings: non-dict API response sections now degrade before output/comment handling, rendered comment fields collapse control-line injection and escape common Markdown markers, and non-finite parser success rates are ignored instead of crashing scanner context rendering.
 - UI validation not applicable: this story changes GitHub PR comment text in the standalone Marketplace action, not a NiceGUI route, browser interaction, keyboard flow, or screen-reader surface.
 - Validation passed:
   - `python3 -m unittest tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_includes_full_advisory_context -q`
   - `python3 -m unittest discover -s tests -q` in `deploywhisper/analyze-action` (`33 tests OK`)
   - `python3 -m unittest discover -s tests -q` in `deploywhisper/analyze-action` after review fixes (`39 tests OK`)
+  - `python3 -m unittest discover -s tests -q` in `deploywhisper/analyze-action` after review edge fixes (`41 tests OK`)
   - `python3 -m py_compile action_runtime.py tests/test_action_runtime.py` in `deploywhisper/analyze-action`
   - `PYTHONPATH=/private/tmp/deploywhisper-analyze-action python3 /private/tmp/deploywhisper-analyze-action/run_action.py --help`
   - `git diff --check` in `deploywhisper/analyze-action`
@@ -118,6 +122,7 @@ GPT-5.4
   - `git diff --check` in `deploywhisper/action-smoke-consumer`
   - live smoke PR `deploywhisper/action-smoke-consumer#8`, workflow run `26455287510`, rerun job `77888153317`, passed and posted comment `4545180466` with the Story 5.4 fields.
   - live smoke PR `deploywhisper/action-smoke-consumer#9`, workflow run `26456848533`, passed and posted comment `4545450694` with the hardened Story 5.4 formatter.
+  - live smoke PR `deploywhisper/action-smoke-consumer#10`, workflow run `26457945837`, passed and posted comment `4545629237` with the hardened Story 5.4 edge fixes.
   - `./.venv/bin/python -m unittest discover -q` in `deploywhisper/deploywhisper` (`445 tests OK`, `skipped=1`)
   - `ruby -e 'require "yaml"; YAML.load_file("_bmad-output/implementation-artifacts/sprint-status.yaml"); puts "sprint yaml ok"'` in `deploywhisper/deploywhisper`
   - `git diff --check` in `deploywhisper/deploywhisper`
@@ -136,3 +141,4 @@ GPT-5.4
 - 2026-05-26: Implemented PR comment formatter expansion in `deploywhisper/analyze-action` and validated through `deploywhisper/action-smoke-consumer`.
 - 2026-05-26: Code review found 5 patch findings; story returned to in-progress for fixes.
 - 2026-05-26: Fixed all 5 code-review findings in `deploywhisper/analyze-action` and revalidated through `deploywhisper/action-smoke-consumer`.
+- 2026-05-26: Fixed 3 follow-up code-review findings in `deploywhisper/analyze-action` and revalidated through `deploywhisper/action-smoke-consumer`.
