@@ -839,6 +839,19 @@ class AnalyzeCliTests(unittest.TestCase):
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
+        narrative = NarrativeResult(
+            available=False,
+            opening_sentence="",
+            explanation="",
+            guidance=["Review deterministic advisory output."],
+            degraded=True,
+            warnings=["Narrative provider unavailable: offline test"],
+            failure_notice="Narrative provider unavailable: offline test",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
+        )
         output = io.StringIO()
 
         def passthrough_analyze_uploaded_files(
@@ -864,6 +877,9 @@ class AnalyzeCliTests(unittest.TestCase):
             patch(
                 "cli.analyze.analyze_uploaded_files",
                 side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
             ),
             patch(
                 "sys.argv",
@@ -896,6 +912,19 @@ class AnalyzeCliTests(unittest.TestCase):
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
+        narrative = NarrativeResult(
+            available=False,
+            opening_sentence="",
+            explanation="",
+            guidance=["Review deterministic advisory output."],
+            degraded=True,
+            warnings=["Narrative provider unavailable: offline test"],
+            failure_notice="Narrative provider unavailable: offline test",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
+        )
         output = io.StringIO()
 
         def passthrough_analyze_uploaded_files(
@@ -921,6 +950,9 @@ class AnalyzeCliTests(unittest.TestCase):
             patch(
                 "cli.analyze.analyze_uploaded_files",
                 side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
             ),
             patch(
                 "sys.argv",
@@ -1001,6 +1033,105 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["project"]["project_key"], "payments"
         )
+
+    def test_analyze_command_accepts_project_workspace_key(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="prod",
+            display_name="Production",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+
+        def passthrough_analyze_uploaded_files(
+            files,
+            completion_client=None,
+            audit_context=None,
+            project_id=None,
+            project_key=None,
+            workspace_id=None,
+            workspace_key=None,
+        ):
+            return analysis_service_module.analyze_uploaded_files(
+                files,
+                completion_client=completion_client,
+                audit_context=audit_context,
+                project_id=project_id,
+                project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
+            )
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    "--workspace",
+                    "prod",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(
+            payload["data"]["persisted_report"]["project"]["project_key"], "payments"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["workspace"]["workspace_key"], "prod"
+        )
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+        self.assertFalse(payload["data"]["advisory"]["should_block"])
+        self.assertFalse(payload["data"]["narrative"]["available"])
+        self.assertTrue(payload["data"]["narrative"]["degraded"])
+        self.assertTrue(payload["data"]["persisted_report"]["narrative_degraded"])
+        self.assertIn(
+            payload["data"]["advisory"]["recommendation"],
+            {"go", "caution", "no-go"},
+        )
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["verdict_banner"],
+            (
+                f"DeployWhisper {payload['data']['advisory']['severity'].upper()} · "
+                f"{payload['data']['advisory']['recommendation'].upper()}"
+            ),
+        )
+        self.assertIn(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
+            {"Satisfied", "Needs review", "Reconciled"},
+        )
+        self.assertIsInstance(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"],
+            str,
+        )
+        self.assertTrue(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"]
+        )
+        self.assertIn("top_findings", payload["data"]["share_summary"]["json_payload"])
+        self.assertTrue(
+            payload["data"]["share_summary"]["json_payload"]["top_findings"]
+        )
+        self.assertIn("uncertainty_flags", payload["data"]["advisory"])
 
     def test_outcome_record_command_records_deployment_result(self) -> None:
         project = project_service_module.create_project(
@@ -2482,6 +2613,15 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertTrue(payload["data"]["assessment"]["partial_context"])
         self.assertEqual(payload["data"]["advisory"]["recommendation"], "no-go")
         self.assertEqual(payload["data"]["advisory"]["severity"], "critical")
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
+            "Satisfied",
+        )
+        self.assertIn(
+            "deterministic evidence",
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"],
+        )
+        self.assertIn("Evidence Law", payload["data"]["share_summary"]["plain_text"])
         self.assertIn("context_completeness", payload["data"]["assessment"])
         self.assertIn("context_completeness", payload["data"]["persisted_report"])
         self.assertIn("rollback_plan", payload["data"]["persisted_report"])

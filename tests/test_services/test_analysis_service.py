@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import os
 
+from pydantic import ValidationError
+
 from analysis.interaction_risk import InteractionRisk
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.blast_radius import BlastRadiusResult
@@ -23,6 +25,7 @@ from services.analysis_service import (
     build_share_summary,
     evaluate_parse_batch,
     resolve_analysis_project_scope,
+    ShareSummaryJsonPayload,
 )
 
 
@@ -362,6 +365,16 @@ class AnalysisServiceTests(unittest.TestCase):
                 "context_score": 0.84,
             },
         }
+
+    def _satisfy_share_payload_evidence_law(self, report: dict) -> None:
+        for evidence, evidence_id in zip(
+            report["evidence_items"],
+            ["ev-001", "ev-002", "ev-003", "ev-004", "ev-005"],
+            strict=True,
+        ):
+            evidence["evidence_id"] = evidence_id
+            evidence["deterministic"] = True
+            evidence["determinism_level"] = "deterministic"
 
     def test_build_analysis_artifacts_extracts_evidence_items(self) -> None:
         assessment = RiskAssessment(
@@ -1347,10 +1360,17 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertIn("Primary Database", summary.blast_radius_summary)
         self.assertIn("3/5", summary.rollback_summary)
         self.assertIn("Advisory only", summary.markdown)
+        self.assertIn("Evidence Law", summary.markdown)
         self.assertIn("Advisory only", summary.plain_text)
+        self.assertIn("Evidence Law", summary.plain_text)
         self.assertFalse(summary.should_block)
         self.assertLessEqual(len(summary.markdown), 1500)
         self.assertEqual(summary.json_payload.report_schema_version, "v2")
+        self.assertEqual(summary.json_payload.evidence_law_status, "Needs review")
+        self.assertIn(
+            "lacks linked deterministic evidence",
+            summary.json_payload.evidence_law_detail,
+        )
         self.assertEqual(summary.json_payload.report_id, 17)
         self.assertEqual(len(summary.json_payload.top_findings), 3)
         self.assertEqual(summary.json_payload.evidence_count, 5)
@@ -1361,6 +1381,84 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertEqual(
             summary.json_payload.context_completeness.label, "STRONG CONTEXT"
         )
+
+    def test_build_share_summary_requires_attention_for_unsatisfied_evidence_law(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["context_completeness"] = {"context_score": 0.84}
+        report["advisory"] = {"requires_attention": False}
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.evidence_law_status, "Needs review")
+        self.assertIn("requires additional human review", summary.uncertainty_summary)
+
+    def test_build_share_summary_can_mark_evidence_detail_omitted(self) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["advisory"] = {"requires_attention": False}
+
+        summary = build_share_summary(report, evidence_detail_available=False)
+
+        self.assertEqual(summary.json_payload.evidence_law_status, "Detail omitted")
+        self.assertIn(
+            "Evidence rows are not included",
+            summary.json_payload.evidence_law_detail,
+        )
+        self.assertNotIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_normalizes_malformed_finding_confidence(self) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["advisory"] = {"requires_attention": False}
+        report["findings"][0]["confidence"] = "oops"
+        report["findings"][1]["confidence"] = math.nan
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.top_findings[0].confidence, 0.0)
+        self.assertEqual(summary.json_payload.top_findings[1].confidence, 0.0)
+        self.assertNotIn("NaN", summary.json_payload.model_dump_json())
+
+    def test_build_share_summary_ignores_malformed_finding_and_evidence_entries(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"].insert(0, "oops")
+        report["findings"].append(None)
+        report["evidence_items"].insert(0, "oops")
+        report["evidence_items"].append(None)
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.top_findings), 3)
+        self.assertEqual(summary.json_payload.evidence_count, 5)
+
+    def test_share_summary_payload_rejects_unknown_evidence_law_status(self) -> None:
+        with self.assertRaises(ValidationError):
+            ShareSummaryJsonPayload(
+                report_schema_version="v2",
+                verdict_banner="DeployWhisper LOW · GO",
+                evidence_law_status="Typo",
+                evidence_law_detail="Invalid status should fail validation.",
+                headline="GO: low risk",
+                evidence_count=0,
+                blast_radius_summary="0 direct / 0 transitive",
+                rollback_summary="1/5 LOW · First step: No rollback steps available",
+                context_completeness={
+                    "score": 1.0,
+                    "label": "STRONG CONTEXT",
+                    "summary": "STRONG CONTEXT (1.00)",
+                },
+                advisory_summary="Standard approval flow is sufficient.",
+            )
 
     def test_build_share_summary_normalizes_missing_report_schema_as_legacy(
         self,
@@ -1512,6 +1610,7 @@ class AnalysisServiceTests(unittest.TestCase):
         self,
     ) -> None:
         report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
         report["recommendation"] = "go"
         report["context_completeness"] = {
             "context_score": 0.92,
@@ -1577,6 +1676,7 @@ class AnalysisServiceTests(unittest.TestCase):
         self,
     ) -> None:
         report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
         report["severity"] = "low"
         report["recommendation"] = "go"
         report["narrative_available"] = "true"
@@ -1625,6 +1725,7 @@ class AnalysisServiceTests(unittest.TestCase):
         self,
     ) -> None:
         report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
         report["severity"] = "low"
         report["recommendation"] = "go"
         report["narrative_available"] = "true"

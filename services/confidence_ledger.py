@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, Literal
+
+EvidenceLawStatus = Literal["Satisfied", "Needs review", "Reconciled", "Detail omitted"]
 
 SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 SEVERITY_THRESHOLDS = {
@@ -151,7 +153,7 @@ def evidence_law_status(
     report: dict[str, Any],
     *,
     evidence_detail_available: bool = True,
-) -> tuple[str, str]:
+) -> tuple[EvidenceLawStatus, str]:
     """Return the Evidence Law status for serialized report payloads."""
     warnings = [
         str(warning)

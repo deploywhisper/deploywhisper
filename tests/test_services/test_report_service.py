@@ -9484,6 +9484,49 @@ class ReportServiceTests(unittest.TestCase):
         self.assertNotIn("partial_context", advisory["uncertainty_flags"])
         self.assertNotIn("narrative_degraded", advisory["uncertainty_flags"])
 
+    def test_report_advisory_builder_requires_attention_for_evidence_law_gap(
+        self,
+    ) -> None:
+        report_payload = {
+            "severity": "low",
+            "recommendation": "go",
+            "top_risk": "Low risk metadata-only update.",
+            "context_completeness": {
+                "context_score": 1.0,
+                "parser_success_rate": 1.0,
+                "evidence_success_rate": 1.0,
+            },
+            "narrative_available": "true",
+            "narrative_degraded": "false",
+            "warnings": [],
+            "findings": [
+                {
+                    "finding_id": "finding-001",
+                    "severity": "critical",
+                    "evidence_refs": ["ev-001"],
+                }
+            ],
+            "evidence_items": [
+                {
+                    "evidence_id": "ev-002",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                }
+            ],
+        }
+        advisory = report_service_module.build_report_advisory_payload(report_payload)
+        compact_advisory = report_service_module.build_report_advisory_payload(
+            report_payload,
+            evidence_detail_available=False,
+        )
+
+        self.assertTrue(advisory["requires_attention"])
+        self.assertIn("evidence_law_needs_review", advisory["uncertainty_flags"])
+        self.assertTrue(compact_advisory["requires_attention"])
+        self.assertIn(
+            "evidence_law_needs_review", compact_advisory["uncertainty_flags"]
+        )
+
     def test_legacy_context_partial_context_matches_recovered_manifest_signal(
         self,
     ) -> None:

@@ -41,6 +41,7 @@ from services.report_service import (
 from services.settings_service import resolve_provider_runtime
 from services.submission_manifest import build_submission_manifest
 from services.incident_service import get_incident_index_snapshot
+from services.confidence_ledger import EvidenceLawStatus, evidence_law_status
 from services.topology_service import (
     STALE_AFTER_DAYS,
     get_topology_status,
@@ -262,6 +263,12 @@ class ShareSummaryJsonPayload(BaseModel):
         default=None, description="Deep link to the report rollback view"
     )
     verdict_banner: str = Field(..., description="Verdict banner for PR comments")
+    evidence_law_status: EvidenceLawStatus = Field(
+        ..., description="Evidence Law verification status for severe claims"
+    )
+    evidence_law_detail: str = Field(
+        ..., description="Human-readable Evidence Law verification detail"
+    )
     headline: str = Field(..., description="Top summary line")
     top_findings: list[ShareSummaryFinding] = Field(
         default_factory=list, description="Top findings to surface"
@@ -782,6 +789,22 @@ def _finding_evidence_count(
     return len(finding.get("evidence_refs") or [])
 
 
+def _mapping_items(value: object) -> list[dict]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _share_finding_confidence(value: object) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(confidence):
+        return 0.0
+    return max(0.0, min(confidence, 1.0))
+
+
 def _context_number(
     context: dict,
     key: str,
@@ -889,13 +912,13 @@ def _rollback_summary(report: dict) -> str:
 
 
 def _share_findings(report: dict) -> list[ShareSummaryFinding]:
-    evidence_items = list(report.get("evidence_items") or [])
-    findings = list(report.get("findings") or [])
+    evidence_items = _mapping_items(report.get("evidence_items"))
+    findings = _mapping_items(report.get("findings"))
     sorted_findings = sorted(
         findings,
         key=lambda item: (
             -_finding_severity_rank(str(item.get("severity", ""))),
-            -float(item.get("confidence", 0.0)),
+            -_share_finding_confidence(item.get("confidence")),
             str(item.get("title", "")),
         ),
     )
@@ -904,13 +927,15 @@ def _share_findings(report: dict) -> list[ShareSummaryFinding]:
             title=_shorten(str(finding.get("title", "")), 72),
             severity=str(finding.get("severity", "medium")),
             evidence_count=_finding_evidence_count(finding, evidence_items),
-            confidence=round(float(finding.get("confidence", 0.0)), 2),
+            confidence=round(_share_finding_confidence(finding.get("confidence")), 2),
         )
         for finding in sorted_findings[:3]
     ]
 
 
-def build_share_summary(report: dict) -> ShareSummary:
+def build_share_summary(
+    report: dict, *, evidence_detail_available: bool = True
+) -> ShareSummary:
     """Build a markdown + JSON share summary from the persisted report object."""
     severity = str(report.get("severity", "medium"))
     recommendation = str(report.get("recommendation", "caution"))
@@ -922,7 +947,10 @@ def build_share_summary(report: dict) -> ShareSummary:
     )
     verdict_banner = f"DeployWhisper {severity.upper()} · {recommendation.upper()}"
     top_findings = _share_findings(report)
-    evidence_count = len(report.get("evidence_items") or [])
+    evidence_count = len(_mapping_items(report.get("evidence_items")))
+    evidence_status, evidence_detail = evidence_law_status(
+        report, evidence_detail_available=evidence_detail_available
+    )
     blast_radius_summary = _blast_radius_summary(report)
     rollback_summary = _rollback_summary(report)
     context_summary = _context_summary_from_report(report)
@@ -933,7 +961,7 @@ def build_share_summary(report: dict) -> ShareSummary:
     narrative_available = _truthy_bool_signal(report.get("narrative_available", True))
     narrative_degraded = _truthy_bool_signal(report.get("narrative_degraded"))
     advisory_requires_attention = _advisory_requires_attention_signal(report)
-    requires_attention = (
+    baseline_requires_attention = (
         advisory_requires_attention
         if advisory_requires_attention is not None
         else (
@@ -946,6 +974,10 @@ def build_share_summary(report: dict) -> ShareSummary:
             or _has_warning_attention_signal(report)
         )
     )
+    requires_attention = baseline_requires_attention or evidence_status in {
+        "Needs review",
+        "Reconciled",
+    }
     uncertainty_summary = (
         "This result requires additional human review before release."
         if requires_attention
@@ -959,6 +991,8 @@ def build_share_summary(report: dict) -> ShareSummary:
         report_link=report_link,
         rollback_link=rollback_link,
         verdict_banner=verdict_banner,
+        evidence_law_status=evidence_status,
+        evidence_law_detail=evidence_detail,
         headline=headline,
         top_findings=top_findings,
         evidence_count=evidence_count,
@@ -985,6 +1019,7 @@ def build_share_summary(report: dict) -> ShareSummary:
                 if rollback_link
                 else f"- Rollback: {rollback_summary}"
             ),
+            f"- Evidence Law: {evidence_status} - {evidence_detail}",
             f"- Context: {context_summary.summary}",
             f"- Advisory only: {uncertainty_summary}",
         ]
@@ -1007,6 +1042,7 @@ def build_share_summary(report: dict) -> ShareSummary:
                     if rollback_link
                     else f"- Rollback: {_shorten(rollback_summary, 120)}"
                 ),
+                f"- Evidence Law: {evidence_status} - {_shorten(evidence_detail, 100)}",
                 f"- Context: {context_summary.label} ({context_summary.score:.2f})",
                 f"- Advisory only: {uncertainty_summary}",
             ]
@@ -1018,6 +1054,7 @@ def build_share_summary(report: dict) -> ShareSummary:
             f"Findings: {len(top_findings)} shown / {len(report.get('findings') or [])} total and {evidence_count} evidence items.",
             f"Blast radius: {blast_radius_summary}.",
             f"Rollback: {rollback_summary}.",
+            f"Evidence Law: {evidence_status} - {evidence_detail}.",
             (
                 f"Rollback link: {rollback_link}."
                 if rollback_link

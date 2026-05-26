@@ -1345,6 +1345,14 @@ class AnalysesApiTests(unittest.TestCase):
             "v2",
         )
         self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
+            "Reconciled",
+        )
+        self.assertIn(
+            "adjusted unsupported or inconsistent severe claims",
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"],
+        )
+        self.assertEqual(
             payload["data"]["share_summary"]["json_payload"]["report_id"],
             payload["data"]["persisted_report"]["id"],
         )
