@@ -1,6 +1,6 @@
 # Story 5.5: Rerun-on-Commit and Report Comparison
 
-Status: review
+Status: in-progress
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -28,6 +28,13 @@ So that I can see whether changes resolved or introduced risk.
 - [x] Add or update deterministic regression coverage for the changed behavior. (AC: all)
 - [x] Update relevant docs or examples if the story changes user-visible, operator, API, CLI, integration, or contribution behavior. (AC: all)
 - [x] Run required validation and record commands/results in the Dev Agent Record. (AC: all)
+
+### Review Findings
+
+- [ ] [Review][Patch] Finding metadata can exceed the 2,000-character PR comment cap because scan-marker keys are unbounded and fallback compaction preserves oversized metadata [/private/tmp/deploywhisper-analyze-action/action_runtime.py:650]
+- [ ] [Review][Patch] Reruns that resolve all findings or introduce findings after a clean previous scan suppress the finding-delta summary instead of showing all-resolved or all-new results [/private/tmp/deploywhisper-analyze-action/action_runtime.py:687]
+- [ ] [Review][Patch] Finding comparison truncates metadata to the first 12 findings before computing deltas, so larger reruns can hide or miscount new, resolved, and persistent findings [/private/tmp/deploywhisper-analyze-action/action_runtime.py:650]
+- [ ] [Review][Patch] Finding identity ignores stable finding ids and collapses duplicate title/category findings, which can misclassify changed wording or duplicate resources as new/resolved/persistent incorrectly [/private/tmp/deploywhisper-analyze-action/action_runtime.py:635]
 
 ## Dev Notes
 
@@ -113,3 +120,4 @@ GPT-5 Codex
 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-05-26: Implemented rerun finding comparison in the external analyze-action runtime and moved story to review.
+- 2026-05-26: Code review found 4 patch issues and moved story back to in-progress.
