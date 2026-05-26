@@ -110,6 +110,7 @@ GPT-5 Codex
 - Compile validation: `python3 -m py_compile action_runtime.py tests/test_action_runtime.py` passed.
 - Entrypoint validation: `PYTHONPATH=/private/tmp/deploywhisper-analyze-action python3 /private/tmp/deploywhisper-analyze-action/run_action.py --help` passed.
 - Whitespace validation: `git diff --check` passed.
+- Live smoke-consumer validation: `deploywhisper/action-smoke-consumer` workflow run `26463827370` passed on branch `smoke/story-5-5-action-branch`; the workflow used `deploywhisper/analyze-action@feature/5-5-rerun-report-comparison`, downloaded action SHA `f8d8b3c4c3566f9124a02af9d692736c18580758`, and asserted successful manual outputs for report IDs `52` and `53`.
 - Main repository regression: `./.venv/bin/python -m unittest discover -q` passed with 445 tests and 1 skipped.
 - Main repository review-fix validation: `git diff --check` passed, and `./.venv/bin/python -m unittest discover -q` passed with 445 tests and 1 skipped.
 - Main repository re-review validation: `git diff --check` passed, and `./.venv/bin/python -m unittest discover -q` passed with 445 tests and 1 skipped.
