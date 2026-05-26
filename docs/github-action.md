@@ -60,7 +60,8 @@ endpoint before using it with a project-scoped DeployWhisper server.
 DeployWhisper remains advisory in CI. Successful analysis should not fail a
 workflow based only on risk score or recommendation. Consumers should use
 `data.advisory.requires_attention` to decide whether to notify reviewers or add
-manual checks.
+manual checks. Advisory-first boundary: the action surfaces evidence and
+recommendations for review, but does not enforce deployment blocking by itself.
 
 ## Canonical Schema Mapping
 
@@ -111,6 +112,13 @@ them to the canonical API fields.
 Do not store provider credentials, raw infrastructure state, or deployment
 secrets in this repository for the action. Keep API tokens in GitHub Actions
 secrets and pass them only to the external action at runtime.
+
+Local-first boundary: raw IaC, scanner artifacts, incident exports, and
+sensitive context stay in the user's infrastructure by default. External model
+calls should receive structured summaries, not raw uploads.
+
+Secret-storage prohibition: the action contract must not persist API tokens,
+provider credentials, raw infrastructure state, or deployment secrets.
 
 ## Repository Ownership
 

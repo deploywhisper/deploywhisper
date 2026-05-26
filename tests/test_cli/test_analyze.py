@@ -672,13 +672,17 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["share_summary"]["json_payload"]["report_id"],
             payload["data"]["persisted_report"]["id"],
         )
-        self.assertIn(
-            "https://deploywhisper.example.com/reports/",
-            payload["data"]["share_summary"]["json_payload"]["report_link"],
+        expected_report_link = (
+            "https://deploywhisper.example.com/reports/"
+            f"{payload['data']['persisted_report']['id']}"
         )
-        self.assertIn(
-            "https://deploywhisper.example.com/reports/",
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["report_link"],
+            expected_report_link,
+        )
+        self.assertEqual(
             payload["data"]["share_summary"]["json_payload"]["rollback_link"],
+            expected_report_link,
         )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertEqual(

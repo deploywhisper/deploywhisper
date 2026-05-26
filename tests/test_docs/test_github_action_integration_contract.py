@@ -52,6 +52,20 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
             mapping,
         )
 
+    def test_github_action_guide_locks_advisory_local_first_boundaries(self) -> None:
+        content = self._normalized_prose(ACTION_GUIDE.read_text(encoding="utf-8"))
+
+        expected_clauses = (
+            "Consumers should use `data.advisory.requires_attention` to decide whether to notify reviewers or add manual checks.",
+            "Advisory-first boundary: the action surfaces evidence and recommendations for review, but does not enforce deployment blocking by itself.",
+            "Local-first boundary: raw IaC, scanner artifacts, incident exports, and sensitive context stay in the user's infrastructure by default.",
+            "External model calls should receive structured summaries, not raw uploads.",
+            "Secret-storage prohibition: the action contract must not persist API tokens, provider credentials, raw infrastructure state, or deployment secrets.",
+        )
+        for expected in expected_clauses:
+            with self.subTest(expected=expected):
+                self.assertIn(expected, content)
+
     def test_app_repo_does_not_host_marketplace_action_runtime(self) -> None:
         tracked_or_unignored = subprocess.check_output(  # nosec
             ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
@@ -129,6 +143,10 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
     @staticmethod
     def _strip_code(value: str) -> str:
         return value.replace("`", "").strip()
+
+    @staticmethod
+    def _normalized_prose(value: str) -> str:
+        return re.sub(r"\s+", " ", value).strip()
 
     @staticmethod
     def _table_cells(line: str) -> list[str]:
