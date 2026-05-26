@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import shutil
@@ -403,13 +404,13 @@ def _render_pr_body(options: GitHubInitOptions, *, workflow_path: str) -> str:
 def _render_action_scope_inputs(options: GitHubInitOptions) -> str:
     lines: list[str] = []
     if options.project_key:
-        lines.append(f"          project-key: {options.project_key.strip()}")
+        lines.append(f"          project-key: {_yaml_string(options.project_key)}")
     if options.project_id:
-        lines.append(f"          project-id: {options.project_id.strip()}")
+        lines.append(f"          project-id: {_yaml_string(options.project_id)}")
     if options.workspace_key:
-        lines.append(f"          workspace-key: {options.workspace_key.strip()}")
+        lines.append(f"          workspace-key: {_yaml_string(options.workspace_key)}")
     if options.workspace_id:
-        lines.append(f"          workspace-id: {options.workspace_id.strip()}")
+        lines.append(f"          workspace-id: {_yaml_string(options.workspace_id)}")
     if (
         options.allow_derived_project_scope
         and not options.project_key
@@ -419,6 +420,10 @@ def _render_action_scope_inputs(options: GitHubInitOptions) -> str:
     else:
         lines.append('          allow-derived-project-scope: "false"')
     return "\n".join(lines)
+
+
+def _yaml_string(value: str) -> str:
+    return json.dumps(value.strip())
 
 
 def _scope_readme_lines(options: GitHubInitOptions) -> list[str]:

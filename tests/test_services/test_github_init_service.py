@@ -187,8 +187,8 @@ class GitHubInitServiceTests(unittest.TestCase):
             "DEPLOYWHISPER_API_URL: https://deploywhisper.example.com/api/v1/analyses",
             workflow_text,
         )
-        self.assertIn("project-key: payments", workflow_text)
-        self.assertIn("workspace-key: prod", workflow_text)
+        self.assertIn('project-key: "payments"', workflow_text)
+        self.assertIn('workspace-key: "prod"', workflow_text)
         self.assertIn('allow-derived-project-scope: "false"', workflow_text)
         self.assertIn(init_service.README_SECTION_START, readme_text)
         self.assertIn("Project scope: `project-key=payments`", readme_text)
@@ -209,6 +209,68 @@ class GitHubInitServiceTests(unittest.TestCase):
         self.assertTrue(
             any(command[:3] == ("gh", "pr", "create") for command in command_log)
         )
+
+    @patch("integrations.github.init_service._require_binary")
+    @patch("integrations.github.init_service._run_command")
+    def test_run_github_init_quotes_yaml_scope_inputs(
+        self,
+        run_command,
+        require_binary,
+    ) -> None:
+        require_binary.return_value = None
+
+        def fake_run_command(repo_root: Path, *args: str, check: bool = True):
+            if args[:3] == ("git", "rev-parse", "--is-inside-work-tree"):
+                return subprocess.CompletedProcess(args, 0, "true\n", "")
+            if args[:3] == ("git", "status", "--porcelain"):
+                return subprocess.CompletedProcess(args, 0, "", "")
+            if args[:4] == ("git", "remote", "get-url", "origin"):
+                return subprocess.CompletedProcess(
+                    args,
+                    0,
+                    "git@github.com:acme/example-repo.git\n",
+                    "",
+                )
+            if args[:3] == ("git", "branch", "--show-current"):
+                return subprocess.CompletedProcess(args, 0, "main\n", "")
+            if args[:4] == ("git", "show-ref", "--verify", "--quiet"):
+                if args[4] == "refs/heads/main":
+                    return subprocess.CompletedProcess(args, 0, "", "")
+                return subprocess.CompletedProcess(args, 1, "", "")
+            if args[:3] == ("git", "rev-parse", "HEAD"):
+                return subprocess.CompletedProcess(args, 0, "abc123\n", "")
+            if args[:3] == ("gh", "pr", "create"):
+                return subprocess.CompletedProcess(
+                    args,
+                    0,
+                    "https://github.com/acme/example-repo/pull/8\n",
+                    "",
+                )
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        run_command.side_effect = fake_run_command
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+
+            init_service.run_github_init(
+                init_service.GitHubInitOptions(
+                    repo_path=str(repo_root),
+                    workflow_path=".github/workflows/deploywhisper.yml",
+                    api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+                    enable_github_app=False,
+                    base_branch="main",
+                    project_key="payments:prod",
+                    workspace_key="prod # blue",
+                )
+            )
+
+            workflow_text = (
+                repo_root / ".github/workflows/deploywhisper.yml"
+            ).read_text(encoding="utf-8")
+
+        self.assertIn('project-key: "payments:prod"', workflow_text)
+        self.assertIn('workspace-key: "prod # blue"', workflow_text)
 
     @patch("integrations.github.init_service._require_binary")
     @patch("integrations.github.init_service._run_command")
