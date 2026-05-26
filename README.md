@@ -591,7 +591,7 @@ npm run setup:ui-review
 npm run test:ui-review:voiceover
 ```
 
-## GitHUb CI
+## GitHub CI
 
 GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
 
@@ -600,6 +600,8 @@ GitHub Actions is configured in [`.github/workflows/ci.yml`](./.github/workflows
 The published GitHub Marketplace action now lives in its own dedicated public
 repository:
 [`deploywhisper/analyze-action@v1`](https://github.com/deploywhisper/analyze-action).
+The app-repo integration contract and canonical output mapping are documented
+in [`docs/github-action.md`](./docs/github-action.md).
 
 Typical PR usage:
 
@@ -624,6 +626,8 @@ jobs:
       - uses: deploywhisper/analyze-action@v1
         with:
           api-url: ${{ secrets.DEPLOYWHISPER_API_URL }}
+          project-key: payments
+          workspace-key: prod
 ```
 
 What the action does:
@@ -648,6 +652,8 @@ What the action does:
 Optional inputs:
 
 - `api-token`: bearer token for protected DeployWhisper APIs
+- `project-key` or `project-id`: required unless your DeployWhisper integration endpoint derives project scope from repository context
+- `workspace-key` or `workspace-id`: optional project-local environment or deployment lane
 - `changed-files`: override auto-detected PR files with a comma or newline separated list
 - `working-directory`: repository root when the checkout is not in `.`
 
