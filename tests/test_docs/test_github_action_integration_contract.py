@@ -94,6 +94,7 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
             path
             for path in tracked_files
             if self._is_forbidden_action_runtime_path(path)
+            or self._contains_standalone_action_runtime_markers(REPO_ROOT / path)
         ]
 
         self.assertEqual([], forbidden_files)
@@ -184,6 +185,31 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
         }:
             return True
         return normalized.startswith(".github/actions/")
+
+    @staticmethod
+    def _contains_standalone_action_runtime_markers(path: Path) -> bool:
+        if path == Path(__file__).resolve():
+            return False
+        if path.suffix not in {".py", ".yml", ".yaml"}:
+            return False
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            return False
+        action_runtime_markers = (
+            'COMMENT_MARKER = "<!-- deploywhisper:pr-comment -->"',
+            'SCAN_META_MARKER = "deploywhisper:scan-meta"',
+            "def run_action(args:",
+            "write_github_output(",
+        )
+        composite_action_markers = (
+            "github.action_path",
+            "run_action.py",
+            "deploywhisper.outputs.",
+        )
+        return any(marker in content for marker in action_runtime_markers) or all(
+            marker in content for marker in composite_action_markers
+        )
 
     @staticmethod
     def _markdown_links(content: str) -> list[tuple[str, str]]:

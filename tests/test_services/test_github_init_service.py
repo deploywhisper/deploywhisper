@@ -30,6 +30,8 @@ class GitHubInitServiceTests(unittest.TestCase):
                 "",
                 "",
                 "",
+                "payments",
+                "",
                 "n",
             ]
         )
@@ -55,6 +57,9 @@ class GitHubInitServiceTests(unittest.TestCase):
             "https://deploywhisper.example.com/api/v1/analyses",
         )
         self.assertEqual(options.base_branch, "main")
+        self.assertEqual(options.project_key, "payments")
+        self.assertEqual(options.workspace_key, "")
+        self.assertFalse(options.allow_derived_project_scope)
         self.assertFalse(options.enable_github_app)
 
     def test_collect_github_init_options_prompts_for_self_hosted_app_fields(
@@ -66,6 +71,8 @@ class GitHubInitServiceTests(unittest.TestCase):
                 "",
                 "",
                 "",
+                "payments",
+                "prod",
                 "y",
                 "acme",
                 "DeployWhisper Acme",
@@ -90,6 +97,8 @@ class GitHubInitServiceTests(unittest.TestCase):
 
         self.assertTrue(options.enable_github_app)
         self.assertEqual(options.base_branch, "main")
+        self.assertEqual(options.project_key, "payments")
+        self.assertEqual(options.workspace_key, "prod")
         self.assertEqual(options.github_owner, "acme")
         self.assertEqual(options.github_app_name, "DeployWhisper Acme")
         self.assertEqual(options.github_app_slug, "deploywhisper-acme")
@@ -152,6 +161,8 @@ class GitHubInitServiceTests(unittest.TestCase):
                     api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
                     enable_github_app=True,
                     base_branch="develop",
+                    project_key="payments",
+                    workspace_key="prod",
                     github_owner="acme",
                     github_app_name="DeployWhisper Acme",
                     github_app_slug="deploywhisper-acme",
@@ -176,7 +187,12 @@ class GitHubInitServiceTests(unittest.TestCase):
             "DEPLOYWHISPER_API_URL: https://deploywhisper.example.com/api/v1/analyses",
             workflow_text,
         )
+        self.assertIn("project-key: payments", workflow_text)
+        self.assertIn("workspace-key: prod", workflow_text)
+        self.assertIn('allow-derived-project-scope: "false"', workflow_text)
         self.assertIn(init_service.README_SECTION_START, readme_text)
+        self.assertIn("Project scope: `project-key=payments`", readme_text)
+        self.assertIn("Workspace scope: `workspace-key=prod`", readme_text)
         self.assertIn("Advanced self-hosted GitHub App", readme_text)
         self.assertIn("DeployWhisper Acme", notes_text)
         self.assertIn(
@@ -232,6 +248,40 @@ class GitHubInitServiceTests(unittest.TestCase):
                         api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
                         enable_github_app=False,
                         base_branch="main",
+                        project_key="payments",
+                    )
+                )
+
+    def test_run_github_init_rejects_missing_project_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "project scope is required",
+            ):
+                init_service.run_github_init(
+                    init_service.GitHubInitOptions(
+                        repo_path=tmpdir,
+                        workflow_path=".github/workflows/deploywhisper.yml",
+                        api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+                        enable_github_app=False,
+                        base_branch="main",
+                    )
+                )
+
+    def test_run_github_init_rejects_non_positive_project_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "project id must be a positive number",
+            ):
+                init_service.run_github_init(
+                    init_service.GitHubInitOptions(
+                        repo_path=tmpdir,
+                        workflow_path=".github/workflows/deploywhisper.yml",
+                        api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+                        enable_github_app=False,
+                        base_branch="main",
+                        project_id="0",
                     )
                 )
 

@@ -787,6 +787,11 @@ def _run_github_init(args: argparse.Namespace) -> int:
             github_app_name=args.github_app_name,
             github_app_slug=args.github_app_slug,
             public_base_url=args.public_base_url,
+            project_key=args.project_key,
+            project_id=args.project_id,
+            workspace_key=args.workspace_key,
+            workspace_id=args.workspace_id,
+            allow_derived_project_scope=args.allow_derived_project_scope,
             branch_name=args.branch_name,
         )
         result = run_github_init(options)
@@ -1095,6 +1100,28 @@ def build_parser() -> argparse.ArgumentParser:
     github_init_parser.add_argument(
         "--public-base-url",
         help="Public DeployWhisper base URL for the self-hosted GitHub App path.",
+    )
+    github_init_parser.add_argument(
+        "--project-key",
+        help="DeployWhisper project key for the generated action workflow.",
+    )
+    github_init_parser.add_argument(
+        "--project-id",
+        help="DeployWhisper numeric project id for the generated action workflow.",
+    )
+    github_init_parser.add_argument(
+        "--workspace-key",
+        help="Optional DeployWhisper workspace key for the generated action workflow.",
+    )
+    github_init_parser.add_argument(
+        "--workspace-id",
+        help="Optional DeployWhisper numeric workspace id for the generated action workflow.",
+    )
+    github_init_parser.add_argument(
+        "--allow-derived-project-scope",
+        action="store_true",
+        default=None,
+        help="Generate an action workflow that relies on the API endpoint to derive project scope.",
     )
     github_init_parser.add_argument(
         "--branch-name",
