@@ -672,13 +672,17 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["share_summary"]["json_payload"]["report_id"],
             payload["data"]["persisted_report"]["id"],
         )
-        self.assertIn(
-            "https://deploywhisper.example.com/reports/",
-            payload["data"]["share_summary"]["json_payload"]["report_link"],
+        expected_report_link = (
+            "https://deploywhisper.example.com/reports/"
+            f"{payload['data']['persisted_report']['id']}"
         )
-        self.assertIn(
-            "https://deploywhisper.example.com/reports/",
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["report_link"],
+            expected_report_link,
+        )
+        self.assertEqual(
             payload["data"]["share_summary"]["json_payload"]["rollback_link"],
+            expected_report_link,
         )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertEqual(
@@ -2735,6 +2739,7 @@ class AnalyzeCliTests(unittest.TestCase):
             api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
             enable_github_app=False,
             base_branch="develop",
+            project_key="payments",
         )
         run_github_init.return_value = GitHubInitResult(
             repo_path="/tmp/example-repo",
@@ -2757,6 +2762,8 @@ class AnalyzeCliTests(unittest.TestCase):
                     "init",
                     "--repo",
                     "/tmp/example-repo",
+                    "--project-key",
+                    "payments",
                 ],
             ),
             redirect_stdout(output),
@@ -2775,6 +2782,11 @@ class AnalyzeCliTests(unittest.TestCase):
             github_app_name=None,
             github_app_slug=None,
             public_base_url=None,
+            project_key="payments",
+            project_id=None,
+            workspace_key=None,
+            workspace_id=None,
+            allow_derived_project_scope=None,
             branch_name=None,
         )
         run_github_init.assert_called_once()

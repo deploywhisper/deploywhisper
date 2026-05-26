@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import shutil
@@ -32,6 +33,11 @@ class GitHubInitOptions:
     api_endpoint: str
     enable_github_app: bool
     base_branch: str
+    project_key: str | None = None
+    project_id: str | None = None
+    workspace_key: str | None = None
+    workspace_id: str | None = None
+    allow_derived_project_scope: bool = False
     github_owner: str | None = None
     github_app_name: str | None = None
     github_app_slug: str | None = None
@@ -62,6 +68,11 @@ def collect_github_init_options(
     github_app_slug: str | None,
     public_base_url: str | None,
     base_branch: str | None,
+    project_key: str | None = None,
+    project_id: str | None = None,
+    workspace_key: str | None = None,
+    workspace_id: str | None = None,
+    allow_derived_project_scope: bool | None = None,
     branch_name: str | None,
     input_fn=input,
 ) -> GitHubInitOptions:
@@ -87,6 +98,34 @@ def collect_github_init_options(
         default=(base_branch or _infer_base_branch(repo_value)),
         input_fn=input_fn,
     )
+    project_key_value = (project_key or "").strip()
+    project_id_value = (project_id or "").strip()
+    derived_scope_value = bool(allow_derived_project_scope)
+    if not project_key_value and not project_id_value and not derived_scope_value:
+        project_key_value = _prompt_required(
+            "DeployWhisper project key (leave blank only if the API endpoint derives project scope)",
+            default="",
+            input_fn=input_fn,
+        )
+        if not project_key_value:
+            derived_scope_value = _prompt_yes_no(
+                "Does the API endpoint derive project scope without action inputs?",
+                default=False,
+                input_fn=input_fn,
+            )
+
+    workspace_key_value = (workspace_key or "").strip()
+    workspace_id_value = (workspace_id or "").strip()
+    if (
+        not workspace_key_value
+        and not workspace_id_value
+        and (project_key_value or project_id_value)
+    ):
+        workspace_key_value = _prompt_required(
+            "DeployWhisper workspace key (optional)",
+            default="",
+            input_fn=input_fn,
+        )
 
     advanced_requested = bool(enable_github_app) or any(
         [github_owner, github_app_name, github_app_slug, public_base_url]
@@ -130,6 +169,11 @@ def collect_github_init_options(
         api_endpoint=api_value,
         enable_github_app=advanced_requested,
         base_branch=base_branch_value,
+        project_key=project_key_value,
+        project_id=project_id_value,
+        workspace_key=workspace_key_value,
+        workspace_id=workspace_id_value,
+        allow_derived_project_scope=derived_scope_value,
         github_owner=owner_value,
         github_app_name=app_name_value,
         github_app_slug=app_slug_value,
@@ -143,6 +187,7 @@ def collect_github_init_options(
 def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
     """Apply the GitHub init wizard to a target repository and open a PR."""
 
+    _validate_options(options)
     repo_root = Path(options.repo_path).expanduser().resolve()
     if not repo_root.exists():
         raise GitHubInitError(f"Repository path does not exist: {repo_root}")
@@ -230,7 +275,8 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
 
 def _render_workflow(options: GitHubInitOptions) -> str:
     api_endpoint = options.api_endpoint.strip()
-    return dedent(
+    scope_lines = _render_action_scope_inputs(options)
+    workflow = dedent(
         f"""\
         name: DeployWhisper
 
@@ -257,6 +303,7 @@ def _render_workflow(options: GitHubInitOptions) -> str:
                   api-token: ${{{{ secrets.DEPLOYWHISPER_API_TOKEN }}}}
         """
     )
+    return f"{workflow.rstrip()}\n{scope_lines}\n"
 
 
 def _render_readme_section(
@@ -275,6 +322,7 @@ def _render_readme_section(
         f"- Workflow file: `{workflow_path}`",
         f"- Configured API endpoint: `{options.api_endpoint}`",
         "- Optional secret: `DEPLOYWHISPER_API_TOKEN` for protected DeployWhisper APIs",
+        *_scope_readme_lines(options),
         "- The `DeployWhisper / Risk Analysis` check is advisory-only and should not be configured as a required status check",
         "",
         "### Configuration example",
@@ -283,6 +331,7 @@ def _render_readme_section(
         "",
         f"- `DEPLOYWHISPER_API_URL={options.api_endpoint}`",
         "- `DEPLOYWHISPER_API_TOKEN=<optional bearer token>`",
+        *_scope_configuration_lines(options),
     ]
     if options.enable_github_app:
         lines.extend(
@@ -352,6 +401,71 @@ def _render_pr_body(options: GitHubInitOptions, *, workflow_path: str) -> str:
     return "\n".join(lines)
 
 
+def _render_action_scope_inputs(options: GitHubInitOptions) -> str:
+    lines: list[str] = []
+    if options.project_key:
+        lines.append(f"          project-key: {_yaml_string(options.project_key)}")
+    if options.project_id:
+        lines.append(f"          project-id: {_yaml_string(options.project_id)}")
+    if options.workspace_key:
+        lines.append(f"          workspace-key: {_yaml_string(options.workspace_key)}")
+    if options.workspace_id:
+        lines.append(f"          workspace-id: {_yaml_string(options.workspace_id)}")
+    if (
+        options.allow_derived_project_scope
+        and not options.project_key
+        and not options.project_id
+    ):
+        lines.append('          allow-derived-project-scope: "true"')
+    else:
+        lines.append('          allow-derived-project-scope: "false"')
+    return "\n".join(lines)
+
+
+def _yaml_string(value: str) -> str:
+    return json.dumps(value.strip())
+
+
+def _scope_readme_lines(options: GitHubInitOptions) -> list[str]:
+    if options.project_key:
+        scope = f"Project scope: `project-key={options.project_key.strip()}`"
+    elif options.project_id:
+        scope = f"Project scope: `project-id={options.project_id.strip()}`"
+    else:
+        scope = "Project scope: derived by the configured DeployWhisper endpoint"
+    lines = [f"- {scope}"]
+    if options.workspace_key:
+        lines.append(
+            f"- Workspace scope: `workspace-key={options.workspace_key.strip()}`"
+        )
+    if options.workspace_id:
+        lines.append(
+            f"- Workspace scope: `workspace-id={options.workspace_id.strip()}`"
+        )
+    return lines
+
+
+def _scope_configuration_lines(options: GitHubInitOptions) -> list[str]:
+    lines: list[str] = []
+    if options.project_key:
+        lines.append(f"- `DEPLOYWHISPER_PROJECT_KEY={options.project_key.strip()}`")
+    if options.project_id:
+        lines.append(f"- `DEPLOYWHISPER_PROJECT_ID={options.project_id.strip()}`")
+    if options.workspace_key:
+        lines.append(f"- `DEPLOYWHISPER_WORKSPACE_KEY={options.workspace_key.strip()}`")
+    if options.workspace_id:
+        lines.append(f"- `DEPLOYWHISPER_WORKSPACE_ID={options.workspace_id.strip()}`")
+    if (
+        options.allow_derived_project_scope
+        and not options.project_key
+        and not options.project_id
+    ):
+        lines.append(
+            "- Project scope is derived by the configured DeployWhisper endpoint."
+        )
+    return lines
+
+
 def _upsert_readme_section(existing: str, section: str) -> str:
     rendered_section = f"{README_SECTION_START}\n{section}\n{README_SECTION_END}\n"
     if README_SECTION_START in existing and README_SECTION_END in existing:
@@ -407,6 +521,7 @@ def _validate_options(options: GitHubInitOptions) -> None:
     if not options.base_branch.strip():
         raise GitHubInitError("Base branch is required.")
     _validate_url(options.api_endpoint, field_name="API endpoint")
+    _validate_scope_options(options)
     if options.enable_github_app:
         if not options.github_owner:
             raise GitHubInitError(
@@ -419,6 +534,34 @@ def _validate_options(options: GitHubInitOptions) -> None:
         _validate_url(
             options.public_base_url or "",
             field_name="public DeployWhisper base URL",
+        )
+
+
+def _validate_scope_options(options: GitHubInitOptions) -> None:
+    project_key = (options.project_key or "").strip()
+    project_id = (options.project_id or "").strip()
+    workspace_key = (options.workspace_key or "").strip()
+    workspace_id = (options.workspace_id or "").strip()
+    if project_key and project_id:
+        raise GitHubInitError(
+            "Provide only one project scope: project key or project id."
+        )
+    if workspace_key and workspace_id:
+        raise GitHubInitError(
+            "Provide only one workspace scope: workspace key or workspace id."
+        )
+    for label, value in {
+        "project id": project_id,
+        "workspace id": workspace_id,
+    }.items():
+        if value and (not value.isdecimal() or int(value) <= 0):
+            raise GitHubInitError(f"DeployWhisper {label} must be a positive number.")
+    if (workspace_key or workspace_id) and not project_key and not project_id:
+        raise GitHubInitError("Workspace scope requires project key or project id.")
+    if not project_key and not project_id and not options.allow_derived_project_scope:
+        raise GitHubInitError(
+            "DeployWhisper project scope is required. Provide project key/project id "
+            "or explicitly enable derived project scope."
         )
 
 
