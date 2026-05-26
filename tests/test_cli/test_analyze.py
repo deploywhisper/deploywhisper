@@ -912,6 +912,19 @@ class AnalyzeCliTests(unittest.TestCase):
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
+        narrative = NarrativeResult(
+            available=False,
+            opening_sentence="",
+            explanation="",
+            guidance=["Review deterministic advisory output."],
+            degraded=True,
+            warnings=["Narrative provider unavailable: offline test"],
+            failure_notice="Narrative provider unavailable: offline test",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
+        )
         output = io.StringIO()
 
         def passthrough_analyze_uploaded_files(
@@ -937,6 +950,9 @@ class AnalyzeCliTests(unittest.TestCase):
             patch(
                 "cli.analyze.analyze_uploaded_files",
                 side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
             ),
             patch(
                 "sys.argv",

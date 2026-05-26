@@ -3511,10 +3511,13 @@ def _build_report_advisory_payload(
         default=True,
     )
     recommendation = _normalized_advisory_recommendation(report.get("recommendation"))
-    evidence_status, _ = evidence_law_status(
-        report, evidence_detail_available=evidence_detail_available
+    evidence_attention_status, _ = evidence_law_status(
+        report, evidence_detail_available=True
     )
-    evidence_law_requires_attention = evidence_status in {"Needs review", "Reconciled"}
+    evidence_law_requires_attention = evidence_attention_status in {
+        "Needs review",
+        "Reconciled",
+    }
 
     uncertainty_flags: list[str] = []
     if partial_context:
@@ -3653,41 +3656,41 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         warnings=warnings,
     )
     confidence = _clamp_confidence_to_context(confidence, context_completeness)
-    evidence_items: list[dict[str, Any]] = []
-    if include_evidence:
-        seen_evidence_ids: set[str] = set()
-        for finding in report.findings:
-            for evidence_item in finding.evidence_items:
-                if evidence_item.evidence_id in seen_evidence_ids:
-                    continue
-                seen_evidence_ids.add(evidence_item.evidence_id)
-                evidence_items.append(
-                    {
-                        "evidence_id": evidence_item.evidence_id,
-                        "analysis_id": evidence_item.analysis_id,
-                        "finding_id": evidence_item.finding_id,
-                        "source_type": evidence_item.source_type,
-                        "source_ref": evidence_item.source_ref,
-                        "artifact": evidence_item.artifact,
-                        "location": evidence_item.location,
-                        "resource": evidence_item.resource,
-                        "operation": evidence_item.operation,
-                        "project_id": evidence_item.project_id,
-                        "project_key": evidence_item.project_key,
-                        "workspace_id": evidence_item.workspace_id,
-                        "workspace_key": evidence_item.workspace_key,
-                        "source_kind": evidence_item.source_kind,
-                        "determinism_level": evidence_item.determinism_level,
-                        "redaction_status": evidence_item.redaction_status,
-                        "summary": evidence_item.summary,
-                        "severity_hint": evidence_item.severity_hint,
-                        "deterministic": evidence_item.deterministic,
-                        "confidence": evidence_item.confidence,
-                        "related_change_ids": json.loads(
-                            evidence_item.related_change_ids_json or "[]"
-                        ),
-                    }
-                )
+    full_evidence_items: list[dict[str, Any]] = []
+    seen_evidence_ids: set[str] = set()
+    for finding in report.findings:
+        for evidence_item in finding.evidence_items:
+            if evidence_item.evidence_id in seen_evidence_ids:
+                continue
+            seen_evidence_ids.add(evidence_item.evidence_id)
+            full_evidence_items.append(
+                {
+                    "evidence_id": evidence_item.evidence_id,
+                    "analysis_id": evidence_item.analysis_id,
+                    "finding_id": evidence_item.finding_id,
+                    "source_type": evidence_item.source_type,
+                    "source_ref": evidence_item.source_ref,
+                    "artifact": evidence_item.artifact,
+                    "location": evidence_item.location,
+                    "resource": evidence_item.resource,
+                    "operation": evidence_item.operation,
+                    "project_id": evidence_item.project_id,
+                    "project_key": evidence_item.project_key,
+                    "workspace_id": evidence_item.workspace_id,
+                    "workspace_key": evidence_item.workspace_key,
+                    "source_kind": evidence_item.source_kind,
+                    "determinism_level": evidence_item.determinism_level,
+                    "redaction_status": evidence_item.redaction_status,
+                    "summary": evidence_item.summary,
+                    "severity_hint": evidence_item.severity_hint,
+                    "deterministic": evidence_item.deterministic,
+                    "confidence": evidence_item.confidence,
+                    "related_change_ids": json.loads(
+                        evidence_item.related_change_ids_json or "[]"
+                    ),
+                }
+            )
+    evidence_items = full_evidence_items if include_evidence else []
     narrative_available = _has_visible_narrative_text(
         report.narrative_opening or ""
     ) or _has_visible_narrative_text(report.narrative_explanation or "")
@@ -3819,9 +3822,9 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         ),
         "audit": audit,
     }
-    payload["advisory"] = _build_report_advisory_payload(
-        payload, evidence_detail_available=include_evidence
-    )
+    advisory_payload = dict(payload)
+    advisory_payload["evidence_items"] = full_evidence_items
+    payload["advisory"] = _build_report_advisory_payload(advisory_payload)
     payload["confidence_ledger"] = build_confidence_ledger(
         payload,
         evidence_detail_available=include_evidence,

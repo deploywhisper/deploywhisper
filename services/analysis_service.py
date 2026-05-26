@@ -41,7 +41,7 @@ from services.report_service import (
 from services.settings_service import resolve_provider_runtime
 from services.submission_manifest import build_submission_manifest
 from services.incident_service import get_incident_index_snapshot
-from services.confidence_ledger import evidence_law_status
+from services.confidence_ledger import EvidenceLawStatus, evidence_law_status
 from services.topology_service import (
     STALE_AFTER_DAYS,
     get_topology_status,
@@ -263,7 +263,7 @@ class ShareSummaryJsonPayload(BaseModel):
         default=None, description="Deep link to the report rollback view"
     )
     verdict_banner: str = Field(..., description="Verdict banner for PR comments")
-    evidence_law_status: str = Field(
+    evidence_law_status: EvidenceLawStatus = Field(
         ..., description="Evidence Law verification status for severe claims"
     )
     evidence_law_detail: str = Field(
@@ -789,6 +789,12 @@ def _finding_evidence_count(
     return len(finding.get("evidence_refs") or [])
 
 
+def _mapping_items(value: object) -> list[dict]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
 def _share_finding_confidence(value: object) -> float:
     try:
         confidence = float(value)
@@ -906,8 +912,8 @@ def _rollback_summary(report: dict) -> str:
 
 
 def _share_findings(report: dict) -> list[ShareSummaryFinding]:
-    evidence_items = list(report.get("evidence_items") or [])
-    findings = list(report.get("findings") or [])
+    evidence_items = _mapping_items(report.get("evidence_items"))
+    findings = _mapping_items(report.get("findings"))
     sorted_findings = sorted(
         findings,
         key=lambda item: (
@@ -941,7 +947,7 @@ def build_share_summary(
     )
     verdict_banner = f"DeployWhisper {severity.upper()} · {recommendation.upper()}"
     top_findings = _share_findings(report)
-    evidence_count = len(report.get("evidence_items") or [])
+    evidence_count = len(_mapping_items(report.get("evidence_items")))
     evidence_status, evidence_detail = evidence_law_status(
         report, evidence_detail_available=evidence_detail_available
     )

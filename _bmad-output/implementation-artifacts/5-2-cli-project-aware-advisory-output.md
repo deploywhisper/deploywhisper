@@ -39,6 +39,8 @@ So that local and CI workflows can consume the same core report.
 - [x] [Review Rerun][Patch] Fold unsatisfied Evidence Law into the advisory attention contract [services/report_service.py:3477]
 - [x] [Review Rerun][Patch] Normalize share-summary finding confidence and compact Evidence Law attention handling [services/analysis_service.py:782]
 - [x] [Review Rerun][Patch] Prove scoped CLI advisory output remains deterministic when narrative is unavailable [tests/test_cli/test_analyze.py:1005]
+- [x] [Review Rerun][Patch] Keep compact report advisory attention based on full Evidence Law state [services/report_service.py:3514]
+- [x] [Review Rerun][Patch] Filter malformed share-summary finding/evidence entries and constrain Evidence Law status values [services/analysis_service.py:254]
 
 ## Dev Notes
 
@@ -100,6 +102,7 @@ GPT-5 Codex
 - Repo validation: `./.venv/bin/ruff check .`; `./.venv/bin/ruff format --check .`; `./.venv/bin/bandit -r api/ services/ cli/ --severity-level high --confidence-level high -x tests/`; `./.venv/bin/python -m unittest discover -q`
 - Review rerun validation: `./.venv/bin/python -m unittest tests.test_services.test_report_service.ReportServiceTests.test_report_advisory_builder_requires_attention_for_evidence_law_gap tests.test_services.test_report_service.ReportServiceTests.test_report_advisory_builder_normalizes_false_like_boolean_strings tests.test_services.test_report_service.ReportServiceTests.test_report_advisory_builder_ignores_non_finite_boolean_signals -q`; `./.venv/bin/python -m unittest tests.test_cli.test_analyze.AnalyzeCliTests.test_analyze_command_accepts_project_workspace_key -q`; `./.venv/bin/python -m unittest discover -q`; `bash scripts/ci-local.sh` all passed.
 - Review rerun hardening validation: `./.venv/bin/python -m unittest tests.test_services.test_analysis_service.AnalysisServiceTests.test_build_share_summary_can_mark_evidence_detail_omitted tests.test_services.test_analysis_service.AnalysisServiceTests.test_build_share_summary_normalizes_malformed_finding_confidence tests.test_services.test_analysis_service.AnalysisServiceTests.test_build_share_summary_requires_attention_for_unsatisfied_evidence_law tests.test_cli.test_analyze.AnalyzeCliTests.test_analyze_command_accepts_project_workspace_key tests.test_services.test_report_service.ReportServiceTests.test_report_advisory_builder_requires_attention_for_evidence_law_gap -q`; `./.venv/bin/ruff check services/analysis_service.py tests/test_services/test_analysis_service.py tests/test_cli/test_analyze.py docs/ci-advisory-consumption.md docs/schemas/report-v2.md _bmad-output/implementation-artifacts/5-2-cli-project-aware-advisory-output.md`; `./.venv/bin/ruff format --check services/analysis_service.py tests/test_services/test_analysis_service.py tests/test_cli/test_analyze.py`; `./.venv/bin/python -m unittest discover -q`; `bash scripts/ci-local.sh` all passed.
+- Review rerun contract validation: `./.venv/bin/python -m unittest tests.test_services.test_analysis_service.AnalysisServiceTests.test_build_share_summary_ignores_malformed_finding_and_evidence_entries tests.test_services.test_analysis_service.AnalysisServiceTests.test_build_share_summary_normalizes_malformed_finding_confidence tests.test_services.test_analysis_service.AnalysisServiceTests.test_share_summary_payload_rejects_unknown_evidence_law_status tests.test_services.test_analysis_service.AnalysisServiceTests.test_build_share_summary_can_mark_evidence_detail_omitted tests.test_cli.test_analyze.AnalyzeCliTests.test_analyze_command_accepts_project_workspace_key tests.test_services.test_report_service.ReportServiceTests.test_report_advisory_builder_requires_attention_for_evidence_law_gap -q`; `./.venv/bin/ruff check services/confidence_ledger.py services/analysis_service.py services/report_service.py api/schemas.py tests/test_services/test_analysis_service.py tests/test_services/test_report_service.py tests/test_cli/test_analyze.py`; `./.venv/bin/ruff format --check services/confidence_ledger.py services/analysis_service.py services/report_service.py api/schemas.py tests/test_services/test_analysis_service.py tests/test_services/test_report_service.py tests/test_cli/test_analyze.py`; `./.venv/bin/python -m unittest discover -q`; `bash scripts/ci-local.sh` all passed.
 
 ### Completion Notes List
 
@@ -111,6 +114,7 @@ GPT-5 Codex
 - BMad code review rerun follow-up resolved: project/workspace CLI coverage now asserts the Evidence Law detail field as part of the advisory contract.
 - BMad code review rerun follow-up resolved: unsatisfied Evidence Law now also sets advisory attention and an uncertainty flag for CI consumers that branch on `data.advisory.requires_attention`.
 - BMad code review rerun follow-up resolved: share-summary finding confidence is finite-safe, compact omitted-detail Evidence Law summaries no longer force human-review guidance by themselves, and scoped CLI coverage now exercises unavailable narrative output.
+- BMad code review rerun follow-up resolved: compact report serialization now preserves advisory attention from the full Evidence Law state, malformed share-summary collections are ignored instead of aborting output generation, and Evidence Law status values are schema-constrained.
 
 ### File List
 
@@ -119,6 +123,7 @@ GPT-5 Codex
 - `docs/project-workspaces.md`
 - `docs/schemas/report-v2.md`
 - `services/analysis_service.py`
+- `services/confidence_ledger.py`
 - `services/report_service.py`
 - `tests/test_api/test_analyses.py`
 - `tests/test_cli/test_analyze.py`
@@ -133,3 +138,4 @@ GPT-5 Codex
 - 2026-05-25: Reran BMad code review and tightened project/workspace CLI Evidence Law detail coverage.
 - 2026-05-25: Reran BMad code review and aligned Evidence Law gaps with advisory attention output.
 - 2026-05-25: Reran BMad code review and hardened compact Evidence Law summaries plus malformed finding confidence handling.
+- 2026-05-26: Reran BMad code review and hardened compact advisory attention plus Evidence Law status validation.

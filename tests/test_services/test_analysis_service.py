@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import os
 
+from pydantic import ValidationError
+
 from analysis.interaction_risk import InteractionRisk
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.blast_radius import BlastRadiusResult
@@ -23,6 +25,7 @@ from services.analysis_service import (
     build_share_summary,
     evaluate_parse_batch,
     resolve_analysis_project_scope,
+    ShareSummaryJsonPayload,
 )
 
 
@@ -1422,6 +1425,40 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertEqual(summary.json_payload.top_findings[0].confidence, 0.0)
         self.assertEqual(summary.json_payload.top_findings[1].confidence, 0.0)
         self.assertNotIn("NaN", summary.json_payload.model_dump_json())
+
+    def test_build_share_summary_ignores_malformed_finding_and_evidence_entries(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"].insert(0, "oops")
+        report["findings"].append(None)
+        report["evidence_items"].insert(0, "oops")
+        report["evidence_items"].append(None)
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.top_findings), 3)
+        self.assertEqual(summary.json_payload.evidence_count, 5)
+
+    def test_share_summary_payload_rejects_unknown_evidence_law_status(self) -> None:
+        with self.assertRaises(ValidationError):
+            ShareSummaryJsonPayload(
+                report_schema_version="v2",
+                verdict_banner="DeployWhisper LOW · GO",
+                evidence_law_status="Typo",
+                evidence_law_detail="Invalid status should fail validation.",
+                headline="GO: low risk",
+                evidence_count=0,
+                blast_radius_summary="0 direct / 0 transitive",
+                rollback_summary="1/5 LOW · First step: No rollback steps available",
+                context_completeness={
+                    "score": 1.0,
+                    "label": "STRONG CONTEXT",
+                    "summary": "STRONG CONTEXT (1.00)",
+                },
+                advisory_summary="Standard approval flow is sufficient.",
+            )
 
     def test_build_share_summary_normalizes_missing_report_schema_as_legacy(
         self,
