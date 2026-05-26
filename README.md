@@ -640,9 +640,9 @@ What the action does:
 - exits `0` when analysis succeeds, regardless of risk verdict
 - exposes outputs for follow-on GitHub steps:
   - `report-id`
-  - `report-link` (optional shareable `/reports/{id}` URL; populated only
+  - `report-link` (optional `/reports/{id}` URL; publicly shareable only
     when the DeployWhisper server has `APP_BASE_URL` or `PUBLIC_APP_URL`
-    configured)
+    configured, otherwise it may be local/private)
   - `severity`
   - `recommendation`
   - `share-summary-json`

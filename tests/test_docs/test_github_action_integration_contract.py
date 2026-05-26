@@ -35,7 +35,10 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
 
     def test_github_action_guide_maps_outputs_to_canonical_schema_fields(self) -> None:
         content = ACTION_GUIDE.read_text(encoding="utf-8")
-        mapping = self._canonical_schema_mapping(content)
+        mapping = self._table_mapping(
+            content,
+            header=["Action output", "Canonical source"],
+        )
 
         self.assertEqual(
             {
@@ -45,11 +48,24 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
                 "recommendation": "data.advisory.recommendation, falling back to data.share_summary.recommendation when advisory is blank",
                 "share-summary-json": "JSON-encoded data.share_summary.json_payload",
                 "share-summary-markdown": "data.share_summary.markdown",
+            },
+            mapping,
+        )
+
+    def test_github_action_guide_separates_action_owned_github_metadata(self) -> None:
+        content = ACTION_GUIDE.read_text(encoding="utf-8")
+        metadata_mapping = self._table_mapping(
+            content,
+            header=["Action output", "Action-owned source"],
+        )
+
+        self.assertEqual(
+            {
                 "comment-id": "GitHub PR comment identifier returned by the external action",
                 "comment-url": "GitHub PR comment URL returned by the external action",
                 "comment-updated": "GitHub PR comment create/update state returned by the external action",
             },
-            mapping,
+            metadata_mapping,
         )
 
     def test_github_action_guide_locks_advisory_local_first_boundaries(self) -> None:
@@ -61,26 +77,40 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
             "Local-first boundary: raw IaC, scanner artifacts, incident exports, and sensitive context stay in the user's infrastructure by default.",
             "External model calls should receive structured summaries, not raw uploads.",
             "Secret-storage prohibition: the action contract must not persist API tokens, provider credentials, raw infrastructure state, or deployment secrets.",
-            "The `report-link` output is populated only when the DeployWhisper server is configured with a public base URL such as `APP_BASE_URL` or `PUBLIC_APP_URL`.",
-            "Without that public URL prerequisite, consumers should treat `report-link` and `share-summary-json.report_link` as optional.",
+            "The `report-link` output is publicly shareable only when the DeployWhisper server is configured with a public base URL such as `APP_BASE_URL` or `PUBLIC_APP_URL`.",
+            "Without that public URL prerequisite, self-hosted app instances may emit a local or private fallback link such as `http://127.0.0.1:8080/reports/{id}`, so GitHub Action consumers should treat `report-link` and `share-summary-json.report_link` as optional for external review workflows.",
         )
         for expected in expected_clauses:
             with self.subTest(expected=expected):
                 self.assertIn(expected, content)
 
     def test_app_repo_does_not_host_marketplace_action_runtime(self) -> None:
-        tracked_or_unignored = subprocess.check_output(  # nosec
-            ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        tracked_files = subprocess.check_output(  # nosec
+            ["git", "ls-files", "--cached"],
             cwd=REPO_ROOT,
             text=True,
         ).splitlines()
         forbidden_files = [
             path
-            for path in tracked_or_unignored
-            if Path(path).name in {"action.yml", "action.yaml"}
+            for path in tracked_files
+            if self._is_forbidden_action_runtime_path(path)
         ]
 
         self.assertEqual([], forbidden_files)
+
+    def test_github_action_guide_names_external_smoke_consumer_owner(self) -> None:
+        content = self._normalized_prose(ACTION_GUIDE.read_text(encoding="utf-8"))
+
+        expected_clauses = (
+            "Action repo: `deploywhisper/analyze-action`",
+            "Owns packaged action runtime code and Marketplace release metadata.",
+            "Smoke consumer repo: `deploywhisper/action-smoke-consumer`",
+            "Owns live GitHub Actions smoke workflows for immutable release tags and the moving `v1` compatibility tag.",
+            "Owns same-repository PR smoke validation for published action behavior.",
+        )
+        for expected in expected_clauses:
+            with self.subTest(expected=expected):
+                self.assertIn(expected, content)
 
     def test_documentation_links_resolve_to_contract_guides(self) -> None:
         link_expectations = {
@@ -107,24 +137,24 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
         self.assertIn("docs/github-action.md", content)
         self.assertIn("deploywhisper/analyze-action@v1", content)
         self.assertIn("project-key", content)
-        self.assertIn("optional shareable `/reports/{id}` URL", content)
+        self.assertIn("publicly shareable only", content)
+        self.assertIn("local/private", content)
         self.assertIn("APP_BASE_URL", content)
         self.assertIn("PUBLIC_APP_URL", content)
 
     @staticmethod
-    def _canonical_schema_mapping(content: str) -> dict[str, str]:
+    def _table_mapping(content: str, *, header: list[str]) -> dict[str, str]:
         lines = content.splitlines()
         header_index = next(
             (
                 index
                 for index, line in enumerate(lines)
-                if GitHubActionIntegrationContractTests._table_cells(line)
-                == ["Action output", "Canonical source"]
+                if GitHubActionIntegrationContractTests._table_cells(line) == header
             ),
             None,
         )
         if header_index is None:
-            raise AssertionError("Canonical schema mapping table is missing.")
+            raise AssertionError(f"Expected table is missing: {header!r}.")
 
         rows: dict[str, str] = {}
         for line in lines[header_index + 2 :]:
@@ -140,6 +170,20 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
                 raise AssertionError(f"Duplicate action output: {clean_output}")
             rows[clean_output] = clean_source
         return rows
+
+    @staticmethod
+    def _is_forbidden_action_runtime_path(path: str) -> bool:
+        normalized = path.replace("\\", "/")
+        name = Path(normalized).name
+        if name in {
+            "action.yml",
+            "action.yaml",
+            "action_runtime.py",
+            "run_action.py",
+            "PUBLISHING.md",
+        }:
+            return True
+        return normalized.startswith(".github/actions/")
 
     @staticmethod
     def _markdown_links(content: str) -> list[tuple[str, str]]:
