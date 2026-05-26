@@ -86,6 +86,11 @@ JSON-encoded string of `data.share_summary.json_payload`; consumers should parse
 it with `fromJSON(steps.deploywhisper.outputs.share-summary-json)` in workflow
 expressions or `JSON.parse(...)` in scripts.
 
+The `report-link` output is populated only when the DeployWhisper server is
+configured with a public base URL such as `APP_BASE_URL` or `PUBLIC_APP_URL`.
+Without that public URL prerequisite, consumers should treat `report-link` and
+`share-summary-json.report_link` as optional.
+
 The machine payload in `share_summary.json_payload` includes
 `report_schema_version`, Evidence Law status, top findings, evidence count,
 context completeness, and report/rollback links. Consumers that need to branch

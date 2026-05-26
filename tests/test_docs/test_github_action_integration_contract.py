@@ -61,6 +61,8 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
             "Local-first boundary: raw IaC, scanner artifacts, incident exports, and sensitive context stay in the user's infrastructure by default.",
             "External model calls should receive structured summaries, not raw uploads.",
             "Secret-storage prohibition: the action contract must not persist API tokens, provider credentials, raw infrastructure state, or deployment secrets.",
+            "The `report-link` output is populated only when the DeployWhisper server is configured with a public base URL such as `APP_BASE_URL` or `PUBLIC_APP_URL`.",
+            "Without that public URL prerequisite, consumers should treat `report-link` and `share-summary-json.report_link` as optional.",
         )
         for expected in expected_clauses:
             with self.subTest(expected=expected):
@@ -105,6 +107,9 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
         self.assertIn("docs/github-action.md", content)
         self.assertIn("deploywhisper/analyze-action@v1", content)
         self.assertIn("project-key", content)
+        self.assertIn("optional shareable `/reports/{id}` URL", content)
+        self.assertIn("APP_BASE_URL", content)
+        self.assertIn("PUBLIC_APP_URL", content)
 
     @staticmethod
     def _canonical_schema_mapping(content: str) -> dict[str, str]:
