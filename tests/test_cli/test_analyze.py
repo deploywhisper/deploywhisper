@@ -674,6 +674,10 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         self.assertIn(
             "https://deploywhisper.example.com/reports/",
+            payload["data"]["share_summary"]["json_payload"]["report_link"],
+        )
+        self.assertIn(
+            "https://deploywhisper.example.com/reports/",
             payload["data"]["share_summary"]["json_payload"]["rollback_link"],
         )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
