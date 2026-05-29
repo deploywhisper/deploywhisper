@@ -25,12 +25,17 @@ The service helper returns an `AdapterOutputContract` with three parts:
 `adapter_payload` and `adapter_metadata.extra` must not shadow canonical fields
 such as severity, recommendation, Evidence Law status, Evidence Law detail,
 advisory posture, blocking decision, markdown, plain text, JSON payload, or
-report schema version.
+report schema version. Adapter-owned payload and metadata values must remain
+JSON-safe; non-finite numeric values such as NaN and infinity are rejected.
+
+The envelope `contract_version` is fixed to `v1` until a future migration story
+introduces and documents a new adapter contract version.
 
 Project scope is mandatory for adapter output. Provide exactly one of
-`project_key` or `project_id`. Workspace scope is optional; provide exactly one
-of `workspace_key` or `workspace_id` when the adapter output targets a specific
-environment or deployment lane.
+`project_key` or `project_id`. Numeric IDs must be strict positive integers,
+not coerced booleans, strings, or floats. Workspace scope is optional; provide
+exactly one of `workspace_key` or `workspace_id` when the adapter output targets
+a specific environment or deployment lane.
 
 ## Adapter Implementation Pattern
 

@@ -80,6 +80,9 @@ class AdapterOutputContractTests(unittest.TestCase):
         for forbidden_payload in (
             {"thread": {"severity": "low"}},
             {"blocks": [{"evidence_law_status": "Needs review"}]},
+            {"thread": {"confidence": 0.2}},
+            {"thread": {"score": 0.1}},
+            {"blocks": [{"label": "Partial context"}]},
         ):
             with self.subTest(forbidden_payload=forbidden_payload):
                 with self.assertRaises(AdapterOutputContractError):
@@ -140,6 +143,17 @@ class AdapterOutputContractTests(unittest.TestCase):
                 extra={"headline": "Adapter headline"},
             )
 
+    def test_adapter_metadata_extra_requires_finite_numbers(self) -> None:
+        for value in (float("nan"), float("inf"), -float("inf")):
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError):
+                    AdapterMetadata(
+                        adapter="chat",
+                        format="message",
+                        project_key="payments",
+                        extra={"ratio": value},
+                    )
+
     def test_adapter_metadata_requires_project_key_or_id(self) -> None:
         with self.assertRaises(ValidationError):
             AdapterMetadata(adapter="chat", format="message")
@@ -161,6 +175,23 @@ class AdapterOutputContractTests(unittest.TestCase):
         self.assertEqual(by_key.workspace_key, "prod")
         self.assertEqual(by_id.project_id, 12)
         self.assertEqual(by_id.workspace_id, 7)
+
+    def test_adapter_metadata_rejects_coerced_scope_ids(self) -> None:
+        for kwargs in (
+            {"project_id": True},
+            {"project_id": "12"},
+            {"project_id": 12.0},
+            {"project_key": "payments", "workspace_id": True},
+            {"project_key": "payments", "workspace_id": "7"},
+            {"project_key": "payments", "workspace_id": 7.0},
+        ):
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(ValidationError):
+                    AdapterMetadata(
+                        adapter="chat",
+                        format="message",
+                        **kwargs,
+                    )
 
     def test_adapter_metadata_rejects_conflicting_scope_identifiers(self) -> None:
         for kwargs in (
@@ -207,6 +238,33 @@ class AdapterOutputContractTests(unittest.TestCase):
                 canonical_summary=canonical_summary,
                 adapter_payload={"evidence_law_status": "Needs review"},
             )
+
+    def test_contract_version_is_fixed_to_v1(self) -> None:
+        summary = build_share_summary(_report_payload())
+        metadata = AdapterMetadata(
+            adapter="jenkins",
+            format="build_comment",
+            project_key="payments",
+        )
+        canonical_summary = build_adapter_output_contract(
+            summary, metadata
+        ).canonical_summary
+
+        contract = AdapterOutputContract(
+            contract_version="v1",
+            adapter_metadata=metadata,
+            canonical_summary=canonical_summary,
+        )
+        self.assertEqual(contract.contract_version, "v1")
+
+        for contract_version in ("", " ", "v2"):
+            with self.subTest(contract_version=contract_version):
+                with self.assertRaises(ValidationError):
+                    AdapterOutputContract(
+                        contract_version=contract_version,
+                        adapter_metadata=metadata,
+                        canonical_summary=canonical_summary,
+                    )
 
     def test_canonical_summary_is_immutable_for_adapter_formatters(self) -> None:
         contract = build_adapter_output_contract(

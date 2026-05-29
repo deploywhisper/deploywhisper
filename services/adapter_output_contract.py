@@ -5,7 +5,15 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 
 from services.analysis_service import (
     ShareSummary,
@@ -61,11 +69,15 @@ class AdapterMetadata(BaseModel):
     format: str = Field(..., description="Adapter output format or destination type")
     version: str | None = Field(default=None, description="Adapter contract version")
     project_key: str | None = Field(default=None, description="Project key in scope")
-    project_id: int | None = Field(default=None, description="Project ID in scope")
+    project_id: StrictInt | None = Field(
+        default=None, description="Project ID in scope"
+    )
     workspace_key: str | None = Field(
         default=None, description="Workspace key in scope"
     )
-    workspace_id: int | None = Field(default=None, description="Workspace ID in scope")
+    workspace_id: StrictInt | None = Field(
+        default=None, description="Workspace ID in scope"
+    )
     invocation_id: str | None = Field(
         default=None, description="Adapter invocation or workflow run identifier"
     )
@@ -128,6 +140,16 @@ class AdapterMetadata(BaseModel):
             raise ValueError(
                 f"Adapter metadata extra cannot shadow canonical field(s): {joined}."
             )
+        non_finite_numbers = sorted(
+            key
+            for key, value in self.extra.items()
+            if isinstance(value, float) and not math.isfinite(value)
+        )
+        if non_finite_numbers:
+            joined = ", ".join(non_finite_numbers)
+            raise ValueError(
+                f"Adapter metadata extra numbers must be finite: {joined}."
+            )
         return self
 
     def model_post_init(self, __context: Any) -> None:
@@ -174,7 +196,9 @@ class AdapterOutputContract(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    contract_version: str = Field(default="v1", description="Adapter contract version")
+    contract_version: StrictStr = Field(
+        default="v1", description="Adapter contract version"
+    )
     adapter_metadata: AdapterMetadata = Field(..., description="Adapter metadata")
     canonical_summary: AdapterCanonicalSummary = Field(
         ..., description="Immutable canonical summary"
@@ -183,6 +207,13 @@ class AdapterOutputContract(BaseModel):
         default_factory=dict,
         description="Adapter-specific formatting and delivery fields",
     )
+
+    @field_validator("contract_version")
+    @classmethod
+    def _validate_contract_version(cls, value: str) -> str:
+        if value != "v1":
+            raise ValueError("Adapter contract version must be v1.")
+        return value
 
     @model_validator(mode="after")
     def _reject_payload_canonical_keys(self) -> AdapterOutputContract:
@@ -221,6 +252,8 @@ def _reserved_adapter_fields() -> frozenset[str]:
         {
             *AdapterCanonicalSummary.model_fields,
             *FrozenShareSummaryJsonPayload.model_fields,
+            *FrozenShareSummaryFinding.model_fields,
+            *FrozenShareSummaryContext.model_fields,
             "adapter_metadata",
             "adapter_payload",
             "canonical_summary",
