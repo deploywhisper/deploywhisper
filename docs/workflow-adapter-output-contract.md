@@ -27,10 +27,10 @@ such as severity, recommendation, Evidence Law status, Evidence Law detail,
 advisory posture, blocking decision, markdown, plain text, JSON payload, or
 report schema version.
 
-Project scope is mandatory for adapter output. Provide either `project_key` or
-`project_id`. Workspace scope is optional; provide either `workspace_key` or
-`workspace_id` when the adapter output targets a specific environment or
-deployment lane.
+Project scope is mandatory for adapter output. Provide exactly one of
+`project_key` or `project_id`. Workspace scope is optional; provide exactly one
+of `workspace_key` or `workspace_id` when the adapter output targets a specific
+environment or deployment lane.
 
 ## Adapter Implementation Pattern
 

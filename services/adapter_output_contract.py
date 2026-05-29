@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -45,6 +46,8 @@ def _freeze_value(value: Any) -> Any:
     if isinstance(value, dict):
         return FrozenDict({key: _freeze_value(item) for key, item in value.items()})
     if isinstance(value, list):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, tuple):
         return tuple(_freeze_value(item) for item in value)
     return value
 
@@ -109,6 +112,14 @@ class AdapterMetadata(BaseModel):
     def _validate_scope_and_extra_keys(self) -> AdapterMetadata:
         if self.project_key is None and self.project_id is None:
             raise ValueError("Adapter metadata requires project_key or project_id.")
+        if self.project_key is not None and self.project_id is not None:
+            raise ValueError(
+                "Adapter metadata must use either project_key or project_id, not both."
+            )
+        if self.workspace_key is not None and self.workspace_id is not None:
+            raise ValueError(
+                "Adapter metadata must use either workspace_key or workspace_id, not both."
+            )
         shadowed = sorted(
             key for key in self.extra if key in _reserved_adapter_fields()
         )
@@ -219,9 +230,40 @@ def _reserved_adapter_fields() -> frozenset[str]:
 
 
 def _validate_adapter_payload(payload: dict[str, Any]) -> None:
-    shadowed = sorted(key for key in payload if key in _reserved_adapter_fields())
-    if shadowed:
-        joined = ", ".join(shadowed)
+    _validate_json_payload_value(payload, "adapter_payload")
+
+
+def _validate_json_payload_value(value: Any, path: str) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise AdapterOutputContractError(
+                    f"Adapter payload keys must be strings at {path}."
+                )
+            child_path = f"{path}.{key}"
+            if key in _reserved_adapter_fields():
+                raise AdapterOutputContractError(
+                    f"Adapter payload cannot shadow canonical field at {child_path}."
+                )
+            _validate_json_payload_value(item, child_path)
+        return
+
+    if isinstance(value, list | tuple):
+        for index, item in enumerate(value):
+            _validate_json_payload_value(item, f"{path}[{index}]")
+        return
+
+    if value is None or isinstance(value, str | bool | int):
+        return
+
+    if isinstance(value, float) and math.isfinite(value):
+        return
+
+    if isinstance(value, float):
         raise AdapterOutputContractError(
-            f"Adapter payload cannot shadow canonical field(s): {joined}."
+            f"Adapter payload numbers must be finite at {path}."
         )
+
+    raise AdapterOutputContractError(
+        f"Adapter payload values must be JSON-serializable at {path}."
+    )
