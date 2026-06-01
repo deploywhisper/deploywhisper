@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-05-26
+# last_updated: 2026-05-29
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-05-26
+last_updated: 2026-05-29
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -97,7 +97,7 @@ development_status:
   5-3-github-action-integration-contract: done
   5-4-pr-comment-formatter: done
   5-5-rerun-on-commit-and-report-comparison: ready-for-dev
-  5-6-future-adapter-output-contract: ready-for-dev
+  5-6-future-adapter-output-contract: done
   epic-5-retrospective: optional
 
   epic-6: in-progress
