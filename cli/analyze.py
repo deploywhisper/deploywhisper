@@ -37,6 +37,7 @@ from services.analysis_service import (
     build_share_summary,
     resolve_analysis_project_scope,
 )
+from services.benchmark_corpus_service import validate_benchmark_corpus
 from services.deployment_outcome_service import record_deployment_outcome
 from services.project_service import create_project, create_workspace
 from services.project_service import filter_projects_by_authorization
@@ -817,6 +818,15 @@ def _run_github_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_benchmark_validate_corpus(path: str | None) -> int:
+    result = validate_benchmark_corpus(
+        Path(path) if path is not None else None,
+        raise_on_error=False,
+    )
+    _emit_json(result.model_dump(mode="json"), stream=sys.stdout)
+    return 0 if result.valid else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="DeployWhisper CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -1128,6 +1138,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional branch name to use in the target repository.",
     )
 
+    benchmark_parser = subparsers.add_parser(
+        "benchmark", help="Benchmark corpus and result helpers."
+    )
+    benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command")
+    benchmark_subparsers.required = True
+    benchmark_validate_parser = benchmark_subparsers.add_parser(
+        "validate-corpus", help="Validate the public benchmark corpus contract."
+    )
+    benchmark_validate_parser.add_argument(
+        "--path",
+        help="Optional benchmark corpus root. Defaults to benchmarks/corpus/v1.",
+    )
+
     return parser
 
 
@@ -1180,6 +1203,8 @@ def main() -> None:
         raise SystemExit(_run_topology_import(args))
     if args.command == "github" and args.github_command == "init":
         raise SystemExit(_run_github_init(args))
+    if args.command == "benchmark" and args.benchmark_command == "validate-corpus":
+        raise SystemExit(_run_benchmark_validate_corpus(args.path))
 
     print("DeployWhisper CLI ready: foundation-check")
 

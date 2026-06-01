@@ -1,0 +1,49 @@
+{
+  "id": "terraform-public-ssh",
+  "name": "Terraform public SSH ingress",
+  "description": "Synthetic Terraform scenario that exposes SSH from the public internet.",
+  "labels": ["baseline", "network-exposure", "terraform"],
+  "artifacts": [
+    {
+      "path": "artifacts/main.tf",
+      "type": "terraform",
+      "description": "Synthetic Terraform fixture with an internet-facing SSH ingress rule."
+    }
+  ],
+  "expected_findings": [
+    {
+      "id": "finding-public-ssh",
+      "title": "Public SSH ingress",
+      "severity": "high",
+      "evidence_ids": ["evidence-public-cidr", "evidence-ssh-port"],
+      "rationale": "SSH is exposed from 0.0.0.0/0, so a high-severity advisory must cite deterministic artifact evidence."
+    }
+  ],
+  "expected_evidence": [
+    {
+      "id": "evidence-public-cidr",
+      "artifact_path": "artifacts/main.tf",
+      "selector": "cidr_blocks = [\"0.0.0.0/0\"]",
+      "description": "Ingress rule allows traffic from the public internet."
+    },
+    {
+      "id": "evidence-ssh-port",
+      "artifact_path": "artifacts/main.tf",
+      "selector": "from_port = 22",
+      "description": "Ingress rule targets SSH."
+    }
+  ],
+  "expected_verdict": "warn",
+  "expected_verdict_rationale": "Warn because high-risk public SSH exposure has deterministic Terraform evidence.",
+  "license": {
+    "spdx_id": "CC0-1.0",
+    "source": "Original synthetic fixture authored for public benchmark use.",
+    "public_sample": true
+  },
+  "safety": {
+    "synthetic": true,
+    "contains_secrets": false,
+    "contains_customer_data": false,
+    "contains_non_public_information": false
+  }
+}

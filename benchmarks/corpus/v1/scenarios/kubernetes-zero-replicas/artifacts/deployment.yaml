@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-web
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: checkout-web
+  template:
+    metadata:
+      labels:
+        app: checkout-web
+    spec:
+      containers:
+        - name: app
+          image: example.invalid/checkout-web:1.2.3
+          ports:
+            - containerPort: 8080
