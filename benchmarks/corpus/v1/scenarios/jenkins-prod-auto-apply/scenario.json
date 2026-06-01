@@ -1,0 +1,49 @@
+{
+  "id": "jenkins-prod-auto-apply",
+  "name": "Jenkins production auto apply",
+  "description": "Synthetic Jenkins scenario that applies infrastructure changes from main without a manual approval step.",
+  "labels": ["baseline", "jenkins", "workflow-risk"],
+  "artifacts": [
+    {
+      "path": "artifacts/Jenkinsfile",
+      "type": "jenkins",
+      "description": "Synthetic Jenkins pipeline fixture with an automatic production apply step."
+    }
+  ],
+  "expected_findings": [
+    {
+      "id": "finding-auto-prod-apply",
+      "title": "Production infrastructure apply lacks manual review",
+      "severity": "high",
+      "evidence_ids": ["evidence-auto-apply", "evidence-main-branch"],
+      "rationale": "Production apply runs automatically from main, so the benchmark expects a high-severity workflow-risk advisory with deterministic pipeline evidence."
+    }
+  ],
+  "expected_evidence": [
+    {
+      "id": "evidence-auto-apply",
+      "artifact_path": "artifacts/Jenkinsfile",
+      "selector": "terraform apply -auto-approve",
+      "description": "Pipeline applies infrastructure changes without an approval gate."
+    },
+    {
+      "id": "evidence-main-branch",
+      "artifact_path": "artifacts/Jenkinsfile",
+      "selector": "branch \"main\"",
+      "description": "Production apply stage runs on the main branch."
+    }
+  ],
+  "expected_verdict": "warn",
+  "expected_verdict_rationale": "Warn because an automatic production apply should be reviewed before rollout.",
+  "license": {
+    "spdx_id": "CC0-1.0",
+    "source": "Original synthetic fixture authored for public benchmark use.",
+    "public_sample": true
+  },
+  "safety": {
+    "synthetic": true,
+    "contains_secrets": false,
+    "contains_customer_data": false,
+    "contains_non_public_information": false
+  }
+}

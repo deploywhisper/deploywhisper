@@ -210,6 +210,26 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("valid skill manifest v1", output.getvalue())
 
+    def test_benchmark_validate_corpus_command_reports_public_corpus_status(
+        self,
+    ) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "validate-corpus"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertTrue(payload["valid"])
+        self.assertEqual(
+            payload["summary"]["corpus_id"], "deploywhisper-benchmark-corpus-v1"
+        )
+        self.assertGreaterEqual(payload["summary"]["scenario_count"], 3)
+
     def test_skill_test_command_reports_success_for_requested_skill(self) -> None:
         output = io.StringIO()
 
