@@ -26,6 +26,10 @@ from services.benchmark_corpus_service import (
     ExpectedVerdict,
     load_benchmark_corpus,
 )
+from services.benchmark_failure_report_service import (
+    BenchmarkHonestFailureReport,
+    generate_honest_failure_report,
+)
 from services.confidence_ledger import EvidenceLawStatus, evidence_law_status
 from services.submission_manifest import SubmissionManifest
 
@@ -100,6 +104,7 @@ class BenchmarkRunResult(BaseModel):
     passed: bool
     summary: BenchmarkRunSummary
     scenarios: list[BenchmarkScenarioRunResult]
+    honest_failure_report: BenchmarkHonestFailureReport | None = None
 
 
 def _timestamp() -> str:
@@ -879,8 +884,10 @@ def run_benchmark_corpus(corpus_root: Path | str | None = None) -> BenchmarkRunR
         total_latency_ms=total_latency_ms,
         generated_at=_timestamp(),
     )
-    return BenchmarkRunResult(
+    result = BenchmarkRunResult(
         passed=all(scenario.passed for scenario in scenarios),
         summary=summary,
         scenarios=scenarios,
     )
+    result.honest_failure_report = generate_honest_failure_report(result)
+    return result

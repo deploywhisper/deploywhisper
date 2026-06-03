@@ -45,3 +45,6 @@ The runner validates and loads the corpus, replays each scenario through the sam
 - observed findings with confidence and evidence references
 - finding coverage and selector-level evidence coverage against the scenario expectations
 - Evidence Law status, detail, and violation records
+- `honest_failure_report`, which groups detected scenarios, misses, regressions, false reassurance, false positives, unsupported scenarios, aggregate evidence coverage, the Evidence Law violation count, context limitations, and deterministic local `benchmark://issues/...` links for material misses that are not explicitly out of scope
+
+The honest-failure report does not open external tracker issues. Its linked issues are stable local records in the JSON payload so maintainers can route benchmark misses through the repository's normal issue or pull-request workflow without giving the benchmark runner network or write-side effects.
