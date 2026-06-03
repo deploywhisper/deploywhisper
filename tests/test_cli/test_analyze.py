@@ -26,6 +26,7 @@ from importlib import reload
 from integrations.github.init_service import GitHubInitOptions, GitHubInitResult
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult
+from services.benchmark_runner_service import BenchmarkRunResult, BenchmarkRunSummary
 from services.skill_installer_service import InstalledSkillEntry, SkillInstallResult
 from services.skill_registry_service import SkillRegistryEntry
 from services.skill_test_harness_service import (
@@ -229,6 +230,137 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["summary"]["corpus_id"], "deploywhisper-benchmark-corpus-v1"
         )
         self.assertGreaterEqual(payload["summary"]["scenario_count"], 3)
+
+    def test_benchmark_run_command_reports_scenario_results(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "run"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertIn(ctx.exception.code, {0, 1})
+        self.assertEqual(
+            payload["summary"]["corpus_id"], "deploywhisper-benchmark-corpus-v1"
+        )
+        self.assertGreaterEqual(payload["summary"]["scenario_count"], 3)
+        self.assertEqual(
+            len(payload["scenarios"]), payload["summary"]["scenario_count"]
+        )
+        self.assertIn(
+            payload["scenarios"][0]["status"], ["passed", "failed", "unsupported"]
+        )
+        self.assertIn("findings", payload["scenarios"][0])
+        self.assertIn("evidence_coverage", payload["scenarios"][0])
+        self.assertIn("evidence_law_violations", payload["scenarios"][0])
+        self.assertIn("latency_ms", payload["scenarios"][0])
+        self.assertIn("unsupported", payload["scenarios"][0])
+
+    def test_benchmark_run_command_exits_nonzero_for_failed_result(self) -> None:
+        output = io.StringIO()
+        failed_result = BenchmarkRunResult(
+            passed=False,
+            summary=BenchmarkRunSummary(
+                corpus_id="failing-corpus",
+                version="1.0.0",
+                scenario_count=1,
+                passed_count=0,
+                failed_count=1,
+                unsupported_count=0,
+                total_latency_ms=1.0,
+                generated_at="2026-06-02T00:00:00Z",
+            ),
+            scenarios=[],
+        )
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "run"]),
+            patch("cli.analyze.run_benchmark_corpus", return_value=failed_result),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse(payload["passed"])
+        self.assertEqual(payload["summary"]["failed_count"], 1)
+
+    def test_benchmark_run_command_reports_invalid_corpus_as_json(self) -> None:
+        output = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch(
+                    "sys.argv",
+                    ["deploywhisper", "benchmark", "run", "--path", tmpdir],
+                ),
+                redirect_stdout(output),
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse(payload["passed"])
+        self.assertFalse(payload["valid"])
+        self.assertEqual(payload["summary"]["corpus_id"], "unknown")
+        self.assertIn("passed_count", payload["summary"])
+        self.assertIn("failed_count", payload["summary"])
+        self.assertIn("unsupported_count", payload["summary"])
+        self.assertTrue(payload["errors"])
+
+    def test_benchmark_run_command_reports_loader_failure_as_json(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "run"]),
+            patch(
+                "cli.analyze.run_benchmark_corpus",
+                side_effect=json.JSONDecodeError("bad json", "{}", 0),
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse(payload["passed"])
+        self.assertFalse(payload["valid"])
+        self.assertEqual(payload["summary"]["corpus_id"], "unknown")
+        self.assertIn("passed_count", payload["summary"])
+        self.assertIn("failed_count", payload["summary"])
+        self.assertIn("unsupported_count", payload["summary"])
+        self.assertTrue(payload["errors"])
+
+    def test_benchmark_run_command_reports_non_utf8_corpus_json_as_json(self) -> None:
+        output = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, "manifest.json").write_bytes(b"\xff\xfe\x00")
+            with (
+                patch(
+                    "sys.argv",
+                    ["deploywhisper", "benchmark", "run", "--path", tmpdir],
+                ),
+                redirect_stdout(output),
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse(payload["passed"])
+        self.assertFalse(payload["valid"])
+        self.assertEqual(payload["summary"]["corpus_id"], "unknown")
+        self.assertIn("passed_count", payload["summary"])
+        self.assertIn("failed_count", payload["summary"])
+        self.assertIn("unsupported_count", payload["summary"])
+        self.assertTrue(payload["errors"])
 
     def test_skill_test_command_reports_success_for_requested_skill(self) -> None:
         output = io.StringIO()
@@ -2753,8 +2885,9 @@ class AnalyzeCliTests(unittest.TestCase):
         collect_github_init_options,
         run_github_init,
     ) -> None:
+        example_repo = str(Path(tempfile.gettempdir()) / "example-repo")
         collect_github_init_options.return_value = GitHubInitOptions(
-            repo_path="/tmp/example-repo",
+            repo_path=example_repo,
             workflow_path=".github/workflows/deploywhisper.yml",
             api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
             enable_github_app=False,
@@ -2762,7 +2895,7 @@ class AnalyzeCliTests(unittest.TestCase):
             project_key="payments",
         )
         run_github_init.return_value = GitHubInitResult(
-            repo_path="/tmp/example-repo",
+            repo_path=example_repo,
             workflow_path=".github/workflows/deploywhisper.yml",
             readme_path="README.md",
             github_app_notes_path=None,
@@ -2781,7 +2914,7 @@ class AnalyzeCliTests(unittest.TestCase):
                     "github",
                     "init",
                     "--repo",
-                    "/tmp/example-repo",
+                    example_repo,
                     "--project-key",
                     "payments",
                 ],
@@ -2793,7 +2926,7 @@ class AnalyzeCliTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, 0)
         collect_github_init_options.assert_called_once_with(
-            repo_path="/tmp/example-repo",
+            repo_path=example_repo,
             workflow_path=None,
             api_endpoint=None,
             enable_github_app=None,

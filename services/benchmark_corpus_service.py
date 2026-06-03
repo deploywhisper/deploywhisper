@@ -225,6 +225,21 @@ class BenchmarkCorpusValidationError(ValueError):
         super().__init__("; ".join(errors))
 
 
+class BenchmarkCorpusScenario(BaseModel):
+    """Loaded benchmark scenario with its manifest-relative path."""
+
+    path: str
+    scenario: BenchmarkScenarioDefinition
+
+
+class BenchmarkCorpusDefinition(BaseModel):
+    """Loaded benchmark corpus ready for execution."""
+
+    root: str
+    manifest: BenchmarkCorpusManifest
+    scenarios: list[BenchmarkCorpusScenario]
+
+
 def _timestamp() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
 
@@ -427,7 +442,7 @@ def validate_benchmark_corpus(
 
     try:
         manifest = BenchmarkCorpusManifest.model_validate(_load_json(manifest_path))
-    except (OSError, json.JSONDecodeError, ValidationError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
         errors.append(f"manifest.json: {exc}")
 
     seen_scenarios: set[str] = set()
@@ -446,7 +461,12 @@ def validate_benchmark_corpus(
             scenario = BenchmarkScenarioDefinition.model_validate(
                 _load_json(scenario_path)
             )
-        except (OSError, json.JSONDecodeError, ValidationError) as exc:
+        except (
+            OSError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            ValidationError,
+        ) as exc:
             errors.append(f"{scenario_ref}: {exc}")
             continue
         if scenario.id in seen_scenarios:
@@ -484,3 +504,42 @@ def validate_benchmark_corpus(
     if errors and raise_on_error:
         raise BenchmarkCorpusValidationError(errors, result)
     return result
+
+
+def load_benchmark_corpus(
+    corpus_root: Path | str | None = None,
+    *,
+    validate: bool = True,
+) -> BenchmarkCorpusDefinition:
+    """Load a validated benchmark corpus for deterministic execution."""
+
+    root = (
+        Path(corpus_root) if corpus_root is not None else DEFAULT_BENCHMARK_CORPUS_DIR
+    )
+    root = root.resolve()
+    if validate:
+        validate_benchmark_corpus(root)
+    manifest = BenchmarkCorpusManifest.model_validate(
+        _load_json(root / "manifest.json")
+    )
+    scenarios: list[BenchmarkCorpusScenario] = []
+    for scenario_ref in manifest.scenarios:
+        path_error = _relative_path_error(
+            scenario_ref, field_name="scenario manifest path"
+        )
+        if path_error:
+            raise ValueError(path_error)
+        scenario_path = _resolve_child(root, scenario_ref)
+        try:
+            scenario_path.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(
+                f"scenario manifest escapes corpus: {scenario_ref}"
+            ) from exc
+        scenario = BenchmarkScenarioDefinition.model_validate(_load_json(scenario_path))
+        scenarios.append(BenchmarkCorpusScenario(path=scenario_ref, scenario=scenario))
+    return BenchmarkCorpusDefinition(
+        root=str(root),
+        manifest=manifest,
+        scenarios=scenarios,
+    )

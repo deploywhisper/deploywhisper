@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 import yaml
 
 from parsers.base import UnifiedChange, build_change_id
@@ -23,16 +24,22 @@ def _construct_cloudformation_tag(loader: _CloudFormationLoader, tag_suffix: str
 _CloudFormationLoader.add_multi_constructor("!", _construct_cloudformation_tag)
 
 
+def load_cloudformation_template(text: str) -> Any:
+    """Load a CloudFormation JSON/YAML template, tolerating intrinsic YAML tags."""
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # _CloudFormationLoader subclasses SafeLoader and only tolerates CFN intrinsic tags.
+        return yaml.load(text, Loader=_CloudFormationLoader) or {}  # nosec B506
+
+
 def parse_cloudformation(name: str, raw_content: bytes | None) -> list[UnifiedChange]:
     if not raw_content:
         return []
 
     text = raw_content.decode("utf-8", errors="ignore")
-    payload: dict
-    try:
-        payload = json.loads(text)
-    except json.JSONDecodeError:
-        payload = yaml.load(text, Loader=_CloudFormationLoader) or {}
+    payload = load_cloudformation_template(text)
 
     resources = payload.get("Resources", {}) if isinstance(payload, dict) else {}
     return [

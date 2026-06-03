@@ -39,7 +39,7 @@ from services.report_service import (
     readable_report_schema_version,
 )
 from services.settings_service import resolve_provider_runtime
-from services.submission_manifest import build_submission_manifest
+from services.submission_manifest import SubmissionManifest, build_submission_manifest
 from services.incident_service import get_incident_index_snapshot
 from services.confidence_ledger import EvidenceLawStatus, evidence_law_status
 from services.topology_service import (
@@ -58,6 +58,7 @@ def evaluate_evidence(
     change_metadata_by_id: dict[str, dict[str, Any]] | None = None,
     supplemental_changes: list[UnifiedChange] | None = None,
     completion_client=None,
+    allow_llm_assistance: bool = True,
 ) -> RiskAssessment:
     """Return a reusable unified risk assessment from evidence inputs."""
     return score_evidence(
@@ -68,6 +69,7 @@ def evaluate_evidence(
         change_metadata_by_id=change_metadata_by_id,
         supplemental_changes=supplemental_changes,
         completion_client=completion_client,
+        allow_llm_assistance=allow_llm_assistance,
     )
 
 
@@ -115,6 +117,7 @@ def evaluate_parse_batch(
     topology: dict | None = None,
     raw_files: dict[str, bytes | None] | None = None,
     completion_client=None,
+    allow_llm_assistance: bool = True,
 ) -> RiskAssessment:
     """Compatibility wrapper that scores extracted evidence for a parse batch."""
     scored_evidence_items = (
@@ -133,6 +136,7 @@ def evaluate_parse_batch(
             topology=topology,
             raw_files=raw_files,
             completion_client=completion_client,
+            allow_llm_assistance=allow_llm_assistance,
         )
     if not scored_evidence_items:
         scored_evidence_items = extract_batch_evidence(batch)
@@ -146,11 +150,16 @@ def evaluate_parse_batch(
             changes, scored_evidence_items
         ),
         completion_client=completion_client,
+        allow_llm_assistance=allow_llm_assistance,
     )
 
 
 class AnalysisArtifacts(BaseModel):
     parse_batch: ParseBatchResult = Field(..., description="Per-file parse results")
+    submission_manifest: SubmissionManifest = Field(
+        default_factory=SubmissionManifest,
+        description="Submission coverage and artifact outcome manifest",
+    )
     evidence_items: list[EvidenceItem] = Field(
         default_factory=list,
         description="Traceable evidence extracted from parsed changes",
@@ -349,13 +358,18 @@ def _context_todos(
     topology_freshness_days: int | None,
     incident_index_size: int,
     parser_success_rate: float,
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
 ) -> list[str]:
     todos: list[str] = []
-    if topology_freshness_days is None:
-        todos.append("Import or refresh topology context for this project/workspace.")
-    elif topology_freshness_days > STALE_AFTER_DAYS:
-        todos.append("Refresh stale topology context for this project/workspace.")
-    if incident_index_size == 0:
+    if include_topology_context:
+        if topology_freshness_days is None:
+            todos.append(
+                "Import or refresh topology context for this project/workspace."
+            )
+        elif topology_freshness_days > STALE_AFTER_DAYS:
+            todos.append("Refresh stale topology context for this project/workspace.")
+    if include_incident_context and incident_index_size == 0:
         todos.append("Import relevant incident history for this project/workspace.")
     if parser_success_rate < 1.0:
         todos.append("Review parser errors and resubmit supported artifacts.")
@@ -371,19 +385,22 @@ def _context_uncertainty(
     topology_freshness_days: int | None,
     incident_index_size: int,
     parser_success_rate: float,
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
 ) -> str | None:
     if context_score < 0.7:
         return (
-            "Insufficient context: missing or stale topology, parser coverage, "
-            "evidence coverage, or incident history prevents a confident "
+            "Insufficient context: missing parser coverage, evidence coverage, "
+            "or enabled project context prevents a confident "
             "low-risk verdict."
         )
     weak_signals: list[str] = []
-    if topology_freshness_days is None:
-        weak_signals.append("topology context is unavailable")
-    elif topology_freshness_days > STALE_AFTER_DAYS:
-        weak_signals.append("topology context is stale")
-    if incident_index_size == 0:
+    if include_topology_context:
+        if topology_freshness_days is None:
+            weak_signals.append("topology context is unavailable")
+        elif topology_freshness_days > STALE_AFTER_DAYS:
+            weak_signals.append("topology context is stale")
+    if include_incident_context and incident_index_size == 0:
         weak_signals.append("incident history is unavailable")
     if parser_success_rate < 1.0:
         weak_signals.append("parser coverage is partial")
@@ -436,15 +453,20 @@ def _build_context_completeness(
     project_key: str | None = None,
     workspace_id: int | None = None,
     workspace_key: str | None = None,
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
 ) -> ContextCompleteness:
-    topology_status = get_topology_status(
-        project_id=project_id,
-        project_key=project_key,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    topology_freshness_days = _topology_freshness_days(topology_status.updated_at)
-    if project_id is None and project_key is None:
+    topology_last_imported_at = None
+    if include_topology_context:
+        topology_status = get_topology_status(
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        topology_last_imported_at = topology_status.updated_at
+    topology_freshness_days = _topology_freshness_days(topology_last_imported_at)
+    if not include_incident_context or (project_id is None and project_key is None):
         incident_index_size = 0
         incident_index_snapshot = {
             "incident_index_version": "incidents:unscoped",
@@ -474,14 +496,18 @@ def _build_context_completeness(
     evidence_success_rate = _evidence_success_rate(
         _collect_changes(parse_batch), list(evidence_items or [])
     )
+    weighted_scores = [
+        (raw_parser_success_rate, 0.35),
+        (evidence_success_rate, 0.20),
+    ]
+    if include_topology_context:
+        weighted_scores.append((_freshness_score(topology_freshness_days), 0.25))
+    if include_incident_context:
+        weighted_scores.append((_incident_score(incident_index_size), 0.20))
+    total_weight = sum(weight for _, weight in weighted_scores) or 1.0
     raw_context_score = min(
         1.0,
-        (
-            raw_parser_success_rate * 0.35
-            + _freshness_score(topology_freshness_days) * 0.25
-            + _incident_score(incident_index_size) * 0.20
-            + evidence_success_rate * 0.20
-        ),
+        sum(score * weight for score, weight in weighted_scores) / total_weight,
     )
     context_score = round(raw_context_score, 2)
     context_todos = _context_todos(
@@ -489,10 +515,12 @@ def _build_context_completeness(
         topology_freshness_days=topology_freshness_days,
         incident_index_size=incident_index_size,
         parser_success_rate=raw_parser_success_rate,
+        include_topology_context=include_topology_context,
+        include_incident_context=include_incident_context,
     )
     return ContextCompleteness(
         topology_freshness_days=topology_freshness_days,
-        topology_last_imported_at=topology_status.updated_at,
+        topology_last_imported_at=topology_last_imported_at,
         incident_index_size=incident_index_size,
         incident_index_version=str(
             incident_index_snapshot.get("incident_index_version") or "incidents:empty"
@@ -514,9 +542,49 @@ def _build_context_completeness(
             topology_freshness_days=topology_freshness_days,
             incident_index_size=incident_index_size,
             parser_success_rate=raw_parser_success_rate,
+            include_topology_context=include_topology_context,
+            include_incident_context=include_incident_context,
         ),
         context_todos=context_todos,
         insufficient_context=raw_context_score < 0.7,
+    )
+
+
+def build_context_completeness(
+    parse_batch: ParseBatchResult,
+    *,
+    evidence_items: list[EvidenceItem] | None = None,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
+) -> ContextCompleteness:
+    """Build the shared context-completeness signal for analysis callers."""
+
+    return _build_context_completeness(
+        parse_batch,
+        evidence_items=evidence_items,
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+        include_topology_context=include_topology_context,
+        include_incident_context=include_incident_context,
+    )
+
+
+def _skipped_narrative(reason: str, assessment: RiskAssessment) -> NarrativeResult:
+    return NarrativeResult(
+        available=False,
+        opening_sentence="",
+        explanation="",
+        guidance=[],
+        degraded=True,
+        warnings=list(assessment.warnings) + [reason],
+        failure_notice=reason,
+        source="fallback",
     )
 
 
@@ -1088,6 +1156,10 @@ def build_analysis_artifacts(
     workspace_id: int | None = None,
     workspace_key: str | None = None,
     completion_client=None,
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
+    include_narrative: bool = True,
+    allow_llm_assistance: bool = True,
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
@@ -1104,12 +1176,15 @@ def build_analysis_artifacts(
         workspace_key=workspace_key,
     )
     changes = _collect_changes(parse_batch)
-    topology, topology_warning = load_topology(
-        project_id=project_id,
-        project_key=project_key,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
+    if include_topology_context:
+        topology, topology_warning = load_topology(
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+    else:
+        topology, topology_warning = None, None
     assessment = evaluate_parse_batch(
         parse_batch,
         partial_context=partial_context,
@@ -1117,6 +1192,7 @@ def build_analysis_artifacts(
         topology=topology,
         raw_files=analysis_raw_files,
         completion_client=completion_client,
+        allow_llm_assistance=allow_llm_assistance,
     )
     assessment.context_completeness = _build_context_completeness(
         parse_batch,
@@ -1125,6 +1201,8 @@ def build_analysis_artifacts(
         project_key=project_key,
         workspace_id=workspace_id,
         workspace_key=workspace_key,
+        include_topology_context=include_topology_context,
+        include_incident_context=include_incident_context,
     )
     assessment = apply_context_uncertainty(assessment)
     findings = build_findings(
@@ -1138,7 +1216,7 @@ def build_analysis_artifacts(
     rollback_plan = generate_rollback_plan(changes, partial_context=partial_context)
     incident_matches = _normalize_incident_matches(
         []
-        if project_id is None and project_key is None
+        if not include_incident_context or (project_id is None and project_key is None)
         else find_incident_matches(
             changes,
             project_id=project_id,
@@ -1147,14 +1225,21 @@ def build_analysis_artifacts(
             workspace_key=workspace_key,
         )
     )
-    narrative = generate_narrative(
-        assessment.model_copy(deep=True),
-        [finding.model_copy(deep=True) for finding in findings],
-        completion_client=completion_client,
-        raw_files=analysis_raw_files,
-    )
+    if include_narrative:
+        narrative = generate_narrative(
+            assessment.model_copy(deep=True),
+            [finding.model_copy(deep=True) for finding in findings],
+            completion_client=completion_client,
+            raw_files=analysis_raw_files,
+        )
+    else:
+        narrative = _skipped_narrative(
+            "Narrative skipped for deterministic benchmark profile.",
+            assessment,
+        )
     return AnalysisArtifacts(
         parse_batch=parse_batch,
+        submission_manifest=submission_manifest,
         evidence_items=evidence_items,
         findings=findings,
         assessment=assessment,
