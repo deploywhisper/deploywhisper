@@ -8,6 +8,7 @@ import io
 import json
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from api.errors import build_error
 from api.schemas import AdvisorySummaryData, build_analysis_run_data, build_meta
@@ -37,7 +38,11 @@ from services.analysis_service import (
     build_share_summary,
     resolve_analysis_project_scope,
 )
-from services.benchmark_corpus_service import validate_benchmark_corpus
+from services.benchmark_corpus_service import (
+    BenchmarkCorpusValidationError,
+    validate_benchmark_corpus,
+)
+from services.benchmark_runner_service import run_benchmark_corpus
 from services.deployment_outcome_service import record_deployment_outcome
 from services.project_service import create_project, create_workspace
 from services.project_service import filter_projects_by_authorization
@@ -57,6 +62,7 @@ from services.report_service import (
     fetch_analysis_report,
 )
 from services.topology_service import get_topology_status, import_topology_source
+from pydantic import ValidationError
 
 
 def _emit_json(payload: dict, *, stream) -> None:
@@ -827,6 +833,66 @@ def _run_benchmark_validate_corpus(path: str | None) -> int:
     return 0 if result.valid else 1
 
 
+def _benchmark_error_summary(
+    *,
+    corpus_id: str = "unknown",
+    version: str = "unknown",
+    scenario_count: int = 0,
+) -> dict:
+    return {
+        "corpus_id": corpus_id,
+        "version": version,
+        "scenario_count": scenario_count,
+        "passed_count": 0,
+        "failed_count": scenario_count,
+        "unsupported_count": 0,
+        "total_latency_ms": 0.0,
+        "generated_at": datetime.now(tz=UTC).isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _run_benchmark_run(path: str | None) -> int:
+    try:
+        result = run_benchmark_corpus(Path(path) if path is not None else None)
+    except BenchmarkCorpusValidationError as exc:
+        validation_summary = exc.result.summary
+        _emit_json(
+            {
+                "passed": False,
+                "valid": False,
+                "summary": _benchmark_error_summary(
+                    corpus_id=validation_summary.corpus_id,
+                    version=validation_summary.version,
+                    scenario_count=validation_summary.scenario_count,
+                ),
+                "scenarios": [],
+                "errors": exc.errors,
+            },
+            stream=sys.stdout,
+        )
+        return 1
+    except (
+        OSError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ValidationError,
+        ValueError,
+    ) as exc:
+        _emit_json(
+            {
+                "passed": False,
+                "valid": False,
+                "summary": _benchmark_error_summary(),
+                "scenarios": [],
+                "errors": [str(exc)],
+            },
+            stream=sys.stdout,
+        )
+        return 1
+    _emit_json(result.model_dump(mode="json"), stream=sys.stdout)
+    return 0 if result.passed else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="DeployWhisper CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -1150,6 +1216,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--path",
         help="Optional benchmark corpus root. Defaults to benchmarks/corpus/v1.",
     )
+    benchmark_run_parser = benchmark_subparsers.add_parser(
+        "run", help="Run the public benchmark corpus against the analysis core."
+    )
+    benchmark_run_parser.add_argument(
+        "--path",
+        help="Optional benchmark corpus root. Defaults to benchmarks/corpus/v1.",
+    )
 
     return parser
 
@@ -1205,6 +1278,8 @@ def main() -> None:
         raise SystemExit(_run_github_init(args))
     if args.command == "benchmark" and args.benchmark_command == "validate-corpus":
         raise SystemExit(_run_benchmark_validate_corpus(args.path))
+    if args.command == "benchmark" and args.benchmark_command == "run":
+        raise SystemExit(_run_benchmark_run(args.path))
 
     print("DeployWhisper CLI ready: foundation-check")
 

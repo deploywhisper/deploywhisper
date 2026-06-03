@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-06-01
+# last_updated: 2026-06-03
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-06-01
+last_updated: 2026-06-03
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -102,7 +102,7 @@ development_status:
 
   epic-6: in-progress
   6-1-benchmark-corpus-v1: review
-  6-2-benchmark-runner: ready-for-dev
+  6-2-benchmark-runner: review
   6-3-honest-failure-report-generator: ready-for-dev
   6-4-outcome-calibration-metrics: ready-for-dev
   6-5-incident-backtesting: ready-for-dev
