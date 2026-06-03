@@ -258,6 +258,13 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertIn("evidence_law_violations", payload["scenarios"][0])
         self.assertIn("latency_ms", payload["scenarios"][0])
         self.assertIn("unsupported", payload["scenarios"][0])
+        self.assertIn("honest_failure_report", payload)
+        self.assertIn(
+            "evidence_law_violation_count",
+            payload["honest_failure_report"]["summary"],
+        )
+        self.assertIn("missed_scenarios", payload["honest_failure_report"])
+        self.assertIn("linked_issues", payload["honest_failure_report"])
 
     def test_benchmark_run_command_exits_nonzero_for_failed_result(self) -> None:
         output = io.StringIO()
