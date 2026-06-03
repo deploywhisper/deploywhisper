@@ -4709,9 +4709,17 @@ def fetch_active_dashboard_report(
 
 
 def remove_analysis_report(report_id: int) -> bool:
+    project_id: int | None = None
     with SessionLocal() as session:
+        report = get_analysis_report(session, report_id, include_evidence=False)
+        if report is not None:
+            project_id = report.project_id
         removed = delete_analysis_report(session, report_id)
     if removed:
+        if project_id is not None:
+            from services.backtesting_service import invalidate_backtesting_snapshot
+
+            invalidate_backtesting_snapshot(project_id=project_id)
         delete_report_artifacts(report_id)
     return removed
 
