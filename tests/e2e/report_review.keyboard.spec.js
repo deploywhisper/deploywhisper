@@ -387,6 +387,15 @@ async function expectReportSummaryCardsReadable(page) {
       key: card.getAttribute("data-dw-report-signal") || "unknown",
       rect: card.getBoundingClientRect(),
     }));
+    if (viewportWidth >= 1180) {
+      const verdict = rects.find((item) => item.key === "verdict");
+      const topRisk = rects.find((item) => item.key === "top-risk");
+      if (verdict && topRisk && topRisk.rect.width <= verdict.rect.width * 2) {
+        result.push(
+          `top-risk card is not wide enough: ${topRisk.rect.width} <= ${verdict.rect.width * 2}`
+        );
+      }
+    }
     for (let index = 0; index < rects.length; index += 1) {
       for (
         let otherIndex = index + 1;

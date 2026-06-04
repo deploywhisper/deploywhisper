@@ -454,6 +454,62 @@ def inject_shell_styles(*, force: bool = False) -> None:
     width: 100%;
   }}
   .dw-danger-button {{ color: {RED} !important; }}
+  .dw-report-signal-grid {{
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+  }}
+  .dw-report-signal {{
+    min-width: 0;
+    width: 100%;
+    overflow: visible;
+    align-self: stretch;
+  }}
+  .dw-report-signal-compact {{
+    min-height: 148px;
+  }}
+  .dw-report-signal-long {{
+    grid-column: span 3;
+  }}
+  .dw-report-signal-action {{
+    grid-column: span 1;
+  }}
+  .dw-report-signal-long .dw-report-signal-value {{
+    font-size: 18px;
+    line-height: 1.35;
+    max-width: 92ch;
+  }}
+  .dw-report-signal-long .dw-report-signal-detail {{
+    margin-top: 6px;
+  }}
+  .dw-report-signal-value,
+  .dw-report-signal-detail {{
+    display: block;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+  }}
+  @media (max-width: 1180px) {{
+    .dw-report-signal-grid {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+    .dw-report-signal-long,
+    .dw-report-signal-action {{
+      grid-column: span 2;
+    }}
+  }}
+  @media (max-width: 720px) {{
+    .dw-report-signal-grid {{
+      grid-template-columns: 1fr;
+    }}
+    .dw-report-signal-long,
+    .dw-report-signal-action {{
+      grid-column: span 1;
+    }}
+  }}
   .dw-theme-toggle {{
     width: 40px;
     height: 40px;
