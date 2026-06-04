@@ -33,3 +33,11 @@ def delete_setting(session: Session, key: str) -> None:
         return
     session.delete(record)
     session.commit()
+
+
+def delete_settings_by_key_prefix(session: Session, prefix: str) -> int:
+    records = session.query(AppSetting).filter(AppSetting.key.like(f"{prefix}%")).all()
+    for record in records:
+        session.delete(record)
+    session.commit()
+    return len(records)
