@@ -37,7 +37,7 @@ from ui.project_authorization import (
 from ui.routes.history import build_history_detail_page, build_history_page
 from ui.routes.incidents import build_incidents_page
 from ui.routes.settings import build_settings_page
-from ui.theme import BRAND_MARK_IMAGE_PATH
+from ui.theme import BRAND_MARK_IMAGE_PATH, LOCAL_DESIGN_ASSET_HEAD_HTML
 
 ORANGE = "#ff6900"
 ORANGE_LIGHT = "rgba(255,105,0,0.10)"
@@ -142,10 +142,7 @@ def inject_styles(*, force: bool = False) -> None:
 <link rel="icon" href="/assets/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+{LOCAL_DESIGN_ASSET_HEAD_HTML}
 <style>
   *, *::before, *::after {{
     box-sizing: border-box;

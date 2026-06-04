@@ -25,7 +25,7 @@ from ui.project_authorization import (
     resolve_authorized_ui_active_project,
     set_authorized_ui_project,
 )
-from ui.theme import BRAND_MARK_IMAGE_PATH
+from ui.theme import BRAND_MARK_IMAGE_PATH, LOCAL_DESIGN_ASSET_HEAD_HTML
 
 ORANGE = "#ff6900"
 ORANGE_LIGHT = "rgba(255,105,0,0.10)"
@@ -116,9 +116,7 @@ def inject_shell_styles(*, force: bool = False) -> None:
     )
     ui.add_head_html(
         f"""
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+{LOCAL_DESIGN_ASSET_HEAD_HTML}
 <style>
   *, *::before, *::after {{ box-sizing: border-box; }}
   :root {{

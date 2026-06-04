@@ -5,6 +5,12 @@ from __future__ import annotations
 from nicegui import ui
 
 BRAND_MARK_IMAGE_PATH = "/assets/favicon-512.png"
+PLUS_JAKARTA_400_PATH = "/assets/fonts/plus-jakarta-sans-400.ttf"
+PLUS_JAKARTA_500_PATH = "/assets/fonts/plus-jakarta-sans-500.ttf"
+PLUS_JAKARTA_600_PATH = "/assets/fonts/plus-jakarta-sans-600.ttf"
+PLUS_JAKARTA_700_PATH = "/assets/fonts/plus-jakarta-sans-700.ttf"
+PLUS_JAKARTA_800_PATH = "/assets/fonts/plus-jakarta-sans-800.ttf"
+MATERIAL_ICONS_PATH = "/assets/fonts/material-icons-regular.ttf"
 
 ORANGE = "#ff6900"
 ORANGE_LIGHT = "rgba(255,105,0,0.10)"
@@ -17,14 +23,82 @@ BG = "#f9fafb"
 GREEN = "#16a34a"
 AMBER = "#d97706"
 
+LOCAL_FONT_ASSET_CSS = f"""
+@font-face {{
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('{PLUS_JAKARTA_400_PATH}') format('truetype');
+}}
+@font-face {{
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('{PLUS_JAKARTA_500_PATH}') format('truetype');
+}}
+@font-face {{
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('{PLUS_JAKARTA_600_PATH}') format('truetype');
+}}
+@font-face {{
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('{PLUS_JAKARTA_700_PATH}') format('truetype');
+}}
+@font-face {{
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('{PLUS_JAKARTA_800_PATH}') format('truetype');
+}}
+@font-face {{
+  font-family: 'Material Icons';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('{MATERIAL_ICONS_PATH}') format('truetype');
+}}
+"""
+
+LOCAL_MATERIAL_ICON_CSS = """
+.q-icon,
+i.q-icon,
+.material-icons,
+.material-icons-outlined,
+.material-symbols-outlined {
+  font-family: 'Material Icons' !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'liga';
+}
+"""
+
+LOCAL_DESIGN_ASSET_CSS = LOCAL_FONT_ASSET_CSS + LOCAL_MATERIAL_ICON_CSS
+LOCAL_DESIGN_ASSET_HEAD_HTML = f"<style>{LOCAL_DESIGN_ASSET_CSS}</style>"
+
 _THEME_HEAD_HTML = """
 <link rel="icon" href="/assets/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-"""
+""" + LOCAL_DESIGN_ASSET_HEAD_HTML
 
 _THEME_CSS = f"""
 <style>

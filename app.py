@@ -58,6 +58,7 @@ from ui.formatters.topology_freshness import (
     topology_freshness_supporting_text,
 )
 from ui.routes.dashboard import build_dashboard, inject_styles
+from ui.theme import LOCAL_DESIGN_ASSET_CSS
 import ui.routes.skills as skills_ui_routes  # noqa: F401
 
 configure_logging()
@@ -237,10 +238,8 @@ def _shared_report_prompt_html(
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>Shared DeployWhisper report {report_id}</title>"
-        "<link rel='preconnect' href='https://fonts.googleapis.com'>"
-        "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
-        "<link href='https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap' rel='stylesheet'>"
         "<style>"
+        f"{LOCAL_DESIGN_ASSET_CSS}"
         "body{margin:0;background:#f4f4f5;color:#0a0a0a;font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif;}"
         "main{max-width:560px;margin:72px auto;padding:32px;background:#fff;border-radius:18px;"
         "border:1px solid #e4e4e7;box-shadow:0 1px 3px rgba(0,0,0,0.06);}"
@@ -580,10 +579,8 @@ def _shared_report_html(
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>Shared DeployWhisper report #{int(report['id'])}</title>"
-        "<link rel='preconnect' href='https://fonts.googleapis.com'>"
-        "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
-        "<link href='https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap' rel='stylesheet'>"
         "<style>"
+        f"{LOCAL_DESIGN_ASSET_CSS}"
         "body{margin:0;background:#f4f4f5;color:#0a0a0a;font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif;}"
         "main{max-width:980px;margin:0 auto;padding:40px 24px 64px;}"
         ".hero,.panel{background:#fff;border:1px solid #e4e4e7;border-radius:18px;box-shadow:0 1px 3px rgba(0,0,0,0.06);padding:24px;margin-bottom:20px;}"
@@ -805,10 +802,8 @@ def report_artifact_view(
         content=(
             "<!doctype html><html><head><meta charset='utf-8'>"
             f"<title>{escape(snapshot.artifact_name)} · DeployWhisper</title>"
-            "<link rel='preconnect' href='https://fonts.googleapis.com'>"
-            "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
-            "<link href='https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap' rel='stylesheet'>"
             "<style>"
+            f"{LOCAL_DESIGN_ASSET_CSS}"
             "body{margin:0;background:#f4f4f5;color:#0a0a0a;font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif;}"
             "main{max-width:1200px;margin:0 auto;padding:24px;}"
             "a{color:#ff6900;text-decoration:none;font-weight:700;}"
