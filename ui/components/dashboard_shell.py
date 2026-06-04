@@ -50,6 +50,26 @@ ICON_FALLBACKS = {
 }
 
 _SHELL_HEAD_INJECTED = False
+_THEME_SYNC_JS = """
+(() => {
+  const key = 'deploywhisper-theme';
+  const apply = (theme) => {
+    const resolved = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.dwTheme = resolved;
+    try { window.localStorage.setItem(key, resolved); } catch (_) {}
+    document.querySelectorAll('[data-dw-theme-toggle-label]').forEach((node) => {
+      node.textContent = resolved === 'dark' ? 'Light theme' : 'Dark theme';
+    });
+  };
+  window.dwToggleTheme = () => {
+    const current = document.documentElement.dataset.dwTheme === 'dark' ? 'dark' : 'light';
+    apply(current === 'dark' ? 'light' : 'dark');
+  };
+  let stored = document.documentElement.dataset.dwTheme || 'light';
+  try { stored = window.localStorage.getItem(key) || stored; } catch (_) {}
+  apply(stored);
+})();
+"""
 
 
 def inject_shell_styles(*, force: bool = False) -> None:
@@ -871,6 +891,7 @@ def build_header(on_project_change=None) -> None:
             "font-weight:700;cursor:pointer;flex-shrink:0"
         ):
             ui.label("JD")
+    ui.timer(0.05, lambda: ui.run_javascript(_THEME_SYNC_JS), once=True)
 
 
 def build_app_shell(

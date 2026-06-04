@@ -277,6 +277,73 @@ _BROWSER_CSS = """
   background: var(--dw-surface-soft);
 }
 
+html[data-dw-theme="dark"] .dw-skills-hero,
+html[data-dw-theme="dark"] .dw-skill-row,
+html[data-dw-theme="dark"] .dw-skill-section {
+  background: var(--dw-surface) !important;
+  border-color: var(--dw-line) !important;
+  color: var(--dw-text) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-row:hover {
+  background: #1f1f23 !important;
+  border-color: var(--dw-accent-line) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.28);
+}
+
+html[data-dw-theme="dark"] .dw-skills-display,
+html[data-dw-theme="dark"] .dw-skill-row-title,
+html[data-dw-theme="dark"] .dw-skill-metric-value,
+html[data-dw-theme="dark"] .dw-skills-stat-value,
+html[data-dw-theme="dark"] .dw-skill-command {
+  color: var(--dw-text) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skills-body,
+html[data-dw-theme="dark"] .dw-skill-row-meta,
+html[data-dw-theme="dark"] .dw-skill-metric-label,
+html[data-dw-theme="dark"] .dw-skills-stat-label,
+html[data-dw-theme="dark"] .dw-empty-note {
+  color: var(--dw-muted) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skills-stat,
+html[data-dw-theme="dark"] .dw-skill-tag,
+html[data-dw-theme="dark"] .dw-skill-command,
+html[data-dw-theme="dark"] .dw-empty-note {
+  background: var(--dw-surface-soft) !important;
+  border-color: var(--dw-line) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-tag {
+  color: #d4d4d8 !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-badge-official {
+  background: rgba(22,163,74,0.22) !important;
+  color: #86efac !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-badge-featured {
+  background: rgba(217,119,6,0.24) !important;
+  color: #fcd34d !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-chip {
+  background: rgba(255,105,0,0.18) !important;
+  color: #fed7aa !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-version-row {
+  border-color: var(--dw-line) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skills-controls .q-field__control {
+  background: var(--dw-surface-soft) !important;
+  border-color: var(--dw-line) !important;
+  color: var(--dw-text) !important;
+}
+
 @media (max-width: 900px) {
   .dw-skills-hero-grid,
   .dw-skills-controls,

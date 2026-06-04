@@ -59,6 +59,26 @@ AMBER_DARK = "#92400e"
 ZINC_100_BORDER = "#f4f4f5"
 
 _DASHBOARD_HEAD_INJECTED = False
+_THEME_SYNC_JS = """
+(() => {
+  const key = 'deploywhisper-theme';
+  const apply = (theme) => {
+    const resolved = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.dwTheme = resolved;
+    try { window.localStorage.setItem(key, resolved); } catch (_) {}
+    document.querySelectorAll('[data-dw-theme-toggle-label]').forEach((node) => {
+      node.textContent = resolved === 'dark' ? 'Light theme' : 'Dark theme';
+    });
+  };
+  window.dwToggleTheme = () => {
+    const current = document.documentElement.dataset.dwTheme === 'dark' ? 'dark' : 'light';
+    apply(current === 'dark' ? 'light' : 'dark');
+  };
+  let stored = document.documentElement.dataset.dwTheme || 'light';
+  try { stored = window.localStorage.getItem(key) || stored; } catch (_) {}
+  apply(stored);
+})();
+"""
 ICON_FALLBACKS = {
     "activity": "↗",
     "bolt": "⚡",
@@ -1239,6 +1259,7 @@ def build_header(on_project_change=None) -> None:
             "font-weight:700;cursor:pointer;flex-shrink:0"
         ):
             ui.label("JD")
+    ui.timer(0.05, lambda: ui.run_javascript(_THEME_SYNC_JS), once=True)
 
 
 def build_page_title() -> None:

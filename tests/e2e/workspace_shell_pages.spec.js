@@ -144,4 +144,48 @@ test.describe("workspace shell pages", () => {
       "rgb(244, 244, 245)",
     );
   });
+
+  test("dark theme keeps skills catalog and detail cards readable", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      if (!window.sessionStorage.getItem("dw-theme-reset-once")) {
+        window.localStorage.removeItem("deploywhisper-theme");
+        window.sessionStorage.setItem("dw-theme-reset-once", "1");
+      }
+    });
+    await page.goto("/skills", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Toggle theme" }).click();
+
+    const skillRows = page.locator(".dw-skill-row");
+    await expect(skillRows.first()).toBeVisible();
+    await expect(skillRows.first()).toHaveCSS(
+      "background-color",
+      "rgb(24, 24, 27)",
+    );
+    await expect(skillRows.first().locator(".dw-skill-row-title")).toHaveCSS(
+      "color",
+      "rgb(244, 244, 245)",
+    );
+    await expect(skillRows.first().locator(".dw-skills-body")).toHaveCSS(
+      "color",
+      "rgb(161, 161, 170)",
+    );
+    await skillRows.first().hover();
+    await expect(skillRows.first()).toHaveCSS(
+      "background-color",
+      "rgb(31, 31, 35)",
+    );
+
+    await skillRows.first().click();
+    await expect(page).toHaveURL(/\/skills\/.+/);
+    await expect(page.locator(".dw-skill-section").first()).toHaveCSS(
+      "background-color",
+      "rgb(24, 24, 27)",
+    );
+    await expect(page.locator(".dw-skill-command").first()).toHaveCSS(
+      "background-color",
+      "rgb(39, 39, 42)",
+    );
+  });
 });
