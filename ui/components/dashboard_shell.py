@@ -501,14 +501,30 @@ def inject_shell_styles(*, force: bool = False) -> None:
   html[data-dw-theme="dark"] .dw-project-filter-meta {{
     color: #a1a1aa !important;
   }}
+  html[data-dw-theme="dark"] .dw-nav-inactive:hover,
+  html[data-dw-theme="dark"] .dw-nav-item:hover,
+  html[data-dw-theme="dark"] .dw-project-option-button:hover,
+  html[data-dw-theme="dark"] .dw-project-option-active,
+  html[data-dw-theme="dark"] .dw-table-row:hover,
+  html[data-dw-theme="dark"] .dw-history-card:hover {{
+    background: #27272a !important;
+    color: #f4f4f5 !important;
+  }}
+  html[data-dw-theme="dark"] .dw-project-option-selected {{
+    background: rgba(255,105,0,0.18) !important;
+    box-shadow: inset 0 0 0 1px rgba(255,105,0,0.38) !important;
+  }}
   html[data-dw-theme="dark"] [style*="color:#0a0a0a"],
   html[data-dw-theme="dark"] [style*="color: #0a0a0a"],
+  html[data-dw-theme="dark"] [style*="color: rgb(10, 10, 10)"],
   html[data-dw-theme="dark"] [style*="color:{ZINC_950}"],
   html[data-dw-theme="dark"] [style*="color: {ZINC_950}"] {{
     color: #f4f4f5 !important;
   }}
   html[data-dw-theme="dark"] [style*="color:#71717b"],
   html[data-dw-theme="dark"] [style*="color: #71717b"],
+  html[data-dw-theme="dark"] [style*="color: rgb(113, 113, 123)"],
+  html[data-dw-theme="dark"] [style*="color: rgb(156, 163, 175)"],
   html[data-dw-theme="dark"] [style*="color:{MUTED}"],
   html[data-dw-theme="dark"] [style*="color: {MUTED}"] {{
     color: #a1a1aa !important;
@@ -516,14 +532,31 @@ def inject_shell_styles(*, force: bool = False) -> None:
   html[data-dw-theme="dark"] [style*="background:#fff"],
   html[data-dw-theme="dark"] [style*="background: #fff"],
   html[data-dw-theme="dark"] [style*="background:#ffffff"],
-  html[data-dw-theme="dark"] [style*="background: #ffffff"] {{
+  html[data-dw-theme="dark"] [style*="background: #ffffff"],
+  html[data-dw-theme="dark"] [style*="background: rgb(255, 255, 255)"] {{
     background: #18181b !important;
   }}
   html[data-dw-theme="dark"] [style*="background:#f9fafb"],
   html[data-dw-theme="dark"] [style*="background: #f9fafb"],
   html[data-dw-theme="dark"] [style*="background:#f4f4f5"],
-  html[data-dw-theme="dark"] [style*="background: #f4f4f5"] {{
+  html[data-dw-theme="dark"] [style*="background: #f4f4f5"],
+  html[data-dw-theme="dark"] [style*="background: rgb(249, 250, 251)"],
+  html[data-dw-theme="dark"] [style*="background: rgb(244, 244, 245)"] {{
     background: #27272a !important;
+  }}
+  html[data-dw-theme="dark"] [style*="border:1px solid #e4e4e7"],
+  html[data-dw-theme="dark"] [style*="border: 1px solid #e4e4e7"],
+  html[data-dw-theme="dark"] [style*="border: 1px solid rgb(228, 228, 231)"],
+  html[data-dw-theme="dark"] [style*="border-color:#e4e4e7"],
+  html[data-dw-theme="dark"] [style*="border-color: #e4e4e7"],
+  html[data-dw-theme="dark"] [style*="border-color: rgb(228, 228, 231)"] {{
+    border-color: #3f3f46 !important;
+  }}
+  html[data-dw-theme="dark"] .q-field__native::placeholder,
+  html[data-dw-theme="dark"] .q-field__input::placeholder,
+  html[data-dw-theme="dark"] input::placeholder {{
+    color: #a1a1aa !important;
+    opacity: 1 !important;
   }}
   ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
   ::-webkit-scrollbar-track {{ background: transparent; }}

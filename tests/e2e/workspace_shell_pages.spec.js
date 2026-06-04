@@ -96,7 +96,52 @@ test.describe("workspace shell pages", () => {
       "background-color",
       "rgb(39, 39, 42)",
     );
+    await expect(page.getByRole("complementary")).toHaveCSS(
+      "background-color",
+      "rgb(24, 24, 27)",
+    );
+    const historyLink = page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: /History/ });
+    await historyLink.hover();
+    await expect(historyLink).toHaveCSS("background-color", "rgb(39, 39, 42)");
     await page.getByRole("button", { name: "Toggle theme" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-dw-theme", "light");
+  });
+
+  test("dark theme keeps dashboard content readable", async ({ page }) => {
+    await page.addInitScript(() =>
+      window.localStorage.removeItem("deploywhisper-theme"),
+    );
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Toggle theme" }).click();
+
+    await expect(page.locator("html")).toHaveAttribute("data-dw-theme", "dark");
+    await expect(page.getByText("Analysis snapshot")).toHaveCSS(
+      "color",
+      "rgb(244, 244, 245)",
+    );
+
+    const totalAnalysesCard = page
+      .locator(".q-card")
+      .filter({ hasText: "Total Analyses" })
+      .first();
+    await expect(totalAnalysesCard).toHaveCSS(
+      "background-color",
+      "rgb(24, 24, 27)",
+    );
+    await expect(totalAnalysesCard.getByText("Total Analyses")).toHaveCSS(
+      "color",
+      "rgb(161, 161, 170)",
+    );
+
+    const briefingCard = page
+      .locator(".q-card")
+      .filter({ hasText: "Deployment briefing" })
+      .first();
+    await expect(briefingCard.getByText(/Last scan:/).first()).toHaveCSS(
+      "color",
+      "rgb(244, 244, 245)",
+    );
   });
 });
