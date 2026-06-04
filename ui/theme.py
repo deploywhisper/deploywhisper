@@ -274,12 +274,207 @@ _THEME_CSS = f"""
 </style>
 """
 
+_REPORT_LAYOUT_CSS = """
+<style>
+.dw-report-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.dw-report-signal {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dw-report-signal-value,
+.dw-report-signal-detail {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.dw-verdict-card {
+  margin-top: 12px;
+  padding: 22px 24px !important;
+}
+
+.dw-verdict-score-block {
+  min-width: 124px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--dw-accent-line);
+  background: var(--dw-accent-soft);
+}
+
+.dw-verdict-score-value {
+  color: var(--dw-text);
+  font-size: 44px;
+  line-height: 0.95;
+  font-weight: 800;
+}
+
+.dw-verdict-score-label {
+  color: var(--dw-accent-contrast);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dw-verdict-top-risk {
+  color: var(--dw-text);
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 700;
+  max-width: min(58ch, 100%);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.dw-findings-row {
+  border-radius: 14px;
+}
+
+.dw-findings-col {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.dw-findings-col-severity {
+  width: 120px;
+}
+
+.dw-findings-col-title {
+  min-width: min(360px, 100%);
+}
+
+.dw-findings-col-tool {
+  width: 84px;
+}
+
+.dw-findings-col-evidence {
+  width: min(240px, 100%);
+}
+
+.dw-findings-col-confidence {
+  width: 150px;
+}
+
+.dw-findings-col-actions {
+  width: 116px;
+}
+
+.dw-findings-grid {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 88px minmax(220px, 0.7fr) 150px 116px;
+  gap: 12px;
+  align-items: start;
+}
+
+.dw-findings-header {
+  border: 1px solid var(--dw-line);
+  border-radius: 14px;
+  background: var(--dw-surface-soft);
+}
+
+.dw-findings-header .q-btn {
+  justify-content: flex-start;
+}
+
+.dw-findings-row-card {
+  border: 1px solid var(--dw-line);
+}
+
+.dw-findings-row-base,
+.dw-findings-row-alt {
+  background: #fff;
+}
+
+.dw-context-progress {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--dw-pill-bg);
+  border: 1px solid var(--dw-line);
+  overflow: hidden;
+}
+
+.dw-context-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dw-accent);
+}
+
+.dw-detail-list-row {
+  border: 1px solid var(--dw-line);
+}
+
+.dw-stat-card {
+  min-height: 150px;
+  padding: 24px !important;
+}
+
+.dw-stat-value {
+  color: var(--dw-text);
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.dw-stat-label {
+  margin-top: 10px;
+  color: var(--dw-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dw-stat-detail {
+  color: var(--dw-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+@media (max-width: 960px) {
+  .dw-findings-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .dw-findings-col {
+    width: auto !important;
+  }
+
+  .dw-findings-col-actions,
+  .dw-findings-col-confidence {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 820px) {
+  .dw-findings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+</style>
+"""
+
 
 def apply_theme() -> None:
     """Inject the shared compatibility theme for app surfaces."""
     ui.colors(primary=ORANGE)
     ui.add_head_html(_THEME_HEAD_HTML)
     ui.add_head_html(_THEME_CSS)
+    ui.add_head_html(_REPORT_LAYOUT_CSS)
 
 
 def build_page_header(
