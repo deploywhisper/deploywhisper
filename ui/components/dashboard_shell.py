@@ -44,9 +44,9 @@ ICON_FALLBACKS = {
     "folder": "▣",
     "grid_view": "⊞",
     "history": "↺",
-    "notifications": "🔔",
     "search": "⌕",
     "settings": "⚙",
+    "theme": "◐",
 }
 
 _SHELL_HEAD_INJECTED = False
@@ -434,10 +434,121 @@ def inject_shell_styles(*, force: bool = False) -> None:
     width: 100%;
   }}
   .dw-danger-button {{ color: {RED} !important; }}
+  .dw-theme-toggle {{
+    width: 40px;
+    height: 40px;
+    border: 1px solid {ZINC_200};
+    border-radius: 10px;
+    background: {ZINC_100};
+    color: {ZINC_950};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }}
+  html[data-dw-theme="dark"] {{
+    --dw-bg: #18181b;
+    --dw-zinc-100: #27272a;
+    --dw-zinc-200: #3f3f46;
+    --dw-zinc-950: #f4f4f5;
+    --dw-text: #f4f4f5;
+    --dw-muted: #a1a1aa;
+    --dw-muted-text: #a1a1aa;
+    --dw-line: #3f3f46;
+    --dw-line-strong: #52525b;
+    --dw-surface: #18181b;
+    --dw-surface-strong: #18181b;
+    --dw-surface-soft: #27272a;
+    --dw-pill-bg: #27272a;
+  }}
+  html[data-dw-theme="dark"] body,
+  html[data-dw-theme="dark"] .nicegui-content,
+  html[data-dw-theme="dark"] .q-page-container {{
+    background: #27272a !important;
+    color: #f4f4f5 !important;
+  }}
+  html[data-dw-theme="dark"] .q-header,
+  html[data-dw-theme="dark"] .q-drawer,
+  html[data-dw-theme="dark"] .dw-panel,
+  html[data-dw-theme="dark"] .q-card {{
+    background: #18181b !important;
+    border-color: #3f3f46 !important;
+    color: #f4f4f5 !important;
+  }}
+  html[data-dw-theme="dark"] .dw-panel-soft,
+  html[data-dw-theme="dark"] .dw-mini-stat,
+  html[data-dw-theme="dark"] .dw-theme-toggle,
+  html[data-dw-theme="dark"] .dw-header-button,
+  html[data-dw-theme="dark"] .dw-theme-button,
+  html[data-dw-theme="dark"] .q-field--outlined .q-field__control,
+  html[data-dw-theme="dark"] .q-select .q-field__control,
+  html[data-dw-theme="dark"] .q-uploader {{
+    background: #27272a !important;
+    border-color: #3f3f46 !important;
+    color: #f4f4f5 !important;
+  }}
+  html[data-dw-theme="dark"] .dw-text,
+  html[data-dw-theme="dark"] .dw-title,
+  html[data-dw-theme="dark"] .q-field__native,
+  html[data-dw-theme="dark"] .q-field__input,
+  html[data-dw-theme="dark"] .q-field__label {{
+    color: #f4f4f5 !important;
+  }}
+  html[data-dw-theme="dark"] .dw-muted,
+  html[data-dw-theme="dark"] .dw-body,
+  html[data-dw-theme="dark"] .dw-project-option-meta,
+  html[data-dw-theme="dark"] .dw-project-filter-meta {{
+    color: #a1a1aa !important;
+  }}
+  html[data-dw-theme="dark"] [style*="color:#0a0a0a"],
+  html[data-dw-theme="dark"] [style*="color: #0a0a0a"],
+  html[data-dw-theme="dark"] [style*="color:{ZINC_950}"],
+  html[data-dw-theme="dark"] [style*="color: {ZINC_950}"] {{
+    color: #f4f4f5 !important;
+  }}
+  html[data-dw-theme="dark"] [style*="color:#71717b"],
+  html[data-dw-theme="dark"] [style*="color: #71717b"],
+  html[data-dw-theme="dark"] [style*="color:{MUTED}"],
+  html[data-dw-theme="dark"] [style*="color: {MUTED}"] {{
+    color: #a1a1aa !important;
+  }}
+  html[data-dw-theme="dark"] [style*="background:#fff"],
+  html[data-dw-theme="dark"] [style*="background: #fff"],
+  html[data-dw-theme="dark"] [style*="background:#ffffff"],
+  html[data-dw-theme="dark"] [style*="background: #ffffff"] {{
+    background: #18181b !important;
+  }}
+  html[data-dw-theme="dark"] [style*="background:#f9fafb"],
+  html[data-dw-theme="dark"] [style*="background: #f9fafb"],
+  html[data-dw-theme="dark"] [style*="background:#f4f4f5"],
+  html[data-dw-theme="dark"] [style*="background: #f4f4f5"] {{
+    background: #27272a !important;
+  }}
   ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
   ::-webkit-scrollbar-track {{ background: transparent; }}
   ::-webkit-scrollbar-thumb {{ background: #d4d4d8; border-radius: 3px; }}
 </style>
+<script>
+(() => {{
+  const key = 'deploywhisper-theme';
+  const apply = (theme) => {{
+    const resolved = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.dwTheme = resolved;
+    try {{ window.localStorage.setItem(key, resolved); }} catch (_) {{}}
+    document.querySelectorAll('[data-dw-theme-toggle-label]').forEach((node) => {{
+      node.textContent = resolved === 'dark' ? 'Light theme' : 'Dark theme';
+    }});
+  }};
+  window.dwToggleTheme = () => {{
+    const current = document.documentElement.dataset.dwTheme === 'dark' ? 'dark' : 'light';
+    apply(current === 'dark' ? 'light' : 'dark');
+  }};
+  let stored = 'light';
+  try {{ stored = window.localStorage.getItem(key) || 'light'; }} catch (_) {{}}
+  apply(stored);
+}})();
+</script>
 """,
         shared=True,
     )
@@ -706,14 +817,20 @@ def build_header(on_project_change=None) -> None:
             .on("click", lambda _: open_deploy_review())
         ):
             ui.html("<span>▶ Run Analysis</span>")
-        with ui.element("div").style(
-            f"position:relative;width:40px;height:40px;border-radius:10px;background:{ZINC_100};"
-            "display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0"
+        with (
+            ui.element("button")
+            .props('type=button aria-label="Toggle theme" title="Toggle theme"')
+            .classes("dw-theme-toggle")
+            .on(
+                "click",
+                lambda _: ui.run_javascript(
+                    "window.dwToggleTheme && window.dwToggleTheme()"
+                ),
+            )
         ):
-            icon_symbol("notifications", color=MUTED, size=18)
-            ui.element("span").style(
-                "position:absolute;top:8px;right:8px;width:8px;height:8px;"
-                "background:#dc2626;border-radius:50%;border:2px solid #fff"
+            icon_symbol("theme", color=MUTED, size=18)
+            ui.html(
+                '<span data-dw-theme-toggle-label class="dw-dashboard-hidden-context">Dark theme</span>'
             )
         with ui.element("div").style(
             f"width:40px;height:40px;border-radius:10px;background:{ORANGE};color:#fff;"

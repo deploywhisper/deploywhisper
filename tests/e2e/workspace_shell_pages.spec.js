@@ -35,6 +35,9 @@ test.describe("workspace shell pages", () => {
         "background-color",
         "rgb(255, 105, 0)",
       );
+      const themeToggle = page.getByRole("button", { name: "Toggle theme" });
+      await expect(themeToggle).toBeVisible();
+      await expect(themeToggle).toHaveCSS("width", "40px");
       await expect(page.getByText(route.title)).toBeVisible();
 
       const nav = page.getByRole("navigation", { name: "Primary navigation" });
@@ -76,5 +79,24 @@ test.describe("workspace shell pages", () => {
     await expect(page).toHaveURL(/\/#deploy-review$/);
     await expect(page.locator("#deploy-review")).toBeAttached({ timeout: 20_000 });
     await expect(page.getByText("Deploy review", { exact: true })).toBeVisible();
+  });
+
+  test("theme toggle switches the shared shell between light and dark", async ({
+    page,
+  }) => {
+    await page.addInitScript(() =>
+      window.localStorage.removeItem("deploywhisper-theme"),
+    );
+    await page.goto("/skills", { waitUntil: "networkidle" });
+
+    await expect(page.locator("html")).toHaveAttribute("data-dw-theme", "light");
+    await page.getByRole("button", { name: "Toggle theme" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-dw-theme", "dark");
+    await expect(page.locator("body")).toHaveCSS(
+      "background-color",
+      "rgb(39, 39, 42)",
+    );
+    await page.getByRole("button", { name: "Toggle theme" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-dw-theme", "light");
   });
 });

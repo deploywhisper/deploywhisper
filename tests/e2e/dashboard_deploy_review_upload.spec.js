@@ -58,18 +58,28 @@ test.describe("dashboard deploy review upload", () => {
     await analyzeButton.click();
 
     const continueAnyway = page.getByRole("button", { name: "Continue Anyway" });
-    if (await continueAnyway.isVisible({ timeout: 15_000 }).catch(() => false)) {
+    if (
+      await continueAnyway
+        .waitFor({ state: "visible", timeout: 15_000 })
+        .then(() => true)
+        .catch(() => false)
+    ) {
       await continueAnyway.click();
     }
 
-    await expect(
-      page.getByRole("link", { name: /^Saved report #/ }),
-    ).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByText("0 files", { exact: true })).toBeVisible({
+      timeout: 90_000,
+    });
 
     const recentAnalysesCard = page
       .locator(".q-card")
       .filter({ hasText: "Recent Analyses" })
       .first();
+    await expect(
+      recentAnalysesCard
+        .getByRole("link", { name: /checkout-platform\.yaml/ })
+        .first(),
+    ).toBeVisible({ timeout: 90_000 });
     await expect(recentAnalysesCard).toContainText(/\d+s/, {
       timeout: 15_000,
     });
