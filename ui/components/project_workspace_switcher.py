@@ -194,8 +194,8 @@ def build_project_combobox(
                         with (
                             ui.element("div")
                             .props(
-                                "role=option tabindex=-1 "
-                                f"aria-selected={'true' if is_active else 'false'}"
+                                "role=button tabindex=-1 "
+                                f"aria-pressed={'true' if is_active else 'false'}"
                             )
                             .classes(" ".join(option_classes))
                             .on(
@@ -212,10 +212,10 @@ def build_project_combobox(
                                     ui.html(primary).classes(
                                         "dw-project-option-primary"
                                     )
-                                    ui.html(secondary).classes("dw-project-option-meta")
+                                ui.html(secondary).classes("dw-project-option-meta")
                                 if is_active:
-                                    ui.icon("check").classes(
-                                        "dw-project-option-check shrink-0"
+                                    ui.html(
+                                        '<span aria-hidden="true" class="dw-project-option-check shrink-0">✓</span>'
                                     )
 
     def set_highlighted_index(index: int) -> None:

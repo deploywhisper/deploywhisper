@@ -25,9 +25,10 @@ from ui.components.review_accessibility import (
     decorate_modal_close,
 )
 from ui.components.topology_freshness_banner import render_topology_freshness_banner
+from ui.components.dashboard_shell import build_app_shell, workspace_content
 from ui.project_authorization import resolve_authorized_ui_active_project
 from ui.project_authorization import load_authorized_ui_projects
-from ui.theme import apply_theme, build_navigation_shell, build_page_header
+from ui.theme import build_page_header
 
 
 def page_selection_state(
@@ -118,17 +119,12 @@ def _history_toolchain_options(toolchains: list[str]) -> dict[str, str]:
 
 def build_history_page() -> None:
     """Render a scanable history view with direct report retrieval."""
-    apply_theme()
     content_refresh = {"fn": lambda *_: None}
 
     def handle_project_change(*_) -> None:
-        refresh_shell()
         content_refresh["fn"]()
 
-    refresh_shell = build_navigation_shell(
-        "history",
-        on_project_change=handle_project_change,
-    )
+    build_app_shell("history", on_project_change=handle_project_change)
 
     @ui.refreshable
     def render_history_content() -> None:
@@ -170,11 +166,7 @@ def build_history_page() -> None:
         card_checkboxes: dict[int, Any] = {}
         selection_sync = {"active": False}
 
-        with (
-            ui.column()
-            .classes("dw-main-content dw-shell gap-5")
-            .props('role=main aria-label="Analysis history workspace"')
-        ):
+        with workspace_content(aria_label="Analysis history workspace"):
             with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
                 build_page_header(
                     eyebrow="History",
@@ -746,17 +738,12 @@ def _render_history_report_comparison(
 
 def build_history_detail_page(report_id: int, *, show_comparison: bool = False) -> None:
     """Render one persisted report on a dedicated detail page."""
-    apply_theme()
     content_refresh = {"fn": lambda *_: None}
 
     def handle_project_change(*_) -> None:
-        refresh_shell()
         content_refresh["fn"]()
 
-    refresh_shell = build_navigation_shell(
-        "history",
-        on_project_change=handle_project_change,
-    )
+    build_app_shell("history", on_project_change=handle_project_change)
 
     @ui.refreshable
     def render_history_detail_content() -> None:
@@ -778,11 +765,7 @@ def build_history_detail_page(report_id: int, *, show_comparison: bool = False) 
             else "Analysis report workspace"
         )
 
-        with (
-            ui.column()
-            .classes("dw-main-content dw-shell gap-5")
-            .props(f'role=main aria-label="{main_label}"')
-        ):
+        with workspace_content(aria_label=main_label):
             with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
                 if report is None:
                     build_page_header(

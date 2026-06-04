@@ -3815,6 +3815,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "evidence_items": evidence_items,
         "contributors": contributors,
         "dashboard_display_duration_seconds": report.dashboard_display_duration_seconds,
+        "analysis_duration_seconds": report.analysis_duration_seconds,
         "share_password_hash": getattr(report, "share_password_hash", None),
         "share_password_salt": getattr(report, "share_password_salt", None),
         "share_redact_filenames": bool(
@@ -3848,6 +3849,7 @@ def persist_analysis_report(
     workspace_key: str | None = None,
     audit_context: dict[str, Any] | None = None,
     submitted_artifacts: list[tuple[str, bytes | None]] | None = None,
+    analysis_duration_seconds: int | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
     assessment = apply_context_uncertainty(assessment)
@@ -4030,6 +4032,7 @@ def persist_analysis_report(
                     trigger_type=audit["trigger_type"],
                     trigger_id=audit["trigger_id"],
                     dashboard_display_duration_seconds=dashboard_display_duration_seconds,
+                    analysis_duration_seconds=analysis_duration_seconds,
                     top_risk_contributors_json=json.dumps(
                         assessment.top_risk_contributors
                     ),

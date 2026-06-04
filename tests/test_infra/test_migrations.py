@@ -277,6 +277,9 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("share_password_salt", self._table_columns("analysis_reports"))
         self.assertIn("share_redact_filenames", self._table_columns("analysis_reports"))
         self.assertIn(
+            "analysis_duration_seconds", self._table_columns("analysis_reports")
+        )
+        self.assertIn(
             "submission_manifest_json", self._table_columns("analysis_reports")
         )
         self.assertIn(
@@ -495,6 +498,9 @@ class MigrationTests(unittest.TestCase):
             submission_manifest_fallback = sqlite_conn.execute(
                 "SELECT submission_manifest_fallback_json FROM analysis_reports LIMIT 1"
             ).fetchone()[0]
+            analysis_duration_seconds = sqlite_conn.execute(
+                "SELECT analysis_duration_seconds FROM analysis_reports LIMIT 1"
+            ).fetchone()[0]
             project_key = sqlite_conn.execute(
                 """
                 SELECT projects.project_key
@@ -518,6 +524,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(share_redact_filenames, 0)
         self.assertEqual(submission_manifest, "{}")
         self.assertEqual(submission_manifest_fallback, "[]")
+        self.assertIsNone(analysis_duration_seconds)
         self.assertEqual(project_key, "unassigned")
         self.assertTrue(any(row[2] == "analysis_reports" for row in finding_fks))
         self.assertTrue(any(row[2] == "findings" for row in evidence_fks))
@@ -1049,7 +1056,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("topology_versions", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "024_add_analysis_duration_seconds")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1100,7 +1107,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("projects", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "024_add_analysis_duration_seconds")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1126,13 +1133,14 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "024_add_analysis_duration_seconds")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
         self.assertIn("workspace_id", columns)
         self.assertIn("submission_manifest_json", columns)
         self.assertIn("submission_manifest_fallback_json", columns)
+        self.assertIn("analysis_duration_seconds", columns)
         self._assert_incident_ingestion_source_schema()
 
     def test_init_db_accepts_current_incident_matches_revision(self) -> None:
@@ -1151,7 +1159,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "024_add_analysis_duration_seconds")
         self._assert_incident_ingestion_source_schema()
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
@@ -1583,7 +1591,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "024_add_analysis_duration_seconds")
         self._assert_incident_ingestion_source_schema()
 
 

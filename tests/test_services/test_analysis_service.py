@@ -19,6 +19,7 @@ from evidence.models import EvidenceItem
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 from services.analysis_service import (
+    AnalysisArtifacts,
     analyze_uploaded_files,
     build_advisory_summary,
     build_analysis_artifacts,
@@ -40,6 +41,81 @@ def _incident_snapshot(count: int = 0) -> dict:
 
 
 class AnalysisServiceTests(unittest.TestCase):
+    def test_analyze_uploaded_files_persists_elapsed_analysis_duration(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        artifacts = AnalysisArtifacts(
+            parse_batch=parse_batch,
+            evidence_items=[],
+            findings=[],
+            assessment=RiskAssessment(
+                score=10,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk fixture.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            blast_radius=BlastRadiusResult(
+                affected=[],
+                direct_count=0,
+                transitive_count=0,
+            ),
+            rollback_plan=RollbackPlan(
+                steps=[],
+                complexity="low",
+                complexity_score=1,
+            ),
+            incident_matches=[],
+            narrative=NarrativeResult(
+                opening_sentence="GO: low risk fixture.",
+                explanation="No material risk.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+
+        with (
+            patch(
+                "services.analysis_service.resolve_analysis_project_scope",
+                return_value=SimpleNamespace(id=17),
+            ),
+            patch(
+                "services.analysis_service.build_analysis_artifacts",
+                return_value=artifacts,
+            ),
+            patch(
+                "services.analysis_service.persist_analysis_report",
+                return_value={"id": 99, "analysis_duration_seconds": 7},
+            ) as persist_analysis_report,
+            patch(
+                "services.analysis_service.perf_counter",
+                side_effect=[10.0, 17.2],
+            ),
+        ):
+            result = analyze_uploaded_files(
+                [("plan.json", b"{}")],
+                project_id=17,
+                audit_context={"source_interface": "api"},
+            )
+
+        self.assertEqual(result.persisted_report["analysis_duration_seconds"], 7)
+        self.assertEqual(
+            persist_analysis_report.call_args.kwargs["analysis_duration_seconds"],
+            7,
+        )
+
     def test_analyze_uploaded_files_requires_explicit_project_scope_before_parsing(
         self,
     ) -> None:

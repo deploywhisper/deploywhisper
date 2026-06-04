@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 from datetime import UTC, datetime
+from time import perf_counter
 from typing import Any
 from pydantic import BaseModel, Field
 
@@ -1298,6 +1299,7 @@ def analyze_uploaded_files(
     audit_context: dict | None = None,
 ) -> AnalysisRunResult:
     """Run the shared parse -> assess -> persist pipeline."""
+    started_at = perf_counter()
     resolved_project = resolve_analysis_project_scope(
         project_id=project_id,
         project_key=project_key,
@@ -1311,6 +1313,7 @@ def analyze_uploaded_files(
         workspace_key=workspace_key,
         completion_client=completion_client,
     )
+    analysis_duration_seconds = max(1, round(perf_counter() - started_at))
     try:
         persisted_report = persist_analysis_report(
             artifacts.parse_batch,
@@ -1327,6 +1330,7 @@ def analyze_uploaded_files(
             workspace_id=workspace_id,
             workspace_key=workspace_key,
             audit_context=audit_context,
+            analysis_duration_seconds=analysis_duration_seconds,
         )
     except Exception as exc:  # noqa: BLE001
         raise AnalysisPersistenceError(str(exc)) from exc

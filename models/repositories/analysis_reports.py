@@ -424,6 +424,7 @@ def create_analysis_report(
     trigger_type: str | None,
     trigger_id: str | None,
     dashboard_display_duration_seconds: int | None,
+    analysis_duration_seconds: int | None = None,
     narrative_degraded: bool | None = None,
     narrative_failure_notice: str | None = None,
     top_risk_contributors_json: str = "[]",
@@ -468,6 +469,7 @@ def create_analysis_report(
         trigger_type=trigger_type,
         trigger_id=trigger_id,
         dashboard_display_duration_seconds=dashboard_display_duration_seconds,
+        analysis_duration_seconds=analysis_duration_seconds,
     )
     finding_rows: list[tuple[PersistedFinding, list[str]]] = []
     for finding in findings_payload or []:

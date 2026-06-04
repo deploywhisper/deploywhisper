@@ -3857,6 +3857,7 @@ class ReportServiceTests(unittest.TestCase):
             ],
             findings=findings,
             evidence_items=evidence_items,
+            analysis_duration_seconds=14,
             audit_context={
                 "source_interface": "api",
                 "trigger_type": "session",
@@ -3866,6 +3867,7 @@ class ReportServiceTests(unittest.TestCase):
         )
         self.assertIn("id", persisted)
         self.assertEqual(persisted["audit"]["source_interface"], "api")
+        self.assertEqual(persisted["analysis_duration_seconds"], 14)
         self.assertEqual(persisted["audit"]["trigger_type"], "session")
         self.assertEqual(persisted["audit"]["trigger_id"], "sess-123")
         self.assertEqual(persisted["audit"]["actor"], "reviewer@example.com")
