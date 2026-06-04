@@ -39,7 +39,9 @@ class LocalDesignAssetTests(unittest.TestCase):
         self.assertIn("font-family: 'Plus Jakarta Sans'", LOCAL_DESIGN_ASSET_CSS)
         self.assertIn("font-family: 'Material Icons'", LOCAL_DESIGN_ASSET_CSS)
         self.assertIn("/assets/fonts/plus-jakarta-sans-400.ttf", LOCAL_DESIGN_ASSET_CSS)
-        self.assertIn("/assets/fonts/material-icons-regular.ttf", LOCAL_DESIGN_ASSET_CSS)
+        self.assertIn(
+            "/assets/fonts/material-icons-regular.ttf", LOCAL_DESIGN_ASSET_CSS
+        )
         self.assertNotIn("fonts.googleapis.com", LOCAL_DESIGN_ASSET_CSS)
         self.assertNotIn("fonts.gstatic.com", LOCAL_DESIGN_ASSET_CSS)
 

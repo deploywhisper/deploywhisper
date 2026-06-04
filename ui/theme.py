@@ -94,11 +94,14 @@ i.q-icon,
 LOCAL_DESIGN_ASSET_CSS = LOCAL_FONT_ASSET_CSS + LOCAL_MATERIAL_ICON_CSS
 LOCAL_DESIGN_ASSET_HEAD_HTML = f"<style>{LOCAL_DESIGN_ASSET_CSS}</style>"
 
-_THEME_HEAD_HTML = """
+_THEME_HEAD_HTML = (
+    """
 <link rel="icon" href="/assets/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-""" + LOCAL_DESIGN_ASSET_HEAD_HTML
+"""
+    + LOCAL_DESIGN_ASSET_HEAD_HTML
+)
 
 _THEME_CSS = f"""
 <style>
