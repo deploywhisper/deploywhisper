@@ -54,6 +54,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "021_add_incident_matches_payload",
     "022_add_deployment_outcome_notes",
     "023_add_incident_ingestion_sources",
+    "024_add_analysis_duration_seconds",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -400,6 +401,19 @@ def _analysis_report_incident_matches_complete(connection) -> bool:
     )
 
 
+def _analysis_report_duration_metric_complete(connection) -> bool:
+    column_map = {
+        column["name"]: column
+        for column in inspect(connection).get_columns("analysis_reports")
+    }
+    duration_column = column_map.get("analysis_duration_seconds")
+    return (
+        duration_column is not None
+        and duration_column["type"]._type_affinity is Integer
+        and duration_column.get("nullable") is True
+    )
+
+
 def _index_has_workspace_null_predicate(index: dict) -> bool:
     dialect_options = index.get("dialect_options") or {}
     predicate_sql = " ".join(
@@ -738,6 +752,11 @@ def _bootstrap_brownfield_revision() -> None:
             has_incident_ingestion_sources
             and _incident_ingestion_sources_schema_complete(connection)
         )
+        has_analysis_duration_metric = "analysis_duration_seconds" in report_columns
+        has_complete_analysis_duration_metric = (
+            has_analysis_duration_metric
+            and _analysis_report_duration_metric_complete(connection)
+        )
         if has_incident_ingestion_sources and not (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload
@@ -750,6 +769,21 @@ def _bootstrap_brownfield_revision() -> None:
         ):
             raise RuntimeError(
                 "Detected a partial incident ingestion source schema without a "
+                "complete migration history. Manual recovery is required."
+            )
+        if has_analysis_duration_metric and not (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+            and has_deployment_outcome_notes
+            and has_complete_incident_ingestion_sources
+            and has_complete_analysis_duration_metric
+        ):
+            raise RuntimeError(
+                "Detected a partial analysis duration metric schema without a "
                 "complete migration history. Manual recovery is required."
             )
         if scoped_learning_columns_present and not has_complete_learning_context_scope:
@@ -819,6 +853,19 @@ def _bootstrap_brownfield_revision() -> None:
                 "Detected a partial deployment outcome notes schema without a complete "
                 "migration history. Manual recovery is required."
             )
+        if (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+            and has_deployment_outcome_notes
+            and has_complete_incident_ingestion_sources
+            and has_complete_analysis_duration_metric
+        ):
+            _write_alembic_revision(connection, "024_add_analysis_duration_seconds")
+            return
         if (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload

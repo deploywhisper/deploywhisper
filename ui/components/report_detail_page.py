@@ -102,9 +102,13 @@ def _detail_stat(label: str, value: str, detail: str) -> None:
 
 def _header_signal(label: str, value: str, detail: str) -> None:
     signal_key = label.lower().replace(" ", "-")
+    span_class = {
+        "top-risk": "dw-report-signal-long",
+        "next-action": "dw-report-signal-action",
+    }.get(signal_key, "dw-report-signal-compact")
     with (
         ui.element("div")
-        .classes("dw-panel-soft dw-report-signal p-3")
+        .classes(f"dw-panel-soft dw-report-signal {span_class} p-3")
         .props(f'data-dw-report-signal="{signal_key}"')
     ):
         with ui.column().classes("gap-1 min-w-0"):

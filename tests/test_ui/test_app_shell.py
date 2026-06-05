@@ -66,6 +66,8 @@ class DashboardShellTests(unittest.TestCase):
         self.assertIn("Active Project", response.text)
         self.assertIn("Search repo or project name", response.text)
         self.assertIn("New project", response.text)
+        self.assertIn('"aria-label":"Toggle theme"', response.text)
+        self.assertIn("window.dwToggleTheme", response.text)
         self.assertIn("Unassigned", response.text)
         self.assertIn("Default workspace", response.text)
         self.assertIn("dw-project-bar", response.text)

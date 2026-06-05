@@ -17,7 +17,8 @@ from services.skill_registry_service import (
     fetch_skill_registry_page,
     fetch_skill_registry_versions,
 )
-from ui.theme import apply_theme, build_navigation_shell, build_page_header
+from ui.components.dashboard_shell import build_app_shell, workspace_content
+from ui.theme import build_page_header
 
 _BROWSER_CSS = """
 <style>
@@ -27,12 +28,10 @@ _BROWSER_CSS = """
 }
 
 .dw-skills-hero {
-  padding: 34px;
+  padding: 28px;
   display: grid;
   gap: 22px;
-  background:
-    radial-gradient(circle at 85% 18%, rgba(217, 107, 61, 0.18), transparent 30%),
-    linear-gradient(140deg, color-mix(in srgb, var(--dw-surface-strong) 92%, transparent), color-mix(in srgb, var(--dw-surface) 88%, transparent));
+  background: #fff;
 }
 
 .dw-skills-hero-grid {
@@ -43,12 +42,12 @@ _BROWSER_CSS = """
 }
 
 .dw-skills-display {
-  font-size: clamp(2.7rem, 6vw, 4.8rem);
-  line-height: 0.94;
+  font-size: 32px;
+  line-height: 1.08;
   font-weight: 800;
-  letter-spacing: -0.06em;
+  letter-spacing: 0;
   color: var(--dw-text);
-  max-width: 8ch;
+  max-width: 18ch;
 }
 
 .dw-skills-display span {
@@ -70,9 +69,9 @@ _BROWSER_CSS = """
 
 .dw-skills-stat {
   border: 1px solid var(--dw-line);
-  border-radius: 18px;
+  border-radius: 14px;
   padding: 16px;
-  background: color-mix(in srgb, var(--dw-surface-soft) 88%, transparent);
+  background: var(--dw-surface-soft);
 }
 
 .dw-skills-stat-value {
@@ -108,15 +107,15 @@ _BROWSER_CSS = """
   align-items: center;
   padding: 20px 24px;
   border: 1px solid var(--dw-line);
-  border-radius: 22px;
-  background: linear-gradient(180deg, var(--dw-surface), var(--dw-surface-strong));
+  border-radius: 18px;
+  background: #fff;
   box-shadow: var(--dw-shadow);
-  transition: transform 180ms ease, border-color 180ms ease;
+  transition: box-shadow 180ms ease, border-color 180ms ease;
 }
 
 .dw-skill-row:hover {
-  transform: translateY(-2px);
   border-color: var(--dw-accent-line);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
 }
 
 .dw-skill-row-title {
@@ -180,13 +179,13 @@ _BROWSER_CSS = """
 }
 
 .dw-skill-badge-official {
-  background: color-mix(in srgb, #0f766e 18%, white);
-  color: #0f5c56;
+  background: rgba(22,163,74,0.12);
+  color: #166534;
 }
 
 .dw-skill-badge-featured {
-  background: color-mix(in srgb, #d97706 18%, white);
-  color: #8a4a05;
+  background: rgba(217,119,6,0.12);
+  color: #92400e;
 }
 
 .dw-skill-metrics {
@@ -218,7 +217,7 @@ _BROWSER_CSS = """
   padding: 12px 14px;
   background: var(--dw-pill-bg);
   color: var(--dw-text);
-  font-family: "IBM Plex Mono", monospace;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 13px;
 }
 
@@ -273,9 +272,76 @@ _BROWSER_CSS = """
 .dw-empty-note {
   padding: 24px;
   border: 1px dashed var(--dw-line-strong);
-  border-radius: 22px;
+  border-radius: 14px;
   color: var(--dw-muted);
   background: var(--dw-surface-soft);
+}
+
+html[data-dw-theme="dark"] .dw-skills-hero,
+html[data-dw-theme="dark"] .dw-skill-row,
+html[data-dw-theme="dark"] .dw-skill-section {
+  background: var(--dw-surface) !important;
+  border-color: var(--dw-line) !important;
+  color: var(--dw-text) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-row:hover {
+  background: #1f1f23 !important;
+  border-color: var(--dw-accent-line) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.28);
+}
+
+html[data-dw-theme="dark"] .dw-skills-display,
+html[data-dw-theme="dark"] .dw-skill-row-title,
+html[data-dw-theme="dark"] .dw-skill-metric-value,
+html[data-dw-theme="dark"] .dw-skills-stat-value,
+html[data-dw-theme="dark"] .dw-skill-command {
+  color: var(--dw-text) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skills-body,
+html[data-dw-theme="dark"] .dw-skill-row-meta,
+html[data-dw-theme="dark"] .dw-skill-metric-label,
+html[data-dw-theme="dark"] .dw-skills-stat-label,
+html[data-dw-theme="dark"] .dw-empty-note {
+  color: var(--dw-muted) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skills-stat,
+html[data-dw-theme="dark"] .dw-skill-tag,
+html[data-dw-theme="dark"] .dw-skill-command,
+html[data-dw-theme="dark"] .dw-empty-note {
+  background: var(--dw-surface-soft) !important;
+  border-color: var(--dw-line) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-tag {
+  color: #d4d4d8 !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-badge-official {
+  background: rgba(22,163,74,0.22) !important;
+  color: #86efac !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-badge-featured {
+  background: rgba(217,119,6,0.24) !important;
+  color: #fcd34d !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-chip {
+  background: rgba(255,105,0,0.18) !important;
+  color: #fed7aa !important;
+}
+
+html[data-dw-theme="dark"] .dw-skill-version-row {
+  border-color: var(--dw-line) !important;
+}
+
+html[data-dw-theme="dark"] .dw-skills-controls .q-field__control {
+  background: var(--dw-surface-soft) !important;
+  border-color: var(--dw-line) !important;
+  color: var(--dw-text) !important;
 }
 
 @media (max-width: 900px) {
@@ -425,9 +491,8 @@ def _render_skill_row(skill: SkillRegistryEntry) -> None:
 
 @ui.page("/skills")
 def skills_browser_page(request: Request) -> None:
-    apply_theme()
     ui.add_head_html(_BROWSER_CSS)
-    build_navigation_shell("skills")
+    build_app_shell("skills")
 
     tools, authors = _browser_options()
     search = _query_value(request, "search") or ""
@@ -443,105 +508,108 @@ def skills_browser_page(request: Request) -> None:
         sort=sort_value,
     )
 
-    with ui.column().classes("dw-main-content dw-shell dw-skills-shell"):
-        with ui.card().classes("dw-panel shadow-none dw-skills-hero"):
-            with ui.element("div").classes("dw-skills-hero-grid"):
-                with ui.column().classes("gap-5"):
-                    ui.label("Marketplace").classes("dw-eyebrow")
-                    ui.html(
-                        '<div class="dw-skills-display">DeployWhisper <span>skills atlas</span></div>'
-                    )
-                    ui.label(
-                        "Browse the registry before you install anything. Search by domain, filter by owner, and compare readiness signals from the same catalog the CLI consumes."
-                    ).classes("dw-skills-body")
-                with ui.element("div").classes("dw-skills-hero-stats"):
-                    for value, label in (
-                        (str(len(catalog)), "Visible skills"),
-                        (
-                            str(sum(item.install_count for item in catalog)),
-                            "Catalog installs",
-                        ),
-                        (
-                            str(sum(item.active_issue_count for item in catalog)),
-                            "Open issues",
-                        ),
-                        (
-                            str(
-                                sum(
-                                    1
-                                    for item in catalog
-                                    if item.test_results
-                                    and item.test_results.status == "passing"
-                                )
+    with workspace_content(aria_label="Skills registry workspace"):
+        with ui.column().classes("dw-skills-shell"):
+            with ui.card().classes("dw-panel shadow-none dw-skills-hero"):
+                with ui.element("div").classes("dw-skills-hero-grid"):
+                    with ui.column().classes("gap-5"):
+                        ui.label("Marketplace").classes("dw-eyebrow")
+                        ui.html(
+                            '<div class="dw-skills-display">DeployWhisper <span>skills atlas</span></div>'
+                        )
+                        ui.label(
+                            "Browse the registry before you install anything. Search by domain, filter by owner, and compare readiness signals from the same catalog the CLI consumes."
+                        ).classes("dw-skills-body")
+                    with ui.element("div").classes("dw-skills-hero-stats"):
+                        for value, label in (
+                            (str(len(catalog)), "Visible skills"),
+                            (
+                                str(sum(item.install_count for item in catalog)),
+                                "Catalog installs",
                             ),
-                            "Passing harnesses",
-                        ),
-                    ):
-                        with ui.element("div").classes("dw-skills-stat"):
-                            ui.label(value).classes("dw-skills-stat-value")
-                            ui.label(label).classes("dw-skills-stat-label")
+                            (
+                                str(sum(item.active_issue_count for item in catalog)),
+                                "Open issues",
+                            ),
+                            (
+                                str(
+                                    sum(
+                                        1
+                                        for item in catalog
+                                        if item.test_results
+                                        and item.test_results.status == "passing"
+                                    )
+                                ),
+                                "Passing harnesses",
+                            ),
+                        ):
+                            with ui.element("div").classes("dw-skills-stat"):
+                                ui.label(value).classes("dw-skills-stat-value")
+                                ui.label(label).classes("dw-skills-stat-label")
 
-            with ui.element("div").classes("dw-skills-controls"):
-                search_input = (
-                    ui.input(
-                        value=search, placeholder="Search skills, tags, or triggers"
+                with ui.element("div").classes("dw-skills-controls"):
+                    search_input = (
+                        ui.input(
+                            value=search, placeholder="Search skills, tags, or triggers"
+                        )
+                        .props("outlined dense clearable")
+                        .classes("w-full")
                     )
-                    .props("outlined dense clearable")
-                    .classes("w-full")
-                )
-                tool_select = (
-                    ui.select(["", *tools], value=tool, label="Tool")
-                    .props("outlined dense")
-                    .classes("w-full")
-                )
-                author_select = (
-                    ui.select(["", *authors], value=author, label="Author")
-                    .props("outlined dense")
-                    .classes("w-full")
-                )
-                sort_select = (
-                    ui.select(
-                        {"popularity": "Popularity", "recency": "Recency"},
-                        value=sort,
-                        label="Sort",
+                    tool_select = (
+                        ui.select(["", *tools], value=tool, label="Tool")
+                        .props("outlined dense")
+                        .classes("w-full")
                     )
-                    .props("outlined dense")
-                    .classes("w-full")
-                )
-
-                def apply_filters() -> None:
-                    _navigate_with_filters(
-                        search=str(search_input.value or ""),
-                        tool=str(tool_select.value or ""),
-                        author=str(author_select.value or ""),
-                        sort=str(sort_select.value or "popularity"),
+                    author_select = (
+                        ui.select(["", *authors], value=author, label="Author")
+                        .props("outlined dense")
+                        .classes("w-full")
+                    )
+                    sort_select = (
+                        ui.select(
+                            {"popularity": "Popularity", "recency": "Recency"},
+                            value=sort,
+                            label="Sort",
+                        )
+                        .props("outlined dense")
+                        .classes("w-full")
                     )
 
-                search_input.on("keydown.enter", lambda _: apply_filters())
-                tool_select.on_value_change(lambda _: apply_filters())
-                author_select.on_value_change(lambda _: apply_filters())
-                sort_select.on_value_change(lambda _: apply_filters())
+                    def apply_filters() -> None:
+                        _navigate_with_filters(
+                            search=str(search_input.value or ""),
+                            tool=str(tool_select.value or ""),
+                            author=str(author_select.value or ""),
+                            sort=str(sort_select.value or "popularity"),
+                        )
 
-        with ui.card().classes("dw-panel shadow-none dw-page-header"):
-            build_page_header(
-                eyebrow="Catalog",
-                title="Search the current skills registry",
-                subtitle=(
-                    "Shared registry analytics are refreshed daily and exposed through "
-                    "the same metadata contract the browser and CLI consume."
-                ),
-            )
-            ui.link("Open public registry", settings.public_skills_registry_url).props(
-                'target="_blank" rel="noreferrer"'
-            ).classes("dw-link mt-4 inline-flex")
+                    search_input.on("keydown.enter", lambda _: apply_filters())
+                    tool_select.on_value_change(lambda _: apply_filters())
+                    author_select.on_value_change(lambda _: apply_filters())
+                    sort_select.on_value_change(lambda _: apply_filters())
 
-        with ui.column().classes("dw-skills-catalog"):
-            if not catalog:
-                ui.label(
-                    "No skills match the current search and filter combination."
-                ).classes("dw-empty-note")
-            for item in catalog:
-                _render_skill_row(item)
+            with ui.card().classes("dw-panel shadow-none dw-page-header"):
+                build_page_header(
+                    eyebrow="Catalog",
+                    title="Search the current skills registry",
+                    subtitle=(
+                        "Shared registry analytics are refreshed daily and exposed through "
+                        "the same metadata contract the browser and CLI consume."
+                    ),
+                )
+                ui.link(
+                    "Open public registry", settings.public_skills_registry_url
+                ).props('target="_blank" rel="noreferrer"').classes(
+                    "dw-link mt-4 inline-flex"
+                )
+
+            with ui.column().classes("dw-skills-catalog"):
+                if not catalog:
+                    ui.label(
+                        "No skills match the current search and filter combination."
+                    ).classes("dw-empty-note")
+                for item in catalog:
+                    _render_skill_row(item)
 
 
 @ui.page("/skills/{skill_id}")
@@ -552,84 +620,86 @@ def skill_detail_page(skill_id: str) -> None:
 
     versions = fetch_skill_registry_versions(skill_id)
 
-    apply_theme()
     ui.add_head_html(_BROWSER_CSS)
-    build_navigation_shell("skills")
+    build_app_shell("skills")
 
-    with ui.column().classes("dw-main-content dw-shell dw-skills-shell"):
-        with ui.card().classes("dw-panel shadow-none dw-skills-hero"):
-            build_page_header(
-                eyebrow=skill.tool,
-                title=skill.name,
-                subtitle=skill.description,
-                back_href="/skills",
-                back_label="Back to skills",
-            )
-            _render_editorial_badges(skill)
+    with workspace_content(aria_label="Skill detail workspace"):
+        with ui.column().classes("dw-skills-shell"):
+            with ui.card().classes("dw-panel shadow-none dw-skills-hero"):
+                build_page_header(
+                    eyebrow=skill.tool,
+                    title=skill.name,
+                    subtitle=skill.description,
+                    back_href="/skills",
+                    back_label="Back to skills",
+                )
+                _render_editorial_badges(skill)
+                with ui.element("div").classes("dw-skill-detail-grid"):
+                    with ui.column().classes("dw-skill-detail-stack"):
+                        ui.label(skill.install_command).classes("dw-skill-command")
+                        with ui.element("div").classes("dw-skills-hero-stats"):
+                            for value, label in (
+                                (skill.author, "Author"),
+                                (skill.maintainer, "Maintainer"),
+                                (str(skill.install_count), "Installs"),
+                                (str(skill.active_issue_count), "Active issues"),
+                                (_format_updated_at(skill.updated_at), "Last updated"),
+                                (_pass_rate_label(skill), "Pass rate"),
+                            ):
+                                with ui.element("div").classes("dw-skills-stat"):
+                                    ui.label(value).classes("dw-skills-stat-value")
+                                    ui.label(label).classes("dw-skills-stat-label")
+
+                    with ui.element("div").classes("dw-skills-hero-stats"):
+                        with ui.element("div").classes("dw-skills-stat"):
+                            ui.label(str(skill.available_versions)).classes(
+                                "dw-skills-stat-value text-lg"
+                            )
+                            ui.label("Tracked versions").classes("dw-skills-stat-label")
+                        with ui.element("div").classes("dw-skills-stat"):
+                            ui.label(
+                                _format_updated_at(skill.analytics_updated_at)
+                            ).classes("dw-skills-stat-value text-lg")
+                            ui.label("Analytics refreshed").classes(
+                                "dw-skills-stat-label"
+                            )
+
             with ui.element("div").classes("dw-skill-detail-grid"):
                 with ui.column().classes("dw-skill-detail-stack"):
-                    ui.label(skill.install_command).classes("dw-skill-command")
-                    with ui.element("div").classes("dw-skills-hero-stats"):
-                        for value, label in (
-                            (skill.author, "Author"),
-                            (skill.maintainer, "Maintainer"),
-                            (str(skill.install_count), "Installs"),
-                            (str(skill.active_issue_count), "Active issues"),
-                            (_format_updated_at(skill.updated_at), "Last updated"),
-                            (_pass_rate_label(skill), "Pass rate"),
-                        ):
-                            with ui.element("div").classes("dw-skills-stat"):
-                                ui.label(value).classes("dw-skills-stat-value")
-                                ui.label(label).classes("dw-skills-stat-label")
+                    with ui.card().classes("dw-panel shadow-none dw-skill-section"):
+                        ui.label("Contributors").classes("dw-eyebrow")
+                        for contributor in skill.contributors:
+                            ui.label(contributor).classes("dw-skills-body")
 
-                with ui.element("div").classes("dw-skills-hero-stats"):
-                    with ui.element("div").classes("dw-skills-stat"):
-                        ui.label(str(skill.available_versions)).classes(
-                            "dw-skills-stat-value text-lg"
-                        )
-                        ui.label("Tracked versions").classes("dw-skills-stat-label")
-                    with ui.element("div").classes("dw-skills-stat"):
-                        ui.label(
-                            _format_updated_at(skill.analytics_updated_at)
-                        ).classes("dw-skills-stat-value text-lg")
-                        ui.label("Analytics refreshed").classes("dw-skills-stat-label")
-
-        with ui.element("div").classes("dw-skill-detail-grid"):
-            with ui.column().classes("dw-skill-detail-stack"):
-                with ui.card().classes("dw-panel shadow-none dw-skill-section"):
-                    ui.label("Contributors").classes("dw-eyebrow")
-                    for contributor in skill.contributors:
-                        ui.label(contributor).classes("dw-skills-body")
-
-                with ui.card().classes("dw-panel shadow-none dw-skill-section"):
-                    ui.label("Version history").classes("dw-eyebrow")
-                    with ui.element("div").classes("dw-skill-version-list"):
-                        for version in versions:
-                            with ui.element("div").classes("dw-skill-version-row"):
-                                with ui.column().classes("gap-1"):
-                                    ui.label(version.version).classes(
-                                        "text-lg font-semibold dw-text"
-                                    )
+                    with ui.card().classes("dw-panel shadow-none dw-skill-section"):
+                        ui.label("Version history").classes("dw-eyebrow")
+                        with ui.element("div").classes("dw-skill-version-list"):
+                            for version in versions:
+                                with ui.element("div").classes("dw-skill-version-row"):
+                                    with ui.column().classes("gap-1"):
+                                        ui.label(version.version).classes(
+                                            "text-lg font-semibold dw-text"
+                                        )
+                                        ui.label(
+                                            f"{version.author} · {_format_updated_at(version.updated_at)}"
+                                        ).classes("dw-muted text-sm")
                                     ui.label(
-                                        f"{version.author} · {_format_updated_at(version.updated_at)}"
-                                    ).classes("dw-muted text-sm")
-                                ui.label(
-                                    "Current" if version.is_current else "Archived"
-                                ).classes("dw-skill-chip")
+                                        "Current" if version.is_current else "Archived"
+                                    ).classes("dw-skill-chip")
 
-            with ui.column().classes("dw-skill-detail-stack"):
-                with ui.card().classes("dw-panel shadow-none dw-skill-section"):
-                    ui.label("Ready to install").classes("dw-eyebrow")
-                    ui.label(
-                        "Use the shared CLI installer to pull the exact registry artifact shown here."
-                    ).classes("dw-skills-body")
-                    ui.label(skill.install_command).classes("dw-skill-command")
-                    with ui.element("div").classes("dw-skill-tags"):
-                        for tag in skill.tags:
-                            ui.label(tag).classes("dw-skill-tag")
+                with ui.column().classes("dw-skill-detail-stack"):
+                    with ui.card().classes("dw-panel shadow-none dw-skill-section"):
+                        ui.label("Ready to install").classes("dw-eyebrow")
+                        ui.label(
+                            "Use the shared CLI installer to pull the exact registry artifact shown here."
+                        ).classes("dw-skills-body")
+                        ui.label(skill.install_command).classes("dw-skill-command")
+                        with ui.element("div").classes("dw-skill-tags"):
+                            for tag in skill.tags:
+                                ui.label(tag).classes("dw-skill-tag")
 
-                with ui.card().classes("dw-panel shadow-none dw-skill-section"):
-                    ui.label("Registry snapshot").classes("dw-eyebrow")
-                    ui.label(
-                        "This page reflects the same source-of-truth metadata, daily analytics snapshot, and version history used by the shared registry and installer surfaces."
-                    ).classes("dw-skills-body")
+                    with ui.card().classes("dw-panel shadow-none dw-skill-section"):
+                        ui.label("Registry snapshot").classes("dw-eyebrow")
+                        ui.label(
+                            "This page reflects the same source-of-truth metadata, daily analytics snapshot, and version history used by the shared registry and installer surfaces."
+                        ).classes("dw-skills-body")

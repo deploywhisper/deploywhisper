@@ -422,6 +422,7 @@ class PersistedReportData(BaseModel):
     )
     dashboard_display_duration_seconds: int | None = Field(default=None)
     dashboard_remaining_seconds: int | None = Field(default=None)
+    analysis_duration_seconds: int | None = Field(default=None)
     submission_manifest: SubmissionManifestData | None = Field(
         default=None,
         description="Submission manifest metadata, or null when persisted manifest data is unavailable",

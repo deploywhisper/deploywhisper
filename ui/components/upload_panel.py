@@ -74,6 +74,11 @@ STATUS_STYLES = {
     "unsupported": "color: #d8a432;",
     "sensitive": "color: #cf3f3f;",
 }
+ORANGE = "#ff6900"
+ORANGE_BUTTON_STYLE = (
+    f"background:{ORANGE};color:#fff;border-radius:12px;font-weight:700;"
+)
+ORANGE_TEXT_BUTTON_STYLE = f"color:{ORANGE};border-radius:12px;font-weight:700;"
 
 
 def process_uploaded_files(
@@ -385,11 +390,17 @@ def build_upload_panel(
                 )
             )
 
-        ui.button(
-            "Create project",
-            on_click=open_create_project_dialog,
-            color="primary",
-        ).props("flat no-caps")
+        with (
+            ui.element("button")
+            .props("type=button")
+            .classes("dw-orange-text-button")
+            .style(
+                ORANGE_TEXT_BUTTON_STYLE
+                + "background:transparent;border:none;padding:0 2px;cursor:pointer"
+            )
+            .on("click", lambda _: open_create_project_dialog())
+        ):
+            ui.html("<span>Create project</span>")
 
     def clear_result_if_current(token: int) -> None:
         if token != state["result_token"]:
@@ -584,7 +595,7 @@ def build_upload_panel(
         with action_column:
             if state["is_running"]:
                 with ui.row().classes("items-center gap-3"):
-                    ui.spinner(size="sm", color="primary")
+                    ui.spinner(size="sm").style(f"color:{ORANGE}")
                     progress_label = ui.label(
                         f"{int(state['progress_value'])}% · {state['progress_message']}"
                     ).classes("text-sm dw-text")
@@ -598,9 +609,26 @@ def build_upload_panel(
 
             progress_bar = None
             progress_label = None
-            analyze_button = ui.button(
-                "Analyze", on_click=run_analysis, color="primary"
-            ).props("unelevated")
+            analyze_disabled = (
+                summary.ready_count == 0 or not state["active_project_key"]
+            )
+            analyze_style = (
+                ORANGE_BUTTON_STYLE
+                + "border:none;padding:8px 16px;min-height:36px;cursor:pointer"
+            )
+            if analyze_disabled:
+                analyze_style += ";opacity:0.55;cursor:not-allowed"
+            analyze_button = (
+                ui.element("button")
+                .props("type=button")
+                .classes("dw-orange-button")
+                .style(analyze_style)
+                .on("click", lambda _: run_analysis())
+            )
+            if analyze_disabled:
+                analyze_button.props("disabled")
+            with analyze_button:
+                ui.html("<span>Analyze</span>")
             if not state["active_project_key"]:
                 ui.label(
                     "Select an existing project or create one before running manual analysis."
@@ -609,8 +637,6 @@ def build_upload_panel(
                 ui.label(state["project_authorization_error"]).classes(
                     "text-xs dw-warning-text"
                 )
-            if summary.ready_count == 0 or not state["active_project_key"]:
-                analyze_button.disable()
 
     def update_progress(value: int, message: str) -> None:
         state["progress_value"] = value
@@ -773,9 +799,17 @@ def build_upload_panel(
                     dialog.close()
                     schedule_analysis_after_dialog_close()
 
-                ui.button(
-                    "Continue Anyway", on_click=proceed_anyway, color="primary"
-                ).props("unelevated no-caps")
+                with (
+                    ui.element("button")
+                    .props("type=button")
+                    .classes("dw-orange-button")
+                    .style(
+                        ORANGE_BUTTON_STYLE
+                        + "border:none;padding:8px 16px;min-height:36px;cursor:pointer"
+                    )
+                    .on("click", lambda _: proceed_anyway())
+                ):
+                    ui.html("<span>Continue Anyway</span>")
         dialog.open()
 
     async def handle_multi_upload(event: events.MultiUploadEventArguments) -> None:

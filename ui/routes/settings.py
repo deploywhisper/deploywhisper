@@ -27,8 +27,9 @@ from services.topology_service import (
     save_topology_definition,
     validate_topology_definition,
 )
+from ui.components.dashboard_shell import build_app_shell, workspace_content
 from ui.project_authorization import resolve_authorized_ui_active_project
-from ui.theme import apply_theme, build_navigation_shell, build_page_header
+from ui.theme import build_page_header
 
 
 def _empty_feedback_summary() -> dict[str, Any]:
@@ -128,17 +129,12 @@ def process_custom_skill_upload_content(
 
 def build_settings_page() -> None:
     """Render the provider settings form."""
-    apply_theme()
     content_refresh = {"fn": lambda *_: None}
 
     def handle_project_change(*_) -> None:
-        refresh_shell()
         content_refresh["fn"]()
 
-    refresh_shell = build_navigation_shell(
-        "settings",
-        on_project_change=handle_project_change,
-    )
+    build_app_shell("settings", on_project_change=handle_project_change)
 
     @ui.refreshable
     def render_settings_content() -> None:
@@ -169,7 +165,7 @@ def build_settings_page() -> None:
         provider_options = provider_select_options()
         staged_topology: dict[str, Any] = {"name": None, "content": None}
 
-        with ui.column().classes("dw-main-content dw-shell gap-5"):
+        with workspace_content(aria_label="Operational settings workspace"):
             with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
                 build_page_header(
                     eyebrow="Settings",

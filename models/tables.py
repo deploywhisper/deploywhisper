@@ -296,6 +296,9 @@ if "AnalysisReport" not in globals():
         dashboard_display_duration_seconds: Mapped[int | None] = mapped_column(
             Integer, nullable=True
         )
+        analysis_duration_seconds: Mapped[int | None] = mapped_column(
+            Integer, nullable=True
+        )
         findings: Mapped[list["Finding"]] = relationship(
             back_populates="report",
             cascade="all, delete-orphan",
