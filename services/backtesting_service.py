@@ -10,8 +10,11 @@ from typing import Any
 
 from sqlalchemy import select
 
+from services.artifact_snapshot_service import load_report_artifact
 from models.database import SessionLocal
+from models.repositories.analysis_reports import get_analysis_report
 from models.repositories.feedback_events import list_feedback_events
+from models.repositories.incident_records import list_incident_records
 from models.repositories.settings import (
     delete_setting,
     delete_settings_by_key_prefix,
@@ -36,6 +39,13 @@ from services.project_service import (
 BACKTEST_WINDOW_DAYS = 7
 BACKTEST_LAST_RUN_KEY = "backtesting:last_run_at:project:"
 BACKTEST_SNAPSHOT_KEY = "backtesting:snapshot:project:"
+INCIDENT_BACKTEST_STATUSES = (
+    "detected",
+    "missed",
+    "unsupported",
+    "insufficient_context",
+    "error",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +202,378 @@ def _serialize_timestamp(value: datetime) -> str:
     else:
         value = value.astimezone(UTC)
     return value.isoformat()
+
+
+def _load_json_object(raw_value: str | None) -> dict[str, Any]:
+    try:
+        decoded = json.loads(raw_value or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
+def _load_json_list(raw_value: str | None) -> list[Any]:
+    try:
+        decoded = json.loads(raw_value or "[]")
+    except json.JSONDecodeError:
+        return []
+    return decoded if isinstance(decoded, list) else []
+
+
+def _accepted_replay_artifact_names(report: AnalysisReport) -> list[str]:
+    manifest = _load_json_object(report.submission_manifest_json)
+    items = manifest.get("items")
+    accepted = (
+        [
+            str(item.get("name"))
+            for item in items
+            if isinstance(item, dict)
+            and item.get("status") == "accepted"
+            and str(item.get("name") or "").strip()
+        ]
+        if isinstance(items, list)
+        else []
+    )
+    if accepted:
+        return list(dict.fromkeys(accepted))
+    fallback = _load_json_list(report.analyzed_files_json)
+    return list(
+        dict.fromkeys(
+            str(item) for item in fallback if isinstance(item, str) and item.strip()
+        )
+    )
+
+
+def _replay_artifact_files(
+    report: AnalysisReport,
+) -> tuple[list[tuple[str, bytes | None]], list[str], list[str]]:
+    missing: list[str] = []
+    files: list[tuple[str, bytes | None]] = []
+    for artifact_name in _accepted_replay_artifact_names(report):
+        snapshot = load_report_artifact(int(report.id), artifact_name)
+        if snapshot is None:
+            missing.append(artifact_name)
+            continue
+        files.append((artifact_name, snapshot.content.encode("utf-8")))
+    return files, [name for name, _ in files], missing
+
+
+def _incident_payload(incident: IncidentRecord) -> dict[str, Any]:
+    return {
+        "id": incident.id,
+        "project_id": incident.project_id,
+        "workspace_id": incident.workspace_id,
+        "title": incident.title,
+        "severity": incident.severity,
+        "source_file": incident.source_file,
+        "incident_date": incident.incident_date,
+        "analysis_id": incident.analysis_id,
+    }
+
+
+def _linked_report_payload(report: AnalysisReport | None) -> dict[str, Any] | None:
+    if report is None:
+        return None
+    return {
+        "id": report.id,
+        "project_id": report.project_id,
+        "workspace_id": report.workspace_id,
+        "severity": report.severity,
+        "recommendation": report.recommendation,
+        "risk_score": report.risk_score,
+        "top_risk": report.top_risk,
+        "created_at": _serialize_timestamp(report.created_at),
+    }
+
+
+def _expected_evidence_payload(report: AnalysisReport | None) -> list[dict[str, Any]]:
+    if report is None:
+        return []
+    evidence_items: list[dict[str, Any]] = []
+    for finding in report.findings:
+        for evidence in finding.evidence_items:
+            evidence_items.append(
+                {
+                    "evidence_id": evidence.evidence_id,
+                    "finding_id": evidence.finding_id,
+                    "source_ref": evidence.source_ref,
+                    "artifact": evidence.artifact,
+                    "location": evidence.location,
+                    "resource": evidence.resource,
+                    "operation": evidence.operation,
+                    "summary": evidence.summary,
+                    "severity_hint": evidence.severity_hint,
+                    "deterministic": evidence.deterministic,
+                }
+            )
+    return evidence_items
+
+
+def _observed_evidence_payload(evidence_items: list[Any]) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for evidence in evidence_items:
+        if hasattr(evidence, "model_dump"):
+            item = evidence.model_dump(mode="json")
+        else:
+            item = dict(evidence)
+        payload.append(
+            {
+                "evidence_id": item.get("evidence_id"),
+                "source_ref": item.get("source_ref"),
+                "artifact": item.get("artifact"),
+                "location": item.get("location"),
+                "resource": item.get("resource"),
+                "operation": item.get("operation"),
+                "summary": item.get("summary"),
+                "severity_hint": item.get("severity_hint"),
+                "deterministic": item.get("deterministic"),
+            }
+        )
+    return payload
+
+
+def _observed_finding_payload(findings: list[Any]) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for finding in findings:
+        if hasattr(finding, "model_dump"):
+            item = finding.model_dump(mode="json")
+        else:
+            item = dict(finding)
+        payload.append(
+            {
+                "finding_id": item.get("finding_id"),
+                "title": item.get("title"),
+                "severity": item.get("severity"),
+                "category": item.get("category"),
+                "deterministic": item.get("deterministic"),
+                "confidence": item.get("confidence"),
+                "evidence_refs": item.get("evidence_refs") or [],
+            }
+        )
+    return payload
+
+
+def _run_incident_replay_analysis(files: list[tuple[str, bytes | None]]):
+    from services.analysis_service import build_analysis_artifacts
+
+    return build_analysis_artifacts(
+        files,
+        include_topology_context=False,
+        include_incident_context=False,
+        include_narrative=False,
+        allow_llm_assistance=False,
+    )
+
+
+def _incident_backtest_improvements(
+    *,
+    status: str,
+    context_todos: list[str],
+    missing_artifacts: list[str],
+) -> list[str]:
+    if status == "detected":
+        return ["No immediate analyzer improvement identified for this replay."]
+    if status == "missed":
+        return [
+            "Review incident prevention notes and add deterministic evidence/risk patterns for the missed change."
+        ]
+    if status == "insufficient_context":
+        return context_todos or [
+            "Import the missing topology, incident, scanner, or ownership context before rerunning the backtest."
+        ]
+    if missing_artifacts:
+        return ["Store accepted replay artifact snapshots for the linked report."]
+    return ["Link the incident to an analysis report with accepted replay artifacts."]
+
+
+def _classify_incident_replay(analysis_artifacts) -> tuple[str, str]:
+    assessment = analysis_artifacts.assessment
+    manifest = analysis_artifacts.submission_manifest
+    if getattr(manifest, "accepted_artifact_count", 0) == 0:
+        return "unsupported", "unsupported"
+    if assessment.context_completeness.insufficient_context:
+        return "insufficient_context", "insufficient_context"
+    if str(assessment.recommendation).lower() == "go":
+        return "missed", "go"
+    if (
+        str(assessment.recommendation).lower() == "no-go"
+        and assessment.severity == "critical"
+    ):
+        return "detected", "stop"
+    return "detected", "warn"
+
+
+def _unsupported_incident_scenario(
+    *,
+    incident: IncidentRecord,
+    report: AnalysisReport | None,
+    reasons: list[str],
+    missing_artifacts: list[str] | None = None,
+    replay_artifacts: list[str] | None = None,
+) -> dict[str, Any]:
+    missing_artifacts = missing_artifacts or []
+    replay_artifacts = replay_artifacts or []
+    return {
+        "incident": _incident_payload(incident),
+        "linked_report": _linked_report_payload(report),
+        "status": "unsupported",
+        "actual_verdict": "unsupported",
+        "actual_recommendation": None,
+        "actual_severity": None,
+        "actual_score": None,
+        "replay_artifacts": replay_artifacts,
+        "missing_replay_artifacts": missing_artifacts,
+        "expected_evidence": _expected_evidence_payload(report),
+        "observed_evidence": [],
+        "observed_findings": [],
+        "context_todos": [],
+        "reasons": reasons,
+        "what_would_need_to_improve": _incident_backtest_improvements(
+            status="unsupported",
+            context_todos=[],
+            missing_artifacts=missing_artifacts,
+        ),
+    }
+
+
+def _error_incident_scenario(
+    *,
+    incident: IncidentRecord,
+    report: AnalysisReport | None,
+    reasons: list[str],
+    replay_artifacts: list[str] | None = None,
+    missing_artifacts: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "incident": _incident_payload(incident),
+        "linked_report": _linked_report_payload(report),
+        "status": "error",
+        "actual_verdict": "error",
+        "actual_recommendation": None,
+        "actual_severity": None,
+        "actual_score": None,
+        "replay_artifacts": replay_artifacts or [],
+        "missing_replay_artifacts": missing_artifacts or [],
+        "expected_evidence": _expected_evidence_payload(report),
+        "observed_evidence": [],
+        "observed_findings": [],
+        "context_todos": [],
+        "reasons": reasons,
+        "what_would_need_to_improve": [
+            "Fix the replay execution error, then rerun incident backtesting."
+        ],
+    }
+
+
+def _run_incident_backtest_scenario(
+    *,
+    incident: IncidentRecord,
+    report: AnalysisReport | None,
+) -> dict[str, Any]:
+    if incident.analysis_id is None:
+        return _unsupported_incident_scenario(
+            incident=incident,
+            report=report,
+            reasons=["Incident is not linked to an analysis report."],
+        )
+    if report is None:
+        return _unsupported_incident_scenario(
+            incident=incident,
+            report=report,
+            reasons=["Linked analysis report is unavailable."],
+        )
+
+    try:
+        files, replay_artifact_names, missing_artifacts = _replay_artifact_files(report)
+    except Exception as exc:  # noqa: BLE001
+        return _error_incident_scenario(
+            incident=incident,
+            report=report,
+            reasons=[str(exc)],
+        )
+
+    if not files:
+        return _unsupported_incident_scenario(
+            incident=incident,
+            report=report,
+            reasons=["No accepted replay artifact snapshots are available."],
+            missing_artifacts=missing_artifacts,
+        )
+    if missing_artifacts:
+        return _unsupported_incident_scenario(
+            incident=incident,
+            report=report,
+            reasons=[
+                "Some accepted linked-report artifact snapshots were unavailable: "
+                + ", ".join(missing_artifacts)
+            ],
+            missing_artifacts=missing_artifacts,
+            replay_artifacts=replay_artifact_names,
+        )
+
+    try:
+        analysis_artifacts = _run_incident_replay_analysis(files)
+    except Exception as exc:  # noqa: BLE001
+        return _error_incident_scenario(
+            incident=incident,
+            report=report,
+            reasons=[str(exc)],
+            replay_artifacts=replay_artifact_names,
+            missing_artifacts=missing_artifacts,
+        )
+
+    status, actual_verdict = _classify_incident_replay(analysis_artifacts)
+    assessment = analysis_artifacts.assessment
+    context_todos = list(assessment.context_completeness.context_todos)
+    reasons = list(assessment.warnings)
+    return {
+        "incident": _incident_payload(incident),
+        "linked_report": _linked_report_payload(report),
+        "status": status,
+        "actual_verdict": actual_verdict,
+        "actual_recommendation": assessment.recommendation,
+        "actual_severity": assessment.severity,
+        "actual_score": assessment.score,
+        "replay_artifacts": replay_artifact_names,
+        "missing_replay_artifacts": missing_artifacts,
+        "expected_evidence": _expected_evidence_payload(report),
+        "observed_evidence": _observed_evidence_payload(
+            list(analysis_artifacts.evidence_items)
+        ),
+        "observed_findings": _observed_finding_payload(
+            list(analysis_artifacts.findings)
+        ),
+        "context_todos": context_todos,
+        "reasons": reasons,
+        "what_would_need_to_improve": _incident_backtest_improvements(
+            status=status,
+            context_todos=context_todos,
+            missing_artifacts=missing_artifacts,
+        ),
+    }
+
+
+def _incident_linked_report(
+    *,
+    session,
+    incident: IncidentRecord,
+    project_id: int,
+    workspace_id: int | None,
+) -> AnalysisReport | None:
+    if incident.analysis_id is None:
+        return None
+    report = get_analysis_report(
+        session,
+        int(incident.analysis_id),
+        project_id=project_id,
+        workspace_id=workspace_id,
+        include_evidence=True,
+    )
+    if report is None or workspace_id is not None:
+        return report
+    if report.workspace_id != incident.workspace_id:
+        return None
+    return report
 
 
 def _confidence_bucket(confidence: float | None) -> str:
@@ -898,6 +1280,75 @@ def run_weekly_backtest(
             value=json.dumps(summary),
         )
     return summary
+
+
+def run_incident_backtest(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Replay incident-linked artifacts through the current analysis core."""
+
+    project = resolve_project_reference(project_id=project_id, project_key=project_key)
+    workspace = resolve_workspace_reference(
+        project_id=project.id,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    generated_at = _serialize_timestamp(now or datetime.now(UTC))
+    with SessionLocal() as session:
+        incidents = list_incident_records(
+            session,
+            project_id=project.id,
+            workspace_id=workspace.id if workspace is not None else None,
+        )
+        scenarios = [
+            _run_incident_backtest_scenario(
+                incident=incident,
+                report=_incident_linked_report(
+                    session=session,
+                    incident=incident,
+                    project_id=project.id,
+                    workspace_id=workspace.id if workspace is not None else None,
+                ),
+            )
+            for incident in incidents
+        ]
+    counts = {
+        status: sum(1 for scenario in scenarios if scenario["status"] == status)
+        for status in INCIDENT_BACKTEST_STATUSES
+    }
+    summary = {
+        "project_id": project.id,
+        "project_key": project.project_key,
+        "workspace_id": workspace.id if workspace is not None else None,
+        "workspace_key": workspace.workspace_key if workspace is not None else None,
+        "scenario_count": len(scenarios),
+        "detected_count": counts["detected"],
+        "missed_count": counts["missed"],
+        "unsupported_count": counts["unsupported"],
+        "insufficient_context_count": counts["insufficient_context"],
+        "error_count": counts["error"],
+        "generated_at": generated_at,
+    }
+    return {
+        "passed": counts["missed"] == 0 and counts["error"] == 0,
+        "project": build_project_payload(project),
+        "workspace": build_workspace_payload(workspace)
+        if workspace is not None
+        else None,
+        "summary": summary,
+        "scenarios": scenarios,
+        "errors": [
+            reason
+            for scenario in scenarios
+            if scenario["status"] == "error"
+            for reason in scenario["reasons"]
+        ],
+    }
 
 
 def run_due_weekly_backtests(*, now: datetime | None = None) -> list[dict[str, Any]]:

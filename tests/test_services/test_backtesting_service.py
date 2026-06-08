@@ -14,7 +14,9 @@ from unittest import mock
 import config as config_module
 import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
+import models.repositories.incident_records as incident_records_repository_module
 import models.tables as tables_module
+import services.artifact_snapshot_service as artifact_snapshot_service_module
 import services.backtesting_service as backtesting_service_module
 import services.deployment_outcome_service as deployment_outcome_service_module
 import services.feedback_service as feedback_service_module
@@ -23,7 +25,7 @@ import services.project_service as project_service_module
 import services.report_service as report_service_module
 from models.repositories.settings import get_setting, upsert_setting
 from analysis.risk_scorer import RiskAssessment
-from evidence.models import Finding
+from evidence.models import ContextCompleteness, EvidenceItem, Finding
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult
 
@@ -32,15 +34,20 @@ class BacktestingServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tempdir.name) / "backtesting.db"
+        self.snapshot_dir = Path(self.tempdir.name) / "report-artifacts"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
+        os.environ["ARTIFACT_SNAPSHOT_DIR"] = str(self.snapshot_dir)
         reload(config_module)
         reload(tables_module)
         reload(database_module)
         reload(analysis_reports_repository_module)
+        reload(incident_records_repository_module)
+        reload(artifact_snapshot_service_module)
         reload(project_service_module)
         reload(report_service_module)
         reload(feedback_service_module)
         reload(deployment_outcome_service_module)
+        reload(incident_service_module)
         reload(backtesting_service_module)
         database_module.init_db()
         self.project = project_service_module.create_project(
@@ -56,6 +63,7 @@ class BacktestingServiceTests(unittest.TestCase):
     def tearDown(self) -> None:
         database_module.engine.dispose()
         os.environ.pop("DATABASE_URL", None)
+        os.environ.pop("ARTIFACT_SNAPSHOT_DIR", None)
         self.tempdir.cleanup()
 
     def _persist_report(
@@ -123,6 +131,152 @@ class BacktestingServiceTests(unittest.TestCase):
             project_id=self.project.id,
             workspace_id=workspace_id,
             audit_context={"source_interface": "api"},
+        )
+
+    def _persist_replay_report(
+        self,
+        *,
+        file_name: str,
+        extra_file_names: list[str] | None = None,
+        recommendation: str = "go",
+        severity: str = "low",
+        project_id: int | None = None,
+        workspace_id: int | None = None,
+        artifact_snapshots: dict[str, bytes | None] | None = None,
+    ) -> dict:
+        file_names = [file_name, *(extra_file_names or [])]
+        if artifact_snapshots is None:
+            artifact_snapshots = {
+                name: f"resource {name}\n".encode("utf-8") for name in file_names
+            }
+        return report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name=name,
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                    for name in file_names
+                ]
+            ),
+            RiskAssessment(
+                score=12 if recommendation == "go" else 66,
+                severity=severity,
+                recommendation=recommendation,
+                top_risk=f"Replay fixture for {file_name}.",
+                confidence=0.8,
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence=f"Replay fixture for {file_name}.",
+                explanation=f"Replay fixture for {file_name}.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            findings=[
+                Finding(
+                    finding_id=f"expected-{file_name.replace('.', '-')}",
+                    analysis_id=0,
+                    title=f"Expected incident evidence for {file_name}",
+                    description="Historical evidence expected during replay.",
+                    severity=severity,
+                    category="incident/backtest",
+                    deterministic=True,
+                    confidence=0.8,
+                    uncertainty_note=None,
+                    evidence_refs=[f"expected-evidence-{file_name.replace('.', '-')}"],
+                    skill_id=None,
+                )
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id=f"expected-evidence-{file_name.replace('.', '-')}",
+                    analysis_id=0,
+                    finding_id=f"expected-{file_name.replace('.', '-')}",
+                    source_type="artifact",
+                    source_ref=f"artifact://{file_name}#expected",
+                    artifact=file_name,
+                    location="line 1",
+                    resource="fixture",
+                    operation="modify",
+                    summary="Historical replay evidence.",
+                    severity_hint=severity,
+                    deterministic=True,
+                    confidence=0.8,
+                )
+            ],
+            project_id=project_id or self.project.id,
+            workspace_id=workspace_id,
+            audit_context={"source_interface": "api"},
+            artifact_snapshots=artifact_snapshots,
+        )
+
+    def _fake_replay_artifacts(
+        self,
+        *,
+        recommendation: str,
+        severity: str,
+        insufficient_context: bool = False,
+    ):
+        return mock.Mock(
+            assessment=RiskAssessment(
+                score=12 if recommendation == "go" else 66,
+                severity=severity,
+                recommendation=recommendation,
+                top_risk="Replay assessment.",
+                confidence=0.8,
+                contributors=[],
+                interaction_risks=[],
+                context_completeness=ContextCompleteness(
+                    context_score=0.4 if insufficient_context else 1.0,
+                    confidence_level="low" if insufficient_context else "high",
+                    insufficient_context=insufficient_context,
+                    context_todos=["Import more topology."]
+                    if insufficient_context
+                    else [],
+                ),
+                partial_context=False,
+                warnings=[],
+            ),
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="observed-evidence",
+                    analysis_id=0,
+                    finding_id="observed-finding",
+                    source_type="artifact",
+                    source_ref="artifact://fixture#observed",
+                    artifact="fixture.tf",
+                    location="line 1",
+                    resource="fixture",
+                    operation="modify",
+                    summary="Observed replay evidence.",
+                    severity_hint=severity,
+                    deterministic=True,
+                    confidence=0.8,
+                )
+            ],
+            findings=[
+                Finding(
+                    finding_id="observed-finding",
+                    analysis_id=0,
+                    title="Observed replay finding",
+                    description="Observed replay finding.",
+                    severity=severity,
+                    category="incident/backtest",
+                    deterministic=True,
+                    confidence=0.8,
+                    uncertainty_note=None,
+                    evidence_refs=["observed-evidence"],
+                    skill_id=None,
+                )
+            ],
+            submission_manifest=mock.Mock(accepted_artifact_count=1),
         )
 
     def _recent_deployed_at(self, *, hours_ago: int = 24) -> str:
@@ -1145,6 +1299,251 @@ class BacktestingServiceTests(unittest.TestCase):
         self.assertEqual(summary["overall_precision"], 1.0)
         self.assertEqual(summary["overall_recall"], 1.0)
         self.assertEqual(summary["backtest_rows"][0]["incident_id"], incident["id"])
+
+    def test_run_incident_backtest_replays_linked_report_artifacts(self) -> None:
+        detected_report = self._persist_replay_report(
+            file_name="detected.tf",
+            recommendation="caution",
+            severity="medium",
+        )
+        missed_report = self._persist_replay_report(file_name="missed.tf")
+        insufficient_report = self._persist_replay_report(file_name="insufficient.tf")
+        unsupported_report = self._persist_report(
+            top_risk="Legacy report lacks stored replay artifacts.",
+            recommendation="go",
+            severity="low",
+            file_name="unsupported.tf",
+        )
+
+        detected_incident = incident_service_module.ingest_incident_document(
+            "detected-incident.md",
+            "# Detected incident\nDate: 2026-04-29\nSeverity: high\nReplay should warn.",
+            analysis_id=detected_report["id"],
+        )
+        incident_service_module.ingest_incident_document(
+            "missed-incident.md",
+            "# Missed incident\nDate: 2026-04-29\nSeverity: high\nReplay should miss.",
+            analysis_id=missed_report["id"],
+        )
+        incident_service_module.ingest_incident_document(
+            "insufficient-incident.md",
+            "# Insufficient incident\nDate: 2026-04-29\nSeverity: high\nReplay lacks context.",
+            analysis_id=insufficient_report["id"],
+        )
+        incident_service_module.ingest_incident_document(
+            "unsupported-incident.md",
+            "# Unsupported incident\nDate: 2026-04-29\nSeverity: high\nNo replay artifact snapshot.",
+            analysis_id=unsupported_report["id"],
+        )
+
+        def fake_replay(files):
+            artifact_name = files[0][0]
+            if artifact_name == "detected.tf":
+                return self._fake_replay_artifacts(
+                    recommendation="caution",
+                    severity="medium",
+                )
+            if artifact_name == "insufficient.tf":
+                return self._fake_replay_artifacts(
+                    recommendation="go",
+                    severity="low",
+                    insufficient_context=True,
+                )
+            return self._fake_replay_artifacts(recommendation="go", severity="low")
+
+        with mock.patch(
+            "services.backtesting_service._run_incident_replay_analysis",
+            side_effect=fake_replay,
+        ):
+            result = backtesting_service_module.run_incident_backtest(
+                project_id=self.project.id,
+                now=datetime(2026, 4, 30, 12, 0, tzinfo=UTC),
+            )
+
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["summary"]["scenario_count"], 4)
+        self.assertEqual(result["summary"]["detected_count"], 1)
+        self.assertEqual(result["summary"]["missed_count"], 1)
+        self.assertEqual(result["summary"]["insufficient_context_count"], 1)
+        self.assertEqual(result["summary"]["unsupported_count"], 1)
+        statuses = {
+            scenario["incident"]["source_file"]: scenario["status"]
+            for scenario in result["scenarios"]
+        }
+        self.assertEqual(statuses["detected-incident.md"], "detected")
+        self.assertEqual(statuses["missed-incident.md"], "missed")
+        self.assertEqual(statuses["insufficient-incident.md"], "insufficient_context")
+        self.assertEqual(statuses["unsupported-incident.md"], "unsupported")
+        detected = next(
+            scenario
+            for scenario in result["scenarios"]
+            if scenario["incident"]["id"] == detected_incident["id"]
+        )
+        self.assertEqual(detected["replay_artifacts"], ["detected.tf"])
+        self.assertEqual(detected["linked_report"]["id"], detected_report["id"])
+        self.assertTrue(detected["expected_evidence"])
+        self.assertEqual(
+            detected["expected_evidence"][0]["artifact"],
+            "detected.tf",
+        )
+        self.assertTrue(detected["observed_findings"][0]["evidence_refs"])
+        self.assertEqual(detected["incident"]["project_id"], self.project.id)
+        self.assertIsNone(detected["incident"]["workspace_id"])
+        self.assertEqual(detected["linked_report"]["project_id"], self.project.id)
+        self.assertIsNone(detected["linked_report"]["workspace_id"])
+
+    def test_run_incident_backtest_reports_unlinked_incident_as_unsupported(
+        self,
+    ) -> None:
+        incident_service_module.ingest_incident_document(
+            "unlinked-incident.md",
+            "# Unlinked incident\nDate: 2026-04-29\nSeverity: high\nNo replay report.",
+            project_id=self.project.id,
+        )
+
+        result = backtesting_service_module.run_incident_backtest(
+            project_id=self.project.id,
+            now=datetime(2026, 4, 30, 12, 0, tzinfo=UTC),
+        )
+
+        self.assertEqual(result["summary"]["scenario_count"], 1)
+        self.assertEqual(result["summary"]["unsupported_count"], 1)
+        self.assertEqual(result["scenarios"][0]["status"], "unsupported")
+        self.assertIn("Incident is not linked", result["scenarios"][0]["reasons"][0])
+
+    def test_run_incident_backtest_rejects_cross_scope_linked_report(
+        self,
+    ) -> None:
+        other_project = project_service_module.create_project(
+            project_key="identity",
+            display_name="Identity",
+        )
+        other_report = self._persist_replay_report(
+            file_name="identity.tf",
+            project_id=other_project.id,
+        )
+        with database_module.SessionLocal() as session:
+            incident_records_repository_module.create_incident_record(
+                session,
+                project_id=self.project.id,
+                title="Cross-scope incident",
+                severity="high",
+                source_file="cross-scope-incident.md",
+                incident_date="2026-04-29",
+                analysis_id=other_report["id"],
+                content="Cross-scope report links should not replay.",
+            )
+
+        with mock.patch(
+            "services.backtesting_service._run_incident_replay_analysis"
+        ) as replay:
+            result = backtesting_service_module.run_incident_backtest(
+                project_id=self.project.id,
+                now=datetime(2026, 4, 30, 12, 0, tzinfo=UTC),
+            )
+
+        replay.assert_not_called()
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["summary"]["unsupported_count"], 1)
+        scenario = result["scenarios"][0]
+        self.assertEqual(scenario["status"], "unsupported")
+        self.assertIsNone(scenario["linked_report"])
+        self.assertIn("unavailable", scenario["reasons"][0])
+
+    def test_run_incident_backtest_rejects_cross_workspace_linked_report(
+        self,
+    ) -> None:
+        workspace_report = self._persist_replay_report(
+            file_name="workspace.tf",
+            workspace_id=self.workspace.id,
+        )
+        with database_module.SessionLocal() as session:
+            incident_records_repository_module.create_incident_record(
+                session,
+                project_id=self.project.id,
+                workspace_id=None,
+                title="Project incident linked to workspace report",
+                severity="high",
+                source_file="cross-workspace-incident.md",
+                incident_date="2026-04-29",
+                analysis_id=workspace_report["id"],
+                content="Cross-workspace report links should not replay.",
+            )
+
+        with mock.patch(
+            "services.backtesting_service._run_incident_replay_analysis"
+        ) as replay:
+            result = backtesting_service_module.run_incident_backtest(
+                project_id=self.project.id,
+                now=datetime(2026, 4, 30, 12, 0, tzinfo=UTC),
+            )
+
+        replay.assert_not_called()
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["summary"]["unsupported_count"], 1)
+        scenario = result["scenarios"][0]
+        self.assertEqual(scenario["status"], "unsupported")
+        self.assertIsNone(scenario["linked_report"])
+        self.assertIn("unavailable", scenario["reasons"][0])
+
+    def test_run_incident_backtest_rejects_partial_replay_artifact_snapshots(
+        self,
+    ) -> None:
+        report = self._persist_replay_report(
+            file_name="partial-a.tf",
+            extra_file_names=["partial-b.tf"],
+        )
+        report_dir = self.snapshot_dir / str(report["id"])
+        manifest = json.loads(
+            (report_dir / "manifest.json").read_text(encoding="utf-8")
+        )
+        (report_dir / manifest["partial-b.tf"]).unlink()
+        incident_service_module.ingest_incident_document(
+            "partial-incident.md",
+            "# Partial incident\nDate: 2026-04-29\nSeverity: high\nReplay is incomplete.",
+            analysis_id=report["id"],
+        )
+
+        with mock.patch(
+            "services.backtesting_service._run_incident_replay_analysis"
+        ) as replay:
+            result = backtesting_service_module.run_incident_backtest(
+                project_id=self.project.id,
+                now=datetime(2026, 4, 30, 12, 0, tzinfo=UTC),
+            )
+
+        replay.assert_not_called()
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["summary"]["unsupported_count"], 1)
+        scenario = result["scenarios"][0]
+        self.assertEqual(scenario["status"], "unsupported")
+        self.assertEqual(scenario["replay_artifacts"], ["partial-a.tf"])
+        self.assertEqual(scenario["missing_replay_artifacts"], ["partial-b.tf"])
+
+    def test_run_incident_backtest_reports_snapshot_load_error_per_scenario(
+        self,
+    ) -> None:
+        report = self._persist_replay_report(file_name="corrupt.tf")
+        incident_service_module.ingest_incident_document(
+            "corrupt-incident.md",
+            "# Corrupt incident\nDate: 2026-04-29\nSeverity: high\nSnapshot cannot load.",
+            analysis_id=report["id"],
+        )
+
+        with mock.patch(
+            "services.backtesting_service.load_report_artifact",
+            side_effect=ValueError("corrupt artifact manifest"),
+        ):
+            result = backtesting_service_module.run_incident_backtest(
+                project_id=self.project.id,
+                now=datetime(2026, 4, 30, 12, 0, tzinfo=UTC),
+            )
+
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["summary"]["error_count"], 1)
+        scenario = result["scenarios"][0]
+        self.assertEqual(scenario["status"], "error")
+        self.assertIn("corrupt artifact manifest", scenario["reasons"])
 
     def test_run_weekly_backtest_counts_multiple_outcomes_for_one_analysis(
         self,
