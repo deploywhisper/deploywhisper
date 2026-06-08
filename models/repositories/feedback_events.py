@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -48,6 +50,8 @@ def list_feedback_events(
     project_id: int | None = None,
     workspace_id: int | None = None,
     analysis_id: int | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     limit: int | None = None,
 ) -> list[FeedbackEvent]:
     stmt = select(FeedbackEvent).order_by(
@@ -59,6 +63,10 @@ def list_feedback_events(
         stmt = stmt.where(FeedbackEvent.workspace_id == workspace_id)
     if analysis_id is not None:
         stmt = stmt.where(FeedbackEvent.analysis_id == analysis_id)
+    if created_from is not None:
+        stmt = stmt.where(FeedbackEvent.created_at >= created_from)
+    if created_to is not None:
+        stmt = stmt.where(FeedbackEvent.created_at <= created_to)
     if limit is not None:
         stmt = stmt.limit(max(1, limit))
     result = session.execute(stmt)

@@ -72,16 +72,73 @@ def _empty_risk_trends() -> dict[str, Any]:
     }
 
 
+def _fetch_history_risk_trends(
+    *,
+    has_history_scope: bool,
+    project_id: int | None,
+    workspace_key: str | None = None,
+) -> dict[str, Any]:
+    if not has_history_scope:
+        return _empty_risk_trends()
+    return fetch_risk_trends(
+        project_id=project_id,
+        workspace_key=workspace_key,
+    )
+
+
 def _empty_calibration_dashboard_seed() -> dict[str, Any]:
     return {
+        "project": None,
+        "workspace": None,
+        "window": {"start": None, "end": None, "days": 7},
         "failed_deploy_count": 0,
         "warned_failed_deploy_count": 0,
         "overall_precision": 0.0,
         "overall_recall": 0.0,
-        "window": {"days": 7},
         "backtest_rows": [],
         "by_severity": {},
+        "false_positive_cases": [],
+        "false_reassurance_cases": [],
+        "confidence_trends": {"buckets": {}, "sample_size": 0},
+        "calibration_metrics": {
+            "sample_size": 0,
+            "feedback_event_count": 0,
+            "feedback_history_event_count": 0,
+            "precision": 0.0,
+            "recall_proxy": 0.0,
+            "false_positive_count": 0,
+            "false_positive_rate": 0.0,
+            "false_reassurance_count": 0,
+            "false_reassurance_rate": 0.0,
+            "deployment_false_reassurance_count": 0,
+            "reviewer_missed_feedback_count": 0,
+            "recall_proxy_signals": {
+                "failed_deploy_count": 0,
+                "warned_failed_deploy_count": 0,
+                "failed_without_warning_count": 0,
+                "missed_feedback_count": 0,
+            },
+        },
+        "confidence_limitations": [
+            {
+                "code": "no_calibration_inputs",
+                "label": "No calibration inputs",
+                "message": "No deployment outcomes or feedback are linked yet.",
+            }
+        ],
+        "confidence_label": "Directional only",
+        "statistical_certainty": False,
     }
+
+
+def _calibration_limitation_labels(calibration: dict[str, Any]) -> list[str]:
+    labels: list[str] = []
+    for limitation in calibration.get("confidence_limitations") or []:
+        if isinstance(limitation, dict):
+            label = str(limitation.get("label") or "").strip()
+            if label:
+                labels.append(label)
+    return labels or ["Calibration evidence available"]
 
 
 def _history_workspace_options(project_key: str | None) -> dict[str, str]:
@@ -143,10 +200,9 @@ def build_history_page() -> None:
         )
         reports = reports_page["items"]
         total_report_count = reports_page["total_count"]
-        trends = (
-            _empty_risk_trends()
-            if not has_history_scope
-            else fetch_risk_trends(project_id=active_project_id)
+        trends = _fetch_history_risk_trends(
+            has_history_scope=has_history_scope,
+            project_id=active_project_id,
         )
         calibration = (
             _empty_calibration_dashboard_seed()
@@ -185,8 +241,12 @@ def build_history_page() -> None:
                     back_href="/",
                     back_label="Back to dashboard",
                 )
-            with ui.card().classes("w-full dw-panel shadow-none p-4"):
-                with ui.column().classes("gap-0"):
+            risk_trends_card = ui.card().classes("w-full dw-panel shadow-none p-4")
+            calibration_card = ui.card().classes("w-full dw-panel shadow-none p-4")
+
+            def render_risk_trends_summary() -> None:
+                risk_trends_card.clear()
+                with risk_trends_card, ui.column().classes("gap-0"):
                     ui.label("Risk trends").classes("dw-eyebrow mb-1")
                     ui.label(
                         f"{trends['total_reports']} reports · "
@@ -204,8 +264,10 @@ def build_history_page() -> None:
                             )[:3]
                         )
                     ).classes("mt-[2px] text-sm dw-muted")
-            with ui.card().classes("w-full dw-panel shadow-none p-4"):
-                with ui.column().classes("gap-0"):
+
+            def render_calibration_summary() -> None:
+                calibration_card.clear()
+                with calibration_card, ui.column().classes("gap-0"):
                     ui.label("Calibration snapshot").classes("dw-eyebrow mb-1")
                     ui.label(
                         f"{calibration['failed_deploy_count']} failed deploys · "
@@ -216,6 +278,19 @@ def build_history_page() -> None:
                         f"Recall {calibration['overall_recall']:.2f} · "
                         f"{calibration['window']['days']}d window"
                     ).classes("mt-[2px] text-sm dw-muted")
+                    limitation_label = " · ".join(
+                        _calibration_limitation_labels(calibration)
+                    )
+                    ui.label(
+                        f"{calibration.get('confidence_label', 'Directional only')} · "
+                        f"{limitation_label}"
+                    ).classes("mt-[2px] text-sm dw-muted")
+
+            def render_summaries() -> None:
+                render_risk_trends_summary()
+                render_calibration_summary()
+
+            render_summaries()
             search_input = (
                 ui.input(placeholder="Search top risk or summary")
                 .props("outlined dense clearable prepend-icon=search")
@@ -332,15 +407,18 @@ def build_history_page() -> None:
                 )
                 reports = page_payload["items"]
                 total_report_count = page_payload["total_count"]
-                trends = (
-                    _empty_risk_trends()
-                    if not has_history_scope
-                    else fetch_risk_trends(project_id=active_project_id)
+                trends = _fetch_history_risk_trends(
+                    has_history_scope=has_history_scope,
+                    project_id=active_project_id,
+                    workspace_key=current_workspace_key(),
                 )
                 calibration = (
                     _empty_calibration_dashboard_seed()
                     if not has_history_scope
-                    else fetch_calibration_dashboard_seed(project_id=active_project_id)
+                    else fetch_calibration_dashboard_seed(
+                        project_id=active_project_id,
+                        workspace_key=current_workspace_key(),
+                    )
                 )
                 max_page = max(
                     1, (total_report_count - 1) // page_state["page_size"] + 1
@@ -532,6 +610,7 @@ def build_history_page() -> None:
                 )
                 page_state["page"] = min(max(1, page_state["page"] + delta), max_page)
                 refresh_data(search_input.value.strip() if search_input.value else None)
+                render_summaries()
                 render_history()
                 render_actions()
 
@@ -540,6 +619,7 @@ def build_history_page() -> None:
                 page_state["page"] = 1
                 selected_ids.clear()
                 refresh_data(query)
+                render_summaries()
                 render_history()
                 render_actions()
 
