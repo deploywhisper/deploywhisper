@@ -42,6 +42,7 @@ from services.benchmark_corpus_service import (
     BenchmarkCorpusValidationError,
     validate_benchmark_corpus,
 )
+from services.backtesting_service import run_incident_backtest
 from services.benchmark_runner_service import run_benchmark_corpus
 from services.deployment_outcome_service import record_deployment_outcome
 from services.project_service import create_project, create_workspace
@@ -893,6 +894,43 @@ def _run_benchmark_run(path: str | None) -> int:
     return 0 if result.passed else 1
 
 
+def _run_benchmark_backtest_incidents(args: argparse.Namespace) -> int:
+    try:
+        result = run_incident_backtest(
+            project_id=args.project_id,
+            project_key=args.project_key,
+            workspace_id=args.workspace_id,
+            workspace_key=args.workspace_key,
+        )
+    except (ValueError, OSError, ValidationError) as exc:
+        _emit_json(
+            {
+                "passed": False,
+                "summary": {
+                    "project_id": args.project_id,
+                    "project_key": args.project_key,
+                    "workspace_id": args.workspace_id,
+                    "workspace_key": args.workspace_key,
+                    "scenario_count": 0,
+                    "detected_count": 0,
+                    "missed_count": 0,
+                    "unsupported_count": 0,
+                    "insufficient_context_count": 0,
+                    "error_count": 1,
+                    "generated_at": datetime.now(tz=UTC)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                },
+                "scenarios": [],
+                "errors": [str(exc)],
+            },
+            stream=sys.stdout,
+        )
+        return 1
+    _emit_json(result, stream=sys.stdout)
+    return 0 if result.get("passed") else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="DeployWhisper CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -1223,6 +1261,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--path",
         help="Optional benchmark corpus root. Defaults to benchmarks/corpus/v1.",
     )
+    benchmark_backtest_parser = benchmark_subparsers.add_parser(
+        "backtest-incidents",
+        help="Replay incident-linked artifacts against the current analysis core.",
+    )
+    benchmark_backtest_parser.add_argument(
+        "--project-id",
+        type=int,
+        help="DeployWhisper numeric project id.",
+    )
+    benchmark_backtest_parser.add_argument(
+        "--project-key",
+        help="DeployWhisper project key.",
+    )
+    benchmark_backtest_parser.add_argument(
+        "--workspace-id",
+        type=int,
+        help="Optional DeployWhisper numeric workspace id.",
+    )
+    benchmark_backtest_parser.add_argument(
+        "--workspace-key",
+        help="Optional DeployWhisper workspace key.",
+    )
 
     return parser
 
@@ -1280,6 +1340,8 @@ def main() -> None:
         raise SystemExit(_run_benchmark_validate_corpus(args.path))
     if args.command == "benchmark" and args.benchmark_command == "run":
         raise SystemExit(_run_benchmark_run(args.path))
+    if args.command == "benchmark" and args.benchmark_command == "backtest-incidents":
+        raise SystemExit(_run_benchmark_backtest_incidents(args))
 
     print("DeployWhisper CLI ready: foundation-check")
 

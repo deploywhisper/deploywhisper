@@ -296,6 +296,54 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertFalse(payload["passed"])
         self.assertEqual(payload["summary"]["failed_count"], 1)
 
+    def test_benchmark_backtest_incidents_command_reports_project_results(
+        self,
+    ) -> None:
+        output = io.StringIO()
+        result = {
+            "passed": False,
+            "summary": {
+                "project_id": 7,
+                "workspace_id": None,
+                "scenario_count": 2,
+                "detected_count": 1,
+                "missed_count": 1,
+                "unsupported_count": 0,
+                "insufficient_context_count": 0,
+                "error_count": 0,
+                "generated_at": "2026-06-08T00:00:00Z",
+            },
+            "scenarios": [],
+            "errors": [],
+        }
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "benchmark",
+                    "backtest-incidents",
+                    "--project-id",
+                    "7",
+                ],
+            ),
+            patch("cli.analyze.run_incident_backtest", return_value=result) as mocked,
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(payload["summary"]["missed_count"], 1)
+        mocked.assert_called_once_with(
+            project_id=7,
+            project_key=None,
+            workspace_id=None,
+            workspace_key=None,
+        )
+
     def test_benchmark_run_command_reports_invalid_corpus_as_json(self) -> None:
         output = io.StringIO()
 

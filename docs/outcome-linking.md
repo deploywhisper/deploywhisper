@@ -32,6 +32,26 @@ DeployWhisper can now link incident records back to persisted analysis reports a
 - Feedback and deployment outcomes update aggregate calibration metrics only; historical report severity, recommendation, verdict confidence, and narrative fields remain immutable.
 - False-reassurance reviewer feedback is counted only when the report did not warn, so missed-finding notes on caution/no-go reports do not imply the advisory system reassured the user.
 
+## Incident Replay Backtesting
+
+- `services.backtesting_service.run_incident_backtest(...)` replays imported incident records that are linked to persisted analysis reports.
+- The replay uses the locally stored accepted artifact snapshots from the linked report and runs them through the shared analysis core with ambient topology, incident memory, narrative generation, and LLM assistance disabled. Raw artifacts remain local.
+- The CLI command is:
+
+```bash
+python -m cli.analyze benchmark backtest-incidents --project-key <project>
+```
+
+- Add `--workspace-key`, `--project-id`, or `--workspace-id` when a narrower scope is needed.
+- Each scenario is classified as:
+  - `detected` when the replay produces a caution/no-go warning.
+  - `missed` when the replay returns `go`.
+  - `unsupported` when the incident is not linked to a report, the linked report is unavailable, accepted artifact snapshots are missing, or the replay parser accepts no artifacts.
+  - `insufficient_context` when the shared analysis core reports insufficient supporting context.
+  - `error` when replay execution fails.
+- Scenario rows link incident metadata, linked report metadata, expected evidence from the original persisted report, observed replay evidence, observed findings, context TODOs, and improvement guidance.
+- The command exits non-zero when any scenario is missed or errors, so it can be used as a guardrail for benchmark claims while still reporting unsupported and insufficient-context scenarios explicitly.
+
 ## Scheduler and Calibration Feed
 
 - The app lifecycle scheduler now runs `run_due_weekly_backtests()` alongside topology drift checks.
