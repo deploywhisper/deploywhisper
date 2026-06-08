@@ -62,8 +62,14 @@ _DASHBOARD_HEAD_INJECTED = False
 _THEME_SYNC_JS = """
 (() => {
   const key = 'deploywhisper-theme';
+  const brandPrimary = '#ff6900';
+  const applyBrand = () => {
+    document.documentElement.style.setProperty('--q-primary', brandPrimary);
+    document.body?.style.setProperty('--q-primary', brandPrimary);
+  };
   const apply = (theme) => {
     const resolved = theme === 'dark' ? 'dark' : 'light';
+    applyBrand();
     document.documentElement.dataset.dwTheme = resolved;
     try { window.localStorage.setItem(key, resolved); } catch (_) {}
     document.querySelectorAll('[data-dw-theme-toggle-label]').forEach((node) => {
@@ -76,6 +82,7 @@ _THEME_SYNC_JS = """
   };
   let stored = document.documentElement.dataset.dwTheme || 'light';
   try { stored = window.localStorage.getItem(key) || stored; } catch (_) {}
+  applyBrand();
   apply(stored);
 })();
 """
@@ -160,6 +167,7 @@ def inject_styles(*, force: bool = False) -> None:
     --dw-green-light: {GREEN_LIGHT};
     --dw-amber: {AMBER};
     --dw-amber-light: {AMBER_LIGHT};
+    --q-primary: {ORANGE};
   }}
   *, body, .q-page, .nicegui-content, .q-layout,
   input, button, span, div, p, h1, h2, h3, label, a {{
@@ -743,8 +751,14 @@ def inject_styles(*, force: bool = False) -> None:
 <script>
 (() => {{
   const key = 'deploywhisper-theme';
+  const brandPrimary = '#ff6900';
+  const applyBrand = () => {{
+    document.documentElement.style.setProperty('--q-primary', brandPrimary);
+    document.body?.style.setProperty('--q-primary', brandPrimary);
+  }};
   const apply = (theme) => {{
     const resolved = theme === 'dark' ? 'dark' : 'light';
+    applyBrand();
     document.documentElement.dataset.dwTheme = resolved;
     try {{ window.localStorage.setItem(key, resolved); }} catch (_) {{}}
     document.querySelectorAll('[data-dw-theme-toggle-label]').forEach((node) => {{
@@ -757,6 +771,7 @@ def inject_styles(*, force: bool = False) -> None:
   }};
   let stored = 'light';
   try {{ stored = window.localStorage.getItem(key) || 'light'; }} catch (_) {{}}
+  applyBrand();
   apply(stored);
 }})();
 </script>
@@ -1201,7 +1216,12 @@ def _resolve_header_project_state() -> tuple[
     return projects, current_project_id, authorization_error
 
 
-def _build_header_project_selector(on_project_change=None) -> None:
+def _build_header_project_selector(
+    on_project_change=None,
+    *,
+    on_create_project_dialog_open=None,
+    on_create_project_dialog_close=None,
+) -> None:
     projects, current_project_id, authorization_error = _resolve_header_project_state()
 
     def select_project(
@@ -1230,7 +1250,11 @@ def _build_header_project_selector(on_project_change=None) -> None:
         ui.button(
             "New project",
             on_click=lambda: open_create_project_dialog(
-                on_created=lambda created: select_project(created, [*projects, created])
+                on_created=lambda created: select_project(
+                    created, [*projects, created]
+                ),
+                on_open=on_create_project_dialog_open,
+                on_close=on_create_project_dialog_close,
             ),
         ).props("flat dense no-caps").style(
             f"color:{ORANGE};font-size:12px;font-weight:700;padding:0 2px;"
@@ -1242,7 +1266,12 @@ def _build_header_project_selector(on_project_change=None) -> None:
         )
 
 
-def build_header(on_project_change=None) -> None:
+def build_header(
+    on_project_change=None,
+    *,
+    on_create_project_dialog_open=None,
+    on_create_project_dialog_close=None,
+) -> None:
     """Build the dashboard top header."""
 
     def open_deploy_review() -> None:
@@ -1272,7 +1301,11 @@ def build_header(on_project_change=None) -> None:
                 "flex:1;background:transparent;border:none;outline:none;"
                 f"font-size:13px;color:{ZINC_950};min-width:0"
             )
-        _build_header_project_selector(on_project_change=on_project_change)
+        _build_header_project_selector(
+            on_project_change=on_project_change,
+            on_create_project_dialog_open=on_create_project_dialog_open,
+            on_create_project_dialog_close=on_create_project_dialog_close,
+        )
         ui.element("div").style("flex:1")
         with (
             ui.element("button")
@@ -1758,6 +1791,7 @@ def _build_legacy_context_markers(
 def build_dashboard() -> None:
     """Render the primary DeployWhisper dashboard."""
     content_refresh = {"fn": lambda *_: None}
+    header_dialog_state = {"create_project_open": False}
 
     def handle_project_change(*_) -> None:
         render_header.refresh()
@@ -1774,7 +1808,15 @@ def build_dashboard() -> None:
 
         @ui.refreshable
         def render_header() -> None:
-            build_header(on_project_change=handle_project_change)
+            build_header(
+                on_project_change=handle_project_change,
+                on_create_project_dialog_open=lambda: header_dialog_state.update(
+                    create_project_open=True
+                ),
+                on_create_project_dialog_close=lambda: header_dialog_state.update(
+                    create_project_open=False
+                ),
+            )
 
         render_header()
 
@@ -1850,12 +1892,16 @@ def build_dashboard() -> None:
 
     render_dashboard_content()
     content_refresh["fn"] = lambda *_: render_dashboard_content.refresh()
+
+    def refresh_header_shell() -> None:
+        if header_dialog_state["create_project_open"]:
+            return
+        render_header.refresh()
+        render_sidebar.refresh()
+
     ui.timer(
         5.0,
-        lambda: (
-            render_header.refresh(),
-            render_sidebar.refresh(),
-        ),
+        refresh_header_shell,
     )
 
 

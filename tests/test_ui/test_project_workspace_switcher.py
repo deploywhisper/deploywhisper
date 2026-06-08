@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from services.project_service import ProjectRecord
 from ui.components.project_workspace_switcher import (
@@ -15,6 +16,93 @@ from ui.components.project_workspace_switcher import (
     project_option_label,
     project_repository_context,
 )
+import ui.components.project_workspace_switcher as switcher_module
+
+
+class _FakeElement:
+    def __init__(self, *, kind: str, label: str | None = None) -> None:
+        self.kind = kind
+        self.label = label
+        self.props_values: list[str] = []
+        self.class_values: list[str] = []
+        self.style_values: list[str] = []
+        self.opened = False
+        self.value = ""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args) -> None:
+        return None
+
+    def props(self, value: str):
+        self.props_values.append(value)
+        return self
+
+    def classes(self, value: str):
+        self.class_values.append(value)
+        return self
+
+    def style(self, value: str):
+        self.style_values.append(value)
+        return self
+
+    def open(self) -> None:
+        self.opened = True
+
+    def close(self) -> None:
+        self.opened = False
+
+
+class _FakeUi:
+    def __init__(self) -> None:
+        self.dialogs: list[_FakeElement] = []
+        self.cards: list[_FakeElement] = []
+        self.buttons: list[_FakeElement] = []
+
+    def dialog(self) -> _FakeElement:
+        element = _FakeElement(kind="dialog")
+        self.dialogs.append(element)
+        return element
+
+    def card(self) -> _FakeElement:
+        element = _FakeElement(kind="card")
+        self.cards.append(element)
+        return element
+
+    def column(self) -> _FakeElement:
+        return _FakeElement(kind="column")
+
+    def row(self) -> _FakeElement:
+        return _FakeElement(kind="row")
+
+    def element(self, _tag: str) -> _FakeElement:
+        return _FakeElement(kind="element")
+
+    def input(self, label: str) -> _FakeElement:
+        return _FakeElement(kind="input", label=label)
+
+    def textarea(self, label: str) -> _FakeElement:
+        return _FakeElement(kind="textarea", label=label)
+
+    def label(self, text: str) -> _FakeElement:
+        return _FakeElement(kind="label", label=text)
+
+    def button(
+        self,
+        text: str,
+        *,
+        on_click=None,
+        color: str | None = None,
+    ) -> _FakeElement:
+        element = _FakeElement(kind="button", label=text)
+        element.on_click = on_click
+        element.color = color
+        self.buttons.append(element)
+        return element
+
+    def separator(self) -> _FakeElement:
+        return _FakeElement(kind="separator")
 
 
 class ProjectWorkspaceSwitcherTests(unittest.TestCase):
@@ -144,6 +232,59 @@ class ProjectWorkspaceSwitcherTests(unittest.TestCase):
             ),
             "Key unassigned",
         )
+
+    def test_create_project_dialog_is_persistent_with_explicit_close_controls(
+        self,
+    ) -> None:
+        fake_ui = _FakeUi()
+        lifecycle = {"opened": 0, "closed": 0}
+
+        def decorate_modal_card(element, *, label: str) -> None:
+            element.props(f'role=dialog aria-modal=true aria-label="{label}"')
+
+        with (
+            patch.object(switcher_module, "ui", fake_ui),
+            patch.object(
+                switcher_module,
+                "decorate_modal_card",
+                decorate_modal_card,
+            ),
+        ):
+            switcher_module.open_create_project_dialog(
+                on_created=lambda _project: None,
+                on_open=lambda: lifecycle.update(opened=lifecycle["opened"] + 1),
+                on_close=lambda: lifecycle.update(closed=lifecycle["closed"] + 1),
+            )
+
+        self.assertEqual(len(fake_ui.dialogs), 1)
+        self.assertIn("persistent", fake_ui.dialogs[0].props_values)
+        self.assertTrue(fake_ui.dialogs[0].opened)
+        self.assertEqual(lifecycle, {"opened": 1, "closed": 0})
+        self.assertIn(
+            'data-dw-create-project-dialog="1"',
+            fake_ui.cards[0].props_values,
+        )
+        self.assertIn(
+            'role=dialog aria-modal=true aria-label="Create project workspace"',
+            fake_ui.cards[0].props_values,
+        )
+        button_labels = [button.label for button in fake_ui.buttons]
+        self.assertIn("Close", button_labels)
+        self.assertIn("Cancel", button_labels)
+        self.assertIn("Create project", button_labels)
+        close_button = next(
+            button for button in fake_ui.buttons if button.label == "Close"
+        )
+        cancel_button = next(
+            button for button in fake_ui.buttons if button.label == "Cancel"
+        )
+        self.assertIn('data-dw-modal-close="1"', close_button.props_values)
+        self.assertIn('data-dw-modal-close="1"', cancel_button.props_values)
+
+        close_button.on_click()
+        cancel_button.on_click()
+
+        self.assertEqual(lifecycle, {"opened": 1, "closed": 1})
 
 
 if __name__ == "__main__":
