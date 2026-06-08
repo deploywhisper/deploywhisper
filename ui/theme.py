@@ -120,6 +120,7 @@ _THEME_CSS = f"""
     --dw-bg: {BG};
     --dw-green: {GREEN};
     --dw-amber: {AMBER};
+    --q-primary: {ORANGE};
     --dw-text: {ZINC_950};
     --dw-muted-text: {MUTED};
     --dw-accent: {ORANGE};
@@ -349,6 +350,20 @@ _THEME_CSS = f"""
     border-radius: 3px;
   }}
 </style>
+"""
+
+_QUASAR_BRAND_SYNC_JS = f"""
+<script>
+(() => {{
+  const brandPrimary = '{ORANGE}';
+  const applyBrand = () => {{
+    document.documentElement.style.setProperty('--q-primary', brandPrimary);
+    document.body?.style.setProperty('--q-primary', brandPrimary);
+  }};
+  applyBrand();
+  window.setTimeout(applyBrand, 0);
+}})();
+</script>
 """
 
 _REPORT_LAYOUT_CSS = """
@@ -595,6 +610,7 @@ def apply_theme() -> None:
     ui.colors(primary=ORANGE)
     ui.add_head_html(_THEME_HEAD_HTML)
     ui.add_head_html(_THEME_CSS)
+    ui.add_head_html(_QUASAR_BRAND_SYNC_JS)
     ui.add_head_html(_REPORT_LAYOUT_CSS)
 
 
