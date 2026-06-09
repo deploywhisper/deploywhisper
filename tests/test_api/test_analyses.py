@@ -18,7 +18,8 @@ import models.tables as tables_module
 import services.deployment_outcome_service as deployment_outcome_service_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
-from analysis.blast_radius import BlastRadiusResult
+from analysis.blast_radius import BlastRadiusResult, ImpactNode
+from api.schemas import BlastRadiusData
 from services.analysis_service import AnalysisPersistenceError
 from services.analysis_service import AnalysisRunResult
 from analysis.rollback_planner import RollbackPlan
@@ -367,6 +368,119 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["advisory"]["recommendation"], "caution")
         self.assertEqual(payload["data"]["audit"]["llm_provider"], "ollama")
         self.assertEqual(payload["data"]["blast_radius"]["direct_count"], 0)
+
+    def test_blast_radius_api_schema_preserves_topology_context_fields(self) -> None:
+        blast_radius = BlastRadiusData.model_validate(
+            BlastRadiusResult(
+                affected=[
+                    ImpactNode(
+                        service_id="api",
+                        label="API Service",
+                        depth=1,
+                        dependencies=["database"],
+                        owners=["payments"],
+                    )
+                ],
+                direct_count=0,
+                transitive_count=1,
+                context_source={"type": "custom", "ref": "topology.json"},
+                freshness={"updated_at": "2026-06-08T12:00:00Z", "age_days": 1},
+                context_state="current",
+                context_limitations=[],
+            ).model_dump()
+        )
+
+        payload = blast_radius.model_dump()
+        self.assertEqual(payload["affected"][0]["dependencies"], ["database"])
+        self.assertEqual(payload["affected"][0]["owners"], ["payments"])
+        self.assertEqual(
+            payload["context_source"],
+            {"type": "custom", "ref": "topology.json"},
+        )
+        self.assertEqual(
+            payload["freshness"],
+            {"updated_at": "2026-06-08T12:00:00Z", "age_days": 1},
+        )
+        self.assertEqual(payload["context_state"], "current")
+        self.assertEqual(payload["context_limitations"], [])
+
+    def test_blast_radius_api_schema_fills_partial_context_defaults(self) -> None:
+        blast_radius = BlastRadiusData.model_validate(
+            {
+                "affected": [],
+                "direct_count": 0,
+                "transitive_count": 0,
+                "context_source": {"type": "custom"},
+                "freshness": {"updated_at": "2026-06-08T12:00:00Z"},
+            }
+        )
+
+        payload = blast_radius.model_dump()
+        self.assertEqual(payload["context_source"], {"type": "custom", "ref": None})
+        self.assertEqual(
+            payload["freshness"],
+            {"updated_at": "2026-06-08T12:00:00Z", "age_days": None},
+        )
+
+    def test_blast_radius_api_schema_drops_malformed_additive_fields(self) -> None:
+        blast_radius = BlastRadiusData.model_validate(
+            {
+                "affected": [
+                    {
+                        "service_id": "api",
+                        "label": "API Service",
+                        "depth": 0,
+                        "dependencies": None,
+                        "owners": None,
+                    }
+                ],
+                "direct_count": 1,
+                "transitive_count": 0,
+                "context_source": "legacy",
+                "freshness": "unknown",
+                "context_limitations": "legacy",
+            }
+        )
+
+        payload = blast_radius.model_dump()
+        self.assertEqual(payload["affected"][0]["dependencies"], [])
+        self.assertEqual(payload["affected"][0]["owners"], [])
+        self.assertEqual(payload["context_source"], {"type": None, "ref": None})
+        self.assertEqual(payload["freshness"], {"updated_at": None, "age_days": None})
+        self.assertEqual(payload["context_limitations"], [])
+
+    def test_blast_radius_api_schema_drops_malformed_nested_additive_fields(
+        self,
+    ) -> None:
+        blast_radius = BlastRadiusData.model_validate(
+            {
+                "affected": [],
+                "direct_count": 0,
+                "transitive_count": 0,
+                "context_source": {"type": {"kind": "custom"}, "ref": "topology.json"},
+                "freshness": {"updated_at": {"bad": "value"}, "age_days": []},
+                "context_state": {"state": "missing"},
+            }
+        )
+
+        payload = blast_radius.model_dump()
+        self.assertEqual(
+            payload["context_source"], {"type": None, "ref": "topology.json"}
+        )
+        self.assertEqual(payload["freshness"], {"updated_at": None, "age_days": None})
+        self.assertEqual(payload["context_state"], "unknown")
+
+    def test_blast_radius_api_schema_normalizes_null_context_state(self) -> None:
+        blast_radius = BlastRadiusData.model_validate(
+            {
+                "affected": [],
+                "direct_count": 0,
+                "transitive_count": 0,
+                "context_state": None,
+            }
+        )
+
+        self.assertEqual(blast_radius.model_dump()["context_state"], "unknown")
 
     def test_get_analysis_preserves_go_advisory_with_narrative_warning(self) -> None:
         parse_batch = ParseBatchResult(
@@ -1520,6 +1634,19 @@ class AnalysesApiTests(unittest.TestCase):
             payload["data"]["advisory"]["recommendation"],
         )
         self.assertIn("blast_radius", payload["data"]["persisted_report"])
+        self.assertEqual(payload["data"]["blast_radius"]["context_state"], "missing")
+        self.assertIn(
+            "missing_topology",
+            payload["data"]["blast_radius"]["context_limitations"],
+        )
+        self.assertEqual(
+            payload["data"]["blast_radius"]["context_source"],
+            {"type": None, "ref": None},
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["blast_radius"]["context_state"],
+            "missing",
+        )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertTrue(payload["data"]["persisted_report"]["evidence_items"])
         self.assertEqual(

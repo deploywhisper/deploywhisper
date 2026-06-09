@@ -911,6 +911,24 @@ class ImpactNodeData(BaseModel):
     service_id: str = Field(..., description="Stable service identifier")
     label: str = Field(..., description="Human-readable service label")
     depth: int = Field(..., description="0 for direct impact, 1+ for transitive impact")
+    dependencies: list[str] = Field(
+        default_factory=list,
+        description="Upstream service ids this service depends on in topology context",
+    )
+    owners: list[str] = Field(
+        default_factory=list,
+        description="Owner labels declared for this topology service",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_lists(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        normalized["dependencies"] = _text_list(normalized.get("dependencies"))
+        normalized["owners"] = _text_list(normalized.get("owners"))
+        return normalized
 
 
 class BlastRadiusData(BaseModel):
@@ -927,6 +945,84 @@ class BlastRadiusData(BaseModel):
     unmatched_resources: list[str] = Field(
         default_factory=list, description="Resources not found in topology context"
     )
+    context_source: dict[str, str | None] = Field(
+        default_factory=lambda: {"type": None, "ref": None},
+        description="Topology source metadata used for this blast-radius result",
+    )
+    freshness: dict[str, int | str | None] = Field(
+        default_factory=lambda: {"updated_at": None, "age_days": None},
+        description="Topology freshness metadata used for this blast-radius result",
+    )
+    context_state: str | None = Field(
+        default="unknown",
+        description="Topology context state: current, stale, missing, incomplete, conflicting, or unknown",
+    )
+    context_limitations: list[str] = Field(
+        default_factory=list,
+        description="Machine-readable topology context limitation labels",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_context(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        if not isinstance(normalized.get("affected"), list):
+            normalized["affected"] = []
+        if not isinstance(normalized.get("context_source"), dict):
+            normalized["context_source"] = {"type": None, "ref": None}
+        if not isinstance(normalized.get("freshness"), dict):
+            normalized["freshness"] = {"updated_at": None, "age_days": None}
+        else:
+            freshness = normalized["freshness"]
+            updated_at = freshness.get("updated_at")
+            age_days = freshness.get("age_days")
+            normalized["freshness"] = {
+                "updated_at": updated_at if isinstance(updated_at, str) else None,
+                "age_days": age_days if isinstance(age_days, int | str) else None,
+            }
+        context_source = normalized.get("context_source")
+        if isinstance(context_source, dict):
+            normalized["context_source"] = {
+                "type": _scalar_text_or_none(context_source.get("type")),
+                "ref": _scalar_text_or_none(context_source.get("ref")),
+            }
+        context_state = normalized.get("context_state")
+        if context_state is None or not isinstance(context_state, str):
+            normalized["context_state"] = "unknown"
+        normalized["context_limitations"] = _text_list(
+            normalized.get("context_limitations")
+        )
+        return normalized
+
+    @model_validator(mode="after")
+    def normalize_context_defaults(self) -> "BlastRadiusData":
+        context_source = dict(self.context_source or {})
+        self.context_source = {
+            "type": context_source.get("type"),
+            "ref": context_source.get("ref"),
+        }
+        freshness = dict(self.freshness or {})
+        self.freshness = {
+            "updated_at": freshness.get("updated_at"),
+            "age_days": freshness.get("age_days"),
+        }
+        return self
+
+
+def _text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _scalar_text_or_none(value: Any) -> str | None:
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, int | float | bool):
+        return str(value)
+    return None
 
 
 class RollbackStepData(BaseModel):
@@ -1457,6 +1553,10 @@ def build_analysis_run_data(
                 "transitive_count": blast_radius.transitive_count,
                 "warning": blast_radius.warning,
                 "unmatched_resources": list(blast_radius.unmatched_resources),
+                "context_source": dict(blast_radius.context_source),
+                "freshness": dict(blast_radius.freshness),
+                "context_state": blast_radius.context_state,
+                "context_limitations": list(blast_radius.context_limitations),
             }
         ),
         rollback_plan=RollbackPlanData.model_validate(

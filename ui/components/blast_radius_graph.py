@@ -96,6 +96,40 @@ def _plotly_figure(result: BlastRadiusResult, *, severity: str) -> dict:
     }
 
 
+def _freshness_text(result: BlastRadiusResult) -> str:
+    age_days = result.freshness.get("age_days")
+    if age_days is None:
+        return "Topology freshness: unknown"
+    try:
+        days = int(age_days)
+    except (TypeError, ValueError):
+        return "Topology freshness: unknown"
+    if days < 0:
+        return "Topology freshness: unknown"
+    if days == 0:
+        return "Topology freshness: updated today"
+    unit = "day" if days == 1 else "days"
+    return f"Topology freshness: {days} {unit} old"
+
+
+def _source_text(result: BlastRadiusResult) -> str:
+    source_type = result.context_source.get("type") or "unknown"
+    source_ref = result.context_source.get("ref")
+    if source_ref:
+        return f"Topology source: {source_type} · {source_ref}"
+    return f"Topology source: {source_type}"
+
+
+def _node_context_text(node) -> str:
+    parts = [node.label]
+    if node.owners:
+        owner_label = "Owners" if len(node.owners) > 1 else "Owner"
+        parts.append(f"{owner_label}: {', '.join(node.owners)}")
+    if node.dependencies:
+        parts.append(f"Depends on: {', '.join(node.dependencies)}")
+    return " · ".join(parts)
+
+
 def render_blast_radius_panel(result: BlastRadiusResult, *, severity: str) -> None:
     """Render a blast-radius graph plus textual equivalent."""
     register_review_accessibility()
@@ -117,3 +151,13 @@ def render_blast_radius_panel(result: BlastRadiusResult, *, severity: str) -> No
         with ui.column().classes("w-full gap-1 mt-2"):
             ui.label("Text equivalent").classes("text-xs font-semibold dw-muted")
             ui.label(direct_text).classes("text-sm dw-text")
+            ui.label(_source_text(result)).classes("text-xs dw-muted")
+            ui.label(_freshness_text(result)).classes("text-xs dw-muted")
+            if result.context_state and result.context_state != "current":
+                ui.label(f"Topology context: {result.context_state}").classes(
+                    "text-xs dw-warning-text"
+                )
+            for node in sorted(
+                result.affected, key=lambda item: (item.depth, item.label)
+            ):
+                ui.label(_node_context_text(node)).classes("text-sm dw-text")
