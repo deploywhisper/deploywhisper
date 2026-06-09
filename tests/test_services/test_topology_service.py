@@ -17,7 +17,9 @@ import models.database as database_module
 import models.tables as tables_module
 import services.project_service as project_service_module
 import services.settings_service as settings_service_module
+from analysis.blast_radius import compute_blast_radius
 from models.database import SessionLocal
+from parsers.base import UnifiedChange
 from services.topology_service import (
     check_topology_drift,
     get_topology_status,
@@ -523,6 +525,341 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertIn("terraform", result.warnings[0].lower())
         self.assertIsNone(topology)
         self.assertIn("not configured", warning)
+
+    def test_import_topology_source_reads_terraform_state_relationships(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        state_path = Path(self.tempdir.name) / "terraform.tfstate"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "version": 4,
+                    "terraform_version": "1.8.5",
+                    "serial": 42,
+                    "lineage": "state-lineage",
+                    "resources": [
+                        {
+                            "mode": "managed",
+                            "type": "aws_db_instance",
+                            "name": "primary",
+                            "provider": 'provider["registry.terraform.io/hashicorp/aws"]',
+                            "instances": [
+                                {
+                                    "attributes": {
+                                        "id": "db-123",
+                                        "arn": "arn:aws:rds:us-east-1:111122223333:db:primary",
+                                    }
+                                }
+                            ],
+                        },
+                        {
+                            "mode": "managed",
+                            "type": "aws_ecs_service",
+                            "name": "api",
+                            "instances": [
+                                {
+                                    "dependencies": ["aws_db_instance.primary"],
+                                    "attributes": {"id": "svc-123", "name": "api"},
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = import_topology_source(
+            "terraform",
+            str(state_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertTrue(result.applied)
+        self.assertEqual(
+            sorted(result.diff.added_services),
+            ["aws_db_instance.primary", "aws_ecs_service.api"],
+        )
+        self.assertIsNone(warning)
+        assert topology is not None
+        service_by_id = {service["id"]: service for service in topology["services"]}
+        self.assertEqual(
+            service_by_id["aws_db_instance.primary"]["downstream"],
+            ["aws_ecs_service.api"],
+        )
+        self.assertIn(
+            "arn:aws:rds:us-east-1:111122223333:db:primary",
+            service_by_id["aws_db_instance.primary"]["resource_keys"],
+        )
+        self.assertIn(
+            "aws_db_instance.primary",
+            service_by_id["aws_db_instance.primary"]["resource_keys"],
+        )
+        self.assertEqual(
+            topology["metadata"]["import"]["source_type"],
+            "terraform",
+        )
+        blast_radius = compute_blast_radius(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_db_instance.primary",
+                    action="modify",
+                    summary="Terraform changed the database.",
+                )
+            ],
+            topology,
+            warning,
+        )
+        self.assertEqual(blast_radius.context_source["type"], "terraform")
+        self.assertEqual(blast_radius.direct_count, 1)
+        self.assertEqual(blast_radius.transitive_count, 1)
+        self.assertEqual(
+            [node.service_id for node in blast_radius.affected],
+            ["aws_db_instance.primary", "aws_ecs_service.api"],
+        )
+
+    def test_import_topology_source_warns_without_failing_for_missing_terraform_state(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        missing_path = Path(self.tempdir.name) / "missing.tfstate"
+
+        result = import_topology_source(
+            "terraform",
+            str(missing_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertFalse(result.applied)
+        self.assertEqual(result.accepted_resources, [])
+        self.assertIn("unavailable", " ".join(result.warnings).lower())
+        self.assertIsNone(topology)
+        self.assertIn("not configured", warning)
+
+    def test_import_topology_source_warns_without_replacing_for_missing_resources(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        source_path = Path(self.tempdir.name) / "baseline-topology.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["aws_ecs_service.api"],
+                            "downstream": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        import_topology_source("custom", str(source_path), project_key="payments")
+        state_path = Path(self.tempdir.name) / "malformed.tfstate"
+        state_path.write_text(
+            json.dumps({"version": 4, "serial": 1}),
+            encoding="utf-8",
+        )
+
+        result = import_topology_source(
+            "terraform",
+            str(state_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertFalse(result.applied)
+        self.assertIn("resources", " ".join(result.warnings).lower())
+        assert topology is not None
+        self.assertEqual(
+            [service["id"] for service in topology["services"]],
+            ["api"],
+        )
+        self.assertIsNone(warning)
+
+    def test_import_topology_source_matches_for_each_plan_addresses(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        state_path = Path(self.tempdir.name) / "foreach.tfstate"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "version": 4,
+                    "serial": 1,
+                    "resources": [
+                        {
+                            "mode": "managed",
+                            "type": "aws_instance",
+                            "name": "web",
+                            "instances": [
+                                {
+                                    "index_key": "blue",
+                                    "attributes": {"id": "i-blue"},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = import_topology_source(
+            "terraform",
+            str(state_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertTrue(result.applied)
+        assert topology is not None
+        service = topology["services"][0]
+        self.assertIn('aws_instance.web["blue"]', service["resource_keys"])
+        blast_radius = compute_blast_radius(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id='aws_instance.web["blue"]',
+                    action="modify",
+                    summary="Terraform changed an indexed instance.",
+                )
+            ],
+            topology,
+            warning,
+        )
+        self.assertEqual(blast_radius.direct_count, 1)
+        self.assertEqual(blast_radius.unmatched_resources, [])
+
+    def test_import_topology_source_resolves_indexed_dependency_refs(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        state_path = Path(self.tempdir.name) / "indexed-dependency.tfstate"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "version": 4,
+                    "serial": 1,
+                    "resources": [
+                        {
+                            "mode": "managed",
+                            "type": "aws_db_instance",
+                            "name": "primary",
+                            "instances": [
+                                {
+                                    "index_key": "blue",
+                                    "attributes": {"id": "db-blue"},
+                                }
+                            ],
+                        },
+                        {
+                            "mode": "managed",
+                            "type": "aws_ecs_service",
+                            "name": "api",
+                            "instances": [
+                                {
+                                    "dependencies": ['aws_db_instance.primary["blue"]'],
+                                    "attributes": {"id": "svc-api"},
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = import_topology_source(
+            "terraform",
+            str(state_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertTrue(result.applied)
+        self.assertEqual(result.partially_parsed_resources, [])
+        self.assertIsNone(warning)
+        assert topology is not None
+        service_by_id = {service["id"]: service for service in topology["services"]}
+        self.assertEqual(
+            service_by_id["aws_db_instance.primary"]["downstream"],
+            ["aws_ecs_service.api"],
+        )
+        blast_radius = compute_blast_radius(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id='aws_db_instance.primary["blue"]',
+                    action="modify",
+                    summary="Terraform changed an indexed database.",
+                )
+            ],
+            topology,
+            warning,
+        )
+        self.assertEqual(blast_radius.direct_count, 1)
+        self.assertEqual(blast_radius.transitive_count, 1)
+        self.assertEqual(
+            [node.service_id for node in blast_radius.affected],
+            ["aws_db_instance.primary", "aws_ecs_service.api"],
+        )
+
+    def test_import_topology_source_warns_for_stale_terraform_state(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        state_path = Path(self.tempdir.name) / "stale.tfstate"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "version": 4,
+                    "serial": 1,
+                    "resources": [
+                        {
+                            "mode": "managed",
+                            "type": "aws_lambda_function",
+                            "name": "worker",
+                            "instances": [{"attributes": {"id": "worker"}}],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        stale_timestamp = datetime(2025, 1, 1, tzinfo=UTC).timestamp()
+        os.utime(state_path, (stale_timestamp, stale_timestamp))
+
+        result = import_topology_source(
+            "terraform",
+            str(state_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertTrue(result.applied)
+        self.assertIn("stale", " ".join(result.warnings).lower())
+        self.assertIsNotNone(topology)
+        self.assertIn("stale", warning)
 
     def test_check_topology_drift_reports_added_removed_and_modified_resources(
         self,

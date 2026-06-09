@@ -732,6 +732,268 @@ def _parse_custom_source(source_ref: str) -> TopologyChangeSet:
     return _build_custom_change_set(payload)
 
 
+def _terraform_state_unavailable_change_set(
+    source_ref: str, message: str
+) -> TopologyChangeSet:
+    return TopologyChangeSet(
+        operation="noop",
+        warnings=[message],
+        unsupported_resources=[
+            TopologyImportResource(
+                resource_ref=source_ref,
+                message=message,
+            )
+        ],
+    )
+
+
+def _terraform_state_resource_address(resource: dict[str, Any]) -> str:
+    address = str(resource.get("address") or "").strip()
+    if address:
+        return address
+    resource_type = str(resource.get("type") or "").strip()
+    resource_name = str(resource.get("name") or "").strip()
+    if not resource_type or not resource_name:
+        return ""
+    prefix = str(resource.get("module") or "").strip()
+    if str(resource.get("mode") or "").strip() == "data":
+        resource_ref = f"data.{resource_type}.{resource_name}"
+    else:
+        resource_ref = f"{resource_type}.{resource_name}"
+    if prefix:
+        return f"{prefix}.{resource_ref}"
+    return resource_ref
+
+
+def _terraform_state_identity_keys(
+    address: str, resource: dict[str, Any], instances: list[Any]
+) -> list[str]:
+    keys = [address]
+    for field in ("provider", "type"):
+        value = str(resource.get(field) or "").strip()
+        if value:
+            keys.append(value)
+    for instance in instances:
+        if not isinstance(instance, dict):
+            continue
+        index_key = instance.get("index_key")
+        if index_key is not None:
+            if isinstance(index_key, str):
+                keys.append(f"{address}[{json.dumps(index_key)}]")
+            else:
+                keys.append(f"{address}[{index_key}]")
+        attributes = instance.get("attributes")
+        if not isinstance(attributes, dict):
+            continue
+        for field in ("id", "arn", "name", "resource_id", "self_link"):
+            value = attributes.get(field)
+            if isinstance(value, str) and value.strip():
+                keys.append(value.strip())
+    seen: set[str] = set()
+    unique: list[str] = []
+    for key in keys:
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(key)
+    return unique
+
+
+def _terraform_state_dependency_refs(instances: list[Any]) -> list[str]:
+    dependencies: list[str] = []
+    for instance in instances:
+        if not isinstance(instance, dict):
+            continue
+        raw_dependencies = instance.get("dependencies", [])
+        if not isinstance(raw_dependencies, list):
+            continue
+        for dependency in raw_dependencies:
+            dependency_ref = str(dependency or "").strip()
+            if dependency_ref:
+                dependencies.append(dependency_ref)
+    return sorted(set(dependencies))
+
+
+def _terraform_state_staleness_warning(path: Path) -> str | None:
+    try:
+        modified_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+    except OSError:
+        return None
+    if datetime.now(UTC) - modified_at <= timedelta(days=STALE_AFTER_DAYS):
+        return None
+    return f"Terraform state context is stale — state file was last modified more than {STALE_AFTER_DAYS} days ago."
+
+
+def _parse_terraform_state_source(source_ref: str) -> TopologyChangeSet:
+    path = Path(source_ref)
+    if not path.is_file():
+        return _terraform_state_unavailable_change_set(
+            source_ref,
+            "Terraform state context is unavailable because the source is not a readable local state file; no topology changes were applied.",
+        )
+    try:
+        raw_text = path.read_text(encoding="utf-8")
+    except OSError:
+        return _terraform_state_unavailable_change_set(
+            source_ref,
+            "Terraform state context is unavailable; no topology changes were applied.",
+        )
+    try:
+        payload = json.loads(raw_text)
+    except JSONDecodeError:
+        return _terraform_state_unavailable_change_set(
+            source_ref,
+            "Terraform state context is unavailable because the state file is not valid JSON; no topology changes were applied.",
+        )
+    if not isinstance(payload, dict):
+        return _terraform_state_unavailable_change_set(
+            source_ref,
+            "Terraform state context is unavailable because the state file is not a JSON object; no topology changes were applied.",
+        )
+    if "resources" not in payload:
+        return _terraform_state_unavailable_change_set(
+            source_ref,
+            "Terraform state context is unavailable because resources are missing; no topology changes were applied.",
+        )
+    resources_raw = payload.get("resources")
+    if not isinstance(resources_raw, list):
+        return _terraform_state_unavailable_change_set(
+            source_ref,
+            "Terraform state context is unavailable because resources are missing or malformed; no topology changes were applied.",
+        )
+
+    warnings: list[str] = []
+    stale_warning = _terraform_state_staleness_warning(path)
+    if stale_warning:
+        warnings.append(stale_warning)
+    services_by_id: dict[str, dict[str, Any]] = {}
+    dependency_refs_by_service: dict[str, list[str]] = {}
+    accepted_resources: list[TopologyImportResource] = []
+    partially_parsed_resources: list[TopologyImportResource] = []
+    skipped_resources: list[TopologyImportResource] = []
+
+    for index, resource in enumerate(resources_raw, start=1):
+        resource_ref = f"resources[{index}]"
+        if not isinstance(resource, dict):
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=resource_ref,
+                    message="Terraform state resource entry was not a JSON object and was ignored.",
+                )
+            )
+            continue
+        if str(resource.get("mode") or "managed").strip() == "data":
+            skipped_resources.append(
+                TopologyImportResource(
+                    resource_ref=_terraform_state_resource_address(resource)
+                    or resource_ref,
+                    message="Terraform data source was skipped because it is not a managed infrastructure resource.",
+                )
+            )
+            continue
+        address = _terraform_state_resource_address(resource)
+        if not address:
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=resource_ref,
+                    message="Terraform state resource is missing type/name identity and was ignored.",
+                )
+            )
+            continue
+        if address in services_by_id:
+            skipped_resources.append(
+                TopologyImportResource(
+                    resource_ref=address,
+                    service_id=address,
+                    message="Duplicate Terraform state resource address was skipped.",
+                )
+            )
+            continue
+        instances = resource.get("instances", [])
+        if not isinstance(instances, list):
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=address,
+                    service_id=address,
+                    message="Terraform state resource instances were malformed and were ignored.",
+                )
+            )
+            instances = []
+        resource_keys = _terraform_state_identity_keys(address, resource, instances)
+        services_by_id[address] = {
+            "id": address,
+            "label": address,
+            "resource_keys": resource_keys,
+            "downstream": [],
+        }
+        dependency_refs_by_service[address] = _terraform_state_dependency_refs(
+            instances
+        )
+        accepted_resources.append(
+            TopologyImportResource(
+                resource_ref=address,
+                service_id=address,
+                message="Terraform state resource was mapped into the topology graph.",
+            )
+        )
+
+    resource_key_to_service_id = {
+        resource_key: service_id
+        for service_id, service in services_by_id.items()
+        for resource_key in service["resource_keys"]
+    }
+    for service_id, dependency_refs in dependency_refs_by_service.items():
+        for dependency_ref in dependency_refs:
+            dependency_service_id = resource_key_to_service_id.get(dependency_ref)
+            if dependency_service_id is None:
+                partially_parsed_resources.append(
+                    TopologyImportResource(
+                        resource_ref=f"{service_id}->{dependency_ref}",
+                        service_id=service_id,
+                        message=(
+                            f"Terraform dependency '{dependency_ref}' could not be resolved "
+                            "inside the state and was dropped."
+                        ),
+                    )
+                )
+                continue
+            services_by_id[dependency_service_id]["downstream"].append(service_id)
+
+    services = []
+    for service_id in sorted(services_by_id):
+        service = dict(services_by_id[service_id])
+        service["downstream"] = sorted(set(service["downstream"]))
+        services.append(service)
+
+    if partially_parsed_resources:
+        warnings.append(
+            "Terraform state import partially parsed one or more resources; malformed entries or unresolved relationships were skipped."
+        )
+    if skipped_resources:
+        warnings.append(
+            "Terraform state import skipped data sources or duplicate resources while preserving managed infrastructure context."
+        )
+    if not accepted_resources and resources_raw:
+        warnings.append(
+            "Terraform state import did not produce any valid managed resources to apply."
+        )
+        return TopologyChangeSet(
+            operation="noop",
+            warnings=warnings,
+            skipped_resources=skipped_resources,
+            partially_parsed_resources=partially_parsed_resources,
+        )
+
+    return TopologyChangeSet(
+        operation="replace",
+        services=services,
+        warnings=warnings,
+        accepted_resources=accepted_resources,
+        skipped_resources=skipped_resources,
+        partially_parsed_resources=partially_parsed_resources,
+    )
+
+
 def _build_custom_change_set(payload: dict[str, Any]) -> TopologyChangeSet:
     services_raw = payload.get("services", [])
     if not isinstance(services_raw, list):
@@ -931,7 +1193,7 @@ def _build_unimplemented_source_handler(source_type: str) -> TopologySourceHandl
 
 TOPOLOGY_SOURCE_REGISTRY: dict[str, TopologySourceHandler] = {
     "custom": _parse_custom_source,
-    "terraform": _build_unimplemented_source_handler("terraform"),
+    "terraform": _parse_terraform_state_source,
     "cloudformation": _build_unimplemented_source_handler("cloudformation"),
     "kubernetes": _build_unimplemented_source_handler("kubernetes"),
     "ansible": _build_unimplemented_source_handler("ansible"),
