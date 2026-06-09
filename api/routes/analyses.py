@@ -5,7 +5,7 @@ from __future__ import annotations
 import hmac
 import os
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 from pydantic import ValidationError
@@ -52,6 +52,7 @@ from services.project_service import resolve_project_reference
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
 _HISTORY_ANALYSIS_STATUSES = {"complete", "degraded", "fallback"}
+AnalysisOutcomeFilter = Literal["success", "failure", "rolled_back", "rollback"]
 
 
 def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
@@ -411,9 +412,30 @@ def list_analyses(
     recommendation: str | None = Query(default=None),
     search: str | None = Query(default=None),
     toolchain: str | None = Query(default=None),
+    outcome: AnalysisOutcomeFilter | None = Query(
+        default=None,
+        description=(
+            "Optional deployment outcome filter. Allowed values: success, failure, "
+            "rolled_back, rollback."
+        ),
+    ),
     analysis_status: str | None = Query(default=None),
-    created_from: datetime | None = Query(default=None),
-    created_to: datetime | None = Query(default=None),
+    created_from: datetime | None = Query(
+        default=None,
+        description=(
+            "Optional inclusive activity-window start timestamp. Matches reports "
+            "created in the window or reports with deployment-outcome/reviewer-feedback "
+            "activity in the window."
+        ),
+    ),
+    created_to: datetime | None = Query(
+        default=None,
+        description=(
+            "Optional inclusive activity-window end timestamp. Matches reports "
+            "created in the window or reports with deployment-outcome/reviewer-feedback "
+            "activity in the window."
+        ),
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
     authorization: dict[str, object] = Depends(_authorization_context),
@@ -455,6 +477,7 @@ def list_analyses(
             recommendation=recommendation,
             search=search,
             toolchain=toolchain,
+            outcome=outcome,
             analysis_status=analysis_status,
             created_from=created_from,
             created_to=created_to,

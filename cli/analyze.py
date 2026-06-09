@@ -59,8 +59,10 @@ from services.intake_service import (
 )
 from services.report_service import (
     REPORT_SCHEMA_VERSION,
+    ReportTrendError,
     build_report_advisory_payload,
     fetch_analysis_report,
+    fetch_risk_trends,
 )
 from services.topology_service import get_topology_status, import_topology_source
 from pydantic import ValidationError
@@ -931,6 +933,62 @@ def _run_benchmark_backtest_incidents(args: argparse.Namespace) -> int:
     return 0 if result.get("passed") else 1
 
 
+def _parse_trend_timestamp(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _run_benchmark_risk_trends(args: argparse.Namespace) -> int:
+    try:
+        if args.project_id is None and not args.project_key:
+            raise ReportTrendError(
+                "missing_project_scope",
+                "Project scope is required for risk trend review.",
+            )
+        created_from = _parse_trend_timestamp(args.created_from)
+        created_to = _parse_trend_timestamp(args.created_to)
+        if (
+            created_from is not None
+            and created_to is not None
+            and created_from > created_to
+        ):
+            raise ReportTrendError(
+                "invalid_time_window",
+                "created_from must be earlier than or equal to created_to.",
+            )
+        result = fetch_risk_trends(
+            project_id=args.project_id,
+            project_key=args.project_key,
+            workspace_id=args.workspace_id,
+            workspace_key=args.workspace_key,
+            severity=args.severity,
+            toolchain=args.toolchain,
+            outcome=args.outcome,
+            created_from=created_from,
+            created_to=created_to,
+        )
+    except (ValueError, OSError, ValidationError) as exc:
+        _emit_json(
+            build_error(
+                code=getattr(exc, "code", "risk_trend_export_failed"),
+                message=str(exc),
+            ),
+            stream=sys.stderr,
+        )
+        return 1
+    _emit_json(result, stream=sys.stdout)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="DeployWhisper CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -1283,6 +1341,56 @@ def build_parser() -> argparse.ArgumentParser:
         "--workspace-key",
         help="Optional DeployWhisper workspace key.",
     )
+    benchmark_risk_trends_parser = benchmark_subparsers.add_parser(
+        "risk-trends",
+        help="Export scoped risk trend review data as JSON.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--project-id",
+        type=int,
+        help="DeployWhisper numeric project id.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--project-key",
+        help="DeployWhisper project key.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--workspace-id",
+        type=int,
+        help="Optional DeployWhisper numeric workspace id.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--workspace-key",
+        help="Optional DeployWhisper workspace key.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--severity",
+        choices=("critical", "high", "medium", "low"),
+        help="Optional risk severity filter.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--toolchain",
+        help="Optional normalized toolchain filter, such as terraform or kubernetes.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--outcome",
+        choices=("success", "failure", "rolled_back", "rollback"),
+        help="Optional deployment outcome filter.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--created-from",
+        help=(
+            "Optional inclusive activity-window start timestamp "
+            "(report created, outcome deployed, or feedback created), ISO-8601 or Zulu."
+        ),
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--created-to",
+        help=(
+            "Optional inclusive activity-window end timestamp "
+            "(report created, outcome deployed, or feedback created), ISO-8601 or Zulu."
+        ),
+    )
 
     return parser
 
@@ -1342,6 +1450,8 @@ def main() -> None:
         raise SystemExit(_run_benchmark_run(args.path))
     if args.command == "benchmark" and args.benchmark_command == "backtest-incidents":
         raise SystemExit(_run_benchmark_backtest_incidents(args))
+    if args.command == "benchmark" and args.benchmark_command == "risk-trends":
+        raise SystemExit(_run_benchmark_risk_trends(args))
 
     print("DeployWhisper CLI ready: foundation-check")
 

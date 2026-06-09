@@ -344,6 +344,127 @@ class AnalyzeCliTests(unittest.TestCase):
             workspace_key=None,
         )
 
+    def test_benchmark_risk_trends_command_exports_scoped_json(self) -> None:
+        output = io.StringIO()
+        result = {
+            "total_reports": 3,
+            "severity_counts": {"high": 2, "critical": 1},
+            "false_positive_signals": {"count": 1, "rate": 1 / 3},
+        }
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "benchmark",
+                    "risk-trends",
+                    "--project-key",
+                    "payments",
+                    "--workspace-key",
+                    "prod",
+                    "--severity",
+                    "high",
+                    "--toolchain",
+                    "terraform",
+                    "--outcome",
+                    "failure",
+                    "--created-from",
+                    "2026-06-01T00:00:00Z",
+                    "--created-to",
+                    "2026-06-08T00:00:00Z",
+                ],
+            ),
+            patch("cli.analyze.fetch_risk_trends", return_value=result) as mocked,
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertEqual(payload["total_reports"], 3)
+        mocked.assert_called_once()
+        kwargs = mocked.call_args.kwargs
+        self.assertEqual(kwargs["project_key"], "payments")
+        self.assertEqual(kwargs["workspace_key"], "prod")
+        self.assertEqual(kwargs["severity"], "high")
+        self.assertEqual(kwargs["toolchain"], "terraform")
+        self.assertEqual(kwargs["outcome"], "failure")
+        self.assertEqual(
+            kwargs["created_from"].isoformat(), "2026-06-01T00:00:00+00:00"
+        )
+        self.assertEqual(kwargs["created_to"].isoformat(), "2026-06-08T00:00:00+00:00")
+
+    def test_benchmark_risk_trends_help_describes_activity_window(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "risk-trends", "--help"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        help_text = output.getvalue()
+        self.assertIn("activity-window start timestamp", help_text)
+        self.assertIn("outcome deployed", help_text)
+        self.assertIn("feedback", help_text)
+        self.assertIn("created), ISO-8601 or Zulu", help_text)
+
+    def test_benchmark_risk_trends_rejects_reversed_time_window(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "benchmark",
+                    "risk-trends",
+                    "--project-key",
+                    "payments",
+                    "--created-from",
+                    "2026-06-08T00:00:00Z",
+                    "--created-to",
+                    "2026-06-01T00:00:00Z",
+                ],
+            ),
+            patch("cli.analyze.fetch_risk_trends") as mocked,
+            redirect_stderr(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(payload["error"]["code"], "invalid_time_window")
+        mocked.assert_not_called()
+
+    def test_benchmark_risk_trends_requires_project_scope(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "benchmark",
+                    "risk-trends",
+                ],
+            ),
+            patch("cli.analyze.fetch_risk_trends") as mocked,
+            redirect_stderr(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(payload["error"]["code"], "missing_project_scope")
+        mocked.assert_not_called()
+
     def test_benchmark_run_command_reports_invalid_corpus_as_json(self) -> None:
         output = io.StringIO()
 

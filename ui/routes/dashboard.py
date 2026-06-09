@@ -221,13 +221,35 @@ def inject_styles(*, force: bool = False) -> None:
   }}
   .dw-dashboard-header {{
     left: 240px !important;
-    width: calc(100% - 240px) !important;
+    right: 0 !important;
+    width: auto !important;
   }}
   .dw-dashboard-main {{
     margin-left: 240px;
     margin-top: 68px;
-    width: calc(100% - 240px);
+    width: auto;
     min-width: 0;
+  }}
+  @media (max-width: 900px) {{
+    html, body {{
+      max-width: 100vw;
+      overflow-x: hidden;
+    }}
+    .dw-dashboard-header {{
+      left: 0 !important;
+      width: 100% !important;
+    }}
+    .dw-dashboard-main {{
+      margin-left: 0 !important;
+      width: 100% !important;
+      max-width: 100vw;
+      overflow-x: hidden;
+    }}
+    .q-page-container,
+    .nicegui-content {{
+      max-width: 100vw;
+      overflow-x: hidden;
+    }}
   }}
   .q-card {{
     border: 1px solid {ZINC_200};
@@ -495,11 +517,14 @@ def inject_styles(*, force: bool = False) -> None:
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     align-items: start;
+    max-width: 100%;
+    overflow-x: hidden;
   }}
   .dw-report-signal {{
     min-width: 0;
+    max-width: 100%;
     width: 100%;
-    overflow: visible;
+    overflow: hidden;
     align-self: stretch;
   }}
   .dw-report-signal-compact {{
@@ -537,13 +562,15 @@ def inject_styles(*, force: bool = False) -> None:
       grid-column: span 2;
     }}
   }}
-  @media (max-width: 720px) {{
+  @media (max-width: 900px) {{
     .dw-report-signal-grid {{
-      grid-template-columns: 1fr;
+      display: flex;
+      flex-direction: column;
+      grid-template-columns: none;
     }}
     .dw-report-signal-long,
     .dw-report-signal-action {{
-      grid-column: span 1;
+      grid-column: auto;
     }}
   }}
   .dw-panel-soft {{
