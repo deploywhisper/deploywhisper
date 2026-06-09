@@ -110,7 +110,7 @@ development_status:
   epic-6-retrospective: optional
 
   epic-7: in-progress
-  7-1-project-scoped-topology-context: ready-for-dev
+  7-1-project-scoped-topology-context: review
   7-2-terraform-state-connector: ready-for-dev
   7-3-kubernetes-live-state-connector: ready-for-dev
   7-4-codeowners-and-ownership-mapping: ready-for-dev

@@ -91,6 +91,68 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertIsNone(default_topology)
         self.assertIn("not configured", default_warning)
 
+    def test_save_topology_definition_preserves_service_ownership(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+
+        save_topology_definition(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                            "owner": "payments-team",
+                            "owners": ["sre", "security"],
+                        }
+                    ]
+                }
+            ),
+            project_key="payments",
+        )
+
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertIsNone(warning)
+        assert topology is not None
+        self.assertEqual(topology["services"][0]["owner"], "payments-team")
+        self.assertEqual(topology["services"][0]["owners"], ["sre", "security"])
+
+    def test_save_topology_definition_drops_malformed_singular_owner(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+
+        status = save_topology_definition(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                            "owner": {"team": "payments"},
+                            "owners": ["sre", {"team": "security"}],
+                        }
+                    ]
+                }
+            ),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertTrue(status.warnings)
+        self.assertIn("partially parsed", warning)
+        assert topology is not None
+        self.assertNotIn("owner", topology["services"][0])
+        self.assertEqual(topology["services"][0]["owners"], ["sre"])
+
     def test_topology_imports_are_isolated_by_workspace(self) -> None:
         project_service_module.create_project(
             project_key="payments",
@@ -361,6 +423,84 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertEqual(topology["services"][0]["downstream"], [])
         self.assertIn("partially parsed", warning)
 
+    def test_import_topology_source_records_malformed_singular_owner(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        source_path = Path(self.tempdir.name) / "owner-topology.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                            "owner": {"team": "payments"},
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = import_topology_source(
+            "custom",
+            str(source_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertEqual(len(result.partially_parsed_resources), 1)
+        self.assertIn(
+            "Owner label was malformed",
+            result.partially_parsed_resources[0].message,
+        )
+        self.assertIn("partially parsed", warning)
+        assert topology is not None
+        self.assertNotIn("owner", topology["services"][0])
+
+    def test_import_topology_source_records_malformed_owner_entries(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        source_path = Path(self.tempdir.name) / "owner-list-topology.json"
+        source_path.write_text(
+            json.dumps(
+                {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "resource_keys": ["Deployment/api"],
+                            "downstream": [],
+                            "owners": ["sre", {"team": "security"}],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = import_topology_source(
+            "custom",
+            str(source_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertEqual(len(result.partially_parsed_resources), 1)
+        self.assertIn(
+            "Owner labels were malformed",
+            result.partially_parsed_resources[0].message,
+        )
+        self.assertIn("partially parsed", warning)
+        assert topology is not None
+        self.assertEqual(topology["services"][0]["owners"], ["sre"])
+
     def test_import_topology_source_warns_without_failing_for_unimplemented_source(
         self,
     ) -> None:
@@ -608,6 +748,8 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertIsNone(warning)
         assert topology is not None
         self.assertEqual(topology["services"][0]["id"], "legacy-api")
+        self.assertEqual(topology["metadata"]["import"]["source_type"], "legacy-file")
+        self.assertEqual(topology["metadata"]["import"]["source_ref"], str(legacy_path))
 
     def test_get_topology_status_returns_validation_error_for_malformed_stored_payload(
         self,

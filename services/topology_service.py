@@ -263,6 +263,23 @@ def _extract_import_warnings(payload: dict[str, Any]) -> list[str]:
     return _unique_messages([str(item) for item in warnings])
 
 
+def _owner_labels(raw_owners: Any) -> tuple[list[str], bool]:
+    if raw_owners is None:
+        return [], False
+    if not isinstance(raw_owners, list):
+        return [], True
+    labels: list[str] = []
+    malformed = False
+    for owner in raw_owners:
+        if isinstance(owner, str):
+            label = owner.strip()
+            if label:
+                labels.append(label)
+        elif owner is not None:
+            malformed = True
+    return labels, malformed
+
+
 def _resource_snapshot(payload: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     if not payload:
         return {}
@@ -284,9 +301,12 @@ def _resource_snapshot(payload: dict[str, Any] | None) -> dict[str, dict[str, An
         ]
         if not resource_keys:
             resource_keys = [f"service:{service_id}"]
+        owners, _ = _owner_labels(service.get("owners", []))
         signature = {
             "service_id": service_id,
             "label": str(service.get("label") or service_id),
+            "owner": str(service.get("owner") or ""),
+            "owners": sorted(owners),
             "downstream": sorted(
                 str(target).strip()
                 for target in service.get("downstream", [])
@@ -489,6 +509,16 @@ def _read_legacy_topology_status() -> TopologyStatus | None:
                 "Topology validation failed — active topology must be a JSON object."
             ],
         )
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    import_metadata = metadata.get("import")
+    if not isinstance(import_metadata, dict):
+        import_metadata = {}
+    import_metadata.setdefault("source_type", "legacy-file")
+    import_metadata.setdefault("source_ref", str(legacy_path))
+    metadata["import"] = import_metadata
+    payload = {**payload, "metadata": metadata}
     return _build_topology_status(payload, path=legacy_path, exists=True)
 
 
@@ -776,16 +806,41 @@ def _build_custom_change_set(payload: dict[str, Any]) -> TopologyChangeSet:
         downstream = [
             str(target).strip() for target in downstream_raw if str(target).strip()
         ]
+        owner_raw = service.get("owner")
+        owner = ""
+        if owner_raw is not None:
+            if isinstance(owner_raw, str):
+                owner = owner_raw.strip()
+            else:
+                partially_parsed_resources.append(
+                    TopologyImportResource(
+                        resource_ref=service_id,
+                        service_id=service_id,
+                        message="Owner label was malformed and was dropped.",
+                    )
+                )
+        owners, malformed_owners = _owner_labels(service.get("owners", []))
+        if malformed_owners:
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=service_id,
+                    service_id=service_id,
+                    message="Owner labels were malformed and were dropped.",
+                )
+            )
 
         seen_service_ids.add(service_id)
-        services.append(
-            {
-                "id": service_id,
-                "label": str(service.get("label") or service_id),
-                "resource_keys": resource_keys,
-                "downstream": downstream,
-            }
-        )
+        normalized_service = {
+            "id": service_id,
+            "label": str(service.get("label") or service_id),
+            "resource_keys": resource_keys,
+            "downstream": downstream,
+        }
+        if owner:
+            normalized_service["owner"] = owner
+        if owners:
+            normalized_service["owners"] = owners
+        services.append(normalized_service)
 
         if resource_keys:
             for resource_key in resource_keys:
@@ -994,7 +1049,7 @@ def _persist_topology_payload(
 
 
 def _canonical_service(service: dict[str, Any]) -> dict[str, Any]:
-    return {
+    canonical = {
         "id": str(service.get("id") or "").strip(),
         "label": str(service.get("label") or "").strip(),
         "resource_keys": sorted(
@@ -1008,6 +1063,14 @@ def _canonical_service(service: dict[str, Any]) -> dict[str, Any]:
             if str(item).strip()
         ),
     }
+    owner = str(service.get("owner") or "").strip()
+    owners, _ = _owner_labels(service.get("owners", []))
+    owners = sorted(owners)
+    if owner:
+        canonical["owner"] = owner
+    if owners:
+        canonical["owners"] = owners
+    return canonical
 
 
 def _build_topology_diff(

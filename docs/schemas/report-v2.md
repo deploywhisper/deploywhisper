@@ -236,6 +236,38 @@ without storing raw plan internals in a separate contract.
     "insufficient_context": true,
     "partial_context": true
   },
+  "blast_radius": {
+    "affected": [
+      {
+        "service_id": "database",
+        "label": "Primary Database",
+        "depth": 0,
+        "dependencies": [],
+        "owners": ["sre"]
+      },
+      {
+        "service_id": "api",
+        "label": "Payments API",
+        "depth": 1,
+        "dependencies": ["database"],
+        "owners": ["payments"]
+      }
+    ],
+    "direct_count": 1,
+    "transitive_count": 1,
+    "warning": null,
+    "unmatched_resources": [],
+    "context_source": {
+      "type": "custom",
+      "ref": "topology.json"
+    },
+    "freshness": {
+      "updated_at": "2026-06-08T12:00:00Z",
+      "age_days": 1
+    },
+    "context_state": "current",
+    "context_limitations": []
+  },
   "rollback_plan": {
     "complexity": "medium",
     "complexity_score": 3,
@@ -402,6 +434,25 @@ without storing raw plan internals in a separate contract.
   }
 }
 ```
+
+### Blast-radius topology context
+
+`blast_radius.context_state` is the report-facing topology trust state. It is
+`current` when topology source and freshness metadata are valid and no
+limitations were detected. It is `stale` when freshness warnings indicate old
+topology, `missing` when no topology context was available, `incomplete` when
+source metadata, freshness metadata, resource mappings, or imported context are
+partial, `conflicting` when validation detects duplicate, circular, or otherwise
+conflicting topology, and `unknown` for legacy payloads where no state was
+persisted.
+
+`blast_radius.context_limitations` contains machine-readable reasons for
+non-current states. Current labels include `missing_topology`, `stale_topology`,
+`conflicting_topology`, `incomplete_topology`, `missing_topology_source`,
+`invalid_topology_source`, `missing_topology_freshness`,
+`invalid_topology_freshness`, and `missing_resource_mapping`. Consumers should
+treat unrecognized future labels as additional incomplete-context signals rather
+than failing report parsing.
 
 ### Analysis run incident and pattern matches
 

@@ -3799,13 +3799,29 @@ class ReportServiceTests(unittest.TestCase):
         ]
         blast_radius = BlastRadiusResult(
             affected=[
-                ImpactNode(service_id="database", label="Database", depth=0),
-                ImpactNode(service_id="api", label="API Service", depth=1),
+                ImpactNode(
+                    service_id="database",
+                    label="Database",
+                    depth=0,
+                    dependencies=[],
+                    owners=["sre"],
+                ),
+                ImpactNode(
+                    service_id="api",
+                    label="API Service",
+                    depth=1,
+                    dependencies=["database"],
+                    owners=["payments"],
+                ),
             ],
             direct_count=1,
             transitive_count=1,
             warning=None,
             unmatched_resources=[],
+            context_source={"type": "custom", "ref": "topology.json"},
+            freshness={"updated_at": "2026-06-08T12:00:00Z", "age_days": 1},
+            context_state="current",
+            context_limitations=[],
         )
         rollback_plan = RollbackPlan(
             steps=[
@@ -3898,6 +3914,23 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(persisted["skills_applied"], ["git", "terraform"])
         self.assertEqual(persisted["context_completeness"]["context_score"], 0.84)
         self.assertEqual(persisted["blast_radius"]["direct_count"], 1)
+        self.assertEqual(
+            persisted["blast_radius"]["context_source"],
+            {"type": "custom", "ref": "topology.json"},
+        )
+        self.assertEqual(persisted["blast_radius"]["context_state"], "current")
+        self.assertEqual(
+            persisted["blast_radius"]["affected"][0]["owners"],
+            ["sre"],
+        )
+        self.assertEqual(
+            persisted["blast_radius"]["affected"][0]["dependencies"],
+            [],
+        )
+        self.assertEqual(
+            persisted["blast_radius"]["affected"][1]["dependencies"],
+            ["database"],
+        )
         self.assertEqual(persisted["rollback_plan"]["complexity_score"], 3)
         self.assertEqual(len(persisted["incident_matches"]), 1)
         self.assertEqual(
