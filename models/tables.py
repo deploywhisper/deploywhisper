@@ -547,6 +547,12 @@ if "DeploymentOutcome" not in globals():
 
         __tablename__ = "deployment_outcomes"
         __table_args__ = (
+            Index(
+                "ix_deployment_outcomes_analysis_deployed_outcome",
+                "analysis_id",
+                "deployed_at",
+                "outcome_label",
+            ),
             ForeignKeyConstraint(
                 ["project_id", "workspace_id"],
                 ["project_workspaces.project_id", "project_workspaces.id"],
@@ -602,6 +608,11 @@ if "FeedbackEvent" not in globals():
 
         __tablename__ = "feedback_events"
         __table_args__ = (
+            Index(
+                "ix_feedback_events_analysis_created",
+                "analysis_id",
+                "created_at",
+            ),
             ForeignKeyConstraint(
                 ["project_id", "workspace_id"],
                 ["project_workspaces.project_id", "project_workspaces.id"],

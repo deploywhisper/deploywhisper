@@ -15,6 +15,7 @@ import config as config_module
 import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
 import models.tables as tables_module
+import services.deployment_outcome_service as deployment_outcome_service_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
 from analysis.blast_radius import BlastRadiusResult
@@ -46,6 +47,7 @@ class AnalysesApiTests(unittest.TestCase):
         reload(analysis_reports_repository_module)
         reload(project_service_module)
         reload(report_service_module)
+        reload(deployment_outcome_service_module)
         database_module.init_db()
         self.client = TestClient(create_app())
 
@@ -216,6 +218,20 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["data"][0]["advisory"]["advisory_only"], True)
         self.assertFalse(payload["data"][0]["advisory"]["should_block"])
         self.assertEqual(payload["data"][0]["advisory"]["recommendation"], "caution")
+
+    def test_list_analyses_rejects_reversed_activity_window(self) -> None:
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={
+                "created_from": "2026-06-08T00:00:00Z",
+                "created_to": "2026-06-01T00:00:00Z",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "invalid_time_window")
+        self.assertIn("created_from", payload["error"]["message"])
 
     def test_list_analyses_meta_matches_legacy_report_schema(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -907,6 +923,103 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(foreign_response.json()["meta"]["total_count"], 0)
         self.assertEqual(foreign_response.json()["data"], [])
         self.assertNotIn("Platform production ingress widened.", foreign_response.text)
+
+    def test_list_analyses_filters_by_deployment_outcome(self) -> None:
+        failure_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="failure-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=45,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Failure-linked report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="CAUTION: failure-linked report.",
+                explanation="Failure report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+                source="llm",
+            ),
+        )
+        success_report = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="success-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=10,
+                severity="low",
+                recommendation="go",
+                top_risk="Success-linked report.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: success-linked report.",
+                explanation="Success report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+                source="llm",
+            ),
+        )
+        deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=failure_report["id"],
+            outcome="failure",
+            deployed_at="2026-06-07T09:00:00Z",
+        )
+        deployment_outcome_service_module.record_deployment_outcome(
+            analysis_id=success_report["id"],
+            outcome="success",
+            deployed_at="2026-06-07T10:00:00Z",
+        )
+
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={"outcome": "failure"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["total_count"], 1)
+        self.assertEqual(payload["data"][0]["id"], failure_report["id"])
+        self.assertNotIn("Success-linked report.", response.text)
+
+    def test_list_analyses_rejects_invalid_deployment_outcome_filter(self) -> None:
+        response = self.client.get(
+            "/api/v1/analyses",
+            params={"outcome": "failed"},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "request_validation_failed")
+        self.assertEqual(
+            payload["error"]["details"]["issues"][0]["loc"],
+            ["query", "outcome"],
+        )
 
     def test_list_analyses_rejects_naive_history_time_bounds(self) -> None:
         response = self.client.get(
@@ -2933,16 +3046,43 @@ class AnalysesApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         schema = response.json()
+
+        def schema_enum_values(schema_part: dict) -> set[str]:
+            values = set(schema_part.get("enum") or [])
+            for branch_key in ("anyOf", "oneOf", "allOf"):
+                for branch in schema_part.get(branch_key) or []:
+                    values.update(schema_enum_values(branch))
+            return values
+
         analyses_get = schema["paths"]["/api/v1/analyses"]["get"]
         analyses_post = schema["paths"]["/api/v1/analyses"]["post"]
         analyses_detail = schema["paths"]["/api/v1/analyses/{report_id}"]["get"]
         request_body_schema = analyses_post["requestBody"]["content"][
             "multipart/form-data"
         ]["schema"]
+        analyses_get_parameters = {
+            parameter["name"]: parameter for parameter in analyses_get["parameters"]
+        }
         self.assertIn("$ref", request_body_schema)
         component_name = request_body_schema["$ref"].split("/")[-1]
         self.assertEqual(
             schema["components"]["schemas"][component_name]["type"], "object"
+        )
+        self.assertIn(
+            "activity-window start timestamp",
+            analyses_get_parameters["created_from"]["description"],
+        )
+        self.assertIn(
+            "deployment-outcome/reviewer-feedback activity",
+            analyses_get_parameters["created_to"]["description"],
+        )
+        self.assertIn(
+            "deployment outcome filter",
+            analyses_get_parameters["outcome"]["description"],
+        )
+        self.assertEqual(
+            schema_enum_values(analyses_get_parameters["outcome"]["schema"]),
+            {"success", "failure", "rolled_back", "rollback"},
         )
         self.assertIn("AnalysisRunResponse", str(analyses_post["responses"]["200"]))
         self.assertIn("ErrorResponse", str(analyses_post["responses"]["400"]))

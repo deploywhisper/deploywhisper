@@ -373,12 +373,15 @@ _REPORT_LAYOUT_CSS = """
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   align-items: start;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .dw-report-signal {
   min-width: 0;
+  max-width: 100%;
   width: 100%;
-  overflow: visible;
+  overflow: hidden;
   align-self: stretch;
 }
 
@@ -425,14 +428,16 @@ _REPORT_LAYOUT_CSS = """
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .dw-report-signal-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
   }
 
   .dw-report-signal-long,
   .dw-report-signal-action {
-    grid-column: span 1;
+    grid-column: auto;
   }
 }
 

@@ -30,6 +30,10 @@ from ui.project_authorization import resolve_authorized_ui_active_project
 from ui.project_authorization import load_authorized_ui_projects
 from ui.theme import build_page_header
 
+_RISK_TREND_HISTORY_FILTERS = frozenset(
+    {"workspace", "time_range", "severity", "toolchain", "outcome"}
+)
+
 
 def page_selection_state(
     visible_ids: set[int], selected_ids: set[int]
@@ -64,10 +68,44 @@ def _empty_history_page() -> dict[str, Any]:
 def _empty_risk_trends() -> dict[str, Any]:
     return {
         "total_reports": 0,
+        "filters": {},
+        "window": {"start": None, "end": None},
         "severity_counts": {},
         "recommendation_counts": {},
+        "high_critical_frequency": {"count": 0, "rate": 0.0},
         "tool_counts": {},
+        "outcome_counts": {},
+        "outcome_links": {
+            "linked_outcome_count": 0,
+            "failed_outcome_count": 0,
+            "warned_failed_outcome_count": 0,
+            "analysis_ids": [],
+        },
+        "false_positive_signals": {"count": 0, "event_count": 0, "rate": 0.0},
+        "false_reassurance_signals": {
+            "count": 0,
+            "event_count": 0,
+            "deployment_count": 0,
+            "feedback_count": 0,
+            "rate": 0.0,
+        },
+        "context_completeness": {
+            "sample_size": 0,
+            "missing_count": 0,
+            "partial_context_count": 0,
+            "partial_context_rate": 0.0,
+            "average_context_score": None,
+        },
+        "limitations": [
+            {
+                "code": "no_authorized_project",
+                "label": "No authorized project",
+                "message": "Select an authorized project before reviewing risk trends.",
+            }
+        ],
         "audit_rows": [],
+        "trend_windows": [],
+        "trend_comparison": None,
         "trend_sample_size": 100,
     }
 
@@ -77,12 +115,22 @@ def _fetch_history_risk_trends(
     has_history_scope: bool,
     project_id: int | None,
     workspace_key: str | None = None,
+    severity: str | None = None,
+    toolchain: str | None = None,
+    outcome: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
 ) -> dict[str, Any]:
     if not has_history_scope:
         return _empty_risk_trends()
     return fetch_risk_trends(
         project_id=project_id,
         workspace_key=workspace_key,
+        severity=severity,
+        toolchain=toolchain,
+        outcome=outcome,
+        created_from=created_from,
+        created_to=created_to,
     )
 
 
@@ -168,6 +216,10 @@ def _history_time_bounds(value: str | None) -> tuple[datetime | None, datetime |
     return None, None
 
 
+def _history_filter_updates_risk_trends(filter_name: str) -> bool:
+    return filter_name in _RISK_TREND_HISTORY_FILTERS
+
+
 def _history_toolchain_options(toolchains: list[str]) -> dict[str, str]:
     options = {"": "Any toolchain"}
     options.update({str(tool): str(tool).title() for tool in toolchains})
@@ -246,6 +298,30 @@ def build_history_page() -> None:
 
             def render_risk_trends_summary() -> None:
                 risk_trends_card.clear()
+
+                def count_delta(value: Any) -> str:
+                    return f"{int(value or 0):+d}"
+
+                def top_count_deltas(values: dict[str, Any], labels: list[str]) -> str:
+                    parts = [
+                        f"{label} {count_delta(values.get(label))}"
+                        for label in labels
+                        if int(values.get(label) or 0) != 0
+                    ]
+                    return ", ".join(parts) or "no change"
+
+                def top_dynamic_deltas(values: dict[str, Any]) -> str:
+                    changed = [
+                        (str(label), int(delta or 0))
+                        for label, delta in values.items()
+                        if int(delta or 0) != 0
+                    ]
+                    changed.sort(key=lambda item: abs(item[1]), reverse=True)
+                    return (
+                        ", ".join(f"{label} {delta:+d}" for label, delta in changed[:3])
+                        or "no change"
+                    )
+
                 with risk_trends_card, ui.column().classes("gap-0"):
                     ui.label("Risk trends").classes("dw-eyebrow mb-1")
                     ui.label(
@@ -253,6 +329,11 @@ def build_history_page() -> None:
                         f"{trends['severity_counts'].get('critical', 0)} critical · "
                         f"{trends['severity_counts'].get('high', 0)} high"
                     ).classes("text-lg font-medium dw-text leading-6")
+                    false_positive = trends.get("false_positive_signals", {})
+                    false_reassurance = trends.get("false_reassurance_signals", {})
+                    outcome_links = trends.get("outcome_links", {})
+                    context = trends.get("context_completeness", {})
+                    average_context = context.get("average_context_score")
                     ui.label(
                         "Top tools: "
                         + ", ".join(
@@ -264,6 +345,93 @@ def build_history_page() -> None:
                             )[:3]
                         )
                     ).classes("mt-[2px] text-sm dw-muted")
+                    outcome_counts = trends.get("outcome_counts", {})
+                    ui.label(
+                        "Outcomes: "
+                        + (
+                            ", ".join(
+                                f"{outcome} ({count})"
+                                for outcome, count in sorted(
+                                    outcome_counts.items(),
+                                    key=lambda item: item[1],
+                                    reverse=True,
+                                )[:3]
+                            )
+                            or "none linked"
+                        )
+                    ).classes("mt-[2px] text-sm dw-muted")
+                    ui.label(
+                        "Calibration signals: "
+                        f"{int(false_positive.get('count') or 0)} false-positive · "
+                        f"{int(false_reassurance.get('count') or 0)} false-reassurance · "
+                        f"{int(outcome_links.get('linked_outcome_count') or 0)} linked outcomes"
+                    ).classes("mt-[2px] text-sm dw-muted")
+                    ui.label(
+                        "Context completeness: "
+                        f"{int(context.get('partial_context_count') or 0)} partial · "
+                        + (
+                            f"average {float(average_context):.2f}"
+                            if average_context is not None
+                            else "average unavailable"
+                        )
+                    ).classes("mt-[2px] text-sm dw-muted")
+                    comparison = trends.get("trend_comparison") or {}
+                    if comparison:
+                        ui.label(
+                            "Window change: "
+                            f"{int(comparison.get('total_reports_delta') or 0):+d} reports · "
+                            f"{int(comparison.get('high_critical_count_delta') or 0):+d} high/critical · "
+                            f"{int(comparison.get('false_positive_count_delta') or 0):+d} false-positive · "
+                            f"{int(comparison.get('false_reassurance_count_delta') or 0):+d} false-reassurance · "
+                            f"{int(comparison.get('linked_outcome_count_delta') or 0):+d} linked outcomes"
+                        ).classes("mt-[2px] text-sm dw-muted")
+                        ui.label(
+                            "Verdict change: "
+                            + top_count_deltas(
+                                comparison.get("severity_count_deltas") or {},
+                                ["critical", "high", "medium", "low"],
+                            )
+                        ).classes("mt-[2px] text-sm dw-muted")
+                        ui.label(
+                            "Recommendation change: "
+                            + top_count_deltas(
+                                comparison.get("recommendation_count_deltas") or {},
+                                ["no-go", "caution", "go"],
+                            )
+                        ).classes("mt-[2px] text-sm dw-muted")
+                        ui.label(
+                            "Outcome change: "
+                            + top_dynamic_deltas(
+                                comparison.get("outcome_count_deltas") or {}
+                            )
+                        ).classes("mt-[2px] text-sm dw-muted")
+                        ui.label(
+                            "Toolchain change: "
+                            + top_dynamic_deltas(
+                                comparison.get("tool_count_deltas") or {}
+                            )
+                        ).classes("mt-[2px] text-sm dw-muted")
+                        context_score_delta = comparison.get(
+                            "context_average_score_delta"
+                        )
+                        ui.label(
+                            "Context change: "
+                            f"{count_delta(comparison.get('context_partial_count_delta'))} partial · "
+                            + (
+                                f"average {float(context_score_delta):+.2f}"
+                                if context_score_delta is not None
+                                else "average unavailable"
+                            )
+                        ).classes("mt-[2px] text-sm dw-muted")
+                    limitation_labels = [
+                        str(item.get("label"))
+                        for item in trends.get("limitations", [])
+                        if isinstance(item, dict) and item.get("label")
+                    ]
+                    if limitation_labels:
+                        ui.label(
+                            "Limitations: " + " · ".join(limitation_labels)
+                        ).classes("mt-[2px] text-sm dw-muted")
 
             def render_calibration_summary() -> None:
                 calibration_card.clear()
@@ -378,12 +546,30 @@ def build_history_page() -> None:
                             .props("outlined dense")
                             .classes("dw-history-filter-control min-w-[170px] flex-1")
                         )
+                        outcome_select = (
+                            ui.select(
+                                {
+                                    "": "Any outcome",
+                                    "success": "Success",
+                                    "failure": "Failure",
+                                    "rolled_back": "Rolled back",
+                                },
+                                value="",
+                                label="Outcome",
+                            )
+                            .props("outlined dense")
+                            .classes("dw-history-filter-control min-w-[170px] flex-1")
+                        )
             actions_row = ui.row().classes(
                 "w-full items-center justify-between gap-4 flex-wrap"
             )
             history_column = ui.column().classes("w-full gap-3")
 
-            def refresh_data(query: str | None = None) -> list[dict]:
+            def refresh_data(
+                query: str | None = None,
+                *,
+                refresh_trends: bool = True,
+            ) -> list[dict]:
                 nonlocal reports, trends, total_report_count, calibration
                 created_from, created_to = _history_time_bounds(
                     str(time_range_select.value or "")
@@ -397,6 +583,7 @@ def build_history_page() -> None:
                         severity=str(severity_select.value or "") or None,
                         search=query,
                         toolchain=str(toolchain_select.value or "") or None,
+                        outcome=str(outcome_select.value or "") or None,
                         analysis_status=str(status_select.value or "") or None,
                         created_from=created_from,
                         created_to=created_to,
@@ -407,19 +594,25 @@ def build_history_page() -> None:
                 )
                 reports = page_payload["items"]
                 total_report_count = page_payload["total_count"]
-                trends = _fetch_history_risk_trends(
-                    has_history_scope=has_history_scope,
-                    project_id=active_project_id,
-                    workspace_key=current_workspace_key(),
-                )
-                calibration = (
-                    _empty_calibration_dashboard_seed()
-                    if not has_history_scope
-                    else fetch_calibration_dashboard_seed(
+                if refresh_trends:
+                    trends = _fetch_history_risk_trends(
+                        has_history_scope=has_history_scope,
                         project_id=active_project_id,
                         workspace_key=current_workspace_key(),
+                        severity=str(severity_select.value or "") or None,
+                        toolchain=str(toolchain_select.value or "") or None,
+                        outcome=str(outcome_select.value or "") or None,
+                        created_from=created_from,
+                        created_to=created_to,
                     )
-                )
+                    calibration = (
+                        _empty_calibration_dashboard_seed()
+                        if not has_history_scope
+                        else fetch_calibration_dashboard_seed(
+                            project_id=active_project_id,
+                            workspace_key=current_workspace_key(),
+                        )
+                    )
                 max_page = max(
                     1, (total_report_count - 1) // page_state["page_size"] + 1
                 )
@@ -609,17 +802,20 @@ def build_history_page() -> None:
                     1, (total_report_count - 1) // page_state["page_size"] + 1
                 )
                 page_state["page"] = min(max(1, page_state["page"] + delta), max_page)
-                refresh_data(search_input.value.strip() if search_input.value else None)
-                render_summaries()
+                refresh_data(
+                    search_input.value.strip() if search_input.value else None,
+                    refresh_trends=False,
+                )
                 render_history()
                 render_actions()
 
-            def apply_filters() -> None:
+            def apply_filters(*, refresh_trends: bool = True) -> None:
                 query = search_input.value.strip() if search_input.value else None
                 page_state["page"] = 1
                 selected_ids.clear()
-                refresh_data(query)
-                render_summaries()
+                refresh_data(query, refresh_trends=refresh_trends)
+                if refresh_trends:
+                    render_summaries()
                 render_history()
                 render_actions()
 
@@ -627,28 +823,60 @@ def build_history_page() -> None:
                 if hasattr(event, "value"):
                     select.value = event.value
 
-            def apply_select_filter(select, event) -> None:
+            def apply_select_filter(select, event, *, filter_name: str) -> None:
                 sync_select_value(select, event)
-                apply_filters()
+                apply_filters(
+                    refresh_trends=_history_filter_updates_risk_trends(filter_name)
+                )
 
             def apply_workspace_filter(event) -> None:
                 sync_select_value(workspace_select, event)
                 sync_toolchain_options()
-                apply_filters()
+                apply_filters(
+                    refresh_trends=_history_filter_updates_risk_trends("workspace")
+                )
 
-            search_input.on("update:model-value", lambda *_: apply_filters())
+            search_input.on(
+                "update:model-value",
+                lambda *_: apply_filters(
+                    refresh_trends=_history_filter_updates_risk_trends("search")
+                ),
+            )
             workspace_select.on_value_change(apply_workspace_filter)
             time_range_select.on_value_change(
-                lambda event: apply_select_filter(time_range_select, event)
+                lambda event: apply_select_filter(
+                    time_range_select,
+                    event,
+                    filter_name="time_range",
+                )
             )
             severity_select.on_value_change(
-                lambda event: apply_select_filter(severity_select, event)
+                lambda event: apply_select_filter(
+                    severity_select,
+                    event,
+                    filter_name="severity",
+                )
             )
             toolchain_select.on_value_change(
-                lambda event: apply_select_filter(toolchain_select, event)
+                lambda event: apply_select_filter(
+                    toolchain_select,
+                    event,
+                    filter_name="toolchain",
+                )
             )
             status_select.on_value_change(
-                lambda event: apply_select_filter(status_select, event)
+                lambda event: apply_select_filter(
+                    status_select,
+                    event,
+                    filter_name="analysis_status",
+                )
+            )
+            outcome_select.on_value_change(
+                lambda event: apply_select_filter(
+                    outcome_select,
+                    event,
+                    filter_name="outcome",
+                )
             )
             render_history()
             render_actions()

@@ -59,8 +59,37 @@ class HistoryPageHelpersTests(unittest.TestCase):
             },
         )
 
+    def test_history_filter_trend_refresh_scope_excludes_search_and_status(
+        self,
+    ) -> None:
+        trend_relevant = {
+            "workspace",
+            "time_range",
+            "severity",
+            "toolchain",
+            "outcome",
+        }
+        row_only = {"search", "analysis_status"}
+
+        self.assertEqual(
+            {
+                name
+                for name in trend_relevant
+                if history_module._history_filter_updates_risk_trends(name)
+            },
+            trend_relevant,
+        )
+        self.assertFalse(
+            any(
+                history_module._history_filter_updates_risk_trends(name)
+                for name in row_only
+            )
+        )
+
     def test_fetch_history_risk_trends_uses_workspace_scope(self) -> None:
         expected = {"total_reports": 1, "severity_counts": {"high": 1}}
+        created_from = datetime(2026, 6, 1, tzinfo=UTC)
+        created_to = datetime(2026, 6, 8, tzinfo=UTC)
 
         with mock.patch.object(
             history_module,
@@ -71,12 +100,22 @@ class HistoryPageHelpersTests(unittest.TestCase):
                 has_history_scope=True,
                 project_id=7,
                 workspace_key="prod",
+                severity="high",
+                toolchain="terraform",
+                outcome="failure",
+                created_from=created_from,
+                created_to=created_to,
             )
 
         self.assertEqual(result, expected)
         fetch_risk_trends.assert_called_once_with(
             project_id=7,
             workspace_key="prod",
+            severity="high",
+            toolchain="terraform",
+            outcome="failure",
+            created_from=created_from,
+            created_to=created_to,
         )
 
     def test_fetch_history_risk_trends_returns_empty_without_scope(self) -> None:
@@ -1032,6 +1071,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         reload(analysis_reports_repository_module)
         reload(project_service_module)
         reload(report_service_module)
+        reload(deployment_outcome_service_module)
         reload(feedback_service_module)
         reload(report_detail_page_module)
         reload(history_module)
@@ -1758,6 +1798,126 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Recall 1.00", response.text)
         self.assertIn("Directional only", response.text)
         self.assertIn("Sparse calibration data", response.text)
+
+    def test_history_page_renders_full_risk_trend_comparison(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.set_active_project(project.id)
+        trend_payload = {
+            "total_reports": 3,
+            "filters": {"project_id": project.id},
+            "window": {
+                "start": "2026-06-01T00:00:00+00:00",
+                "end": "2026-06-08T00:00:00+00:00",
+            },
+            "severity_counts": {"critical": 1, "high": 1, "low": 1},
+            "recommendation_counts": {"no-go": 2, "go": 1},
+            "high_critical_frequency": {"count": 2, "rate": 2 / 3},
+            "tool_counts": {"terraform": 2, "kubernetes": 1},
+            "outcome_counts": {"failure": 1, "success": 1},
+            "outcome_links": {
+                "linked_outcome_count": 2,
+                "failed_outcome_count": 1,
+                "warned_failed_outcome_count": 1,
+                "analysis_ids": [1, 2],
+            },
+            "false_positive_signals": {"count": 1, "event_count": 1, "rate": 1 / 3},
+            "false_reassurance_signals": {
+                "count": 1,
+                "event_count": 1,
+                "deployment_count": 1,
+                "feedback_count": 0,
+                "rate": 1 / 3,
+            },
+            "context_completeness": {
+                "sample_size": 3,
+                "missing_count": 0,
+                "partial_context_count": 1,
+                "partial_context_rate": 1 / 3,
+                "average_context_score": 0.74,
+            },
+            "limitations": [],
+            "audit_rows": [],
+            "trend_sample_size": 100,
+            "trend_windows": [
+                {
+                    "label": "previous",
+                    "total_reports": 2,
+                    "severity_counts": {"critical": 1, "medium": 1},
+                    "recommendation_counts": {"no-go": 1, "caution": 1},
+                    "tool_counts": {"kubernetes": 2},
+                    "outcome_counts": {"success": 1},
+                    "high_critical_frequency": {"count": 1, "rate": 0.5},
+                    "outcome_links": {"linked_outcome_count": 1},
+                    "false_positive_signals": {"count": 0, "rate": 0.0},
+                    "false_reassurance_signals": {"count": 0, "rate": 0.0},
+                    "context_completeness": {
+                        "partial_context_count": 0,
+                        "average_context_score": 0.9,
+                    },
+                },
+                {
+                    "label": "current",
+                    "total_reports": 3,
+                    "severity_counts": {"critical": 1, "high": 1, "low": 1},
+                    "recommendation_counts": {"no-go": 2, "go": 1},
+                    "tool_counts": {"terraform": 2, "kubernetes": 1},
+                    "outcome_counts": {"failure": 1, "success": 1},
+                    "high_critical_frequency": {"count": 2, "rate": 2 / 3},
+                    "outcome_links": {"linked_outcome_count": 2},
+                    "false_positive_signals": {"count": 1, "rate": 1 / 3},
+                    "false_reassurance_signals": {"count": 1, "rate": 1 / 3},
+                    "context_completeness": {
+                        "partial_context_count": 1,
+                        "average_context_score": 0.74,
+                    },
+                },
+            ],
+            "trend_comparison": {
+                "total_reports_delta": 1,
+                "severity_count_deltas": {
+                    "critical": 0,
+                    "high": 1,
+                    "medium": -1,
+                    "low": 1,
+                },
+                "recommendation_count_deltas": {
+                    "no-go": 1,
+                    "caution": -1,
+                    "go": 1,
+                },
+                "tool_count_deltas": {"terraform": 2, "kubernetes": -1},
+                "outcome_count_deltas": {"failure": 1, "success": 0},
+                "high_critical_count_delta": 1,
+                "high_critical_rate_delta": 1 / 6,
+                "false_positive_count_delta": 1,
+                "false_positive_rate_delta": 1 / 3,
+                "false_reassurance_count_delta": 1,
+                "false_reassurance_rate_delta": 1 / 3,
+                "linked_outcome_count_delta": 1,
+                "context_partial_count_delta": 1,
+                "context_average_score_delta": -0.16,
+            },
+        }
+
+        with mock.patch.object(
+            history_module,
+            "_fetch_history_risk_trends",
+            return_value=trend_payload,
+        ):
+            response = self.client.get("/history")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Window change", response.text)
+        self.assertIn("Verdict change", response.text)
+        self.assertIn("Recommendation change", response.text)
+        self.assertIn("no-go +1", response.text)
+        self.assertIn("caution -1", response.text)
+        self.assertIn("Outcome change", response.text)
+        self.assertIn("Toolchain change", response.text)
+        self.assertIn("Context change", response.text)
 
     def test_history_page_renders_feedback_bias_calibration_limitation(self) -> None:
         report = self._persist_report(

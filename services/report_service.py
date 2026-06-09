@@ -36,7 +36,6 @@ from llm.narrator import NarrativeResult
 from models.database import SessionLocal
 from models.repositories.analysis_reports import (
     count_analysis_reports,
-    count_analysis_reports_by_field,
     create_analysis_report,
     delete_analysis_report,
     get_analysis_report,
@@ -44,6 +43,10 @@ from models.repositories.analysis_reports import (
     list_analysis_reports,
     update_analysis_report_share_settings,
 )
+from models.repositories.deployment_outcomes import (
+    list_deployment_outcomes as list_deployment_outcome_records,
+)
+from models.repositories.feedback_events import list_feedback_events
 from parsers.base import ParseBatchResult, ParsedFileResult
 from services.artifact_snapshot_service import (
     delete_report_artifacts,
@@ -152,6 +155,133 @@ class ReportSchemaVersionError(ValueError):
         self.code = code
         self.message = message
         self.status_code = status_code
+
+
+class ReportTrendError(ValueError):
+    """Raised when risk trend requests are invalid."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+_TREND_OUTCOME_ALIASES = {
+    "success": "success",
+    "failure": "failure",
+    "rolled_back": "rolled_back",
+    "rollback": "rolled_back",
+}
+_TREND_ANALYSIS_ID_CHUNK_SIZE = 100
+_TREND_REPORT_BATCH_SIZE = 100
+
+
+def _normalize_trend_outcome(value: str | None) -> str | None:
+    normalized = str(value or "").strip().lower().replace("-", "_")
+    if not normalized:
+        return None
+    try:
+        return _TREND_OUTCOME_ALIASES[normalized]
+    except KeyError as exc:
+        raise ReportTrendError(
+            "invalid_trend_outcome",
+            "Outcome must be one of: success, failure, rolled_back, rollback.",
+        ) from exc
+
+
+def _chunk_analysis_ids(analysis_ids: list[int] | set[int]) -> list[list[int]]:
+    ids = sorted({int(analysis_id) for analysis_id in analysis_ids})
+    return [
+        ids[index : index + _TREND_ANALYSIS_ID_CHUNK_SIZE]
+        for index in range(0, len(ids), _TREND_ANALYSIS_ID_CHUNK_SIZE)
+    ]
+
+
+def _trend_report_warned(report) -> bool:
+    return str(getattr(report, "recommendation", "") or "").strip().lower() != "go"
+
+
+def _previous_trend_window(
+    created_from: datetime | None,
+    created_to: datetime | None,
+) -> tuple[datetime, datetime] | None:
+    if created_from is None or created_to is None or created_from >= created_to:
+        return None
+    duration = created_to - created_from
+    return created_from - duration, created_from
+
+
+def _trend_window_summary(label: str, payload: dict) -> dict:
+    return {
+        "label": label,
+        "window": payload["window"],
+        "total_reports": payload["total_reports"],
+        "severity_counts": payload["severity_counts"],
+        "recommendation_counts": payload["recommendation_counts"],
+        "tool_counts": payload["tool_counts"],
+        "high_critical_frequency": payload["high_critical_frequency"],
+        "false_positive_signals": payload["false_positive_signals"],
+        "false_reassurance_signals": payload["false_reassurance_signals"],
+        "outcome_links": payload["outcome_links"],
+        "outcome_counts": payload["outcome_counts"],
+        "context_completeness": payload["context_completeness"],
+        "limitations": payload["limitations"],
+    }
+
+
+def _count_deltas(current_counts: dict, previous_counts: dict) -> dict:
+    keys = set(current_counts) | set(previous_counts)
+    return {
+        key: int(current_counts.get(key, 0)) - int(previous_counts.get(key, 0))
+        for key in sorted(keys)
+    }
+
+
+def _trend_delta(current: dict, previous: dict) -> dict:
+    return {
+        "total_reports_delta": current["total_reports"] - previous["total_reports"],
+        "severity_count_deltas": _count_deltas(
+            current["severity_counts"],
+            previous["severity_counts"],
+        ),
+        "recommendation_count_deltas": _count_deltas(
+            current["recommendation_counts"],
+            previous["recommendation_counts"],
+        ),
+        "tool_count_deltas": _count_deltas(
+            current["tool_counts"],
+            previous["tool_counts"],
+        ),
+        "outcome_count_deltas": _count_deltas(
+            current["outcome_counts"],
+            previous["outcome_counts"],
+        ),
+        "high_critical_count_delta": current["high_critical_frequency"]["count"]
+        - previous["high_critical_frequency"]["count"],
+        "high_critical_rate_delta": current["high_critical_frequency"]["rate"]
+        - previous["high_critical_frequency"]["rate"],
+        "false_positive_count_delta": current["false_positive_signals"]["count"]
+        - previous["false_positive_signals"]["count"],
+        "false_positive_rate_delta": current["false_positive_signals"]["rate"]
+        - previous["false_positive_signals"]["rate"],
+        "false_reassurance_count_delta": current["false_reassurance_signals"]["count"]
+        - previous["false_reassurance_signals"]["count"],
+        "false_reassurance_rate_delta": current["false_reassurance_signals"]["rate"]
+        - previous["false_reassurance_signals"]["rate"],
+        "linked_outcome_count_delta": current["outcome_links"]["linked_outcome_count"]
+        - previous["outcome_links"]["linked_outcome_count"],
+        "context_partial_count_delta": current["context_completeness"][
+            "partial_context_count"
+        ]
+        - previous["context_completeness"]["partial_context_count"],
+        "context_average_score_delta": (
+            None
+            if current["context_completeness"]["average_context_score"] is None
+            or previous["context_completeness"]["average_context_score"] is None
+            else current["context_completeness"]["average_context_score"]
+            - previous["context_completeness"]["average_context_score"]
+        ),
+    }
 
 
 def _resolve_project_id(
@@ -4249,6 +4379,7 @@ def fetch_filtered_analysis_history(
     recommendation: str | None = None,
     search: str | None = None,
     toolchain: str | None = None,
+    outcome: str | None = None,
     analysis_status: str | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
@@ -4262,6 +4393,7 @@ def fetch_filtered_analysis_history(
         recommendation=recommendation,
         search=search,
         toolchain=toolchain,
+        outcome=outcome,
         analysis_status=analysis_status,
         created_from=created_from,
         created_to=created_to,
@@ -4279,6 +4411,7 @@ def fetch_filtered_analysis_history_page(
     recommendation: str | None = None,
     search: str | None = None,
     toolchain: str | None = None,
+    outcome: str | None = None,
     analysis_status: str | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
@@ -4286,6 +4419,15 @@ def fetch_filtered_analysis_history_page(
     page_size: int = 50,
     skip_unreadable_schema: bool = False,
 ) -> dict[str, Any]:
+    if (
+        created_from is not None
+        and created_to is not None
+        and created_from > created_to
+    ):
+        raise ReportTrendError(
+            "invalid_time_window",
+            "created_from must be earlier than or equal to created_to.",
+        )
     page = max(page, 1)
     page_size = max(1, min(page_size, 100))
     offset = (page - 1) * page_size
@@ -4298,6 +4440,7 @@ def fetch_filtered_analysis_history_page(
     readable_schema_versions = (
         _readable_report_schema_versions() if skip_unreadable_schema else None
     )
+    normalized_outcome = _normalize_trend_outcome(outcome)
 
     def operation():
         with SessionLocal() as session:
@@ -4318,8 +4461,9 @@ def fetch_filtered_analysis_history_page(
                     search=search,
                     toolchain=toolchain,
                     analysis_status=analysis_status,
-                    created_from=created_from,
-                    created_to=created_to,
+                    activity_from=created_from,
+                    activity_to=created_to,
+                    outcome_label=normalized_outcome,
                     report_schema_versions=readable_schema_versions,
                     limit=page_size,
                     offset=offset,
@@ -4342,8 +4486,9 @@ def fetch_filtered_analysis_history_page(
                     search=search,
                     toolchain=toolchain,
                     analysis_status=analysis_status,
-                    created_from=created_from,
-                    created_to=created_to,
+                    activity_from=created_from,
+                    activity_to=created_to,
+                    outcome_label=normalized_outcome,
                     report_schema_versions=readable_schema_versions,
                 )
             else:
@@ -4356,8 +4501,9 @@ def fetch_filtered_analysis_history_page(
                     search=search,
                     toolchain=toolchain,
                     analysis_status=analysis_status,
-                    created_from=created_from,
-                    created_to=created_to,
+                    activity_from=created_from,
+                    activity_to=created_to,
+                    outcome_label=normalized_outcome,
                     limit=page_size,
                     offset=offset,
                     include_evidence=True,
@@ -4379,8 +4525,9 @@ def fetch_filtered_analysis_history_page(
                     search=search,
                     toolchain=toolchain,
                     analysis_status=analysis_status,
-                    created_from=created_from,
-                    created_to=created_to,
+                    activity_from=created_from,
+                    activity_to=created_to,
+                    outcome_label=normalized_outcome,
                 )
             return (
                 _attach_previous_scan_diffs(serialized_reports, serialized_all_reports),
@@ -4459,82 +4606,478 @@ def fetch_risk_trends(
     project_key: str | None = None,
     workspace_id: int | None = None,
     workspace_key: str | None = None,
+    severity: str | None = None,
+    toolchain: str | None = None,
+    outcome: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
 ) -> dict:
     """Return high-signal trend summaries over stored reports."""
     trend_sample_size = 100
+    if project_id is None and project_key is None:
+        raise ReportTrendError(
+            "missing_project_scope",
+            "Project scope is required for risk trend review.",
+        )
+    if (
+        created_from is not None
+        and created_to is not None
+        and created_from > created_to
+    ):
+        raise ReportTrendError(
+            "invalid_time_window",
+            "created_from must be earlier than or equal to created_to.",
+        )
+    normalized_outcome = _normalize_trend_outcome(outcome)
     resolved_project_id, resolved_workspace_id = _resolve_report_scope(
         project_id=project_id,
         project_key=project_key,
         workspace_id=workspace_id,
         workspace_key=workspace_key,
     )
+    readable_schema_versions = _readable_report_schema_versions()
 
-    def operation():
-        with SessionLocal() as session:
-            reports = list_analysis_reports(
-                session,
-                project_id=resolved_project_id,
-                workspace_id=resolved_workspace_id,
-                limit=trend_sample_size,
-                include_evidence=False,
+    def list_trend_outcomes(
+        session,
+        analysis_ids: list[int],
+        *,
+        deployed_from: datetime | None,
+        deployed_to: datetime | None,
+        deployed_before: datetime | None,
+    ):
+        outcomes = []
+        for chunk in _chunk_analysis_ids(analysis_ids):
+            outcomes.extend(
+                list_deployment_outcome_records(
+                    session,
+                    project_id=resolved_project_id,
+                    workspace_id=resolved_workspace_id,
+                    analysis_ids=chunk,
+                    outcome_label=normalized_outcome,
+                    deployed_from=deployed_from,
+                    deployed_to=deployed_to,
+                    deployed_before=deployed_before,
+                    limit=None,
+                )
             )
+        return outcomes
+
+    def list_trend_feedback(
+        session,
+        analysis_ids: list[int],
+        *,
+        feedback_from: datetime | None,
+        feedback_to: datetime | None,
+        feedback_before: datetime | None,
+    ):
+        events = []
+        for chunk in _chunk_analysis_ids(analysis_ids):
+            events.extend(
+                list_feedback_events(
+                    session,
+                    project_id=resolved_project_id,
+                    workspace_id=resolved_workspace_id,
+                    analysis_ids=chunk,
+                    created_from=feedback_from,
+                    created_to=feedback_to,
+                    created_before=feedback_before,
+                    limit=None,
+                )
+            )
+        return events
+
+    def event_matches_report_scope(
+        event, report_scope_by_id: dict[int, tuple[int, int | None]]
+    ) -> bool:
+        if event.analysis_id is None:
+            return False
+        report_scope = report_scope_by_id.get(int(event.analysis_id))
+        if report_scope is None:
+            return False
+        report_project_id, report_workspace_id = report_scope
+        event_workspace_id = (
+            int(event.workspace_id) if event.workspace_id is not None else None
+        )
+        return (
+            int(event.project_id) == report_project_id
+            and event_workspace_id == report_workspace_id
+        )
+
+    def load_window(
+        window_start: datetime | None,
+        window_end: datetime | None,
+        *,
+        window_end_exclusive: bool = False,
+    ) -> dict:
+        inclusive_end = None if window_end_exclusive else window_end
+        exclusive_end = window_end if window_end_exclusive else None
+        with SessionLocal() as session:
+            report_ids: list[int] = []
+            report_scope_by_id: dict[int, tuple[int, int | None]] = {}
+            report_warned_by_id: dict[int, bool] = {}
+            severity_counts: Counter[str] = Counter()
+            recommendation_counts: Counter[str] = Counter()
+            tool_counts: Counter[str] = Counter()
+            audit_rows: list[dict] = []
+            context_scores: list[float] = []
+            partial_context_count = 0
+            missing_context_count = 0
+            id_before: int | None = None
+            while True:
+                report_batch = list_analysis_reports(
+                    session,
+                    project_id=resolved_project_id,
+                    workspace_id=resolved_workspace_id,
+                    severity=severity,
+                    toolchain=toolchain,
+                    activity_from=window_start,
+                    activity_to=inclusive_end,
+                    activity_before=exclusive_end,
+                    outcome_label=normalized_outcome,
+                    report_schema_versions=readable_schema_versions,
+                    limit=_TREND_REPORT_BATCH_SIZE,
+                    id_before=id_before,
+                    include_evidence=False,
+                    order_by_activity=False,
+                )
+                if not report_batch:
+                    break
+                id_before = int(report_batch[-1].id)
+                for report in report_batch:
+                    report_id = int(report.id)
+                    report_ids.append(report_id)
+                    report_scope_by_id[report_id] = (
+                        int(report.project_id),
+                        int(report.workspace_id)
+                        if report.workspace_id is not None
+                        else None,
+                    )
+                    report_warned_by_id[report_id] = _trend_report_warned(report)
+                    severity_counts[report.severity] += 1
+                    recommendation_counts[report.recommendation] += 1
+                    try:
+                        contributors = json.loads(report.contributors_json or "[]")
+                        analyzed_files = json.loads(report.analyzed_files_json or "[]")
+                    except json.JSONDecodeError:
+                        contributors = []
+                        analyzed_files = []
+                    submission_manifest, _ = _load_submission_manifest_payload(
+                        getattr(report, "submission_manifest_json", None)
+                    )
+                    submission_manifest_fallback = (
+                        _load_submission_manifest_fallback_payload(
+                            getattr(report, "submission_manifest_fallback_json", None)
+                        )
+                    )
+                    tools = _history_tool_mix(
+                        contributors if isinstance(contributors, list) else [],
+                        submission_manifest or {},
+                        analyzed_files if isinstance(analyzed_files, list) else [],
+                        submission_manifest_fallback,
+                    )
+                    for tool in tools:
+                        tool_counts[tool] += 1
+                    context_payload, context_warning = (
+                        _load_context_completeness_payload(
+                            report.risk_assessment.context_completeness_json
+                            if report.risk_assessment is not None
+                            else None
+                        )
+                    )
+                    if not context_warning:
+                        context_scores.append(float(context_payload["context_score"]))
+                        if bool(context_payload.get("partial_context")):
+                            partial_context_count += 1
+                    else:
+                        missing_context_count += 1
+                    if len(audit_rows) < trend_sample_size:
+                        audit_rows.append(
+                            {
+                                "id": report.id,
+                                "created_at": report.created_at.isoformat(),
+                                "severity": report.severity,
+                                "recommendation": report.recommendation,
+                                "top_risk": report.top_risk,
+                                "tools": tools,
+                                "audit": {
+                                    "llm_provider": report.llm_provider,
+                                    "source_interface": report.source_interface,
+                                },
+                            }
+                        )
+            outcomes = list_trend_outcomes(
+                session,
+                report_ids,
+                deployed_from=window_start,
+                deployed_to=inclusive_end,
+                deployed_before=exclusive_end,
+            )
+            outcomes = [
+                outcome
+                for outcome in outcomes
+                if event_matches_report_scope(outcome, report_scope_by_id)
+            ]
+            feedback_events = list_trend_feedback(
+                session,
+                report_ids,
+                feedback_from=window_start,
+                feedback_to=inclusive_end,
+                feedback_before=exclusive_end,
+            )
+            feedback_events = [
+                event
+                for event in feedback_events
+                if event_matches_report_scope(event, report_scope_by_id)
+            ]
             return {
-                "reports": reports,
-                "total_reports": count_analysis_reports(
-                    session,
-                    project_id=resolved_project_id,
-                    workspace_id=resolved_workspace_id,
+                "total_reports": len(report_ids),
+                "severity_counts": dict(severity_counts),
+                "recommendation_counts": dict(recommendation_counts),
+                "tool_counts": dict(tool_counts),
+                "outcomes": outcomes,
+                "outcome_counts": dict(
+                    Counter(outcome.outcome_label for outcome in outcomes)
                 ),
-                "severity_counts": count_analysis_reports_by_field(
-                    session,
-                    "severity",
-                    project_id=resolved_project_id,
-                    workspace_id=resolved_workspace_id,
-                ),
-                "recommendation_counts": count_analysis_reports_by_field(
-                    session,
-                    "recommendation",
-                    project_id=resolved_project_id,
-                    workspace_id=resolved_workspace_id,
-                ),
+                "feedback_events": feedback_events,
+                "report_warned_by_id": report_warned_by_id,
+                "context_scores": context_scores,
+                "partial_context_count": partial_context_count,
+                "missing_context_count": missing_context_count,
+                "audit_rows": audit_rows,
             }
 
-    trend_data = _run_with_schema_retry(operation)
-    reports = trend_data["reports"]
-
-    tool_counts: Counter[str] = Counter()
-    audit_rows: list[dict] = []
-
-    for report in reports:
-        contributors = json.loads(report.contributors_json or "[]")
-        tools = sorted(
-            {contributor.get("tool", "unknown") for contributor in contributors}
+    def build_payload(
+        trend_data: dict,
+        *,
+        window_start: datetime | None,
+        window_end: datetime | None,
+    ) -> dict:
+        total_reports = int(trend_data["total_reports"])
+        report_warned_by_id = trend_data["report_warned_by_id"]
+        context_scores = trend_data["context_scores"]
+        partial_context_count = int(trend_data["partial_context_count"])
+        missing_context_count = int(trend_data["missing_context_count"])
+        severe_count = sum(
+            int(trend_data["severity_counts"].get(label, 0))
+            for label in ("high", "critical")
         )
-        for tool in tools:
-            tool_counts[tool] += 1
-        audit_rows.append(
-            {
-                "id": report.id,
-                "created_at": report.created_at.isoformat(),
-                "severity": report.severity,
-                "recommendation": report.recommendation,
-                "top_risk": report.top_risk,
-                "tools": tools,
-                "audit": {
-                    "llm_provider": report.llm_provider,
-                    "source_interface": report.source_interface,
-                },
-            }
+        failed_outcomes = [
+            outcome
+            for outcome in trend_data["outcomes"]
+            if outcome.outcome_label in {"failure", "rolled_back"}
+        ]
+        warned_failed_analysis_ids = {
+            int(outcome.analysis_id)
+            for outcome in failed_outcomes
+            if outcome.analysis_id is not None
+            and report_warned_by_id.get(int(outcome.analysis_id), False)
+        }
+        warned_failed_outcomes = [
+            outcome
+            for outcome in failed_outcomes
+            if outcome.analysis_id is not None
+            and int(outcome.analysis_id) in warned_failed_analysis_ids
+        ]
+        deployment_false_reassurance = [
+            outcome
+            for outcome in failed_outcomes
+            if outcome.analysis_id is not None
+            and int(outcome.analysis_id) not in warned_failed_analysis_ids
+        ]
+        deployment_false_reassurance_analysis_ids = {
+            int(outcome.analysis_id)
+            for outcome in deployment_false_reassurance
+            if outcome.analysis_id is not None
+        }
+        false_positive_events = [
+            event
+            for event in trend_data["feedback_events"]
+            if bool(event.false_positive_flag)
+        ]
+        false_positive_analysis_ids = {
+            int(event.analysis_id)
+            for event in false_positive_events
+            if event.analysis_id is not None
+        }
+        false_negative_events = [
+            event
+            for event in trend_data["feedback_events"]
+            if event.false_negative_note
+            and event.analysis_id is not None
+            and not report_warned_by_id.get(int(event.analysis_id), False)
+        ]
+        false_negative_analysis_ids = {
+            int(event.analysis_id)
+            for event in false_negative_events
+            if event.analysis_id is not None
+        }
+        false_reassurance_analysis_ids = (
+            deployment_false_reassurance_analysis_ids | false_negative_analysis_ids
         )
+        limitations: list[dict[str, str]] = []
+        if total_reports == 0:
+            limitations.append(
+                {
+                    "code": "no_reports",
+                    "label": "No reports in scope",
+                    "message": "No persisted reports match the selected project, workspace, time, toolchain, severity, and outcome filters.",
+                }
+            )
+        elif total_reports < 5:
+            limitations.append(
+                {
+                    "code": "sparse_reports",
+                    "label": "Limited report history",
+                    "message": f"Only {total_reports} persisted reports match the selected scope; trend direction is directional only.",
+                }
+            )
+        if len(trend_data["outcomes"]) < 5:
+            limitations.append(
+                {
+                    "code": "sparse_outcomes",
+                    "label": "Limited deployment outcomes",
+                    "message": f"Only {len(trend_data['outcomes'])} linked deployment outcomes match this trend scope.",
+                }
+            )
+        if len(trend_data["feedback_events"]) < 5:
+            limitations.append(
+                {
+                    "code": "sparse_feedback",
+                    "label": "Limited reviewer feedback",
+                    "message": f"Only {len(trend_data['feedback_events'])} reviewer feedback events match this trend scope.",
+                }
+            )
+        if missing_context_count:
+            limitations.append(
+                {
+                    "code": "missing_context_completeness",
+                    "label": "Incomplete context metadata",
+                    "message": f"{missing_context_count} report(s) in scope lack valid context-completeness metadata.",
+                }
+            )
 
-    return {
-        "total_reports": trend_data["total_reports"],
-        "severity_counts": trend_data["severity_counts"],
-        "recommendation_counts": trend_data["recommendation_counts"],
-        "tool_counts": dict(tool_counts),
-        "audit_rows": audit_rows,
-        "trend_sample_size": trend_sample_size,
-    }
+        return {
+            "total_reports": total_reports,
+            "filters": {
+                "project_id": resolved_project_id,
+                "project_key": project_key,
+                "workspace_id": resolved_workspace_id,
+                "workspace_key": workspace_key,
+                "toolchain": toolchain,
+                "severity": severity,
+                "outcome": normalized_outcome,
+            },
+            "window": {
+                "start": window_start.isoformat() if window_start is not None else None,
+                "end": window_end.isoformat() if window_end is not None else None,
+            },
+            "severity_counts": trend_data["severity_counts"],
+            "recommendation_counts": trend_data["recommendation_counts"],
+            "high_critical_frequency": {
+                "count": severe_count,
+                "rate": severe_count / total_reports if total_reports else 0.0,
+            },
+            "tool_counts": trend_data["tool_counts"],
+            "outcome_counts": trend_data["outcome_counts"],
+            "outcome_links": {
+                "linked_outcome_count": len(trend_data["outcomes"]),
+                "failed_outcome_count": len(failed_outcomes),
+                "warned_failed_outcome_count": len(warned_failed_outcomes),
+                "analysis_ids": sorted(
+                    {
+                        int(outcome.analysis_id)
+                        for outcome in trend_data["outcomes"]
+                        if outcome.analysis_id is not None
+                    }
+                ),
+            },
+            "false_positive_signals": {
+                "count": len(false_positive_analysis_ids),
+                "event_count": len(false_positive_events),
+                "rate": len(false_positive_analysis_ids) / total_reports
+                if total_reports
+                else 0.0,
+            },
+            "false_reassurance_signals": {
+                "count": len(false_reassurance_analysis_ids),
+                "event_count": len(deployment_false_reassurance)
+                + len(false_negative_events),
+                "deployment_count": len(deployment_false_reassurance_analysis_ids),
+                "feedback_count": len(false_negative_analysis_ids),
+                "rate": len(false_reassurance_analysis_ids) / total_reports
+                if total_reports
+                else 0.0,
+            },
+            "context_completeness": {
+                "sample_size": len(context_scores),
+                "missing_count": missing_context_count,
+                "partial_context_count": partial_context_count,
+                "partial_context_rate": (
+                    partial_context_count / len(context_scores)
+                    if context_scores
+                    else 0.0
+                ),
+                "average_context_score": (
+                    sum(context_scores) / len(context_scores)
+                    if context_scores
+                    else None
+                ),
+            },
+            "limitations": limitations,
+            "audit_rows": trend_data["audit_rows"],
+            "trend_sample_size": trend_sample_size,
+        }
+
+    current_data = _run_with_schema_retry(lambda: load_window(created_from, created_to))
+    current_payload = build_payload(
+        current_data,
+        window_start=created_from,
+        window_end=created_to,
+    )
+    previous_window = _previous_trend_window(created_from, created_to)
+    if previous_window is None:
+        current_payload["trend_windows"] = [
+            _trend_window_summary("selected", current_payload)
+        ]
+        current_payload["trend_comparison"] = None
+        return current_payload
+
+    previous_start, previous_end = previous_window
+    previous_data = _run_with_schema_retry(
+        lambda: load_window(
+            previous_start,
+            previous_end,
+            window_end_exclusive=True,
+        )
+    )
+    previous_payload = build_payload(
+        previous_data,
+        window_start=previous_start,
+        window_end=previous_end,
+    )
+    current_payload["trend_windows"] = [
+        _trend_window_summary("previous", previous_payload),
+        _trend_window_summary("current", current_payload),
+    ]
+    previous_limitations = [
+        {
+            **limitation,
+            "code": f"previous_window_{limitation.get('code', 'limitation')}",
+            "label": f"Previous window: {limitation.get('label', 'Limitation')}",
+            "message": f"Previous comparison window: {limitation.get('message', '')}",
+        }
+        for limitation in previous_payload.get("limitations", [])
+        if isinstance(limitation, dict)
+    ]
+    current_payload["limitations"] = [
+        *current_payload["limitations"],
+        *previous_limitations,
+    ]
+    current_payload["trend_comparison"] = _trend_delta(
+        current_payload,
+        previous_payload,
+    )
+    return current_payload
 
 
 def fetch_dashboard_stats(

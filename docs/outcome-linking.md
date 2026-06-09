@@ -52,6 +52,38 @@ python -m cli.analyze benchmark backtest-incidents --project-key <project>
 - Scenario rows link incident metadata, linked report metadata, expected evidence from the original persisted report, observed replay evidence, observed findings, context TODOs, and improvement guidance.
 - The command exits non-zero when any scenario is missed or errors, so it can be used as a guardrail for benchmark claims while still reporting unsupported and insufficient-context scenarios explicitly.
 
+## Risk Trend Review
+
+- The history view includes a project-scoped risk trend card that updates with the selected workspace, time range, risk severity, toolchain, and deployment outcome filters. Project scope is required for CLI trend export.
+- Trend data preserves historical report immutability. Feedback and deployment outcomes are joined as calibration signals, but they do not rewrite stored report verdicts, severity, recommendation, confidence, narrative, or context-completeness metadata.
+- When a bounded time range is selected, the trend payload includes current and previous equal-length windows plus deltas so managers can compare whether signals are improving or recurring. Previous comparison windows use an exclusive upper bound, so events exactly at the current window start are counted only in the current window.
+- Report rows are included when they were created in the selected window or have selected-window feedback/outcome activity. Deployment outcomes use `deployed_at` for the event window; reviewer feedback uses feedback `created_at`. The History table and trend card share this activity-window behavior.
+- The trend payload compares:
+  - verdict / recommendation distribution
+  - high and critical report frequency
+  - toolchain frequency
+  - deployment outcome distribution
+  - linked deployment outcome counts
+  - reviewer false-positive feedback
+  - deployment-backed and reviewer-backed false-reassurance signals
+  - partial-context count/rate and average context-completeness score
+- Sparse or missing report, feedback, outcome, and context-completeness inputs are returned as explicit limitation labels. Empty or unauthorized project scopes return no report metadata from inaccessible projects, and future-schema reports that history cannot render are excluded from trend summaries.
+- Export scoped trend data from the CLI:
+
+```bash
+python -m cli.analyze benchmark risk-trends \
+  --project-key payments \
+  --workspace-key prod \
+  --severity high \
+  --toolchain terraform \
+  --outcome failure \
+  --created-from 2026-06-01T00:00:00Z \
+  --created-to 2026-06-08T00:00:00Z
+```
+
+- The CLI emits the same JSON payload used by the history trend card so browser review and exported trend data stay aligned.
+- API history consumers can use the same outcome scope with `GET /api/v1/analyses?outcome=failure` alongside existing project, workspace, severity, toolchain, status, and time filters.
+
 ## Scheduler and Calibration Feed
 
 - The app lifecycle scheduler now runs `run_due_weekly_backtests()` alongside topology drift checks.

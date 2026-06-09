@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import select
@@ -50,10 +51,14 @@ def list_feedback_events(
     project_id: int | None = None,
     workspace_id: int | None = None,
     analysis_id: int | None = None,
+    analysis_ids: Sequence[int] | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
+    created_before: datetime | None = None,
     limit: int | None = None,
 ) -> list[FeedbackEvent]:
+    if analysis_ids is not None and not analysis_ids:
+        return []
     stmt = select(FeedbackEvent).order_by(
         FeedbackEvent.created_at.desc(), FeedbackEvent.id.desc()
     )
@@ -63,10 +68,14 @@ def list_feedback_events(
         stmt = stmt.where(FeedbackEvent.workspace_id == workspace_id)
     if analysis_id is not None:
         stmt = stmt.where(FeedbackEvent.analysis_id == analysis_id)
+    if analysis_ids is not None:
+        stmt = stmt.where(FeedbackEvent.analysis_id.in_(tuple(analysis_ids)))
     if created_from is not None:
         stmt = stmt.where(FeedbackEvent.created_at >= created_from)
     if created_to is not None:
         stmt = stmt.where(FeedbackEvent.created_at <= created_to)
+    if created_before is not None:
+        stmt = stmt.where(FeedbackEvent.created_at < created_before)
     if limit is not None:
         stmt = stmt.limit(max(1, limit))
     result = session.execute(stmt)

@@ -174,12 +174,13 @@ def inject_shell_styles(*, force: bool = False) -> None:
   .q-drawer-container {{ pointer-events: none !important; }}
   .dw-dashboard-header {{
     left: 240px !important;
-    width: calc(100% - 240px) !important;
+    right: 0 !important;
+    width: auto !important;
   }}
   .dw-dashboard-main {{
     margin-left: 240px;
     margin-top: 68px;
-    width: calc(100% - 240px);
+    width: auto;
     min-width: 0;
   }}
   .dw-workspace-content {{
@@ -188,6 +189,27 @@ def inject_shell_styles(*, force: bool = False) -> None:
     margin: 0 auto;
     padding: 32px;
     min-width: 0;
+  }}
+  @media (max-width: 900px) {{
+    html, body {{
+      max-width: 100vw;
+      overflow-x: hidden;
+    }}
+    .dw-dashboard-header {{
+      left: 0 !important;
+      width: 100% !important;
+    }}
+    .dw-dashboard-main {{
+      margin-left: 0 !important;
+      width: 100% !important;
+      max-width: 100vw;
+      overflow-x: hidden;
+    }}
+    .q-page-container,
+    .nicegui-content {{
+      max-width: 100vw;
+      overflow-x: hidden;
+    }}
   }}
   .q-card {{
     border: 1px solid {ZINC_200};
@@ -314,7 +336,7 @@ def inject_shell_styles(*, force: bool = False) -> None:
     box-shadow: 0 0 0 1px rgba(255,105,0,0.28), 0 1px 3px rgba(0,0,0,0.06) !important;
   }}
   .dw-history-project-filter-field {{
-    min-height: 40px;
+    min-height: 64px;
     padding: 6px 12px 7px;
     border: 1px solid #d4d4d8;
     border-radius: 10px;
@@ -323,6 +345,10 @@ def inject_shell_styles(*, force: bool = False) -> None:
     min-width: 0;
   }}
   .dw-history-filter-control {{ min-width: 0; width: 100%; }}
+  .dw-history-filter-control .q-field__control {{
+    min-height: 64px !important;
+    height: 64px !important;
+  }}
   .dw-nav-inactive:hover {{
     background: {ZINC_100} !important;
     color: {ZINC_950} !important;
@@ -458,6 +484,10 @@ def inject_shell_styles(*, force: bool = False) -> None:
     gap: 12px;
     flex-wrap: wrap;
     width: 100%;
+    align-items: stretch;
+  }}
+  .dw-history-filter-row > * {{
+    min-height: 64px;
   }}
   .dw-danger-button {{ color: {RED} !important; }}
   .dw-report-signal-grid {{
@@ -465,11 +495,14 @@ def inject_shell_styles(*, force: bool = False) -> None:
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     align-items: start;
+    max-width: 100%;
+    overflow-x: hidden;
   }}
   .dw-report-signal {{
     min-width: 0;
+    max-width: 100%;
     width: 100%;
-    overflow: visible;
+    overflow: hidden;
     align-self: stretch;
   }}
   .dw-report-signal-compact {{
@@ -507,13 +540,15 @@ def inject_shell_styles(*, force: bool = False) -> None:
       grid-column: span 2;
     }}
   }}
-  @media (max-width: 720px) {{
+  @media (max-width: 900px) {{
     .dw-report-signal-grid {{
-      grid-template-columns: 1fr;
+      display: flex;
+      flex-direction: column;
+      grid-template-columns: none;
     }}
     .dw-report-signal-long,
     .dw-report-signal-action {{
-      grid-column: span 1;
+      grid-column: auto;
     }}
   }}
   .dw-theme-toggle {{

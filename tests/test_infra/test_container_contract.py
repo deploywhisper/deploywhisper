@@ -38,6 +38,7 @@ class ContainerContractTests(unittest.TestCase):
                 "022_add_deployment_outcome_notes.py",
                 "023_add_incident_ingestion_sources.py",
                 "024_add_analysis_duration_seconds.py",
+                "025_add_event_analysis_indexes.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -61,6 +62,7 @@ class ContainerContractTests(unittest.TestCase):
         deployment_notes_content = migrations[18].read_text(encoding="utf-8")
         incident_ingestion_sources_content = migrations[19].read_text(encoding="utf-8")
         analysis_duration_content = migrations[20].read_text(encoding="utf-8")
+        event_indexes_content = migrations[21].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -167,6 +169,15 @@ class ContainerContractTests(unittest.TestCase):
             analysis_duration_content,
         )
         self.assertIn('"analysis_duration_seconds"', analysis_duration_content)
+        self.assertIn(
+            'down_revision = "024_add_analysis_duration_seconds"',
+            event_indexes_content,
+        )
+        self.assertIn(
+            "ix_deployment_outcomes_analysis_deployed_outcome",
+            event_indexes_content,
+        )
+        self.assertIn("ix_feedback_events_analysis_created", event_indexes_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())
