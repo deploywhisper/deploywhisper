@@ -747,6 +747,82 @@ class TopologyServiceTests(unittest.TestCase):
         self.assertEqual(blast_radius.direct_count, 1)
         self.assertEqual(blast_radius.unmatched_resources, [])
 
+    def test_import_topology_source_resolves_indexed_dependency_refs(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        state_path = Path(self.tempdir.name) / "indexed-dependency.tfstate"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "version": 4,
+                    "serial": 1,
+                    "resources": [
+                        {
+                            "mode": "managed",
+                            "type": "aws_db_instance",
+                            "name": "primary",
+                            "instances": [
+                                {
+                                    "index_key": "blue",
+                                    "attributes": {"id": "db-blue"},
+                                }
+                            ],
+                        },
+                        {
+                            "mode": "managed",
+                            "type": "aws_ecs_service",
+                            "name": "api",
+                            "instances": [
+                                {
+                                    "dependencies": ['aws_db_instance.primary["blue"]'],
+                                    "attributes": {"id": "svc-api"},
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = import_topology_source(
+            "terraform",
+            str(state_path),
+            project_key="payments",
+        )
+        topology, warning = load_topology(project_key="payments")
+
+        self.assertTrue(result.applied)
+        self.assertEqual(result.partially_parsed_resources, [])
+        self.assertIsNone(warning)
+        assert topology is not None
+        service_by_id = {service["id"]: service for service in topology["services"]}
+        self.assertEqual(
+            service_by_id["aws_db_instance.primary"]["downstream"],
+            ["aws_ecs_service.api"],
+        )
+        blast_radius = compute_blast_radius(
+            [
+                UnifiedChange(
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id='aws_db_instance.primary["blue"]',
+                    action="modify",
+                    summary="Terraform changed an indexed database.",
+                )
+            ],
+            topology,
+            warning,
+        )
+        self.assertEqual(blast_radius.direct_count, 1)
+        self.assertEqual(blast_radius.transitive_count, 1)
+        self.assertEqual(
+            [node.service_id for node in blast_radius.affected],
+            ["aws_db_instance.primary", "aws_ecs_service.api"],
+        )
+
     def test_import_topology_source_warns_for_stale_terraform_state(self) -> None:
         project_service_module.create_project(
             project_key="payments",

@@ -937,10 +937,15 @@ def _parse_terraform_state_source(source_ref: str) -> TopologyChangeSet:
             )
         )
 
-    service_ids = set(services_by_id)
+    resource_key_to_service_id = {
+        resource_key: service_id
+        for service_id, service in services_by_id.items()
+        for resource_key in service["resource_keys"]
+    }
     for service_id, dependency_refs in dependency_refs_by_service.items():
         for dependency_ref in dependency_refs:
-            if dependency_ref not in service_ids:
+            dependency_service_id = resource_key_to_service_id.get(dependency_ref)
+            if dependency_service_id is None:
                 partially_parsed_resources.append(
                     TopologyImportResource(
                         resource_ref=f"{service_id}->{dependency_ref}",
@@ -952,7 +957,7 @@ def _parse_terraform_state_source(source_ref: str) -> TopologyChangeSet:
                     )
                 )
                 continue
-            services_by_id[dependency_ref]["downstream"].append(service_id)
+            services_by_id[dependency_service_id]["downstream"].append(service_id)
 
     services = []
     for service_id in sorted(services_by_id):
