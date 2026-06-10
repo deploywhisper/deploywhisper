@@ -310,6 +310,38 @@ def _service_resource_keys(service: dict) -> list[str]:
     ]
 
 
+def _change_resource_ids(change: UnifiedChange) -> list[str]:
+    resource_ids = [change.resource_id]
+    aliases = change.metadata.get("resource_aliases", [])
+    if isinstance(aliases, list):
+        resource_ids.extend(str(alias).strip() for alias in aliases)
+    seen: set[str] = set()
+    unique: list[str] = []
+    for resource_id in resource_ids:
+        if not resource_id or resource_id in seen:
+            continue
+        seen.add(resource_id)
+        unique.append(resource_id)
+    return unique
+
+
+def _matched_service_ids_for_change(
+    change: UnifiedChange,
+    resource_to_service_ids: dict[str, list[str]],
+) -> list[str]:
+    exact_matches = resource_to_service_ids.get(change.resource_id, [])
+    if exact_matches:
+        return exact_matches
+
+    alias_matches: list[str] = []
+    for resource_id in _change_resource_ids(change)[1:]:
+        alias_matches.extend(resource_to_service_ids.get(resource_id, []))
+    unique_alias_matches = sorted(set(alias_matches))
+    if len(unique_alias_matches) == 1:
+        return unique_alias_matches
+    return []
+
+
 def compute_blast_radius(
     changes: list[UnifiedChange],
     topology: dict | None,
@@ -385,7 +417,9 @@ def compute_blast_radius(
     unmatched_resources: list[str] = []
 
     for change in mutating_changes:
-        matched_service_ids = resource_to_service_ids.get(change.resource_id, [])
+        matched_service_ids = _matched_service_ids_for_change(
+            change, resource_to_service_ids
+        )
         if not matched_service_ids:
             unmatched_resources.append(change.resource_id)
         for service_id in matched_service_ids:

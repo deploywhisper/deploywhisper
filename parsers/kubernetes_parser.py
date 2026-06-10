@@ -17,7 +17,15 @@ def parse_kubernetes(name: str, raw_content: bytes | None) -> list[UnifiedChange
         kind = document.get("kind", "Resource")
         metadata = document.get("metadata", {}) or {}
         resource_name = metadata.get("name", "unnamed")
-        resource_id = f"{kind}/{resource_name}"
+        namespace = str(metadata.get("namespace") or "").strip()
+        if namespace:
+            resource_id = f"{kind}/{namespace}/{resource_name}"
+        else:
+            resource_id = f"{kind}/{resource_name}"
+        legacy_resource_id = f"{kind}/{resource_name}"
+        metadata_payload = {}
+        if resource_id != legacy_resource_id:
+            metadata_payload["resource_aliases"] = [legacy_resource_id]
         changes.append(
             UnifiedChange(
                 change_id=build_change_id(
@@ -31,6 +39,7 @@ def parse_kubernetes(name: str, raw_content: bytes | None) -> list[UnifiedChange
                     f"Kubernetes {kind} {resource_name} supplied as a standalone manifest; "
                     "previous cluster state is unknown, so the delta cannot be confirmed."
                 ),
+                metadata=metadata_payload,
             )
         )
     return changes

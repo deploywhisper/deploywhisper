@@ -41,6 +41,7 @@ For setup-specific modeling guidance, see the [Project Model Guide](./concepts/p
   - `deploywhisper analyze --project <key> [--workspace <workspace>] <artifact...>` or `deploywhisper analyze --project-id <id> [--workspace-id <id>] <artifact...>` returns the same submit advisory JSON contract, including verdict, Evidence Law status, top findings, uncertainty, report schema version, and advisory posture.
   - `deploywhisper topology import --from custom --source <topology.json> --project <key>`
   - `deploywhisper topology import --from terraform --source <terraform.tfstate> --project <key>`
+  - `deploywhisper topology import --from kubernetes --source <current-context|context:name> --project <key>`
   - The topology import command now routes through a shared source registry and returns a normalized import result with accepted, skipped, partially parsed, and unsupported resources.
   - Project, analysis, topology import, and outcome record commands can read `DEPLOYWHISPER_PROJECT_ROLE` and `DEPLOYWHISPER_PROJECT_KEYS` for automation actors that need the same lightweight authorization behavior as API callers.
 - GitHub App integration: respects `DEPLOYWHISPER_GITHUB_PROJECT_KEY` when set; otherwise derives an owner-safe default from the full repository slug and creates it on demand. Unknown, malformed, or blank explicit override values fail fast instead of falling back to the repository-derived default.

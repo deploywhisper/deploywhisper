@@ -24,6 +24,36 @@ provisioner: efs.csi.aws.com
         self.assertEqual(changes[0].action, "apply")
         self.assertIn("previous cluster state is unknown", changes[0].summary)
 
+    def test_parse_kubernetes_includes_namespace_when_manifest_declares_one(
+        self,
+    ) -> None:
+        raw = b"""apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: payments
+"""
+
+        changes = parse_kubernetes("deployment.yaml", raw)
+
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0].resource_id, "Deployment/payments/api")
+
+    def test_parse_kubernetes_leaves_namespace_less_manifest_unscoped(
+        self,
+    ) -> None:
+        raw = b"""apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+"""
+
+        changes = parse_kubernetes("deployment.yaml", raw)
+
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0].resource_id, "Deployment/api")
+        self.assertNotIn("resource_aliases", changes[0].metadata)
+
 
 if __name__ == "__main__":
     unittest.main()

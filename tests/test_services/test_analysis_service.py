@@ -630,6 +630,314 @@ class AnalysisServiceTests(unittest.TestCase):
             context.context_todos,
         )
 
+    def test_build_context_completeness_surfaces_kubernetes_live_state_todos(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                warnings=[
+                    "Kubernetes live-state context TODO: cluster access is unavailable."
+                ],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 0.7)
+        self.assertEqual(context.confidence_level, "low")
+        self.assertTrue(context.insufficient_context)
+        self.assertIn(
+            "Resolve Kubernetes live-state context TODOs before relying on topology context.",
+            context.context_todos,
+        )
+        self.assertIn("Kubernetes live-state", context.uncertainty)
+
+    def test_build_context_completeness_keeps_partial_kubernetes_context_usable(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "services": [
+                        {
+                            "id": "Deployment/payments/api",
+                            "resource_keys": ["Deployment/payments/api"],
+                            "downstream": [],
+                        }
+                    ]
+                },
+                warnings=[
+                    "Kubernetes live-state context TODO: all-namespaces access is unavailable for 'context:prod' resource 'deployments'."
+                ],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertGreaterEqual(context.context_score, 0.7)
+        self.assertLess(context.context_score, 1.0)
+        self.assertEqual(context.confidence_level, "medium")
+        self.assertFalse(context.insufficient_context)
+        self.assertIn(
+            "Resolve Kubernetes live-state context TODOs before relying on topology context.",
+            context.context_todos,
+        )
+        self.assertIn("Kubernetes live-state", context.uncertainty)
+
+    def test_build_context_completeness_uses_kubernetes_drift_todos(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "services": [
+                        {
+                            "id": "Deployment/payments/api",
+                            "resource_keys": ["Deployment/payments/api"],
+                            "downstream": [],
+                        }
+                    ]
+                },
+                warnings=[],
+                drift=SimpleNamespace(
+                    status="unavailable",
+                    warnings=[
+                        "Kubernetes live-state context TODO: cluster access is unavailable for 'context:prod'."
+                    ],
+                ),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 1.0)
+        self.assertEqual(context.confidence_level, "medium")
+        self.assertIn(
+            "Resolve Kubernetes live-state context TODOs before relying on topology context.",
+            context.context_todos,
+        )
+        self.assertIn("Kubernetes live-state", context.uncertainty)
+
+    def test_build_context_completeness_uses_malformed_kubernetes_drift_warnings(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "services": [
+                        {
+                            "id": "Deployment/payments/api",
+                            "resource_keys": ["Deployment/payments/api"],
+                            "downstream": [],
+                        }
+                    ]
+                },
+                warnings=[],
+                drift=SimpleNamespace(
+                    status="unavailable",
+                    warnings=[
+                        "Kubernetes live-state import partially parsed one or more objects; malformed entries were skipped."
+                    ],
+                ),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 1.0)
+        self.assertEqual(context.confidence_level, "medium")
+        self.assertIn("Kubernetes live-state", context.uncertainty)
+
+    def test_build_context_completeness_does_not_degrade_for_unsupported_kind_skips(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "metadata": {
+                        "import": {
+                            "source_type": "kubernetes",
+                            "source_ref": "context:prod",
+                        }
+                    },
+                    "services": [
+                        {
+                            "id": "Deployment/payments/api",
+                            "resource_keys": ["Deployment/payments/api"],
+                            "downstream": [],
+                        }
+                    ],
+                },
+                warnings=[
+                    "Kubernetes live-state import skipped unsupported or duplicate objects while preserving supported context."
+                ],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertEqual(context.context_score, 1.0)
+        self.assertEqual(context.confidence_level, "high")
+        self.assertIsNone(context.uncertainty)
+
+    def test_build_context_completeness_treats_namespace_only_kubernetes_context_as_unusable(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="namespace.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "services": [
+                        {
+                            "id": "Namespace/payments",
+                            "resource_keys": ["Namespace/payments"],
+                            "downstream": [],
+                        }
+                    ]
+                },
+                warnings=[
+                    "Kubernetes live-state context TODO: all-namespaces access is unavailable for 'context:prod' resource 'deployments'."
+                ],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 0.7)
+        self.assertEqual(context.confidence_level, "low")
+        self.assertTrue(context.insufficient_context)
+        self.assertIn(
+            "Resolve Kubernetes live-state context TODOs before relying on topology context.",
+            context.context_todos,
+        )
+
+    def test_build_context_completeness_treats_namespace_only_kubernetes_context_without_todos_as_unusable(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="namespace.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "metadata": {
+                        "import": {
+                            "source_type": "kubernetes",
+                            "source_ref": "context:prod",
+                        }
+                    },
+                    "services": [
+                        {
+                            "id": "Namespace/payments",
+                            "resource_keys": ["Namespace/payments"],
+                            "downstream": [],
+                        }
+                    ],
+                },
+                warnings=[],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 0.7)
+        self.assertEqual(context.confidence_level, "low")
+        self.assertTrue(context.insufficient_context)
+
     def test_build_context_completeness_counts_distinct_evidence_coverage(
         self,
     ) -> None:
@@ -1195,7 +1503,10 @@ class AnalysisServiceTests(unittest.TestCase):
         inferred = artifacts.findings[1]
         self.assertFalse(inferred.deterministic)
         self.assertAlmostEqual(inferred.confidence, 0.73)
-        self.assertGreater(artifacts.assessment.context_completeness.context_score, 0.7)
+        self.assertGreaterEqual(
+            artifacts.assessment.context_completeness.context_score,
+            0.7,
+        )
 
     def test_build_analysis_artifacts_reduces_context_score_for_stale_topology(
         self,
