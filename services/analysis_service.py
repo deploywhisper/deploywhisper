@@ -345,6 +345,18 @@ def _incident_score(incident_index_size: int) -> float:
     return min(incident_index_size / 10, 1.0)
 
 
+def _unique_texts(values: list[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = str(value or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(normalized)
+    return unique
+
+
 def _context_confidence_level(context_score: float) -> str:
     if context_score >= 0.85:
         return "high"
@@ -357,6 +369,7 @@ def _context_todos(
     *,
     evidence_success_rate: float,
     topology_freshness_days: int | None,
+    topology_warnings: list[str] | None = None,
     incident_index_size: int,
     parser_success_rate: float,
     include_topology_context: bool = True,
@@ -370,6 +383,10 @@ def _context_todos(
             )
         elif topology_freshness_days > STALE_AFTER_DAYS:
             todos.append("Refresh stale topology context for this project/workspace.")
+        if _has_kubernetes_live_state_todo(topology_warnings):
+            todos.append(
+                "Resolve Kubernetes live-state context TODOs before relying on topology context."
+            )
     if include_incident_context and incident_index_size == 0:
         todos.append("Import relevant incident history for this project/workspace.")
     if parser_success_rate < 1.0:
@@ -384,32 +401,101 @@ def _context_uncertainty(
     context_score: float,
     evidence_success_rate: float,
     topology_freshness_days: int | None,
+    topology_warnings: list[str] | None = None,
     incident_index_size: int,
     parser_success_rate: float,
     include_topology_context: bool = True,
     include_incident_context: bool = True,
 ) -> str | None:
-    if context_score < 0.7:
-        return (
-            "Insufficient context: missing parser coverage, evidence coverage, "
-            "or enabled project context prevents a confident "
-            "low-risk verdict."
-        )
     weak_signals: list[str] = []
     if include_topology_context:
         if topology_freshness_days is None:
             weak_signals.append("topology context is unavailable")
         elif topology_freshness_days > STALE_AFTER_DAYS:
             weak_signals.append("topology context is stale")
+        if _has_kubernetes_live_state_todo(topology_warnings):
+            weak_signals.append("Kubernetes live-state context has unresolved TODOs")
+        elif _has_kubernetes_live_state_degradation(topology_warnings):
+            weak_signals.append("Kubernetes live-state context is degraded")
     if include_incident_context and incident_index_size == 0:
         weak_signals.append("incident history is unavailable")
     if parser_success_rate < 1.0:
         weak_signals.append("parser coverage is partial")
     if evidence_success_rate < 1.0:
         weak_signals.append("evidence coverage is partial")
+    if context_score < 0.7:
+        message = (
+            "Insufficient context: missing parser coverage, evidence coverage, "
+            "or enabled project context prevents a confident low-risk verdict."
+        )
+        if weak_signals:
+            message += " Weak signals: " + "; ".join(weak_signals) + "."
+        return message
     if not weak_signals:
         return None
     return "Uncertainty: " + "; ".join(weak_signals) + "."
+
+
+def _has_kubernetes_live_state_todo(warnings: list[str] | None) -> bool:
+    return any(
+        "kubernetes live-state context todo" in str(warning).lower()
+        for warning in warnings or []
+    )
+
+
+def _has_kubernetes_live_state_degradation(warnings: list[str] | None) -> bool:
+    degradation_markers = (
+        "kubernetes live-state context todo",
+        "kubernetes live-state import partially parsed",
+        "kubernetes live-state import did not produce any supported resources",
+        "kubernetes live-state import did not produce any non-namespace resources",
+    )
+    return any(
+        any(marker in str(warning).lower() for marker in degradation_markers)
+        for warning in warnings or []
+    )
+
+
+def _is_kubernetes_topology_payload(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    metadata = payload.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return False
+    import_metadata = metadata.get("import", {})
+    if not isinstance(import_metadata, dict):
+        return False
+    return str(import_metadata.get("source_type") or "").strip() == "kubernetes"
+
+
+def _has_usable_topology_payload(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    services = payload.get("services", [])
+    if not isinstance(services, list):
+        return False
+    for service in services:
+        if not isinstance(service, dict):
+            continue
+        service_id = str(service.get("id") or "").strip()
+        resource_keys = service.get("resource_keys", [])
+        resource_key_texts = (
+            [
+                str(resource_key).strip()
+                for resource_key in resource_keys
+                if str(resource_key).strip()
+            ]
+            if isinstance(resource_keys, list)
+            else []
+        )
+        if service_id and not service_id.startswith("Namespace/"):
+            return True
+        if any(
+            resource_key and not resource_key.startswith("Namespace/")
+            for resource_key in resource_key_texts
+        ):
+            return True
+    return False
 
 
 def _evidence_success_rate(
@@ -458,6 +544,9 @@ def _build_context_completeness(
     include_incident_context: bool = True,
 ) -> ContextCompleteness:
     topology_last_imported_at = None
+    topology_warnings: list[str] = []
+    topology_payload_is_usable = False
+    topology_payload_is_kubernetes = False
     if include_topology_context:
         topology_status = get_topology_status(
             project_id=project_id,
@@ -465,7 +554,23 @@ def _build_context_completeness(
             workspace_id=workspace_id,
             workspace_key=workspace_key,
         )
+        topology_payload = getattr(topology_status, "payload", None)
         topology_last_imported_at = topology_status.updated_at
+        topology_warnings = list(getattr(topology_status, "warnings", []) or [])
+        topology_payload_is_usable = _has_usable_topology_payload(topology_payload)
+        topology_payload_is_kubernetes = _is_kubernetes_topology_payload(
+            topology_payload
+        )
+        topology_drift = getattr(topology_status, "drift", None)
+        topology_drift_warnings = list(getattr(topology_drift, "warnings", []) or [])
+        if getattr(
+            topology_drift, "status", None
+        ) == "unavailable" and _has_kubernetes_live_state_degradation(
+            topology_drift_warnings
+        ):
+            topology_warnings = _unique_texts(
+                topology_warnings + topology_drift_warnings
+            )
     topology_freshness_days = _topology_freshness_days(topology_last_imported_at)
     if not include_incident_context or (project_id is None and project_key is None):
         incident_index_size = 0
@@ -502,7 +607,14 @@ def _build_context_completeness(
         (evidence_success_rate, 0.20),
     ]
     if include_topology_context:
-        weighted_scores.append((_freshness_score(topology_freshness_days), 0.25))
+        topology_score = _freshness_score(topology_freshness_days)
+        if topology_payload_is_kubernetes and not topology_payload_is_usable:
+            topology_score = 0.0
+        if _has_kubernetes_live_state_degradation(topology_warnings):
+            topology_score = (
+                0.0 if not topology_payload_is_usable else min(topology_score, 0.5)
+            )
+        weighted_scores.append((topology_score, 0.25))
     if include_incident_context:
         weighted_scores.append((_incident_score(incident_index_size), 0.20))
     total_weight = sum(weight for _, weight in weighted_scores) or 1.0
@@ -514,6 +626,7 @@ def _build_context_completeness(
     context_todos = _context_todos(
         evidence_success_rate=evidence_success_rate,
         topology_freshness_days=topology_freshness_days,
+        topology_warnings=topology_warnings,
         incident_index_size=incident_index_size,
         parser_success_rate=raw_parser_success_rate,
         include_topology_context=include_topology_context,
@@ -541,6 +654,7 @@ def _build_context_completeness(
             context_score=raw_context_score,
             evidence_success_rate=evidence_success_rate,
             topology_freshness_days=topology_freshness_days,
+            topology_warnings=topology_warnings,
             incident_index_size=incident_index_size,
             parser_success_rate=raw_parser_success_rate,
             include_topology_context=include_topology_context,

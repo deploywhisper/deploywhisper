@@ -527,6 +527,7 @@ Project documentation currently lives in a few places:
 - [Implementation Readiness Report](./_bmad-output/planning-artifacts/implementation-readiness-report-2026-05-01.md)
 - [Project Model Guide](./docs/concepts/project-model.md)
 - [Project Workspaces](./docs/project-workspaces.md)
+- [Kubernetes Live-State Connector](./docs/kubernetes-live-state-connector.md)
 - [Evidence Model Foundation](./docs/evidence-model.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)

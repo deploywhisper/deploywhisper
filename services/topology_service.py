@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import UTC, datetime, timedelta
 from json import JSONDecodeError
 from pathlib import Path
+from time import monotonic
 from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, Field
@@ -25,6 +27,16 @@ from services.settings_service import get_topology_drift_check_interval_hours
 
 STALE_AFTER_DAYS = 30
 TOPOLOGY_DRIFT_ALERT_THRESHOLD_PERCENT = 10.0
+KUBERNETES_LIVE_STATE_TIMEOUT_SECONDS = 10
+KUBERNETES_LIVE_STATE_RESOURCES = (
+    ("namespaces", False),
+    ("services", True),
+    ("deployments", True),
+    ("statefulsets", True),
+    ("daemonsets", True),
+)
+KUBERNETES_WORKLOAD_KINDS = {"Deployment", "StatefulSet", "DaemonSet"}
+KUBERNETES_NAMESPACED_KINDS = {"Service", *KUBERNETES_WORKLOAD_KINDS}
 
 
 class TopologyImportError(ValueError):
@@ -326,6 +338,169 @@ def _drift_setting_key(
     return f"topology_drift_status::{project['id']}::{workspace['id']}"
 
 
+def _source_status_setting_key(
+    project: dict[str, Any], workspace: dict[str, Any] | None = None
+) -> str:
+    if workspace is None:
+        return f"topology_source_status::{project['id']}"
+    return f"topology_source_status::{project['id']}::{workspace['id']}"
+
+
+def _save_topology_source_status(
+    *,
+    project: dict[str, Any],
+    workspace: dict[str, Any] | None,
+    source_type: str,
+    source_ref: str,
+    warnings: list[str],
+    replace_existing: bool = False,
+) -> None:
+    entry = {
+        "source_type": source_type,
+        "source_ref": source_ref,
+        "checked_at": _current_timestamp(),
+        "warnings": _unique_messages(warnings),
+    }
+    entries: list[dict[str, Any]] = []
+    if not replace_existing:
+        existing_payload = _load_topology_source_status(project, workspace)
+        entries = [
+            existing_entry
+            for existing_entry in _source_status_entries(existing_payload)
+            if (
+                str(existing_entry.get("source_type") or "").strip(),
+                str(existing_entry.get("source_ref") or "").strip(),
+            )
+            != (source_type, source_ref)
+        ]
+    entries.append(entry)
+    payload = {**entry, "entries": entries}
+    with SessionLocal() as session:
+        upsert_setting(
+            session,
+            key=_source_status_setting_key(project, workspace),
+            value=json.dumps(payload),
+        )
+
+
+def _load_topology_source_status(
+    project: dict[str, Any], workspace: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    with SessionLocal() as session:
+        record = get_setting(session, _source_status_setting_key(project, workspace))
+    if record is None:
+        return None
+    try:
+        payload = json.loads(record.value)
+    except JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _source_status_entries(
+    source_status: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if source_status is None:
+        return []
+    entries = source_status.get("entries")
+    if not isinstance(entries, list):
+        entries = [source_status]
+    normalized_entries = []
+    for entry in entries:
+        if isinstance(entry, dict):
+            normalized_entries.append(entry)
+    return normalized_entries
+
+
+def _source_status_matches_payload(
+    source_status: dict[str, Any] | None, payload: dict[str, Any] | None
+) -> bool:
+    if source_status is None or payload is None:
+        return False
+    import_metadata = _import_metadata(payload)
+    source_type = str(source_status.get("source_type") or "").strip()
+    active_source_type = str(import_metadata.get("source_type") or "").strip()
+    if source_type != active_source_type:
+        checked_at = _parse_iso_datetime(str(source_status.get("checked_at") or ""))
+        active_updated_at = _parse_iso_datetime(str(payload.get("updated_at") or ""))
+        return (
+            checked_at is not None
+            and active_updated_at is not None
+            and checked_at >= active_updated_at
+        )
+    source_ref = str(source_status.get("source_ref") or "").strip()
+    active_source_ref = str(import_metadata.get("source_ref") or "").strip()
+    requested_source_ref = str(
+        import_metadata.get("requested_source_ref") or ""
+    ).strip()
+    if (
+        source_type == "kubernetes"
+        and active_source_type == "kubernetes"
+        and source_ref == "current-context"
+        and requested_source_ref == "current-context"
+    ):
+        return True
+    return source_ref == active_source_ref
+
+
+def _has_kubernetes_live_state_todo_warnings(warnings: list[str] | None) -> bool:
+    return any(
+        "kubernetes live-state context todo" in str(warning).lower()
+        for warning in warnings or []
+    )
+
+
+def _has_kubernetes_live_state_degradation_warnings(
+    warnings: list[str] | None,
+) -> bool:
+    degradation_markers = (
+        "kubernetes live-state context todo",
+        "kubernetes live-state import partially parsed",
+        "kubernetes live-state import did not produce any supported resources",
+        "kubernetes live-state import did not produce any non-namespace resources",
+    )
+    return any(
+        any(marker in str(warning).lower() for marker in degradation_markers)
+        for warning in warnings or []
+    )
+
+
+def _source_status_warnings(source_status: dict[str, Any] | None) -> list[str]:
+    if source_status is None:
+        return []
+    warnings: list[str] = []
+    for entry in _source_status_entries(source_status):
+        entry_warnings = entry.get("warnings", [])
+        if isinstance(entry_warnings, list):
+            warnings.extend(str(item) for item in entry_warnings)
+    return _unique_messages(warnings)
+
+
+def _load_topology_source_status_warnings(
+    project: dict[str, Any],
+    workspace: dict[str, Any] | None = None,
+    *,
+    active_payload: dict[str, Any] | None = None,
+    require_active_match: bool = False,
+) -> list[str]:
+    source_status = _load_topology_source_status(project, workspace)
+    entries = _source_status_entries(source_status)
+    if require_active_match:
+        entries = [
+            entry
+            for entry in entries
+            if _source_status_matches_payload(entry, active_payload)
+        ]
+    warnings: list[str] = []
+    for entry in entries:
+        entry_warnings = entry.get("warnings", [])
+        if isinstance(entry_warnings, list):
+            warnings.extend(str(item) for item in entry_warnings)
+    return _unique_messages(warnings)
+
+
 def _parse_iso_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -361,6 +536,18 @@ def _load_cached_topology_drift(
     if not isinstance(payload, dict):
         return None
     return TopologyDriftStatus(**payload)
+
+
+def _cached_drift_matches_source(
+    cached_status: TopologyDriftStatus | None,
+    source_type: str | None,
+    source_ref: str | None,
+) -> bool:
+    if cached_status is None or not source_type or not source_ref:
+        return False
+    cached_source_type = str(cached_status.source_type or "").strip()
+    cached_source_ref = str(cached_status.source_ref or "").strip()
+    return cached_source_type == source_type and cached_source_ref == source_ref
 
 
 def _save_topology_drift(
@@ -433,10 +620,29 @@ def _build_drift_status(
 
 
 def run_due_topology_drift_checks() -> list[TopologyDriftStatus]:
-    """Run due topology drift checks for every known project."""
+    """Run due topology drift checks for every known project/workspace scope."""
     drift_statuses: list[TopologyDriftStatus] = []
-    for project in list_projects():
-        drift_statuses.append(check_topology_drift(project_id=project.id))
+    project_ids = {project.id for project in list_projects()}
+    topology_scopes: set[tuple[int, int | None]] = {
+        (project_id, None) for project_id in project_ids
+    }
+    with SessionLocal() as session:
+        rows = (
+            session.query(TopologyVersion.project_id, TopologyVersion.workspace_id)
+            .distinct()
+            .all()
+        )
+    for project_id, workspace_id in rows:
+        if project_id not in project_ids:
+            continue
+        topology_scopes.add((project_id, workspace_id))
+    for project_id, workspace_id in sorted(
+        topology_scopes,
+        key=lambda scope: (scope[0], -1 if scope[1] is None else scope[1]),
+    ):
+        drift_statuses.append(
+            check_topology_drift(project_id=project_id, workspace_id=workspace_id)
+        )
     return drift_statuses
 
 
@@ -812,6 +1018,636 @@ def _terraform_state_dependency_refs(instances: list[Any]) -> list[str]:
             if dependency_ref:
                 dependencies.append(dependency_ref)
     return sorted(set(dependencies))
+
+
+def _kubernetes_live_state_unavailable_change_set(
+    source_ref: str, message: str, warnings: list[str] | None = None
+) -> TopologyChangeSet:
+    normalized_warnings = _unique_messages(warnings or [message])
+    return TopologyChangeSet(
+        operation="noop",
+        warnings=normalized_warnings,
+        unsupported_resources=[
+            TopologyImportResource(
+                resource_ref=source_ref,
+                message=message,
+            )
+        ],
+    )
+
+
+def _kubernetes_source_ref_error(source_ref: str) -> str | None:
+    normalized = str(source_ref or "").strip()
+    if normalized == "current-context":
+        return None
+    if (
+        normalized.startswith("context:")
+        and normalized.removeprefix("context:").strip()
+    ):
+        return None
+    return (
+        "Kubernetes live-state context TODO: source must be 'current-context' "
+        "or 'context:<name>'; no topology changes were applied."
+    )
+
+
+def _kubernetes_context_from_source_ref(source_ref: str) -> str | None:
+    normalized = str(source_ref or "").strip()
+    if normalized == "current-context":
+        return None
+    return normalized.removeprefix("context:").strip()
+
+
+def _resolve_kubernetes_import_source_ref(
+    source_ref: str,
+    *,
+    deadline: float | None = None,
+) -> tuple[str, list[str]]:
+    normalized = str(source_ref or "").strip()
+    if normalized != "current-context":
+        return source_ref, []
+
+    remaining_seconds = (
+        KUBERNETES_LIVE_STATE_TIMEOUT_SECONDS
+        if deadline is None
+        else deadline - monotonic()
+    )
+    if remaining_seconds <= 0:
+        return (
+            normalized,
+            [
+                "Kubernetes live-state context TODO: resolving the current Kubernetes "
+                f"context timed out after {KUBERNETES_LIVE_STATE_TIMEOUT_SECONDS} seconds; "
+                "no topology changes were applied."
+            ],
+        )
+    try:
+        completed = subprocess.run(
+            ["kubectl", "config", "current-context"],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=remaining_seconds,
+        )
+    except FileNotFoundError:
+        return normalized, [_kubernetes_context_todo_message(normalized)]
+    except OSError:
+        return (
+            normalized,
+            [
+                "Kubernetes live-state context TODO: kubectl could not be executed; "
+                "no topology changes were applied."
+            ],
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            normalized,
+            [
+                "Kubernetes live-state context TODO: resolving the current Kubernetes "
+                f"context timed out after {KUBERNETES_LIVE_STATE_TIMEOUT_SECONDS} seconds; "
+                "no topology changes were applied."
+            ],
+        )
+    except UnicodeDecodeError:
+        return (
+            normalized,
+            [
+                "Kubernetes live-state context TODO: kubectl current-context output "
+                "was not valid UTF-8; no topology changes were applied."
+            ],
+        )
+    except subprocess.CalledProcessError:
+        return (
+            normalized,
+            [
+                "Kubernetes live-state context TODO: current Kubernetes context could "
+                "not be resolved; no topology changes were applied."
+            ],
+        )
+
+    context_name = completed.stdout.strip()
+    if not context_name:
+        return (
+            normalized,
+            [
+                "Kubernetes live-state context TODO: current Kubernetes context was "
+                "empty; no topology changes were applied."
+            ],
+        )
+    return f"context:{context_name}", []
+
+
+def _kubernetes_resource_access_todo_message(source_ref: str, resource: str) -> str:
+    return (
+        "Kubernetes live-state context TODO: cluster access is unavailable for "
+        f"'{source_ref}' resource '{resource}'; that resource kind was skipped."
+    )
+
+
+def _is_kubernetes_authorization_failure(
+    exc: subprocess.CalledProcessError,
+) -> bool:
+    stderr = exc.stderr
+    if isinstance(stderr, bytes):
+        stderr_text = stderr.decode("utf-8", errors="replace")
+    else:
+        stderr_text = str(stderr or "")
+    normalized = stderr_text.lower()
+    return any(
+        marker in normalized
+        for marker in (
+            "forbidden",
+            "cannot list",
+            "permission denied",
+            "unauthorized",
+        )
+    )
+
+
+def _kubernetes_get_args(
+    base_args: list[str],
+    resource: str,
+    *,
+    all_namespaces: bool,
+    namespace: str | None = None,
+) -> list[str]:
+    args = [*base_args, "get", resource]
+    if namespace:
+        args.extend(["-n", namespace])
+    elif all_namespaces:
+        args.append("-A")
+    args.extend(["-o", "json"])
+    return args
+
+
+def _kubernetes_namespace_names(items: list[Any]) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = str(_kubernetes_metadata(item).get("name") or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+    return names
+
+
+def _read_kubernetes_live_state(
+    source_ref: str,
+    *,
+    deadline: float | None = None,
+) -> tuple[str | None, list[str]]:
+    source_ref_error = _kubernetes_source_ref_error(source_ref)
+    if source_ref_error:
+        return None, [source_ref_error]
+
+    base_args = ["kubectl"]
+    context_name = _kubernetes_context_from_source_ref(source_ref)
+    if context_name:
+        base_args.extend(["--context", context_name])
+
+    items: list[Any] = []
+    warnings: list[str] = []
+    successful_reads = 0
+    namespace_names: list[str] = []
+    if deadline is None:
+        deadline = monotonic() + KUBERNETES_LIVE_STATE_TIMEOUT_SECONDS
+    for resource, is_namespaced in KUBERNETES_LIVE_STATE_RESOURCES:
+        attempts: list[tuple[bool, str | None]] = (
+            [(True, None)] if is_namespaced else [(False, None)]
+        )
+        attempt_index = 0
+        while attempt_index < len(attempts):
+            all_namespaces, namespace = attempts[attempt_index]
+            attempt_index += 1
+            remaining_seconds = deadline - monotonic()
+            if remaining_seconds <= 0:
+                warnings.append(
+                    "Kubernetes live-state context TODO: cluster access timed out after "
+                    f"{KUBERNETES_LIVE_STATE_TIMEOUT_SECONDS} seconds for '{source_ref}' "
+                    f"before reading resource '{resource}'; that resource kind was skipped."
+                )
+                break
+            args = _kubernetes_get_args(
+                base_args,
+                resource,
+                all_namespaces=all_namespaces,
+                namespace=namespace,
+            )
+            try:
+                completed = subprocess.run(
+                    args,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=remaining_seconds,
+                )
+            except FileNotFoundError:
+                if successful_reads > 0:
+                    warnings.append(
+                        "Kubernetes live-state context TODO: kubectl could not be "
+                        f"executed while reading resource '{resource}'; that resource "
+                        "kind was skipped."
+                    )
+                    return json.dumps({"items": items}), _unique_messages(warnings)
+                return None, [_kubernetes_context_todo_message(source_ref)]
+            except OSError:
+                if successful_reads > 0:
+                    warnings.append(
+                        "Kubernetes live-state context TODO: kubectl could not be "
+                        f"executed while reading resource '{resource}'; that resource "
+                        "kind was skipped."
+                    )
+                    return json.dumps({"items": items}), _unique_messages(warnings)
+                return (
+                    None,
+                    [
+                        "Kubernetes live-state context TODO: kubectl could not be executed; "
+                        "no topology changes were applied."
+                    ],
+                )
+            except subprocess.TimeoutExpired:
+                warnings.append(
+                    "Kubernetes live-state context TODO: cluster access timed out after "
+                    f"{KUBERNETES_LIVE_STATE_TIMEOUT_SECONDS} seconds for '{source_ref}' "
+                    f"resource '{resource}'; that resource kind was skipped."
+                )
+                break
+            except UnicodeDecodeError:
+                warnings.append(
+                    "Kubernetes live-state context TODO: kubectl output was not valid UTF-8 "
+                    f"for resource '{resource}'; that resource kind was skipped."
+                )
+                break
+            except subprocess.CalledProcessError as exc:
+                if all_namespaces and is_namespaced:
+                    if not _is_kubernetes_authorization_failure(exc):
+                        warnings.append(
+                            _kubernetes_resource_access_todo_message(
+                                source_ref, resource
+                            )
+                        )
+                        break
+                    warnings.append(
+                        "Kubernetes live-state context TODO: all-namespaces access is "
+                        f"unavailable for '{source_ref}' resource '{resource}'."
+                    )
+                    if namespace_names:
+                        attempts.extend((False, name) for name in namespace_names)
+                    else:
+                        warnings.append(
+                            "Kubernetes live-state context TODO: namespace-scoped "
+                            f"fallback is unavailable for '{source_ref}' resource "
+                            f"'{resource}' because no readable namespaces were found; "
+                            "that resource kind was skipped."
+                        )
+                    continue
+                if namespace:
+                    warnings.append(
+                        "Kubernetes live-state context TODO: namespace-scoped access "
+                        f"is unavailable for '{source_ref}' resource '{resource}' "
+                        f"in namespace '{namespace}'; that namespace was skipped."
+                    )
+                    continue
+                warnings.append(
+                    _kubernetes_resource_access_todo_message(source_ref, resource)
+                )
+                break
+
+            try:
+                payload = json.loads(completed.stdout)
+            except JSONDecodeError:
+                warnings.append(
+                    "Kubernetes live-state context TODO: kubectl returned invalid JSON "
+                    f"for resource '{resource}'; that resource kind was skipped."
+                )
+                break
+            if not isinstance(payload, dict):
+                warnings.append(
+                    "Kubernetes live-state context TODO: kubectl output was not a JSON "
+                    f"object for resource '{resource}'; that resource kind was skipped."
+                )
+                break
+            resource_items = payload.get("items", [])
+            if not isinstance(resource_items, list):
+                warnings.append(
+                    "Kubernetes live-state context TODO: kubectl output did not include "
+                    f"an items list for resource '{resource}'; that resource kind was skipped."
+                )
+                break
+            successful_reads += 1
+            if resource == "namespaces":
+                namespace_names = _kubernetes_namespace_names(resource_items)
+            items.extend(resource_items)
+
+    if successful_reads == 0:
+        return None, warnings or [_kubernetes_context_todo_message(source_ref)]
+    return json.dumps({"items": items}), _unique_messages(warnings)
+
+
+def _kubernetes_context_todo_message(source_ref: str) -> str:
+    return (
+        "Kubernetes live-state context TODO: cluster access is unavailable for "
+        f"'{source_ref}'; no topology changes were applied."
+    )
+
+
+def _kubernetes_metadata(item: dict[str, Any]) -> dict[str, Any]:
+    metadata = item.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return {}
+    return metadata
+
+
+def _kubernetes_resource_ref(kind: str, namespace: str, name: str) -> str:
+    if kind == "Namespace":
+        return f"Namespace/{name}"
+    if namespace:
+        return f"{kind}/{namespace}/{name}"
+    return f"{kind}/{name}"
+
+
+def _kubernetes_short_resource_ref(kind: str, name: str) -> str:
+    return f"{kind}/{name}"
+
+
+def _kubernetes_selector_key(namespace: str, selector: dict[str, str]) -> str:
+    selector_text = ",".join(f"{key}={selector[key]}" for key in sorted(selector))
+    if namespace:
+        return f"selector:{namespace}:{selector_text}"
+    return f"selector:{selector_text}"
+
+
+def _kubernetes_string_map(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    mapped: dict[str, str] = {}
+    for key, raw_value in value.items():
+        key_text = str(key or "").strip()
+        value_text = str(raw_value or "").strip()
+        if key_text and value_text:
+            mapped[key_text] = value_text
+    return mapped
+
+
+def _kubernetes_workload_labels(item: dict[str, Any]) -> dict[str, str]:
+    spec = item.get("spec", {})
+    if not isinstance(spec, dict):
+        return {}
+    template = spec.get("template", {})
+    if not isinstance(template, dict):
+        return {}
+    metadata = template.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return {}
+    return _kubernetes_string_map(metadata.get("labels", {}))
+
+
+def _kubernetes_selector(item: dict[str, Any], kind: str) -> dict[str, str]:
+    spec = item.get("spec", {})
+    if not isinstance(spec, dict):
+        return {}
+    selector = spec.get("selector", {})
+    if kind == "Service":
+        return _kubernetes_string_map(selector)
+    if not isinstance(selector, dict):
+        return {}
+    return _kubernetes_string_map(selector.get("matchLabels", {}))
+
+
+def _kubernetes_selector_matches(
+    selector: dict[str, str], labels: dict[str, str]
+) -> bool:
+    if not selector:
+        return False
+    return all(labels.get(key) == value for key, value in selector.items())
+
+
+def _parse_kubernetes_live_state_source(
+    source_ref: str,
+    *,
+    deadline: float | None = None,
+) -> TopologyChangeSet:
+    raw_text, read_warnings = _read_kubernetes_live_state(
+        source_ref,
+        deadline=deadline,
+    )
+    if raw_text is None:
+        warnings = read_warnings or [_kubernetes_context_todo_message(source_ref)]
+        return _kubernetes_live_state_unavailable_change_set(
+            source_ref,
+            warnings[0],
+            warnings,
+        )
+    try:
+        payload = json.loads(raw_text)
+    except JSONDecodeError:
+        return _kubernetes_live_state_unavailable_change_set(
+            source_ref,
+            "Kubernetes live-state context TODO: kubectl returned invalid JSON; no topology changes were applied.",
+        )
+    if not isinstance(payload, dict):
+        return _kubernetes_live_state_unavailable_change_set(
+            source_ref,
+            "Kubernetes live-state context TODO: kubectl output was not a JSON object; no topology changes were applied.",
+        )
+    items = payload.get("items", [])
+    if not isinstance(items, list):
+        return _kubernetes_live_state_unavailable_change_set(
+            source_ref,
+            "Kubernetes live-state context TODO: kubectl output did not include an items list; no topology changes were applied.",
+        )
+
+    services_by_id: dict[str, dict[str, Any]] = {}
+    accepted_resources: list[TopologyImportResource] = []
+    partially_parsed_resources: list[TopologyImportResource] = []
+    skipped_resources: list[TopologyImportResource] = []
+    workloads: list[dict[str, Any]] = []
+    cluster_services: list[dict[str, Any]] = []
+
+    for index, item in enumerate(items, start=1):
+        item_ref = f"items[{index}]"
+        if not isinstance(item, dict):
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=item_ref,
+                    message="Kubernetes live-state item was not a JSON object and was ignored.",
+                )
+            )
+            continue
+        kind = str(item.get("kind") or "").strip()
+        metadata = _kubernetes_metadata(item)
+        name = str(metadata.get("name") or "").strip()
+        namespace = str(metadata.get("namespace") or "").strip()
+        if not kind or not name:
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=item_ref,
+                    message="Kubernetes live-state item is missing kind/name identity and was ignored.",
+                )
+            )
+            continue
+        if kind in KUBERNETES_NAMESPACED_KINDS and not namespace:
+            partially_parsed_resources.append(
+                TopologyImportResource(
+                    resource_ref=_kubernetes_resource_ref(kind, "", name),
+                    message=(
+                        "Kubernetes live-state namespaced object is missing "
+                        "metadata.namespace and was ignored."
+                    ),
+                )
+            )
+            continue
+        if kind not in {"Namespace", "Service", *KUBERNETES_WORKLOAD_KINDS}:
+            skipped_resources.append(
+                TopologyImportResource(
+                    resource_ref=_kubernetes_resource_ref(kind, namespace, name),
+                    message="Kubernetes object kind was skipped because it is not mapped by this connector.",
+                )
+            )
+            continue
+
+        resource_ref = _kubernetes_resource_ref(kind, namespace, name)
+        if resource_ref in services_by_id:
+            skipped_resources.append(
+                TopologyImportResource(
+                    resource_ref=resource_ref,
+                    service_id=resource_ref,
+                    message="Duplicate Kubernetes live-state object was skipped.",
+                )
+            )
+            continue
+
+        resource_keys = [resource_ref]
+        if kind == "Namespace":
+            resource_keys.append(_kubernetes_short_resource_ref(kind, name))
+        api_version = str(item.get("apiVersion") or "").strip()
+        if api_version:
+            resource_keys.append(f"{api_version}/{resource_ref}")
+        selector = _kubernetes_selector(item, kind)
+        if selector:
+            resource_keys.append(_kubernetes_selector_key(namespace, selector))
+
+        seen_keys: set[str] = set()
+        unique_keys: list[str] = []
+        for resource_key in resource_keys:
+            if resource_key in seen_keys:
+                continue
+            seen_keys.add(resource_key)
+            unique_keys.append(resource_key)
+
+        services_by_id[resource_ref] = {
+            "id": resource_ref,
+            "label": resource_ref,
+            "resource_keys": unique_keys,
+            "downstream": [],
+        }
+        accepted_resources.append(
+            TopologyImportResource(
+                resource_ref=resource_ref,
+                service_id=resource_ref,
+                message="Kubernetes live-state object was mapped into the topology graph.",
+            )
+        )
+        if kind in KUBERNETES_WORKLOAD_KINDS:
+            workloads.append(
+                {
+                    "service_id": resource_ref,
+                    "namespace": namespace,
+                    "labels": _kubernetes_workload_labels(item),
+                }
+            )
+        elif kind == "Service":
+            cluster_services.append(
+                {
+                    "service_id": resource_ref,
+                    "namespace": namespace,
+                    "selector": selector,
+                }
+            )
+
+    for service_id, service in services_by_id.items():
+        if service_id.startswith("Namespace/"):
+            namespace = service_id.removeprefix("Namespace/")
+            service["downstream"].extend(
+                target_id
+                for target_id in services_by_id
+                if target_id != service_id
+                and target_id.split("/", maxsplit=2)[1] == namespace
+            )
+
+    for cluster_service in cluster_services:
+        selector = cluster_service["selector"]
+        if not selector:
+            continue
+        for workload in workloads:
+            if cluster_service["namespace"] != workload["namespace"]:
+                continue
+            if _kubernetes_selector_matches(selector, workload["labels"]):
+                services_by_id[workload["service_id"]]["downstream"].append(
+                    cluster_service["service_id"]
+                )
+
+    normalized_services = []
+    for service_id in sorted(services_by_id):
+        service = dict(services_by_id[service_id])
+        service["downstream"] = sorted(set(service["downstream"]))
+        normalized_services.append(service)
+
+    warnings: list[str] = list(read_warnings)
+    if partially_parsed_resources:
+        warnings.append(
+            "Kubernetes live-state import partially parsed one or more objects; malformed entries were skipped."
+        )
+    if skipped_resources:
+        warnings.append(
+            "Kubernetes live-state import skipped unsupported or duplicate objects while preserving supported context."
+        )
+    if not accepted_resources:
+        warnings.append(
+            "Kubernetes live-state import did not produce any supported resources to apply."
+        )
+        if not items and not read_warnings:
+            return TopologyChangeSet(
+                operation="replace",
+                services=[],
+                warnings=warnings,
+                skipped_resources=skipped_resources,
+                partially_parsed_resources=partially_parsed_resources,
+            )
+        return TopologyChangeSet(
+            operation="noop",
+            warnings=warnings,
+            skipped_resources=skipped_resources,
+            partially_parsed_resources=partially_parsed_resources,
+        )
+
+    if not any(
+        not item.resource_ref.startswith("Namespace/") for item in accepted_resources
+    ):
+        warnings.append(
+            "Kubernetes live-state import did not produce any non-namespace resources to apply."
+        )
+        return TopologyChangeSet(
+            operation="noop",
+            warnings=warnings,
+            accepted_resources=accepted_resources,
+            skipped_resources=skipped_resources,
+            partially_parsed_resources=partially_parsed_resources,
+        )
+
+    return TopologyChangeSet(
+        operation="replace",
+        services=normalized_services,
+        warnings=warnings,
+        accepted_resources=accepted_resources,
+        skipped_resources=skipped_resources,
+        partially_parsed_resources=partially_parsed_resources,
+    )
 
 
 def _terraform_state_staleness_warning(path: Path) -> str | None:
@@ -1195,7 +2031,7 @@ TOPOLOGY_SOURCE_REGISTRY: dict[str, TopologySourceHandler] = {
     "custom": _parse_custom_source,
     "terraform": _parse_terraform_state_source,
     "cloudformation": _build_unimplemented_source_handler("cloudformation"),
-    "kubernetes": _build_unimplemented_source_handler("kubernetes"),
+    "kubernetes": _parse_kubernetes_live_state_source,
     "ansible": _build_unimplemented_source_handler("ansible"),
 }
 
@@ -1234,29 +2070,31 @@ def _build_payload_from_change_set(
     change_set: TopologyChangeSet,
     source_type: str,
     source_ref: str,
+    requested_source_ref: str | None = None,
 ) -> dict[str, Any]:
+    import_metadata: dict[str, Any] = {
+        "source_type": source_type,
+        "source_ref": source_ref,
+        "warnings": change_set.warnings,
+        "accepted_resources": [
+            item.model_dump() for item in change_set.accepted_resources
+        ],
+        "skipped_resources": [
+            item.model_dump() for item in change_set.skipped_resources
+        ],
+        "partially_parsed_resources": [
+            item.model_dump() for item in change_set.partially_parsed_resources
+        ],
+        "unsupported_resources": [
+            item.model_dump() for item in change_set.unsupported_resources
+        ],
+    }
+    if requested_source_ref:
+        import_metadata["requested_source_ref"] = requested_source_ref
     return {
         "updated_at": _current_timestamp(),
         "services": change_set.services,
-        "metadata": {
-            "import": {
-                "source_type": source_type,
-                "source_ref": source_ref,
-                "warnings": change_set.warnings,
-                "accepted_resources": [
-                    item.model_dump() for item in change_set.accepted_resources
-                ],
-                "skipped_resources": [
-                    item.model_dump() for item in change_set.skipped_resources
-                ],
-                "partially_parsed_resources": [
-                    item.model_dump() for item in change_set.partially_parsed_resources
-                ],
-                "unsupported_resources": [
-                    item.model_dump() for item in change_set.unsupported_resources
-                ],
-            }
-        },
+        "metadata": {"import": import_metadata},
     }
 
 
@@ -1304,10 +2142,7 @@ def _persist_topology_payload(
             )
         )
         session.commit()
-    return get_topology_status(
-        project_id=int(project["id"]),
-        workspace_id=int(workspace["id"]) if workspace is not None else None,
-    )
+    return _build_topology_status(payload, path=topology_path, exists=True)
 
 
 def _canonical_service(service: dict[str, Any]) -> dict[str, Any]:
@@ -1423,7 +2258,11 @@ def check_topology_drift(
     source_ref = str(import_metadata.get("source_ref") or "").strip() or None
     cached_status = _load_cached_topology_drift(project, workspace)
 
-    if not force and not _is_drift_check_due(cached_status, interval_hours):
+    if (
+        not force
+        and _cached_drift_matches_source(cached_status, source_type, source_ref)
+        and not _is_drift_check_due(cached_status, interval_hours)
+    ):
         return cached_status or _build_drift_status(
             status="unavailable",
             interval_hours=interval_hours,
@@ -1488,6 +2327,22 @@ def check_topology_drift(
                 source_type=source_type,
                 source_ref=source_ref,
                 warnings=[str(exc)],
+            ),
+            workspace,
+        )
+
+    if source_type == "kubernetes" and (
+        _has_kubernetes_live_state_todo_warnings(change_set.warnings)
+        or bool(change_set.partially_parsed_resources)
+    ):
+        return _save_topology_drift(
+            project,
+            _build_drift_status(
+                status="unavailable",
+                interval_hours=interval_hours,
+                source_type=source_type,
+                source_ref=source_ref,
+                warnings=change_set.warnings,
             ),
             workspace,
         )
@@ -1569,23 +2424,43 @@ def get_topology_status(
         project, workspace
     )
     if status_override is not None and payload is None:
+        status_override.warnings = _unique_messages(
+            list(status_override.warnings)
+            + _load_topology_source_status_warnings(project, workspace)
+        )
         return status_override
     if payload is None:
+        source_status_warnings = _load_topology_source_status_warnings(
+            project, workspace
+        )
         if bool(project.get("is_default")):
             legacy_status = _read_legacy_topology_status()
             if legacy_status is not None:
+                legacy_status.warnings = _unique_messages(
+                    list(legacy_status.warnings) + source_status_warnings
+                )
                 return legacy_status
         return TopologyStatus(
             path=str(topology_path),
             exists=False,
             warnings=[
                 "Blast radius may be incomplete — service topology is not configured."
-            ],
+            ]
+            + source_status_warnings,
         )
     status = _build_topology_status(payload, path=topology_path, exists=True)
     status.drift = check_topology_drift(
         project_id=int(project["id"]),
         workspace_id=int(workspace["id"]) if workspace is not None else None,
+    )
+    status.warnings = _unique_messages(
+        list(status.warnings)
+        + _load_topology_source_status_warnings(
+            project,
+            workspace,
+            active_payload=payload,
+            require_active_match=True,
+        )
     )
     return status
 
@@ -1621,13 +2496,55 @@ def import_topology_source(
         else None
     )
     previous_payload, _, _ = _load_latest_topology_payload(project, workspace)
-    change_set = _lookup_source_handler(normalized_source_type)(source_ref)
+    resolved_source_ref = source_ref
+    source_ref_warnings: list[str] = []
+    kubernetes_deadline: float | None = None
+    if normalized_source_type == "kubernetes":
+        kubernetes_deadline = monotonic() + KUBERNETES_LIVE_STATE_TIMEOUT_SECONDS
+        resolved_source_ref, source_ref_warnings = (
+            _resolve_kubernetes_import_source_ref(
+                source_ref,
+                deadline=kubernetes_deadline,
+            )
+        )
+    if source_ref_warnings:
+        change_set = _kubernetes_live_state_unavailable_change_set(
+            resolved_source_ref,
+            source_ref_warnings[0],
+            source_ref_warnings,
+        )
+    elif normalized_source_type == "kubernetes":
+        change_set = _parse_kubernetes_live_state_source(
+            resolved_source_ref,
+            deadline=kubernetes_deadline,
+        )
+    else:
+        change_set = _lookup_source_handler(normalized_source_type)(resolved_source_ref)
     warnings = list(change_set.warnings)
 
     if change_set.operation == "noop":
+        if normalized_source_type == "kubernetes":
+            _save_topology_source_status(
+                project=project,
+                workspace=workspace,
+                source_type=normalized_source_type,
+                source_ref=resolved_source_ref,
+                warnings=warnings,
+            )
+            _save_topology_drift(
+                project,
+                _build_drift_status(
+                    status="unavailable",
+                    interval_hours=get_topology_drift_check_interval_hours(),
+                    source_type=normalized_source_type,
+                    source_ref=resolved_source_ref,
+                    warnings=warnings,
+                ),
+                workspace,
+            )
         return _build_import_result(
             source_type=normalized_source_type,
-            source_ref=source_ref,
+            source_ref=resolved_source_ref,
             applied=False,
             change_set=change_set,
             before_payload=previous_payload,
@@ -1638,7 +2555,13 @@ def import_topology_source(
     payload = _build_payload_from_change_set(
         change_set=change_set,
         source_type=normalized_source_type,
-        source_ref=source_ref,
+        source_ref=resolved_source_ref,
+        requested_source_ref=(
+            "current-context"
+            if normalized_source_type == "kubernetes"
+            and str(source_ref or "").strip() == "current-context"
+            else None
+        ),
     )
     status = _persist_topology_payload(
         payload,
@@ -1646,10 +2569,46 @@ def import_topology_source(
         workspace=workspace,
         source_type=normalized_source_type,
     )
-    warnings.extend(status.warnings)
+    _save_topology_source_status(
+        project=project,
+        workspace=workspace,
+        source_type=normalized_source_type,
+        source_ref=resolved_source_ref,
+        warnings=[],
+        replace_existing=normalized_source_type != "kubernetes",
+    )
+    _save_topology_drift(
+        project,
+        _build_drift_status(
+            status=(
+                "unavailable"
+                if normalized_source_type == "kubernetes"
+                and _has_kubernetes_live_state_degradation_warnings(warnings)
+                else "up_to_date"
+            ),
+            interval_hours=get_topology_drift_check_interval_hours(),
+            source_type=normalized_source_type,
+            source_ref=resolved_source_ref,
+            total_resource_count=len(_resource_snapshot(status.payload or {})),
+            warnings=warnings,
+        ),
+        workspace,
+    )
+    if (
+        normalized_source_type == "kubernetes"
+        and str(source_ref or "").strip() == "current-context"
+        and resolved_source_ref != "current-context"
+    ):
+        _save_topology_source_status(
+            project=project,
+            workspace=workspace,
+            source_type=normalized_source_type,
+            source_ref="current-context",
+            warnings=[],
+        )
     return _build_import_result(
         source_type=normalized_source_type,
-        source_ref=source_ref,
+        source_ref=resolved_source_ref,
         applied=True,
         change_set=change_set,
         before_payload=previous_payload,
@@ -1694,7 +2653,7 @@ def save_topology_definition(
     change_set = _build_custom_change_set(payload)
 
     try:
-        return _persist_topology_payload(
+        status = _persist_topology_payload(
             _build_payload_from_change_set(
                 change_set=change_set,
                 source_type="manual",
@@ -1704,6 +2663,19 @@ def save_topology_definition(
             workspace=workspace,
             source_type="manual",
         )
+        _save_topology_source_status(
+            project=project,
+            workspace=workspace,
+            source_type="manual",
+            source_ref="inline://manual-topology",
+            warnings=[],
+            replace_existing=True,
+        )
+        status = get_topology_status(
+            project_id=int(project["id"]),
+            workspace_id=int(workspace["id"]) if workspace is not None else None,
+        )
+        return status
     except TopologyImportError as exc:
         raise ValueError(exc.message) from exc
 

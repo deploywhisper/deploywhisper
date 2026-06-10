@@ -100,6 +100,79 @@ class BlastRadiusTests(unittest.TestCase):
 
         self.assertEqual(result.freshness["age_days"], 1)
 
+    def test_compute_blast_radius_prefers_exact_match_over_legacy_alias(
+        self,
+    ) -> None:
+        topology = {
+            "services": [
+                {
+                    "id": "api-payments",
+                    "label": "Payments API",
+                    "resource_keys": ["Deployment/payments/api"],
+                    "downstream": [],
+                },
+                {
+                    "id": "api-legacy",
+                    "label": "Legacy API",
+                    "resource_keys": ["Deployment/api"],
+                    "downstream": [],
+                },
+            ]
+        }
+        changes = [
+            UnifiedChange(
+                source_file="deployment.yaml",
+                tool="kubernetes",
+                resource_id="Deployment/payments/api",
+                action="modify",
+                summary="Deployment changed.",
+                metadata={"resource_aliases": ["Deployment/api"]},
+            )
+        ]
+
+        result = compute_blast_radius(changes, topology)
+
+        self.assertEqual(result.direct_count, 1)
+        self.assertEqual(
+            [node.service_id for node in result.affected], ["api-payments"]
+        )
+
+    def test_compute_blast_radius_ignores_ambiguous_legacy_alias(
+        self,
+    ) -> None:
+        topology = {
+            "services": [
+                {
+                    "id": "api-a",
+                    "label": "API A",
+                    "resource_keys": ["Deployment/api"],
+                    "downstream": [],
+                },
+                {
+                    "id": "api-b",
+                    "label": "API B",
+                    "resource_keys": ["Deployment/api"],
+                    "downstream": [],
+                },
+            ]
+        }
+        changes = [
+            UnifiedChange(
+                source_file="deployment.yaml",
+                tool="kubernetes",
+                resource_id="Deployment/payments/api",
+                action="modify",
+                summary="Deployment changed.",
+                metadata={"resource_aliases": ["Deployment/api"]},
+            )
+        ]
+
+        result = compute_blast_radius(changes, topology)
+
+        self.assertEqual(result.direct_count, 0)
+        self.assertEqual(result.affected, [])
+        self.assertEqual(result.unmatched_resources, ["Deployment/payments/api"])
+
     def test_compute_blast_radius_drops_malformed_owner_values(self) -> None:
         topology = {
             "services": [
