@@ -5,9 +5,15 @@ from __future__ import annotations
 import unittest
 
 from services.intake_service import (
+    EXTERNAL_ARTIFACT_PREFIX,
+    UNSAFE_ARTIFACT_PREFIX,
     build_pending_analysis,
     detect_tool_type,
     is_sensitive_file,
+    normalize_artifact_name,
+    trusted_artifact_path_binding_is_ambiguous,
+    trusted_artifact_path_matches_filename,
+    trusted_relative_artifact_path,
     uniquify_artifact_names,
 )
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
@@ -89,6 +95,129 @@ Outputs:
             ]
         )
         self.assertEqual([name for name, _ in files], ["plan.json", "plan#2.json"])
+
+    def test_uniquify_artifact_names_preserves_safe_relative_paths(self) -> None:
+        files = uniquify_artifact_names(
+            [
+                ("repo/services/payments/plan.json", b"first"),
+                ("repo/services/payments/plan.json", b"second"),
+                ("../repo/./CODEOWNERS", b"owners"),
+                ("repo/../CODEOWNERS", b"root owners"),
+            ]
+        )
+
+        self.assertEqual(
+            [name for name, _ in files],
+            [
+                "repo/services/payments/plan.json",
+                "repo/services/payments/plan#2.json",
+                f"{UNSAFE_ARTIFACT_PREFIX}/repo/CODEOWNERS",
+                f"{UNSAFE_ARTIFACT_PREFIX}/repo/CODEOWNERS#2",
+            ],
+        )
+
+    def test_normalize_artifact_name_removes_unsafe_path_segments(self) -> None:
+        self.assertEqual(
+            normalize_artifact_name("../C:/repo/./services\\plan.json"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/repo/services/plan.json",
+        )
+        self.assertEqual(
+            normalize_artifact_name("repo/../CODEOWNERS"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/repo/CODEOWNERS",
+        )
+        self.assertEqual(
+            normalize_artifact_name(f"{UNSAFE_ARTIFACT_PREFIX}/CODEOWNERS"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/CODEOWNERS",
+        )
+        self.assertEqual(
+            normalize_artifact_name("/Users/alice/repo/.github/CODEOWNERS"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/Users/alice/repo/.github/CODEOWNERS",
+        )
+        self.assertEqual(
+            normalize_artifact_name("C:\\Users\\alice\\repo\\.github\\CODEOWNERS"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/Users/alice/repo/.github/CODEOWNERS",
+        )
+        self.assertEqual(
+            normalize_artifact_name("./C:/Users/alice/repo/.github/CODEOWNERS"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/Users/alice/repo/.github/CODEOWNERS",
+        )
+        self.assertEqual(
+            normalize_artifact_name("C:repo/services/payments/plan.json"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/services/payments/plan.json",
+        )
+        self.assertEqual(
+            normalize_artifact_name("__UNSAFE_PATH__/CODEOWNERS"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/CODEOWNERS",
+        )
+        self.assertEqual(
+            normalize_artifact_name(f"{EXTERNAL_ARTIFACT_PREFIX}/plan.json"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/plan.json",
+        )
+        self.assertEqual(normalize_artifact_name(""), "artifact.bin")
+
+    def test_trusted_relative_artifact_path_canonicalizes_safe_metadata(
+        self,
+    ) -> None:
+        self.assertEqual(
+            trusted_relative_artifact_path("./repo/./services/payments/plan.json"),
+            "repo/services/payments/plan.json",
+        )
+
+    def test_trusted_relative_artifact_path_rejects_host_and_reserved_metadata(
+        self,
+    ) -> None:
+        unsafe_values = [
+            "./C:/Users/alice/repo/.github/CODEOWNERS",
+            "C:repo/services/plan.json",
+            "repo/C:/services/plan.json",
+            f"{UNSAFE_ARTIFACT_PREFIX}/CODEOWNERS",
+            f"{EXTERNAL_ARTIFACT_PREFIX}/plan.json",
+        ]
+
+        self.assertEqual(
+            [trusted_relative_artifact_path(value) for value in unsafe_values],
+            [None, None, None, None, None],
+        )
+
+    def test_trusted_artifact_path_rejects_traversal_filename_leaf_match(
+        self,
+    ) -> None:
+        self.assertFalse(
+            trusted_artifact_path_matches_filename(
+                "services/payments/plan.json",
+                "../payments/plan.json",
+            )
+        )
+
+    def test_duplicate_basename_bindings_require_full_path_filename_proof(
+        self,
+    ) -> None:
+        paths = ["services/payments/plan.json", "services/billing/plan.json"]
+
+        self.assertTrue(
+            trusted_artifact_path_binding_is_ambiguous(
+                paths, ["plan.json", "plan.json"]
+            )
+        )
+        self.assertFalse(trusted_artifact_path_binding_is_ambiguous(paths, paths))
+        self.assertTrue(
+            trusted_artifact_path_binding_is_ambiguous(
+                paths,
+                ["services/billing/plan.json", "services/payments/plan.json"],
+            )
+        )
+        self.assertTrue(
+            trusted_artifact_path_matches_filename(
+                "services/payments/plan.json",
+                "services/payments/plan.json",
+            )
+        )
+        self.assertFalse(
+            trusted_artifact_path_matches_filename(
+                "services/payments/plan.json",
+                "services/billing/plan.json",
+            )
+        )
 
     def test_pending_analysis_preserves_duplicate_file_names_after_uniquifying(
         self,

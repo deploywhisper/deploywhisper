@@ -21,11 +21,16 @@ import services.analysis_service as analysis_service_module
 import services.project_service as project_service_module
 from analysis.incident_matcher import IncidentMatch
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from cli.analyze import main
+from cli.analyze import _load_artifacts, main
 from importlib import reload
 from integrations.github.init_service import GitHubInitOptions, GitHubInitResult
 from llm.narrator import NarrativeResult
-from parsers.base import ParseBatchResult, ParsedFileResult
+from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
+from services.intake_service import EXTERNAL_ARTIFACT_PREFIX
+from services.ownership_service import (
+    build_ownership_context,
+    uploaded_codeowners_sources,
+)
 from services.benchmark_runner_service import BenchmarkRunResult, BenchmarkRunSummary
 from services.skill_installer_service import InstalledSkillEntry, SkillInstallResult
 from services.skill_registry_service import SkillRegistryEntry
@@ -55,6 +60,252 @@ class AnalyzeCliTests(unittest.TestCase):
         os.environ.pop("DATABASE_URL", None)
         os.environ.pop("APP_BASE_URL", None)
         self.tempdir.cleanup()
+
+    def test_load_artifacts_preserves_relative_paths_for_common_parent(self) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        codeowners_path = repo / ".github" / "CODEOWNERS"
+        plan_path = repo / "services" / "payments" / "plan.json"
+        codeowners_path.parent.mkdir(parents=True)
+        plan_path.parent.mkdir(parents=True)
+        codeowners_path.write_text(
+            "/services/payments/ @payments-sre", encoding="utf-8"
+        )
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        artifacts = _load_artifacts([str(codeowners_path), str(plan_path)])
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            [".github/CODEOWNERS", "services/payments/plan.json"],
+        )
+
+    def test_load_artifacts_preserves_mixed_relative_codeowners_absolute_artifact(
+        self,
+    ) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        codeowners_path = repo / ".github" / "CODEOWNERS"
+        plan_path = repo / "services" / "payments" / "plan.json"
+        codeowners_path.parent.mkdir(parents=True)
+        plan_path.parent.mkdir(parents=True)
+        codeowners_path.write_text(
+            "/services/payments/ @payments-sre", encoding="utf-8"
+        )
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        cwd = Path.cwd()
+        try:
+            os.chdir(repo)
+            artifacts = _load_artifacts([".github/CODEOWNERS", str(plan_path)])
+        finally:
+            os.chdir(cwd)
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            [".github/CODEOWNERS", "services/payments/plan.json"],
+        )
+
+    def test_load_artifacts_preserves_mixed_absolute_codeowners_relative_artifact(
+        self,
+    ) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        codeowners_path = repo / ".github" / "CODEOWNERS"
+        plan_path = repo / "services" / "payments" / "plan.json"
+        codeowners_path.parent.mkdir(parents=True)
+        plan_path.parent.mkdir(parents=True)
+        codeowners_path.write_text(
+            "/services/payments/ @payments-sre", encoding="utf-8"
+        )
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        cwd = Path.cwd()
+        try:
+            os.chdir(repo.parent)
+            artifacts = _load_artifacts(
+                [str(codeowners_path), "repo/services/payments/plan.json"]
+            )
+        finally:
+            os.chdir(cwd)
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            [".github/CODEOWNERS", "services/payments/plan.json"],
+        )
+
+    def test_load_artifacts_preserves_single_relative_path(self) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        plan_path = repo / "services" / "payments" / "plan.json"
+        plan_path.parent.mkdir(parents=True)
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        cwd = Path.cwd()
+        try:
+            os.chdir(repo.parent)
+            artifacts = _load_artifacts(["repo/services/payments/plan.json"])
+        finally:
+            os.chdir(cwd)
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            ["repo/services/payments/plan.json"],
+        )
+
+    def test_load_artifacts_uses_basenames_for_unrelated_absolute_paths(self) -> None:
+        first_root = Path(self.tempdir.name) / "repo-a"
+        second_root = Path(self.tempdir.name) / "repo-b"
+        first_path = first_root / "services" / "payments" / "plan.json"
+        second_path = second_root / "services" / "billing" / "plan.json"
+        first_path.parent.mkdir(parents=True)
+        second_path.parent.mkdir(parents=True)
+        first_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        second_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        artifacts = _load_artifacts([str(first_path), str(second_path)])
+
+        self.assertEqual([name for name, _ in artifacts], ["plan.json", "plan#2.json"])
+
+    def test_load_artifacts_marks_out_of_root_absolute_paths_when_codeowners_present(
+        self,
+    ) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        external = Path(self.tempdir.name) / "external"
+        codeowners_path = repo / ".github" / "CODEOWNERS"
+        plan_path = external / "plan.json"
+        codeowners_path.parent.mkdir(parents=True)
+        plan_path.parent.mkdir(parents=True)
+        codeowners_path.write_text("*.json @root-owner", encoding="utf-8")
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        artifacts = _load_artifacts([str(codeowners_path), str(plan_path)])
+        artifact_names = [name for name, _ in artifacts]
+
+        self.assertEqual(
+            artifact_names,
+            [".github/CODEOWNERS", f"{EXTERNAL_ARTIFACT_PREFIX}/plan.json"],
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name=artifact_names[1],
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file=artifact_names[1],
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.external",
+                            action="create",
+                            summary="Terraform creates an external bucket.",
+                        )
+                    ],
+                )
+            ]
+        )
+        context = build_ownership_context(
+            parse_batch,
+            codeowners_sources=uploaded_codeowners_sources(artifacts),
+        )
+
+        self.assertEqual(context.owner_signals, ())
+        self.assertEqual(
+            context.unmapped_subjects,
+            (f"{EXTERNAL_ARTIFACT_PREFIX}/plan.json", "aws_s3_bucket.external"),
+        )
+
+    def test_load_artifacts_preserves_multiple_absolute_codeowners_roots(
+        self,
+    ) -> None:
+        repo_a = Path(self.tempdir.name) / "repo-a"
+        repo_b = Path(self.tempdir.name) / "repo-b"
+        repo_a_codeowners = repo_a / ".github" / "CODEOWNERS"
+        repo_b_codeowners = repo_b / ".github" / "CODEOWNERS"
+        repo_a_plan = repo_a / "services" / "payments" / "plan.json"
+        repo_b_plan = repo_b / "services" / "billing" / "plan.json"
+        for path in (repo_a_codeowners, repo_b_codeowners, repo_a_plan, repo_b_plan):
+            path.parent.mkdir(parents=True, exist_ok=True)
+        repo_a_codeowners.write_text(
+            "/services/payments/ @payments-sre", encoding="utf-8"
+        )
+        repo_b_codeowners.write_text(
+            "/services/billing/ @billing-sre", encoding="utf-8"
+        )
+        repo_a_plan.write_text('{"resource_changes": []}', encoding="utf-8")
+        repo_b_plan.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        artifacts = _load_artifacts(
+            [
+                str(repo_a_codeowners),
+                str(repo_a_plan),
+                str(repo_b_codeowners),
+                str(repo_b_plan),
+            ]
+        )
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            [
+                "repo-a/.github/CODEOWNERS",
+                "repo-a/services/payments/plan.json",
+                "repo-b/.github/CODEOWNERS",
+                "repo-b/services/billing/plan.json",
+            ],
+        )
+
+    def test_load_artifacts_prefers_nested_codeowners_root_for_nested_repo(
+        self,
+    ) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        nested_repo = repo / "services" / "payments"
+        root_codeowners = repo / ".github" / "CODEOWNERS"
+        nested_codeowners = nested_repo / "CODEOWNERS"
+        nested_plan = nested_repo / "plan.json"
+        for path in (root_codeowners, nested_codeowners, nested_plan):
+            path.parent.mkdir(parents=True, exist_ok=True)
+        root_codeowners.write_text("/services/payments/ @platform", encoding="utf-8")
+        nested_codeowners.write_text("*.json @payments-sre", encoding="utf-8")
+        nested_plan.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+            encoding="utf-8",
+        )
+
+        artifacts = _load_artifacts(
+            [str(root_codeowners), str(nested_codeowners), str(nested_plan)]
+        )
+        artifact_names = [name for name, _ in artifacts]
+
+        self.assertEqual(
+            artifact_names,
+            [
+                "repo/.github/CODEOWNERS",
+                "payments/CODEOWNERS",
+                "payments/plan.json",
+            ],
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name=artifact_names[2],
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file=artifact_names[2],
+                            tool="terraform",
+                            resource_id="aws_security_group.payments",
+                            action="modify",
+                            summary="Terraform modifies a payments security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        context = build_ownership_context(
+            parse_batch,
+            codeowners_sources=uploaded_codeowners_sources(artifacts),
+        )
+
+        self.assertEqual(len(context.owner_signals), 1)
+        self.assertEqual(context.owner_signals[0].owners, ["@payments-sre"])
+        self.assertEqual(context.owner_signals[0].source, "CODEOWNERS")
 
     def test_skills_command_uses_shared_custom_skill_registry(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

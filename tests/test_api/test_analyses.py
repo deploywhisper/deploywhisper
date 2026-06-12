@@ -19,7 +19,7 @@ import services.deployment_outcome_service as deployment_outcome_service_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
-from api.schemas import BlastRadiusData
+from api.schemas import BlastRadiusData, ContextCompletenessData, PersistedReportData
 from services.analysis_service import AnalysisPersistenceError
 from services.analysis_service import AnalysisRunResult
 from analysis.rollback_planner import RollbackPlan
@@ -34,6 +34,7 @@ from evidence.models import ContextCompleteness, EvidenceItem
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
+from pydantic import ValidationError
 
 
 class AnalysesApiTests(unittest.TestCase):
@@ -1654,6 +1655,578 @@ class AnalysesApiTests(unittest.TestCase):
             persisted_evidence_id,
         )
         self.assertEqual(payload["data"]["persisted_report"]["id"], 2)
+
+    def test_create_analysis_preserves_ownership_context_in_api_schema(self) -> None:
+        project_service_module.create_project(
+            project_key="payments-owners",
+            display_name="Payments Owners",
+        )
+        persisted_report = dict(self.persisted)
+        persisted_report["context_completeness"] = {
+            **dict(persisted_report["context_completeness"]),
+            "incident_index_version": "incidents:unknown",
+            "incident_index_last_indexed_at": "2026-05-25T00:00:00Z",
+            "incident_index_freshness_status": "current",
+            "owner_signals": [
+                {
+                    "scope": "file",
+                    "subject": "services/payments/plan.json",
+                    "owners": ["@payments-sre"],
+                    "source": "CODEOWNERS",
+                    "source_ref": ".github/CODEOWNERS",
+                    "matched_pattern": "/services/payments/",
+                    "resource_id": None,
+                    "service_id": None,
+                    "escalation_hint": "Escalate file review for services/payments/plan.json to @payments-sre.",
+                }
+            ],
+            "escalation_hints": [
+                "Escalate file review for services/payments/plan.json to @payments-sre."
+            ],
+            "ownership_unmapped_subjects": ["aws_security_group.unmapped"],
+        }
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files={"files": ("plan.json", b'{"resource_changes": []}')},
+                data={"project_key": "payments-owners"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        context = response.json()["data"]["assessment"]["context_completeness"]
+        self.assertEqual(context["incident_index_version"], "incidents:unknown")
+        self.assertEqual(
+            context["incident_index_last_indexed_at"],
+            "2026-05-25T00:00:00Z",
+        )
+        self.assertEqual(context["incident_index_freshness_status"], "current")
+        self.assertEqual(context["owner_signals"][0]["owners"], ["@payments-sre"])
+        self.assertEqual(
+            context["escalation_hints"],
+            ["Escalate file review for services/payments/plan.json to @payments-sre."],
+        )
+        self.assertEqual(
+            context["ownership_unmapped_subjects"],
+            ["aws_security_group.unmapped"],
+        )
+        self.assertEqual(
+            context,
+            response.json()["data"]["persisted_report"]["context_completeness"],
+        )
+
+    def test_create_analysis_uses_trusted_relative_artifact_paths_for_api_uploads(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-paths",
+            display_name="Payments API Paths",
+        )
+        persisted_report = dict(self.persisted)
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ) as analyze_uploaded_files:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=[
+                    ("files", ("CODEOWNERS", b"/services/payments/ @payments-sre")),
+                    ("files", ("plan.json", b'{"resource_changes": []}')),
+                ],
+                data={
+                    "project_key": "payments-api-paths",
+                    "artifact_paths": [
+                        ".github/CODEOWNERS",
+                        "services/payments/plan.json",
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        raw_files = analyze_uploaded_files.call_args.args[0]
+        self.assertEqual(
+            [name for name, _ in raw_files],
+            [".github/CODEOWNERS", "services/payments/plan.json"],
+        )
+
+    def test_create_analysis_rejects_mismatched_artifact_paths_for_api_uploads(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-path-mismatch",
+            display_name="Payments API Path Mismatch",
+        )
+
+        with patch("api.routes.analyses.analyze_uploaded_files") as analyze_mock:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=[
+                    ("files", ("CODEOWNERS", b"/services/payments/ @payments-sre")),
+                    ("files", ("plan.json", b'{"resource_changes": []}')),
+                ],
+                data={
+                    "project_key": "payments-api-path-mismatch",
+                    "artifact_paths": [".github/CODEOWNERS"],
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "artifact_path_mismatch")
+        analyze_mock.assert_not_called()
+
+    def test_create_analysis_rejects_reordered_artifact_paths_for_api_uploads(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-path-reorder",
+            display_name="Payments API Path Reorder",
+        )
+
+        with patch("api.routes.analyses.analyze_uploaded_files") as analyze_mock:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=[
+                    ("files", ("CODEOWNERS", b"/services/payments/ @payments-sre")),
+                    ("files", ("plan.json", b'{"resource_changes": []}')),
+                ],
+                data={
+                    "project_key": "payments-api-path-reorder",
+                    "artifact_paths": [
+                        "services/payments/plan.json",
+                        ".github/CODEOWNERS",
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "artifact_path_mismatch")
+        analyze_mock.assert_not_called()
+
+    def test_create_analysis_supports_duplicate_artifact_path_filenames(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-path-duplicate",
+            display_name="Payments API Path Duplicate",
+        )
+        persisted_report = dict(self.persisted)
+
+        with patch("api.routes.analyses.analyze_uploaded_files") as analyze_mock:
+            analyze_mock.return_value = self._analysis_result_with_persisted_report(
+                persisted_report
+            )
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=[
+                    (
+                        "files",
+                        (
+                            "services/payments/plan.json",
+                            b'{"resource_changes": []}',
+                        ),
+                    ),
+                    (
+                        "files",
+                        (
+                            "services/billing/plan.json",
+                            b'{"resource_changes": []}',
+                        ),
+                    ),
+                ],
+                data={
+                    "project_key": "payments-api-path-duplicate",
+                    "artifact_paths": [
+                        "services/payments/plan.json",
+                        "services/billing/plan.json",
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        raw_files = analyze_mock.call_args.args[0]
+        self.assertEqual(
+            [name for name, _ in raw_files],
+            ["services/payments/plan.json", "services/billing/plan.json"],
+        )
+
+    def test_create_analysis_rejects_duplicate_basenames_without_path_binding(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-path-duplicate-bare",
+            display_name="Payments API Path Duplicate Bare",
+        )
+
+        with patch("api.routes.analyses.analyze_uploaded_files") as analyze_mock:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=[
+                    ("files", ("plan.json", b'{"resource_changes": []}')),
+                    ("files", ("plan.json", b'{"resource_changes": []}')),
+                ],
+                data={
+                    "project_key": "payments-api-path-duplicate-bare",
+                    "artifact_paths": [
+                        "services/payments/plan.json",
+                        "services/billing/plan.json",
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "artifact_path_ambiguous")
+        analyze_mock.assert_not_called()
+
+    def test_create_analysis_rejects_duplicate_artifact_paths_for_api_uploads(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-path-exact-duplicate",
+            display_name="Payments API Path Exact Duplicate",
+        )
+
+        with patch("api.routes.analyses.analyze_uploaded_files") as analyze_mock:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=[
+                    ("files", ("plan.json", b'{"resource_changes": []}')),
+                    ("files", ("plan.json", b'{"resource_changes": []}')),
+                ],
+                data={
+                    "project_key": "payments-api-path-exact-duplicate",
+                    "artifact_paths": [
+                        "services/payments/plan.json",
+                        "services/payments/plan.json",
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "artifact_path_ambiguous")
+        analyze_mock.assert_not_called()
+
+    def test_create_analysis_rejects_invalid_artifact_paths_at_request_layer(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-path-invalid",
+            display_name="Payments API Path Invalid",
+        )
+
+        invalid_values = (
+            "/Users/alice/repo/services/payments/plan.json",
+            "services/../payments/plan.json",
+            "__unsafe_path__/services/payments/plan.json",
+            "__external_path__/services/payments/plan.json",
+        )
+        for artifact_path in invalid_values:
+            with self.subTest(artifact_path=artifact_path):
+                with patch(
+                    "api.routes.analyses.analyze_uploaded_files"
+                ) as analyze_mock:
+                    response = self.client.post(
+                        "/api/v1/analyses",
+                        files=[
+                            ("files", ("plan.json", b'{"resource_changes": []}')),
+                        ],
+                        data={
+                            "project_key": "payments-api-path-invalid",
+                            "artifact_paths": [artifact_path],
+                        },
+                    )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["error"]["code"],
+                    "invalid_artifact_path",
+                )
+                analyze_mock.assert_not_called()
+
+    def test_context_completeness_api_schema_rejects_invalid_scalar_values(
+        self,
+    ) -> None:
+        invalid_payloads = (
+            {"topology_freshness_days": -1},
+            {"incident_index_size": -1},
+            {"parser_success_rate": float("nan")},
+            {"parser_success_rate": -0.1},
+            {"parser_success_by_tool": {"terraform": float("inf")}},
+            {"parser_success_by_tool": {"terraform": 1.2}},
+            {"context_score": float("-inf")},
+            {"context_score": -0.1},
+        )
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValidationError):
+                    ContextCompletenessData.model_validate(payload)
+
+    def test_persisted_report_salvages_nonfinite_and_negative_context_scalars(
+        self,
+    ) -> None:
+        persisted_report = dict(self.persisted)
+        persisted_report["context_completeness"] = {
+            **dict(persisted_report["context_completeness"]),
+            "topology_freshness_days": -7,
+            "incident_index_size": -3,
+            "evidence_success_rate": float("nan"),
+            "parser_success_rate": float("inf"),
+            "parser_success_by_tool": {"terraform": -0.2, "kubernetes": float("nan")},
+            "context_score": float("-inf"),
+            "confidence_level": "medium",
+            "owner_signals": [
+                {
+                    "scope": "file",
+                    "subject": "services/payments/plan.json",
+                    "owners": ["@payments-sre"],
+                    "source": "CODEOWNERS",
+                    "source_ref": ".github/CODEOWNERS",
+                    "escalation_hint": "Escalate file review for services/payments/plan.json to @payments-sre.",
+                }
+            ],
+        }
+
+        report = PersistedReportData.model_validate(persisted_report)
+
+        self.assertIsNone(report.context_completeness.topology_freshness_days)
+        self.assertEqual(report.context_completeness.incident_index_size, 0)
+        self.assertEqual(report.context_completeness.evidence_success_rate, 0.0)
+        self.assertEqual(report.context_completeness.parser_success_rate, 0.0)
+        self.assertEqual(
+            report.context_completeness.parser_success_by_tool,
+            {"terraform": 0.0, "kubernetes": 0.0},
+        )
+        self.assertEqual(report.context_completeness.context_score, 0.69)
+        self.assertEqual(report.context_completeness.confidence_level, "low")
+        self.assertTrue(report.context_completeness.insufficient_context)
+        self.assertTrue(report.context_completeness.partial_context)
+        self.assertEqual(len(report.context_completeness.owner_signals), 1)
+
+    def test_context_completeness_api_schema_rejects_malformed_owner_signals(
+        self,
+    ) -> None:
+        with self.assertRaises(ValidationError):
+            ContextCompletenessData.model_validate(
+                {
+                    "owner_signals": [
+                        {
+                            "scope": "file",
+                            "subject": "",
+                            "owners": [""],
+                            "source": "",
+                            "escalation_hint": "",
+                        }
+                    ],
+                    "escalation_hints": [""],
+                    "ownership_unmapped_subjects": [""],
+                }
+            )
+        with self.assertRaises(ValidationError):
+            ContextCompletenessData.model_validate(
+                {
+                    "owner_signals": [
+                        {
+                            "scope": "file",
+                            "subject": "services/payments/plan.json",
+                            "owners": ["@payments-sre"],
+                            "source": "CODEOWNERS",
+                            "escalation_hint": "Escalate file review to @payments-sre.",
+                            "unexpected": "not allowed",
+                        }
+                    ],
+                    "unexpected_context": "not allowed",
+                }
+            )
+
+    def test_persisted_report_degrades_malformed_context_payload(self) -> None:
+        malformed_contexts = (
+            "oops",
+            {"future_context_field": "unknown"},
+            {"context_score": "oops"},
+        )
+        for malformed_context in malformed_contexts:
+            persisted_report = dict(self.persisted)
+            persisted_report["context_completeness"] = malformed_context
+
+            report = PersistedReportData.model_validate(persisted_report)
+
+            self.assertEqual(report.context_completeness.context_score, 0.0)
+            self.assertEqual(report.context_completeness.confidence_level, "low")
+            self.assertTrue(report.context_completeness.insufficient_context)
+            self.assertIn(
+                "Context completeness payload was unavailable or unreadable.",
+                report.context_completeness.uncertainty,
+            )
+
+    def test_persisted_report_degrades_missing_context_payload(self) -> None:
+        persisted_report = dict(self.persisted)
+        persisted_report.pop("context_completeness", None)
+
+        report = PersistedReportData.model_validate(persisted_report)
+
+        self.assertEqual(report.context_completeness.context_score, 0.0)
+        self.assertEqual(report.context_completeness.confidence_level, "low")
+        self.assertTrue(report.context_completeness.insufficient_context)
+        self.assertIn(
+            "Context completeness payload was unavailable or unreadable.",
+            report.context_completeness.uncertainty,
+        )
+
+    def test_persisted_report_salvages_malformed_ownership_context_fields(
+        self,
+    ) -> None:
+        persisted_report = dict(self.persisted)
+        persisted_report["context_completeness"] = {
+            **dict(persisted_report["context_completeness"]),
+            "context_score": 0.84,
+            "confidence_level": "medium",
+            "owner_signals": [
+                {
+                    "scope": "file",
+                    "subject": "services/payments/plan.json",
+                    "owners": ["@payments-sre", "", {"handle": "@fake-owner"}],
+                    "source": "CODEOWNERS",
+                    "source_ref": ".github/CODEOWNERS",
+                    "unexpected": "not allowed",
+                },
+                {
+                    "scope": "file",
+                    "subject": "",
+                    "owners": ["@broken"],
+                    "source": "CODEOWNERS",
+                    "escalation_hint": "Broken owner signal.",
+                },
+            ],
+            "context_todos": ["Review missing ownership before deploy.", "", 42],
+            "escalation_hints": [
+                "Escalate service review for Payments API to @payments-runtime.",
+                "",
+                {"hint": "fake escalation"},
+            ],
+            "ownership_unmapped_subjects": [
+                "aws_security_group.unmapped",
+                "",
+                123,
+            ],
+        }
+
+        report = PersistedReportData.model_validate(persisted_report)
+
+        self.assertEqual(report.context_completeness.context_score, 0.69)
+        self.assertEqual(report.context_completeness.confidence_level, "low")
+        self.assertTrue(report.context_completeness.insufficient_context)
+        self.assertTrue(report.context_completeness.partial_context)
+        self.assertIn(
+            "Ownership context payload was partially unreadable.",
+            report.context_completeness.uncertainty,
+        )
+        self.assertIn(
+            "Regenerate this report to restore ownership context metadata.",
+            report.context_completeness.context_todos,
+        )
+        self.assertEqual(len(report.context_completeness.owner_signals), 1)
+        self.assertEqual(
+            report.context_completeness.owner_signals[0].owners,
+            ["@payments-sre"],
+        )
+        self.assertEqual(
+            report.context_completeness.owner_signals[0].escalation_hint,
+            "Escalate file review for services/payments/plan.json to @payments-sre.",
+        )
+        self.assertIn(
+            "Review missing ownership before deploy.",
+            report.context_completeness.context_todos,
+        )
+        self.assertEqual(
+            report.context_completeness.escalation_hints,
+            ["Escalate service review for Payments API to @payments-runtime."],
+        )
+        self.assertEqual(
+            report.context_completeness.ownership_unmapped_subjects,
+            ["aws_security_group.unmapped"],
+        )
+
+    def test_persisted_report_marks_partial_when_owner_entries_are_cleaned(
+        self,
+    ) -> None:
+        persisted_report = dict(self.persisted)
+        persisted_report["context_completeness"] = {
+            **dict(persisted_report["context_completeness"]),
+            "context_score": 0.84,
+            "confidence_level": "medium",
+            "owner_signals": [
+                {
+                    "scope": "file",
+                    "subject": "services/payments/plan.json",
+                    "owners": ["@payments-sre", ""],
+                    "source": "CODEOWNERS",
+                    "source_ref": ".github/CODEOWNERS",
+                }
+            ],
+        }
+
+        report = PersistedReportData.model_validate(persisted_report)
+
+        self.assertEqual(report.context_completeness.context_score, 0.69)
+        self.assertEqual(report.context_completeness.confidence_level, "low")
+        self.assertTrue(report.context_completeness.insufficient_context)
+        self.assertTrue(report.context_completeness.partial_context)
+        self.assertEqual(len(report.context_completeness.owner_signals), 1)
+        self.assertEqual(
+            report.context_completeness.owner_signals[0].owners,
+            ["@payments-sre"],
+        )
+        self.assertIn(
+            "Regenerate this report to restore ownership context metadata.",
+            report.context_completeness.context_todos,
+        )
+
+    def test_persisted_report_salvages_ownership_when_scalar_context_is_malformed(
+        self,
+    ) -> None:
+        persisted_report = dict(self.persisted)
+        persisted_report["context_completeness"] = {
+            **dict(persisted_report["context_completeness"]),
+            "context_score": "oops",
+            "confidence_level": "medium",
+            "owner_signals": [
+                {
+                    "scope": "file",
+                    "subject": "services/payments/plan.json",
+                    "owners": ["@payments-sre"],
+                    "source": "CODEOWNERS",
+                    "source_ref": ".github/CODEOWNERS",
+                    "escalation_hint": "Escalate file review for services/payments/plan.json to @payments-sre.",
+                }
+            ],
+            "escalation_hints": [
+                "Escalate file review for services/payments/plan.json to @payments-sre."
+            ],
+            "ownership_unmapped_subjects": ["aws_security_group.unmapped"],
+        }
+
+        report = PersistedReportData.model_validate(persisted_report)
+
+        self.assertEqual(report.context_completeness.context_score, 0.69)
+        self.assertEqual(report.context_completeness.confidence_level, "low")
+        self.assertTrue(report.context_completeness.insufficient_context)
+        self.assertTrue(report.context_completeness.partial_context)
+        self.assertEqual(len(report.context_completeness.owner_signals), 1)
+        self.assertEqual(
+            report.context_completeness.owner_signals[0].owners,
+            ["@payments-sre"],
+        )
+        self.assertEqual(
+            report.context_completeness.escalation_hints,
+            ["Escalate file review for services/payments/plan.json to @payments-sre."],
+        )
+        self.assertEqual(
+            report.context_completeness.ownership_unmapped_subjects,
+            ["aws_security_group.unmapped"],
+        )
 
     def test_create_analysis_preserves_go_advisory_with_narrative_warning(
         self,

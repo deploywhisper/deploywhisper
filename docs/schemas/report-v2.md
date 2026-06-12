@@ -231,10 +231,40 @@ without storing raw plan internals in a separate contract.
       "Import or refresh topology context for this project/workspace.",
       "Import relevant incident history for this project/workspace.",
       "Review evidence extraction gaps for supported artifacts.",
-      "Review parser errors and resubmit supported artifacts."
+      "Review parser errors and resubmit supported artifacts.",
+      "Add CODEOWNERS or ownership mapping for analyzed files/resources."
     ],
     "insufficient_context": true,
-    "partial_context": true
+    "partial_context": true,
+    "owner_signals": [
+      {
+        "scope": "file",
+        "subject": "services/payments/plan.json",
+        "owners": ["@payments-sre"],
+        "source": "CODEOWNERS",
+        "source_ref": ".github/CODEOWNERS",
+        "matched_pattern": "/services/payments/",
+        "resource_id": null,
+        "service_id": null,
+        "escalation_hint": "Escalate file review for services/payments/plan.json to @payments-sre."
+      },
+      {
+        "scope": "service",
+        "subject": "Payments API",
+        "owners": ["@payments-runtime"],
+        "source": "topology",
+        "source_ref": "topology.json",
+        "matched_pattern": null,
+        "resource_id": "aws_security_group.payments",
+        "service_id": "payments-api",
+        "escalation_hint": "Escalate service review for Payments API to @payments-runtime."
+      }
+    ],
+    "escalation_hints": [
+      "Escalate file review for services/payments/plan.json to @payments-sre.",
+      "Escalate service review for Payments API to @payments-runtime."
+    ],
+    "ownership_unmapped_subjects": []
   },
   "blast_radius": {
     "affected": [
@@ -454,6 +484,49 @@ non-current states. Current labels include `missing_topology`, `stale_topology`,
 treat unrecognized future labels as additional incomplete-context signals rather
 than failing report parsing.
 
+### Ownership context
+
+`context_completeness.owner_signals` is a point-in-time ownership snapshot for
+the analyzed files and mapped services/resources. File signals come from the
+last matching `CODEOWNERS` rule in the analyzed submission's uploaded
+`CODEOWNERS` source; DeployWhisper does not fall back to its own repository
+checkout for analyzed-project ownership. Service signals come from topology
+ownership fields when a changed resource maps to a service. Each signal carries
+owners, source metadata, and an `escalation_hint` that report consumers can
+render directly for reviewer routing.
+
+When no file or service ownership can be found for analyzed subjects,
+`context_completeness.context_todos` includes
+`Add CODEOWNERS or ownership mapping for analyzed files/resources.`, and
+`ownership_unmapped_subjects` lists the files or services that need owner data.
+
+#### Request-side ownership setup
+
+Directory-scoped ownership depends on preserving repo-relative artifact paths
+for every submitted file. Upload `.github/CODEOWNERS`, `CODEOWNERS`, or
+`docs/CODEOWNERS` with the analyzed artifacts from the same repository root.
+
+API multipart clients should send one `artifact_paths` form value for each
+`files` part, in the same order. Each value must be a safe repo-relative
+artifact path such as `.github/CODEOWNERS` or
+`services/payments/plan.json`; absolute paths, drive-root paths, traversal
+segments, and reserved internal prefixes are rejected.
+
+```bash
+curl -F project_key=payments \
+  -F files=@.github/CODEOWNERS \
+  -F artifact_paths=.github/CODEOWNERS \
+  -F files=@services/payments/plan.json \
+  -F artifact_paths=services/payments/plan.json \
+  http://127.0.0.1:8080/api/v1/analyses
+```
+
+CLI analysis preserves relative paths when files are submitted from a common
+repository root, so run it from the target checkout or pass paths that share the
+same root. For the dashboard, prefer directory upload when analyzing a tree; the
+browser supplies repo-relative artifact paths so directory-scoped CODEOWNERS
+rules can match.
+
 ### Analysis run incident and pattern matches
 
 Live API/CLI analysis responses and persisted report retrieval payloads include
@@ -485,6 +558,7 @@ must not be presented as organization-specific incident history.
 - submission manifest payloads that record accepted, excluded, failed, partial, sensitive, provenance, and redaction status
 - durable submission manifest fallback identity/status metadata for malformed-manifest recovery
 - parser-normalized change metadata for Terraform plan JSON format and Terraform versions, module paths, replacement paths, unknown-after-apply fields, redacted fields, and unsupported resource/change/plan fields
+- ownership owner signals, escalation hints, and missing-ownership context TODOs
 
 Story 2.6 added report-level confidence, context uncertainty, evidence coverage,
 context TODOs, and insufficient-context signals as additive `v2` fields. Story

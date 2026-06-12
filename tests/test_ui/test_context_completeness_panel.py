@@ -271,6 +271,78 @@ class ContextCompletenessPanelRenderingTests(unittest.TestCase):
             response.text,
         )
 
+    def test_context_panel_renders_ownership_context(self) -> None:
+        @ui.page("/_test/context-panel-ownership")
+        def ownership_context_panel_test_page() -> None:
+            from ui.components.context_completeness_panel import (
+                render_context_completeness_panel,
+            )
+
+            render_context_completeness_panel(
+                {
+                    "topology_freshness_days": 0,
+                    "topology_last_imported_at": "2026-05-11T11:22:33Z",
+                    "incident_index_size": 10,
+                    "evidence_success_rate": 1.0,
+                    "parser_success_rate": 1.0,
+                    "parser_success_by_tool": {"terraform": 1.0},
+                    "context_score": 0.92,
+                    "owner_signals": [
+                        {
+                            "scope": "file",
+                            "subject": "services/payments/plan.json",
+                            "owners": ["@payments-sre"],
+                            "source": "CODEOWNERS",
+                            "source_ref": ".github/CODEOWNERS",
+                        }
+                    ],
+                    "escalation_hints": [
+                        "Escalate file review for services/payments/plan.json to @payments-sre."
+                    ],
+                    "ownership_unmapped_subjects": ["aws_security_group.unmapped"],
+                }
+            )
+
+        response = self.client.get("/_test/context-panel-ownership")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Ownership context", response.text)
+        self.assertIn("services/payments/plan.json", response.text)
+        self.assertIn("@payments-sre", response.text)
+        self.assertIn("Escalation hints", response.text)
+        self.assertIn("Missing ownership", response.text)
+        self.assertIn("aws_security_group.unmapped", response.text)
+
+    def test_context_summary_renders_owner_signals_without_hints(self) -> None:
+        @ui.page("/_test/context-summary-ownership-only")
+        def ownership_summary_test_page() -> None:
+            from ui.components.context_completeness_panel import (
+                render_context_summary_panel,
+            )
+
+            render_context_summary_panel(
+                {
+                    "context_score": 0.92,
+                    "owner_signals": [
+                        {
+                            "scope": "file",
+                            "subject": "services/payments/plan.json",
+                            "owners": ["@payments-sre"],
+                            "source": "CODEOWNERS",
+                            "source_ref": ".github/CODEOWNERS",
+                        }
+                    ],
+                }
+            )
+
+        response = self.client.get("/_test/context-summary-ownership-only")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Ownership context", response.text)
+        self.assertIn(
+            "Owner: services/payments/plan.json -&gt; @payments-sre", response.text
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
