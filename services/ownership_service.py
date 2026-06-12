@@ -648,6 +648,7 @@ def build_ownership_context(
     unmapped_subjects: list[str] = []
     file_owned_subjects: set[str] = set()
     file_unmapped_candidates: set[str] = set()
+    untrusted_file_unmapped_candidates: set[str] = set()
     unknown_file_candidates: set[str] = set()
     files_with_service_ownership: set[str] = set()
     files_with_unresolved_changes: set[str] = set()
@@ -668,8 +669,9 @@ def build_ownership_context(
                 unknown_file_candidates.add(subject)
             continue
         if artifact_name_is_ownership_untrusted(subject):
-            if file_result.status == "failed":
-                unmapped_subjects.append(subject)
+            unmapped_subjects.append(subject)
+            if file_result.status != "failed":
+                untrusted_file_unmapped_candidates.add(subject)
             continue
         match = _match_codeowners(subject, rules, prefixed_roots=prefixed_roots)
         if match is None or not match.owners:
@@ -756,6 +758,18 @@ def build_ownership_context(
         if subject in files_with_unresolved_changes:
             continue
         unmapped_subjects.append("unknown-file")
+    cleared_untrusted_subjects = {
+        subject
+        for subject in untrusted_file_unmapped_candidates
+        if subject in files_with_service_ownership
+        and subject not in files_with_unresolved_changes
+    }
+    if cleared_untrusted_subjects:
+        unmapped_subjects = [
+            subject
+            for subject in unmapped_subjects
+            if subject not in cleared_untrusted_subjects
+        ]
 
     unique_signals = _dedupe_signals(signals)
     escalation_hints = tuple(
