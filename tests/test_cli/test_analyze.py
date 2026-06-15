@@ -208,7 +208,7 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(context.owner_signals, ())
         self.assertEqual(
             context.unmapped_subjects,
-            (f"{EXTERNAL_ARTIFACT_PREFIX}/plan.json", "aws_s3_bucket.external"),
+            ("external artifact: plan.json", "aws_s3_bucket.external"),
         )
 
     def test_load_artifacts_preserves_multiple_absolute_codeowners_roots(
