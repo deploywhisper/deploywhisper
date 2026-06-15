@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-06-10
+# last_updated: 2026-06-15
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-06-10
+last_updated: 2026-06-15
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -113,7 +113,7 @@ development_status:
   7-1-project-scoped-topology-context: review
   7-2-terraform-state-connector: done
   7-3-kubernetes-live-state-connector: done
-  7-4-codeowners-and-ownership-mapping: ready-for-dev
+  7-4-codeowners-and-ownership-mapping: done
   7-5-context-graph-and-freshness-ledger: ready-for-dev
   epic-7-retrospective: optional
 

@@ -79,6 +79,24 @@ def _context_todo_items(value: object) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def _context_list_items(value: object) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _owner_signal_items(value: object) -> list[dict]:
+    if not isinstance(value, list | tuple):
+        return []
+    signals: list[dict] = []
+    for item in value:
+        if isinstance(item, dict):
+            subject = str(item.get("subject") or "").strip()
+            if subject:
+                signals.append(item)
+    return signals
+
+
 def _context_warning_action(context: dict, link_target: str) -> tuple[str, str]:
     todos = " ".join(
         item.lower() for item in _context_todo_items(context.get("context_todos"))
@@ -90,6 +108,8 @@ def _context_warning_action(context: dict, link_target: str) -> tuple[str, str]:
     parser_success_rate = context_number(context.get("parser_success_rate"), 1.0)
     if "parser" in todos or parser_success_rate < 1.0:
         return "Review artifacts", "#context-todos"
+    if "ownership" in todos or "codeowners" in todos:
+        return "Review ownership", "#ownership-context"
     incident_index_size = _context_int(context, "incident_index_size")
     if incident_index_size == 0 or "incident" in todos:
         return "Review incidents", "#context-todos"
@@ -106,6 +126,8 @@ def _todo_guidance(todo: str, link_target: str) -> tuple[str, str]:
         return "Evidence model guide", f"{DOCS_BASE_URL}/docs/evidence-model.md"
     if "parser" in todo_text or "artifact" in todo_text:
         return "Report schema guide", f"{DOCS_BASE_URL}/docs/schemas/report-v2.md"
+    if "ownership" in todo_text or "codeowners" in todo_text:
+        return "Ownership context guide", f"{DOCS_BASE_URL}/docs/schemas/report-v2.md"
     return "Report context guide", f"{DOCS_BASE_URL}/docs/schemas/report-v2.md"
 
 
@@ -124,6 +146,9 @@ def _render_todo_item(todo: str, link_target: str) -> None:
 def _has_context_followups(context: dict) -> bool:
     return (
         bool(_context_todo_items(context.get("context_todos")))
+        or bool(_owner_signal_items(context.get("owner_signals")))
+        or bool(_context_list_items(context.get("escalation_hints")))
+        or bool(_context_list_items(context.get("ownership_unmapped_subjects")))
         or bool(str(context.get("uncertainty") or "").strip())
         or bool(context.get("insufficient_context"))
         or context_score(context) < 0.7
@@ -144,6 +169,9 @@ def render_context_summary_panel(
     if not _has_context_followups(details):
         return
     context_todos = _context_todo_items(details.get("context_todos"))
+    owner_signals = _owner_signal_items(details.get("owner_signals"))
+    escalation_hints = _context_list_items(details.get("escalation_hints"))
+    unmapped_subjects = _context_list_items(details.get("ownership_unmapped_subjects"))
     uncertainty = str(details.get("uncertainty") or "").strip()
     score = context_score(details)
 
@@ -169,7 +197,27 @@ def render_context_summary_panel(
                 with ui.column().classes("w-full gap-2"):
                     for todo in context_todos[:4]:
                         _render_todo_item(todo, link_target)
-            else:
+            has_ownership_summary = bool(
+                owner_signals or escalation_hints or unmapped_subjects
+            )
+            if has_ownership_summary:
+                ui.label("Ownership context").classes("text-sm font-semibold dw-text")
+                with ui.column().classes("w-full gap-2"):
+                    for signal in owner_signals[:3]:
+                        owners = _context_list_items(signal.get("owners"))
+                        owner_text = ", ".join(owners) if owners else "Unowned"
+                        subject = str(signal.get("subject") or "").strip()
+                        if subject:
+                            ui.label(f"Owner: {subject} -> {owner_text}").classes(
+                                "text-xs dw-muted leading-5"
+                            )
+                    for hint in escalation_hints[:3]:
+                        ui.label(hint).classes("text-xs dw-muted leading-5")
+                    for subject in unmapped_subjects[:3]:
+                        ui.label(f"Missing owner: {subject}").classes(
+                            "text-xs dw-muted leading-5"
+                        )
+            if not context_todos and not has_ownership_summary:
                 ui.label("No context TODOs were generated.").classes("text-xs dw-muted")
 
 
@@ -188,6 +236,9 @@ def render_context_completeness_panel(
         else {}
     )
     context_todos = _context_todo_items(details.get("context_todos"))
+    owner_signals = _owner_signal_items(details.get("owner_signals"))
+    escalation_hints = _context_list_items(details.get("escalation_hints"))
+    unmapped_subjects = _context_list_items(details.get("ownership_unmapped_subjects"))
     uncertainty = str(details.get("uncertainty") or "").strip()
     score = context_score(details)
     low_context = bool(details.get("insufficient_context")) or score < 0.7
@@ -291,6 +342,43 @@ def render_context_completeness_panel(
                         ui.label(
                             "No context follow-up actions were generated."
                         ).classes("text-xs dw-muted")
+
+        if owner_signals or escalation_hints or unmapped_subjects:
+            with ui.card().classes("w-full dw-panel-soft shadow-none mt-3"):
+                with ui.column().classes("gap-2 p-3"):
+                    ui.label("Ownership context").props("id=ownership-context").classes(
+                        "text-sm font-semibold dw-text"
+                    )
+                    if owner_signals:
+                        with ui.column().classes("w-full gap-2"):
+                            for signal in owner_signals:
+                                owners = _context_list_items(signal.get("owners"))
+                                owner_text = ", ".join(owners) if owners else "Unowned"
+                                scope = str(signal.get("scope") or "ownership").title()
+                                subject = str(signal.get("subject") or "").strip()
+                                source = str(
+                                    signal.get("source_ref")
+                                    or signal.get("source")
+                                    or ""
+                                ).strip()
+                                detail = f"{scope}: {subject} -> {owner_text}"
+                                if source:
+                                    detail = f"{detail} ({source})"
+                                ui.label(detail).classes("text-xs dw-muted leading-5")
+                    if escalation_hints:
+                        ui.label("Escalation hints").classes(
+                            "text-xs font-semibold dw-text"
+                        )
+                        for hint in escalation_hints:
+                            ui.label(hint).classes("text-xs dw-muted leading-5")
+                    if unmapped_subjects:
+                        ui.label("Missing ownership").classes(
+                            "text-xs font-semibold dw-text"
+                        )
+                        for subject in unmapped_subjects:
+                            ui.label(f"Missing owner: {subject}").classes(
+                                "text-xs dw-muted leading-5"
+                            )
 
         with ui.card().classes("w-full dw-panel-soft shadow-none mt-3"):
             with ui.column().classes("gap-2 p-3"):

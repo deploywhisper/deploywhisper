@@ -53,8 +53,11 @@ from services.project_service import list_projects, list_workspaces
 from services.project_service import require_project_permission
 from services.project_service import resolve_project_reference
 from services.intake_service import (
+    EXTERNAL_ARTIFACT_PREFIX,
     MAX_TOTAL_UPLOAD_BYTES,
+    artifact_name_has_traversal,
     build_pending_analysis,
+    normalize_artifact_name,
     uniquify_artifact_names,
 )
 from services.report_service import (
@@ -198,11 +201,96 @@ def _require_cli_analysis_project_permission(
     return True
 
 
+def _codeowners_root_for_cli_path(path: Path) -> Path | None:
+    if path.name != "CODEOWNERS":
+        return None
+    parent = path.parent
+    if parent.name in {".github", "docs"}:
+        return parent.parent
+    return parent
+
+
+def _infer_cli_artifact_roots(paths: list[Path]) -> tuple[Path, ...]:
+    roots: set[Path] = set()
+    for path in paths:
+        try:
+            resolved_path = path.resolve()
+        except OSError:
+            continue
+        root = _codeowners_root_for_cli_path(resolved_path)
+        if root is None:
+            continue
+        roots.add(root)
+    return tuple(sorted(roots, key=lambda root: str(root)))
+
+
+def _unique_cli_root_prefixes(roots: tuple[Path, ...]) -> dict[Path, str]:
+    prefix_counts: dict[str, int] = {}
+    prefixes: dict[Path, str] = {}
+    for root in roots:
+        candidate = normalize_artifact_name(root.name or "project")
+        prefix_counts.setdefault(candidate, 0)
+        prefix = candidate
+        while prefix in prefixes.values():
+            prefix_counts[candidate] += 1
+            prefix = f"{candidate}#{prefix_counts[candidate] + 1}"
+        prefixes[root] = prefix
+    return prefixes
+
+
+def _cli_artifact_roots_by_specificity(roots: tuple[Path, ...]) -> tuple[Path, ...]:
+    return tuple(sorted(roots, key=lambda root: (-len(root.parts), str(root))))
+
+
+def _cli_artifact_name(
+    *,
+    raw_path: str,
+    path: Path,
+    artifact_roots: tuple[Path, ...],
+    root_prefixes: dict[Path, str],
+) -> str:
+    if not path.is_absolute():
+        if artifact_name_has_traversal(raw_path):
+            return normalize_artifact_name(raw_path)
+        try:
+            resolved_path = path.resolve()
+        except OSError:
+            return normalize_artifact_name(raw_path)
+        for artifact_root in _cli_artifact_roots_by_specificity(artifact_roots):
+            try:
+                relative_name = normalize_artifact_name(
+                    str(resolved_path.relative_to(artifact_root))
+                )
+            except ValueError:
+                continue
+            if len(artifact_roots) == 1:
+                return relative_name
+            return f"{root_prefixes[artifact_root]}/{relative_name}"
+        if artifact_roots:
+            return f"{EXTERNAL_ARTIFACT_PREFIX}/{normalize_artifact_name(path.name or 'artifact.bin')}"
+        return normalize_artifact_name(raw_path)
+    for artifact_root in _cli_artifact_roots_by_specificity(artifact_roots):
+        try:
+            relative_name = normalize_artifact_name(
+                str(path.resolve().relative_to(artifact_root))
+            )
+        except (OSError, ValueError):
+            continue
+        if len(artifact_roots) == 1:
+            return relative_name
+        return f"{root_prefixes[artifact_root]}/{relative_name}"
+    if artifact_roots:
+        return f"{EXTERNAL_ARTIFACT_PREFIX}/{normalize_artifact_name(path.name or 'artifact.bin')}"
+    return path.name or "artifact.bin"
+
+
 def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
     artifacts: list[tuple[str, bytes]] = []
     running_total = 0
-    for raw_path in paths:
-        path = Path(raw_path)
+    artifact_paths = [(raw_path, Path(raw_path)) for raw_path in paths]
+    artifact_roots = _infer_cli_artifact_roots([path for _, path in artifact_paths])
+    root_prefixes = _unique_cli_root_prefixes(artifact_roots)
+    for raw_path, path in artifact_paths:
         try:
             file_size = path.stat().st_size
             running_total += file_size
@@ -215,7 +303,13 @@ def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
                         )
                     )
                 )
-            artifacts.append((path.name, path.read_bytes()))
+            artifact_name = _cli_artifact_name(
+                raw_path=raw_path,
+                path=path,
+                artifact_roots=artifact_roots,
+                root_prefixes=root_prefixes,
+            )
+            artifacts.append((artifact_name, path.read_bytes()))
         except OSError as exc:
             raise ValueError(
                 json.dumps(
@@ -228,7 +322,10 @@ def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
             ) from exc
     return [
         (str(name), bytes(raw_content or b""))
-        for name, raw_content in uniquify_artifact_names(artifacts)
+        for name, raw_content in uniquify_artifact_names(
+            artifacts,
+            allow_external_prefix=True,
+        )
     ]
 
 

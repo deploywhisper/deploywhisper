@@ -34,6 +34,10 @@ from services.analysis_service import (
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     build_pending_analysis,
+    trusted_artifact_path_binding_is_ambiguous,
+    trusted_artifact_path_matches_filename,
+    trusted_relative_artifact_path,
+    untrusted_upload_filename,
     uniquify_artifact_names,
 )
 from services.report_service import REPORT_SCHEMA_VERSION
@@ -361,11 +365,40 @@ def require_share_management_token(
 
 async def _read_upload_files_with_limit(
     files: list[UploadFile],
+    artifact_paths: list[str] | str | None = None,
 ) -> list[tuple[str, bytes]]:
     remaining = MAX_TOTAL_UPLOAD_BYTES
     buffered: list[tuple[str, bytes]] = []
+    trusted_paths = _trusted_artifact_paths(artifact_paths, expected_count=len(files))
+    if trusted_paths:
+        for index, upload in enumerate(files):
+            if not trusted_artifact_path_matches_filename(
+                trusted_paths[index],
+                upload.filename,
+            ):
+                raise ApiError(
+                    status_code=400,
+                    code="artifact_path_mismatch",
+                    message=(
+                        "artifact_paths entries must be provided in the same order "
+                        "as the uploaded files and their filenames must match."
+                    ),
+                )
+        if trusted_artifact_path_binding_is_ambiguous(
+            trusted_paths,
+            [upload.filename for upload in files],
+        ):
+            raise ApiError(
+                status_code=400,
+                code="artifact_path_ambiguous",
+                message=(
+                    "artifact_paths cannot safely bind duplicate path metadata. "
+                    "For duplicate basenames, include each trusted repo-relative "
+                    "path in the matching upload filename."
+                ),
+            )
 
-    for upload in files:
+    for index, upload in enumerate(files):
         file_size = getattr(upload, "size", None)
         if isinstance(file_size, int) and file_size > remaining:
             raise ApiError(
@@ -387,9 +420,50 @@ async def _read_upload_files_with_limit(
                 )
             chunks.extend(chunk)
             remaining -= len(chunk)
-        buffered.append((upload.filename or "artifact.bin", bytes(chunks)))
+        artifact_name = (
+            trusted_paths[index]
+            if trusted_paths
+            else untrusted_upload_filename(upload.filename)
+        )
+        buffered.append((artifact_name, bytes(chunks)))
 
     return uniquify_artifact_names(buffered)
+
+
+def _trusted_artifact_paths(
+    artifact_paths: list[str] | str | None,
+    *,
+    expected_count: int | None = None,
+) -> list[str]:
+    if artifact_paths is None:
+        return []
+    if isinstance(artifact_paths, str):
+        values = [artifact_paths]
+    else:
+        values = list(artifact_paths)
+    if expected_count is not None and len(values) != expected_count:
+        raise ApiError(
+            status_code=400,
+            code="artifact_path_mismatch",
+            message=(
+                "artifact_paths must include exactly one trusted relative path "
+                "for each uploaded file."
+            ),
+        )
+    trusted_paths: list[str] = []
+    for value in values:
+        trusted_path = trusted_relative_artifact_path(value)
+        if trusted_path is None:
+            raise ApiError(
+                status_code=400,
+                code="invalid_artifact_path",
+                message=(
+                    "artifact_paths entries must be safe repo-relative paths "
+                    "without absolute, traversal, drive-root, or reserved segments."
+                ),
+            )
+        trusted_paths.append(trusted_path)
+    return trusted_paths
 
 
 @router.get(
@@ -549,6 +623,10 @@ async def create_analysis(
         default=None,
         description="Optional project-local workspace/environment key for the analysis.",
     ),
+    artifact_paths: list[str] | None = Form(
+        default=None,
+        description="Optional trusted relative artifact path per uploaded file for directory-scoped ownership matching.",
+    ),
     trigger_type: str | None = Header(
         default=None, alias="X-DeployWhisper-Trigger-Type"
     ),
@@ -615,7 +693,7 @@ async def create_analysis(
             raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
 
-    raw_files = await _read_upload_files_with_limit(files)
+    raw_files = await _read_upload_files_with_limit(files, artifact_paths)
     pending_analysis = build_pending_analysis(raw_files)
     if pending_analysis.ready_count == 0:
         raise ApiError(

@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import secrets
+from collections.abc import Callable, Iterable
 from typing import Any
 
-from nicegui import events, run, ui
+from nicegui import app, core, events, run, ui
+from nicegui.elements.upload_files import SmallFileUpload
+from starlette.datastructures import UploadFile as StarletteUploadFile
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from analysis.blast_radius import BlastRadiusResult
 from analysis.incident_matcher import IncidentMatch
@@ -17,6 +22,10 @@ from services.intake_service import (
     build_pending_analysis,
     is_sensitive_file,
     total_upload_bytes,
+    trusted_artifact_path_binding_is_ambiguous,
+    trusted_artifact_path_matches_filename,
+    trusted_relative_artifact_path,
+    untrusted_upload_filename,
     uniquify_artifact_names,
 )
 from services.project_service import (
@@ -74,6 +83,16 @@ STATUS_STYLES = {
     "unsupported": "color: #d8a432;",
     "sensitive": "color: #cf3f3f;",
 }
+DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD = "artifact_paths"
+DASHBOARD_UPLOAD_ACCEPT = ".json,.yaml,.yml,.tf,.tfvars,.hcl,Jenkinsfile,CODEOWNERS"
+DASHBOARD_DIRECTORY_UPLOAD_SELECTOR = '[data-dw-dashboard-directory-upload="1"]'
+DASHBOARD_UPLOAD_ROUTE_PREFIX = "/_deploywhisper/dashboard-upload"
+DASHBOARD_UPLOAD_ROUTE_PATH = f"{DASHBOARD_UPLOAD_ROUTE_PREFIX}/{{upload_key}}"
+DASHBOARD_UPLOAD_READ_CHUNK_BYTES = 1_048_576
+_DASHBOARD_UPLOAD_HANDLERS: dict[str, tuple[object, Callable[[str], None], bool]] = {}
+_DASHBOARD_UPLOAD_WIDGET_KEYS: dict[tuple[str, str], str] = {}
+_DASHBOARD_UPLOAD_ROUTE_REGISTERED = False
+_DASHBOARD_UPLOAD_MAX_WIDGETS_PER_CLIENT = 2
 ORANGE = "#ff6900"
 ORANGE_BUTTON_STYLE = (
     f"background:{ORANGE};color:#fff;border-radius:12px;font-weight:700;"
@@ -94,6 +113,411 @@ def process_uploaded_files(
         (name, raw_content) for name, raw_content in normalized_uploads
     )
     return build_pending_analysis(current_files)
+
+
+def reset_upload_widgets(upload_widgets: Iterable[object | None]) -> None:
+    """Reset every available dashboard upload widget."""
+    for upload_widget in upload_widgets:
+        reset = getattr(upload_widget, "reset", None)
+        if callable(reset):
+            reset()
+
+
+def dashboard_upload_artifact_path_form_fields_prop(
+    field_name: str = DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD,
+) -> str:
+    """Return Quasar uploader prop for browser-provided relative path metadata."""
+    return (
+        ':form-fields="files => files.map(file => ({ '
+        f"name: '{field_name}', "
+        "value: file.webkitRelativePath || file.relativePath || file.name || '' "
+        '}))"'
+    )
+
+
+def dashboard_upload_field_name_prop() -> str:
+    """Return Quasar uploader prop that binds file parts to browser paths."""
+    return (
+        ':field-name="file => '
+        "file.webkitRelativePath || file.relativePath || file.name || 'files'"
+        '"'
+    )
+
+
+def configure_dashboard_upload_widget(
+    upload_widget: object, *, upload_url: str, enable_directory: bool = False
+) -> object:
+    """Configure the dashboard uploader to preserve repo-relative browser paths."""
+    props = getattr(upload_widget, "_props", None)
+    if isinstance(props, dict):
+        props["url"] = upload_url
+    upload_widget.props(f"accept={DASHBOARD_UPLOAD_ACCEPT}")
+    if enable_directory:
+        upload_widget.props('data-dw-dashboard-directory-upload="1"')
+    upload_widget.props(dashboard_upload_field_name_prop())
+    upload_widget.props(dashboard_upload_artifact_path_form_fields_prop())
+    return upload_widget
+
+
+def _dashboard_upload_route_exists() -> bool:
+    return any(
+        getattr(route, "path", None) == DASHBOARD_UPLOAD_ROUTE_PATH
+        and "POST" in getattr(route, "methods", set())
+        for route in getattr(app.router, "routes", [])
+    )
+
+
+def _ensure_dashboard_upload_route_registered() -> None:
+    global _DASHBOARD_UPLOAD_ROUTE_REGISTERED
+    if _DASHBOARD_UPLOAD_ROUTE_REGISTERED or _dashboard_upload_route_exists():
+        _DASHBOARD_UPLOAD_ROUTE_REGISTERED = True
+        return
+
+    @app.post(DASHBOARD_UPLOAD_ROUTE_PATH, response_model=None)
+    async def dashboard_upload_route(
+        upload_key: str, request: Request
+    ) -> dict[str, str] | JSONResponse:
+        handler = _DASHBOARD_UPLOAD_HANDLERS.get(upload_key)
+        if handler is None:
+            return JSONResponse({"upload": "unknown"}, status_code=404)
+        upload_widget, set_upload_error, require_directory_paths = handler
+        try:
+            files = await dashboard_file_uploads_from_request(
+                request,
+                require_directory_paths=require_directory_paths,
+            )
+        except ValueError as exc:
+            if "upload size exceeds" in str(exc):
+                set_upload_error(
+                    "Total upload size exceeds the 50 MB analysis-session limit. Remove some artifacts and try again."
+                )
+                return JSONResponse({"upload": "too_large"}, status_code=413)
+            set_upload_error(
+                "Upload metadata did not match the selected files. Select the artifacts again."
+            )
+            return JSONResponse({"upload": "metadata_error"}, status_code=400)
+        await upload_widget.handle_uploads(files)
+        return {"upload": "success"}
+
+    _DASHBOARD_UPLOAD_ROUTE_REGISTERED = True
+
+
+def register_dashboard_upload_handler(
+    upload_widget: object,
+    set_upload_error: Callable[[str], None],
+    *,
+    require_directory_paths: bool = False,
+) -> str:
+    """Register an upload widget handler behind the stable dashboard upload route."""
+    _ensure_dashboard_upload_route_registered()
+    client_id = str(getattr(getattr(upload_widget, "client", None), "id", "client"))
+    widget_identity = (
+        client_id,
+        str(getattr(upload_widget, "id", "upload")),
+    )
+    _drop_stale_dashboard_upload_client_widgets(
+        client_id, keep_identity=widget_identity
+    )
+    previous_key = _DASHBOARD_UPLOAD_WIDGET_KEYS.pop(widget_identity, None)
+    if previous_key is not None:
+        _DASHBOARD_UPLOAD_HANDLERS.pop(previous_key, None)
+    upload_key = secrets.token_urlsafe(32)
+    while upload_key in _DASHBOARD_UPLOAD_HANDLERS:
+        upload_key = secrets.token_urlsafe(32)
+    _DASHBOARD_UPLOAD_WIDGET_KEYS[widget_identity] = upload_key
+    _DASHBOARD_UPLOAD_HANDLERS[upload_key] = (
+        upload_widget,
+        set_upload_error,
+        require_directory_paths,
+    )
+    return f"{DASHBOARD_UPLOAD_ROUTE_PREFIX}/{upload_key}"
+
+
+def _drop_stale_dashboard_upload_client_widgets(
+    client_id: str,
+    *,
+    keep_identity: tuple[str, str],
+) -> None:
+    active_identities = [
+        identity
+        for identity in _DASHBOARD_UPLOAD_WIDGET_KEYS
+        if identity[0] == client_id and identity != keep_identity
+    ]
+    if len(active_identities) < _DASHBOARD_UPLOAD_MAX_WIDGETS_PER_CLIENT:
+        return
+    for identity in active_identities:
+        stale_key = _DASHBOARD_UPLOAD_WIDGET_KEYS.pop(identity, None)
+        if stale_key is not None:
+            _DASHBOARD_UPLOAD_HANDLERS.pop(stale_key, None)
+
+
+def unregister_dashboard_upload_handler(upload_url_or_key: str) -> None:
+    """Remove a dashboard upload handler registered for a widget."""
+    upload_key = str(upload_url_or_key or "").rsplit("/", maxsplit=1)[-1]
+    handler = _DASHBOARD_UPLOAD_HANDLERS.pop(upload_key, None)
+    if handler is None:
+        return
+    upload_widget, _, _ = handler
+    widget_identity = (
+        str(getattr(getattr(upload_widget, "client", None), "id", "client")),
+        str(getattr(upload_widget, "id", "upload")),
+    )
+    if _DASHBOARD_UPLOAD_WIDGET_KEYS.get(widget_identity) == upload_key:
+        _DASHBOARD_UPLOAD_WIDGET_KEYS.pop(widget_identity, None)
+
+
+def _register_dashboard_upload_disconnect_cleanup(upload_urls: Iterable[str]) -> None:
+    client = getattr(ui.context, "client", None)
+    on_disconnect = getattr(client, "on_disconnect", None)
+    if not callable(on_disconnect):
+        return
+    for upload_url in upload_urls:
+        on_disconnect(lambda url=upload_url: unregister_dashboard_upload_handler(url))
+
+
+def dashboard_upload_directory_javascript(
+    selector: str = DASHBOARD_DIRECTORY_UPLOAD_SELECTOR,
+) -> str:
+    """Return browser script that enables directory selection on Quasar's file input."""
+    return f"""
+(() => {{
+  const applyDirectoryUploadAttrs = () => {{
+    document
+      .querySelectorAll('{selector} input[type="file"]')
+      .forEach((input) => {{
+        input.setAttribute('webkitdirectory', '');
+        input.setAttribute('directory', '');
+      }});
+  }};
+  if (window.__dwDashboardUploadDirectoryObserver) {{
+    window.__dwDashboardUploadDirectoryObserver.disconnect();
+  }}
+  applyDirectoryUploadAttrs();
+  window.__dwDashboardUploadDirectoryObserver = new MutationObserver(
+    applyDirectoryUploadAttrs
+  );
+  window.__dwDashboardUploadDirectoryObserver.observe(document.body, {{
+    childList: true,
+    subtree: true,
+  }});
+}})();
+"""
+
+
+def _dashboard_artifact_paths_are_basename_fallbacks(
+    trusted_paths: Iterable[str],
+    uploads: Iterable[tuple[str, StarletteUploadFile]],
+) -> bool:
+    paths = list(trusted_paths)
+    if not paths or any("/" in path for path in paths):
+        return False
+    upload_names = [
+        str(getattr(upload, "filename", "") or "").replace("\\", "/").rsplit("/", 1)[-1]
+        for _, upload in uploads
+    ]
+    return paths == upload_names
+
+
+async def dashboard_file_uploads_from_request(
+    request: Request,
+    *,
+    require_directory_paths: bool = False,
+) -> list[object]:
+    """Create NiceGUI upload files while preserving submitted artifact path metadata."""
+    uploads: list[tuple[str, StarletteUploadFile]] = []
+    artifact_paths: list[str] = []
+    async with request.form() as form:
+        for field_name, value in form.multi_items():
+            if field_name == DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD and isinstance(
+                value, str
+            ):
+                artifact_paths.append(str(value))
+            elif not isinstance(value, str):
+                uploads.append((field_name, value))
+        if not uploads:
+            raise ValueError("upload must include files")
+        if artifact_paths and len(artifact_paths) != len(uploads):
+            raise ValueError("artifact path metadata must match uploaded files")
+        if require_directory_paths and not artifact_paths:
+            raise ValueError("directory path metadata must include relative paths")
+        if not artifact_paths and any(
+            "/" in str(field_name or "").replace("\\", "/") for field_name, _ in uploads
+        ):
+            raise ValueError("artifact path metadata must match uploaded files")
+
+        field_paths: list[str | None] = []
+        binding_names: list[object] = []
+        for field_name, upload in uploads:
+            field_path = trusted_relative_artifact_path(field_name)
+            upload_filename = getattr(upload, "filename", None)
+            if field_path is not None and trusted_artifact_path_matches_filename(
+                field_path,
+                upload_filename,
+            ):
+                field_paths.append(field_path)
+                binding_names.append(field_path)
+            else:
+                field_paths.append(None)
+                binding_names.append(upload_filename)
+        if any(path is None for path in field_paths) and any(
+            path is not None for path in field_paths
+        ):
+            raise ValueError("artifact path metadata must match uploaded files")
+
+        trusted_paths: list[str] = []
+        basename_fallback = False
+        if artifact_paths:
+            artifact_path_set: set[str] = set()
+            for artifact_path in artifact_paths:
+                trusted_path = trusted_relative_artifact_path(artifact_path)
+                if trusted_path is None:
+                    raise ValueError("artifact path metadata must match uploaded files")
+                if require_directory_paths and "/" not in trusted_path:
+                    raise ValueError(
+                        "directory path metadata must include relative paths"
+                    )
+                artifact_path_set.add(trusted_path)
+                trusted_paths.append(trusted_path)
+            bound_field_paths = [path for path in field_paths if path is not None]
+            basename_fallback = _dashboard_artifact_paths_are_basename_fallbacks(
+                trusted_paths,
+                uploads,
+            )
+            if (
+                basename_fallback
+                and bound_field_paths
+                and any(
+                    field_paths[index] is not None
+                    and field_paths[index] != trusted_paths[index]
+                    for index in range(len(uploads))
+                )
+            ):
+                raise ValueError("artifact path metadata must match uploaded files")
+            if basename_fallback and any(
+                path.rsplit("/", maxsplit=1)[-1] == "CODEOWNERS"
+                for path in trusted_paths
+            ):
+                trusted_paths = []
+            if bound_field_paths:
+                if basename_fallback and require_directory_paths:
+                    raise ValueError("artifact path metadata must match uploaded files")
+                if not basename_fallback and (
+                    len(bound_field_paths) != len(uploads)
+                    or artifact_path_set != set(bound_field_paths)
+                    or len(artifact_path_set) != len(bound_field_paths)
+                ):
+                    raise ValueError("artifact path metadata must match uploaded files")
+                if not basename_fallback:
+                    trusted_paths = [path or "" for path in field_paths]
+            else:
+                for index, trusted_path in enumerate(trusted_paths):
+                    _, upload = uploads[index]
+                    if not trusted_artifact_path_matches_filename(
+                        trusted_path,
+                        getattr(upload, "filename", None),
+                    ):
+                        raise ValueError(
+                            "artifact path metadata must match uploaded files"
+                        )
+            if trusted_artifact_path_binding_is_ambiguous(
+                trusted_paths,
+                binding_names,
+            ):
+                if basename_fallback:
+                    if require_directory_paths:
+                        raise ValueError(
+                            "directory path metadata must include relative paths"
+                        )
+                    trusted_paths = []
+                else:
+                    raise ValueError(
+                        "artifact path metadata is ambiguous for duplicate paths"
+                    )
+        files: list[object] = []
+        upload_bytes = 0
+        for index, (field_name, upload) in enumerate(uploads):
+            file_upload = await dashboard_create_file_upload(
+                upload,
+                max_bytes=MAX_TOTAL_UPLOAD_BYTES - upload_bytes,
+            )
+            upload_bytes += len(getattr(file_upload, "_data", b""))
+            if trusted_paths:
+                setattr(file_upload, "relative_path", trusted_paths[index])
+            else:
+                field_name_text = str(field_name or "").replace("\\", "/")
+                upload_filename = getattr(upload, "filename", None)
+                upload_filename_leaf = (
+                    str(upload_filename or "")
+                    .replace("\\", "/")
+                    .rsplit("/", maxsplit=1)[-1]
+                )
+                field_name_leaf = field_name_text.rsplit("/", maxsplit=1)[-1]
+                upload_name = (
+                    field_name
+                    if "/" in field_name_text
+                    and field_name_leaf == upload_filename_leaf
+                    else upload_filename
+                )
+                file_upload.name = untrusted_upload_filename(upload_name)
+            files.append(file_upload)
+        return files
+
+
+async def _read_dashboard_upload_data(upload: object, *, max_bytes: int) -> bytes:
+    read = getattr(upload, "read", None)
+    if not callable(read):
+        return b""
+    chunks: list[bytes] = []
+    total_bytes = 0
+    while True:
+        try:
+            chunk = await read(DASHBOARD_UPLOAD_READ_CHUNK_BYTES)
+        except TypeError:
+            chunk = await read()
+            total_bytes += len(chunk)
+            if total_bytes > max_bytes:
+                raise ValueError("upload size exceeds analysis-session limit")
+            return chunk
+        if not chunk:
+            break
+        total_bytes += len(chunk)
+        if total_bytes > max_bytes:
+            raise ValueError("upload size exceeds analysis-session limit")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+async def dashboard_create_file_upload(
+    upload: object,
+    *,
+    max_bytes: int = MAX_TOTAL_UPLOAD_BYTES,
+) -> SmallFileUpload:
+    """Create an in-memory NiceGUI upload object without closing metadata first."""
+    filename = str(getattr(upload, "filename", "") or "artifact.bin")
+    content_type = str(getattr(upload, "content_type", "") or "")
+    close = getattr(upload, "close", None)
+    try:
+        data = await _read_dashboard_upload_data(upload, max_bytes=max_bytes)
+    finally:
+        if callable(close):
+            await close()
+    return SmallFileUpload(
+        filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1], content_type, data
+    )
+
+
+def uploaded_file_artifact_name(uploaded_file: object) -> str:
+    """Return the richest browser-provided artifact name for ownership matching."""
+    for attr_name in (
+        "relative_path",
+        "webkit_relative_path",
+        "webkitRelativePath",
+    ):
+        value = getattr(uploaded_file, attr_name, None)
+        trusted_path = trusted_relative_artifact_path(value)
+        if trusted_path is not None:
+            return trusted_path
+    return untrusted_upload_filename(getattr(uploaded_file, "name", None))
 
 
 def _accepted_files(files: list[tuple[str, bytes]]) -> list[tuple[str, bytes]]:
@@ -170,6 +594,20 @@ def uploads_allowed(active_project_key: str | None) -> bool:
     return bool(active_project_key)
 
 
+def apply_upload_widget_state(
+    upload_widgets: tuple[object | None, ...],
+    *,
+    enabled: bool,
+) -> None:
+    """Enable or disable every dashboard upload widget in lockstep."""
+    for upload_widget in upload_widgets:
+        if upload_widget is None:
+            continue
+        action = getattr(upload_widget, "enable" if enabled else "disable", None)
+        if callable(action):
+            action()
+
+
 def should_clear_pending_uploads(
     *,
     current_file_count: int,
@@ -241,7 +679,7 @@ def build_upload_panel(
         "is_running": False,
         "progress_value": 0,
         "progress_message": "Waiting to analyze",
-        "result_token": 0,
+        "result_counter": 0,
         "active_result": None,
         "projects": projects,
         "active_project_id": initial_project_id,
@@ -302,12 +740,11 @@ def build_upload_panel(
             )
 
     def sync_upload_widget_state() -> None:
-        if upload_widget is None:
-            return
-        if uploads_allowed(state["active_project_key"]):
-            upload_widget.enable()
-        else:
-            upload_widget.disable()
+        apply_upload_widget_state(
+            (upload_widget, directory_upload_widget),
+            enabled=uploads_allowed(state["active_project_key"])
+            and not state["is_running"],
+        )
 
     def refresh_projects(
         *,
@@ -367,8 +804,7 @@ def build_upload_panel(
                 state["files"] = []
                 state["summary"] = build_pending_analysis([])
                 upload_error.set_text("Re-upload artifacts after switching projects.")
-                if upload_widget is not None:
-                    upload_widget.reset()
+                reset_upload_widgets((upload_widget, directory_upload_widget))
             refresh_projects(selected_project_id=selected_id, notify_parent=True)
             render_summary()
             render_actions()
@@ -403,7 +839,7 @@ def build_upload_panel(
             ui.html("<span>Create project</span>")
 
     def clear_result_if_current(token: int) -> None:
-        if token != state["result_token"]:
+        if token != state["result_counter"]:
             return
         state["active_result"] = None
         result_mount.clear()
@@ -411,8 +847,8 @@ def build_upload_panel(
     def render_result_card(
         report: dict, *, remaining_seconds: int | None = None, parse_batch=None
     ) -> None:
-        token = int(state["result_token"]) + 1
-        state["result_token"] = token
+        token = int(state["result_counter"]) + 1
+        state["result_counter"] = token
         state["active_result"] = report
         result_mount.clear()
         countdown_label = None
@@ -429,7 +865,7 @@ def build_upload_panel(
         }
 
         def update_countdown() -> None:
-            if token != state["result_token"]:
+            if token != state["result_counter"]:
                 return
             if timer_state["remaining"] <= 0:
                 clear_result_if_current(token)
@@ -690,7 +1126,7 @@ def build_upload_panel(
             return
 
         state["is_running"] = True
-        upload_widget.disable()
+        sync_upload_widget_state()
         render_actions()
         update_progress(5, "Preparing analysis")
 
@@ -730,7 +1166,7 @@ def build_upload_panel(
             )
             state["files"] = []
             state["summary"] = build_pending_analysis([])
-            upload_widget.reset()
+            reset_upload_widgets((upload_widget, directory_upload_widget))
             render_summary()
             if parse_batch.has_partial_context:
                 ui.notify(
@@ -842,7 +1278,7 @@ def build_upload_panel(
                     "Total upload size exceeds the 50 MB analysis-session limit. Remove some artifacts and try again."
                 )
                 return
-            uploads.append((uploaded_file.name, content))
+            uploads.append((uploaded_file_artifact_name(uploaded_file), content))
         state["summary"] = process_uploaded_files(state["files"], uploads)
         render_summary()
 
@@ -852,19 +1288,45 @@ def build_upload_panel(
         )
 
     upload_widget = None
+    directory_upload_widget = None
     with upload_card:
-        upload_widget = (
-            ui.upload(
-                on_multi_upload=handle_multi_upload,
-                on_rejected=handle_rejected,
-                auto_upload=True,
-                multiple=True,
-                label="Select deployment artifacts",
-                max_file_size=50_000_000,
-            )
-            .props("accept=.json,.yaml,.yml,.tf,.tfvars,.hcl,Jenkinsfile")
-            .classes("w-full")
-        )
+        upload_widget = ui.upload(
+            on_multi_upload=handle_multi_upload,
+            on_rejected=handle_rejected,
+            auto_upload=True,
+            multiple=True,
+            label="Select deployment artifacts",
+            max_file_size=50_000_000,
+        ).classes("w-full")
+        directory_upload_widget = ui.upload(
+            on_multi_upload=handle_multi_upload,
+            on_rejected=handle_rejected,
+            auto_upload=True,
+            multiple=True,
+            label="Select artifact directory",
+            max_file_size=50_000_000,
+        ).classes("w-full")
+    dashboard_upload_url = register_dashboard_upload_handler(
+        upload_widget,
+        upload_error.set_text,
+    )
+    configure_dashboard_upload_widget(upload_widget, upload_url=dashboard_upload_url)
+
+    dashboard_directory_upload_url = register_dashboard_upload_handler(
+        directory_upload_widget,
+        upload_error.set_text,
+        require_directory_paths=True,
+    )
+    configure_dashboard_upload_widget(
+        directory_upload_widget,
+        upload_url=dashboard_directory_upload_url,
+        enable_directory=True,
+    )
+    _register_dashboard_upload_disconnect_cleanup(
+        (dashboard_upload_url, dashboard_directory_upload_url)
+    )
+    if core.loop is not None:
+        ui.run_javascript(dashboard_upload_directory_javascript())
 
     refresh_projects()
     render_summary()

@@ -43,6 +43,11 @@ from services.settings_service import resolve_provider_runtime
 from services.submission_manifest import SubmissionManifest, build_submission_manifest
 from services.incident_service import get_incident_index_snapshot
 from services.confidence_ledger import EvidenceLawStatus, evidence_law_status
+from services.ownership_service import (
+    CodeownersSource,
+    build_ownership_context,
+    uploaded_codeowners_sources,
+)
 from services.topology_service import (
     STALE_AFTER_DAYS,
     get_topology_status,
@@ -404,6 +409,7 @@ def _context_uncertainty(
     topology_warnings: list[str] | None = None,
     incident_index_size: int,
     parser_success_rate: float,
+    ownership_unmapped_subjects: list[str] | tuple[str, ...] = (),
     include_topology_context: bool = True,
     include_incident_context: bool = True,
 ) -> str | None:
@@ -423,10 +429,12 @@ def _context_uncertainty(
         weak_signals.append("parser coverage is partial")
     if evidence_success_rate < 1.0:
         weak_signals.append("evidence coverage is partial")
+    if ownership_unmapped_subjects:
+        weak_signals.append("ownership mapping is incomplete")
     if context_score < 0.7:
         message = (
             "Insufficient context: missing parser coverage, evidence coverage, "
-            "or enabled project context prevents a confident low-risk verdict."
+            "ownership mapping, or enabled project context prevents a confident low-risk verdict."
         )
         if weak_signals:
             message += " Weak signals: " + "; ".join(weak_signals) + "."
@@ -542,6 +550,8 @@ def _build_context_completeness(
     workspace_key: str | None = None,
     include_topology_context: bool = True,
     include_incident_context: bool = True,
+    topology: dict | None = None,
+    codeowners_sources: tuple[CodeownersSource, ...] = (),
 ) -> ContextCompleteness:
     topology_last_imported_at = None
     topology_warnings: list[str] = []
@@ -622,6 +632,12 @@ def _build_context_completeness(
         1.0,
         sum(score * weight for score, weight in weighted_scores) / total_weight,
     )
+    ownership_topology = topology if include_topology_context else None
+    ownership_context = build_ownership_context(
+        parse_batch,
+        topology=ownership_topology,
+        codeowners_sources=codeowners_sources,
+    )
     context_score = round(raw_context_score, 2)
     context_todos = _context_todos(
         evidence_success_rate=evidence_success_rate,
@@ -632,6 +648,7 @@ def _build_context_completeness(
         include_topology_context=include_topology_context,
         include_incident_context=include_incident_context,
     )
+    context_todos = _unique_texts(context_todos + list(ownership_context.context_todos))
     return ContextCompleteness(
         topology_freshness_days=topology_freshness_days,
         topology_last_imported_at=topology_last_imported_at,
@@ -657,11 +674,15 @@ def _build_context_completeness(
             topology_warnings=topology_warnings,
             incident_index_size=incident_index_size,
             parser_success_rate=raw_parser_success_rate,
+            ownership_unmapped_subjects=ownership_context.unmapped_subjects,
             include_topology_context=include_topology_context,
             include_incident_context=include_incident_context,
         ),
         context_todos=context_todos,
         insufficient_context=raw_context_score < 0.7,
+        owner_signals=list(ownership_context.owner_signals),
+        escalation_hints=list(ownership_context.escalation_hints),
+        ownership_unmapped_subjects=list(ownership_context.unmapped_subjects),
     )
 
 
@@ -675,6 +696,8 @@ def build_context_completeness(
     workspace_key: str | None = None,
     include_topology_context: bool = True,
     include_incident_context: bool = True,
+    topology: dict | None = None,
+    codeowners_sources: tuple[CodeownersSource, ...] = (),
 ) -> ContextCompleteness:
     """Build the shared context-completeness signal for analysis callers."""
 
@@ -687,6 +710,8 @@ def build_context_completeness(
         workspace_key=workspace_key,
         include_topology_context=include_topology_context,
         include_incident_context=include_incident_context,
+        topology=topology,
+        codeowners_sources=codeowners_sources,
     )
 
 
@@ -1282,6 +1307,7 @@ def build_analysis_artifacts(
     partial_context = parse_batch.has_partial_context or (
         submission_manifest.partial_analysis
     )
+    codeowners_sources = uploaded_codeowners_sources(files)
     analysis_raw_files = _raw_files_for_parse_batch(files, parse_batch)
     evidence_items = extract_batch_evidence(
         parse_batch,
@@ -1318,6 +1344,8 @@ def build_analysis_artifacts(
         workspace_key=workspace_key,
         include_topology_context=include_topology_context,
         include_incident_context=include_incident_context,
+        topology=topology,
+        codeowners_sources=codeowners_sources,
     )
     assessment = apply_context_uncertainty(assessment)
     findings = build_findings(

@@ -23,11 +23,14 @@ from services.analysis_service import (
     analyze_uploaded_files,
     build_advisory_summary,
     build_analysis_artifacts,
+    build_context_completeness,
     build_share_summary,
     evaluate_parse_batch,
     resolve_analysis_project_scope,
     ShareSummaryJsonPayload,
 )
+from services.intake_service import uniquify_artifact_names
+from services.ownership_service import CodeownersSource
 
 
 def _incident_snapshot(count: int = 0) -> dict:
@@ -370,6 +373,529 @@ class AnalysisServiceTests(unittest.TestCase):
             "public-ingress-wide-open",
         )
         self.assertTrue(artifacts.incident_matches[0].verification_guidance)
+
+    def test_build_analysis_artifacts_adds_owner_signals_from_codeowners_and_topology(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed the payments security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        topology = {
+            "updated_at": "2026-06-08T12:00:00Z",
+            "metadata": {
+                "import": {
+                    "source_type": "custom",
+                    "source_ref": "topology.json",
+                    "warnings": [],
+                }
+            },
+            "services": [
+                {
+                    "id": "payments-api",
+                    "label": "Payments API",
+                    "resource_keys": ["aws_security_group.payments"],
+                    "downstream": [],
+                    "owners": ["@payments-runtime"],
+                }
+            ],
+        }
+        with (
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=(topology, None),
+            ),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-06-08T12:00:00Z",
+                    payload=topology,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(2),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="CAUTION: review the payments change.",
+                    explanation="The deployment should be reviewed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "CODEOWNERS",
+                        "\n".join(
+                            [
+                                "* @platform",
+                                "/services/payments/ @payments-sre @payments-dev",
+                            ]
+                        ).encode(),
+                    ),
+                    (
+                        "services/payments/plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+                    ),
+                ],
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        owner_signals = [signal.model_dump() for signal in context.owner_signals]
+        self.assertIn(
+            {
+                "scope": "file",
+                "subject": "services/payments/plan.json",
+                "owners": ["@payments-sre", "@payments-dev"],
+                "source": "CODEOWNERS",
+                "source_ref": "CODEOWNERS",
+                "matched_pattern": "/services/payments/",
+                "resource_id": None,
+                "service_id": None,
+                "escalation_hint": "Escalate file review for services/payments/plan.json to @payments-sre, @payments-dev.",
+            },
+            owner_signals,
+        )
+        self.assertIn(
+            {
+                "scope": "service",
+                "subject": "Payments API",
+                "owners": ["@payments-runtime"],
+                "source": "topology",
+                "source_ref": "topology.json",
+                "matched_pattern": None,
+                "resource_id": "aws_security_group.payments",
+                "service_id": "payments-api",
+                "escalation_hint": "Escalate service review for Payments API to @payments-runtime.",
+            },
+            owner_signals,
+        )
+        self.assertIn(
+            "Escalate file review for services/payments/plan.json to @payments-sre, @payments-dev.",
+            context.escalation_hints,
+        )
+        self.assertNotIn(
+            "Add CODEOWNERS or ownership mapping for analyzed files/resources.",
+            context.context_todos,
+        )
+
+    def test_build_analysis_artifacts_preserves_owner_signals_after_intake_paths(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed the payments security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        with (
+            patch("services.analysis_service.load_topology", return_value=(None, None)),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at=None,
+                    payload=None,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(0),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="CAUTION: review the payments change.",
+                    explanation="The deployment should be reviewed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                uniquify_artifact_names(
+                    [
+                        (
+                            "repo/.github/CODEOWNERS",
+                            b"/services/payments/ @payments-sre",
+                        ),
+                        (
+                            "repo/services/payments/plan.json",
+                            b'{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+                        ),
+                    ]
+                ),
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        self.assertIn(
+            {
+                "scope": "file",
+                "subject": "repo/services/payments/plan.json",
+                "owners": ["@payments-sre"],
+                "source": "CODEOWNERS",
+                "source_ref": "repo/.github/CODEOWNERS",
+                "matched_pattern": "/services/payments/",
+                "resource_id": None,
+                "service_id": None,
+                "escalation_hint": "Escalate file review for repo/services/payments/plan.json to @payments-sre.",
+            },
+            [signal.model_dump() for signal in context.owner_signals],
+        )
+
+    def test_codeowners_file_owner_prevents_missing_resource_ownership_downgrade(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=24,
+            severity="low",
+            recommendation="go",
+            top_risk="Terraform changed a security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        topology = {
+            "updated_at": "2026-06-08T12:00:00Z",
+            "metadata": {
+                "import": {
+                    "source_type": "custom",
+                    "source_ref": "topology.json",
+                    "warnings": [],
+                }
+            },
+            "services": [
+                {
+                    "id": "unrelated-api",
+                    "label": "Unrelated API",
+                    "resource_keys": ["aws_security_group.unrelated"],
+                    "owners": ["@platform-runtime"],
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=(topology, None),
+            ),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-06-08T12:00:00Z",
+                    payload=topology,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(2),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="GO: review the security group update.",
+                    explanation="The deployment was analyzed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "CODEOWNERS",
+                        b"/services/payments/ @payments-sre",
+                    ),
+                    (
+                        "services/payments/plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+                    ),
+                ],
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        self.assertEqual([signal.scope for signal in context.owner_signals], ["file"])
+        self.assertEqual(context.owner_signals[0].owners, ["@payments-sre"])
+        self.assertEqual(context.ownership_unmapped_subjects, [])
+        self.assertNotIn(
+            "Add CODEOWNERS or ownership mapping for analyzed files/resources.",
+            context.context_todos,
+        )
+        self.assertGreaterEqual(context.context_score, 0.7)
+        self.assertFalse(context.insufficient_context)
+
+    def test_topology_owner_prevents_missing_file_ownership_downgrade(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=24,
+            severity="low",
+            recommendation="go",
+            top_risk="Terraform security group changed.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        topology = {
+            "updated_at": "2026-06-08T12:00:00Z",
+            "metadata": {
+                "import": {
+                    "source_type": "custom",
+                    "source_ref": "topology.json",
+                    "warnings": [],
+                }
+            },
+            "services": [
+                {
+                    "id": "payments-api",
+                    "label": "Payments API",
+                    "resource_keys": ["aws_security_group.payments"],
+                    "owners": ["@payments-runtime"],
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=(topology, None),
+            ),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-06-08T12:00:00Z",
+                    payload=topology,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(2),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="GO: review the deployment update.",
+                    explanation="The deployment was analyzed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "services/payments/plan.json",
+                        (
+                            b'{"resource_changes": [{"address": '
+                            b'"aws_security_group.payments", "change": '
+                            b'{"actions": ["update"]}}]}'
+                        ),
+                    )
+                ],
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        self.assertEqual(
+            [signal.scope for signal in context.owner_signals], ["service"]
+        )
+        self.assertEqual(context.owner_signals[0].owners, ["@payments-runtime"])
+        self.assertEqual(context.ownership_unmapped_subjects, [])
+        self.assertNotIn(
+            "Add CODEOWNERS or ownership mapping for analyzed files/resources.",
+            context.context_todos,
+        )
+        self.assertGreaterEqual(context.context_score, 0.7)
+        self.assertFalse(context.insufficient_context)
+
+    def test_build_analysis_artifacts_adds_context_todo_when_ownership_missing(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=24,
+            severity="low",
+            recommendation="go",
+            top_risk="Terraform changed a security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        topology = {
+            "updated_at": "2026-06-08T12:00:00Z",
+            "metadata": {
+                "import": {
+                    "source_type": "custom",
+                    "source_ref": "topology.json",
+                    "warnings": [],
+                }
+            },
+            "services": [
+                {
+                    "id": "payments-api",
+                    "label": "Payments API",
+                    "resource_keys": ["aws_security_group.payments"],
+                    "downstream": [],
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=(topology, None),
+            ),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-06-08T12:00:00Z",
+                    payload=topology,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(2),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="GO: review the security group update.",
+                    explanation="The deployment was analyzed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "services/payments/plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+                    )
+                ],
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        self.assertEqual(context.owner_signals, [])
+        self.assertIn(
+            "Add CODEOWNERS or ownership mapping for analyzed files/resources.",
+            context.context_todos,
+        )
+        self.assertIn(
+            "services/payments/plan.json",
+            context.ownership_unmapped_subjects,
+        )
+        self.assertIn("Payments API", context.ownership_unmapped_subjects)
+        self.assertEqual(context.context_score, 0.84)
+        self.assertEqual(context.confidence_level, "medium")
+        self.assertFalse(context.insufficient_context)
+        self.assertIn("ownership mapping is incomplete", context.uncertainty)
+
+    def test_build_context_completeness_suppresses_service_ownership_when_topology_disabled(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="services/payments/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="services/payments/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.payments",
+                            action="modify",
+                            summary="Terraform changed a payments security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        topology = {
+            "services": [
+                {
+                    "id": "payments-api",
+                    "label": "Payments API",
+                    "resource_keys": ["aws_security_group.payments"],
+                    "owners": ["@payments-runtime"],
+                }
+            ]
+        }
+        context = build_context_completeness(
+            parse_batch,
+            include_topology_context=False,
+            include_incident_context=False,
+            topology=topology,
+            codeowners_sources=(
+                CodeownersSource(
+                    source_ref="CODEOWNERS",
+                    content="/services/payments/ @payments-sre",
+                ),
+            ),
+        )
+
+        self.assertEqual([signal.scope for signal in context.owner_signals], ["file"])
+        self.assertEqual(context.owner_signals[0].owners, ["@payments-sre"])
+        self.assertNotIn(
+            "aws_security_group.payments",
+            context.ownership_unmapped_subjects,
+        )
+        self.assertNotIn("Payments API", context.ownership_unmapped_subjects)
 
     def _share_report_payload(self) -> dict:
         return {
@@ -1496,7 +2022,9 @@ class AnalysisServiceTests(unittest.TestCase):
                         "plan.json",
                         b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     )
-                ]
+                ],
+                include_topology_context=False,
+                include_incident_context=False,
             )
 
         self.assertEqual(len(artifacts.findings), 2)
