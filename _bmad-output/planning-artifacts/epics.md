@@ -446,6 +446,12 @@ Prepare the project for foundation-scale community maturity with public adopters
 
 **Primary coverage:** GOV-08..15, DOC-19..20, NFR-OSS-01..05.
 
+### Epic 15: UI modernization & migration
+
+Migrate the web UI from NiceGUI to a static React SPA served by FastAPI, following `docs/ui-migration-plan.md` and `docs/design/deploywhisper-redesign-v3.jsx` as the governing scope, design, and verification contract.
+
+**Primary coverage:** REV-01..10, HIS-03..05, ADM-01..05, SKL-05, UX-DR1..09, DOC-05..06, DOC-18, NFR-XAI-05.
+
 ## Epic 0: Open Governance, Traceability, and Maintainer Ownership
 
 Establish the public project foundation needed for open-source trust, contribution, and roadmap accountability.
@@ -1800,6 +1806,149 @@ So that submission is grounded in evidence rather than aspiration.
 **When** maintainers prepare the package  
 **Then** governance, scope, adopters, maintainers, security, releases, docs, benchmarks, architecture, and community health artifacts are linked  
 **And** open gaps are disclosed.
+
+## Epic 15: UI modernization & migration
+
+Migrate DeployWhisper's web experience from NiceGUI to the approved React SPA without changing the advisory-first analysis core. This epic is governed by `docs/ui-migration-plan.md`; when exact visual values disagree, `docs/design/deploywhisper-redesign-v3.jsx` wins. Backend work is limited to the sanctioned Part A3 cases and must ship separately as `backend-for-ui`.
+
+### Story 15.0: Phase 0 - Scaffold Frontend and Migration Documentation
+
+As a maintainer,
+I want the React frontend scaffold and migration documentation hooks established,
+So that later UI migration stories execute against the approved stack and operating rules.
+
+**Acceptance Criteria:**
+
+**Given** the migration plan is approved
+**When** Phase 0 work is performed
+**Then** `frontend/` is scaffolded with Vite, React 18, TypeScript, Tailwind CSS, local font packages, `lucide-react`, TanStack Query, React Router, Vitest, Testing Library, Playwright, axe, and OpenAPI type generation
+**And** root scripts expose `ui:dev`, `ui:build`, and `ui:test`
+**And** the placeholder page proves the Vite proxy can read `GET /api/v1/health` from the compose-run backend
+**And** the Part E Phase 0 documentation rows are complete.
+
+### Story 15.1: Phase 1 - Coexistence Serving
+
+As a maintainer,
+I want the built SPA served at `/app` while NiceGUI remains at `/`,
+So that the migration can proceed screen by screen without breaking the current UI.
+
+**Acceptance Criteria:**
+
+**Given** the frontend build exists
+**When** the FastAPI app and Docker image are updated
+**Then** `frontend/dist` is mounted at `/app` with SPA fallback routing
+**And** the Dockerfile adds a Node 22 Alpine frontend build stage but keeps Node out of the runtime image
+**And** `docker compose up -d --build` serves the old UI at `/`, the new shell at `/app`, and `/api/v1/health` stays green
+**And** the image size delta is recorded in the PR.
+
+### Story 15.2: Phase 2 - Design System Foundation and Parity Audit
+
+As a reviewer,
+I want the approved design system implemented as reusable primitives before screens migrate,
+So that dashboard, report, history, settings, incidents, and skills share one tested visual language.
+
+**Acceptance Criteria:**
+
+**Given** the Part B tokens and mockup source
+**When** the foundation is built
+**Then** Tailwind theme variables and `src/components/ui/` primitives match the approved mockup
+**And** `/app/dev/components` renders every primitive and state as the permanent visual-regression gallery
+**And** each primitive has Vitest render and snapshot coverage
+**And** `docs/design/ui-parity-audit.md` inventories every NiceGUI page, element, control, message, and behavior as `replaced-by-design`, `sanctioned-change`, or `not-in-demo -> stop-and-ask`.
+
+### Story 15.3: Phase 3 - Dashboard
+
+As a reviewer,
+I want a concise dashboard that shows current deployment risk without embedding the full report,
+So that the first screen answers what needs attention now.
+
+**Acceptance Criteria:**
+
+**Given** dashboard data is available through existing or Part A3-sanctioned endpoints
+**When** the React dashboard is implemented
+**Then** it contains only the Part B0 dashboard information budget: greeting and Evidence Law chip, four KPI cards, recent analyses table, Latest Briefing card, new-analysis upload card, and verdict-health donut
+**And** upload success navigates to the Report screen instead of rendering an expiring inline result
+**And** loading, empty, error, and narrative-degraded states follow Part B4
+**And** seeded e2e proves upload-to-report navigation against the composed container.
+
+### Story 15.4: Phase 4 - Report Detail and Shared Report
+
+As a deployment reviewer,
+I want the report screen organized by verdict header and six tabs,
+So that I can scan the decision quickly and inspect evidence deeply.
+
+**Acceptance Criteria:**
+
+**Given** `GET /api/v1/analyses/{id}` returns the report contract
+**When** the React report screen is implemented
+**Then** the sticky header, Overview, Findings, Confidence, Context, Rollback, and Audit tabs match Part B3
+**And** the same screen backs shared `/reports/{id}` views with actions hidden and password protection preserved
+**And** "Copy briefing" uses the existing share-summary markdown
+**And** any schema gaps are documented as additive serializer needs before implementation.
+
+### Story 15.5: Phase 5 - History
+
+As a reviewer,
+I want searchable, filterable, paginated analysis history in the new SPA,
+So that I can find prior reports without scanning repeated verdict text.
+
+**Acceptance Criteria:**
+
+**Given** historical reports exist
+**When** the history screen is implemented
+**Then** rows show timestamp, severity badge, verdict chip, score bar, tools, and rescan delta
+**And** server-side severity, recommendation, search, page, and page-size filters are supported
+**And** expandable detail contains summary text once
+**And** bulk select, delete, and pagination preserve the current authorized behavior.
+
+### Story 15.6: Phase 6 - Settings, Incidents, and Skills
+
+As an administrator,
+I want the remaining NiceGUI operational screens rebuilt in the React design system,
+So that configuration, incidents, topology, reviewer feedback, and Skills management are migrated before cutover.
+
+**Acceptance Criteria:**
+
+**Given** the Part D parity audit is complete
+**When** Phase 6 screens are implemented
+**Then** settings, incidents, and skills list/detail flows match the design system
+**And** provider settings, topology upload and drift cadence, reviewer-feedback stats, and custom-skills management preserve current behavior unless Part A2 sanctions a change
+**And** any NiceGUI-callback-only behavior is extracted into `/api/v1` as Part A3-sanctioned backend work
+**And** the retired Dashboard Result Display Duration setting is recorded as `sanctioned-change (A2)`.
+
+### Story 15.7: Phase 7 - Cutover and NiceGUI Removal
+
+As a maintainer,
+I want the React SPA to become the only web UI,
+So that NiceGUI code, dependencies, assets, and tests no longer remain in the runtime.
+
+**Acceptance Criteria:**
+
+**Given** every screen has a React replacement or approved disposition
+**When** cutover is performed
+**Then** the SPA moves to `/` and legacy routes redirect appropriately
+**And** `ui/`, `nicegui`, old NiceGUI tests, old assets, dead CSS, and orphaned static files are removed
+**And** Part D2 grep gates pass for `nicegui` and `quasar` except historical references
+**And** README screenshots, runtime badges, CI lanes, a11y routes, CHANGELOG, and final image-size delta are updated.
+
+### NiceGUI UI Story Supersession
+
+The following existing stories were written for the NiceGUI-era UI. Their UI implementation scope is superseded by Epic 15 and the Part D parity audit. Non-UI backend, API, data, or documentation obligations remain in force unless a later planning update explicitly replaces them.
+
+| Existing story | Superseded UI scope | Replacement in Epic 15 |
+|---|---|---|
+| Story 3.1: Verdict-First Report Header | NiceGUI report header rendering | Story 15.4 |
+| Story 3.2: Findings Table With Evidence Badges | NiceGUI findings table and evidence badge rendering | Story 15.4 |
+| Story 3.3: Evidence Inspector Panel | NiceGUI evidence inspector UI | Story 15.4 |
+| Story 3.4: Confidence Ledger and Why-Not-Lower/Higher | NiceGUI confidence ledger UI | Story 15.4 |
+| Story 3.5: Context Completeness and TODO Panel | NiceGUI context and TODO panel UI | Story 15.4 and Story 15.6 |
+| Story 3.6: Report Diff After Rerun | NiceGUI report comparison/diff UI | Story 15.4 and Story 15.5 |
+| Story 3.7: Keyboard and Accessibility Review Pass | NiceGUI keyboard and accessibility review surface | Stories 15.2 through 15.7 |
+| Story 3.8: Historical Report Search and Filtering | NiceGUI history UI | Story 15.5 |
+| Story 4.5: Reviewer Feedback Capture | Separate NiceGUI reviewer-feedback UI placement | Story 15.4 inline finding feedback and Story 15.6 feedback stats |
+| Story 6.4: Outcome Calibration Metrics | NiceGUI dashboard trend/limitation labels | Story 15.3 |
+| Story 9.5: Skills Browser UI | NiceGUI skills browser UI | Story 15.6 |
+| Story 12.2: Provider Settings Administration | NiceGUI provider settings UI | Story 15.6 |
 
 ## Final Validation Notes
 

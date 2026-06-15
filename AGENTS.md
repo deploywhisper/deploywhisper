@@ -99,6 +99,24 @@ Use the existing layout unless an approved architecture change says otherwise:
 - `ui/` — NiceGUI routes and components
 - `tests/` — API, CLI, parser, service, UI, and infrastructure tests
 
+## Frontend / UI Migration
+`docs/ui-migration-plan.md` is the authority for the NiceGUI-to-React migration. Read it end-to-end, then read `docs/design/deploywhisper-redesign-v3.jsx` before any UI migration work; when an exact visual value differs, the mockup wins. If `docs/design/ui-parity-audit.md` exists, read it before changing any UI behavior.
+
+Ground rules from Part A:
+- This is a UI/UX modernization and migration, not a backend, analysis, API, data-model, CLI, or GitHub Action rewrite.
+- Backend work is allowed only where Part A3 permits it: read-only stats/project endpoints, additive serializer fields, or later extraction of existing NiceGUI-callback behavior into `/api/v1`; ship backend-for-UI work in its own labeled PR.
+- The Part A2 UX changes are sanctioned product decisions, including the single global search plus ProjectSwitcher, Latest Briefing dashboard card, tabbed report screen, inline finding feedback, permanent report URLs, and retirement of the dashboard result countdown setting.
+- If a screen appears to need flow, validation, or API-contract changes beyond Part A2/A3, stop and raise the question instead of guessing.
+- No CDN imports in production code. Fonts must be packaged locally; icons use `lucide-react`.
+
+Operating rules from Part H:
+- Use one task, one branch, one PR for migration work, and state the active phase/task before writing code.
+- The target stack is Vite + React 18 + TypeScript + Tailwind CSS, built to static files and served by the existing FastAPI app. Node must not be present in the runtime image.
+- Do not restyle, approximate, or "improve" Part B design values; bind UI to real APIs and never hard-code mockup demo data.
+- Do not delete old-UI behavior without a parity-audit disposition: `replaced-by-design`, `sanctioned-change`, or `not-in-demo -> stop-and-ask`.
+- Before every UI migration PR, run the Part F0 compose verification loop: `docker compose up -d --build`, wait for `http://localhost:8080/api/v1/health`, seed data, run Playwright against `BASE_URL=http://localhost:8080`, capture required screenshots from the composed app, then `docker compose down`.
+- PR descriptions must include the plan reference, Part E documentation rows updated, F0 output, and Part F4 screenshots. Documentation-only Phase 0 rows may state UI verification not applicable when no runtime UI changed.
+
 ## Validation Requirements
 After changing code or config, run the most relevant validation available for the scope of your change.
 
