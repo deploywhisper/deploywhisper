@@ -104,6 +104,31 @@ def trusted_artifact_path_matches_filename(
     return trusted_path.rsplit("/", maxsplit=1)[-1] == filename_leaf
 
 
+def untrusted_upload_filename(filename: object) -> str:
+    """Return a safe artifact name for uploads without trusted path metadata."""
+    filename_text = str(filename or "").replace("\\", "/").strip()
+    filename_leaf = filename_text.rsplit("/", maxsplit=1)[-1].strip()
+    if "/" in filename_text:
+        reserved_prefixes = {
+            UNSAFE_ARTIFACT_PREFIX.lower(),
+            EXTERNAL_ARTIFACT_PREFIX.lower(),
+        }
+        safe_parts = [
+            part.strip()
+            for part in filename_text.split("/")
+            if part.strip()
+            and part.strip() not in {".", ".."}
+            and not part.strip().endswith(":")
+            and not _is_drive_relative_segment(part.strip())
+            and part.strip().lower() not in reserved_prefixes
+        ]
+        safe_name = "/".join(safe_parts) or filename_leaf or "artifact.bin"
+        return f"{UNSAFE_ARTIFACT_PREFIX}/{safe_name}"
+    if filename_leaf == "CODEOWNERS":
+        return f"{UNSAFE_ARTIFACT_PREFIX}/{filename_leaf}"
+    return filename_leaf or "artifact.bin"
+
+
 def _filename_leaf(filename: object) -> str | None:
     filename_text = str(filename or "").replace("\\", "/").strip()
     if not filename_text:

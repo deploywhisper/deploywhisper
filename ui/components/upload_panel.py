@@ -25,6 +25,7 @@ from services.intake_service import (
     trusted_artifact_path_binding_is_ambiguous,
     trusted_artifact_path_matches_filename,
     trusted_relative_artifact_path,
+    untrusted_upload_filename,
     uniquify_artifact_names,
 )
 from services.project_service import (
@@ -337,6 +338,12 @@ async def dashboard_file_uploads_from_request(
             raise ValueError("upload must include files")
         if artifact_paths and len(artifact_paths) != len(uploads):
             raise ValueError("artifact path metadata must match uploaded files")
+        if require_directory_paths and not artifact_paths:
+            raise ValueError("directory path metadata must include relative paths")
+        if not artifact_paths and any(
+            "/" in str(field_name or "").replace("\\", "/") for field_name, _ in uploads
+        ):
+            raise ValueError("artifact path metadata must match uploaded files")
 
         field_paths: list[str | None] = []
         binding_names: list[object] = []
@@ -365,6 +372,10 @@ async def dashboard_file_uploads_from_request(
                 trusted_path = trusted_relative_artifact_path(artifact_path)
                 if trusted_path is None:
                     raise ValueError("artifact path metadata must match uploaded files")
+                if require_directory_paths and "/" not in trusted_path:
+                    raise ValueError(
+                        "directory path metadata must include relative paths"
+                    )
                 artifact_path_set.add(trusted_path)
                 trusted_paths.append(trusted_path)
             bound_field_paths = [path for path in field_paths if path is not None]
@@ -372,7 +383,24 @@ async def dashboard_file_uploads_from_request(
                 trusted_paths,
                 uploads,
             )
+            if (
+                basename_fallback
+                and bound_field_paths
+                and any(
+                    field_paths[index] is not None
+                    and field_paths[index] != trusted_paths[index]
+                    for index in range(len(uploads))
+                )
+            ):
+                raise ValueError("artifact path metadata must match uploaded files")
+            if basename_fallback and any(
+                path.rsplit("/", maxsplit=1)[-1] == "CODEOWNERS"
+                for path in trusted_paths
+            ):
+                trusted_paths = []
             if bound_field_paths:
+                if basename_fallback and require_directory_paths:
+                    raise ValueError("artifact path metadata must match uploaded files")
                 if not basename_fallback and (
                     len(bound_field_paths) != len(uploads)
                     or artifact_path_set != set(bound_field_paths)
@@ -405,19 +433,9 @@ async def dashboard_file_uploads_from_request(
                     raise ValueError(
                         "artifact path metadata is ambiguous for duplicate paths"
                     )
-        elif all(path is not None for path in field_paths):
-            trusted_paths = [path or "" for path in field_paths]
-            if trusted_artifact_path_binding_is_ambiguous(
-                trusted_paths,
-                binding_names,
-            ):
-                raise ValueError(
-                    "artifact path metadata is ambiguous for duplicate paths"
-                )
-
         files: list[object] = []
         upload_bytes = 0
-        for index, (_, upload) in enumerate(uploads):
+        for index, (field_name, upload) in enumerate(uploads):
             file_upload = await dashboard_create_file_upload(
                 upload,
                 max_bytes=MAX_TOTAL_UPLOAD_BYTES - upload_bytes,
@@ -425,6 +443,22 @@ async def dashboard_file_uploads_from_request(
             upload_bytes += len(getattr(file_upload, "_data", b""))
             if trusted_paths:
                 setattr(file_upload, "relative_path", trusted_paths[index])
+            else:
+                field_name_text = str(field_name or "").replace("\\", "/")
+                upload_filename = getattr(upload, "filename", None)
+                upload_filename_leaf = (
+                    str(upload_filename or "")
+                    .replace("\\", "/")
+                    .rsplit("/", maxsplit=1)[-1]
+                )
+                field_name_leaf = field_name_text.rsplit("/", maxsplit=1)[-1]
+                upload_name = (
+                    field_name
+                    if "/" in field_name_text
+                    and field_name_leaf == upload_filename_leaf
+                    else upload_filename
+                )
+                file_upload.name = untrusted_upload_filename(upload_name)
             files.append(file_upload)
         return files
 
@@ -483,7 +517,7 @@ def uploaded_file_artifact_name(uploaded_file: object) -> str:
         trusted_path = trusted_relative_artifact_path(value)
         if trusted_path is not None:
             return trusted_path
-    return str(getattr(uploaded_file, "name", "") or "artifact.bin")
+    return untrusted_upload_filename(getattr(uploaded_file, "name", None))
 
 
 def _accepted_files(files: list[tuple[str, bytes]]) -> list[tuple[str, bytes]]:

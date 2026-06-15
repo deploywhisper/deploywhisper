@@ -2022,7 +2022,9 @@ class AnalysisServiceTests(unittest.TestCase):
                         "plan.json",
                         b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     )
-                ]
+                ],
+                include_topology_context=False,
+                include_incident_context=False,
             )
 
         self.assertEqual(len(artifacts.findings), 2)

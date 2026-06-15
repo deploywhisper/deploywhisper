@@ -15,6 +15,7 @@ from services.intake_service import (
     trusted_artifact_path_matches_filename,
     trusted_relative_artifact_path,
     uniquify_artifact_names,
+    untrusted_upload_filename,
 )
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 from services.submission_manifest import build_submission_manifest
@@ -187,6 +188,32 @@ Outputs:
                 "services/payments/plan.json",
                 "../payments/plan.json",
             )
+        )
+
+    def test_untrusted_upload_filename_taints_pathlike_codeowners(self) -> None:
+        self.assertEqual(
+            untrusted_upload_filename(".github/CODEOWNERS"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/.github/CODEOWNERS",
+        )
+        self.assertEqual(
+            untrusted_upload_filename("repo/docs/CODEOWNERS"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/repo/docs/CODEOWNERS",
+        )
+        self.assertEqual(
+            untrusted_upload_filename("CODEOWNERS"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/CODEOWNERS",
+        )
+        self.assertEqual(
+            untrusted_upload_filename("services/payments/plan.json"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/services/payments/plan.json",
+        )
+        self.assertEqual(
+            untrusted_upload_filename("../services/payments/plan.json"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/services/payments/plan.json",
+        )
+        self.assertEqual(
+            untrusted_upload_filename("repo/__external_path__/plan.json"),
+            f"{UNSAFE_ARTIFACT_PREFIX}/repo/plan.json",
         )
 
     def test_duplicate_basename_bindings_require_full_path_filename_proof(

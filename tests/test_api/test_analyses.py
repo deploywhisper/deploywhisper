@@ -1753,6 +1753,91 @@ class AnalysesApiTests(unittest.TestCase):
             [".github/CODEOWNERS", "services/payments/plan.json"],
         )
 
+    def test_create_analysis_does_not_trust_pathlike_filenames_without_metadata(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-untrusted-paths",
+            display_name="Payments API Untrusted Paths",
+        )
+        persisted_report = dict(self.persisted)
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ) as analyze_uploaded_files:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=[
+                    (
+                        "files",
+                        (
+                            ".github/CODEOWNERS",
+                            b"/services/payments/ @payments-sre",
+                        ),
+                    ),
+                    (
+                        "files",
+                        (
+                            "services/payments/plan.json",
+                            b'{"resource_changes": []}',
+                        ),
+                    ),
+                ],
+                data={"project_key": "payments-api-untrusted-paths"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        raw_files = analyze_uploaded_files.call_args.args[0]
+        self.assertEqual(
+            [name for name, _ in raw_files],
+            [
+                "__unsafe_path__/.github/CODEOWNERS",
+                "__unsafe_path__/services/payments/plan.json",
+            ],
+        )
+
+    def test_create_analysis_does_not_trust_bare_codeowners_without_metadata(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-untrusted-codeowners",
+            display_name="Payments API Untrusted CODEOWNERS",
+        )
+        persisted_report = dict(self.persisted)
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ) as analyze_uploaded_files:
+            response = self.client.post(
+                "/api/v1/analyses",
+                files=[
+                    (
+                        "files",
+                        (
+                            "CODEOWNERS",
+                            b"/services/payments/ @payments-sre",
+                        ),
+                    ),
+                    (
+                        "files",
+                        (
+                            "plan.json",
+                            b'{"resource_changes": []}',
+                        ),
+                    ),
+                ],
+                data={"project_key": "payments-api-untrusted-codeowners"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        raw_files = analyze_uploaded_files.call_args.args[0]
+        self.assertEqual(
+            [name for name, _ in raw_files],
+            ["__unsafe_path__/CODEOWNERS", "plan.json"],
+        )
+
     def test_create_analysis_rejects_mismatched_artifact_paths_for_api_uploads(
         self,
     ) -> None:

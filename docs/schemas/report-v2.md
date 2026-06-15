@@ -512,11 +512,16 @@ artifact path such as `.github/CODEOWNERS` or
 `services/payments/plan.json`; absolute paths, drive-root paths, traversal
 segments, and reserved internal prefixes are rejected.
 
+When two uploaded files share the same basename, the multipart filename must
+also carry the matching repo-relative path for each file. This lets the server
+prove that `artifact_paths` values were bound to the intended file parts instead
+of relying on positional order alone.
+
 ```bash
 curl -F project_key=payments \
-  -F files=@.github/CODEOWNERS \
+  -F 'files=@.github/CODEOWNERS;filename=.github/CODEOWNERS' \
   -F artifact_paths=.github/CODEOWNERS \
-  -F files=@services/payments/plan.json \
+  -F 'files=@services/payments/plan.json;filename=services/payments/plan.json' \
   -F artifact_paths=services/payments/plan.json \
   http://127.0.0.1:8080/api/v1/analyses
 ```

@@ -237,7 +237,13 @@ class UploadPanelTests(unittest.TestCase):
 
         self.assertEqual(
             [uploaded_file_artifact_name(upload) for upload in unsafe_uploads],
-            ["CODEOWNERS", "CODEOWNERS", "CODEOWNERS", "CODEOWNERS", "CODEOWNERS"],
+            [
+                "__unsafe_path__/CODEOWNERS",
+                "__unsafe_path__/CODEOWNERS",
+                "__unsafe_path__/CODEOWNERS",
+                "__unsafe_path__/CODEOWNERS",
+                "__unsafe_path__/CODEOWNERS",
+            ],
         )
 
     def test_configure_dashboard_upload_widget_sends_browser_relative_paths(
@@ -343,6 +349,116 @@ class UploadPanelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "metadata is ambiguous"):
             asyncio.run(dashboard_file_uploads_from_request(request))  # type: ignore[arg-type]
 
+    def test_dashboard_upload_request_rejects_codeowners_field_paths_without_metadata(
+        self,
+    ) -> None:
+        request = FakeRequest(
+            [
+                (
+                    ".github/CODEOWNERS",
+                    FakeStarletteUpload(
+                        ".github/CODEOWNERS",
+                        content=b"/services/payments/ @payments-sre",
+                    ),
+                ),
+                (
+                    "services/payments/plan.json",
+                    FakeStarletteUpload(
+                        "services/payments/plan.json",
+                        content=b'{"resource_changes": []}',
+                    ),
+                ),
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "metadata must match uploaded files"):
+            asyncio.run(dashboard_file_uploads_from_request(request))  # type: ignore[arg-type]
+
+    def test_dashboard_upload_request_does_not_trust_bare_codeowners_without_metadata(
+        self,
+    ) -> None:
+        request = FakeRequest(
+            [
+                (
+                    "CODEOWNERS",
+                    FakeStarletteUpload(
+                        "CODEOWNERS",
+                        content=b"/services/payments/ @payments-sre",
+                    ),
+                ),
+                (
+                    "plan.json",
+                    FakeStarletteUpload(
+                        "plan.json",
+                        content=b'{"resource_changes": []}',
+                    ),
+                ),
+            ]
+        )
+
+        files = asyncio.run(dashboard_file_uploads_from_request(request))  # type: ignore[arg-type]
+
+        self.assertEqual(
+            [file.name for file in files],
+            ["__unsafe_path__/CODEOWNERS", "plan.json"],
+        )
+        self.assertFalse(any(hasattr(file, "relative_path") for file in files))
+
+    def test_dashboard_upload_request_taints_pathlike_upload_filename_without_metadata(
+        self,
+    ) -> None:
+        request = FakeRequest(
+            [
+                (
+                    "files",
+                    FakeStarletteUpload(
+                        "services/payments/plan.json",
+                        content=b'{"resource_changes": []}',
+                    ),
+                ),
+            ]
+        )
+
+        files = asyncio.run(dashboard_file_uploads_from_request(request))  # type: ignore[arg-type]
+
+        self.assertEqual(
+            [file.name for file in files],
+            ["__unsafe_path__/services/payments/plan.json"],
+        )
+        self.assertFalse(any(hasattr(file, "relative_path") for file in files))
+
+    def test_dashboard_upload_request_does_not_trust_codeowners_basename_metadata(
+        self,
+    ) -> None:
+        request = FakeRequest(
+            [
+                (DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD, "CODEOWNERS"),
+                (DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD, "plan.json"),
+                (
+                    "CODEOWNERS",
+                    FakeStarletteUpload(
+                        "CODEOWNERS",
+                        content=b"/services/payments/ @payments-sre",
+                    ),
+                ),
+                (
+                    "plan.json",
+                    FakeStarletteUpload(
+                        "plan.json",
+                        content=b'{"resource_changes": []}',
+                    ),
+                ),
+            ]
+        )
+
+        files = asyncio.run(dashboard_file_uploads_from_request(request))  # type: ignore[arg-type]
+
+        self.assertEqual(
+            [file.name for file in files],
+            ["__unsafe_path__/CODEOWNERS", "plan.json"],
+        )
+        self.assertFalse(any(hasattr(file, "relative_path") for file in files))
+
     def test_dashboard_upload_request_preserves_duplicate_basename_fallback_uploads(
         self,
     ) -> None:
@@ -359,6 +475,37 @@ class UploadPanelTests(unittest.TestCase):
 
         self.assertEqual([file.name for file in files], ["plan.json", "plan.json"])
         self.assertFalse(any(hasattr(file, "relative_path") for file in files))
+
+    def test_dashboard_upload_request_rejects_basename_fallback_with_field_path(
+        self,
+    ) -> None:
+        request = FakeRequest(
+            [
+                (DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD, "plan.json"),
+                ("services/payments/plan.json", FakeStarletteUpload("plan.json")),
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "directory path metadata"):
+            asyncio.run(  # type: ignore[arg-type]
+                dashboard_file_uploads_from_request(
+                    request,
+                    require_directory_paths=True,
+                )
+            )
+
+    def test_dashboard_upload_request_rejects_conflicting_basename_metadata(
+        self,
+    ) -> None:
+        request = FakeRequest(
+            [
+                (DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD, "plan.json"),
+                ("services/payments/plan.json", FakeStarletteUpload("plan.json")),
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "metadata must match uploaded files"):
+            asyncio.run(dashboard_file_uploads_from_request(request))  # type: ignore[arg-type]
 
     def test_dashboard_directory_upload_rejects_duplicate_basename_fallbacks(
         self,
@@ -401,7 +548,7 @@ class UploadPanelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "metadata is ambiguous"):
             asyncio.run(dashboard_file_uploads_from_request(request))  # type: ignore[arg-type]
 
-    def test_dashboard_upload_request_rejects_duplicate_field_path_bindings(
+    def test_dashboard_upload_request_rejects_duplicate_field_paths_without_metadata(
         self,
     ) -> None:
         request = FakeRequest(
@@ -411,7 +558,19 @@ class UploadPanelTests(unittest.TestCase):
             ]
         )
 
-        with self.assertRaisesRegex(ValueError, "metadata is ambiguous"):
+        with self.assertRaisesRegex(ValueError, "metadata must match uploaded files"):
+            asyncio.run(dashboard_file_uploads_from_request(request))  # type: ignore[arg-type]
+
+    def test_dashboard_upload_request_rejects_mismatched_field_path_without_metadata(
+        self,
+    ) -> None:
+        request = FakeRequest(
+            [
+                ("services/payments/vars.tfvars", FakeStarletteUpload("plan.json")),
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "metadata must match uploaded files"):
             asyncio.run(dashboard_file_uploads_from_request(request))  # type: ignore[arg-type]
 
     def test_dashboard_upload_request_rejects_mixed_field_path_metadata(
@@ -649,6 +808,82 @@ class UploadPanelTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(widget.handled_files, [])
 
+    def test_dashboard_upload_route_taints_codeowners_basename_metadata(self) -> None:
+        widget = FakeDashboardUploadWidget(
+            "client-codeowners-basename",
+            "upload-codeowners-basename",
+        )
+        upload_url = register_dashboard_upload_handler(widget, lambda _text: None)
+        upload_key = upload_url.rsplit("/", maxsplit=1)[-1]
+        route_path = f"{DASHBOARD_UPLOAD_ROUTE_PREFIX}/{{upload_key}}"
+        route = next(
+            route
+            for route in getattr(dashboard_app.router, "routes", [])
+            if getattr(route, "path", None) == route_path
+        )
+
+        response = asyncio.run(
+            route.endpoint(  # type: ignore[attr-defined]
+                upload_key,
+                FakeRequest(
+                    [
+                        (DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD, "CODEOWNERS"),
+                        (
+                            "CODEOWNERS",
+                            FakeStarletteUpload(
+                                "CODEOWNERS",
+                                content=b"/services/payments/ @payments-sre",
+                            ),
+                        ),
+                    ]
+                ),
+            )
+        )
+
+        self.assertEqual(response, {"upload": "success"})
+        self.assertEqual(
+            [file.name for file in widget.handled_files],
+            ["__unsafe_path__/CODEOWNERS"],
+        )
+        self.assertFalse(
+            any(hasattr(file, "relative_path") for file in widget.handled_files)
+        )
+
+    def test_dashboard_upload_route_rejects_conflicting_basename_metadata(self) -> None:
+        widget = FakeDashboardUploadWidget(
+            "client-conflicting-basename",
+            "upload-conflicting-basename",
+        )
+        upload_url = register_dashboard_upload_handler(widget, lambda _text: None)
+        upload_key = upload_url.rsplit("/", maxsplit=1)[-1]
+        route_path = f"{DASHBOARD_UPLOAD_ROUTE_PREFIX}/{{upload_key}}"
+        route = next(
+            route
+            for route in getattr(dashboard_app.router, "routes", [])
+            if getattr(route, "path", None) == route_path
+        )
+
+        response = asyncio.run(
+            route.endpoint(  # type: ignore[attr-defined]
+                upload_key,
+                FakeRequest(
+                    [
+                        (DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD, "plan.json"),
+                        (
+                            "services/payments/plan.json",
+                            FakeStarletteUpload(
+                                "plan.json",
+                                content=b'{"resource_changes": []}',
+                            ),
+                        ),
+                    ]
+                ),
+            )
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(widget.handled_files, [])
+
     def test_dashboard_directory_upload_route_rejects_basename_only_metadata(
         self,
     ) -> None:
@@ -675,6 +910,87 @@ class UploadPanelTests(unittest.TestCase):
                         (DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD, "plan.json"),
                         ("plan.json", FakeStarletteUpload("plan.json")),
                         ("plan.json", FakeStarletteUpload("plan.json")),
+                    ]
+                ),
+            )
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(widget.handled_files, [])
+
+    def test_dashboard_directory_upload_route_rejects_missing_artifact_paths(
+        self,
+    ) -> None:
+        widget = FakeDashboardUploadWidget(
+            "client-dir-no-paths",
+            "upload-dir-no-paths",
+        )
+        upload_url = register_dashboard_upload_handler(
+            widget,
+            lambda _text: None,
+            require_directory_paths=True,
+        )
+        upload_key = upload_url.rsplit("/", maxsplit=1)[-1]
+        route_path = f"{DASHBOARD_UPLOAD_ROUTE_PREFIX}/{{upload_key}}"
+        route = next(
+            route
+            for route in getattr(dashboard_app.router, "routes", [])
+            if getattr(route, "path", None) == route_path
+        )
+
+        response = asyncio.run(
+            route.endpoint(  # type: ignore[attr-defined]
+                upload_key,
+                FakeRequest(
+                    [
+                        (
+                            "files",
+                            FakeStarletteUpload(
+                                "services/unowned/plan.json",
+                                content=b'{"resource_changes": []}',
+                            ),
+                        )
+                    ]
+                ),
+            )
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(widget.handled_files, [])
+
+    def test_dashboard_directory_upload_route_rejects_basename_artifact_paths(
+        self,
+    ) -> None:
+        widget = FakeDashboardUploadWidget(
+            "client-dir-basename-paths",
+            "upload-dir-basename-paths",
+        )
+        upload_url = register_dashboard_upload_handler(
+            widget,
+            lambda _text: None,
+            require_directory_paths=True,
+        )
+        upload_key = upload_url.rsplit("/", maxsplit=1)[-1]
+        route_path = f"{DASHBOARD_UPLOAD_ROUTE_PREFIX}/{{upload_key}}"
+        route = next(
+            route
+            for route in getattr(dashboard_app.router, "routes", [])
+            if getattr(route, "path", None) == route_path
+        )
+
+        response = asyncio.run(
+            route.endpoint(  # type: ignore[attr-defined]
+                upload_key,
+                FakeRequest(
+                    [
+                        (DASHBOARD_UPLOAD_ARTIFACT_PATH_FIELD, "plan.json"),
+                        (
+                            "files",
+                            FakeStarletteUpload(
+                                "plan.json",
+                                content=b'{"resource_changes": []}',
+                            ),
+                        ),
                     ]
                 ),
             )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 import re
@@ -10,6 +11,8 @@ from typing import Any
 from evidence.models import OwnerSignal
 from parsers.base import ParseBatchResult, UnifiedChange, is_non_mutating_action
 from services.intake_service import (
+    EXTERNAL_ARTIFACT_PREFIX,
+    UNSAFE_ARTIFACT_PREFIX,
     artifact_name_has_traversal,
     artifact_name_is_ownership_untrusted,
     artifact_name_is_traversal_normalized,
@@ -78,6 +81,18 @@ def _normalized_subject(path: str) -> str:
     while normalized.startswith("./"):
         normalized = normalized[2:]
     return normalized.lstrip("/")
+
+
+def _untrusted_display_subject(subject: str) -> str:
+    normalized = _normalized_subject(subject)
+    normalized_lower = normalized.lower()
+    for prefix in (UNSAFE_ARTIFACT_PREFIX, EXTERNAL_ARTIFACT_PREFIX):
+        prefix_lower = prefix.lower()
+        if normalized_lower == prefix_lower:
+            return "unknown-file"
+        if normalized_lower.startswith(f"{prefix_lower}/"):
+            return normalized[len(prefix) + 1 :] or "unknown-file"
+    return normalized or "unknown-file"
 
 
 def _is_codeowners_source(name: str) -> bool:
@@ -669,7 +684,7 @@ def build_ownership_context(
                 unknown_file_candidates.add(subject)
             continue
         if artifact_name_is_ownership_untrusted(subject):
-            unmapped_subjects.append(subject)
+            unmapped_subjects.append(_untrusted_display_subject(subject))
             if file_result.status != "failed":
                 untrusted_file_unmapped_candidates.add(subject)
             continue
@@ -765,11 +780,18 @@ def build_ownership_context(
         and subject not in files_with_unresolved_changes
     }
     if cleared_untrusted_subjects:
-        unmapped_subjects = [
-            subject
-            for subject in unmapped_subjects
-            if subject not in cleared_untrusted_subjects
-        ]
+        cleared_subject_counts = Counter(cleared_untrusted_subjects)
+        cleared_subject_counts.update(
+            _untrusted_display_subject(subject)
+            for subject in cleared_untrusted_subjects
+        )
+        retained_unmapped_subjects: list[str] = []
+        for subject in unmapped_subjects:
+            if cleared_subject_counts[subject] > 0:
+                cleared_subject_counts[subject] -= 1
+                continue
+            retained_unmapped_subjects.append(subject)
+        unmapped_subjects = retained_unmapped_subjects
 
     unique_signals = _dedupe_signals(signals)
     escalation_hints = tuple(

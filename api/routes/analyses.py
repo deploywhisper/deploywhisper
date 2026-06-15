@@ -37,6 +37,7 @@ from services.intake_service import (
     trusted_artifact_path_binding_is_ambiguous,
     trusted_artifact_path_matches_filename,
     trusted_relative_artifact_path,
+    untrusted_upload_filename,
     uniquify_artifact_names,
 )
 from services.report_service import REPORT_SCHEMA_VERSION
@@ -420,7 +421,9 @@ async def _read_upload_files_with_limit(
             chunks.extend(chunk)
             remaining -= len(chunk)
         artifact_name = (
-            trusted_paths[index] if trusted_paths else upload.filename or "artifact.bin"
+            trusted_paths[index]
+            if trusted_paths
+            else untrusted_upload_filename(upload.filename)
         )
         buffered.append((artifact_name, bytes(chunks)))
 

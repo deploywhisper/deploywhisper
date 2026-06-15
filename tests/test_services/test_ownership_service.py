@@ -12,7 +12,7 @@ from services.ownership_service import (
     build_ownership_context,
     uploaded_codeowners_sources,
 )
-from services.intake_service import uniquify_artifact_names
+from services.intake_service import untrusted_upload_filename, uniquify_artifact_names
 
 
 class OwnershipServiceTests(unittest.TestCase):
@@ -197,6 +197,32 @@ class OwnershipServiceTests(unittest.TestCase):
         )
 
         sources = uploaded_codeowners_sources(files)
+
+        self.assertEqual(sources, ())
+
+    def test_pathlike_untrusted_codeowners_filename_is_not_trusted(self) -> None:
+        sources = uploaded_codeowners_sources(
+            [
+                (
+                    untrusted_upload_filename(".github/CODEOWNERS"),
+                    b"* @spoofed-owner",
+                ),
+                ("repo/services/payments/plan.json", b"{}"),
+            ]
+        )
+
+        self.assertEqual(sources, ())
+
+    def test_bare_untrusted_codeowners_filename_is_not_trusted(self) -> None:
+        sources = uploaded_codeowners_sources(
+            [
+                (
+                    untrusted_upload_filename("CODEOWNERS"),
+                    b"* @spoofed-owner",
+                ),
+                ("services/payments/plan.json", b"{}"),
+            ]
+        )
 
         self.assertEqual(sources, ())
 
@@ -892,6 +918,101 @@ class OwnershipServiceTests(unittest.TestCase):
         self.assertEqual(context.owner_signals[0].owners, ["@payments-runtime"])
         self.assertEqual(context.unmapped_subjects, ())
         self.assertEqual(context.context_todos, ())
+
+    def test_untrusted_pathlike_file_unmapped_subject_hides_internal_marker(
+        self,
+    ) -> None:
+        artifact_name = untrusted_upload_filename("services/payments/plan.json")
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name=artifact_name,
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file=artifact_name,
+                            tool="terraform",
+                            resource_id="aws_security_group.payments",
+                            action="modify",
+                            summary="Terraform changed a payments security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+
+        context = build_ownership_context(parse_batch)
+
+        self.assertIn("services/payments/plan.json", context.unmapped_subjects)
+        self.assertFalse(
+            any(
+                subject.startswith("__unsafe_path__/")
+                for subject in context.unmapped_subjects
+            )
+        )
+        self.assertEqual(context.context_todos, (OWNERSHIP_CONTEXT_TODO,))
+
+    def test_service_owned_untrusted_subject_keeps_matching_trusted_gap(
+        self,
+    ) -> None:
+        untrusted_artifact_name = untrusted_upload_filename(
+            "services/payments/plan.json"
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name=untrusted_artifact_name,
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file=untrusted_artifact_name,
+                            tool="terraform",
+                            resource_id="aws_security_group.service_owned",
+                            action="modify",
+                            summary="Terraform changed a service-owned group.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="services/payments/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="services/payments/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.unowned",
+                            action="modify",
+                            summary="Terraform changed an unowned group.",
+                        )
+                    ],
+                ),
+            ]
+        )
+        topology = {
+            "metadata": {"import": {"source_ref": "topology.yaml"}},
+            "services": [
+                {
+                    "id": "payments-api",
+                    "label": "Payments API",
+                    "resource_keys": ["aws_security_group.service_owned"],
+                    "owners": ["@payments-runtime"],
+                }
+            ],
+        }
+
+        context = build_ownership_context(parse_batch, topology=topology)
+
+        self.assertIn("services/payments/plan.json", context.unmapped_subjects)
+        self.assertFalse(
+            any(
+                subject.startswith("__unsafe_path__/")
+                for subject in context.unmapped_subjects
+            )
+        )
+        self.assertEqual(context.context_todos, (OWNERSHIP_CONTEXT_TODO,))
 
     def test_non_mutating_changes_do_not_create_missing_ownership_context(
         self,
