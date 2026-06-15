@@ -6,7 +6,12 @@
   "scripts": {
     "setup:ui-review": "npx @guidepup/setup",
     "test:ui-review": "playwright test tests/e2e/report_review.keyboard.spec.js && playwright test tests/e2e/dashboard_deploy_review_upload.spec.js",
-    "test:ui-review:voiceover": "playwright test tests/e2e/report_review.voiceover.spec.js --project=webkit"
+    "test:ui-review:voiceover": "playwright test tests/e2e/report_review.voiceover.spec.js --project=webkit",
+    "ui:dev": "npm --prefix frontend run dev",
+    "ui:build": "npm --prefix frontend run build",
+    "ui:test": "npm --prefix frontend run test",
+    "ui:typecheck": "npm --prefix frontend run typecheck",
+    "ui:gen-api": "npm --prefix frontend run gen-api"
   },
   "devDependencies": {
     "@guidepup/guidepup": "^0.24.0",

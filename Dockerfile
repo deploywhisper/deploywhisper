@@ -22,6 +22,14 @@ RUN pip install --no-compile -r requirements.txt \
     && rm -f "${VIRTUAL_ENV}"/bin/pip "${VIRTUAL_ENV}"/bin/pip3 "${VIRTUAL_ENV}"/bin/pip3.11
 
 
+FROM node:22-alpine AS frontend
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ .
+RUN npm run build            # outputs /frontend/dist
+
+
 FROM python:3.11-slim AS runtime
 
 WORKDIR /app
@@ -37,6 +45,7 @@ RUN groupadd --system appuser \
     && chown -R appuser:appuser /app
 
 COPY --from=builder /opt/venv /opt/venv
+COPY --from=frontend --chown=appuser:appuser /frontend/dist ./frontend/dist
 COPY --chown=appuser:appuser app.py config.py logging_config.py alembic.ini ./
 COPY --chown=appuser:appuser api ./api
 COPY --chown=appuser:appuser analysis ./analysis

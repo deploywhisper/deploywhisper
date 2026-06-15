@@ -10,15 +10,17 @@ import hashlib
 import hmac
 import logging
 from pathlib import Path
+from typing import Any
 
 from fastapi import Form, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from nicegui import app as fastapi_app
 from nicegui import ui
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import RedirectResponse
+from starlette.responses import FileResponse, RedirectResponse
 
 from api.errors import (
     ApiError,
@@ -65,7 +67,21 @@ configure_logging()
 logger = logging.getLogger(__name__)
 TOPOLOGY_DRIFT_SCHEDULER_POLL_SECONDS = 60
 ASSETS_DIR = Path(__file__).resolve().parent / "ui" / "assets"
+FRONTEND_DIST_DIR = Path(__file__).resolve().parent / "frontend" / "dist"
+FRONTEND_INDEX_PATH = FRONTEND_DIST_DIR / "index.html"
 FAVICON_PATH = "/assets/favicon.ico"
+
+
+class SPAStaticFiles(StaticFiles):
+    """Serve built SPA assets and fall back to index.html for client routes."""
+
+    async def get_response(self, path: str, scope: dict[str, Any]):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404 and FRONTEND_INDEX_PATH.is_file():
+                return FileResponse(FRONTEND_INDEX_PATH)
+            raise
 
 
 def _ensure_nicegui_config_defaults() -> None:
@@ -102,6 +118,15 @@ _ensure_nicegui_config_defaults()
 if not getattr(fastapi_app, "_deploywhisper_assets_mounted", False):
     fastapi_app.add_static_files("/assets", ASSETS_DIR)
     fastapi_app._deploywhisper_assets_mounted = True
+if FRONTEND_DIST_DIR.is_dir() and not getattr(
+    fastapi_app, "_deploywhisper_frontend_mounted", False
+):
+    fastapi_app.mount(
+        "/app",
+        SPAStaticFiles(directory=FRONTEND_DIST_DIR, html=True),
+        name="frontend",
+    )
+    fastapi_app._deploywhisper_frontend_mounted = True
 fastapi_app.add_exception_handler(ApiError, api_error_handler)
 fastapi_app.add_exception_handler(RequestValidationError, validation_error_handler)
 fastapi_app.add_exception_handler(StarletteHTTPException, http_error_envelope_handler)
