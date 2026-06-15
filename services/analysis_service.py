@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 from datetime import UTC, datetime
+from time import perf_counter
 from typing import Any
 from pydantic import BaseModel, Field
 
@@ -39,8 +40,14 @@ from services.report_service import (
     readable_report_schema_version,
 )
 from services.settings_service import resolve_provider_runtime
-from services.submission_manifest import build_submission_manifest
+from services.submission_manifest import SubmissionManifest, build_submission_manifest
 from services.incident_service import get_incident_index_snapshot
+from services.confidence_ledger import EvidenceLawStatus, evidence_law_status
+from services.ownership_service import (
+    CodeownersSource,
+    build_ownership_context,
+    uploaded_codeowners_sources,
+)
 from services.topology_service import (
     STALE_AFTER_DAYS,
     get_topology_status,
@@ -57,6 +64,7 @@ def evaluate_evidence(
     change_metadata_by_id: dict[str, dict[str, Any]] | None = None,
     supplemental_changes: list[UnifiedChange] | None = None,
     completion_client=None,
+    allow_llm_assistance: bool = True,
 ) -> RiskAssessment:
     """Return a reusable unified risk assessment from evidence inputs."""
     return score_evidence(
@@ -67,6 +75,7 @@ def evaluate_evidence(
         change_metadata_by_id=change_metadata_by_id,
         supplemental_changes=supplemental_changes,
         completion_client=completion_client,
+        allow_llm_assistance=allow_llm_assistance,
     )
 
 
@@ -114,6 +123,7 @@ def evaluate_parse_batch(
     topology: dict | None = None,
     raw_files: dict[str, bytes | None] | None = None,
     completion_client=None,
+    allow_llm_assistance: bool = True,
 ) -> RiskAssessment:
     """Compatibility wrapper that scores extracted evidence for a parse batch."""
     scored_evidence_items = (
@@ -132,6 +142,7 @@ def evaluate_parse_batch(
             topology=topology,
             raw_files=raw_files,
             completion_client=completion_client,
+            allow_llm_assistance=allow_llm_assistance,
         )
     if not scored_evidence_items:
         scored_evidence_items = extract_batch_evidence(batch)
@@ -145,11 +156,16 @@ def evaluate_parse_batch(
             changes, scored_evidence_items
         ),
         completion_client=completion_client,
+        allow_llm_assistance=allow_llm_assistance,
     )
 
 
 class AnalysisArtifacts(BaseModel):
     parse_batch: ParseBatchResult = Field(..., description="Per-file parse results")
+    submission_manifest: SubmissionManifest = Field(
+        default_factory=SubmissionManifest,
+        description="Submission coverage and artifact outcome manifest",
+    )
     evidence_items: list[EvidenceItem] = Field(
         default_factory=list,
         description="Traceable evidence extracted from parsed changes",
@@ -262,6 +278,12 @@ class ShareSummaryJsonPayload(BaseModel):
         default=None, description="Deep link to the report rollback view"
     )
     verdict_banner: str = Field(..., description="Verdict banner for PR comments")
+    evidence_law_status: EvidenceLawStatus = Field(
+        ..., description="Evidence Law verification status for severe claims"
+    )
+    evidence_law_detail: str = Field(
+        ..., description="Human-readable Evidence Law verification detail"
+    )
     headline: str = Field(..., description="Top summary line")
     top_findings: list[ShareSummaryFinding] = Field(
         default_factory=list, description="Top findings to surface"
@@ -328,6 +350,18 @@ def _incident_score(incident_index_size: int) -> float:
     return min(incident_index_size / 10, 1.0)
 
 
+def _unique_texts(values: list[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = str(value or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(normalized)
+    return unique
+
+
 def _context_confidence_level(context_score: float) -> str:
     if context_score >= 0.85:
         return "high"
@@ -340,15 +374,25 @@ def _context_todos(
     *,
     evidence_success_rate: float,
     topology_freshness_days: int | None,
+    topology_warnings: list[str] | None = None,
     incident_index_size: int,
     parser_success_rate: float,
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
 ) -> list[str]:
     todos: list[str] = []
-    if topology_freshness_days is None:
-        todos.append("Import or refresh topology context for this project/workspace.")
-    elif topology_freshness_days > STALE_AFTER_DAYS:
-        todos.append("Refresh stale topology context for this project/workspace.")
-    if incident_index_size == 0:
+    if include_topology_context:
+        if topology_freshness_days is None:
+            todos.append(
+                "Import or refresh topology context for this project/workspace."
+            )
+        elif topology_freshness_days > STALE_AFTER_DAYS:
+            todos.append("Refresh stale topology context for this project/workspace.")
+        if _has_kubernetes_live_state_todo(topology_warnings):
+            todos.append(
+                "Resolve Kubernetes live-state context TODOs before relying on topology context."
+            )
+    if include_incident_context and incident_index_size == 0:
         todos.append("Import relevant incident history for this project/workspace.")
     if parser_success_rate < 1.0:
         todos.append("Review parser errors and resubmit supported artifacts.")
@@ -362,29 +406,104 @@ def _context_uncertainty(
     context_score: float,
     evidence_success_rate: float,
     topology_freshness_days: int | None,
+    topology_warnings: list[str] | None = None,
     incident_index_size: int,
     parser_success_rate: float,
+    ownership_unmapped_subjects: list[str] | tuple[str, ...] = (),
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
 ) -> str | None:
-    if context_score < 0.7:
-        return (
-            "Insufficient context: missing or stale topology, parser coverage, "
-            "evidence coverage, or incident history prevents a confident "
-            "low-risk verdict."
-        )
     weak_signals: list[str] = []
-    if topology_freshness_days is None:
-        weak_signals.append("topology context is unavailable")
-    elif topology_freshness_days > STALE_AFTER_DAYS:
-        weak_signals.append("topology context is stale")
-    if incident_index_size == 0:
+    if include_topology_context:
+        if topology_freshness_days is None:
+            weak_signals.append("topology context is unavailable")
+        elif topology_freshness_days > STALE_AFTER_DAYS:
+            weak_signals.append("topology context is stale")
+        if _has_kubernetes_live_state_todo(topology_warnings):
+            weak_signals.append("Kubernetes live-state context has unresolved TODOs")
+        elif _has_kubernetes_live_state_degradation(topology_warnings):
+            weak_signals.append("Kubernetes live-state context is degraded")
+    if include_incident_context and incident_index_size == 0:
         weak_signals.append("incident history is unavailable")
     if parser_success_rate < 1.0:
         weak_signals.append("parser coverage is partial")
     if evidence_success_rate < 1.0:
         weak_signals.append("evidence coverage is partial")
+    if ownership_unmapped_subjects:
+        weak_signals.append("ownership mapping is incomplete")
+    if context_score < 0.7:
+        message = (
+            "Insufficient context: missing parser coverage, evidence coverage, "
+            "ownership mapping, or enabled project context prevents a confident low-risk verdict."
+        )
+        if weak_signals:
+            message += " Weak signals: " + "; ".join(weak_signals) + "."
+        return message
     if not weak_signals:
         return None
     return "Uncertainty: " + "; ".join(weak_signals) + "."
+
+
+def _has_kubernetes_live_state_todo(warnings: list[str] | None) -> bool:
+    return any(
+        "kubernetes live-state context todo" in str(warning).lower()
+        for warning in warnings or []
+    )
+
+
+def _has_kubernetes_live_state_degradation(warnings: list[str] | None) -> bool:
+    degradation_markers = (
+        "kubernetes live-state context todo",
+        "kubernetes live-state import partially parsed",
+        "kubernetes live-state import did not produce any supported resources",
+        "kubernetes live-state import did not produce any non-namespace resources",
+    )
+    return any(
+        any(marker in str(warning).lower() for marker in degradation_markers)
+        for warning in warnings or []
+    )
+
+
+def _is_kubernetes_topology_payload(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    metadata = payload.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return False
+    import_metadata = metadata.get("import", {})
+    if not isinstance(import_metadata, dict):
+        return False
+    return str(import_metadata.get("source_type") or "").strip() == "kubernetes"
+
+
+def _has_usable_topology_payload(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    services = payload.get("services", [])
+    if not isinstance(services, list):
+        return False
+    for service in services:
+        if not isinstance(service, dict):
+            continue
+        service_id = str(service.get("id") or "").strip()
+        resource_keys = service.get("resource_keys", [])
+        resource_key_texts = (
+            [
+                str(resource_key).strip()
+                for resource_key in resource_keys
+                if str(resource_key).strip()
+            ]
+            if isinstance(resource_keys, list)
+            else []
+        )
+        if service_id and not service_id.startswith("Namespace/"):
+            return True
+        if any(
+            resource_key and not resource_key.startswith("Namespace/")
+            for resource_key in resource_key_texts
+        ):
+            return True
+    return False
 
 
 def _evidence_success_rate(
@@ -429,15 +548,41 @@ def _build_context_completeness(
     project_key: str | None = None,
     workspace_id: int | None = None,
     workspace_key: str | None = None,
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
+    topology: dict | None = None,
+    codeowners_sources: tuple[CodeownersSource, ...] = (),
 ) -> ContextCompleteness:
-    topology_status = get_topology_status(
-        project_id=project_id,
-        project_key=project_key,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    topology_freshness_days = _topology_freshness_days(topology_status.updated_at)
-    if project_id is None and project_key is None:
+    topology_last_imported_at = None
+    topology_warnings: list[str] = []
+    topology_payload_is_usable = False
+    topology_payload_is_kubernetes = False
+    if include_topology_context:
+        topology_status = get_topology_status(
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        topology_payload = getattr(topology_status, "payload", None)
+        topology_last_imported_at = topology_status.updated_at
+        topology_warnings = list(getattr(topology_status, "warnings", []) or [])
+        topology_payload_is_usable = _has_usable_topology_payload(topology_payload)
+        topology_payload_is_kubernetes = _is_kubernetes_topology_payload(
+            topology_payload
+        )
+        topology_drift = getattr(topology_status, "drift", None)
+        topology_drift_warnings = list(getattr(topology_drift, "warnings", []) or [])
+        if getattr(
+            topology_drift, "status", None
+        ) == "unavailable" and _has_kubernetes_live_state_degradation(
+            topology_drift_warnings
+        ):
+            topology_warnings = _unique_texts(
+                topology_warnings + topology_drift_warnings
+            )
+    topology_freshness_days = _topology_freshness_days(topology_last_imported_at)
+    if not include_incident_context or (project_id is None and project_key is None):
         incident_index_size = 0
         incident_index_snapshot = {
             "incident_index_version": "incidents:unscoped",
@@ -467,25 +612,46 @@ def _build_context_completeness(
     evidence_success_rate = _evidence_success_rate(
         _collect_changes(parse_batch), list(evidence_items or [])
     )
+    weighted_scores = [
+        (raw_parser_success_rate, 0.35),
+        (evidence_success_rate, 0.20),
+    ]
+    if include_topology_context:
+        topology_score = _freshness_score(topology_freshness_days)
+        if topology_payload_is_kubernetes and not topology_payload_is_usable:
+            topology_score = 0.0
+        if _has_kubernetes_live_state_degradation(topology_warnings):
+            topology_score = (
+                0.0 if not topology_payload_is_usable else min(topology_score, 0.5)
+            )
+        weighted_scores.append((topology_score, 0.25))
+    if include_incident_context:
+        weighted_scores.append((_incident_score(incident_index_size), 0.20))
+    total_weight = sum(weight for _, weight in weighted_scores) or 1.0
     raw_context_score = min(
         1.0,
-        (
-            raw_parser_success_rate * 0.35
-            + _freshness_score(topology_freshness_days) * 0.25
-            + _incident_score(incident_index_size) * 0.20
-            + evidence_success_rate * 0.20
-        ),
+        sum(score * weight for score, weight in weighted_scores) / total_weight,
+    )
+    ownership_topology = topology if include_topology_context else None
+    ownership_context = build_ownership_context(
+        parse_batch,
+        topology=ownership_topology,
+        codeowners_sources=codeowners_sources,
     )
     context_score = round(raw_context_score, 2)
     context_todos = _context_todos(
         evidence_success_rate=evidence_success_rate,
         topology_freshness_days=topology_freshness_days,
+        topology_warnings=topology_warnings,
         incident_index_size=incident_index_size,
         parser_success_rate=raw_parser_success_rate,
+        include_topology_context=include_topology_context,
+        include_incident_context=include_incident_context,
     )
+    context_todos = _unique_texts(context_todos + list(ownership_context.context_todos))
     return ContextCompleteness(
         topology_freshness_days=topology_freshness_days,
-        topology_last_imported_at=topology_status.updated_at,
+        topology_last_imported_at=topology_last_imported_at,
         incident_index_size=incident_index_size,
         incident_index_version=str(
             incident_index_snapshot.get("incident_index_version") or "incidents:empty"
@@ -505,11 +671,60 @@ def _build_context_completeness(
             context_score=raw_context_score,
             evidence_success_rate=evidence_success_rate,
             topology_freshness_days=topology_freshness_days,
+            topology_warnings=topology_warnings,
             incident_index_size=incident_index_size,
             parser_success_rate=raw_parser_success_rate,
+            ownership_unmapped_subjects=ownership_context.unmapped_subjects,
+            include_topology_context=include_topology_context,
+            include_incident_context=include_incident_context,
         ),
         context_todos=context_todos,
         insufficient_context=raw_context_score < 0.7,
+        owner_signals=list(ownership_context.owner_signals),
+        escalation_hints=list(ownership_context.escalation_hints),
+        ownership_unmapped_subjects=list(ownership_context.unmapped_subjects),
+    )
+
+
+def build_context_completeness(
+    parse_batch: ParseBatchResult,
+    *,
+    evidence_items: list[EvidenceItem] | None = None,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
+    topology: dict | None = None,
+    codeowners_sources: tuple[CodeownersSource, ...] = (),
+) -> ContextCompleteness:
+    """Build the shared context-completeness signal for analysis callers."""
+
+    return _build_context_completeness(
+        parse_batch,
+        evidence_items=evidence_items,
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+        include_topology_context=include_topology_context,
+        include_incident_context=include_incident_context,
+        topology=topology,
+        codeowners_sources=codeowners_sources,
+    )
+
+
+def _skipped_narrative(reason: str, assessment: RiskAssessment) -> NarrativeResult:
+    return NarrativeResult(
+        available=False,
+        opening_sentence="",
+        explanation="",
+        guidance=[],
+        degraded=True,
+        warnings=list(assessment.warnings) + [reason],
+        failure_notice=reason,
+        source="fallback",
     )
 
 
@@ -647,12 +862,62 @@ def _report_link(report_id: int | None) -> str | None:
     return build_share_report_link(report_id)
 
 
-def _has_partial_context_signal(report: dict) -> bool:
-    manifest = report.get("submission_manifest")
-    if isinstance(manifest, dict) and manifest.get("partial_analysis"):
+def _truthy_bool_signal(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, int | float):
+        if not math.isfinite(float(value)):
+            return False
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off", ""}:
+            return False
+    return False
+
+
+def _mapping_or_empty(value: object) -> dict:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _manifest_item_has_partial_context_signal(item: object) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if _truthy_bool_signal(item.get("partial")):
         return True
-    context = dict(report.get("context_completeness") or {})
-    if bool(context.get("insufficient_context")):
+    status = str(item.get("status") or "").strip().lower()
+    if status in {"failed", "excluded", "sensitive"}:
+        return True
+    parse_status = str(item.get("parse_status") or "").strip().lower()
+    return bool(parse_status and parse_status != "parsed")
+
+
+def _has_partial_context_signal(report: dict) -> bool:
+    if _truthy_bool_signal(report.get("partial_context")):
+        return True
+    advisory = report.get("advisory")
+    if isinstance(advisory, dict) and _truthy_bool_signal(
+        advisory.get("partial_context")
+    ):
+        return True
+    manifest = report.get("submission_manifest")
+    if isinstance(manifest, dict):
+        if _truthy_bool_signal(manifest.get("partial_analysis")):
+            return True
+        for item in manifest.get("items") or []:
+            if _manifest_item_has_partial_context_signal(item):
+                return True
+    for item in report.get("submission_manifest_fallback") or []:
+        if _manifest_item_has_partial_context_signal(item):
+            return True
+    context = _mapping_or_empty(report.get("context_completeness"))
+    if _truthy_bool_signal(context.get("partial_context")):
+        return True
+    if _truthy_bool_signal(context.get("insufficient_context")):
         return True
     if str(context.get("uncertainty") or "").strip():
         return True
@@ -663,15 +928,58 @@ def _has_partial_context_signal(report: dict) -> bool:
             return True
     except (TypeError, ValueError):
         pass
-    try:
-        if float(context.get("evidence_success_rate", 1.0)) < 1.0:
-            return True
-    except (TypeError, ValueError):
-        pass
     warnings = [str(warning).lower() for warning in (report.get("warnings") or [])]
     return any(
         "partial context" in warning or "failed to parse" in warning
         for warning in warnings
+    )
+
+
+def _has_context_attention_signal(report: dict) -> bool:
+    if _has_partial_context_signal(report):
+        return True
+    context = _mapping_or_empty(report.get("context_completeness"))
+    try:
+        return float(context.get("evidence_success_rate", 1.0)) < 1.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _advisory_requires_attention_signal(report: dict) -> bool | None:
+    advisory = report.get("advisory")
+    if not isinstance(advisory, dict) or "requires_attention" not in advisory:
+        return None
+    return _truthy_bool_signal(advisory.get("requires_attention"))
+
+
+def _warning_requires_attention_signal(warning: object) -> bool:
+    normalized = str(warning or "").strip().lower()
+    return bool(normalized and not normalized.startswith("narrative"))
+
+
+def _has_warning_attention_signal(report: dict) -> bool:
+    return any(
+        _warning_requires_attention_signal(warning)
+        for warning in (report.get("warnings") or [])
+    )
+
+
+def _context_summary_from_report(report: dict) -> ShareSummaryContext:
+    context = _mapping_or_empty(report.get("context_completeness"))
+    context_summary = _context_summary(context)
+    if (
+        not _has_partial_context_signal(report)
+        or context_summary.label == "LIMITED CONTEXT"
+    ):
+        return context_summary
+    uncertainty = str(context.get("uncertainty") or "").strip()
+    return ShareSummaryContext(
+        score=context_summary.score,
+        label="LIMITED CONTEXT",
+        summary=(
+            f"LIMITED CONTEXT ({context_summary.score:.2f}) - "
+            + (uncertainty or "one or more submitted artifacts were not analyzed.")
+        ),
     )
 
 
@@ -687,6 +995,22 @@ def _finding_evidence_count(
     if count:
         return count
     return len(finding.get("evidence_refs") or [])
+
+
+def _mapping_items(value: object) -> list[dict]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _share_finding_confidence(value: object) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(confidence):
+        return 0.0
+    return max(0.0, min(confidence, 1.0))
 
 
 def _context_number(
@@ -721,7 +1045,7 @@ def _context_summary(context: dict) -> ShareSummaryContext:
     partial_evidence = (
         _context_number(context, "evidence_success_rate", missing_default=1.0) < 1.0
     )
-    insufficient_context = bool(context.get("insufficient_context"))
+    insufficient_context = _truthy_bool_signal(context.get("insufficient_context"))
     uncertainty = str(context.get("uncertainty") or "").strip()
     context_todos = bool(_context_todo_items(context.get("context_todos")))
     label = (
@@ -796,13 +1120,13 @@ def _rollback_summary(report: dict) -> str:
 
 
 def _share_findings(report: dict) -> list[ShareSummaryFinding]:
-    evidence_items = list(report.get("evidence_items") or [])
-    findings = list(report.get("findings") or [])
+    evidence_items = _mapping_items(report.get("evidence_items"))
+    findings = _mapping_items(report.get("findings"))
     sorted_findings = sorted(
         findings,
         key=lambda item: (
             -_finding_severity_rank(str(item.get("severity", ""))),
-            -float(item.get("confidence", 0.0)),
+            -_share_finding_confidence(item.get("confidence")),
             str(item.get("title", "")),
         ),
     )
@@ -811,13 +1135,15 @@ def _share_findings(report: dict) -> list[ShareSummaryFinding]:
             title=_shorten(str(finding.get("title", "")), 72),
             severity=str(finding.get("severity", "medium")),
             evidence_count=_finding_evidence_count(finding, evidence_items),
-            confidence=round(float(finding.get("confidence", 0.0)), 2),
+            confidence=round(_share_finding_confidence(finding.get("confidence")), 2),
         )
         for finding in sorted_findings[:3]
     ]
 
 
-def build_share_summary(report: dict) -> ShareSummary:
+def build_share_summary(
+    report: dict, *, evidence_detail_available: bool = True
+) -> ShareSummary:
     """Build a markdown + JSON share summary from the persisted report object."""
     severity = str(report.get("severity", "medium"))
     recommendation = str(report.get("recommendation", "caution"))
@@ -829,34 +1155,37 @@ def build_share_summary(report: dict) -> ShareSummary:
     )
     verdict_banner = f"DeployWhisper {severity.upper()} · {recommendation.upper()}"
     top_findings = _share_findings(report)
-    evidence_count = len(report.get("evidence_items") or [])
+    evidence_count = len(_mapping_items(report.get("evidence_items")))
+    evidence_status, evidence_detail = evidence_law_status(
+        report, evidence_detail_available=evidence_detail_available
+    )
     blast_radius_summary = _blast_radius_summary(report)
     rollback_summary = _rollback_summary(report)
-    context_summary = _context_summary(dict(report.get("context_completeness") or {}))
+    context_summary = _context_summary_from_report(report)
     report_id = int(report["id"]) if report.get("id") is not None else None
     report_link = _report_link(report_id)
     rollback_link = report_link
-    partial_context = _has_partial_context_signal(report)
-    if partial_context and context_summary.label != "LIMITED CONTEXT":
-        uncertainty = str(
-            dict(report.get("context_completeness") or {}).get("uncertainty") or ""
-        ).strip()
-        context_summary = ShareSummaryContext(
-            score=context_summary.score,
-            label="LIMITED CONTEXT",
-            summary=(
-                f"LIMITED CONTEXT ({context_summary.score:.2f}) - "
-                + (uncertainty or "one or more submitted artifacts were not analyzed.")
-            ),
+    partial_context = _has_context_attention_signal(report)
+    narrative_available = _truthy_bool_signal(report.get("narrative_available", True))
+    narrative_degraded = _truthy_bool_signal(report.get("narrative_degraded"))
+    advisory_requires_attention = _advisory_requires_attention_signal(report)
+    baseline_requires_attention = (
+        advisory_requires_attention
+        if advisory_requires_attention is not None
+        else (
+            recommendation != "go"
+            or context_summary.score < 0.7
+            or partial_context
+            or context_summary.label == "LIMITED CONTEXT"
+            or not narrative_available
+            or narrative_degraded
+            or _has_warning_attention_signal(report)
         )
-    requires_attention = (
-        recommendation != "go"
-        or context_summary.score < 0.7
-        or partial_context
-        or context_summary.label == "LIMITED CONTEXT"
-        or not bool(report.get("narrative_available", True))
-        or bool(report.get("warnings"))
     )
+    requires_attention = baseline_requires_attention or evidence_status in {
+        "Needs review",
+        "Reconciled",
+    }
     uncertainty_summary = (
         "This result requires additional human review before release."
         if requires_attention
@@ -870,6 +1199,8 @@ def build_share_summary(report: dict) -> ShareSummary:
         report_link=report_link,
         rollback_link=rollback_link,
         verdict_banner=verdict_banner,
+        evidence_law_status=evidence_status,
+        evidence_law_detail=evidence_detail,
         headline=headline,
         top_findings=top_findings,
         evidence_count=evidence_count,
@@ -896,6 +1227,7 @@ def build_share_summary(report: dict) -> ShareSummary:
                 if rollback_link
                 else f"- Rollback: {rollback_summary}"
             ),
+            f"- Evidence Law: {evidence_status} - {evidence_detail}",
             f"- Context: {context_summary.summary}",
             f"- Advisory only: {uncertainty_summary}",
         ]
@@ -918,6 +1250,7 @@ def build_share_summary(report: dict) -> ShareSummary:
                     if rollback_link
                     else f"- Rollback: {_shorten(rollback_summary, 120)}"
                 ),
+                f"- Evidence Law: {evidence_status} - {_shorten(evidence_detail, 100)}",
                 f"- Context: {context_summary.label} ({context_summary.score:.2f})",
                 f"- Advisory only: {uncertainty_summary}",
             ]
@@ -929,6 +1262,7 @@ def build_share_summary(report: dict) -> ShareSummary:
             f"Findings: {len(top_findings)} shown / {len(report.get('findings') or [])} total and {evidence_count} evidence items.",
             f"Blast radius: {blast_radius_summary}.",
             f"Rollback: {rollback_summary}.",
+            f"Evidence Law: {evidence_status} - {evidence_detail}.",
             (
                 f"Rollback link: {rollback_link}."
                 if rollback_link
@@ -962,6 +1296,10 @@ def build_analysis_artifacts(
     workspace_id: int | None = None,
     workspace_key: str | None = None,
     completion_client=None,
+    include_topology_context: bool = True,
+    include_incident_context: bool = True,
+    include_narrative: bool = True,
+    allow_llm_assistance: bool = True,
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
@@ -969,6 +1307,7 @@ def build_analysis_artifacts(
     partial_context = parse_batch.has_partial_context or (
         submission_manifest.partial_analysis
     )
+    codeowners_sources = uploaded_codeowners_sources(files)
     analysis_raw_files = _raw_files_for_parse_batch(files, parse_batch)
     evidence_items = extract_batch_evidence(
         parse_batch,
@@ -978,12 +1317,15 @@ def build_analysis_artifacts(
         workspace_key=workspace_key,
     )
     changes = _collect_changes(parse_batch)
-    topology, topology_warning = load_topology(
-        project_id=project_id,
-        project_key=project_key,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
+    if include_topology_context:
+        topology, topology_warning = load_topology(
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+    else:
+        topology, topology_warning = None, None
     assessment = evaluate_parse_batch(
         parse_batch,
         partial_context=partial_context,
@@ -991,6 +1333,7 @@ def build_analysis_artifacts(
         topology=topology,
         raw_files=analysis_raw_files,
         completion_client=completion_client,
+        allow_llm_assistance=allow_llm_assistance,
     )
     assessment.context_completeness = _build_context_completeness(
         parse_batch,
@@ -999,6 +1342,10 @@ def build_analysis_artifacts(
         project_key=project_key,
         workspace_id=workspace_id,
         workspace_key=workspace_key,
+        include_topology_context=include_topology_context,
+        include_incident_context=include_incident_context,
+        topology=topology,
+        codeowners_sources=codeowners_sources,
     )
     assessment = apply_context_uncertainty(assessment)
     findings = build_findings(
@@ -1012,7 +1359,7 @@ def build_analysis_artifacts(
     rollback_plan = generate_rollback_plan(changes, partial_context=partial_context)
     incident_matches = _normalize_incident_matches(
         []
-        if project_id is None and project_key is None
+        if not include_incident_context or (project_id is None and project_key is None)
         else find_incident_matches(
             changes,
             project_id=project_id,
@@ -1021,14 +1368,21 @@ def build_analysis_artifacts(
             workspace_key=workspace_key,
         )
     )
-    narrative = generate_narrative(
-        assessment.model_copy(deep=True),
-        [finding.model_copy(deep=True) for finding in findings],
-        completion_client=completion_client,
-        raw_files=analysis_raw_files,
-    )
+    if include_narrative:
+        narrative = generate_narrative(
+            assessment.model_copy(deep=True),
+            [finding.model_copy(deep=True) for finding in findings],
+            completion_client=completion_client,
+            raw_files=analysis_raw_files,
+        )
+    else:
+        narrative = _skipped_narrative(
+            "Narrative skipped for deterministic benchmark profile.",
+            assessment,
+        )
     return AnalysisArtifacts(
         parse_batch=parse_batch,
+        submission_manifest=submission_manifest,
         evidence_items=evidence_items,
         findings=findings,
         assessment=assessment,
@@ -1087,6 +1441,7 @@ def analyze_uploaded_files(
     audit_context: dict | None = None,
 ) -> AnalysisRunResult:
     """Run the shared parse -> assess -> persist pipeline."""
+    started_at = perf_counter()
     resolved_project = resolve_analysis_project_scope(
         project_id=project_id,
         project_key=project_key,
@@ -1100,6 +1455,7 @@ def analyze_uploaded_files(
         workspace_key=workspace_key,
         completion_client=completion_client,
     )
+    analysis_duration_seconds = max(1, round(perf_counter() - started_at))
     try:
         persisted_report = persist_analysis_report(
             artifacts.parse_batch,
@@ -1116,6 +1472,7 @@ def analyze_uploaded_files(
             workspace_id=workspace_id,
             workspace_key=workspace_key,
             audit_context=audit_context,
+            analysis_duration_seconds=analysis_duration_seconds,
         )
     except Exception as exc:  # noqa: BLE001
         raise AnalysisPersistenceError(str(exc)) from exc

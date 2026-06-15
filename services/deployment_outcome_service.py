@@ -282,7 +282,10 @@ def list_deployment_outcomes(
     project_key: str | None = None,
     workspace_id: int | None = None,
     workspace_key: str | None = None,
-    limit: int = 100,
+    deployed_from: datetime | None = None,
+    deployed_to: datetime | None = None,
+    deployed_before: datetime | None = None,
+    limit: int | None = 100,
 ) -> list[dict[str, Any]]:
     normalized_outcome = _normalize_outcome(outcome) if outcome is not None else None
     with SessionLocal() as session:
@@ -335,6 +338,9 @@ def list_deployment_outcomes(
             workspace_id=resolved_workspace_id,
             analysis_id=analysis_id,
             outcome_label=normalized_outcome,
+            deployed_from=deployed_from,
+            deployed_to=deployed_to,
+            deployed_before=deployed_before,
             limit=limit,
         )
         return [_serialize_deployment_outcome(item) for item in outcomes]

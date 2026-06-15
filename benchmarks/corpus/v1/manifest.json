@@ -1,0 +1,10 @@
+{
+  "corpus_id": "deploywhisper-benchmark-corpus-v1",
+  "version": "1.0.0",
+  "description": "Public synthetic DeployWhisper benchmark corpus v1.",
+  "scenarios": [
+    "scenarios/terraform-public-ssh/scenario.json",
+    "scenarios/kubernetes-zero-replicas/scenario.json",
+    "scenarios/jenkins-prod-auto-apply/scenario.json"
+  ]
+}

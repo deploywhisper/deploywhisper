@@ -1,0 +1,20 @@
+pipeline {
+  agent any
+
+  stages {
+    stage("Plan") {
+      steps {
+        sh "terraform plan -out=tfplan"
+      }
+    }
+
+    stage("Production Apply") {
+      when {
+        branch "main"
+      }
+      steps {
+        sh "terraform apply -auto-approve tfplan"
+      }
+    }
+  }
+}

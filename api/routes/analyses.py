@@ -5,9 +5,10 @@ from __future__ import annotations
 import hmac
 import os
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
+from pydantic import ValidationError
 
 from api.errors import ApiError, ApiRoute
 from api.schemas import (
@@ -15,6 +16,7 @@ from api.schemas import (
     AnalysisListResponse,
     AnalysisReportData,
     AnalysisRunResponse,
+    AdvisorySummaryData,
     AnalysisShareConfigData,
     AnalysisShareConfigRequest,
     AnalysisShareConfigResponse,
@@ -26,16 +28,20 @@ from config import settings
 from services.analysis_service import (
     AnalysisPersistenceError,
     analyze_uploaded_files,
-    build_advisory_summary,
     build_share_summary,
     resolve_analysis_project_scope,
 )
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     build_pending_analysis,
+    trusted_artifact_path_binding_is_ambiguous,
+    trusted_artifact_path_matches_filename,
+    trusted_relative_artifact_path,
+    untrusted_upload_filename,
     uniquify_artifact_names,
 )
 from services.report_service import REPORT_SCHEMA_VERSION
+from services.report_service import build_report_advisory_payload
 from services.report_service import configure_report_share
 from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
@@ -50,6 +56,7 @@ from services.project_service import resolve_project_reference
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
 _HISTORY_ANALYSIS_STATUSES = {"complete", "degraded", "fallback"}
+AnalysisOutcomeFilter = Literal["success", "failure", "rolled_back", "rollback"]
 
 
 def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
@@ -69,6 +76,33 @@ def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
         else REPORT_SCHEMA_VERSION,
         "report_schema_versions": versions,
     }
+
+
+def _analysis_run_advisory(result) -> AdvisorySummaryData:
+    persisted_report = result.persisted_report
+    try:
+        fallback_payload = (
+            build_report_advisory_payload(persisted_report)
+            if isinstance(persisted_report, dict)
+            else {}
+        )
+    except (TypeError, ValueError) as exc:
+        raise ApiError(
+            status_code=500,
+            code="analysis_advisory_contract_invalid",
+            message="Analysis advisory contract validation failed.",
+        ) from exc
+    try:
+        advisory = AdvisorySummaryData.model_validate(fallback_payload)
+    except ValidationError as exc:
+        raise ApiError(
+            status_code=500,
+            code="analysis_advisory_contract_invalid",
+            message="Analysis advisory contract validation failed.",
+        ) from exc
+    if isinstance(persisted_report, dict):
+        persisted_report["advisory"] = advisory.model_dump(mode="json")
+    return advisory
 
 
 def _project_api_error(exc: ValueError) -> ApiError:
@@ -331,11 +365,40 @@ def require_share_management_token(
 
 async def _read_upload_files_with_limit(
     files: list[UploadFile],
+    artifact_paths: list[str] | str | None = None,
 ) -> list[tuple[str, bytes]]:
     remaining = MAX_TOTAL_UPLOAD_BYTES
     buffered: list[tuple[str, bytes]] = []
+    trusted_paths = _trusted_artifact_paths(artifact_paths, expected_count=len(files))
+    if trusted_paths:
+        for index, upload in enumerate(files):
+            if not trusted_artifact_path_matches_filename(
+                trusted_paths[index],
+                upload.filename,
+            ):
+                raise ApiError(
+                    status_code=400,
+                    code="artifact_path_mismatch",
+                    message=(
+                        "artifact_paths entries must be provided in the same order "
+                        "as the uploaded files and their filenames must match."
+                    ),
+                )
+        if trusted_artifact_path_binding_is_ambiguous(
+            trusted_paths,
+            [upload.filename for upload in files],
+        ):
+            raise ApiError(
+                status_code=400,
+                code="artifact_path_ambiguous",
+                message=(
+                    "artifact_paths cannot safely bind duplicate path metadata. "
+                    "For duplicate basenames, include each trusted repo-relative "
+                    "path in the matching upload filename."
+                ),
+            )
 
-    for upload in files:
+    for index, upload in enumerate(files):
         file_size = getattr(upload, "size", None)
         if isinstance(file_size, int) and file_size > remaining:
             raise ApiError(
@@ -357,12 +420,63 @@ async def _read_upload_files_with_limit(
                 )
             chunks.extend(chunk)
             remaining -= len(chunk)
-        buffered.append((upload.filename or "artifact.bin", bytes(chunks)))
+        artifact_name = (
+            trusted_paths[index]
+            if trusted_paths
+            else untrusted_upload_filename(upload.filename)
+        )
+        buffered.append((artifact_name, bytes(chunks)))
 
     return uniquify_artifact_names(buffered)
 
 
-@router.get("", response_model=AnalysisListResponse)
+def _trusted_artifact_paths(
+    artifact_paths: list[str] | str | None,
+    *,
+    expected_count: int | None = None,
+) -> list[str]:
+    if artifact_paths is None:
+        return []
+    if isinstance(artifact_paths, str):
+        values = [artifact_paths]
+    else:
+        values = list(artifact_paths)
+    if expected_count is not None and len(values) != expected_count:
+        raise ApiError(
+            status_code=400,
+            code="artifact_path_mismatch",
+            message=(
+                "artifact_paths must include exactly one trusted relative path "
+                "for each uploaded file."
+            ),
+        )
+    trusted_paths: list[str] = []
+    for value in values:
+        trusted_path = trusted_relative_artifact_path(value)
+        if trusted_path is None:
+            raise ApiError(
+                status_code=400,
+                code="invalid_artifact_path",
+                message=(
+                    "artifact_paths entries must be safe repo-relative paths "
+                    "without absolute, traversal, drive-root, or reserved segments."
+                ),
+            )
+        trusted_paths.append(trusted_path)
+    return trusted_paths
+
+
+@router.get(
+    "",
+    response_model=AnalysisListResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        405: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
 def list_analyses(
     project_id: int | None = Query(default=None),
     project_key: str | None = Query(default=None),
@@ -372,9 +486,30 @@ def list_analyses(
     recommendation: str | None = Query(default=None),
     search: str | None = Query(default=None),
     toolchain: str | None = Query(default=None),
+    outcome: AnalysisOutcomeFilter | None = Query(
+        default=None,
+        description=(
+            "Optional deployment outcome filter. Allowed values: success, failure, "
+            "rolled_back, rollback."
+        ),
+    ),
     analysis_status: str | None = Query(default=None),
-    created_from: datetime | None = Query(default=None),
-    created_to: datetime | None = Query(default=None),
+    created_from: datetime | None = Query(
+        default=None,
+        description=(
+            "Optional inclusive activity-window start timestamp. Matches reports "
+            "created in the window or reports with deployment-outcome/reviewer-feedback "
+            "activity in the window."
+        ),
+    ),
+    created_to: datetime | None = Query(
+        default=None,
+        description=(
+            "Optional inclusive activity-window end timestamp. Matches reports "
+            "created in the window or reports with deployment-outcome/reviewer-feedback "
+            "activity in the window."
+        ),
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
     authorization: dict[str, object] = Depends(_authorization_context),
@@ -416,6 +551,7 @@ def list_analyses(
             recommendation=recommendation,
             search=search,
             toolchain=toolchain,
+            outcome=outcome,
             analysis_status=analysis_status,
             created_from=created_from,
             created_to=created_to,
@@ -459,6 +595,7 @@ def list_analyses(
     response_model=AnalysisRunResponse,
     responses={
         400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
         413: {"model": ErrorResponse},
         405: {"model": ErrorResponse},
@@ -485,6 +622,10 @@ async def create_analysis(
     workspace_key: str | None = Form(
         default=None,
         description="Optional project-local workspace/environment key for the analysis.",
+    ),
+    artifact_paths: list[str] | None = Form(
+        default=None,
+        description="Optional trusted relative artifact path per uploaded file for directory-scoped ownership matching.",
     ),
     trigger_type: str | None = Header(
         default=None, alias="X-DeployWhisper-Trigger-Type"
@@ -552,7 +693,7 @@ async def create_analysis(
             raise _project_scope_forbidden_error() from exc
         raise _project_api_error(exc) from exc
 
-    raw_files = await _read_upload_files_with_limit(files)
+    raw_files = await _read_upload_files_with_limit(files, artifact_paths)
     pending_analysis = build_pending_analysis(raw_files)
     if pending_analysis.ready_count == 0:
         raise ApiError(
@@ -585,7 +726,7 @@ async def create_analysis(
         ) from exc
     except ValueError as exc:
         raise _project_api_error(exc) from exc
-    advisory = build_advisory_summary(result.assessment, result.narrative)
+    advisory = _analysis_run_advisory(result)
     share_summary = build_share_summary(result.persisted_report)
     return AnalysisRunResponse(
         data=build_analysis_run_data(
@@ -608,6 +749,8 @@ async def create_analysis(
     "/{report_id}",
     response_model=AnalysisDetailResponse,
     responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
         405: {"model": ErrorResponse},
         422: {"model": ErrorResponse},

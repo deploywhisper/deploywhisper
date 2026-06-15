@@ -16,12 +16,15 @@ test.describe("project selector", () => {
     await option.click();
 
     await expect(page.getByText("Current project: Payments (payments)")).toBeVisible();
-    await expect(page.getByText("Payments")).toBeVisible();
-    await expect(page.getByText("acme/payments-api")).toBeVisible();
-    await expect(page.getByText("Key payments")).toBeVisible();
+    const sidebar = page.getByRole("complementary");
+    await expect(sidebar.getByText("Payments", { exact: true })).toBeVisible();
+    await expect(sidebar.getByText("acme/payments-api")).toBeVisible();
+    await expect(sidebar.getByText("Key payments", { exact: true })).toBeVisible();
 
     const dashboardProjectSelect = page.getByLabel("Project workspace");
-    await expect(dashboardProjectSelect).toContainText("Payments");
+    await expect(dashboardProjectSelect).toHaveValue(
+      "Payments · acme/payments-api · payments"
+    );
 
     await page.goto("/history", { waitUntil: "networkidle" });
     await expect(

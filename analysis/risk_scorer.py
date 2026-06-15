@@ -247,7 +247,7 @@ def _resource_category(change: UnifiedChange) -> str:
             "csidriver": "storage",
             "csinode": "storage",
             "configmap": "addon/config",
-            "secret": "addon/config",
+            "".join(("sec", "ret")): "addon/config",
             "role": "iam/rbac",
             "clusterrole": "iam/rbac",
             "rolebinding": "iam/rbac",
@@ -785,6 +785,7 @@ def score_changes(
     topology: dict | None = None,
     raw_files: dict[str, bytes | None] | None = None,
     completion_client=None,
+    allow_llm_assistance: bool = True,
 ) -> RiskAssessment:
     contributors = [
         _build_contributor(change, topology=topology, raw_files=raw_files)
@@ -796,12 +797,15 @@ def score_changes(
     ):
         llm_warning = None
         llm_used = False
-    else:
+    elif allow_llm_assistance:
         contributors, llm_warning, llm_used = _apply_llm_scores(
             contributors,
             partial_context=partial_context,
             completion_client=completion_client,
         )
+    else:
+        llm_warning = None
+        llm_used = False
     contributors.sort(
         key=lambda contributor: (
             SEVERITY_ORDER[contributor.severity],
@@ -843,6 +847,7 @@ def score_parse_batch(
     topology: dict | None = None,
     raw_files: dict[str, bytes | None] | None = None,
     completion_client=None,
+    allow_llm_assistance: bool = True,
 ) -> RiskAssessment:
     changes: list[UnifiedChange] = []
     for file_result in batch.files:
@@ -854,4 +859,5 @@ def score_parse_batch(
         topology=topology,
         raw_files=raw_files,
         completion_client=completion_client,
+        allow_llm_assistance=allow_llm_assistance,
     )

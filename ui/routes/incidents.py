@@ -10,7 +10,8 @@ from ui.project_authorization import (
     require_ui_project_capability,
     resolve_authorized_ui_active_project,
 )
-from ui.theme import apply_theme, build_navigation_shell, build_page_header
+from ui.components.dashboard_shell import build_app_shell, workspace_content
+from ui.theme import build_page_header
 
 
 def _empty_status(project_id: int | None) -> dict:
@@ -35,17 +36,12 @@ def _status_for_project(project_id: int | None) -> dict:
 
 def build_incidents_page() -> None:
     """Render incident ingestion/index management."""
-    apply_theme()
     content_refresh = {"fn": lambda *_: None}
 
     def handle_project_change(*_) -> None:
-        refresh_shell()
         content_refresh["fn"]()
 
-    refresh_shell = build_navigation_shell(
-        "incidents",
-        on_project_change=handle_project_change,
-    )
+    build_app_shell("incidents", on_project_change=handle_project_change)
 
     @ui.refreshable
     def render_incidents_content() -> None:
@@ -69,7 +65,7 @@ def build_incidents_page() -> None:
             active_project.display_name if active_project is not None else "Unassigned"
         )
 
-        with ui.column().classes("dw-main-content dw-shell gap-5"):
+        with workspace_content(aria_label="Incident ingestion workspace"):
             with ui.card().classes("w-full dw-panel dw-page-header shadow-none"):
                 build_page_header(
                     eyebrow="Incidents",

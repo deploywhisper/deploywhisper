@@ -194,8 +194,8 @@ def build_project_combobox(
                         with (
                             ui.element("div")
                             .props(
-                                "role=option tabindex=-1 "
-                                f"aria-selected={'true' if is_active else 'false'}"
+                                "role=button tabindex=-1 "
+                                f"aria-pressed={'true' if is_active else 'false'}"
                             )
                             .classes(" ".join(option_classes))
                             .on(
@@ -212,10 +212,10 @@ def build_project_combobox(
                                     ui.html(primary).classes(
                                         "dw-project-option-primary"
                                     )
-                                    ui.html(secondary).classes("dw-project-option-meta")
+                                ui.html(secondary).classes("dw-project-option-meta")
                                 if is_active:
-                                    ui.icon("check").classes(
-                                        "dw-project-option-check shrink-0"
+                                    ui.html(
+                                        '<span aria-hidden="true" class="dw-project-option-check shrink-0">✓</span>'
                                     )
 
     def set_highlighted_index(index: int) -> None:
@@ -310,21 +310,73 @@ def build_project_combobox(
 def open_create_project_dialog(
     *,
     on_created: Callable[[ProjectRecord], None],
+    on_open: Callable[[], None] | None = None,
+    on_close: Callable[[], None] | None = None,
 ) -> None:
     """Open the shared create-project dialog and invoke a callback on success."""
-    dialog = ui.dialog()
+    dialog = ui.dialog().props("persistent")
+    close_state = {"closed": False}
+
+    def close_dialog() -> None:
+        dialog.close()
+        if close_state["closed"]:
+            return
+        close_state["closed"] = True
+        if on_close is not None:
+            on_close()
+
     with (
         dialog,
-        ui.card().classes("w-[520px] dw-panel shadow-none p-6 gap-3") as dialog_card,
+        ui.card()
+        .classes("dw-panel shadow-none gap-0")
+        .style(
+            "width:min(620px, calc(100vw - 32px));max-height:calc(100vh - 48px);"
+            "overflow:auto;padding:0 !important"
+        ) as dialog_card,
     ):
         decorate_modal_card(dialog_card, label="Create project workspace")
-        ui.label("Create project workspace").classes("text-lg font-medium dw-text")
-        key_input = ui.input("Project key").classes("w-full")
-        name_input = ui.input("Display name").classes("w-full")
-        description_input = ui.textarea("Description").classes("w-full")
-        repository_input = ui.input("Repository URL").classes("w-full")
-        branch_input = ui.input("Default branch").classes("w-full")
-        error_label = ui.label("").classes("text-xs dw-warning-text")
+        dialog_card.props('data-dw-create-project-dialog="1"')
+        with ui.column().classes("w-full gap-0"):
+            with (
+                ui.row()
+                .classes("w-full items-start justify-between gap-4")
+                .style("padding:24px 24px 16px")
+            ):
+                with ui.column().classes("gap-1 min-w-0"):
+                    ui.label("Create Project Workspace").classes(
+                        "text-xl font-semibold dw-text"
+                    )
+                    ui.label(
+                        "Set the project scope used by reports, history, and deploy review."
+                    ).classes("text-sm dw-muted leading-6")
+                close_button = (
+                    ui.button("Close", on_click=close_dialog)
+                    .props("flat no-caps")
+                    .classes("dw-orange-text-button")
+                    .style("min-height:36px;padding:0 12px;flex-shrink:0")
+                )
+                decorate_modal_close(close_button)
+
+            ui.separator().classes("w-full")
+
+            with ui.column().classes("w-full gap-4").style("padding:24px"):
+                with ui.element("div").classes(
+                    "grid grid-cols-1 md:grid-cols-2 gap-4 w-full"
+                ):
+                    key_input = ui.input("Project key").classes("w-full")
+                    name_input = ui.input("Display name").classes("w-full")
+                    repository_input = ui.input("Repository URL").classes("w-full")
+                    branch_input = ui.input("Default branch").classes("w-full")
+                for text_input in (
+                    key_input,
+                    name_input,
+                    repository_input,
+                    branch_input,
+                ):
+                    text_input.props("outlined dense")
+                description_input = ui.textarea("Description").classes("w-full")
+                description_input.props("outlined autogrow")
+                error_label = ui.label("").classes("text-xs dw-warning-text leading-5")
 
         def submit_project() -> None:
             try:
@@ -338,17 +390,32 @@ def open_create_project_dialog(
             except (PermissionError, ValueError) as exc:
                 error_label.set_text(str(exc))
                 return
-            dialog.close()
+            close_dialog()
             on_created(created)
 
-        with ui.row().classes("w-full justify-end gap-3 mt-4"):
-            cancel_button = ui.button("Cancel", on_click=dialog.close).props(
-                "outline no-caps"
+        with (
+            ui.row()
+            .classes("w-full items-center justify-between gap-3 flex-wrap")
+            .style("padding:0 24px 24px")
+        ):
+            ui.label("Required: project key and display name").classes(
+                "text-xs dw-muted"
             )
-            decorate_modal_close(cancel_button)
-            ui.button(
-                "Create project",
-                on_click=submit_project,
-                color="primary",
-            ).props("unelevated no-caps")
+            with ui.row().classes("items-center gap-3"):
+                cancel_button = (
+                    ui.button("Cancel", on_click=close_dialog)
+                    .props("outline no-caps")
+                    .classes("dw-orange-text-button")
+                    .style("min-height:38px;padding:0 14px")
+                )
+                decorate_modal_close(cancel_button)
+                ui.button(
+                    "Create project",
+                    on_click=submit_project,
+                    color="primary",
+                ).props("unelevated no-caps").classes("dw-orange-button").style(
+                    "min-height:38px;padding:0 16px"
+                )
+    if on_open is not None:
+        on_open()
     dialog.open()

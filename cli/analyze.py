@@ -8,9 +8,10 @@ import io
 import json
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from api.errors import build_error
-from api.schemas import build_analysis_run_data, build_meta
+from api.schemas import AdvisorySummaryData, build_analysis_run_data, build_meta
 from integrations.github.init_service import (
     GitHubInitError,
     collect_github_init_options,
@@ -34,10 +35,15 @@ from services.skill_test_harness_service import iter_built_in_skill_ids
 from services.analysis_service import (
     AnalysisPersistenceError,
     analyze_uploaded_files,
-    build_advisory_summary,
     build_share_summary,
     resolve_analysis_project_scope,
 )
+from services.benchmark_corpus_service import (
+    BenchmarkCorpusValidationError,
+    validate_benchmark_corpus,
+)
+from services.backtesting_service import run_incident_backtest
+from services.benchmark_runner_service import run_benchmark_corpus
 from services.deployment_outcome_service import record_deployment_outcome
 from services.project_service import create_project, create_workspace
 from services.project_service import filter_projects_by_authorization
@@ -47,17 +53,40 @@ from services.project_service import list_projects, list_workspaces
 from services.project_service import require_project_permission
 from services.project_service import resolve_project_reference
 from services.intake_service import (
+    EXTERNAL_ARTIFACT_PREFIX,
     MAX_TOTAL_UPLOAD_BYTES,
+    artifact_name_has_traversal,
     build_pending_analysis,
+    normalize_artifact_name,
     uniquify_artifact_names,
 )
-from services.report_service import REPORT_SCHEMA_VERSION, fetch_analysis_report
+from services.report_service import (
+    REPORT_SCHEMA_VERSION,
+    ReportTrendError,
+    build_report_advisory_payload,
+    fetch_analysis_report,
+    fetch_risk_trends,
+)
 from services.topology_service import get_topology_status, import_topology_source
+from pydantic import ValidationError
 
 
 def _emit_json(payload: dict, *, stream) -> None:
     stream.write(json.dumps(payload))
     stream.write("\n")
+
+
+def _analysis_run_advisory(result) -> AdvisorySummaryData:
+    persisted_report = result.persisted_report
+    fallback_payload = (
+        build_report_advisory_payload(persisted_report)
+        if isinstance(persisted_report, dict)
+        else {}
+    )
+    advisory = AdvisorySummaryData.model_validate(fallback_payload)
+    if isinstance(persisted_report, dict):
+        persisted_report["advisory"] = advisory.model_dump(mode="json")
+    return advisory
 
 
 def _split_env_project_keys(value: str | None) -> list[str] | None:
@@ -172,11 +201,96 @@ def _require_cli_analysis_project_permission(
     return True
 
 
+def _codeowners_root_for_cli_path(path: Path) -> Path | None:
+    if path.name != "CODEOWNERS":
+        return None
+    parent = path.parent
+    if parent.name in {".github", "docs"}:
+        return parent.parent
+    return parent
+
+
+def _infer_cli_artifact_roots(paths: list[Path]) -> tuple[Path, ...]:
+    roots: set[Path] = set()
+    for path in paths:
+        try:
+            resolved_path = path.resolve()
+        except OSError:
+            continue
+        root = _codeowners_root_for_cli_path(resolved_path)
+        if root is None:
+            continue
+        roots.add(root)
+    return tuple(sorted(roots, key=lambda root: str(root)))
+
+
+def _unique_cli_root_prefixes(roots: tuple[Path, ...]) -> dict[Path, str]:
+    prefix_counts: dict[str, int] = {}
+    prefixes: dict[Path, str] = {}
+    for root in roots:
+        candidate = normalize_artifact_name(root.name or "project")
+        prefix_counts.setdefault(candidate, 0)
+        prefix = candidate
+        while prefix in prefixes.values():
+            prefix_counts[candidate] += 1
+            prefix = f"{candidate}#{prefix_counts[candidate] + 1}"
+        prefixes[root] = prefix
+    return prefixes
+
+
+def _cli_artifact_roots_by_specificity(roots: tuple[Path, ...]) -> tuple[Path, ...]:
+    return tuple(sorted(roots, key=lambda root: (-len(root.parts), str(root))))
+
+
+def _cli_artifact_name(
+    *,
+    raw_path: str,
+    path: Path,
+    artifact_roots: tuple[Path, ...],
+    root_prefixes: dict[Path, str],
+) -> str:
+    if not path.is_absolute():
+        if artifact_name_has_traversal(raw_path):
+            return normalize_artifact_name(raw_path)
+        try:
+            resolved_path = path.resolve()
+        except OSError:
+            return normalize_artifact_name(raw_path)
+        for artifact_root in _cli_artifact_roots_by_specificity(artifact_roots):
+            try:
+                relative_name = normalize_artifact_name(
+                    str(resolved_path.relative_to(artifact_root))
+                )
+            except ValueError:
+                continue
+            if len(artifact_roots) == 1:
+                return relative_name
+            return f"{root_prefixes[artifact_root]}/{relative_name}"
+        if artifact_roots:
+            return f"{EXTERNAL_ARTIFACT_PREFIX}/{normalize_artifact_name(path.name or 'artifact.bin')}"
+        return normalize_artifact_name(raw_path)
+    for artifact_root in _cli_artifact_roots_by_specificity(artifact_roots):
+        try:
+            relative_name = normalize_artifact_name(
+                str(path.resolve().relative_to(artifact_root))
+            )
+        except (OSError, ValueError):
+            continue
+        if len(artifact_roots) == 1:
+            return relative_name
+        return f"{root_prefixes[artifact_root]}/{relative_name}"
+    if artifact_roots:
+        return f"{EXTERNAL_ARTIFACT_PREFIX}/{normalize_artifact_name(path.name or 'artifact.bin')}"
+    return path.name or "artifact.bin"
+
+
 def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
     artifacts: list[tuple[str, bytes]] = []
     running_total = 0
-    for raw_path in paths:
-        path = Path(raw_path)
+    artifact_paths = [(raw_path, Path(raw_path)) for raw_path in paths]
+    artifact_roots = _infer_cli_artifact_roots([path for _, path in artifact_paths])
+    root_prefixes = _unique_cli_root_prefixes(artifact_roots)
+    for raw_path, path in artifact_paths:
         try:
             file_size = path.stat().st_size
             running_total += file_size
@@ -189,7 +303,13 @@ def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
                         )
                     )
                 )
-            artifacts.append((path.name, path.read_bytes()))
+            artifact_name = _cli_artifact_name(
+                raw_path=raw_path,
+                path=path,
+                artifact_roots=artifact_roots,
+                root_prefixes=root_prefixes,
+            )
+            artifacts.append((artifact_name, path.read_bytes()))
         except OSError as exc:
             raise ValueError(
                 json.dumps(
@@ -202,7 +322,10 @@ def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
             ) from exc
     return [
         (str(name), bytes(raw_content or b""))
-        for name, raw_content in uniquify_artifact_names(artifacts)
+        for name, raw_content in uniquify_artifact_names(
+            artifacts,
+            allow_external_prefix=True,
+        )
     ]
 
 
@@ -510,7 +633,7 @@ def _run_analyze(
         "data": build_analysis_run_data(
             intake=pending_analysis,
             result=result,
-            advisory=build_advisory_summary(result.assessment, result.narrative),
+            advisory=_analysis_run_advisory(result),
             share_summary=build_share_summary(result.persisted_report),
         ).model_dump(),
         "meta": build_meta(
@@ -771,6 +894,11 @@ def _run_github_init(args: argparse.Namespace) -> int:
             github_app_name=args.github_app_name,
             github_app_slug=args.github_app_slug,
             public_base_url=args.public_base_url,
+            project_key=args.project_key,
+            project_id=args.project_id,
+            workspace_key=args.workspace_key,
+            workspace_id=args.workspace_id,
+            allow_derived_project_scope=args.allow_derived_project_scope,
             branch_name=args.branch_name,
         )
         result = run_github_init(options)
@@ -793,6 +921,168 @@ def _run_github_init(args: argparse.Namespace) -> int:
     print(f"Base branch: {result.base_branch}")
     print(f"Commit: {result.commit_sha}")
     print(f"Pull request: {result.pr_url}")
+    return 0
+
+
+def _run_benchmark_validate_corpus(path: str | None) -> int:
+    result = validate_benchmark_corpus(
+        Path(path) if path is not None else None,
+        raise_on_error=False,
+    )
+    _emit_json(result.model_dump(mode="json"), stream=sys.stdout)
+    return 0 if result.valid else 1
+
+
+def _benchmark_error_summary(
+    *,
+    corpus_id: str = "unknown",
+    version: str = "unknown",
+    scenario_count: int = 0,
+) -> dict:
+    return {
+        "corpus_id": corpus_id,
+        "version": version,
+        "scenario_count": scenario_count,
+        "passed_count": 0,
+        "failed_count": scenario_count,
+        "unsupported_count": 0,
+        "total_latency_ms": 0.0,
+        "generated_at": datetime.now(tz=UTC).isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _run_benchmark_run(path: str | None) -> int:
+    try:
+        result = run_benchmark_corpus(Path(path) if path is not None else None)
+    except BenchmarkCorpusValidationError as exc:
+        validation_summary = exc.result.summary
+        _emit_json(
+            {
+                "passed": False,
+                "valid": False,
+                "summary": _benchmark_error_summary(
+                    corpus_id=validation_summary.corpus_id,
+                    version=validation_summary.version,
+                    scenario_count=validation_summary.scenario_count,
+                ),
+                "scenarios": [],
+                "errors": exc.errors,
+            },
+            stream=sys.stdout,
+        )
+        return 1
+    except (
+        OSError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ValidationError,
+        ValueError,
+    ) as exc:
+        _emit_json(
+            {
+                "passed": False,
+                "valid": False,
+                "summary": _benchmark_error_summary(),
+                "scenarios": [],
+                "errors": [str(exc)],
+            },
+            stream=sys.stdout,
+        )
+        return 1
+    _emit_json(result.model_dump(mode="json"), stream=sys.stdout)
+    return 0 if result.passed else 1
+
+
+def _run_benchmark_backtest_incidents(args: argparse.Namespace) -> int:
+    try:
+        result = run_incident_backtest(
+            project_id=args.project_id,
+            project_key=args.project_key,
+            workspace_id=args.workspace_id,
+            workspace_key=args.workspace_key,
+        )
+    except (ValueError, OSError, ValidationError) as exc:
+        _emit_json(
+            {
+                "passed": False,
+                "summary": {
+                    "project_id": args.project_id,
+                    "project_key": args.project_key,
+                    "workspace_id": args.workspace_id,
+                    "workspace_key": args.workspace_key,
+                    "scenario_count": 0,
+                    "detected_count": 0,
+                    "missed_count": 0,
+                    "unsupported_count": 0,
+                    "insufficient_context_count": 0,
+                    "error_count": 1,
+                    "generated_at": datetime.now(tz=UTC)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                },
+                "scenarios": [],
+                "errors": [str(exc)],
+            },
+            stream=sys.stdout,
+        )
+        return 1
+    _emit_json(result, stream=sys.stdout)
+    return 0 if result.get("passed") else 1
+
+
+def _parse_trend_timestamp(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _run_benchmark_risk_trends(args: argparse.Namespace) -> int:
+    try:
+        if args.project_id is None and not args.project_key:
+            raise ReportTrendError(
+                "missing_project_scope",
+                "Project scope is required for risk trend review.",
+            )
+        created_from = _parse_trend_timestamp(args.created_from)
+        created_to = _parse_trend_timestamp(args.created_to)
+        if (
+            created_from is not None
+            and created_to is not None
+            and created_from > created_to
+        ):
+            raise ReportTrendError(
+                "invalid_time_window",
+                "created_from must be earlier than or equal to created_to.",
+            )
+        result = fetch_risk_trends(
+            project_id=args.project_id,
+            project_key=args.project_key,
+            workspace_id=args.workspace_id,
+            workspace_key=args.workspace_key,
+            severity=args.severity,
+            toolchain=args.toolchain,
+            outcome=args.outcome,
+            created_from=created_from,
+            created_to=created_to,
+        )
+    except (ValueError, OSError, ValidationError) as exc:
+        _emit_json(
+            build_error(
+                code=getattr(exc, "code", "risk_trend_export_failed"),
+                message=str(exc),
+            ),
+            stream=sys.stderr,
+        )
+        return 1
+    _emit_json(result, stream=sys.stdout)
     return 0
 
 
@@ -1081,8 +1371,122 @@ def build_parser() -> argparse.ArgumentParser:
         help="Public DeployWhisper base URL for the self-hosted GitHub App path.",
     )
     github_init_parser.add_argument(
+        "--project-key",
+        help="DeployWhisper project key for the generated action workflow.",
+    )
+    github_init_parser.add_argument(
+        "--project-id",
+        help="DeployWhisper numeric project id for the generated action workflow.",
+    )
+    github_init_parser.add_argument(
+        "--workspace-key",
+        help="Optional DeployWhisper workspace key for the generated action workflow.",
+    )
+    github_init_parser.add_argument(
+        "--workspace-id",
+        help="Optional DeployWhisper numeric workspace id for the generated action workflow.",
+    )
+    github_init_parser.add_argument(
+        "--allow-derived-project-scope",
+        action="store_true",
+        default=None,
+        help="Generate an action workflow that relies on the API endpoint to derive project scope.",
+    )
+    github_init_parser.add_argument(
         "--branch-name",
         help="Optional branch name to use in the target repository.",
+    )
+
+    benchmark_parser = subparsers.add_parser(
+        "benchmark", help="Benchmark corpus and result helpers."
+    )
+    benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command")
+    benchmark_subparsers.required = True
+    benchmark_validate_parser = benchmark_subparsers.add_parser(
+        "validate-corpus", help="Validate the public benchmark corpus contract."
+    )
+    benchmark_validate_parser.add_argument(
+        "--path",
+        help="Optional benchmark corpus root. Defaults to benchmarks/corpus/v1.",
+    )
+    benchmark_run_parser = benchmark_subparsers.add_parser(
+        "run", help="Run the public benchmark corpus against the analysis core."
+    )
+    benchmark_run_parser.add_argument(
+        "--path",
+        help="Optional benchmark corpus root. Defaults to benchmarks/corpus/v1.",
+    )
+    benchmark_backtest_parser = benchmark_subparsers.add_parser(
+        "backtest-incidents",
+        help="Replay incident-linked artifacts against the current analysis core.",
+    )
+    benchmark_backtest_parser.add_argument(
+        "--project-id",
+        type=int,
+        help="DeployWhisper numeric project id.",
+    )
+    benchmark_backtest_parser.add_argument(
+        "--project-key",
+        help="DeployWhisper project key.",
+    )
+    benchmark_backtest_parser.add_argument(
+        "--workspace-id",
+        type=int,
+        help="Optional DeployWhisper numeric workspace id.",
+    )
+    benchmark_backtest_parser.add_argument(
+        "--workspace-key",
+        help="Optional DeployWhisper workspace key.",
+    )
+    benchmark_risk_trends_parser = benchmark_subparsers.add_parser(
+        "risk-trends",
+        help="Export scoped risk trend review data as JSON.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--project-id",
+        type=int,
+        help="DeployWhisper numeric project id.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--project-key",
+        help="DeployWhisper project key.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--workspace-id",
+        type=int,
+        help="Optional DeployWhisper numeric workspace id.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--workspace-key",
+        help="Optional DeployWhisper workspace key.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--severity",
+        choices=("critical", "high", "medium", "low"),
+        help="Optional risk severity filter.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--toolchain",
+        help="Optional normalized toolchain filter, such as terraform or kubernetes.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--outcome",
+        choices=("success", "failure", "rolled_back", "rollback"),
+        help="Optional deployment outcome filter.",
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--created-from",
+        help=(
+            "Optional inclusive activity-window start timestamp "
+            "(report created, outcome deployed, or feedback created), ISO-8601 or Zulu."
+        ),
+    )
+    benchmark_risk_trends_parser.add_argument(
+        "--created-to",
+        help=(
+            "Optional inclusive activity-window end timestamp "
+            "(report created, outcome deployed, or feedback created), ISO-8601 or Zulu."
+        ),
     )
 
     return parser
@@ -1137,6 +1541,14 @@ def main() -> None:
         raise SystemExit(_run_topology_import(args))
     if args.command == "github" and args.github_command == "init":
         raise SystemExit(_run_github_init(args))
+    if args.command == "benchmark" and args.benchmark_command == "validate-corpus":
+        raise SystemExit(_run_benchmark_validate_corpus(args.path))
+    if args.command == "benchmark" and args.benchmark_command == "run":
+        raise SystemExit(_run_benchmark_run(args.path))
+    if args.command == "benchmark" and args.benchmark_command == "backtest-incidents":
+        raise SystemExit(_run_benchmark_backtest_incidents(args))
+    if args.command == "benchmark" and args.benchmark_command == "risk-trends":
+        raise SystemExit(_run_benchmark_risk_trends(args))
 
     print("DeployWhisper CLI ready: foundation-check")
 

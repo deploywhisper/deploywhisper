@@ -9,14 +9,16 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, func, not_, or_, select
+from sqlalchemy import and_, case, exists, func, literal, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from evidence.models import EvidenceItem as EvidenceItemPayload
 from evidence.models import Finding as FindingPayload
 from models.tables import (
     AnalysisReport,
+    DeploymentOutcome,
     EvidenceItem as PersistedEvidenceItem,
+    FeedbackEvent,
     Finding as PersistedFinding,
     RiskAssessment as PersistedRiskAssessment,
 )
@@ -24,6 +26,7 @@ from models.tables import (
 _FINDING_SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 _SEVERITY_SCORE_FLOOR = {"low": 0, "medium": 42, "high": 70, "critical": 90}
 _SEVERITY_SCORE_CEILING = {"low": 39, "medium": 69, "high": 89, "critical": 100}
+_ACTIVITY_ORDER_FLOOR = datetime.min.replace(tzinfo=UTC)
 _VERDICT_PREFIX_PATTERN = re.compile(
     r"^\s*(critical|high|medium|low|no-go|go|caution)"
     r"(?:\s*:\s*|\s+-\s+|"
@@ -111,6 +114,167 @@ def _analysis_status_predicate(analysis_status: str):
     if analysis_status == "fallback":
         return AnalysisReport.narrative_source == "fallback"
     return None
+
+
+def _exclusive_window_predicate(column, *, start=None, end=None, before=None):
+    predicates = []
+    if start is not None:
+        predicates.append(column >= start)
+    if end is not None:
+        predicates.append(column <= end)
+    if before is not None:
+        predicates.append(column < before)
+    if not predicates:
+        return None
+    return and_(*predicates)
+
+
+def _same_report_scope_predicate(model):
+    return and_(
+        model.project_id == AnalysisReport.project_id,
+        or_(
+            and_(model.workspace_id.is_(None), AnalysisReport.workspace_id.is_(None)),
+            model.workspace_id == AnalysisReport.workspace_id,
+        ),
+    )
+
+
+def _outcome_exists_predicate(outcome_label: str | None = None):
+    predicate = exists().where(DeploymentOutcome.analysis_id == AnalysisReport.id)
+    predicate = predicate.where(_same_report_scope_predicate(DeploymentOutcome))
+    if outcome_label:
+        predicate = predicate.where(DeploymentOutcome.outcome_label == outcome_label)
+    return predicate
+
+
+def _activity_window_predicate(
+    *,
+    activity_from: datetime | None = None,
+    activity_to: datetime | None = None,
+    activity_before: datetime | None = None,
+    outcome_label: str | None = None,
+):
+    report_window = _exclusive_window_predicate(
+        AnalysisReport.created_at,
+        start=activity_from,
+        end=activity_to,
+        before=activity_before,
+    )
+    outcome_window = _exclusive_window_predicate(
+        DeploymentOutcome.deployed_at,
+        start=activity_from,
+        end=activity_to,
+        before=activity_before,
+    )
+    feedback_window = _exclusive_window_predicate(
+        FeedbackEvent.created_at,
+        start=activity_from,
+        end=activity_to,
+        before=activity_before,
+    )
+    predicates = []
+    if report_window is not None:
+        predicates.append(report_window)
+    if outcome_window is not None:
+        outcome_exists = exists().where(
+            DeploymentOutcome.analysis_id == AnalysisReport.id
+        )
+        outcome_exists = outcome_exists.where(
+            _same_report_scope_predicate(DeploymentOutcome)
+        )
+        outcome_exists = outcome_exists.where(outcome_window)
+        if outcome_label:
+            outcome_exists = outcome_exists.where(
+                DeploymentOutcome.outcome_label == outcome_label
+            )
+        predicates.append(outcome_exists)
+    if feedback_window is not None:
+        predicates.append(
+            exists()
+            .where(FeedbackEvent.analysis_id == AnalysisReport.id)
+            .where(_same_report_scope_predicate(FeedbackEvent))
+            .where(feedback_window)
+        )
+    if not predicates:
+        return None
+    return or_(*predicates)
+
+
+def _greatest_datetime_expression(candidates):
+    greatest = candidates[0]
+    for candidate in candidates[1:]:
+        greatest = case((candidate > greatest, candidate), else_=greatest)
+    return greatest
+
+
+def _activity_order_expression(
+    *,
+    activity_from: datetime | None = None,
+    activity_to: datetime | None = None,
+    activity_before: datetime | None = None,
+    outcome_label: str | None = None,
+):
+    report_window = _exclusive_window_predicate(
+        AnalysisReport.created_at,
+        start=activity_from,
+        end=activity_to,
+        before=activity_before,
+    )
+    outcome_window = _exclusive_window_predicate(
+        DeploymentOutcome.deployed_at,
+        start=activity_from,
+        end=activity_to,
+        before=activity_before,
+    )
+    feedback_window = _exclusive_window_predicate(
+        FeedbackEvent.created_at,
+        start=activity_from,
+        end=activity_to,
+        before=activity_before,
+    )
+    if report_window is None and outcome_window is None and feedback_window is None:
+        return None
+
+    outcome_latest = (
+        select(func.max(DeploymentOutcome.deployed_at))
+        .where(DeploymentOutcome.analysis_id == AnalysisReport.id)
+        .where(_same_report_scope_predicate(DeploymentOutcome))
+    )
+    if outcome_window is not None:
+        outcome_latest = outcome_latest.where(outcome_window)
+    if outcome_label:
+        outcome_latest = outcome_latest.where(
+            DeploymentOutcome.outcome_label == outcome_label
+        )
+
+    feedback_latest = (
+        select(func.max(FeedbackEvent.created_at))
+        .where(FeedbackEvent.analysis_id == AnalysisReport.id)
+        .where(_same_report_scope_predicate(FeedbackEvent))
+    )
+    if feedback_window is not None:
+        feedback_latest = feedback_latest.where(feedback_window)
+
+    report_activity = (
+        case((report_window, AnalysisReport.created_at), else_=None)
+        if report_window is not None
+        else None
+    )
+    candidates = [
+        func.coalesce(
+            outcome_latest.correlate(AnalysisReport).scalar_subquery(),
+            literal(_ACTIVITY_ORDER_FLOOR),
+        ),
+        func.coalesce(
+            feedback_latest.correlate(AnalysisReport).scalar_subquery(),
+            literal(_ACTIVITY_ORDER_FLOOR),
+        ),
+    ]
+    if report_activity is not None:
+        candidates.append(
+            func.coalesce(report_activity, literal(_ACTIVITY_ORDER_FLOOR))
+        )
+    return _greatest_datetime_expression(candidates)
 
 
 def _normalize_report_severity(severity: str) -> str:
@@ -424,6 +588,7 @@ def create_analysis_report(
     trigger_type: str | None,
     trigger_id: str | None,
     dashboard_display_duration_seconds: int | None,
+    analysis_duration_seconds: int | None = None,
     narrative_degraded: bool | None = None,
     narrative_failure_notice: str | None = None,
     top_risk_contributors_json: str = "[]",
@@ -468,6 +633,7 @@ def create_analysis_report(
         trigger_type=trigger_type,
         trigger_id=trigger_id,
         dashboard_display_duration_seconds=dashboard_display_duration_seconds,
+        analysis_duration_seconds=analysis_duration_seconds,
     )
     finding_rows: list[tuple[PersistedFinding, list[str]]] = []
     for finding in findings_payload or []:
@@ -645,6 +811,7 @@ def delete_analysis_report(session: Session, report_id: int) -> bool:
 def list_analysis_reports(
     session: Session,
     *,
+    analysis_ids: Sequence[int] | None = None,
     project_id: int | None = None,
     workspace_id: int | None = None,
     severity: str | None = None,
@@ -654,16 +821,27 @@ def list_analysis_reports(
     analysis_status: str | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
+    created_before: datetime | None = None,
+    activity_from: datetime | None = None,
+    activity_to: datetime | None = None,
+    activity_before: datetime | None = None,
+    outcome_label: str | None = None,
     report_schema_versions: Sequence[str] | None = None,
     limit: int | None = None,
     offset: int | None = None,
+    id_before: int | None = None,
     include_evidence: bool = False,
+    order_by_activity: bool = True,
 ) -> list[AnalysisReport]:
-    stmt = (
-        select(AnalysisReport)
-        .options(*_report_load_options(include_evidence=include_evidence))
-        .order_by(AnalysisReport.id.desc())
+    if analysis_ids is not None and not analysis_ids:
+        return []
+    stmt = select(AnalysisReport).options(
+        *_report_load_options(include_evidence=include_evidence)
     )
+    if analysis_ids is not None:
+        stmt = stmt.where(AnalysisReport.id.in_(tuple(analysis_ids)))
+    if id_before is not None:
+        stmt = stmt.where(AnalysisReport.id < id_before)
     if project_id is not None:
         stmt = stmt.where(AnalysisReport.project_id == project_id)
     if workspace_id is not None:
@@ -676,6 +854,18 @@ def list_analysis_reports(
         stmt = stmt.where(AnalysisReport.created_at >= created_from)
     if created_to is not None:
         stmt = stmt.where(AnalysisReport.created_at <= created_to)
+    if created_before is not None:
+        stmt = stmt.where(AnalysisReport.created_at < created_before)
+    activity_predicate = _activity_window_predicate(
+        activity_from=activity_from,
+        activity_to=activity_to,
+        activity_before=activity_before,
+        outcome_label=outcome_label,
+    )
+    if activity_predicate is not None:
+        stmt = stmt.where(activity_predicate)
+    if outcome_label:
+        stmt = stmt.where(_outcome_exists_predicate(outcome_label))
     if toolchain:
         predicate = _toolchain_predicate(toolchain)
         if predicate is not None:
@@ -701,6 +891,20 @@ def list_analysis_reports(
                 AnalysisReport.report_schema_version == "",
             )
         stmt = stmt.where(schema_predicate)
+    activity_order = (
+        _activity_order_expression(
+            activity_from=activity_from,
+            activity_to=activity_to,
+            activity_before=activity_before,
+            outcome_label=outcome_label,
+        )
+        if order_by_activity
+        else None
+    )
+    if activity_order is not None:
+        stmt = stmt.order_by(activity_order.desc(), AnalysisReport.id.desc())
+    else:
+        stmt = stmt.order_by(AnalysisReport.id.desc())
     if offset:
         stmt = stmt.offset(offset)
     if limit is not None:
@@ -712,6 +916,7 @@ def list_analysis_reports(
 def count_analysis_reports(
     session: Session,
     *,
+    analysis_ids: Sequence[int] | None = None,
     project_id: int | None = None,
     workspace_id: int | None = None,
     severity: str | None = None,
@@ -721,9 +926,18 @@ def count_analysis_reports(
     analysis_status: str | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
+    created_before: datetime | None = None,
+    activity_from: datetime | None = None,
+    activity_to: datetime | None = None,
+    activity_before: datetime | None = None,
+    outcome_label: str | None = None,
     report_schema_versions: Sequence[str] | None = None,
 ) -> int:
+    if analysis_ids is not None and not analysis_ids:
+        return 0
     stmt = select(func.count()).select_from(AnalysisReport)
+    if analysis_ids is not None:
+        stmt = stmt.where(AnalysisReport.id.in_(tuple(analysis_ids)))
     if project_id is not None:
         stmt = stmt.where(AnalysisReport.project_id == project_id)
     if workspace_id is not None:
@@ -736,6 +950,18 @@ def count_analysis_reports(
         stmt = stmt.where(AnalysisReport.created_at >= created_from)
     if created_to is not None:
         stmt = stmt.where(AnalysisReport.created_at <= created_to)
+    if created_before is not None:
+        stmt = stmt.where(AnalysisReport.created_at < created_before)
+    activity_predicate = _activity_window_predicate(
+        activity_from=activity_from,
+        activity_to=activity_to,
+        activity_before=activity_before,
+        outcome_label=outcome_label,
+    )
+    if activity_predicate is not None:
+        stmt = stmt.where(activity_predicate)
+    if outcome_label:
+        stmt = stmt.where(_outcome_exists_predicate(outcome_label))
     if toolchain:
         predicate = _toolchain_predicate(toolchain)
         if predicate is not None:
@@ -770,6 +996,14 @@ def count_analysis_reports_by_field(
     *,
     project_id: int | None = None,
     workspace_id: int | None = None,
+    severity: str | None = None,
+    recommendation: str | None = None,
+    search: str | None = None,
+    toolchain: str | None = None,
+    analysis_status: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+    report_schema_versions: Sequence[str] | None = None,
 ) -> dict[str, int]:
     column = getattr(AnalysisReport, field_name)
     stmt = select(column, func.count()).group_by(column)
@@ -777,6 +1011,39 @@ def count_analysis_reports_by_field(
         stmt = stmt.where(AnalysisReport.project_id == project_id)
     if workspace_id is not None:
         stmt = stmt.where(AnalysisReport.workspace_id == workspace_id)
+    if severity:
+        stmt = stmt.where(AnalysisReport.severity == severity)
+    if recommendation:
+        stmt = stmt.where(AnalysisReport.recommendation == recommendation)
+    if created_from is not None:
+        stmt = stmt.where(AnalysisReport.created_at >= created_from)
+    if created_to is not None:
+        stmt = stmt.where(AnalysisReport.created_at <= created_to)
+    if toolchain:
+        predicate = _toolchain_predicate(toolchain)
+        if predicate is not None:
+            stmt = stmt.where(predicate)
+    if analysis_status:
+        predicate = _analysis_status_predicate(analysis_status)
+        if predicate is not None:
+            stmt = stmt.where(predicate)
+    if search:
+        like = f"%{search}%"
+        stmt = stmt.where(
+            AnalysisReport.top_risk.ilike(like)
+            | AnalysisReport.narrative_opening.ilike(like)
+            | AnalysisReport.parse_summary.ilike(like)
+        )
+    if report_schema_versions is not None:
+        schema_versions = tuple(report_schema_versions)
+        schema_predicate = AnalysisReport.report_schema_version.in_(schema_versions)
+        if "v1" in schema_versions:
+            schema_predicate = or_(
+                schema_predicate,
+                AnalysisReport.report_schema_version.is_(None),
+                AnalysisReport.report_schema_version == "",
+            )
+        stmt = stmt.where(schema_predicate)
     rows = session.execute(stmt).all()
     return {str(value): int(count) for value, count in rows if value is not None}
 

@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 from config import settings
 from evidence.models import FindingEvidenceClassification
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
-from services.confidence_ledger import normalize_confidence_ledger_payload
+from services.confidence_ledger import (
+    EvidenceLawStatus,
+    normalize_confidence_ledger_payload,
+)
 
 
 class MetaPayload(BaseModel):
@@ -26,6 +38,7 @@ def build_meta(**extra: Any) -> dict[str, Any]:
 
 def build_report_meta(*, report_schema_version: str, **extra: Any) -> dict[str, Any]:
     """Build metadata for report-bearing API responses."""
+    extra.setdefault("api_version", "v1")
     return build_meta(report_schema_version=report_schema_version, **extra)
 
 
@@ -92,6 +105,21 @@ DeployRecommendation = Literal["go", "caution", "no-go"]
 RollbackComplexity = Literal["low", "medium", "high"]
 DeploymentOutcomeLabel = Literal["success", "failure", "rolled_back"]
 DeploymentOutcomeInputLabel = Literal["success", "failure", "rolled_back", "rollback"]
+OwnerSignalScope = Literal["file", "service"]
+
+
+def _validate_non_empty_strings(values: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value).strip()
+        if not text:
+            raise ValueError("List values must be non-empty strings.")
+        if text in seen:
+            continue
+        seen.add(text)
+        cleaned.append(text)
+    return cleaned
 
 
 class IntakeItem(BaseModel):
@@ -111,6 +139,9 @@ class PendingAnalysis(BaseModel):
 
 
 class CountMetaPayload(MetaPayload):
+    api_version: str = Field(
+        default="v1", description="Versioned API contract identifier"
+    )
     report_schema_version: str = Field(
         ...,
         description=(
@@ -131,6 +162,9 @@ class CountMetaPayload(MetaPayload):
 
 
 class ResourceMetaPayload(MetaPayload):
+    api_version: str = Field(
+        default="v1", description="Versioned API contract identifier"
+    )
     report_schema_version: str = Field(
         ..., description="Report schema version used by the returned payload"
     )
@@ -396,6 +430,9 @@ class PersistedReportData(BaseModel):
     narrative_provider: str | None = Field(default=None)
     narrative_model: str | None = Field(default=None)
     narrative_local_mode: bool | None = Field(default=None)
+    advisory: "AdvisorySummaryData" = Field(
+        ..., description="Stable advisory recommendation contract for automation"
+    )
     skills_applied: list[str] = Field(default_factory=list)
     created_at: str
     warnings: list[str] = Field(default_factory=list)
@@ -409,6 +446,7 @@ class PersistedReportData(BaseModel):
     )
     dashboard_display_duration_seconds: int | None = Field(default=None)
     dashboard_remaining_seconds: int | None = Field(default=None)
+    analysis_duration_seconds: int | None = Field(default=None)
     submission_manifest: SubmissionManifestData | None = Field(
         default=None,
         description="Submission manifest metadata, or null when persisted manifest data is unavailable",
@@ -418,6 +456,19 @@ class PersistedReportData(BaseModel):
         description="Durable artifact identity/status fallback retained outside manifest JSON",
     )
     audit: AuditMetadataData
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_context_completeness_payload(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        context_payload = normalized.get("context_completeness")
+        normalized["context_completeness"] = _known_context_fields_payload(
+            context_payload,
+            ContextCompletenessData,
+        )
+        return normalized
 
 
 class AnalysisReportData(PersistedReportData):
@@ -809,32 +860,101 @@ class EvidenceItemData(BaseModel):
     )
 
 
+class OwnerSignalData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scope: OwnerSignalScope = Field(..., description="Ownership signal scope")
+    subject: str = Field(
+        ..., min_length=1, description="Owned file, service, or resource subject"
+    )
+    owners: list[str] = Field(
+        default_factory=list, description="Owners identified for this subject"
+    )
+    source: str = Field(..., min_length=1, description="Ownership source type")
+    source_ref: str | None = Field(
+        default=None, min_length=1, description="Source file or topology reference"
+    )
+    matched_pattern: str | None = Field(
+        default=None,
+        min_length=1,
+        description="CODEOWNERS pattern that matched the subject",
+    )
+    resource_id: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Changed resource linked to the signal",
+    )
+    service_id: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Topology service identifier linked to the signal",
+    )
+    escalation_hint: str = Field(
+        ..., min_length=1, description="Reviewer-facing escalation guidance"
+    )
+
+    @field_validator("owners")
+    @classmethod
+    def _validate_owners(cls, value: list[str]) -> list[str]:
+        return _validate_non_empty_strings(value)
+
+
 class ContextCompletenessData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     topology_freshness_days: int | None = Field(
-        default=None, description="Age in days of the topology snapshot when available"
+        default=None,
+        ge=0,
+        description="Age in days of the topology snapshot when available",
     )
     topology_last_imported_at: str | None = Field(
         default=None,
         description="ISO timestamp for the last imported topology snapshot when available",
     )
     incident_index_size: int = Field(
-        default=0, description="Number of incidents available for similarity matching"
+        default=0,
+        ge=0,
+        description="Number of incidents available for similarity matching",
+    )
+    incident_index_version: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Incident index version used for context",
+    )
+    incident_index_last_indexed_at: str | None = Field(
+        default=None,
+        min_length=1,
+        description="ISO timestamp for the incident index snapshot when available",
+    )
+    incident_index_freshness_status: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Freshness status for the incident index snapshot",
     )
     evidence_success_rate: float = Field(
         default=1.0,
         ge=0.0,
         le=1.0,
+        allow_inf_nan=False,
         description="Fraction of material changes represented by evidence items",
     )
     parser_success_rate: float = Field(
-        default=1.0, description="Fraction of analyzed files parsed successfully"
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        allow_inf_nan=False,
+        description="Fraction of analyzed files parsed successfully",
     )
     parser_success_by_tool: dict[str, float] = Field(
         default_factory=dict,
         description="Per-tool parser success rates between 0 and 1",
     )
     context_score: float = Field(
-        default=1.0, description="Aggregate context completeness score between 0 and 1"
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        allow_inf_nan=False,
+        description="Aggregate context completeness score between 0 and 1",
     )
     confidence_level: Literal["high", "medium", "low"] = Field(
         default="high",
@@ -851,6 +971,57 @@ class ContextCompletenessData(BaseModel):
         default=False,
         description="Whether context is too weak for a confident low-risk verdict",
     )
+    partial_context: bool = Field(
+        default=False,
+        description="Whether analysis context was explicitly marked partial upstream",
+    )
+    owner_signals: list[OwnerSignalData] = Field(
+        default_factory=list,
+        description="File and service ownership signals for analyzed changes",
+    )
+    escalation_hints: list[str] = Field(
+        default_factory=list,
+        description="Reviewer-facing ownership escalation hints",
+    )
+    ownership_unmapped_subjects: list[str] = Field(
+        default_factory=list,
+        description="Analyzed files, resources, or services missing ownership data",
+    )
+
+    @field_validator("escalation_hints", "ownership_unmapped_subjects")
+    @classmethod
+    def _validate_ownership_strings(cls, value: list[str]) -> list[str]:
+        return _validate_non_empty_strings(value)
+
+    @field_validator("evidence_success_rate", "parser_success_rate", "context_score")
+    @classmethod
+    def _validate_unit_float(cls, value: float) -> float:
+        if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+            raise ValueError("value must be a finite number between 0 and 1")
+        return value
+
+    @field_validator("parser_success_by_tool")
+    @classmethod
+    def _validate_parser_success_by_tool(
+        cls, value: dict[str, float]
+    ) -> dict[str, float]:
+        normalized: dict[str, float] = {}
+        for tool, rate in value.items():
+            tool_name = str(tool).strip()
+            if not tool_name:
+                raise ValueError("parser success tool names must be non-empty")
+            try:
+                numeric_rate = float(rate)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "parser success rates must be finite numbers between 0 and 1"
+                ) from exc
+            if not math.isfinite(numeric_rate) or not 0.0 <= numeric_rate <= 1.0:
+                raise ValueError(
+                    "parser success rates must be finite numbers between 0 and 1"
+                )
+            normalized[tool_name] = numeric_rate
+        return normalized
 
 
 class AssessmentData(BaseModel):
@@ -893,6 +1064,24 @@ class ImpactNodeData(BaseModel):
     service_id: str = Field(..., description="Stable service identifier")
     label: str = Field(..., description="Human-readable service label")
     depth: int = Field(..., description="0 for direct impact, 1+ for transitive impact")
+    dependencies: list[str] = Field(
+        default_factory=list,
+        description="Upstream service ids this service depends on in topology context",
+    )
+    owners: list[str] = Field(
+        default_factory=list,
+        description="Owner labels declared for this topology service",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_lists(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        normalized["dependencies"] = _text_list(normalized.get("dependencies"))
+        normalized["owners"] = _text_list(normalized.get("owners"))
+        return normalized
 
 
 class BlastRadiusData(BaseModel):
@@ -909,6 +1098,84 @@ class BlastRadiusData(BaseModel):
     unmatched_resources: list[str] = Field(
         default_factory=list, description="Resources not found in topology context"
     )
+    context_source: dict[str, str | None] = Field(
+        default_factory=lambda: {"type": None, "ref": None},
+        description="Topology source metadata used for this blast-radius result",
+    )
+    freshness: dict[str, int | str | None] = Field(
+        default_factory=lambda: {"updated_at": None, "age_days": None},
+        description="Topology freshness metadata used for this blast-radius result",
+    )
+    context_state: str | None = Field(
+        default="unknown",
+        description="Topology context state: current, stale, missing, incomplete, conflicting, or unknown",
+    )
+    context_limitations: list[str] = Field(
+        default_factory=list,
+        description="Machine-readable topology context limitation labels",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_context(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        if not isinstance(normalized.get("affected"), list):
+            normalized["affected"] = []
+        if not isinstance(normalized.get("context_source"), dict):
+            normalized["context_source"] = {"type": None, "ref": None}
+        if not isinstance(normalized.get("freshness"), dict):
+            normalized["freshness"] = {"updated_at": None, "age_days": None}
+        else:
+            freshness = normalized["freshness"]
+            updated_at = freshness.get("updated_at")
+            age_days = freshness.get("age_days")
+            normalized["freshness"] = {
+                "updated_at": updated_at if isinstance(updated_at, str) else None,
+                "age_days": age_days if isinstance(age_days, int | str) else None,
+            }
+        context_source = normalized.get("context_source")
+        if isinstance(context_source, dict):
+            normalized["context_source"] = {
+                "type": _scalar_text_or_none(context_source.get("type")),
+                "ref": _scalar_text_or_none(context_source.get("ref")),
+            }
+        context_state = normalized.get("context_state")
+        if context_state is None or not isinstance(context_state, str):
+            normalized["context_state"] = "unknown"
+        normalized["context_limitations"] = _text_list(
+            normalized.get("context_limitations")
+        )
+        return normalized
+
+    @model_validator(mode="after")
+    def normalize_context_defaults(self) -> "BlastRadiusData":
+        context_source = dict(self.context_source or {})
+        self.context_source = {
+            "type": context_source.get("type"),
+            "ref": context_source.get("ref"),
+        }
+        freshness = dict(self.freshness or {})
+        self.freshness = {
+            "updated_at": freshness.get("updated_at"),
+            "age_days": freshness.get("age_days"),
+        }
+        return self
+
+
+def _text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _scalar_text_or_none(value: Any) -> str | None:
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, int | float | bool):
+        return str(value)
+    return None
 
 
 class RollbackStepData(BaseModel):
@@ -1116,6 +1383,12 @@ class ShareSummaryJsonPayloadData(BaseModel):
         default=None, description="Deep link to the rollback view"
     )
     verdict_banner: str = Field(..., description="Verdict banner")
+    evidence_law_status: EvidenceLawStatus = Field(
+        ..., description="Evidence Law verification status for severe claims"
+    )
+    evidence_law_detail: str = Field(
+        ..., description="Human-readable Evidence Law verification detail"
+    )
     headline: str = Field(..., description="Top summary line")
     top_findings: list[ShareSummaryFindingData] = Field(
         default_factory=list, description="Top findings to surface"
@@ -1343,6 +1616,284 @@ def _copy_model(model: BaseModel, schema_type: type[BaseModel]) -> BaseModel:
     return schema_type.model_validate(model.model_dump())
 
 
+def _copy_payload(payload: Any, schema_type: type[BaseModel]) -> BaseModel:
+    return schema_type.model_validate(payload)
+
+
+def _copy_payload_list(items: Any, schema_type: type[BaseModel]) -> list[BaseModel]:
+    if not isinstance(items, list):
+        return []
+    return [_copy_payload(item, schema_type) for item in items]
+
+
+def _known_model_fields_payload(payload: Any, schema_type: type[BaseModel]) -> dict:
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        key: value for key, value in payload.items() if key in schema_type.model_fields
+    }
+
+
+def _degraded_context_payload() -> dict[str, Any]:
+    return {
+        "context_score": 0.0,
+        "confidence_level": "low",
+        "insufficient_context": True,
+        "uncertainty": "Context completeness payload was unavailable or unreadable.",
+        "context_todos": [
+            "Regenerate this report to restore context completeness metadata."
+        ],
+    }
+
+
+def _context_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    try:
+        return _validate_non_empty_strings(value)
+    except ValueError:
+        return []
+
+
+def _salvaged_context_string_list(value: Any) -> tuple[list[str], bool]:
+    if not isinstance(value, list):
+        return [], value is not None
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    dropped = False
+    for item in value:
+        if not isinstance(item, str):
+            dropped = True
+            continue
+        text = item.strip()
+        if not text:
+            dropped = True
+            continue
+        if text in seen:
+            continue
+        seen.add(text)
+        cleaned.append(text)
+    return cleaned, dropped
+
+
+def _mark_context_ownership_payload_partial(payload: dict[str, Any]) -> dict[str, Any]:
+    marked = dict(payload)
+    try:
+        marked["context_score"] = min(float(marked.get("context_score", 1.0)), 0.69)
+    except (TypeError, ValueError):
+        marked["context_score"] = 0.69
+    marked["confidence_level"] = "low"
+    marked["insufficient_context"] = True
+    marked["partial_context"] = True
+    warning = "Ownership context payload was partially unreadable."
+    uncertainty = str(marked.get("uncertainty") or "").strip()
+    marked["uncertainty"] = f"{uncertainty} {warning}".strip()
+    todos, _ = _salvaged_context_string_list(marked.get("context_todos"))
+    ownership_todo = "Regenerate this report to restore ownership context metadata."
+    if ownership_todo not in todos:
+        todos.append(ownership_todo)
+    marked["context_todos"] = todos
+    return marked
+
+
+def _owner_signal_escalation_hint(payload: dict[str, Any]) -> str | None:
+    scope = str(payload.get("scope") or "").strip()
+    subject = str(payload.get("subject") or "").strip()
+    owners = _context_string_list(payload.get("owners"))
+    if scope not in {"file", "service"} or not subject or not owners:
+        return None
+    owner_text = ", ".join(owners)
+    if scope == "service":
+        return f"Escalate service review for {subject} to {owner_text}."
+    return f"Escalate file review for {subject} to {owner_text}."
+
+
+def _salvaged_ownership_context_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    salvaged = dict(payload)
+    dropped_ownership_data = False
+    raw_owner_signals = salvaged.get("owner_signals")
+    if isinstance(raw_owner_signals, list):
+        owner_signals: list[dict[str, Any]] = []
+        for item in raw_owner_signals:
+            filtered = _known_model_fields_payload(item, OwnerSignalData)
+            if not filtered:
+                continue
+            if "owners" in filtered:
+                cleaned_owners, dropped_owners = _salvaged_context_string_list(
+                    filtered.get("owners")
+                )
+                if dropped_owners:
+                    dropped_ownership_data = True
+                if cleaned_owners:
+                    filtered["owners"] = cleaned_owners
+            if not filtered.get("escalation_hint"):
+                hint = _owner_signal_escalation_hint(filtered)
+                if hint is not None:
+                    filtered["escalation_hint"] = hint
+            try:
+                owner_signals.append(
+                    OwnerSignalData.model_validate(filtered).model_dump(mode="json")
+                )
+            except ValidationError:
+                continue
+        dropped_ownership_data = dropped_ownership_data or len(owner_signals) != len(
+            raw_owner_signals
+        )
+        salvaged["owner_signals"] = owner_signals
+    else:
+        dropped_ownership_data = "owner_signals" in salvaged
+        salvaged.pop("owner_signals", None)
+    for field_name in ("escalation_hints", "ownership_unmapped_subjects"):
+        if field_name in salvaged:
+            values = salvaged[field_name]
+            salvaged_values, dropped_values = _salvaged_context_string_list(values)
+            if dropped_values:
+                dropped_ownership_data = True
+            salvaged[field_name] = salvaged_values
+    if dropped_ownership_data:
+        return _mark_context_ownership_payload_partial(salvaged)
+    return salvaged
+
+
+def _coerce_optional_context_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _coerce_context_float(value: Any, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(numeric_value):
+        return default
+    return numeric_value
+
+
+def _coerce_context_int(value: Any, default: int) -> int:
+    try:
+        numeric_value = int(value)
+    except (TypeError, ValueError):
+        return default
+    if numeric_value < 0:
+        return default
+    return numeric_value
+
+
+def _coerce_optional_context_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        numeric_value = int(value)
+    except (TypeError, ValueError):
+        return None
+    if numeric_value < 0:
+        return None
+    return numeric_value
+
+
+def _coerce_context_unit_float(
+    value: Any,
+    *,
+    default: float,
+    invalid_default: float = 0.0,
+) -> float:
+    if value is None:
+        return default
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return invalid_default
+    if not math.isfinite(numeric_value):
+        return invalid_default
+    return min(max(numeric_value, 0.0), 1.0)
+
+
+def _salvaged_context_completeness_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    salvaged = _salvaged_ownership_context_payload(payload)
+    normalized = dict(salvaged)
+    normalized["topology_freshness_days"] = _coerce_optional_context_int(
+        normalized.get("topology_freshness_days")
+    )
+    for field_name in (
+        "topology_last_imported_at",
+        "incident_index_version",
+        "incident_index_last_indexed_at",
+        "incident_index_freshness_status",
+        "uncertainty",
+    ):
+        normalized[field_name] = _coerce_optional_context_string(
+            normalized.get(field_name)
+        )
+    normalized["incident_index_size"] = _coerce_context_int(
+        normalized.get("incident_index_size"),
+        0,
+    )
+    normalized["evidence_success_rate"] = _coerce_context_unit_float(
+        normalized.get("evidence_success_rate"),
+        default=1.0,
+    )
+    normalized["parser_success_rate"] = _coerce_context_unit_float(
+        normalized.get("parser_success_rate"),
+        default=1.0,
+    )
+    parser_success_by_tool = normalized.get("parser_success_by_tool")
+    normalized["parser_success_by_tool"] = (
+        {
+            str(tool).strip(): _coerce_context_unit_float(rate, default=1.0)
+            for tool, rate in parser_success_by_tool.items()
+            if str(tool).strip()
+        }
+        if isinstance(parser_success_by_tool, dict)
+        else {}
+    )
+    normalized["context_score"] = _coerce_context_unit_float(
+        normalized.get("context_score"),
+        default=1.0,
+        invalid_default=1.0,
+    )
+    if normalized.get("confidence_level") not in {"high", "medium", "low"}:
+        normalized["confidence_level"] = "low"
+    normalized["context_todos"] = _context_string_list(normalized.get("context_todos"))
+    if not isinstance(normalized.get("insufficient_context"), bool):
+        normalized["insufficient_context"] = True
+    if not isinstance(normalized.get("partial_context"), bool):
+        normalized["partial_context"] = False
+    return _mark_context_ownership_payload_partial(normalized)
+
+
+def _known_context_fields_payload(
+    payload: Any,
+    schema_type: type[BaseModel],
+) -> dict:
+    if not isinstance(payload, dict):
+        return _degraded_context_payload()
+    known_payload = _known_model_fields_payload(payload, schema_type)
+    if not known_payload:
+        return _degraded_context_payload()
+    try:
+        return schema_type.model_validate(known_payload).model_dump(mode="json")
+    except ValidationError:
+        if schema_type is ContextCompletenessData:
+            ownership_fields = {
+                "owner_signals",
+                "escalation_hints",
+                "ownership_unmapped_subjects",
+            }
+            if ownership_fields.intersection(known_payload):
+                try:
+                    return schema_type.model_validate(
+                        _salvaged_context_completeness_payload(known_payload)
+                    ).model_dump(mode="json")
+                except ValidationError:
+                    pass
+        return _degraded_context_payload()
+
+
 def build_analysis_run_data(
     *,
     intake: PendingAnalysis,
@@ -1352,13 +1903,21 @@ def build_analysis_run_data(
 ) -> AnalysisRunData:
     parse_batch = result.parse_batch
     assessment = result.assessment
-    findings = result.findings
-    evidence_items = result.evidence_items
     blast_radius = result.blast_radius
     rollback_plan = result.rollback_plan
-    incident_matches = result.incident_matches
     narrative = result.narrative
     persisted_report = result.persisted_report
+    raw_context_payload = persisted_report.get("context_completeness")
+    persisted_context = ContextCompletenessData.model_validate(
+        _known_context_fields_payload(
+            raw_context_payload,
+            ContextCompletenessData,
+        )
+    )
+    persisted_report_payload = dict(persisted_report)
+    persisted_report_payload["context_completeness"] = persisted_context.model_dump(
+        mode="json"
+    )
 
     return AnalysisRunData(
         intake=PendingAnalysis.model_validate(intake.model_dump()),
@@ -1380,19 +1939,23 @@ def build_analysis_run_data(
             ]
         ),
         assessment=AssessmentData(
-            score=assessment.score,
-            severity=assessment.severity,
-            recommendation=assessment.recommendation,
-            confidence=assessment.confidence,
-            top_risk=assessment.top_risk,
-            top_risk_contributors=list(assessment.top_risk_contributors),
-            context_completeness=_copy_model(
-                assessment.context_completeness, ContextCompletenessData
+            score=int(persisted_report.get("risk_score", assessment.score)),
+            severity=persisted_report.get("severity", assessment.severity),
+            recommendation=persisted_report.get(
+                "recommendation", assessment.recommendation
             ),
-            contributors=[
-                _copy_model(contributor, RiskContributorData)
-                for contributor in assessment.contributors
-            ],
+            confidence=float(persisted_report.get("confidence", assessment.confidence)),
+            top_risk=str(persisted_report.get("top_risk", assessment.top_risk)),
+            top_risk_contributors=list(
+                persisted_report.get(
+                    "top_risk_contributors", assessment.top_risk_contributors
+                )
+                or []
+            ),
+            context_completeness=persisted_context,
+            contributors=_copy_payload_list(
+                persisted_report.get("contributors"), RiskContributorData
+            ),
             confidence_ledger=ConfidenceLedgerData.model_validate(
                 persisted_report.get("confidence_ledger", {})
             ),
@@ -1400,36 +1963,49 @@ def build_analysis_run_data(
                 _copy_model(interaction_risk, InteractionRiskData)
                 for interaction_risk in assessment.interaction_risks
             ],
-            partial_context=assessment.partial_context,
-            warnings=list(assessment.warnings),
-            source=assessment.source,
+            partial_context=persisted_context.partial_context,
+            warnings=list(persisted_report.get("warnings") or []),
+            source=persisted_report.get("assessment_source") or assessment.source,
         ),
-        findings=[_copy_model(finding, FindingData) for finding in findings],
-        evidence_items=[
-            _copy_model(evidence_item, EvidenceItemData)
-            for evidence_item in evidence_items
-        ],
-        blast_radius=BlastRadiusData(
-            affected=[
-                _copy_model(node, ImpactNodeData) for node in blast_radius.affected
-            ],
-            direct_count=blast_radius.direct_count,
-            transitive_count=blast_radius.transitive_count,
-            warning=blast_radius.warning,
-            unmatched_resources=list(blast_radius.unmatched_resources),
+        findings=_copy_payload_list(persisted_report.get("findings"), FindingData),
+        evidence_items=_copy_payload_list(
+            persisted_report.get("evidence_items"), EvidenceItemData
         ),
-        rollback_plan=RollbackPlanData(
-            steps=[_copy_model(step, RollbackStepData) for step in rollback_plan.steps],
-            complexity=rollback_plan.complexity,
-            complexity_score=rollback_plan.complexity_score,
-            complexity_explanation=rollback_plan.complexity_explanation,
-            warning=rollback_plan.warning,
+        blast_radius=BlastRadiusData.model_validate(
+            persisted_report.get("blast_radius")
+            or {
+                "affected": [
+                    _copy_model(node, ImpactNodeData).model_dump()
+                    for node in blast_radius.affected
+                ],
+                "direct_count": blast_radius.direct_count,
+                "transitive_count": blast_radius.transitive_count,
+                "warning": blast_radius.warning,
+                "unmatched_resources": list(blast_radius.unmatched_resources),
+                "context_source": dict(blast_radius.context_source),
+                "freshness": dict(blast_radius.freshness),
+                "context_state": blast_radius.context_state,
+                "context_limitations": list(blast_radius.context_limitations),
+            }
         ),
-        incident_matches=[
-            _copy_model(match, IncidentMatchData) for match in incident_matches
-        ],
+        rollback_plan=RollbackPlanData.model_validate(
+            persisted_report.get("rollback_plan")
+            or {
+                "steps": [
+                    _copy_model(step, RollbackStepData).model_dump()
+                    for step in rollback_plan.steps
+                ],
+                "complexity": rollback_plan.complexity,
+                "complexity_score": rollback_plan.complexity_score,
+                "complexity_explanation": rollback_plan.complexity_explanation,
+                "warning": rollback_plan.warning,
+            }
+        ),
+        incident_matches=_copy_payload_list(
+            persisted_report.get("incident_matches"), IncidentMatchData
+        ),
         narrative=_copy_model(narrative, NarrativeData),
         advisory=_copy_model(advisory, AdvisorySummaryData),
         share_summary=_copy_model(share_summary, ShareSummaryData),
-        persisted_report=PersistedReportData.model_validate(persisted_report),
+        persisted_report=PersistedReportData.model_validate(persisted_report_payload),
     )

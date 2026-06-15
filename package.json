@@ -5,7 +5,7 @@
   "description": "Dev-only browser and screen-reader verification for DeployWhisper UI flows.",
   "scripts": {
     "setup:ui-review": "npx @guidepup/setup",
-    "test:ui-review": "playwright test tests/e2e/report_review.keyboard.spec.js",
+    "test:ui-review": "playwright test tests/e2e/report_review.keyboard.spec.js && playwright test tests/e2e/dashboard_deploy_review_upload.spec.js",
     "test:ui-review:voiceover": "playwright test tests/e2e/report_review.voiceover.spec.js --project=webkit"
   },
   "devDependencies": {

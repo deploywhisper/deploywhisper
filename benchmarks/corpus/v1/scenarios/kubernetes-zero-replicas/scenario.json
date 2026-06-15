@@ -1,0 +1,43 @@
+{
+  "id": "kubernetes-zero-replicas",
+  "name": "Kubernetes rollout removes checkout capacity",
+  "description": "Synthetic Kubernetes scenario where a checkout deployment is scaled to zero replicas.",
+  "labels": ["availability", "baseline", "kubernetes", "rollback-readiness"],
+  "artifacts": [
+    {
+      "path": "artifacts/deployment.yaml",
+      "type": "kubernetes",
+      "description": "Synthetic Kubernetes Deployment fixture with zero desired replicas."
+    }
+  ],
+  "expected_findings": [
+    {
+      "id": "finding-zero-replicas",
+      "title": "Checkout deployment has zero desired replicas",
+      "severity": "medium",
+      "evidence_ids": ["evidence-replicas-zero"],
+      "rationale": "The deployment removes all desired checkout pods, creating an availability risk that should be surfaced with artifact evidence."
+    }
+  ],
+  "expected_evidence": [
+    {
+      "id": "evidence-replicas-zero",
+      "artifact_path": "artifacts/deployment.yaml",
+      "selector": "replicas: 0",
+      "description": "Deployment spec declares zero desired replicas."
+    }
+  ],
+  "expected_verdict": "warn",
+  "expected_verdict_rationale": "Warn because the rollout removes checkout capacity and needs operator review before deployment.",
+  "license": {
+    "spdx_id": "CC0-1.0",
+    "source": "Original synthetic fixture authored for public benchmark use.",
+    "public_sample": true
+  },
+  "safety": {
+    "synthetic": true,
+    "contains_secrets": false,
+    "contains_customer_data": false,
+    "contains_non_public_information": false
+  }
+}

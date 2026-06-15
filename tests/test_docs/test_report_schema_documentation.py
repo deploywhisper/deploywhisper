@@ -30,16 +30,21 @@ class ReportSchemaDocumentationTests(unittest.TestCase):
                 self.assertIn(consumer, content)
 
         for field in (
+            '"api_version"',
             '"report_schema_version"',
             '"findings"',
             '"evidence_items"',
             '"report_schema_versions"',
             '"context_completeness"',
+            '"owner_signals"',
+            '"escalation_hints"',
+            '"ownership_unmapped_subjects"',
             '"narrative_available"',
             '"narrative_degraded"',
             '"narrative_failure_notice"',
             '"advisory_only"',
             '"should_block"',
+            '"top_risk"',
         ):
             with self.subTest(field=field):
                 self.assertIn(field, content)
@@ -51,6 +56,19 @@ class ReportSchemaDocumentationTests(unittest.TestCase):
 
         self.assertIn("share-summary payload `version` remains `v1`", content)
         self.assertIn("additive fields are compatible", content)
+
+    def test_report_v2_guide_documents_ownership_request_setup(self) -> None:
+        content = REPORT_SCHEMA_GUIDE.read_text(encoding="utf-8").lower()
+
+        for phrase in (
+            "request-side ownership setup",
+            "`artifact_paths`",
+            "repo-relative artifact paths",
+            ".github/codeowners",
+            "directory upload",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, content)
 
 
 if __name__ == "__main__":

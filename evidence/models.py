@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 RiskSeverity = Literal["low", "medium", "high", "critical"]
 DeployRecommendation = Literal["go", "caution", "no-go"]
 ContextConfidenceLevel = Literal["high", "medium", "low"]
+OwnerSignalScope = Literal["file", "service"]
 EvidenceSourceType = Literal[
     "artifact",
     "topology",
@@ -85,6 +86,10 @@ class ContextCompleteness(BaseModel):
     uncertainty: str | None = Field(default=None, min_length=1)
     context_todos: list[str] = Field(default_factory=list)
     insufficient_context: bool = Field(default=False)
+    partial_context: bool = Field(default=False)
+    owner_signals: list["OwnerSignal"] = Field(default_factory=list)
+    escalation_hints: list[str] = Field(default_factory=list)
+    ownership_unmapped_subjects: list[str] = Field(default_factory=list)
 
     @field_validator("parser_success_by_tool")
     @classmethod
@@ -109,6 +114,37 @@ class ContextCompleteness(BaseModel):
     @field_validator("context_todos")
     @classmethod
     def _validate_context_todos(cls, value: list[str]) -> list[str]:
+        return _validate_string_list(value)
+
+    @field_validator("escalation_hints")
+    @classmethod
+    def _validate_escalation_hints(cls, value: list[str]) -> list[str]:
+        return _validate_string_list(value)
+
+    @field_validator("ownership_unmapped_subjects")
+    @classmethod
+    def _validate_ownership_unmapped_subjects(cls, value: list[str]) -> list[str]:
+        return _validate_string_list(value)
+
+
+class OwnerSignal(BaseModel):
+    """Reviewer-facing ownership hint captured with report context."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scope: OwnerSignalScope
+    subject: str = Field(..., min_length=1)
+    owners: list[str] = Field(default_factory=list)
+    source: str = Field(..., min_length=1)
+    source_ref: str | None = Field(default=None, min_length=1)
+    matched_pattern: str | None = Field(default=None, min_length=1)
+    resource_id: str | None = Field(default=None, min_length=1)
+    service_id: str | None = Field(default=None, min_length=1)
+    escalation_hint: str = Field(..., min_length=1)
+
+    @field_validator("owners")
+    @classmethod
+    def _validate_owners(cls, value: list[str]) -> list[str]:
         return _validate_string_list(value)
 
 

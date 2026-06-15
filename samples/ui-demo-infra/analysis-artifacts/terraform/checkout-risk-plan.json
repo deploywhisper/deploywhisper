@@ -1,0 +1,154 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.7.5",
+  "resource_changes": [
+    {
+      "address": "aws_security_group.checkout_admin",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "checkout_admin",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before": {
+          "name": "demo-checkout-admin",
+          "ingress": [
+            {
+              "description": "Admin access from office VPN",
+              "from_port": 22,
+              "to_port": 22,
+              "protocol": "tcp",
+              "cidr_blocks": ["203.0.113.10/32"]
+            }
+          ]
+        },
+        "after": {
+          "name": "demo-checkout-admin",
+          "ingress": [
+            {
+              "description": "Temporary SSH access for release troubleshooting",
+              "from_port": 22,
+              "to_port": 22,
+              "protocol": "tcp",
+              "cidr_blocks": ["0.0.0.0/0"]
+            }
+          ],
+          "egress": [
+            {
+              "description": "Allow all outbound traffic",
+              "from_port": 0,
+              "to_port": 0,
+              "protocol": "-1",
+              "cidr_blocks": ["0.0.0.0/0"]
+            }
+          ],
+          "tags": {
+            "Service": "checkout-api",
+            "Environment": "demo-prod",
+            "Owner": "platform-demo"
+          }
+        }
+      }
+    },
+    {
+      "address": "aws_db_instance.checkout",
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "checkout",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before": {
+          "identifier": "demo-checkout-db",
+          "publicly_accessible": false,
+          "backup_retention_period": 7,
+          "deletion_protection": true
+        },
+        "after": {
+          "identifier": "demo-checkout-db",
+          "publicly_accessible": true,
+          "backup_retention_period": 1,
+          "deletion_protection": false,
+          "skip_final_snapshot": true
+        }
+      }
+    },
+    {
+      "address": "aws_iam_policy.deploy_runner",
+      "mode": "managed",
+      "type": "aws_iam_policy",
+      "name": "deploy_runner",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before_sensitive": {
+          "policy": true
+        },
+        "after_sensitive": {
+          "policy": true
+        },
+        "before": {
+          "name": "demo-deploy-runner-policy"
+        },
+        "after": {
+          "name": "demo-deploy-runner-wide-policy"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.assets",
+      "mode": "managed",
+      "type": "aws_s3_bucket_public_access_block",
+      "name": "assets",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before": {
+          "bucket": "demo-checkout-public-assets",
+          "block_public_acls": true,
+          "block_public_policy": true,
+          "ignore_public_acls": true,
+          "restrict_public_buckets": true
+        },
+        "after": {
+          "bucket": "demo-checkout-public-assets",
+          "block_public_acls": false,
+          "block_public_policy": false,
+          "ignore_public_acls": false,
+          "restrict_public_buckets": false
+        }
+      }
+    },
+    {
+      "address": "aws_eks_node_group.checkout_workers",
+      "mode": "managed",
+      "type": "aws_eks_node_group",
+      "name": "checkout_workers",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create", "delete"],
+        "replace_paths": [["scaling_config", 0, "desired_size"]],
+        "before": {
+          "node_group_name": "checkout-workers-blue",
+          "scaling_config": [
+            {
+              "desired_size": 6,
+              "max_size": 10,
+              "min_size": 3
+            }
+          ]
+        },
+        "after": {
+          "node_group_name": "checkout-workers-green",
+          "scaling_config": [
+            {
+              "desired_size": 3,
+              "max_size": 6,
+              "min_size": 2
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -131,6 +131,16 @@ class MigrationTests(unittest.TestCase):
             sqlite_conn.close()
         return str(row[0] if row else "")
 
+    def _index_columns(self, index_name: str) -> tuple[str, ...]:
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            return tuple(
+                row[2]
+                for row in sqlite_conn.execute(f"PRAGMA index_info({index_name})")
+            )
+        finally:
+            sqlite_conn.close()
+
     def _assert_incident_ingestion_source_schema(self) -> None:
         columns = self._table_columns("incident_ingestion_sources")
         self.assertTrue(
@@ -265,6 +275,14 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("notes", self._table_columns("deployment_outcomes"))
         self.assertIn("finding_id", self._table_columns("feedback_events"))
         self.assertIn("false_positive_reason", self._table_columns("feedback_events"))
+        self.assertEqual(
+            self._index_columns("ix_deployment_outcomes_analysis_deployed_outcome"),
+            ("analysis_id", "deployed_at", "outcome_label"),
+        )
+        self.assertEqual(
+            self._index_columns("ix_feedback_events_analysis_created"),
+            ("analysis_id", "created_at"),
+        )
         self.assertIn("report_schema_version", self._table_columns("analysis_reports"))
         self.assertIn("blast_radius_json", self._table_columns("analysis_reports"))
         self.assertIn("rollback_plan_json", self._table_columns("analysis_reports"))
@@ -276,6 +294,9 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("share_password_hash", self._table_columns("analysis_reports"))
         self.assertIn("share_password_salt", self._table_columns("analysis_reports"))
         self.assertIn("share_redact_filenames", self._table_columns("analysis_reports"))
+        self.assertIn(
+            "analysis_duration_seconds", self._table_columns("analysis_reports")
+        )
         self.assertIn(
             "submission_manifest_json", self._table_columns("analysis_reports")
         )
@@ -336,6 +357,33 @@ class MigrationTests(unittest.TestCase):
             if row[1] == "submission_manifest_fallback_json"
         )
         self.assertIsNone(submission_manifest_fallback_row[4])
+
+    def test_event_index_upgrade_repairs_wrong_same_name_indexes(self) -> None:
+        command.upgrade(self._config(), "024_add_analysis_duration_seconds")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            sqlite_conn.execute(
+                "CREATE INDEX ix_deployment_outcomes_analysis_deployed_outcome "
+                "ON deployment_outcomes (analysis_id)"
+            )
+            sqlite_conn.execute(
+                "CREATE INDEX ix_feedback_events_analysis_created "
+                "ON feedback_events (created_at)"
+            )
+            sqlite_conn.commit()
+        finally:
+            sqlite_conn.close()
+
+        command.upgrade(self._config(), "head")
+
+        self.assertEqual(
+            self._index_columns("ix_deployment_outcomes_analysis_deployed_outcome"),
+            ("analysis_id", "deployed_at", "outcome_label"),
+        )
+        self.assertEqual(
+            self._index_columns("ix_feedback_events_analysis_created"),
+            ("analysis_id", "created_at"),
+        )
 
     def test_learning_context_scope_rejects_cross_project_workspace_rows(
         self,
@@ -495,6 +543,9 @@ class MigrationTests(unittest.TestCase):
             submission_manifest_fallback = sqlite_conn.execute(
                 "SELECT submission_manifest_fallback_json FROM analysis_reports LIMIT 1"
             ).fetchone()[0]
+            analysis_duration_seconds = sqlite_conn.execute(
+                "SELECT analysis_duration_seconds FROM analysis_reports LIMIT 1"
+            ).fetchone()[0]
             project_key = sqlite_conn.execute(
                 """
                 SELECT projects.project_key
@@ -518,6 +569,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(share_redact_filenames, 0)
         self.assertEqual(submission_manifest, "{}")
         self.assertEqual(submission_manifest_fallback, "[]")
+        self.assertIsNone(analysis_duration_seconds)
         self.assertEqual(project_key, "unassigned")
         self.assertTrue(any(row[2] == "analysis_reports" for row in finding_fks))
         self.assertTrue(any(row[2] == "findings" for row in evidence_fks))
@@ -1049,7 +1101,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("topology_versions", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "025_add_event_analysis_indexes")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1100,7 +1152,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("projects", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "025_add_event_analysis_indexes")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1126,14 +1178,47 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "025_add_event_analysis_indexes")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
         self.assertIn("workspace_id", columns)
         self.assertIn("submission_manifest_json", columns)
         self.assertIn("submission_manifest_fallback_json", columns)
+        self.assertIn("analysis_duration_seconds", columns)
         self._assert_incident_ingestion_source_schema()
+
+    def test_init_db_repairs_revision_024_schema_then_applies_event_indexes(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "024_add_analysis_duration_seconds")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+        database_module.init_db()
+
+        sqlite_conn = sqlite3.connect(self.db_path)
+        try:
+            revision = sqlite_conn.execute(
+                "SELECT version_num FROM alembic_version"
+            ).fetchone()[0]
+        finally:
+            sqlite_conn.close()
+
+        self.assertEqual(revision, "025_add_event_analysis_indexes")
+        self.assertEqual(
+            self._index_columns("ix_deployment_outcomes_analysis_deployed_outcome"),
+            ("analysis_id", "deployed_at", "outcome_label"),
+        )
+        self.assertEqual(
+            self._index_columns("ix_feedback_events_analysis_created"),
+            ("analysis_id", "created_at"),
+        )
 
     def test_init_db_accepts_current_incident_matches_revision(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1151,7 +1236,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "025_add_event_analysis_indexes")
         self._assert_incident_ingestion_source_schema()
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
@@ -1583,7 +1668,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "023_add_incident_ingestion_sources")
+        self.assertEqual(revision, "025_add_event_analysis_indexes")
         self._assert_incident_ingestion_source_schema()
 
 

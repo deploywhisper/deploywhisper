@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
 from importlib import reload
+from unittest import mock
 
 import app as app_module
 import config as config_module
@@ -56,6 +57,135 @@ class HistoryPageHelpersTests(unittest.TestCase):
                 "kubernetes": "Kubernetes",
                 "terraform": "Terraform",
             },
+        )
+
+    def test_history_filter_trend_refresh_scope_excludes_search_and_status(
+        self,
+    ) -> None:
+        trend_relevant = {
+            "workspace",
+            "time_range",
+            "severity",
+            "toolchain",
+            "outcome",
+        }
+        row_only = {"search", "analysis_status"}
+
+        self.assertEqual(
+            {
+                name
+                for name in trend_relevant
+                if history_module._history_filter_updates_risk_trends(name)
+            },
+            trend_relevant,
+        )
+        self.assertFalse(
+            any(
+                history_module._history_filter_updates_risk_trends(name)
+                for name in row_only
+            )
+        )
+
+    def test_fetch_history_risk_trends_uses_workspace_scope(self) -> None:
+        expected = {"total_reports": 1, "severity_counts": {"high": 1}}
+        created_from = datetime(2026, 6, 1, tzinfo=UTC)
+        created_to = datetime(2026, 6, 8, tzinfo=UTC)
+
+        with mock.patch.object(
+            history_module,
+            "fetch_risk_trends",
+            return_value=expected,
+        ) as fetch_risk_trends:
+            result = history_module._fetch_history_risk_trends(
+                has_history_scope=True,
+                project_id=7,
+                workspace_key="prod",
+                severity="high",
+                toolchain="terraform",
+                outcome="failure",
+                created_from=created_from,
+                created_to=created_to,
+            )
+
+        self.assertEqual(result, expected)
+        fetch_risk_trends.assert_called_once_with(
+            project_id=7,
+            workspace_key="prod",
+            severity="high",
+            toolchain="terraform",
+            outcome="failure",
+            created_from=created_from,
+            created_to=created_to,
+        )
+
+    def test_fetch_history_risk_trends_returns_empty_without_scope(self) -> None:
+        with mock.patch.object(
+            history_module, "fetch_risk_trends"
+        ) as fetch_risk_trends:
+            result = history_module._fetch_history_risk_trends(
+                has_history_scope=False,
+                project_id=None,
+                workspace_key="prod",
+            )
+
+        self.assertEqual(result["total_reports"], 0)
+        fetch_risk_trends.assert_not_called()
+
+    def test_calibration_limitation_labels_preserve_all_active_warnings(self) -> None:
+        labels = history_module._calibration_limitation_labels(
+            {
+                "confidence_limitations": [
+                    {"label": "Sparse calibration data"},
+                    {"label": "Limited reviewer feedback"},
+                    {"label": "Feedback may be biased"},
+                ]
+            }
+        )
+
+        self.assertEqual(
+            labels,
+            [
+                "Sparse calibration data",
+                "Limited reviewer feedback",
+                "Feedback may be biased",
+            ],
+        )
+
+    def test_empty_calibration_dashboard_seed_matches_full_payload_shape(self) -> None:
+        seed = history_module._empty_calibration_dashboard_seed()
+
+        self.assertIn("project", seed)
+        self.assertIn("workspace", seed)
+        self.assertEqual(set(seed["window"]), {"start", "end", "days"})
+        self.assertIn("false_positive_cases", seed)
+        self.assertIn("false_reassurance_cases", seed)
+        self.assertEqual(seed["confidence_trends"], {"buckets": {}, "sample_size": 0})
+        metrics = seed["calibration_metrics"]
+        self.assertEqual(
+            {
+                "sample_size",
+                "feedback_event_count",
+                "feedback_history_event_count",
+                "precision",
+                "recall_proxy",
+                "false_positive_count",
+                "false_positive_rate",
+                "false_reassurance_count",
+                "false_reassurance_rate",
+                "deployment_false_reassurance_count",
+                "reviewer_missed_feedback_count",
+                "recall_proxy_signals",
+            },
+            set(metrics),
+        )
+        self.assertEqual(
+            {
+                "failed_deploy_count",
+                "warned_failed_deploy_count",
+                "failed_without_warning_count",
+                "missed_feedback_count",
+            },
+            set(metrics["recall_proxy_signals"]),
         )
 
     def test_recommendation_helpers_preserve_semantic_go_no_go_styling(self) -> None:
@@ -941,6 +1071,7 @@ class HistoryPageRenderingTests(unittest.TestCase):
         reload(analysis_reports_repository_module)
         reload(project_service_module)
         reload(report_service_module)
+        reload(deployment_outcome_service_module)
         reload(feedback_service_module)
         reload(report_detail_page_module)
         reload(history_module)
@@ -1665,6 +1796,151 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("1 warned", response.text)
         self.assertIn("Precision 1.00", response.text)
         self.assertIn("Recall 1.00", response.text)
+        self.assertIn("Directional only", response.text)
+        self.assertIn("Sparse calibration data", response.text)
+
+    def test_history_page_renders_full_risk_trend_comparison(self) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.set_active_project(project.id)
+        trend_payload = {
+            "total_reports": 3,
+            "filters": {"project_id": project.id},
+            "window": {
+                "start": "2026-06-01T00:00:00+00:00",
+                "end": "2026-06-08T00:00:00+00:00",
+            },
+            "severity_counts": {"critical": 1, "high": 1, "low": 1},
+            "recommendation_counts": {"no-go": 2, "go": 1},
+            "high_critical_frequency": {"count": 2, "rate": 2 / 3},
+            "tool_counts": {"terraform": 2, "kubernetes": 1},
+            "outcome_counts": {"failure": 1, "success": 1},
+            "outcome_links": {
+                "linked_outcome_count": 2,
+                "failed_outcome_count": 1,
+                "warned_failed_outcome_count": 1,
+                "analysis_ids": [1, 2],
+            },
+            "false_positive_signals": {"count": 1, "event_count": 1, "rate": 1 / 3},
+            "false_reassurance_signals": {
+                "count": 1,
+                "event_count": 1,
+                "deployment_count": 1,
+                "feedback_count": 0,
+                "rate": 1 / 3,
+            },
+            "context_completeness": {
+                "sample_size": 3,
+                "missing_count": 0,
+                "partial_context_count": 1,
+                "partial_context_rate": 1 / 3,
+                "average_context_score": 0.74,
+            },
+            "limitations": [],
+            "audit_rows": [],
+            "trend_sample_size": 100,
+            "trend_windows": [
+                {
+                    "label": "previous",
+                    "total_reports": 2,
+                    "severity_counts": {"critical": 1, "medium": 1},
+                    "recommendation_counts": {"no-go": 1, "caution": 1},
+                    "tool_counts": {"kubernetes": 2},
+                    "outcome_counts": {"success": 1},
+                    "high_critical_frequency": {"count": 1, "rate": 0.5},
+                    "outcome_links": {"linked_outcome_count": 1},
+                    "false_positive_signals": {"count": 0, "rate": 0.0},
+                    "false_reassurance_signals": {"count": 0, "rate": 0.0},
+                    "context_completeness": {
+                        "partial_context_count": 0,
+                        "average_context_score": 0.9,
+                    },
+                },
+                {
+                    "label": "current",
+                    "total_reports": 3,
+                    "severity_counts": {"critical": 1, "high": 1, "low": 1},
+                    "recommendation_counts": {"no-go": 2, "go": 1},
+                    "tool_counts": {"terraform": 2, "kubernetes": 1},
+                    "outcome_counts": {"failure": 1, "success": 1},
+                    "high_critical_frequency": {"count": 2, "rate": 2 / 3},
+                    "outcome_links": {"linked_outcome_count": 2},
+                    "false_positive_signals": {"count": 1, "rate": 1 / 3},
+                    "false_reassurance_signals": {"count": 1, "rate": 1 / 3},
+                    "context_completeness": {
+                        "partial_context_count": 1,
+                        "average_context_score": 0.74,
+                    },
+                },
+            ],
+            "trend_comparison": {
+                "total_reports_delta": 1,
+                "severity_count_deltas": {
+                    "critical": 0,
+                    "high": 1,
+                    "medium": -1,
+                    "low": 1,
+                },
+                "recommendation_count_deltas": {
+                    "no-go": 1,
+                    "caution": -1,
+                    "go": 1,
+                },
+                "tool_count_deltas": {"terraform": 2, "kubernetes": -1},
+                "outcome_count_deltas": {"failure": 1, "success": 0},
+                "high_critical_count_delta": 1,
+                "high_critical_rate_delta": 1 / 6,
+                "false_positive_count_delta": 1,
+                "false_positive_rate_delta": 1 / 3,
+                "false_reassurance_count_delta": 1,
+                "false_reassurance_rate_delta": 1 / 3,
+                "linked_outcome_count_delta": 1,
+                "context_partial_count_delta": 1,
+                "context_average_score_delta": -0.16,
+            },
+        }
+
+        with mock.patch.object(
+            history_module,
+            "_fetch_history_risk_trends",
+            return_value=trend_payload,
+        ):
+            response = self.client.get("/history")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Window change", response.text)
+        self.assertIn("Verdict change", response.text)
+        self.assertIn("Recommendation change", response.text)
+        self.assertIn("no-go +1", response.text)
+        self.assertIn("caution -1", response.text)
+        self.assertIn("Outcome change", response.text)
+        self.assertIn("Toolchain change", response.text)
+        self.assertIn("Context change", response.text)
+
+    def test_history_page_renders_feedback_bias_calibration_limitation(self) -> None:
+        report = self._persist_report(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Reviewer marked feedback as noisy.",
+            opening_sentence="Reviewer feedback should shape calibration labels.",
+        )
+        feedback_service_module.record_finding_feedback(
+            analysis_id=report["id"],
+            finding_id=report["findings"][0]["finding_id"],
+            useful=False,
+            false_positive_flag=True,
+            false_positive_reason="Reviewer confirmed the warning was noisy.",
+        )
+
+        response = self.client.get("/history")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Sparse calibration data", response.text)
+        self.assertIn("Limited reviewer feedback", response.text)
+        self.assertIn("Feedback may be biased", response.text)
 
     def test_history_page_shows_diff_indicator_for_rescanned_same_artifact(
         self,
@@ -1762,6 +2038,31 @@ class HistoryPageRenderingTests(unittest.TestCase):
         self.assertIn("Security group exposure risk", response.text)
         self.assertIn("Next action", response.text)
         self.assertIn("Review linked evidence", response.text)
+
+    def test_history_detail_route_marks_summary_cards_as_wrapping_grid(self) -> None:
+        long_top_risk = (
+            "CRITICAL: aws_eks_node_group.checkout_workers - Terraform "
+            "aws_eks_node_group.checkout_workers is a replace change in the "
+            "compute/workload category targeting production. It may affect 3 "
+            "downstream service(s) or resource groups."
+        )
+        self._persist_report(
+            top_risk=long_top_risk,
+            assessment_confidence=0.8,
+        )
+
+        response = self.client.get("/history/1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("dw-report-signal-grid", response.text)
+        self.assertIn("dw-report-signal", response.text)
+        self.assertIn("dw-report-signal-compact", response.text)
+        self.assertIn("dw-report-signal-long", response.text)
+        self.assertIn("dw-report-signal-action", response.text)
+        self.assertIn("dw-report-signal-value", response.text)
+        self.assertIn('"data-dw-report-signal":"top-risk"', response.text)
+        self.assertIn('"data-dw-report-signal":"next-action"', response.text)
+        self.assertIn('"data-dw-report-heading":"top-risk"', response.text)
 
     def test_history_detail_route_renders_confidence_ledger(self) -> None:
         self._persist_report(

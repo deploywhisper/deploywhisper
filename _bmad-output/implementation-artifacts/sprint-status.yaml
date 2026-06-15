@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-05-22
+# last_updated: 2026-06-15
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-05-22
+last_updated: 2026-06-15
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -92,28 +92,28 @@ development_status:
   epic-4-retrospective: optional
 
   epic-5: in-progress
-  5-1-versioned-api-report-contract: ready-for-dev
-  5-2-cli-project-aware-advisory-output: ready-for-dev
-  5-3-github-action-integration-contract: ready-for-dev
-  5-4-pr-comment-formatter: ready-for-dev
-  5-5-rerun-on-commit-and-report-comparison: ready-for-dev
+  5-1-versioned-api-report-contract: done
+  5-2-cli-project-aware-advisory-output: done
+  5-3-github-action-integration-contract: done
+  5-4-pr-comment-formatter: done
+  5-5-rerun-on-commit-and-report-comparison: review
   5-6-future-adapter-output-contract: ready-for-dev
   epic-5-retrospective: optional
 
   epic-6: in-progress
-  6-1-benchmark-corpus-v1: ready-for-dev
-  6-2-benchmark-runner: ready-for-dev
-  6-3-honest-failure-report-generator: ready-for-dev
-  6-4-outcome-calibration-metrics: ready-for-dev
-  6-5-incident-backtesting: ready-for-dev
-  6-6-risk-trend-review: ready-for-dev
+  6-1-benchmark-corpus-v1: review
+  6-2-benchmark-runner: review
+  6-3-honest-failure-report-generator: done
+  6-4-outcome-calibration-metrics: review
+  6-5-incident-backtesting: done
+  6-6-risk-trend-review: done
   epic-6-retrospective: optional
 
   epic-7: in-progress
-  7-1-project-scoped-topology-context: ready-for-dev
-  7-2-terraform-state-connector: ready-for-dev
-  7-3-kubernetes-live-state-connector: ready-for-dev
-  7-4-codeowners-and-ownership-mapping: ready-for-dev
+  7-1-project-scoped-topology-context: review
+  7-2-terraform-state-connector: done
+  7-3-kubernetes-live-state-connector: done
+  7-4-codeowners-and-ownership-mapping: done
   7-5-context-graph-and-freshness-ledger: ready-for-dev
   epic-7-retrospective: optional
 

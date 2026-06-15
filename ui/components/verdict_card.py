@@ -48,13 +48,17 @@ def _context_warning_text(context: dict) -> str:
 
 
 def _verdict_signal(label: str, value: str, detail: str) -> None:
-    with ui.element("div").classes("dw-panel-soft min-w-[170px] flex-1 p-3"):
-        with ui.column().classes("gap-1"):
+    with ui.element("div").classes("dw-panel-soft dw-report-signal p-3"):
+        with ui.column().classes("gap-1 min-w-0"):
             ui.label(label).classes(
                 "text-[11px] font-semibold uppercase tracking-[0.08em] dw-muted"
             )
-            ui.label(value).classes("text-sm font-semibold dw-text leading-5")
-            ui.label(detail).classes("text-xs dw-muted leading-5")
+            ui.label(value).classes(
+                "dw-report-signal-value text-sm font-semibold dw-text leading-5"
+            )
+            ui.label(detail).classes(
+                "dw-report-signal-detail text-xs dw-muted leading-5"
+            )
 
 
 def render_verdict_card(report: dict) -> None:
@@ -99,7 +103,7 @@ def render_verdict_card(report: dict) -> None:
                         ui.label("CONFIDENCE UNAVAILABLE").classes("text-xs dw-muted")
                     render_context_completeness_badge(context)
 
-        with ui.row().classes("w-full gap-3 flex-wrap mt-3"):
+        with ui.element("div").classes("dw-report-signal-grid w-full mt-3"):
             _verdict_signal(
                 "Verdict",
                 report_verdict_text(report),

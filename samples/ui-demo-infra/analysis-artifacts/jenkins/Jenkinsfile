@@ -1,0 +1,55 @@
+pipeline {
+  agent any
+
+  environment {
+    APP_NAME = 'checkout-api'
+    NAMESPACE = 'demo-prod'
+    IMAGE_TAG = '2026.05.22'
+  }
+
+  stages {
+    stage('Build') {
+      steps {
+        sh 'echo building checkout-api demo image'
+      }
+    }
+
+    stage('Infrastructure Plan') {
+      steps {
+        sh 'terraform plan -out=tfplan'
+        sh 'terraform show -json tfplan > checkout-risk-plan.json'
+      }
+    }
+
+    stage('Policy Scan') {
+      steps {
+        sh 'echo run synthetic policy checks for public ingress, IAM wildcard, and privileged pods'
+      }
+    }
+
+    stage('Manual Approval') {
+      steps {
+        input message: 'Approve demo-prod rollout after reviewing DeployWhisper report?'
+      }
+    }
+
+    stage('Deploy') {
+      steps {
+        sh 'kubectl apply -f checkout-platform.yaml -n demo-prod'
+        sh 'kubectl rollout status deployment/checkout-api -n demo-prod --timeout=180s'
+      }
+    }
+
+    stage('Smoke Test') {
+      steps {
+        sh 'curl -fsS https://checkout.demo.example.com/health'
+      }
+    }
+  }
+
+  post {
+    failure {
+      sh 'ansible-playbook ops-rollback-playbook.yml --limit checkout_release_hosts'
+    }
+  }
+}

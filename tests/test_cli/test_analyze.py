@@ -21,11 +21,17 @@ import services.analysis_service as analysis_service_module
 import services.project_service as project_service_module
 from analysis.incident_matcher import IncidentMatch
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from cli.analyze import main
+from cli.analyze import _load_artifacts, main
 from importlib import reload
 from integrations.github.init_service import GitHubInitOptions, GitHubInitResult
 from llm.narrator import NarrativeResult
-from parsers.base import ParseBatchResult, ParsedFileResult
+from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
+from services.intake_service import EXTERNAL_ARTIFACT_PREFIX
+from services.ownership_service import (
+    build_ownership_context,
+    uploaded_codeowners_sources,
+)
+from services.benchmark_runner_service import BenchmarkRunResult, BenchmarkRunSummary
 from services.skill_installer_service import InstalledSkillEntry, SkillInstallResult
 from services.skill_registry_service import SkillRegistryEntry
 from services.skill_test_harness_service import (
@@ -54,6 +60,252 @@ class AnalyzeCliTests(unittest.TestCase):
         os.environ.pop("DATABASE_URL", None)
         os.environ.pop("APP_BASE_URL", None)
         self.tempdir.cleanup()
+
+    def test_load_artifacts_preserves_relative_paths_for_common_parent(self) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        codeowners_path = repo / ".github" / "CODEOWNERS"
+        plan_path = repo / "services" / "payments" / "plan.json"
+        codeowners_path.parent.mkdir(parents=True)
+        plan_path.parent.mkdir(parents=True)
+        codeowners_path.write_text(
+            "/services/payments/ @payments-sre", encoding="utf-8"
+        )
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        artifacts = _load_artifacts([str(codeowners_path), str(plan_path)])
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            [".github/CODEOWNERS", "services/payments/plan.json"],
+        )
+
+    def test_load_artifacts_preserves_mixed_relative_codeowners_absolute_artifact(
+        self,
+    ) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        codeowners_path = repo / ".github" / "CODEOWNERS"
+        plan_path = repo / "services" / "payments" / "plan.json"
+        codeowners_path.parent.mkdir(parents=True)
+        plan_path.parent.mkdir(parents=True)
+        codeowners_path.write_text(
+            "/services/payments/ @payments-sre", encoding="utf-8"
+        )
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        cwd = Path.cwd()
+        try:
+            os.chdir(repo)
+            artifacts = _load_artifacts([".github/CODEOWNERS", str(plan_path)])
+        finally:
+            os.chdir(cwd)
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            [".github/CODEOWNERS", "services/payments/plan.json"],
+        )
+
+    def test_load_artifacts_preserves_mixed_absolute_codeowners_relative_artifact(
+        self,
+    ) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        codeowners_path = repo / ".github" / "CODEOWNERS"
+        plan_path = repo / "services" / "payments" / "plan.json"
+        codeowners_path.parent.mkdir(parents=True)
+        plan_path.parent.mkdir(parents=True)
+        codeowners_path.write_text(
+            "/services/payments/ @payments-sre", encoding="utf-8"
+        )
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        cwd = Path.cwd()
+        try:
+            os.chdir(repo.parent)
+            artifacts = _load_artifacts(
+                [str(codeowners_path), "repo/services/payments/plan.json"]
+            )
+        finally:
+            os.chdir(cwd)
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            [".github/CODEOWNERS", "services/payments/plan.json"],
+        )
+
+    def test_load_artifacts_preserves_single_relative_path(self) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        plan_path = repo / "services" / "payments" / "plan.json"
+        plan_path.parent.mkdir(parents=True)
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        cwd = Path.cwd()
+        try:
+            os.chdir(repo.parent)
+            artifacts = _load_artifacts(["repo/services/payments/plan.json"])
+        finally:
+            os.chdir(cwd)
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            ["repo/services/payments/plan.json"],
+        )
+
+    def test_load_artifacts_uses_basenames_for_unrelated_absolute_paths(self) -> None:
+        first_root = Path(self.tempdir.name) / "repo-a"
+        second_root = Path(self.tempdir.name) / "repo-b"
+        first_path = first_root / "services" / "payments" / "plan.json"
+        second_path = second_root / "services" / "billing" / "plan.json"
+        first_path.parent.mkdir(parents=True)
+        second_path.parent.mkdir(parents=True)
+        first_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        second_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        artifacts = _load_artifacts([str(first_path), str(second_path)])
+
+        self.assertEqual([name for name, _ in artifacts], ["plan.json", "plan#2.json"])
+
+    def test_load_artifacts_marks_out_of_root_absolute_paths_when_codeowners_present(
+        self,
+    ) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        external = Path(self.tempdir.name) / "external"
+        codeowners_path = repo / ".github" / "CODEOWNERS"
+        plan_path = external / "plan.json"
+        codeowners_path.parent.mkdir(parents=True)
+        plan_path.parent.mkdir(parents=True)
+        codeowners_path.write_text("*.json @root-owner", encoding="utf-8")
+        plan_path.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        artifacts = _load_artifacts([str(codeowners_path), str(plan_path)])
+        artifact_names = [name for name, _ in artifacts]
+
+        self.assertEqual(
+            artifact_names,
+            [".github/CODEOWNERS", f"{EXTERNAL_ARTIFACT_PREFIX}/plan.json"],
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name=artifact_names[1],
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file=artifact_names[1],
+                            tool="terraform",
+                            resource_id="aws_s3_bucket.external",
+                            action="create",
+                            summary="Terraform creates an external bucket.",
+                        )
+                    ],
+                )
+            ]
+        )
+        context = build_ownership_context(
+            parse_batch,
+            codeowners_sources=uploaded_codeowners_sources(artifacts),
+        )
+
+        self.assertEqual(context.owner_signals, ())
+        self.assertEqual(
+            context.unmapped_subjects,
+            ("external artifact: plan.json", "aws_s3_bucket.external"),
+        )
+
+    def test_load_artifacts_preserves_multiple_absolute_codeowners_roots(
+        self,
+    ) -> None:
+        repo_a = Path(self.tempdir.name) / "repo-a"
+        repo_b = Path(self.tempdir.name) / "repo-b"
+        repo_a_codeowners = repo_a / ".github" / "CODEOWNERS"
+        repo_b_codeowners = repo_b / ".github" / "CODEOWNERS"
+        repo_a_plan = repo_a / "services" / "payments" / "plan.json"
+        repo_b_plan = repo_b / "services" / "billing" / "plan.json"
+        for path in (repo_a_codeowners, repo_b_codeowners, repo_a_plan, repo_b_plan):
+            path.parent.mkdir(parents=True, exist_ok=True)
+        repo_a_codeowners.write_text(
+            "/services/payments/ @payments-sre", encoding="utf-8"
+        )
+        repo_b_codeowners.write_text(
+            "/services/billing/ @billing-sre", encoding="utf-8"
+        )
+        repo_a_plan.write_text('{"resource_changes": []}', encoding="utf-8")
+        repo_b_plan.write_text('{"resource_changes": []}', encoding="utf-8")
+
+        artifacts = _load_artifacts(
+            [
+                str(repo_a_codeowners),
+                str(repo_a_plan),
+                str(repo_b_codeowners),
+                str(repo_b_plan),
+            ]
+        )
+
+        self.assertEqual(
+            [name for name, _ in artifacts],
+            [
+                "repo-a/.github/CODEOWNERS",
+                "repo-a/services/payments/plan.json",
+                "repo-b/.github/CODEOWNERS",
+                "repo-b/services/billing/plan.json",
+            ],
+        )
+
+    def test_load_artifacts_prefers_nested_codeowners_root_for_nested_repo(
+        self,
+    ) -> None:
+        repo = Path(self.tempdir.name) / "repo"
+        nested_repo = repo / "services" / "payments"
+        root_codeowners = repo / ".github" / "CODEOWNERS"
+        nested_codeowners = nested_repo / "CODEOWNERS"
+        nested_plan = nested_repo / "plan.json"
+        for path in (root_codeowners, nested_codeowners, nested_plan):
+            path.parent.mkdir(parents=True, exist_ok=True)
+        root_codeowners.write_text("/services/payments/ @platform", encoding="utf-8")
+        nested_codeowners.write_text("*.json @payments-sre", encoding="utf-8")
+        nested_plan.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+            encoding="utf-8",
+        )
+
+        artifacts = _load_artifacts(
+            [str(root_codeowners), str(nested_codeowners), str(nested_plan)]
+        )
+        artifact_names = [name for name, _ in artifacts]
+
+        self.assertEqual(
+            artifact_names,
+            [
+                "repo/.github/CODEOWNERS",
+                "payments/CODEOWNERS",
+                "payments/plan.json",
+            ],
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name=artifact_names[2],
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file=artifact_names[2],
+                            tool="terraform",
+                            resource_id="aws_security_group.payments",
+                            action="modify",
+                            summary="Terraform modifies a payments security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        context = build_ownership_context(
+            parse_batch,
+            codeowners_sources=uploaded_codeowners_sources(artifacts),
+        )
+
+        self.assertEqual(len(context.owner_signals), 1)
+        self.assertEqual(context.owner_signals[0].owners, ["@payments-sre"])
+        self.assertEqual(context.owner_signals[0].source, "CODEOWNERS")
 
     def test_skills_command_uses_shared_custom_skill_registry(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -209,6 +461,333 @@ class AnalyzeCliTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("valid skill manifest v1", output.getvalue())
+
+    def test_benchmark_validate_corpus_command_reports_public_corpus_status(
+        self,
+    ) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "validate-corpus"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertTrue(payload["valid"])
+        self.assertEqual(
+            payload["summary"]["corpus_id"], "deploywhisper-benchmark-corpus-v1"
+        )
+        self.assertGreaterEqual(payload["summary"]["scenario_count"], 3)
+
+    def test_benchmark_run_command_reports_scenario_results(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "run"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertIn(ctx.exception.code, {0, 1})
+        self.assertEqual(
+            payload["summary"]["corpus_id"], "deploywhisper-benchmark-corpus-v1"
+        )
+        self.assertGreaterEqual(payload["summary"]["scenario_count"], 3)
+        self.assertEqual(
+            len(payload["scenarios"]), payload["summary"]["scenario_count"]
+        )
+        self.assertIn(
+            payload["scenarios"][0]["status"], ["passed", "failed", "unsupported"]
+        )
+        self.assertIn("findings", payload["scenarios"][0])
+        self.assertIn("evidence_coverage", payload["scenarios"][0])
+        self.assertIn("evidence_law_violations", payload["scenarios"][0])
+        self.assertIn("latency_ms", payload["scenarios"][0])
+        self.assertIn("unsupported", payload["scenarios"][0])
+        self.assertIn("honest_failure_report", payload)
+        self.assertIn(
+            "evidence_law_violation_count",
+            payload["honest_failure_report"]["summary"],
+        )
+        self.assertIn("missed_scenarios", payload["honest_failure_report"])
+        self.assertIn("linked_issues", payload["honest_failure_report"])
+
+    def test_benchmark_run_command_exits_nonzero_for_failed_result(self) -> None:
+        output = io.StringIO()
+        failed_result = BenchmarkRunResult(
+            passed=False,
+            summary=BenchmarkRunSummary(
+                corpus_id="failing-corpus",
+                version="1.0.0",
+                scenario_count=1,
+                passed_count=0,
+                failed_count=1,
+                unsupported_count=0,
+                total_latency_ms=1.0,
+                generated_at="2026-06-02T00:00:00Z",
+            ),
+            scenarios=[],
+        )
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "run"]),
+            patch("cli.analyze.run_benchmark_corpus", return_value=failed_result),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse(payload["passed"])
+        self.assertEqual(payload["summary"]["failed_count"], 1)
+
+    def test_benchmark_backtest_incidents_command_reports_project_results(
+        self,
+    ) -> None:
+        output = io.StringIO()
+        result = {
+            "passed": False,
+            "summary": {
+                "project_id": 7,
+                "workspace_id": None,
+                "scenario_count": 2,
+                "detected_count": 1,
+                "missed_count": 1,
+                "unsupported_count": 0,
+                "insufficient_context_count": 0,
+                "error_count": 0,
+                "generated_at": "2026-06-08T00:00:00Z",
+            },
+            "scenarios": [],
+            "errors": [],
+        }
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "benchmark",
+                    "backtest-incidents",
+                    "--project-id",
+                    "7",
+                ],
+            ),
+            patch("cli.analyze.run_incident_backtest", return_value=result) as mocked,
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(payload["summary"]["missed_count"], 1)
+        mocked.assert_called_once_with(
+            project_id=7,
+            project_key=None,
+            workspace_id=None,
+            workspace_key=None,
+        )
+
+    def test_benchmark_risk_trends_command_exports_scoped_json(self) -> None:
+        output = io.StringIO()
+        result = {
+            "total_reports": 3,
+            "severity_counts": {"high": 2, "critical": 1},
+            "false_positive_signals": {"count": 1, "rate": 1 / 3},
+        }
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "benchmark",
+                    "risk-trends",
+                    "--project-key",
+                    "payments",
+                    "--workspace-key",
+                    "prod",
+                    "--severity",
+                    "high",
+                    "--toolchain",
+                    "terraform",
+                    "--outcome",
+                    "failure",
+                    "--created-from",
+                    "2026-06-01T00:00:00Z",
+                    "--created-to",
+                    "2026-06-08T00:00:00Z",
+                ],
+            ),
+            patch("cli.analyze.fetch_risk_trends", return_value=result) as mocked,
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertEqual(payload["total_reports"], 3)
+        mocked.assert_called_once()
+        kwargs = mocked.call_args.kwargs
+        self.assertEqual(kwargs["project_key"], "payments")
+        self.assertEqual(kwargs["workspace_key"], "prod")
+        self.assertEqual(kwargs["severity"], "high")
+        self.assertEqual(kwargs["toolchain"], "terraform")
+        self.assertEqual(kwargs["outcome"], "failure")
+        self.assertEqual(
+            kwargs["created_from"].isoformat(), "2026-06-01T00:00:00+00:00"
+        )
+        self.assertEqual(kwargs["created_to"].isoformat(), "2026-06-08T00:00:00+00:00")
+
+    def test_benchmark_risk_trends_help_describes_activity_window(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "risk-trends", "--help"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        help_text = output.getvalue()
+        self.assertIn("activity-window start timestamp", help_text)
+        self.assertIn("outcome deployed", help_text)
+        self.assertIn("feedback", help_text)
+        self.assertIn("created), ISO-8601 or Zulu", help_text)
+
+    def test_benchmark_risk_trends_rejects_reversed_time_window(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "benchmark",
+                    "risk-trends",
+                    "--project-key",
+                    "payments",
+                    "--created-from",
+                    "2026-06-08T00:00:00Z",
+                    "--created-to",
+                    "2026-06-01T00:00:00Z",
+                ],
+            ),
+            patch("cli.analyze.fetch_risk_trends") as mocked,
+            redirect_stderr(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(payload["error"]["code"], "invalid_time_window")
+        mocked.assert_not_called()
+
+    def test_benchmark_risk_trends_requires_project_scope(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "benchmark",
+                    "risk-trends",
+                ],
+            ),
+            patch("cli.analyze.fetch_risk_trends") as mocked,
+            redirect_stderr(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(payload["error"]["code"], "missing_project_scope")
+        mocked.assert_not_called()
+
+    def test_benchmark_run_command_reports_invalid_corpus_as_json(self) -> None:
+        output = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch(
+                    "sys.argv",
+                    ["deploywhisper", "benchmark", "run", "--path", tmpdir],
+                ),
+                redirect_stdout(output),
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse(payload["passed"])
+        self.assertFalse(payload["valid"])
+        self.assertEqual(payload["summary"]["corpus_id"], "unknown")
+        self.assertIn("passed_count", payload["summary"])
+        self.assertIn("failed_count", payload["summary"])
+        self.assertIn("unsupported_count", payload["summary"])
+        self.assertTrue(payload["errors"])
+
+    def test_benchmark_run_command_reports_loader_failure_as_json(self) -> None:
+        output = io.StringIO()
+
+        with (
+            patch("sys.argv", ["deploywhisper", "benchmark", "run"]),
+            patch(
+                "cli.analyze.run_benchmark_corpus",
+                side_effect=json.JSONDecodeError("bad json", "{}", 0),
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse(payload["passed"])
+        self.assertFalse(payload["valid"])
+        self.assertEqual(payload["summary"]["corpus_id"], "unknown")
+        self.assertIn("passed_count", payload["summary"])
+        self.assertIn("failed_count", payload["summary"])
+        self.assertIn("unsupported_count", payload["summary"])
+        self.assertTrue(payload["errors"])
+
+    def test_benchmark_run_command_reports_non_utf8_corpus_json_as_json(self) -> None:
+        output = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, "manifest.json").write_bytes(b"\xff\xfe\x00")
+            with (
+                patch(
+                    "sys.argv",
+                    ["deploywhisper", "benchmark", "run", "--path", tmpdir],
+                ),
+                redirect_stdout(output),
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    main()
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse(payload["passed"])
+        self.assertFalse(payload["valid"])
+        self.assertEqual(payload["summary"]["corpus_id"], "unknown")
+        self.assertIn("passed_count", payload["summary"])
+        self.assertIn("failed_count", payload["summary"])
+        self.assertIn("unsupported_count", payload["summary"])
+        self.assertTrue(payload["errors"])
 
     def test_skill_test_command_reports_success_for_requested_skill(self) -> None:
         output = io.StringIO()
@@ -672,9 +1251,17 @@ class AnalyzeCliTests(unittest.TestCase):
             payload["data"]["share_summary"]["json_payload"]["report_id"],
             payload["data"]["persisted_report"]["id"],
         )
-        self.assertIn(
-            "https://deploywhisper.example.com/reports/",
+        expected_report_link = (
+            "https://deploywhisper.example.com/reports/"
+            f"{payload['data']['persisted_report']['id']}"
+        )
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["report_link"],
+            expected_report_link,
+        )
+        self.assertEqual(
             payload["data"]["share_summary"]["json_payload"]["rollback_link"],
+            expected_report_link,
         )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
         self.assertEqual(
@@ -839,6 +1426,19 @@ class AnalyzeCliTests(unittest.TestCase):
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
+        narrative = NarrativeResult(
+            available=False,
+            opening_sentence="",
+            explanation="",
+            guidance=["Review deterministic advisory output."],
+            degraded=True,
+            warnings=["Narrative provider unavailable: offline test"],
+            failure_notice="Narrative provider unavailable: offline test",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
+        )
         output = io.StringIO()
 
         def passthrough_analyze_uploaded_files(
@@ -864,6 +1464,9 @@ class AnalyzeCliTests(unittest.TestCase):
             patch(
                 "cli.analyze.analyze_uploaded_files",
                 side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
             ),
             patch(
                 "sys.argv",
@@ -896,6 +1499,19 @@ class AnalyzeCliTests(unittest.TestCase):
             '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
             encoding="utf-8",
         )
+        narrative = NarrativeResult(
+            available=False,
+            opening_sentence="",
+            explanation="",
+            guidance=["Review deterministic advisory output."],
+            degraded=True,
+            warnings=["Narrative provider unavailable: offline test"],
+            failure_notice="Narrative provider unavailable: offline test",
+            source="fallback",
+            provider="openai",
+            model="gpt-4.1-mini",
+            local_mode=False,
+        )
         output = io.StringIO()
 
         def passthrough_analyze_uploaded_files(
@@ -921,6 +1537,9 @@ class AnalyzeCliTests(unittest.TestCase):
             patch(
                 "cli.analyze.analyze_uploaded_files",
                 side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative", return_value=narrative
             ),
             patch(
                 "sys.argv",
@@ -1001,6 +1620,105 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["persisted_report"]["project"]["project_key"], "payments"
         )
+
+    def test_analyze_command_accepts_project_workspace_key(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="prod",
+            display_name="Production",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text(
+            '{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
+            encoding="utf-8",
+        )
+        output = io.StringIO()
+
+        def passthrough_analyze_uploaded_files(
+            files,
+            completion_client=None,
+            audit_context=None,
+            project_id=None,
+            project_key=None,
+            workspace_id=None,
+            workspace_key=None,
+        ):
+            return analysis_service_module.analyze_uploaded_files(
+                files,
+                completion_client=completion_client,
+                audit_context=audit_context,
+                project_id=project_id,
+                project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
+            )
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                side_effect=passthrough_analyze_uploaded_files,
+            ),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    "--workspace",
+                    "prod",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(
+            payload["data"]["persisted_report"]["project"]["project_key"], "payments"
+        )
+        self.assertEqual(
+            payload["data"]["persisted_report"]["workspace"]["workspace_key"], "prod"
+        )
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+        self.assertFalse(payload["data"]["advisory"]["should_block"])
+        self.assertFalse(payload["data"]["narrative"]["available"])
+        self.assertTrue(payload["data"]["narrative"]["degraded"])
+        self.assertTrue(payload["data"]["persisted_report"]["narrative_degraded"])
+        self.assertIn(
+            payload["data"]["advisory"]["recommendation"],
+            {"go", "caution", "no-go"},
+        )
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["verdict_banner"],
+            (
+                f"DeployWhisper {payload['data']['advisory']['severity'].upper()} · "
+                f"{payload['data']['advisory']['recommendation'].upper()}"
+            ),
+        )
+        self.assertIn(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
+            {"Satisfied", "Needs review", "Reconciled"},
+        )
+        self.assertIsInstance(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"],
+            str,
+        )
+        self.assertTrue(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"]
+        )
+        self.assertIn("top_findings", payload["data"]["share_summary"]["json_payload"])
+        self.assertTrue(
+            payload["data"]["share_summary"]["json_payload"]["top_findings"]
+        )
+        self.assertIn("uncertainty_flags", payload["data"]["advisory"])
 
     def test_outcome_record_command_records_deployment_result(self) -> None:
         project = project_service_module.create_project(
@@ -2414,6 +3132,8 @@ class AnalyzeCliTests(unittest.TestCase):
                     action="delete",
                     contribution=24,
                     summary="Terraform changed a security group.",
+                    normalized_action="destroy",
+                    severity="critical",
                 )
             ],
             interaction_risks=[],
@@ -2480,6 +3200,15 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertTrue(payload["data"]["assessment"]["partial_context"])
         self.assertEqual(payload["data"]["advisory"]["recommendation"], "no-go")
         self.assertEqual(payload["data"]["advisory"]["severity"], "critical")
+        self.assertEqual(
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_status"],
+            "Satisfied",
+        )
+        self.assertIn(
+            "deterministic evidence",
+            payload["data"]["share_summary"]["json_payload"]["evidence_law_detail"],
+        )
+        self.assertIn("Evidence Law", payload["data"]["share_summary"]["plain_text"])
         self.assertIn("context_completeness", payload["data"]["assessment"])
         self.assertIn("context_completeness", payload["data"]["persisted_report"])
         self.assertIn("rollback_plan", payload["data"]["persisted_report"])
@@ -2583,15 +3312,17 @@ class AnalyzeCliTests(unittest.TestCase):
         collect_github_init_options,
         run_github_init,
     ) -> None:
+        example_repo = str(Path(tempfile.gettempdir()) / "example-repo")
         collect_github_init_options.return_value = GitHubInitOptions(
-            repo_path="/tmp/example-repo",
+            repo_path=example_repo,
             workflow_path=".github/workflows/deploywhisper.yml",
             api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
             enable_github_app=False,
             base_branch="develop",
+            project_key="payments",
         )
         run_github_init.return_value = GitHubInitResult(
-            repo_path="/tmp/example-repo",
+            repo_path=example_repo,
             workflow_path=".github/workflows/deploywhisper.yml",
             readme_path="README.md",
             github_app_notes_path=None,
@@ -2610,7 +3341,9 @@ class AnalyzeCliTests(unittest.TestCase):
                     "github",
                     "init",
                     "--repo",
-                    "/tmp/example-repo",
+                    example_repo,
+                    "--project-key",
+                    "payments",
                 ],
             ),
             redirect_stdout(output),
@@ -2620,7 +3353,7 @@ class AnalyzeCliTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, 0)
         collect_github_init_options.assert_called_once_with(
-            repo_path="/tmp/example-repo",
+            repo_path=example_repo,
             workflow_path=None,
             api_endpoint=None,
             enable_github_app=None,
@@ -2629,6 +3362,11 @@ class AnalyzeCliTests(unittest.TestCase):
             github_app_name=None,
             github_app_slug=None,
             public_base_url=None,
+            project_key="payments",
+            project_id=None,
+            workspace_key=None,
+            workspace_id=None,
+            allow_derived_project_scope=None,
             branch_name=None,
         )
         run_github_init.assert_called_once()

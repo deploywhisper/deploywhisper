@@ -69,6 +69,12 @@ def _project_payload(
     )
 
 
+def _invalidate_calibration_snapshot(project_id: int) -> None:
+    from services.backtesting_service import invalidate_backtesting_snapshot
+
+    invalidate_backtesting_snapshot(project_id=project_id)
+
+
 def _resolve_summary_scope(
     *,
     project_id: int | None,
@@ -142,6 +148,7 @@ def record_finding_feedback(
             false_positive_reason=normalized_reason,
             outcome_label=outcome_label,
         )
+        _invalidate_calibration_snapshot(report.project_id)
         return _serialize_event(event)
 
 
@@ -191,6 +198,7 @@ def record_false_negative_feedback(
             false_negative_note=normalized_note,
             outcome_label="missed",
         )
+        _invalidate_calibration_snapshot(report.project_id)
         return _serialize_event(event)
 
 

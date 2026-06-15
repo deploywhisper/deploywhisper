@@ -122,6 +122,7 @@ def score_evidence(
     change_metadata_by_id: dict[str, dict[str, Any]] | None = None,
     supplemental_changes: list[UnifiedChange] | None = None,
     completion_client=None,
+    allow_llm_assistance: bool = True,
 ) -> RiskAssessment:
     changes = [
         _evidence_to_change(item, change_metadata_by_id=change_metadata_by_id)
@@ -139,11 +140,15 @@ def score_evidence(
         _build_contributor(change, topology=topology, raw_files=raw_files)
         for change in changes[len(evidence_items) :]
     )
-    contributors, llm_warning, llm_used = _apply_llm_scores(
-        contributors,
-        partial_context=partial_context,
-        completion_client=completion_client,
-    )
+    if allow_llm_assistance:
+        contributors, llm_warning, llm_used = _apply_llm_scores(
+            contributors,
+            partial_context=partial_context,
+            completion_client=completion_client,
+        )
+    else:
+        llm_warning = None
+        llm_used = False
     evidence_contributor_count = len(evidence_items)
     contributors = [
         _apply_evidence_fields(contributor, item)

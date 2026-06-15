@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import math
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 import os
+
+from pydantic import ValidationError
 
 from analysis.interaction_risk import InteractionRisk
 from analysis.risk_scorer import RiskAssessment, RiskContributor
@@ -16,13 +19,18 @@ from evidence.models import EvidenceItem
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 from services.analysis_service import (
+    AnalysisArtifacts,
     analyze_uploaded_files,
     build_advisory_summary,
     build_analysis_artifacts,
+    build_context_completeness,
     build_share_summary,
     evaluate_parse_batch,
     resolve_analysis_project_scope,
+    ShareSummaryJsonPayload,
 )
+from services.intake_service import uniquify_artifact_names
+from services.ownership_service import CodeownersSource
 
 
 def _incident_snapshot(count: int = 0) -> dict:
@@ -36,6 +44,81 @@ def _incident_snapshot(count: int = 0) -> dict:
 
 
 class AnalysisServiceTests(unittest.TestCase):
+    def test_analyze_uploaded_files_persists_elapsed_analysis_duration(self) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        artifacts = AnalysisArtifacts(
+            parse_batch=parse_batch,
+            evidence_items=[],
+            findings=[],
+            assessment=RiskAssessment(
+                score=10,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk fixture.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            blast_radius=BlastRadiusResult(
+                affected=[],
+                direct_count=0,
+                transitive_count=0,
+            ),
+            rollback_plan=RollbackPlan(
+                steps=[],
+                complexity="low",
+                complexity_score=1,
+            ),
+            incident_matches=[],
+            narrative=NarrativeResult(
+                opening_sentence="GO: low risk fixture.",
+                explanation="No material risk.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+
+        with (
+            patch(
+                "services.analysis_service.resolve_analysis_project_scope",
+                return_value=SimpleNamespace(id=17),
+            ),
+            patch(
+                "services.analysis_service.build_analysis_artifacts",
+                return_value=artifacts,
+            ),
+            patch(
+                "services.analysis_service.persist_analysis_report",
+                return_value={"id": 99, "analysis_duration_seconds": 7},
+            ) as persist_analysis_report,
+            patch(
+                "services.analysis_service.perf_counter",
+                side_effect=[10.0, 17.2],
+            ),
+        ):
+            result = analyze_uploaded_files(
+                [("plan.json", b"{}")],
+                project_id=17,
+                audit_context={"source_interface": "api"},
+            )
+
+        self.assertEqual(result.persisted_report["analysis_duration_seconds"], 7)
+        self.assertEqual(
+            persist_analysis_report.call_args.kwargs["analysis_duration_seconds"],
+            7,
+        )
+
     def test_analyze_uploaded_files_requires_explicit_project_scope_before_parsing(
         self,
     ) -> None:
@@ -291,6 +374,529 @@ class AnalysisServiceTests(unittest.TestCase):
         )
         self.assertTrue(artifacts.incident_matches[0].verification_guidance)
 
+    def test_build_analysis_artifacts_adds_owner_signals_from_codeowners_and_topology(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed the payments security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        topology = {
+            "updated_at": "2026-06-08T12:00:00Z",
+            "metadata": {
+                "import": {
+                    "source_type": "custom",
+                    "source_ref": "topology.json",
+                    "warnings": [],
+                }
+            },
+            "services": [
+                {
+                    "id": "payments-api",
+                    "label": "Payments API",
+                    "resource_keys": ["aws_security_group.payments"],
+                    "downstream": [],
+                    "owners": ["@payments-runtime"],
+                }
+            ],
+        }
+        with (
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=(topology, None),
+            ),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-06-08T12:00:00Z",
+                    payload=topology,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(2),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="CAUTION: review the payments change.",
+                    explanation="The deployment should be reviewed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "CODEOWNERS",
+                        "\n".join(
+                            [
+                                "* @platform",
+                                "/services/payments/ @payments-sre @payments-dev",
+                            ]
+                        ).encode(),
+                    ),
+                    (
+                        "services/payments/plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+                    ),
+                ],
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        owner_signals = [signal.model_dump() for signal in context.owner_signals]
+        self.assertIn(
+            {
+                "scope": "file",
+                "subject": "services/payments/plan.json",
+                "owners": ["@payments-sre", "@payments-dev"],
+                "source": "CODEOWNERS",
+                "source_ref": "CODEOWNERS",
+                "matched_pattern": "/services/payments/",
+                "resource_id": None,
+                "service_id": None,
+                "escalation_hint": "Escalate file review for services/payments/plan.json to @payments-sre, @payments-dev.",
+            },
+            owner_signals,
+        )
+        self.assertIn(
+            {
+                "scope": "service",
+                "subject": "Payments API",
+                "owners": ["@payments-runtime"],
+                "source": "topology",
+                "source_ref": "topology.json",
+                "matched_pattern": None,
+                "resource_id": "aws_security_group.payments",
+                "service_id": "payments-api",
+                "escalation_hint": "Escalate service review for Payments API to @payments-runtime.",
+            },
+            owner_signals,
+        )
+        self.assertIn(
+            "Escalate file review for services/payments/plan.json to @payments-sre, @payments-dev.",
+            context.escalation_hints,
+        )
+        self.assertNotIn(
+            "Add CODEOWNERS or ownership mapping for analyzed files/resources.",
+            context.context_todos,
+        )
+
+    def test_build_analysis_artifacts_preserves_owner_signals_after_intake_paths(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Terraform changed the payments security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        with (
+            patch("services.analysis_service.load_topology", return_value=(None, None)),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at=None,
+                    payload=None,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(0),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="CAUTION: review the payments change.",
+                    explanation="The deployment should be reviewed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                uniquify_artifact_names(
+                    [
+                        (
+                            "repo/.github/CODEOWNERS",
+                            b"/services/payments/ @payments-sre",
+                        ),
+                        (
+                            "repo/services/payments/plan.json",
+                            b'{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+                        ),
+                    ]
+                ),
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        self.assertIn(
+            {
+                "scope": "file",
+                "subject": "repo/services/payments/plan.json",
+                "owners": ["@payments-sre"],
+                "source": "CODEOWNERS",
+                "source_ref": "repo/.github/CODEOWNERS",
+                "matched_pattern": "/services/payments/",
+                "resource_id": None,
+                "service_id": None,
+                "escalation_hint": "Escalate file review for repo/services/payments/plan.json to @payments-sre.",
+            },
+            [signal.model_dump() for signal in context.owner_signals],
+        )
+
+    def test_codeowners_file_owner_prevents_missing_resource_ownership_downgrade(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=24,
+            severity="low",
+            recommendation="go",
+            top_risk="Terraform changed a security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        topology = {
+            "updated_at": "2026-06-08T12:00:00Z",
+            "metadata": {
+                "import": {
+                    "source_type": "custom",
+                    "source_ref": "topology.json",
+                    "warnings": [],
+                }
+            },
+            "services": [
+                {
+                    "id": "unrelated-api",
+                    "label": "Unrelated API",
+                    "resource_keys": ["aws_security_group.unrelated"],
+                    "owners": ["@platform-runtime"],
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=(topology, None),
+            ),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-06-08T12:00:00Z",
+                    payload=topology,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(2),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="GO: review the security group update.",
+                    explanation="The deployment was analyzed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "CODEOWNERS",
+                        b"/services/payments/ @payments-sre",
+                    ),
+                    (
+                        "services/payments/plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+                    ),
+                ],
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        self.assertEqual([signal.scope for signal in context.owner_signals], ["file"])
+        self.assertEqual(context.owner_signals[0].owners, ["@payments-sre"])
+        self.assertEqual(context.ownership_unmapped_subjects, [])
+        self.assertNotIn(
+            "Add CODEOWNERS or ownership mapping for analyzed files/resources.",
+            context.context_todos,
+        )
+        self.assertGreaterEqual(context.context_score, 0.7)
+        self.assertFalse(context.insufficient_context)
+
+    def test_topology_owner_prevents_missing_file_ownership_downgrade(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=24,
+            severity="low",
+            recommendation="go",
+            top_risk="Terraform security group changed.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        topology = {
+            "updated_at": "2026-06-08T12:00:00Z",
+            "metadata": {
+                "import": {
+                    "source_type": "custom",
+                    "source_ref": "topology.json",
+                    "warnings": [],
+                }
+            },
+            "services": [
+                {
+                    "id": "payments-api",
+                    "label": "Payments API",
+                    "resource_keys": ["aws_security_group.payments"],
+                    "owners": ["@payments-runtime"],
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=(topology, None),
+            ),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-06-08T12:00:00Z",
+                    payload=topology,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(2),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="GO: review the deployment update.",
+                    explanation="The deployment was analyzed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "services/payments/plan.json",
+                        (
+                            b'{"resource_changes": [{"address": '
+                            b'"aws_security_group.payments", "change": '
+                            b'{"actions": ["update"]}}]}'
+                        ),
+                    )
+                ],
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        self.assertEqual(
+            [signal.scope for signal in context.owner_signals], ["service"]
+        )
+        self.assertEqual(context.owner_signals[0].owners, ["@payments-runtime"])
+        self.assertEqual(context.ownership_unmapped_subjects, [])
+        self.assertNotIn(
+            "Add CODEOWNERS or ownership mapping for analyzed files/resources.",
+            context.context_todos,
+        )
+        self.assertGreaterEqual(context.context_score, 0.7)
+        self.assertFalse(context.insufficient_context)
+
+    def test_build_analysis_artifacts_adds_context_todo_when_ownership_missing(
+        self,
+    ) -> None:
+        assessment = RiskAssessment(
+            score=24,
+            severity="low",
+            recommendation="go",
+            top_risk="Terraform changed a security group.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        topology = {
+            "updated_at": "2026-06-08T12:00:00Z",
+            "metadata": {
+                "import": {
+                    "source_type": "custom",
+                    "source_ref": "topology.json",
+                    "warnings": [],
+                }
+            },
+            "services": [
+                {
+                    "id": "payments-api",
+                    "label": "Payments API",
+                    "resource_keys": ["aws_security_group.payments"],
+                    "downstream": [],
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "services.analysis_service.load_topology",
+                return_value=(topology, None),
+            ),
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-06-08T12:00:00Z",
+                    payload=topology,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(2),
+            ),
+            patch(
+                "services.analysis_service.evaluate_parse_batch",
+                return_value=assessment,
+            ),
+            patch(
+                "services.analysis_service.generate_narrative",
+                return_value=NarrativeResult(
+                    opening_sentence="GO: review the security group update.",
+                    explanation="The deployment was analyzed.",
+                    guidance=[],
+                    degraded=False,
+                    warnings=[],
+                ),
+            ),
+            patch("services.analysis_service.find_incident_matches", return_value=[]),
+        ):
+            artifacts = build_analysis_artifacts(
+                [
+                    (
+                        "services/payments/plan.json",
+                        b'{"resource_changes": [{"address": "aws_security_group.payments", "change": {"actions": ["update"]}}]}',
+                    )
+                ],
+                project_id=123,
+            )
+
+        context = artifacts.assessment.context_completeness
+        self.assertEqual(context.owner_signals, [])
+        self.assertIn(
+            "Add CODEOWNERS or ownership mapping for analyzed files/resources.",
+            context.context_todos,
+        )
+        self.assertIn(
+            "services/payments/plan.json",
+            context.ownership_unmapped_subjects,
+        )
+        self.assertIn("Payments API", context.ownership_unmapped_subjects)
+        self.assertEqual(context.context_score, 0.84)
+        self.assertEqual(context.confidence_level, "medium")
+        self.assertFalse(context.insufficient_context)
+        self.assertIn("ownership mapping is incomplete", context.uncertainty)
+
+    def test_build_context_completeness_suppresses_service_ownership_when_topology_disabled(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="services/payments/plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="services/payments/plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.payments",
+                            action="modify",
+                            summary="Terraform changed a payments security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        topology = {
+            "services": [
+                {
+                    "id": "payments-api",
+                    "label": "Payments API",
+                    "resource_keys": ["aws_security_group.payments"],
+                    "owners": ["@payments-runtime"],
+                }
+            ]
+        }
+        context = build_context_completeness(
+            parse_batch,
+            include_topology_context=False,
+            include_incident_context=False,
+            topology=topology,
+            codeowners_sources=(
+                CodeownersSource(
+                    source_ref="CODEOWNERS",
+                    content="/services/payments/ @payments-sre",
+                ),
+            ),
+        )
+
+        self.assertEqual([signal.scope for signal in context.owner_signals], ["file"])
+        self.assertEqual(context.owner_signals[0].owners, ["@payments-sre"])
+        self.assertNotIn(
+            "aws_security_group.payments",
+            context.ownership_unmapped_subjects,
+        )
+        self.assertNotIn("Payments API", context.ownership_unmapped_subjects)
+
     def _share_report_payload(self) -> dict:
         return {
             "id": 17,
@@ -361,6 +967,16 @@ class AnalysisServiceTests(unittest.TestCase):
                 "context_score": 0.84,
             },
         }
+
+    def _satisfy_share_payload_evidence_law(self, report: dict) -> None:
+        for evidence, evidence_id in zip(
+            report["evidence_items"],
+            ["ev-001", "ev-002", "ev-003", "ev-004", "ev-005"],
+            strict=True,
+        ):
+            evidence["evidence_id"] = evidence_id
+            evidence["deterministic"] = True
+            evidence["determinism_level"] = "deterministic"
 
     def test_build_analysis_artifacts_extracts_evidence_items(self) -> None:
         assessment = RiskAssessment(
@@ -539,6 +1155,314 @@ class AnalysisServiceTests(unittest.TestCase):
             "Review evidence extraction gaps for supported artifacts.",
             context.context_todos,
         )
+
+    def test_build_context_completeness_surfaces_kubernetes_live_state_todos(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                warnings=[
+                    "Kubernetes live-state context TODO: cluster access is unavailable."
+                ],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 0.7)
+        self.assertEqual(context.confidence_level, "low")
+        self.assertTrue(context.insufficient_context)
+        self.assertIn(
+            "Resolve Kubernetes live-state context TODOs before relying on topology context.",
+            context.context_todos,
+        )
+        self.assertIn("Kubernetes live-state", context.uncertainty)
+
+    def test_build_context_completeness_keeps_partial_kubernetes_context_usable(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "services": [
+                        {
+                            "id": "Deployment/payments/api",
+                            "resource_keys": ["Deployment/payments/api"],
+                            "downstream": [],
+                        }
+                    ]
+                },
+                warnings=[
+                    "Kubernetes live-state context TODO: all-namespaces access is unavailable for 'context:prod' resource 'deployments'."
+                ],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertGreaterEqual(context.context_score, 0.7)
+        self.assertLess(context.context_score, 1.0)
+        self.assertEqual(context.confidence_level, "medium")
+        self.assertFalse(context.insufficient_context)
+        self.assertIn(
+            "Resolve Kubernetes live-state context TODOs before relying on topology context.",
+            context.context_todos,
+        )
+        self.assertIn("Kubernetes live-state", context.uncertainty)
+
+    def test_build_context_completeness_uses_kubernetes_drift_todos(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "services": [
+                        {
+                            "id": "Deployment/payments/api",
+                            "resource_keys": ["Deployment/payments/api"],
+                            "downstream": [],
+                        }
+                    ]
+                },
+                warnings=[],
+                drift=SimpleNamespace(
+                    status="unavailable",
+                    warnings=[
+                        "Kubernetes live-state context TODO: cluster access is unavailable for 'context:prod'."
+                    ],
+                ),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 1.0)
+        self.assertEqual(context.confidence_level, "medium")
+        self.assertIn(
+            "Resolve Kubernetes live-state context TODOs before relying on topology context.",
+            context.context_todos,
+        )
+        self.assertIn("Kubernetes live-state", context.uncertainty)
+
+    def test_build_context_completeness_uses_malformed_kubernetes_drift_warnings(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "services": [
+                        {
+                            "id": "Deployment/payments/api",
+                            "resource_keys": ["Deployment/payments/api"],
+                            "downstream": [],
+                        }
+                    ]
+                },
+                warnings=[],
+                drift=SimpleNamespace(
+                    status="unavailable",
+                    warnings=[
+                        "Kubernetes live-state import partially parsed one or more objects; malformed entries were skipped."
+                    ],
+                ),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 1.0)
+        self.assertEqual(context.confidence_level, "medium")
+        self.assertIn("Kubernetes live-state", context.uncertainty)
+
+    def test_build_context_completeness_does_not_degrade_for_unsupported_kind_skips(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="deployment.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "metadata": {
+                        "import": {
+                            "source_type": "kubernetes",
+                            "source_ref": "context:prod",
+                        }
+                    },
+                    "services": [
+                        {
+                            "id": "Deployment/payments/api",
+                            "resource_keys": ["Deployment/payments/api"],
+                            "downstream": [],
+                        }
+                    ],
+                },
+                warnings=[
+                    "Kubernetes live-state import skipped unsupported or duplicate objects while preserving supported context."
+                ],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertEqual(context.context_score, 1.0)
+        self.assertEqual(context.confidence_level, "high")
+        self.assertIsNone(context.uncertainty)
+
+    def test_build_context_completeness_treats_namespace_only_kubernetes_context_as_unusable(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="namespace.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "services": [
+                        {
+                            "id": "Namespace/payments",
+                            "resource_keys": ["Namespace/payments"],
+                            "downstream": [],
+                        }
+                    ]
+                },
+                warnings=[
+                    "Kubernetes live-state context TODO: all-namespaces access is unavailable for 'context:prod' resource 'deployments'."
+                ],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 0.7)
+        self.assertEqual(context.confidence_level, "low")
+        self.assertTrue(context.insufficient_context)
+        self.assertIn(
+            "Resolve Kubernetes live-state context TODOs before relying on topology context.",
+            context.context_todos,
+        )
+
+    def test_build_context_completeness_treats_namespace_only_kubernetes_context_without_todos_as_unusable(
+        self,
+    ) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="namespace.yaml",
+                    tool="kubernetes",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+
+        with patch(
+            "services.analysis_service.get_topology_status",
+            return_value=SimpleNamespace(
+                updated_at="2026-06-09T00:00:00Z",
+                payload={
+                    "metadata": {
+                        "import": {
+                            "source_type": "kubernetes",
+                            "source_ref": "context:prod",
+                        }
+                    },
+                    "services": [
+                        {
+                            "id": "Namespace/payments",
+                            "resource_keys": ["Namespace/payments"],
+                            "downstream": [],
+                        }
+                    ],
+                },
+                warnings=[],
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, include_incident_context=False)
+
+        self.assertLess(context.context_score, 0.7)
+        self.assertEqual(context.confidence_level, "low")
+        self.assertTrue(context.insufficient_context)
 
     def test_build_context_completeness_counts_distinct_evidence_coverage(
         self,
@@ -1098,14 +2022,19 @@ class AnalysisServiceTests(unittest.TestCase):
                         "plan.json",
                         b'{"resource_changes": [{"address": "aws_security_group.main", "change": {"actions": ["update"]}}]}',
                     )
-                ]
+                ],
+                include_topology_context=False,
+                include_incident_context=False,
             )
 
         self.assertEqual(len(artifacts.findings), 2)
         inferred = artifacts.findings[1]
         self.assertFalse(inferred.deterministic)
         self.assertAlmostEqual(inferred.confidence, 0.73)
-        self.assertGreater(artifacts.assessment.context_completeness.context_score, 0.7)
+        self.assertGreaterEqual(
+            artifacts.assessment.context_completeness.context_score,
+            0.7,
+        )
 
     def test_build_analysis_artifacts_reduces_context_score_for_stale_topology(
         self,
@@ -1346,10 +2275,17 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertIn("Primary Database", summary.blast_radius_summary)
         self.assertIn("3/5", summary.rollback_summary)
         self.assertIn("Advisory only", summary.markdown)
+        self.assertIn("Evidence Law", summary.markdown)
         self.assertIn("Advisory only", summary.plain_text)
+        self.assertIn("Evidence Law", summary.plain_text)
         self.assertFalse(summary.should_block)
         self.assertLessEqual(len(summary.markdown), 1500)
         self.assertEqual(summary.json_payload.report_schema_version, "v2")
+        self.assertEqual(summary.json_payload.evidence_law_status, "Needs review")
+        self.assertIn(
+            "lacks linked deterministic evidence",
+            summary.json_payload.evidence_law_detail,
+        )
         self.assertEqual(summary.json_payload.report_id, 17)
         self.assertEqual(len(summary.json_payload.top_findings), 3)
         self.assertEqual(summary.json_payload.evidence_count, 5)
@@ -1360,6 +2296,84 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertEqual(
             summary.json_payload.context_completeness.label, "STRONG CONTEXT"
         )
+
+    def test_build_share_summary_requires_attention_for_unsatisfied_evidence_law(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["context_completeness"] = {"context_score": 0.84}
+        report["advisory"] = {"requires_attention": False}
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.evidence_law_status, "Needs review")
+        self.assertIn("requires additional human review", summary.uncertainty_summary)
+
+    def test_build_share_summary_can_mark_evidence_detail_omitted(self) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["advisory"] = {"requires_attention": False}
+
+        summary = build_share_summary(report, evidence_detail_available=False)
+
+        self.assertEqual(summary.json_payload.evidence_law_status, "Detail omitted")
+        self.assertIn(
+            "Evidence rows are not included",
+            summary.json_payload.evidence_law_detail,
+        )
+        self.assertNotIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_normalizes_malformed_finding_confidence(self) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["advisory"] = {"requires_attention": False}
+        report["findings"][0]["confidence"] = "oops"
+        report["findings"][1]["confidence"] = math.nan
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.top_findings[0].confidence, 0.0)
+        self.assertEqual(summary.json_payload.top_findings[1].confidence, 0.0)
+        self.assertNotIn("NaN", summary.json_payload.model_dump_json())
+
+    def test_build_share_summary_ignores_malformed_finding_and_evidence_entries(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"].insert(0, "oops")
+        report["findings"].append(None)
+        report["evidence_items"].insert(0, "oops")
+        report["evidence_items"].append(None)
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.top_findings), 3)
+        self.assertEqual(summary.json_payload.evidence_count, 5)
+
+    def test_share_summary_payload_rejects_unknown_evidence_law_status(self) -> None:
+        with self.assertRaises(ValidationError):
+            ShareSummaryJsonPayload(
+                report_schema_version="v2",
+                verdict_banner="DeployWhisper LOW · GO",
+                evidence_law_status="Typo",
+                evidence_law_detail="Invalid status should fail validation.",
+                headline="GO: low risk",
+                evidence_count=0,
+                blast_radius_summary="0 direct / 0 transitive",
+                rollback_summary="1/5 LOW · First step: No rollback steps available",
+                context_completeness={
+                    "score": 1.0,
+                    "label": "STRONG CONTEXT",
+                    "summary": "STRONG CONTEXT (1.00)",
+                },
+                advisory_summary="Standard approval flow is sufficient.",
+            )
 
     def test_build_share_summary_normalizes_missing_report_schema_as_legacy(
         self,
@@ -1511,6 +2525,7 @@ class AnalysisServiceTests(unittest.TestCase):
         self,
     ) -> None:
         report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
         report["recommendation"] = "go"
         report["context_completeness"] = {
             "context_score": 0.92,
@@ -1549,6 +2564,102 @@ class AnalysisServiceTests(unittest.TestCase):
             summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
         )
         self.assertIn("submitted artifacts were not analyzed", summary.plain_text)
+
+    def test_build_share_summary_requires_attention_for_stored_partial_context(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["context_completeness"] = {
+            "context_score": 0.94,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": False,
+            "partial_context": True,
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "LIMITED CONTEXT"
+        )
+        self.assertIn("submitted artifacts were not analyzed", summary.plain_text)
+        self.assertIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_normalizes_false_like_context_booleans(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["narrative_available"] = "true"
+        report["narrative_degraded"] = "false"
+        report["context_completeness"] = {
+            "context_score": 0.94,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": "false",
+            "partial_context": "false",
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "STRONG CONTEXT"
+        )
+        self.assertNotIn("requires additional human review", summary.plain_text.lower())
+        self.assertIn("Standard approval flow is sufficient", summary.plain_text)
+
+    def test_build_share_summary_normalizes_false_like_narrative_availability(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["narrative_available"] = "false"
+        report["narrative_degraded"] = "false"
+        report["warnings"] = []
+        report["context_completeness"] = {
+            "context_score": 0.94,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": "false",
+            "partial_context": "false",
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "STRONG CONTEXT"
+        )
+        self.assertIn("requires additional human review", summary.plain_text.lower())
+
+    def test_build_share_summary_ignores_non_finite_boolean_signals(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["severity"] = "low"
+        report["recommendation"] = "go"
+        report["narrative_available"] = "true"
+        report["narrative_degraded"] = math.nan
+        report["context_completeness"] = {
+            "context_score": 0.94,
+            "parser_success_rate": 1.0,
+            "evidence_success_rate": 1.0,
+            "insufficient_context": math.inf,
+            "partial_context": math.nan,
+        }
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            summary.json_payload.context_completeness.label, "STRONG CONTEXT"
+        )
+        self.assertNotIn("requires additional human review", summary.plain_text.lower())
+        self.assertIn("Standard approval flow is sufficient", summary.plain_text)
 
     def test_build_share_summary_falls_back_to_local_report_link_without_public_base_url(
         self,
