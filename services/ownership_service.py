@@ -86,12 +86,17 @@ def _normalized_subject(path: str) -> str:
 def _untrusted_display_subject(subject: str) -> str:
     normalized = _normalized_subject(subject)
     normalized_lower = normalized.lower()
-    for prefix in (UNSAFE_ARTIFACT_PREFIX, EXTERNAL_ARTIFACT_PREFIX):
+    labels_by_prefix = {
+        UNSAFE_ARTIFACT_PREFIX: "untrusted upload",
+        EXTERNAL_ARTIFACT_PREFIX: "external artifact",
+    }
+    for prefix, label in labels_by_prefix.items():
         prefix_lower = prefix.lower()
         if normalized_lower == prefix_lower:
-            return "unknown-file"
+            return f"{label}: unknown-file"
         if normalized_lower.startswith(f"{prefix_lower}/"):
-            return normalized[len(prefix) + 1 :] or "unknown-file"
+            display_subject = normalized[len(prefix) + 1 :] or "unknown-file"
+            return f"{label}: {display_subject}"
     return normalized or "unknown-file"
 
 

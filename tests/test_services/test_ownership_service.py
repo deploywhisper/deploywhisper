@@ -944,7 +944,10 @@ class OwnershipServiceTests(unittest.TestCase):
 
         context = build_ownership_context(parse_batch)
 
-        self.assertIn("services/payments/plan.json", context.unmapped_subjects)
+        self.assertIn(
+            "untrusted upload: services/payments/plan.json",
+            context.unmapped_subjects,
+        )
         self.assertFalse(
             any(
                 subject.startswith("__unsafe_path__/")
@@ -1006,6 +1009,10 @@ class OwnershipServiceTests(unittest.TestCase):
         context = build_ownership_context(parse_batch, topology=topology)
 
         self.assertIn("services/payments/plan.json", context.unmapped_subjects)
+        self.assertNotIn(
+            "untrusted upload: services/payments/plan.json",
+            context.unmapped_subjects,
+        )
         self.assertFalse(
             any(
                 subject.startswith("__unsafe_path__/")
