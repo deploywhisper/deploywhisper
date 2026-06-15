@@ -35,6 +35,23 @@ completedAt: '2026-04-16'
 
 ## Executive Summary
 
+### 2026 UI Migration Design Authority
+
+The approved React migration design system is now defined by
+[`docs/ui-migration-plan.md`](../../docs/ui-migration-plan.md) Part B and
+[`docs/design/deploywhisper-redesign-v3.jsx`](../../docs/design/deploywhisper-redesign-v3.jsx).
+Those files supersede older NiceGUI-era visual guidance when exact values,
+component anatomy, or migration scope differ.
+
+For Phase 2 first-half delivery, the implemented design-system foundation is:
+
+- `frontend/src/theme/tokens.css` and `frontend/src/theme/tokens.ts` expose Part B1 tokens as Tailwind theme tokens, CSS variables, and typed values.
+- Color tokens cover brand, brand gradient, background/card/border/text surfaces, dark surfaces, severity foreground/background/dot colors, verdict fills, evidence green, and warning callout values.
+- Typography tokens use local `@fontsource` families only: Plus Jakarta Sans Variable for display, Inter for body, and JetBrains Mono Variable for deterministic evidence.
+- Geometry, depth, focus, and motion tokens cover card/inner/button/badge radii, all Part B1 shadows, score-ring animation, hover transitions, active-project ping, and reduced-motion behavior.
+- `frontend/src/components/ui/` implements the Phase 2 primitive set: `SeverityBadge`, `VerdictChip`, `EvidenceTag`, `ConfidenceBadge`, `MonoRef`, `ScoreRing`, `Sparkline`, `Card`, `Button`, `SegmentedTabs`, `ProjectSwitcher`, and B4 skeleton variants.
+- `/app/dev/components` is the temporary component-gallery route used for composed-container visual evidence. Product screens remain out of scope until later Phase 2/Phase 3 tasks.
+
 ### Project Vision
 
 DeployWhisper is an internal, desktop-first pre-deployment risk intelligence tool for infrastructure and platform teams. Its UX purpose is to replace fragmented manual deploy review with one decision-ready analysis experience that feels trustworthy, fast, and operationally useful under pressure.
