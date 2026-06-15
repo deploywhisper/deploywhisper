@@ -124,9 +124,32 @@ h1 {
   align-items: center;
 }
 
+.gallery-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.gallery-score-row {
+  gap: 14px;
+}
+
 .gallery-dark {
   background: var(--dw-dark);
   border-radius: var(--dw-radius-card);
   box-shadow: var(--dw-shadow-dark-card);
   padding: 20px;
+}
+
+.gallery-switcher-preview {
+  min-height: 410px;
+  position: relative;
+}
+
+.gallery-switcher-preview .dw-project-switcher {
+  display: block;
+}
+
+.gallery-switcher-preview .dw-project-popover {
+  left: 0;
+  right: auto;
 }

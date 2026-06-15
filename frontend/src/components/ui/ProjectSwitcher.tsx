@@ -22,6 +22,7 @@ export function ProjectSwitcher({
   onNewProject,
   initialOpen = false,
   initialQuery = "",
+  suppressBackdrop = false,
 }: {
   projects?: ProjectOption[];
   selectedProject?: ProjectOption;
@@ -29,6 +30,7 @@ export function ProjectSwitcher({
   onNewProject?: (query: string) => void;
   initialOpen?: boolean;
   initialQuery?: string;
+  suppressBackdrop?: boolean;
 }) {
   const [open, setOpen] = useState(initialOpen);
   const [query, setQuery] = useState(initialQuery);
@@ -86,7 +88,9 @@ export function ProjectSwitcher({
 
       {open && (
         <>
-          <button aria-label="Close project switcher" className="dw-project-backdrop" onClick={() => setOpen(false)} type="button" />
+          {!suppressBackdrop && (
+            <button aria-label="Close project switcher" className="dw-project-backdrop" onClick={() => setOpen(false)} type="button" />
+          )}
           <div aria-label="Projects" className="dw-project-popover" role="listbox">
             <div className="dw-project-search-row">
               <Search color="var(--dw-faint)" size={14} />

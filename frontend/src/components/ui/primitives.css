@@ -571,6 +571,7 @@
 .dw-skeleton-report-header {
   background: rgba(245,246,248,.88);
   border-bottom: 1px solid var(--dw-border);
+  overflow: hidden;
   padding: 14px 28px 12px;
 }
 
@@ -578,6 +579,15 @@
   align-items: center;
   display: flex;
   gap: 18px;
+  min-width: 0;
+}
+
+.dw-skeleton-report-main > .dw-skeleton {
+  flex: 0 0 auto;
+}
+
+.dw-skeleton-report-main > div:last-child {
+  min-width: 0;
 }
 
 @keyframes dw-skeleton-pulse {
