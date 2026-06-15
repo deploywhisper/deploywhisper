@@ -48,6 +48,8 @@ class ProjectsApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["data"]["project_key"], "payments-api")
         self.assertEqual(payload["data"]["display_name"], "Payments API")
+        self.assertEqual(payload["data"]["name"], "Payments API")
+        self.assertEqual(payload["data"]["env_label"], "main")
 
     def test_list_projects_includes_default_project(self) -> None:
         response = self.client.get("/api/v1/projects")
@@ -56,6 +58,8 @@ class ProjectsApiTests(unittest.TestCase):
         payload = response.json()
         self.assertGreaterEqual(payload["meta"]["count"], 1)
         self.assertEqual(payload["data"][0]["project_key"], "unassigned")
+        self.assertEqual(payload["data"][0]["name"], "Unassigned")
+        self.assertEqual(payload["data"][0]["env_label"], "default")
 
     def test_create_workspace_returns_structured_payload(self) -> None:
         project_response = self.client.post(

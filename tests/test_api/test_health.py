@@ -109,8 +109,11 @@ class HealthEndpointTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
+        self.assertEqual(body["info"]["version"], "1.2.0")
         self.assertIn("/api/v1/health", body["paths"])
         self.assertIn("/api/v1/analyses", body["paths"])
+        self.assertIn("/api/v1/stats/summary", body["paths"])
+        self.assertIn("/api/v1/stats/verdict-distribution", body["paths"])
 
 
 if __name__ == "__main__":

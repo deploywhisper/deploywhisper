@@ -281,6 +281,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Stats Summary */
+        get: operations["get_stats_summary_api_v1_stats_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/verdict-distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Verdict Distribution */
+        get: operations["get_verdict_distribution_api_v1_stats_verdict_distribution_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/incidents/ingestion": {
         parameters: {
             query?: never;
@@ -315,91 +349,6 @@ export interface paths {
          * @description Replace or remove stale incident index entries for one project scope.
          */
         post: operations["incident_reindex_api_v1_incidents_reindex_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_nicegui/client/371b6d87-3849-465d-a32b-3978ebd77dba/upload/146": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Route */
-        post: operations["upload_route__nicegui_client_371b6d87_3849_465d_a32b_3978ebd77dba_upload_146_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_nicegui/client/371b6d87-3849-465d-a32b-3978ebd77dba/upload/147": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Route */
-        post: operations["upload_route__nicegui_client_371b6d87_3849_465d_a32b_3978ebd77dba_upload_147_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_deploywhisper/dashboard-upload/{upload_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Dashboard Upload Route */
-        post: operations["dashboard_upload_route__deploywhisper_dashboard_upload__upload_key__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_nicegui/client/b7177ee1-0068-4be2-8fc1-c033e4761ce8/upload/145": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Route */
-        post: operations["upload_route__nicegui_client_b7177ee1_0068_4be2_8fc1_c033e4761ce8_upload_145_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_nicegui/client/b7177ee1-0068-4be2-8fc1-c033e4761ce8/upload/146": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Route */
-        post: operations["upload_route__nicegui_client_b7177ee1_0068_4be2_8fc1_c033e4761ce8_upload_146_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -576,6 +525,41 @@ export interface components {
              */
             submission_manifest_fallback?: components["schemas"]["SubmissionManifestFallbackItemData"][];
             audit: components["schemas"]["AuditMetadataData"];
+            /**
+             * Score
+             * @description Dashboard-friendly alias for risk_score.
+             */
+            readonly score: number;
+            /**
+             * Verdict
+             * @description Dashboard-friendly alias for recommendation.
+             */
+            readonly verdict: string;
+            /**
+             * Filenames
+             * @description Dashboard-friendly alias for analyzed artifact names.
+             */
+            readonly filenames: string[];
+            /**
+             * Workspace Label
+             * @description Human-friendly workspace label for compact dashboard rows.
+             */
+            readonly workspace_label: string;
+            /**
+             * Env Label
+             * @description Environment label for compact dashboard rows.
+             */
+            readonly env_label: string;
+            /**
+             * Trigger Ref
+             * @description Dashboard-friendly alias for audit trigger identifiers.
+             */
+            readonly trigger_ref: string | null;
+            /**
+             * Pr Ref
+             * @description Pull-request reference when the trigger metadata identifies one.
+             */
+            readonly pr_ref: string | null;
         };
         /** AnalysisRunData */
         AnalysisRunData: {
@@ -2040,6 +2024,41 @@ export interface components {
              */
             submission_manifest_fallback?: components["schemas"]["SubmissionManifestFallbackItemData"][];
             audit: components["schemas"]["AuditMetadataData"];
+            /**
+             * Score
+             * @description Dashboard-friendly alias for risk_score.
+             */
+            readonly score: number;
+            /**
+             * Verdict
+             * @description Dashboard-friendly alias for recommendation.
+             */
+            readonly verdict: string;
+            /**
+             * Filenames
+             * @description Dashboard-friendly alias for analyzed artifact names.
+             */
+            readonly filenames: string[];
+            /**
+             * Workspace Label
+             * @description Human-friendly workspace label for compact dashboard rows.
+             */
+            readonly workspace_label: string;
+            /**
+             * Env Label
+             * @description Environment label for compact dashboard rows.
+             */
+            readonly env_label: string;
+            /**
+             * Trigger Ref
+             * @description Dashboard-friendly alias for audit trigger identifiers.
+             */
+            readonly trigger_ref: string | null;
+            /**
+             * Pr Ref
+             * @description Pull-request reference when the trigger metadata identifies one.
+             */
+            readonly pr_ref: string | null;
         };
         /** ProjectCreateRequest */
         ProjectCreateRequest: {
@@ -2117,6 +2136,16 @@ export interface components {
              * @description Last update timestamp
              */
             updated_at: string;
+            /**
+             * Name
+             * @description Dashboard-friendly alias for display_name.
+             */
+            readonly name: string;
+            /**
+             * Env Label
+             * @description Short label for project switcher secondary text.
+             */
+            readonly env_label: string;
         };
         /** ProjectListResponse */
         ProjectListResponse: {
@@ -3004,6 +3033,95 @@ export interface components {
              */
             failures?: string[];
         };
+        /** StatsBucketData */
+        StatsBucketData: {
+            /**
+             * Date
+             * @description UTC calendar date for the bucket
+             */
+            date: string;
+            /**
+             * Value
+             * @description Metric value for the bucket
+             */
+            value: number;
+        };
+        /** StatsSummaryData */
+        StatsSummaryData: {
+            totals: components["schemas"]["StatsSummaryTotalsData"];
+            /**
+             * Total Analyses
+             * @description Total persisted analyses
+             */
+            total_analyses: number;
+            /**
+             * Clean Verdict Rate
+             * @description Percentage of low-severity analyses
+             */
+            clean_verdict_rate: number;
+            /**
+             * Open High Critical Count
+             * @description Count of high or critical analyses
+             */
+            open_high_critical_count: number;
+            /**
+             * Avg Time To Verdict Seconds
+             * @description Average positive analysis duration in seconds
+             */
+            avg_time_to_verdict_seconds?: number | null;
+            series: components["schemas"]["StatsSummarySeriesData"];
+        };
+        /** StatsSummaryResponse */
+        StatsSummaryResponse: {
+            data: components["schemas"]["StatsSummaryData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
+        /** StatsSummarySeriesData */
+        StatsSummarySeriesData: {
+            /**
+             * Analyses
+             * @description Seven daily analysis-count buckets
+             */
+            analyses?: components["schemas"]["StatsBucketData"][];
+            /**
+             * Clean Verdict Rate
+             * @description Seven daily clean-rate buckets
+             */
+            clean_verdict_rate?: components["schemas"]["StatsBucketData"][];
+            /**
+             * Open High Critical Count
+             * @description Seven daily high/critical-count buckets
+             */
+            open_high_critical_count?: components["schemas"]["StatsBucketData"][];
+            /**
+             * Avg Time To Verdict Seconds
+             * @description Seven daily average-duration buckets
+             */
+            avg_time_to_verdict_seconds?: components["schemas"]["StatsBucketData"][];
+        };
+        /** StatsSummaryTotalsData */
+        StatsSummaryTotalsData: {
+            /**
+             * Analyses
+             * @description Total persisted analyses
+             */
+            analyses: number;
+            /**
+             * Clean Verdict Rate
+             * @description Percentage of low-severity analyses
+             */
+            clean_verdict_rate: number;
+            /**
+             * Open High Critical Count
+             * @description Count of high or critical analyses
+             */
+            open_high_critical_count: number;
+            /**
+             * Avg Time To Verdict Seconds
+             * @description Average positive analysis_duration_seconds across reports
+             */
+            avg_time_to_verdict_seconds?: number | null;
+        };
         /** SubmissionManifestData */
         SubmissionManifestData: {
             /**
@@ -3342,6 +3460,41 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VerdictDistributionData */
+        VerdictDistributionData: {
+            /**
+             * Days
+             * @description Lookback window in days
+             */
+            days: number;
+            /**
+             * Window Start
+             * @description Inclusive UTC window start
+             */
+            window_start: string;
+            /**
+             * Window End
+             * @description Inclusive UTC window end
+             */
+            window_end: string;
+            /**
+             * Counts
+             * @description Counts keyed by advisory recommendation
+             */
+            counts?: {
+                [key: string]: number;
+            };
+            /**
+             * Total
+             * @description Total reports included in the window
+             */
+            total: number;
+        };
+        /** VerdictDistributionResponse */
+        VerdictDistributionResponse: {
+            data: components["schemas"]["VerdictDistributionData"];
+            meta: components["schemas"]["MetaPayload"];
         };
         /** WorkspaceCreateRequest */
         WorkspaceCreateRequest: {
@@ -4459,6 +4612,75 @@ export interface operations {
             };
         };
     };
+    get_stats_summary_api_v1_stats_summary_get: {
+        parameters: {
+            query?: {
+                project_id?: number | null;
+                project_key?: string | null;
+                workspace_id?: number | null;
+                workspace_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_verdict_distribution_api_v1_stats_verdict_distribution_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                project_id?: number | null;
+                project_key?: string | null;
+                workspace_id?: number | null;
+                workspace_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerdictDistributionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     incident_ingestion_status_api_v1_incidents_ingestion_get: {
         parameters: {
             query?: {
@@ -4532,125 +4754,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_route__nicegui_client_371b6d87_3849_465d_a32b_3978ebd77dba_upload_146_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    upload_route__nicegui_client_371b6d87_3849_465d_a32b_3978ebd77dba_upload_147_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    dashboard_upload_route__deploywhisper_dashboard_upload__upload_key__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                upload_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_route__nicegui_client_b7177ee1_0068_4be2_8fc1_c033e4761ce8_upload_145_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    upload_route__nicegui_client_b7177ee1_0068_4be2_8fc1_c033e4761ce8_upload_146_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
                 };
             };
         };
