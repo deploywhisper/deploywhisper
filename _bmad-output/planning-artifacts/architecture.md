@@ -16,7 +16,7 @@ This architecture defines how DeployWhisper evolves into the self-hosted, fully 
 The design aligns with the finalized PRD and intentionally preserves the strongest parts of the current implementation:
 
 - Python-first application stack.
-- Shared NiceGUI + FastAPI runtime.
+- Shared NiceGUI + FastAPI runtime, with a React SPA served by FastAPI during the UI migration.
 - API, CLI, UI, and workflow integrations over one analysis core.
 - Local-first raw artifact boundary.
 - Advisory-first output.
@@ -105,7 +105,7 @@ Every new boundary, schema, adapter, connector, integration, and report contract
 
 The current repository already provides meaningful implementation foundation:
 
-- `app.py` composes the NiceGUI UI, FastAPI routes, OpenAPI docs, and database startup.
+- `app.py` composes the NiceGUI UI, FastAPI routes, OpenAPI docs, static React SPA mount, and database startup.
 - `api/` exposes versioned `/api/v1` routes and schema contracts.
 - `cli/` exposes headless analysis and related commands.
 - `services/analysis_service.py` orchestrates the shared analysis flow.
@@ -115,7 +115,8 @@ The current repository already provides meaningful implementation foundation:
 - `evidence/` provides the emerging evidence-oriented boundary.
 - `llm/` provides provider resolution, direct SDK adapters, compatibility adapters, prompts, and narrative generation.
 - `models/` and `models/repositories/` provide SQLAlchemy tables and persistence access.
-- `ui/` provides NiceGUI pages and components for upload, report review, history, incidents, settings, projects, and Skills.
+- `frontend/` provides the React 18 + Vite + TypeScript SPA migration workspace, built into static assets served at `/app` during coexistence.
+- `ui/` provides the current NiceGUI pages and components for upload, report review, history, incidents, settings, projects, and Skills until parity and cutover.
 - `integrations/github/` and `api/routes/github_app.py` provide the GitHub integration foundation.
 - `services/project_service.py`, `services/feedback_service.py`, `services/deployment_outcome_service.py`, and `services/backtesting_service.py` show that project, feedback, outcome, and backtesting concepts are already emerging in code.
 - `services/skill_*` and `tests/skill-tests/` provide marketplace and Skill validation foundation.
@@ -198,7 +199,8 @@ All external systems are user-owned or community-owned integrations, not DeployW
 
 Responsible for accepting requests and presenting results:
 
-- NiceGUI web UI.
+- NiceGUI web UI at `/` during coexistence.
+- React SPA at `/app` during the UI migration, served as static files by FastAPI with client-route fallback.
 - FastAPI `/api/v1` routes.
 - CLI command surface.
 - GitHub Action and GitHub App integration.
@@ -583,7 +585,13 @@ Not a runtime service, but an architecture-owned delivery area covering docs gen
 
 ### 11.1 Web UI
 
-The web UI remains NiceGUI-based and optimized for reviewer workflow:
+During the UI migration, NiceGUI remains the current web UI at `/`. The
+replacement React SPA is built from `frontend/` and served by FastAPI from
+`frontend/dist` at `/app`, with an SPA fallback so client-side routes survive
+refresh. Until the parity audit and Phase 7 cutover are complete, the React SPA
+coexists with NiceGUI and must not delete or regress existing NiceGUI behavior.
+
+The target reviewer workflow remains:
 
 - Project/workspace selection.
 - Upload and analysis progress.
@@ -1030,7 +1038,8 @@ llm/                         provider boundary, adapters, prompts, narrative gen
 models/                      SQLAlchemy tables and repository classes
 parsers/                     parser registry and tool-specific parsers
 services/                    orchestration, reports, projects, incidents, topology, outcomes, Skills
-ui/                          NiceGUI routes, components, formatters, session state
+frontend/                    React 18 + Vite + TypeScript SPA migration workspace
+ui/                          NiceGUI routes, components, formatters, session state until cutover
 docs/                        product, architecture, operation, API, integration, contribution docs
 skills/                      built-in and local custom Skills
 tests/                       layer-specific unittest coverage and UI/integration tests

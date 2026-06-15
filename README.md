@@ -16,7 +16,7 @@ DeployWhisper helps platform engineers, DevOps teams, and SREs review deployment
   <a href="https://github.com/deploywhisper/deploywhisper/network/members"><img src="https://img.shields.io/github/forks/deploywhisper/deploywhisper?style=flat-square" alt="GitHub forks"/></a>
   <a href="https://github.com/deploywhisper/deploywhisper/issues"><img src="https://img.shields.io/github/issues/deploywhisper/deploywhisper?style=flat-square" alt="GitHub issues"/></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square" alt="Python 3.11+"/>
-  <img src="https://img.shields.io/badge/runtime-NiceGUI%20%2B%20FastAPI-0f766e?style=flat-square" alt="NiceGUI plus FastAPI"/>
+  <img src="https://img.shields.io/badge/runtime-NiceGUI%20%2B%20FastAPI%20%2B%20React%20SPA-0f766e?style=flat-square" alt="NiceGUI plus FastAPI plus React SPA"/>
 </p>
 
 **Quick links:** [Quick Start](#quick-start) · [Skills Registry](https://deploywhisper.github.io/skills-registry/) · [API Endpoints](#api-endpoints) · [Development](#development) · [Contributing](#contributing) · [Open Source](#open-source)
@@ -49,9 +49,10 @@ DeployWhisper exists because deployment risk is rarely visible in a single file.
 
 DeployWhisper treats deployment review as a context problem. It combines multi-tool parsing, local-first analysis, tool-specific AI Skills, public risk pattern matching, incident-memory matching, and advisory summaries so teams can make better go/no-go decisions before changes reach production.
 
-The current implementation is built as a pure-Python application with:
+The current implementation is built as a single-container application with:
 
-- NiceGUI for the operator-facing web UI
+- NiceGUI for the current operator-facing web UI at `/`
+- React 18, Vite, and TypeScript for the in-progress replacement SPA served at `/app`
 - FastAPI for the versioned API surface
 - SQLAlchemy and SQLite for persistence
 - Direct SDK adapters for OpenAI, Anthropic, Gemini, and local Ollama narrative generation
@@ -183,6 +184,7 @@ python app.py
 The app starts on:
 
 - UI: `http://127.0.0.1:8080/`
+- React SPA shell during UI migration: `http://127.0.0.1:8080/app`
 - API docs: `http://127.0.0.1:8080/api/v1/docs`
 - Health: `http://127.0.0.1:8080/api/v1/health`
 
@@ -254,6 +256,7 @@ docker-compose up -d
 Default container behavior:
 
 - Port `8080` exposed from the app container
+- Existing NiceGUI UI served at `/`; the production React SPA shell is served from the same FastAPI process at `/app`
 - SQLite database stored under `/app/data`
 - Default provider set to Ollama directly in `docker-compose.yml`
 - `POST /api/v1/analyses/{id}/share` stays disabled until `DEPLOYWHISPER_SHARE_TOKEN` is set in Compose
@@ -544,6 +547,7 @@ llm/          Narrative generation and skill context
 models/       ORM tables and repositories
 parsers/      Tool-specific parsers
 services/     Shared orchestration and persistence logic
+frontend/     React 18 + Vite + TypeScript migration workspace
 ui/           NiceGUI routes and components
 tests/        API, CLI, parser, service, UI, and infra tests
 ```
@@ -573,6 +577,20 @@ Run the local CI-equivalent checks:
 ```bash
 bash scripts/ci-local.sh
 ```
+
+Run the React SPA migration checks:
+
+```bash
+npm run ui:dev
+npm run ui:typecheck
+npm run ui:test
+npm run ui:build
+```
+
+`npm run ui:dev` serves the SPA at `http://127.0.0.1:5173/app/`
+with `/api` proxied to the compose backend on `http://localhost:8080`.
+Production verification must use `docker compose up -d --build` and
+`http://localhost:8080/app` so the FastAPI static mount is exercised.
 
 Run the browser keyboard/accessibility smoke for the review flow:
 
@@ -710,12 +728,15 @@ source, release metadata, and consumer smoke verification live in the dedicated
 Current CI stages:
 
 - `quality`
+- `frontend`
 - `changed-tests`
 - `test`
 - `report`
 - `notify-failure`
 
-The CI pipeline is backend-focused and intentionally skips frontend-style burn-in loops because the current stack is Python `unittest`, not a flaky browser E2E suite.
+The CI pipeline includes frontend typecheck, tests, and production build for
+the React migration workspace. Compose-based browser verification remains the
+required local proof for UI migration PRs until the full e2e lane is cut over.
 
 For accessibility-sensitive UI changes, the repo also ships an opt-in macOS verification lane:
 
