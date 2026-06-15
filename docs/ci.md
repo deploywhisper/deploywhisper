@@ -6,6 +6,7 @@ DeployWhisper uses GitHub Actions at [`.github/workflows/ci.yml`](../.github/wor
 
 - `quality`: installs dependencies, runs `pip check`, and bytecode-compiles project modules.
 - `security`: runs dependency audit, Bandit static analysis, and secret-pattern scanning.
+- `frontend`: installs the React SPA workspace, then runs typecheck, Vitest, and the production build.
 - `changed-tests`: on pull requests, runs only changed Python test modules for faster early feedback.
 - `test`: runs the full unittest suite in four logical shards with `fail-fast: false`.
 - `report`: publishes a GitHub Actions summary and downloads any failure artifacts.
@@ -37,6 +38,23 @@ npm run setup:ui-review
 ```
 
 The VoiceOver step runs only on macOS. Non-macOS hosts still run the keyboard Playwright smoke and skip the VoiceOver command.
+
+For the React SPA migration workspace, run:
+
+```bash
+npm run ui:typecheck
+npm run ui:test
+npm run ui:build
+```
+
+The Phase 0 API schema is generated from the compose-run backend:
+
+```bash
+docker compose up -d
+npm run ui:gen-api
+```
+
+`frontend/scripts/gen-api.sh` reads `http://localhost:8080/api/v1/openapi.json` and commits the resulting `frontend/src/api/schema.d.ts`.
 
 For full local parity with the CI security lane, make sure `bandit` is installed in the active environment or available via `BANDIT_BIN`. When available, `scripts/ci-local.sh` runs the same two-pass Bandit gate used in CI.
 
@@ -74,6 +92,7 @@ These logs are retained for 14 days.
 - Security scan must pass dependency audit, Bandit high/high gate, and secret-leak checks
 - Source tree must compile with `python -m compileall`
 - Every shard must pass its assigned `unittest` targets
+- React SPA typecheck, Vitest, and build must pass in the `frontend` job
 - Pull requests get a changed-test fast-feedback run
 - UI-facing stories must record browser-side Playwright validation before moving to review. Use `npm run test:ui-review` for review/report flows, `RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local UI lane, and the VoiceOver lane on macOS when the change affects review semantics, tab order, keyboard behavior, or screen-reader announcements. If no UI surface is touched, record `UI validation not applicable` in the story Dev Agent Record.
 

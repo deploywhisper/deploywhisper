@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #252b36;
+  background: #f5f6f8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 32px;
+}
+
+.panel {
+  width: min(100%, 560px);
+  border: 1px solid #e7e9ee;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 1px 3px rgba(16, 24, 40, 0.05);
+  padding: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: #98a2b3;
+  font-family: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  color: #0e1116;
+  font-family: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.lede {
+  margin: 10px 0 0;
+  color: #667085;
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+.status {
+  display: inline-flex;
+  margin: 20px 0 0;
+  border: 1px solid #cfebda;
+  border-radius: 999px;
+  background: #f2fbf6;
+  color: #067647;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 8px 12px;
+}
+
+.status strong {
+  margin-left: 4px;
+  font-family: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.status.error {
+  border-color: #f9dbcb;
+  background: #fef0e7;
+  color: #93370d;
+}

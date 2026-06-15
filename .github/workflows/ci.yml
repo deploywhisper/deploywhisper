@@ -206,7 +206,37 @@ jobs:
           retention-days: 30
 
   # ===========================================================================
-  # STAGE 3a — CHANGED TESTS (fast PR feedback)
+  # STAGE 3a — FRONTEND SPA GATES
+  # ===========================================================================
+  frontend:
+    name: "Frontend SPA"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Type check frontend
+        run: npm run ui:typecheck
+
+      - name: Test frontend
+        run: npm run ui:test
+
+      - name: Build frontend
+        run: npm run ui:build
+
+  # ===========================================================================
+  # STAGE 3b — CHANGED TESTS (fast PR feedback)
   # ===========================================================================
   changed-tests:
     name: "Changed Tests Fast Feedback"
@@ -266,7 +296,7 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
-  # STAGE 3b — FULL TEST SUITE (sharded, with coverage)
+  # STAGE 3c — FULL TEST SUITE (sharded, with coverage)
   # ===========================================================================
   test:
     name: "Test — ${{ matrix.shard }}"
@@ -274,6 +304,7 @@ jobs:
     timeout-minutes: 15
     needs:
       - quality
+      - frontend
     strategy:
       fail-fast: false
       matrix:
@@ -472,6 +503,7 @@ jobs:
     needs:
       - quality
       - security
+      - frontend
       - changed-tests
       - test
       - docker
@@ -485,6 +517,7 @@ jobs:
           echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Quality (lint, format, types, compile) | \`${{ needs.quality.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Security (pip-audit, bandit, secrets)  | \`${{ needs.security.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend SPA (typecheck, test, build)  | \`${{ needs.frontend.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Changed tests (PR only)                | \`${{ needs.changed-tests.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Test shards (4× parallel + coverage)   | \`${{ needs.test.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Docker build + health check            | \`${{ needs.docker.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
@@ -500,6 +533,7 @@ jobs:
           # Fail the report if any required stage failed
           if [[ "${{ needs.quality.result }}" == "failure" ]] || \
              [[ "${{ needs.security.result }}" == "failure" ]] || \
+             [[ "${{ needs.frontend.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
              [[ "${{ needs.docker.result }}" == "failure" ]] || \
              [[ "${{ needs.migration.result }}" == "failure" ]]; then
@@ -517,6 +551,7 @@ jobs:
       needs:
         - quality
         - security
+        - frontend
         - test
         - docker
         - migration
