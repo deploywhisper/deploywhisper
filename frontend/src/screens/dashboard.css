@@ -171,9 +171,11 @@
 
 .dw-main-pane {
   display: flex;
+  height: 100vh;
   min-width: 0;
   flex: 1;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .dw-topbar {
@@ -181,8 +183,12 @@
   top: 0;
   z-index: 30;
   display: flex;
+  min-height: 64px;
   align-items: center;
   gap: 10px;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--dw-border);
   background: rgba(255,255,255,.85);
   backdrop-filter: blur(12px);
@@ -193,6 +199,7 @@
   display: none;
   max-width: 380px;
   flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 9px;
   border: 1px solid var(--dw-border);
@@ -216,6 +223,7 @@
 
 .dw-topbar-spacer {
   flex: 1;
+  min-width: 0;
 }
 
 .dw-topbar-divider {
@@ -243,6 +251,21 @@
   min-height: 0;
   flex: 1;
   overflow-y: auto;
+}
+
+.dw-topbar > .dw-project-switcher {
+  flex: 0 1 236px;
+  min-width: 170px;
+}
+
+.dw-topbar .dw-project-trigger {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.dw-topbar .dw-project-trigger-name {
+  flex: 1;
+  max-width: none;
 }
 
 .dw-dashboard-wrap {

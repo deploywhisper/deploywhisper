@@ -4,6 +4,10 @@
   color: var(--dw-text);
 }
 
+.dw-report-page-shell {
+  min-height: 100%;
+}
+
 .dw-report-header {
   position: sticky;
   top: 0;

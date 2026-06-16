@@ -89,6 +89,9 @@ async function openReport(page: Page, reportId: number) {
   });
   await page.goto(`/reports/${reportId}?private=1`, { waitUntil: "networkidle" });
   await expect(page.getByRole("heading").first()).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
+  await expect(page.getByText("DeployWhisper")).toBeVisible();
+  await expect(page.getByLabel("Global search")).toBeVisible();
 }
 
 async function clickTab(page: Page, name: string) {

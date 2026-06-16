@@ -275,7 +275,7 @@
   background: transparent;
   border: 0;
   border-radius: var(--dw-radius-badge);
-  color: var(--dw-muted);
+  color: #556070;
   cursor: pointer;
   font-family: var(--dw-font-display);
   font-size: 12.5px;

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, History, LayoutGrid, Settings, ShieldCheck, Zap } from "lucide-react";
+import { AlertTriangle, History, LayoutGrid, Search, Settings, ShieldCheck, Zap } from "lucide-react";
 
 import { getProjects, type Project } from "../api/dashboard";
 import { ProjectSwitcher, SkeletonLine, type ProjectOption } from "../components/ui";
@@ -15,6 +15,10 @@ export function projectToOption(project: Project): ProjectOption {
     description: project.description || project.repository_url || project.project_key,
   };
 }
+
+export type ShellProjectContext = ReturnType<typeof useSelectedProject> & {
+  selectedOption?: ProjectOption;
+};
 
 export function useSelectedProject() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -106,7 +110,9 @@ function TopBar({
   return (
     <header className="dw-topbar">
       <div className="dw-global-search" aria-label="Global search">
+        <Search size={15} />
         <span>Search analyses, services...</span>
+        <kbd>⌘K</kbd>
       </div>
       <div className="dw-topbar-spacer" />
       {selectedProject && (
@@ -125,23 +131,36 @@ function TopBar({
 export function Phase6Shell({
   active,
   children,
+  selectedProjectOverride,
 }: {
-  active: "settings" | "incidents" | "skills";
-  children: (context: ReturnType<typeof useSelectedProject>) => ReactNode;
+  active: "dashboard" | "history" | "settings" | "incidents" | "skills";
+  children: (context: ShellProjectContext) => ReactNode;
+  selectedProjectOverride?: ProjectOption;
 }) {
   const projectContext = useSelectedProject();
+  const selectedOption = selectedProjectOverride ?? projectContext.selectedOption;
+  const projectOptions = useMemo(() => {
+    if (!selectedProjectOverride) {
+      return projectContext.projectOptions;
+    }
+    const hasOverride = projectContext.projectOptions.some((project) => project.id === selectedProjectOverride.id);
+    return hasOverride ? projectContext.projectOptions : [selectedProjectOverride, ...projectContext.projectOptions];
+  }, [projectContext.projectOptions, selectedProjectOverride]);
+  const shellContext = { ...projectContext, selectedOption };
 
   return (
     <div className="dw-app-shell dw-phase6-shell dw-ui">
-      <Sidebar active={active} selectedProject={projectContext.selectedOption} />
-      <main className="dw-main">
+      <Sidebar active={active} selectedProject={selectedOption} />
+      <div className="dw-main-pane">
         <TopBar
           onProjectChange={projectContext.setSelectedProject}
-          projects={projectContext.projectOptions}
-          selectedProject={projectContext.selectedOption}
+          projects={projectOptions}
+          selectedProject={selectedOption}
         />
-        {children(projectContext)}
-      </main>
+        <main className="dw-dashboard-scroll">
+          {children(shellContext)}
+        </main>
+      </div>
     </div>
   );
 }
