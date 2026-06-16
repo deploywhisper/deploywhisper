@@ -190,6 +190,16 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
     def _contains_standalone_action_runtime_markers(path: Path) -> bool:
         if path == Path(__file__).resolve():
             return False
+        relative_path = path.relative_to(REPO_ROOT).as_posix()
+        if relative_path in {
+            "package.json",
+            "package-lock.json",
+            "frontend/package.json",
+            "frontend/package-lock.json",
+        }:
+            return False
+        if not path.is_file():
+            return False
         if path.suffix not in {".py", ".yml", ".yaml"}:
             return False
         try:

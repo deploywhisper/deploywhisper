@@ -19,7 +19,7 @@ This is not a new product direction. It is a usability and workflow-completion g
 | --- | --- | --- |
 | 1.1 Trigger story | Done | `5-1-project-workspace-foundation` revealed the gap after completion. |
 | 1.2 Core problem | Done | Misunderstanding of original requirements: project scoping was implemented, but project context switching remained dashboard-local instead of cross-page. |
-| 1.3 Supporting evidence | Done | `ui/components/upload_panel.py` contains the only project selector; `ui/theme.py` shared navigation shell has no project control; `ui/routes/history.py` reads `get_active_project()` and scopes results but offers no switcher. |
+| 1.3 Supporting evidence | Done | `frontend/src/screens/Dashboard.tsx` contains the only project selector; `frontend/src/theme/tokens.css` shared navigation shell has no project control; `frontend/src/screens/History.tsx` reads `get_active_project()` and scopes results but offers no switcher. |
 | 2.1 Current epic viability | Done | Epic 5 remains viable as planned. The issue is a refinement to the existing workspace foundation, not an epic-level failure. |
 | 2.2 Epic-level changes | Done | No new epic needed. Reopen and patch Story 5.1, or add an explicit follow-up note under that story's acceptance/tasks. |
 | 2.3 Future epic impact | Done | Future Epic 5 stories benefit from a clear active-project model across pages, especially history, outcomes, feedback, trends, and topology workflows. |
@@ -71,13 +71,13 @@ Implementation should prefer one shared project-context control rather than dupl
 
 Likely technical touchpoints:
 
-- `ui/theme.py` for shared shell or shared header-level project context UI
-- `ui/components/upload_panel.py` to avoid conflicting dashboard-only ownership of project switching
-- `ui/routes/history.py` to surface active project context and refresh behavior
-- `ui/routes/dashboard.py` and `ui/routes/settings.py` to ensure the active project remains obvious and consistent after switching
-- `tests/test_ui/test_app_shell.py`
-- `tests/test_ui/test_history_page.py`
-- `tests/test_ui/test_upload_panel.py`
+- `frontend/src/theme/tokens.css` for shared shell or shared header-level project context UI
+- `frontend/src/screens/Dashboard.tsx` to avoid conflicting dashboard-only ownership of project switching
+- `frontend/src/screens/History.tsx` to surface active project context and refresh behavior
+- `frontend/src/screens/Dashboard.tsx` and `frontend/src/screens/Settings.tsx` to ensure the active project remains obvious and consistent after switching
+- `frontend/e2e/dashboard.spec.ts`
+- `frontend/e2e/history.spec.ts`
+- `frontend/e2e/dashboard.spec.ts`
 
 The active-project state should continue to flow through `services.project_service` rather than introducing page-local project state.
 
@@ -157,7 +157,7 @@ OLD:
 
 ```text
 - route-level navigation for dashboard, history, settings, and admin areas
-- stable left-side shell navigation using stock Quasar patterns
+- stable left-side shell navigation using stock React shell patterns
 - the left navigation must remain visible on desktop and serve as the primary page-switching control
 ```
 

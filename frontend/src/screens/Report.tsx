@@ -35,6 +35,7 @@ import {
   VerdictChip,
 } from "../components/ui";
 import type { Confidence, Severity, Verdict } from "../theme/tokens";
+import { Phase6Shell } from "./Phase6Shell";
 import "./report.css";
 
 const tabs = [
@@ -272,7 +273,7 @@ function ReportHeader({
   const findingsTab = tabs.map((tab) => (tab.id === "findings" ? { ...tab, count: findings.length } : tab));
   const compareHref = publicView
     ? `/reports/${report.id}?compare=previous#report-comparison`
-    : `/app/reports/${report.id}?compare=previous#report-comparison`;
+    : `/reports/${report.id}?private=1&compare=previous#report-comparison`;
 
   return (
     <header className="dw-report-header">
@@ -281,7 +282,7 @@ function ReportHeader({
           <button
             aria-label={publicView ? "Back to shared report" : "Back to dashboard"}
             className="dw-report-back"
-            onClick={() => (publicView ? navigate(`/reports/${report.id}`) : navigate("/app"))}
+            onClick={() => (publicView ? navigate(`/reports/${report.id}`) : navigate("/"))}
             type="button"
           >
             <ArrowLeft size={16} />
@@ -703,11 +704,55 @@ function ReportLoading() {
   );
 }
 
+function reportProjectOption(report: ReportDetail) {
+  return {
+    id: String(report.project.id),
+    name: report.project.display_name || report.project.project_key,
+    env: report.env_label || report.project.default_branch || "default",
+    description: report.project.description || report.project.repository_url || report.project.project_key,
+  };
+}
+
+function ReportBody({
+  active,
+  copyBriefing,
+  publicView,
+  report,
+  setActiveTab,
+  setToast,
+  toast,
+}: {
+  active: string;
+  copyBriefing: () => void;
+  publicView: boolean;
+  report: ReportDetail;
+  setActiveTab: (tab: string) => void;
+  setToast: (message: string | null) => void;
+  toast: string | null;
+}) {
+  return (
+    <div className={`dw-report-page dw-ui${publicView ? "" : " dw-report-page-shell"}`}>
+      <ReportHeader activeTab={active} copyBriefing={copyBriefing} publicView={publicView} report={report} setActiveTab={setActiveTab} />
+      <main className="dw-report-content">
+        <section aria-labelledby={`tab-${active}`} role="tabpanel">
+          {active === "overview" && <OverviewTab goFindings={() => setActiveTab("findings")} report={report} />}
+          {active === "findings" && <FindingsTab publicView={publicView} report={report} setToast={setToast} />}
+          {active === "confidence" && <ConfidenceTab report={report} />}
+          {active === "context" && <ContextTab report={report} />}
+          {active === "rollback" && <RollbackTab report={report} setToast={setToast} />}
+          {active === "audit" && <AuditTab report={report} />}
+        </section>
+      </main>
+      <Toast message={toast} />
+    </div>
+  );
+}
+
 export function ReportScreen() {
   const params = useParams();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const publicView = location.pathname.startsWith("/reports/");
+  const publicView = location.pathname.startsWith("/reports/") && searchParams.get("private") !== "1";
   const reportId = Number(params.id);
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
   const [toast, setToast] = useState<string | null>(null);
@@ -748,21 +793,25 @@ export function ReportScreen() {
 
   const report = reportQuery.data;
   const active = tabs.some((tab) => tab.id === activeTab) ? activeTab : "overview";
-
-  return (
-    <div className="dw-report-page dw-ui">
-      <ReportHeader activeTab={active} copyBriefing={copyBriefing} publicView={publicView} report={report} setActiveTab={setActiveTab} />
-      <main className="dw-report-content">
-        <section aria-labelledby={`tab-${active}`} role="tabpanel">
-          {active === "overview" && <OverviewTab goFindings={() => setActiveTab("findings")} report={report} />}
-          {active === "findings" && <FindingsTab publicView={publicView} report={report} setToast={setToast} />}
-          {active === "confidence" && <ConfidenceTab report={report} />}
-          {active === "context" && <ContextTab report={report} />}
-          {active === "rollback" && <RollbackTab report={report} setToast={setToast} />}
-          {active === "audit" && <AuditTab report={report} />}
-        </section>
-      </main>
-      <Toast message={toast} />
-    </div>
+  const body = (
+    <ReportBody
+      active={active}
+      copyBriefing={copyBriefing}
+      publicView={publicView}
+      report={report}
+      setActiveTab={setActiveTab}
+      setToast={setToast}
+      toast={toast}
+    />
   );
+
+  if (!publicView) {
+    return (
+      <Phase6Shell active="history" selectedProjectOverride={reportProjectOption(report)}>
+        {() => body}
+      </Phase6Shell>
+    );
+  }
+
+  return body;
 }

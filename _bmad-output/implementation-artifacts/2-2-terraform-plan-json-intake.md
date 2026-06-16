@@ -56,29 +56,29 @@ So that deployment review can use concrete planned changes instead of only sourc
 - [x] [Review][Patch] Terraform replacement actions still classify as medium-risk `go` findings despite destructive replacement semantics [analysis/risk_scorer.py:45] — fixed by classifying replacement actions as high-risk in risk/evidence scoring and applying destructive-critical/production semantics.
 - [x] [Review][Patch] Non-mutating Terraform `no-op` and `read` entries can still force a `no-go` recommendation through raw-file security flags [analysis/risk_scorer.py:459] — fixed by bypassing raw-file security flags for `no-op` and `read` contributors.
 - [x] [Review][Patch] LLM-assisted scoring can still replace deterministic non-mutating reasoning with high-risk wording [analysis/risk_scorer.py:621] — fixed by preserving deterministic non-mutating reasoning while still recording LLM scoring source metadata.
-- [x] [Review][Patch] UI upload results do not explicitly display Terraform plan metadata [ui/components/upload_panel.py:588] — fixed by passing parse batches into upload results and rendering Terraform module, replacement, unknown, redacted, and unsupported metadata.
+- [x] [Review][Patch] UI upload results do not explicitly display Terraform plan metadata [frontend/src/components/upload_panel.py:588] — fixed by passing parse batches into upload results and rendering Terraform module, replacement, unknown, redacted, and unsupported metadata.
 - [x] [Review][Patch] Persisted report and history surfaces drop Terraform plan metadata after intake [services/report_service.py:1475] — fixed by carrying parser metadata into risk contributors, API schemas, persisted report payloads, and history/report detail surfaces.
 - [x] [Review][Patch] Terraform plan JSON without `resource_changes` is accepted as a synthetic no-op plan [parsers/terraform_parser.py:263] — fixed by requiring `resource_changes` to be present and only synthesizing no-op for an explicit empty list.
 - [x] [Review][Patch] Non-native or contradictory Terraform action sets can be accepted and silently normalized [parsers/terraform_parser.py:20] — fixed by validating native Terraform plan action vocabulary and supported action combinations before normalization.
 - [x] [Review][Patch] Parser metadata is threaded through API/persistence/UI without JSON-safety validation [parsers/base.py:32] — fixed by sanitizing parser metadata to JSON-safe primitives and containers at the shared change-model boundary.
 - [x] [Review][Patch] All-non-mutating Terraform plans still invoke LLM scoring and can emit irrelevant provider-failure warnings [analysis/risk_scorer.py:716] — fixed by short-circuiting LLM scoring when every contributor is `no-op` or `read`.
-- [x] [Review][Patch] UI/report metadata rendering truncates explicit redacted and unsupported Terraform field lists [ui/components/change_table.py:10] — fixed by rendering full redacted and unsupported field lists while keeping less critical metadata compact.
-- [x] [Review][Patch] Upload feedback rerender drops the parse-batch metadata table [ui/components/upload_panel.py:451] — fixed by preserving and passing the current parse batch on feedback-triggered result rerenders.
+- [x] [Review][Patch] UI/report metadata rendering truncates explicit redacted and unsupported Terraform field lists [frontend/src/components/change_table.py:10] — fixed by rendering full redacted and unsupported field lists while keeping less critical metadata compact.
+- [x] [Review][Patch] Upload feedback rerender drops the parse-batch metadata table [frontend/src/components/upload_panel.py:451] — fixed by preserving and passing the current parse batch on feedback-triggered result rerenders.
 - [x] [Review][Patch] Review-facing UI validation was not recorded for the metadata rendering changes [_bmad-output/project-context.md:73] — fixed by running and recording `npm run test:ui-review` for the changed review surfaces.
 - [x] [Review][Patch] Terraform resource addresses are validated with trim semantics but returned untrimmed [parsers/terraform_parser.py:168] — fixed by returning canonical stripped resource addresses and adding padded-address parser coverage.
 - [x] [Review][Patch] Duplicate Terraform action entries are accepted because validation collapses actions through a set [parsers/terraform_parser.py:150] — fixed by rejecting duplicate action entries before supported-action-set normalization.
 - [x] [Review][Patch] Plan-scoped unsupported fields are duplicated onto every per-resource metadata record [parsers/terraform_parser.py:198] — fixed by separating plan-level unsupported fields into `plan_unsupported_fields` and attaching them once per parsed plan.
-- [x] [Review][Patch] Upload-panel metadata rerender coverage inspects source text instead of runtime behavior [tests/test_ui/test_upload_panel.py:208] — fixed by extracting and behavior-testing the feedback rerender callback that preserves parse-batch metadata.
+- [x] [Review][Patch] Upload-panel metadata rerender coverage inspects source text instead of runtime behavior [frontend/e2e/test_upload_panel.py:208] — fixed by extracting and behavior-testing the feedback rerender callback that preserves parse-batch metadata.
 - [x] [Review][Patch] Non-mutating Terraform plan entries still emit evidence items for no-change inputs [evidence/extractor.py:96] — fixed by suppressing Terraform `no-op` and `read` entries at evidence extraction while preserving them in parse-batch metadata.
-- [x] [Review][Patch] Upload change table can flood review results with non-mutating Terraform `no-op` and `read` entries [ui/components/change_table.py:91] — fixed by filtering Terraform non-mutating entries from the default normalized-change review table.
+- [x] [Review][Patch] Upload change table can flood review results with non-mutating Terraform `no-op` and `read` entries [frontend/src/components/change_table.py:91] — fixed by filtering Terraform non-mutating entries from the default normalized-change review table.
 - [x] [Review][Patch] API/CLI coverage does not assert `plan_unsupported_fields` serialization or duplicate-action parse failures [tests/test_api/test_analyses.py:720] — fixed with API and CLI assertions for plan-level unsupported fields and duplicate Terraform action parse failures.
-- [x] [Review][Patch] Upload metadata rerender test does not verify rendered metadata survives feedback rerender [tests/test_ui/test_upload_panel.py:209] — fixed by rendering the preserved parse batch through the change table in the rerender callback regression.
+- [x] [Review][Patch] Upload metadata rerender test does not verify rendered metadata survives feedback rerender [frontend/e2e/test_upload_panel.py:209] — fixed by rendering the preserved parse batch through the change table in the rerender callback regression.
 - [x] [Review][Patch] Empty Terraform plan `plan_unsupported_fields` persistence/history path lacks real-parser coverage [tests/test_services/test_report_service.py:209] — fixed with real Terraform parser coverage for empty-plan `plan_unsupported_fields` through report fetch and history metadata.
 - [x] [Review][Patch] Real analysis pipeline drops Terraform parser metadata before persisted report/history rendering [analysis/risk_engine.py:34] — fixed by passing parser metadata into evidence-backed risk scoring and covering the real parser-to-persisted-report/history path.
-- [x] [Review][Patch] Filtering Terraform non-mutating rows can hide plan-level unsupported fields from upload review results [ui/components/change_table.py:71] — fixed by surfacing hidden Terraform plan-scope metadata before the mutating change table.
+- [x] [Review][Patch] Filtering Terraform non-mutating rows can hide plan-level unsupported fields from upload review results [frontend/src/components/change_table.py:71] — fixed by surfacing hidden Terraform plan-scope metadata before the mutating change table.
 - [x] [Review][Patch] Persisted report/history still lose Terraform metadata for all-non-mutating plans [services/analysis_service.py:693] — fixed by scoring all-non-mutating Terraform batches as deterministic low-risk contributors when evidence extraction intentionally returns no evidence, preserving parser metadata through persisted report/history payloads.
-- [x] [Review][Patch] Upload review hides non-plan metadata on filtered Terraform no-op/read rows [ui/components/change_table.py:66] — fixed by rendering complete hidden Terraform metadata lines for filtered `no-op`/`read` rows.
-- [x] [Review][Patch] Hidden Terraform plan metadata is merged across files without file attribution [ui/components/change_table.py:66] — fixed by prefixing hidden Terraform metadata with the originating parsed file name instead of aggregating metadata across files.
+- [x] [Review][Patch] Upload review hides non-plan metadata on filtered Terraform no-op/read rows [frontend/src/components/change_table.py:66] — fixed by rendering complete hidden Terraform metadata lines for filtered `no-op`/`read` rows.
+- [x] [Review][Patch] Hidden Terraform plan metadata is merged across files without file attribution [frontend/src/components/change_table.py:66] — fixed by prefixing hidden Terraform metadata with the originating parsed file name instead of aggregating metadata across files.
 - [x] [Review][Patch] Browser-level regression coverage is missing for Terraform metadata rendering and feedback rerender [tests/e2e/report_review.keyboard.spec.js:68] — fixed by seeding Terraform metadata in the browser review harness and asserting metadata survives dashboard feedback rerender and history-detail navigation.
 - [x] [Review][Patch] Explicit empty evidence can suppress mutating batch scoring [services/analysis_service.py:89] — fixed by re-extracting evidence for mutating batches when callers pass an explicit empty evidence list while preserving deterministic all-non-mutating Terraform scoring.
 - [x] [Review][Patch] Non-object Terraform plan JSON roots fail with an unclean parser error [parsers/terraform_parser.py:280] — fixed by rejecting non-object Terraform plan JSON roots with a clean parser `ValueError`.
@@ -108,7 +108,7 @@ So that deployment review can use concrete planned changes instead of only sourc
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -251,11 +251,11 @@ GPT-5 Codex
 - `tests/test_services/test_evidence_extractor.py`
 - `tests/test_services/test_github_app_service.py`
 - `tests/test_services/test_report_service.py`
-- `tests/test_ui/test_history_page.py`
-- `tests/test_ui/test_upload_panel.py`
-- `ui/components/change_table.py`
-- `ui/components/report_detail_page.py`
-- `ui/components/upload_panel.py`
+- `frontend/e2e/test_history_page.py`
+- `frontend/e2e/test_upload_panel.py`
+- `frontend/src/components/change_table.py`
+- `frontend/src/components/report_detail_page.py`
+- `frontend/src/components/upload_panel.py`
 
 ## Change Log
 

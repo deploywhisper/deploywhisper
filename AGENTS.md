@@ -96,26 +96,25 @@ Use the existing layout unless an approved architecture change says otherwise:
 - `models/` — ORM tables and repositories
 - `parsers/` — tool-specific parsers
 - `services/` — orchestration, persistence, settings, topology workflows
-- `ui/` — NiceGUI routes and components
+- `frontend/` — React SPA screens, UI primitives, routes, e2e tests, and static build
 - `tests/` — API, CLI, parser, service, UI, and infrastructure tests
 
-## Frontend / UI Migration
-`docs/ui-migration-plan.md` is the authority for the NiceGUI-to-React migration. Read it end-to-end, then read `docs/design/deploywhisper-redesign-v3.jsx` before any UI migration work; when an exact visual value differs, the mockup wins. If `docs/design/ui-parity-audit.md` exists, read it before changing any UI behavior.
+## Frontend / UI
+DeployWhisper now uses the React SPA in `frontend/` as the only web UI framework. `docs/ui-migration-plan.md` remains the historical migration contract; for current UI work, follow `frontend/src/theme`, `frontend/src/components/ui`, and `docs/design/deploywhisper-redesign-v3.jsx`. When an exact visual value differs, the mockup wins.
 
-Ground rules from Part A:
+Ground rules:
 - This is a UI/UX modernization and migration, not a backend, analysis, API, data-model, CLI, or GitHub Action rewrite.
-- Backend work is allowed only where Part A3 permits it: read-only stats/project endpoints, additive serializer fields, or later extraction of existing NiceGUI-callback behavior into `/api/v1`; ship backend-for-UI work in its own labeled PR.
-- The Part A2 UX changes are sanctioned product decisions, including the single global search plus ProjectSwitcher, Latest Briefing dashboard card, tabbed report screen, inline finding feedback, permanent report URLs, and retirement of the dashboard result countdown setting.
-- If a screen appears to need flow, validation, or API-contract changes beyond Part A2/A3, stop and raise the question instead of guessing.
+- Backend work for UI must stay additive: read-only stats/project endpoints, additive serializer fields, or API support for existing React screens. Ship backend-for-UI work in its own labeled PR when it changes backend behavior.
+- Current sanctioned UX includes the single global search plus ProjectSwitcher, Latest Briefing dashboard card, tabbed report screen, inline finding feedback, permanent report URLs, and retirement of the dashboard result countdown setting.
+- If a screen appears to need flow, validation, or API-contract changes beyond the current React contract, stop and raise the question instead of guessing.
 - No CDN imports in production code. Fonts must be packaged locally; icons use `lucide-react`.
 
-Operating rules from Part H:
-- Use one task, one branch, one PR for migration work, and state the active phase/task before writing code.
+Operating rules:
+- Use one task, one branch, one PR for UI work, and state the active task before writing code.
 - The target stack is Vite + React 18 + TypeScript + Tailwind CSS, built to static files and served by the existing FastAPI app. Node must not be present in the runtime image.
-- Do not restyle, approximate, or "improve" Part B design values; bind UI to real APIs and never hard-code mockup demo data.
-- Do not delete old-UI behavior without a parity-audit disposition: `replaced-by-design`, `sanctioned-change`, or `not-in-demo -> stop-and-ask`.
-- Before every UI migration PR, run the Part F0 compose verification loop: `docker compose up -d --build`, wait for `http://localhost:8080/api/v1/health`, seed data, run Playwright against `BASE_URL=http://localhost:8080`, capture required screenshots from the composed app, then `docker compose down`.
-- PR descriptions must include the plan reference, Part E documentation rows updated, F0 output, and Part F4 screenshots. Documentation-only Phase 0 rows may state UI verification not applicable when no runtime UI changed.
+- Do not restyle, approximate, or "improve" approved design values; bind UI to real APIs and never hard-code mockup demo data.
+- Before every UI PR, run the compose verification loop: `docker compose up -d --build`, wait for `http://localhost:8080/api/v1/health`, seed data, run Playwright against `BASE_URL=http://localhost:8080`, capture required screenshots from the composed app, then `docker compose down`.
+- PR descriptions must include the design/plan reference, documentation rows updated when applicable, verification output, and screenshots.
 
 ## Validation Requirements
 After changing code or config, run the most relevant validation available for the scope of your change.
@@ -127,10 +126,9 @@ Minimum expectations:
   - `bash scripts/ci-local.sh`
 - If the app behavior changed, run the app locally when possible:
   - `python app.py`
-- If a story changes any UI route, NiceGUI component, rendered report/history/dashboard surface, browser interaction, keyboard behavior, or accessibility semantics, run browser-side Playwright validation and record the command/result in the story Dev Agent Record before moving the story to review:
+- If a story changes any React route, UI primitive, rendered report/history/dashboard/settings/skills surface, browser interaction, keyboard behavior, or accessibility semantics, run browser-side Playwright validation and record the command/result in the story Dev Agent Record before moving the story to review:
   - `npm run test:ui-review` for review/report flows
   - `RUN_UI_A11Y=1 bash scripts/ci-local.sh` when the full local UI lane is needed
-  - `npm run test:ui-review:voiceover` on macOS for screen-reader or keyboard/a11y semantics
   - If no UI surface is touched, record `UI validation not applicable` instead of silently skipping UI validation.
 - If dependencies are not installed, bootstrap locally:
   - `python3 -m venv .venv`

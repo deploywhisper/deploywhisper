@@ -41,7 +41,7 @@ inputDocuments:
 | `parsers/terraform_parser.py` | Unit | P1 | Empty input guard, JSON action normalization, HCL resource/module extraction |
 | `parsers/ansible_parser.py` | Unit | P1 | Empty input guard, multi-document playbooks, fallback task naming |
 | `parsers/jenkins_parser.py` | Unit | P1 | Empty input guard, stage extraction, pipeline fallback |
-| `ui/components/upload_panel.py` helper contract | Unit | P1 regression | Keep helper test aligned with current `list[tuple[str, bytes]]` state shape |
+| `frontend/src/screens/Dashboard.tsx` helper contract | Unit | P1 regression | Keep helper test aligned with current `list[tuple[str, bytes]]` state shape |
 
 Justification:
 
@@ -59,13 +59,13 @@ Created:
 
 Updated:
 
-- `tests/test_ui/test_upload_panel.py`
+- `frontend/e2e/dashboard.spec.ts`
 
 ## Step 4: Validation and Summary
 
 Validation run:
 
-- `./.venv/bin/python -m unittest -q tests.test_parsers.test_terraform_parser tests.test_parsers.test_ansible_parser tests.test_parsers.test_jenkins_parser tests.test_ui.test_upload_panel`
+- `./.venv/bin/python -m unittest -q tests.test_parsers.test_terraform_parser tests.test_parsers.test_ansible_parser tests.test_parsers.test_jenkins_parser frontend.e2e.test_upload_panel`
 - `./.venv/bin/python -m unittest discover -q`
 
 Results:

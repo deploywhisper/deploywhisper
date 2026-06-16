@@ -1380,11 +1380,7 @@ class AnalysesApiTests(unittest.TestCase):
         )
 
         self.assertEqual(reset_response.status_code, 405)
-        self.assertEqual(report_response.status_code, 200)
-        self.assertTrue(
-            '<div id="root"></div>' in report_response.text
-            or "This shared report requires a password." in report_response.text
-        )
+        self.assertIn('<div id="root"></div>', report_response.text)
         self.assertEqual(shared_response.status_code, 401)
         self.assertEqual(
             shared_response.json()["error"]["code"],

@@ -174,24 +174,24 @@ function HistorySidebar({ selectedProject }: { selectedProject: ProjectOption })
         </div>
       </div>
       <nav className="dw-sidebar-nav" aria-label="Primary">
-        <Link className="dw-nav-item" to="/app">
+        <Link className="dw-nav-item" to="/">
           <LayoutGrid color="var(--dw-faint)" size={17} />
           <span>Dashboard</span>
         </Link>
-        <Link className="dw-nav-item" to="/app/skills">
+        <Link className="dw-nav-item" to="/skills">
           <Zap color="var(--dw-faint)" size={17} />
           <span>Skills</span>
         </Link>
-        <Link className="dw-nav-item" to="/app/incidents">
+        <Link className="dw-nav-item" to="/incidents">
           <AlertTriangle color="var(--dw-faint)" size={17} />
           <span>Incidents</span>
           <span className="dw-nav-count">0</span>
         </Link>
-        <Link className="dw-nav-item dw-nav-item-active" to="/app/history">
+        <Link className="dw-nav-item dw-nav-item-active" to="/history">
           <HistoryIcon color="var(--dw-brand)" size={17} />
           <span>History</span>
         </Link>
-        <Link className="dw-nav-item" to="/app/settings">
+        <Link className="dw-nav-item" to="/settings">
           <Settings color="var(--dw-faint)" size={17} />
           <span>Settings</span>
         </Link>
@@ -232,7 +232,7 @@ function HistoryTopBar({
       <div className="dw-topbar-spacer" />
       <ProjectSwitcher projects={projects} selectedProject={selectedProject} onChange={onProjectChange} />
       <span className="dw-topbar-divider" />
-      <Link className="dw-history-top-link" to="/app">
+      <Link className="dw-history-top-link" to="/">
         <LayoutGrid size={14} />
         Dashboard
       </Link>
@@ -318,7 +318,7 @@ function ExpandedReportDetail({ report }: { report: HistoryReport }) {
           Risk: {report.assessment_source || "unknown"} | Narrative: {report.narrative_source || "unknown"}
           {report.narrative_provider ? ` | ${report.narrative_provider}` : ""}
         </div>
-        <Link className="dw-history-report-link" to={`/app/reports/${report.id}`}>
+        <Link className="dw-history-report-link" to={`/reports/${report.id}?private=1`}>
           Open report
           <ChevronRight size={14} />
         </Link>
@@ -710,7 +710,7 @@ export function HistoryScreen() {
                   reports={reports}
                   selectedIds={selectedIds}
                   onExpandedChange={setExpanded}
-                  onOpenReport={(id) => navigate(`/app/reports/${id}`)}
+                  onOpenReport={(id) => navigate(`/reports/${id}?private=1`)}
                   onToggleSelectPage={toggleSelectPage}
                   onToggleSelected={toggleSelected}
                 />

@@ -91,10 +91,11 @@ instances may emit a local or private fallback link such as
 `report-link` and `share-summary-json.report_link` as optional for external
 review workflows.
 
-In the React UI, `/reports/{id}` renders the same read-only Report screen used
-inside `/app/reports/{id}` with mutable actions hidden. Password-protected
-shared reports still require the configured share password before the report
-payload loads, and `?compare=previous` preserves the Compare with previous flow.
+In the React UI, `/reports/{id}` renders the read-only shared Report screen
+with mutable actions hidden. Internal app navigation uses the same report
+screen with the private app context, while password-protected shared reports
+still require the configured share password before the public payload loads, and
+`?compare=previous` preserves the Compare with previous flow.
 
 The machine payload in `share_summary.json_payload` includes
 `report_schema_version`, Evidence Law status, top findings, evidence count,

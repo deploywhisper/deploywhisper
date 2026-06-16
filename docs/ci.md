@@ -12,9 +12,9 @@ DeployWhisper uses GitHub Actions at [`.github/workflows/ci.yml`](../.github/wor
 - `report`: publishes a GitHub Actions summary and downloads any failure artifacts.
 - `notify-failure`: optional Slack notification when `SLACK_WEBHOOK_URL` is configured.
 
-Backend burn-in is intentionally skipped by default. The current repo uses a deterministic Python `unittest` stack rather than a UI-heavy flaky E2E surface.
+Backend burn-in is intentionally skipped by default. The current repo uses a deterministic Python `unittest` stack plus a React frontend job for typecheck, Vitest, and production build.
 
-Accessibility-focused UI verification now lives in an opt-in local lane rather than the default CI path because real VoiceOver automation requires a GUI-enabled macOS host.
+Accessibility-focused UI verification now lives in the SPA Playwright lane. It is available through the root `test:ui-review` script and through the composed-container F0 loop required for UI PRs.
 
 ## Local Parity
 
@@ -24,20 +24,14 @@ Run the local CI-equivalent checks with:
 bash scripts/ci-local.sh
 ```
 
-To append the review-flow browser and VoiceOver checks locally:
+To append the SPA browser/a11y checks locally:
 
 ```bash
-npm install
+npm install --prefix frontend
 RUN_UI_A11Y=1 bash scripts/ci-local.sh
 ```
 
-If the machine has not been prepared for screen-reader automation yet, run:
-
-```bash
-npm run setup:ui-review
-```
-
-The VoiceOver step runs only on macOS. Non-macOS hosts still run the keyboard Playwright smoke and skip the VoiceOver command.
+This runs `npm run test:ui-review`, which delegates to the `frontend/e2e/` Playwright suite.
 
 For the React SPA migration workspace, run:
 
@@ -106,7 +100,7 @@ These logs are retained for 14 days.
 - Every shard must pass its assigned `unittest` targets
 - React SPA typecheck, Vitest, and build must pass in the `frontend` job
 - Pull requests get a changed-test fast-feedback run
-- UI-facing stories must record browser-side Playwright validation before moving to review. Use `npm run test:ui-review` for review/report flows, `RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local UI lane, and the VoiceOver lane on macOS when the change affects review semantics, tab order, keyboard behavior, or screen-reader announcements. If no UI surface is touched, record `UI validation not applicable` in the story Dev Agent Record.
+- UI-facing stories must record browser-side Playwright validation before moving to review. Use `npm run test:ui-review` for the SPA e2e/a11y lane or `RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local lane. If no UI surface is touched, record `UI validation not applicable` in the story Dev Agent Record.
 
 ## Notes
 

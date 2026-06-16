@@ -1,7 +1,6 @@
 # Skills Browser UI
 
-Story 4.5 adds a public browser experience for the shared skills catalog on the
-same NiceGUI runtime:
+The shared skills catalog is exposed through the React SPA:
 
 - `/skills` for the searchable catalog
 - `/skills/{id}` for the skill detail view

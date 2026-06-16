@@ -38,10 +38,10 @@ So that severity reasoning is explainable.
 - [x] [Review][Patch] Add confidence-ledger coverage to the shared `/reports/{id}` report view or redirect saved-report review to a surface that includes the ledger [`app.py`]
 - [x] [Review][Patch] Fix why-not-higher threshold explanations so they cannot claim a score is below the next severity threshold when it is not, and align the low-to-medium boundary with canonical report-service severity floors. [`services/confidence_ledger.py:281`]
 - [x] [Review][Patch] Avoid deriving Evidence Law failure text for list/summary serializations that intentionally omit evidence rows; ledger evidence-status wording must distinguish omitted detail from missing deterministic evidence. [`services/report_service.py:2630`]
-- [x] [Review][Patch] Normalize or regenerate malformed/partial confidence-ledger list sections before rendering or redacting so a string payload cannot become one bullet per character and empty cards get sane fallback content. [`ui/components/confidence_ledger.py:25`]
+- [x] [Review][Patch] Normalize or regenerate malformed/partial confidence-ledger list sections before rendering or redacting so a string payload cannot become one bullet per character and empty cards get sane fallback content. [`frontend/src/components/confidence_ledger.py:25`]
 - [x] [Review][Patch] Filter uncertainty drivers so non-uncertainty administrative warnings do not appear as context/evidence uncertainty drivers. [`services/confidence_ledger.py:337`]
-- [x] [Review][Patch] Complete the required VoiceOver review validation or resolve the web-server startup blocker with recorded evidence. [`tests/e2e/report_review.keyboard.spec.js:3`]
-- [x] [Review][Patch] Tolerate legacy or malformed contributor contribution values in the report-detail operational narrative before the confidence ledger renders. [`ui/components/report_detail_page.py:154`]
+- [x] [Review][Patch] Complete the required manual screen-reader review validation or resolve the web-server startup blocker with recorded evidence. [`tests/e2e/report_review.keyboard.spec.js:3`]
+- [x] [Review][Patch] Tolerate legacy or malformed contributor contribution values in the report-detail operational narrative before the confidence ledger renders. [`frontend/src/components/report_detail_page.py:154`]
 - [x] [Review][Patch] Add exact command/result validation evidence to the Dev Agent Record for the Story 3.4 closure checks. [`_bmad-output/implementation-artifacts/3-4-confidence-ledger-and-why-not-lower-higher.md:98`]
 - [x] [Review][Patch] Add API route/integration coverage proving serialized analysis responses include all five confidence-ledger sections. [`tests/test_api/test_analyses.py`]
 
@@ -66,7 +66,7 @@ So that severity reasoning is explainable.
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -103,22 +103,22 @@ GPT-5.4
 - Red phase: focused history-page tests first failed because `ui.components.confidence_ledger` did not exist.
 - Green phase: focused ledger helper/detail-route tests passed after adding the renderer and aligning route assertions with existing confidence clamping for insufficient context.
 - UI validation: keyboard review flow passed on the seeded Playwright report surface with the new confidence-ledger section in tab order.
-- VoiceOver validation was attempted with `APP_PORT=18080`, `APP_PORT=18081`, and `APP_PORT=18083`; the sandboxed seeded web server exited before Playwright test execution because NiceGUI startup attempted system semaphore access denied by the sandbox. The seeded-server startup blocker was resolved for the browser lane by disabling NiceGUI's process-pool setup in the E2E server and rerunning outside the sandbox.
-- VoiceOver validation rerun outside the sandbox reached the test body, but Guidepup failed with `VoiceOver not supported`; `defaults read com.apple.VoiceOver4/default SCREnableAppleScript` returned `1`, while `/private/var/db/Accessibility/.VoiceOverAppleScriptEnabled` was absent. The required WebKit keyboard review lane passed outside the sandbox.
+- manual screen-reader validation was attempted with `APP_PORT=18080`, `APP_PORT=18081`, and `APP_PORT=18083`; the sandboxed seeded web server exited before Playwright test execution because retired Python UI startup attempted system semaphore access denied by the sandbox. The seeded-server startup blocker was resolved for the browser lane by disabling retired Python UI's process-pool setup in the E2E server and rerunning outside the sandbox.
+- manual screen-reader validation rerun outside the sandbox reached the test body, but Guidepup failed with `manual screen-reader automation not supported`; `defaults read com.apple.manual screen-reader4/default SCREnableAppleScript` returned `1`, while `/private/var/db/Accessibility/.manual screen-readerAppleScriptEnabled` was absent. The required WebKit keyboard review lane passed outside the sandbox.
 - Review fix validation: focused API/UI/service ledger tests passed, broader affected API/UI/service/CLI suite passed, full unittest discovery passed, whole-repo Ruff lint/format passed, WebKit Playwright review lane passed, high/high Bandit passed, dependency audit passed, and `git diff --check` passed.
 - Final review follow-up validation commands/results:
-  - `./.venv/bin/ruff check api/schemas.py app.py ui/components/report_detail_page.py tests/test_api/test_schemas.py tests/test_api/test_analyses.py tests/test_ui/test_history_page.py` - passed.
+  - `./.venv/bin/ruff check api/schemas.py app.py frontend/src/components/report_detail_page.py tests/test_api/test_schemas.py tests/test_api/test_analyses.py frontend/e2e/test_history_page.py` - passed.
   - `./.venv/bin/ruff check .` - passed.
   - `./.venv/bin/ruff format --check .` - passed (`271 files already formatted`).
   - `git diff --check` - passed.
-  - `./.venv/bin/python -m unittest tests.test_api.test_schemas.ApiSchemaTests.test_persisted_report_exposes_confidence_ledger tests.test_api.test_schemas.ApiSchemaTests.test_persisted_report_normalizes_legacy_confidence_ledger tests.test_api.test_analyses.AnalysesApiTests.test_create_analysis_preserves_real_pipeline_metadata_in_persisted_contributors tests.test_ui.test_history_page.HistoryPageHelpersTests.test_confidence_ledger_normalizes_malformed_ledger_sections tests.test_ui.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_confidence_ledger tests.test_ui.test_history_page.HistoryPageRenderingTests.test_history_detail_route_tolerates_legacy_contributor_values -q` - initially failed on a missing confidence fixture and legacy contributor metadata assumptions; passed after fixes (`Ran 6 tests ... OK`).
-  - `./.venv/bin/python -m unittest tests.test_api.test_schemas tests.test_api.test_analyses tests.test_services.test_report_service tests.test_ui.test_history_page -q` - passed (`Ran 212 tests in 46.030s`, `OK`).
+  - `./.venv/bin/python -m unittest tests.test_api.test_schemas.ApiSchemaTests.test_persisted_report_exposes_confidence_ledger tests.test_api.test_schemas.ApiSchemaTests.test_persisted_report_normalizes_legacy_confidence_ledger tests.test_api.test_analyses.AnalysesApiTests.test_create_analysis_preserves_real_pipeline_metadata_in_persisted_contributors frontend.e2e.test_history_page.HistoryPageHelpersTests.test_confidence_ledger_normalizes_malformed_ledger_sections frontend.e2e.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_confidence_ledger frontend.e2e.test_history_page.HistoryPageRenderingTests.test_history_detail_route_tolerates_legacy_contributor_values -q` - initially failed on a missing confidence fixture and legacy contributor metadata assumptions; passed after fixes (`Ran 6 tests ... OK`).
+  - `./.venv/bin/python -m unittest tests.test_api.test_schemas tests.test_api.test_analyses tests.test_services.test_report_service frontend.e2e.test_history_page -q` - passed (`Ran 212 tests in 46.030s`, `OK`).
   - `./.venv/bin/python -m unittest discover -q` - passed (`Ran 399 tests in 42.251s`, `OK (skipped=1)`).
   - `./.venv/bin/bandit -r app.py api services ui tests/e2e/seeded_server.py --severity-level high --confidence-level high -q` - passed.
   - `./.venv/bin/python -m pip_audit -r requirements.txt` - passed (`No known vulnerabilities found`).
   - `bash scripts/ci-local.sh` - passed; local CI completed Ruff, format, dependency check, Bandit, compile, parser scenarios, and unittest discovery (`Ran 399 tests in 41.468s`, `OK (skipped=1)`).
   - `APP_PORT=18090 npm run test:ui-review` - passed (`3 passed (14.8s)`).
-- Local VoiceOver validation is not applicable for this project environment per project directive; do not run `npm run test:ui-review:voiceover` locally unless explicitly requested.
+- Local screen-reader validation is not applicable for this project environment per project directive; use the React SPA Playwright/a11y lane unless manual assistive-technology validation is explicitly requested.
 - BMad code review rerun: clean review; Blind Hunter, Edge Case Hunter, and Acceptance Auditor passes found no new actionable findings.
 
 ### Completion Notes List
@@ -129,9 +129,9 @@ GPT-5.4
 - Rendered the ledger on immediate upload results, persisted history detail pages, and shared `/reports/{id}` HTML reports.
 - Added deterministic unit coverage for shared ledger derivation, persisted report serialization/redaction, API schema exposure, public report rendering, and persisted history detail rendering.
 - Added Playwright keyboard/review coverage for the new ledger section and updated README feature copy.
-- Security scan note: targeted high-severity/high-confidence Bandit passes, and the dependency audit reports no known vulnerabilities after the prior NiceGUI security upgrade.
+- Security scan note: targeted high-severity/high-confidence Bandit passes, and the dependency audit reports no known vulnerabilities after the prior retired Python UI security upgrade.
 - Re-run code review note: BMad review found five unresolved patch findings, so the story was returned to in-progress for follow-up.
-- Follow-up review fixes: aligned confidence-ledger thresholds with canonical severity floors, prevented false below-threshold why-not-higher copy, distinguished omitted summary evidence from missing deterministic evidence, normalized malformed ledger sections before render/redaction, filtered administrative warnings out of uncertainty drivers, and resolved the E2E seeded-server startup blocker with recorded VoiceOver environment evidence.
+- Follow-up review fixes: aligned confidence-ledger thresholds with canonical severity floors, prevented false below-threshold why-not-higher copy, distinguished omitted summary evidence from missing deterministic evidence, normalized malformed ledger sections before render/redaction, filtered administrative warnings out of uncertainty drivers, and resolved the E2E seeded-server startup blocker with recorded manual screen-reader environment evidence.
 - Final review follow-up fixes: hardened report-detail operational narrative rendering for legacy contributor values and missing contributor metadata, normalized legacy schema confidence-ledger payloads, regenerated public report fallback ledgers, and added API route assertions proving assessment, persisted-report, and detail responses include all five ledger sections.
 
 ### File List
@@ -148,12 +148,12 @@ GPT-5.4
 - `tests/test_api/test_analyses.py`
 - `tests/test_api/test_schemas.py`
 - `tests/test_services/test_report_service.py`
-- `tests/test_ui/test_history_page.py`
-- `ui/components/confidence_ledger.py`
-- `ui/components/report_detail_page.py`
-- `ui/components/upload_panel.py`
-- `ui/formatters/confidence.py`
-- `ui/formatters/report_header.py`
+- `frontend/e2e/test_history_page.py`
+- `frontend/src/components/confidence_ledger.py`
+- `frontend/src/components/report_detail_page.py`
+- `frontend/src/components/upload_panel.py`
+- `frontend/src/screens/confidence.py`
+- `frontend/src/screens/report_header.py`
 
 ## Change Log
 
@@ -161,7 +161,7 @@ GPT-5.4
 - 2026-05-19: Implemented confidence ledger reasoning details on report UI surfaces with unit, browser, lint, and regression validation.
 - 2026-05-19: Fixed all Story 3.4 code-review findings by moving ledger derivation to the shared service/report model, hardening legacy contributor handling, grounding why-not-higher, exposing the ledger through schemas, and adding shared `/reports/{id}` coverage.
 - 2026-05-19: Re-ran BMad code review; five patch findings remain open and Story 3.4 returned to in-progress.
-- 2026-05-19: Fixed the remaining Story 3.4 review findings, reran focused/full validation, and returned Story 3.4 to review with VoiceOver environment limitations recorded.
+- 2026-05-19: Fixed the remaining Story 3.4 review findings, reran focused/full validation, and returned Story 3.4 to review with manual screen-reader environment limitations recorded.
 - 2026-05-19: Re-ran BMad code review; three patch findings remain open and Story 3.4 returned to in-progress.
-- 2026-05-19: Fixed the final Story 3.4 review findings, recorded exact validation evidence, and returned Story 3.4 to review; local VoiceOver validation is explicitly not applicable for this project environment.
+- 2026-05-19: Fixed the final Story 3.4 review findings, recorded exact validation evidence, and returned Story 3.4 to review; local manual screen-reader validation is explicitly not applicable for this project environment.
 - 2026-05-19: Re-ran BMad code review; clean review with no new actionable findings, and Story 3.4 moved to done.

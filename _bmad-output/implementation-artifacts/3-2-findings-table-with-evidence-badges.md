@@ -31,7 +31,7 @@ So that I can scan risk quickly and choose what to inspect.
 
 ### Review Findings
 
-- [x] [Review][Patch] Give row evidence badges enough table width to remain readable [ui/components/findings_table.py:413]
+- [x] [Review][Patch] Give row evidence badges enough table width to remain readable [frontend/src/components/findings_table.py:413]
 
 ## Dev Notes
 
@@ -54,7 +54,7 @@ So that I can scan risk quickly and choose what to inspect.
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -96,20 +96,20 @@ GPT-5.4
 ### Completion Notes List
 
 - Added findings-row scan signals for category, evidence count text, deterministic/derived/external labels, and Evidence Law satisfied/needs-evidence/not-required status.
-- Kept the change inside the existing NiceGUI findings table and evidence inspector path; no new service or persistence contract was introduced.
+- Kept the change inside the existing retired Python UI findings table and evidence inspector path; no new service or persistence contract was introduced.
 - Added helper-level, rendered component, and Playwright review-flow coverage for the new row signals.
 - Fixed the review finding by giving row evidence badges a wider desktop grid track while preserving the existing responsive one- and two-column mobile layouts.
 - No separate documentation update was required; this story changes user-visible table copy covered by UI tests.
 - Validation results:
-  - `./.venv/bin/python -m unittest tests.test_ui.test_findings_table tests.test_ui.test_findings_table_rendering -q` - red-phase failed before implementation, then passed after implementation.
-  - `./.venv/bin/python -m unittest tests.test_ui.test_findings_table tests.test_ui.test_findings_table_rendering -q` - passed after review fix, 8 tests.
-  - `./.venv/bin/python -m unittest tests.test_ui.test_findings_table tests.test_ui.test_findings_table_rendering tests.test_ui.test_app_shell tests.test_ui.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_dedicated_report_page -q` - passed, 22 tests.
+  - `./.venv/bin/python -m unittest frontend.e2e.test_findings_table frontend.e2e.test_findings_table_rendering -q` - red-phase failed before implementation, then passed after implementation.
+  - `./.venv/bin/python -m unittest frontend.e2e.test_findings_table frontend.e2e.test_findings_table_rendering -q` - passed after review fix, 8 tests.
+  - `./.venv/bin/python -m unittest frontend.e2e.test_findings_table frontend.e2e.test_findings_table_rendering frontend.e2e.test_app_shell frontend.e2e.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_dedicated_report_page -q` - passed, 22 tests.
   - `APP_PORT=18080 npm run test:ui-review` - passed, 1 Playwright test.
   - `./.venv/bin/ruff check .` - passed.
-  - `./.venv/bin/ruff format --check .` - passed after formatting `ui/components/findings_table.py` and `tests/test_ui/test_findings_table_rendering.py`.
+  - `./.venv/bin/ruff format --check .` - passed after formatting `frontend/src/components/findings_table.py` and `frontend/e2e/test_findings_table_rendering.py`.
   - `git diff --check` - passed.
   - `./.venv/bin/python -m pip check` - passed, no broken requirements.
-  - `./.venv/bin/bandit -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ evidence/ --severity-level high --confidence-level high -x tests/` - passed, no high issues.
+  - `./.venv/bin/bandit -r api/ analysis/ services/ parsers/ llm/ models/ cli/ frontend/ evidence/ --severity-level high --confidence-level high -x tests/` - passed, no high issues.
   - `./.venv/bin/python -m unittest discover -q` - passed, 357 tests, 1 skipped.
 
 ### File List
@@ -117,10 +117,10 @@ GPT-5.4
 - `_bmad-output/implementation-artifacts/3-2-findings-table-with-evidence-badges.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `tests/e2e/report_review.keyboard.spec.js`
-- `tests/test_ui/test_findings_table.py`
-- `tests/test_ui/test_findings_table_rendering.py`
-- `ui/components/findings_table.py`
-- `ui/theme.py`
+- `frontend/e2e/test_findings_table.py`
+- `frontend/e2e/test_findings_table_rendering.py`
+- `frontend/src/components/findings_table.py`
+- `frontend/src/theme/tokens.css`
 
 ## Change Log
 

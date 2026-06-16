@@ -145,11 +145,11 @@ function DashboardError({ message, onRetry }: { message: string; onRetry: () => 
 
 function Sidebar({ selectedProject }: { selectedProject: ProjectOption }) {
   const nav = [
-    { label: "Dashboard", icon: LayoutGrid, href: "/app", active: true },
-    { label: "Skills", icon: Zap, href: "/app/skills" },
-    { label: "Incidents", icon: AlertTriangle, href: "/app/incidents", count: 0 },
-    { label: "History", icon: History, href: "/app/history" },
-    { label: "Settings", icon: Settings, href: "/app/settings" },
+    { label: "Dashboard", icon: LayoutGrid, href: "/", active: true },
+    { label: "Skills", icon: Zap, href: "/skills" },
+    { label: "Incidents", icon: AlertTriangle, href: "/incidents", count: 0 },
+    { label: "History", icon: History, href: "/history" },
+    { label: "Settings", icon: Settings, href: "/settings" },
   ];
 
   return (
@@ -430,7 +430,7 @@ function RecentAnalysesCard({
   return (
     <Card
       right={
-        <Link className="dw-link-button" to="/app/history">
+        <Link className="dw-link-button" to="/history">
           View history <ChevronRight size={13} />
         </Link>
       }
@@ -549,7 +549,7 @@ export function DropzoneCard({
     mutationFn: () => createAnalysis({ files: stagedFiles, projectId: Number(project.id) }),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      navigate(`/app/reports/${result.data.persisted_report.id}`);
+      navigate(`/reports/${result.data.persisted_report.id}?private=1`);
     },
   });
 
@@ -810,7 +810,7 @@ export function DashboardScreen() {
   const hasGlobalError = projectsQuery.isError;
   const latest = analysesQuery.data?.[0];
 
-  const openReport = (id: number) => navigate(`/app/reports/${id}`);
+  const openReport = (id: number) => navigate(`/reports/${id}?private=1`);
   const refetchDashboard = () => {
     void statsQuery.refetch();
     void analysesQuery.refetch();

@@ -92,7 +92,7 @@ The UX specification exists and covers the major user-facing surfaces needed by 
 - Reviewer feedback, calibration, and trust-state presentation.
 - Degraded narrative, stale topology, partial parsing, and missing context trust signals.
 
-The architecture also preserves compatible boundaries: NiceGUI UI, FastAPI API, shared analysis core, project/workspace scoping, persistence/audit metadata, scanner conflict handling, provider settings, history/trends/outcomes/feedback, and agent-facing output.
+The architecture also preserves compatible boundaries: retired UI, FastAPI API, shared analysis core, project/workspace scoping, persistence/audit metadata, scanner conflict handling, provider settings, history/trends/outcomes/feedback, and agent-facing output.
 
 The UX artifact is older than the corrected epics. That is not a readiness blocker because the corrected epics now capture the missing history, admin, RBAC, scanner, and agent safety states. Refresh UX during story creation where affected UI stories need exact screen-level detail.
 
