@@ -220,6 +220,13 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["data"][0]["advisory"]["advisory_only"], True)
         self.assertFalse(payload["data"][0]["advisory"]["should_block"])
         self.assertEqual(payload["data"][0]["advisory"]["recommendation"], "caution")
+        self.assertEqual(payload["data"][0]["score"], 42)
+        self.assertEqual(payload["data"][0]["verdict"], "caution")
+        self.assertEqual(payload["data"][0]["filenames"], ["plan.json"])
+        self.assertEqual(payload["data"][0]["workspace_label"], "Unassigned")
+        self.assertEqual(payload["data"][0]["env_label"], "default")
+        self.assertIsNone(payload["data"][0]["trigger_ref"])
+        self.assertIsNone(payload["data"][0]["pr_ref"])
 
     def test_list_analyses_rejects_reversed_activity_window(self) -> None:
         response = self.client.get(

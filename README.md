@@ -112,7 +112,7 @@ DeployWhisper is an open-source project in active development. The current
 released version is useful today for teams that want a local-first, advisory
 review layer before infrastructure changes are shipped.
 
-### Released version `v1.0.0`
+### Released version `v1.2.0`
 
 What users can use today:
 
@@ -128,7 +128,7 @@ What users can use today:
 - **Shareable reports**: create read-only report links, optionally protect sensitive shared reports with a password, redact filenames, and compare shared reruns when previous scans exist.
 - **Published Skills Registry**: browse published built-in skills at <https://deploywhisper.github.io/skills-registry/> and extend guidance with custom skills.
 - **Published GitHub Action path**: use the dedicated `deploywhisper/analyze-action@v1` action to analyze PR artifact changes, post/update an advisory PR comment, and expose report outputs for follow-on workflow steps.
-- **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.0.0` with SQLite-backed persistence for a self-hosted single-container setup.
+- **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.2.0` with SQLite-backed persistence for a self-hosted single-container setup.
 - **Project quality baseline**: GitHub Actions CI, Python quality checks, sharded tests, local CI scripts, and optional UI accessibility smoke checks are in place.
 
 Why this gives users value:
@@ -217,7 +217,7 @@ example: Docker compose file `docker-compose.yml`
 services:
   deploywhisper:
     # If you want to use the already published image, uncomment the "image" section and comment out the build section.
-    image: ghcr.io/deploywhisper/deploywhisper:1.0.0
+    image: ghcr.io/deploywhisper/deploywhisper:1.2.0
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -335,7 +335,7 @@ docker run -d \
   -e APP_PORT=8080 \
   -e APP_BASE_URL=https://deploywhisper.example.com \
   -e DEPLOYWHISPER_SHARE_TOKEN=replace-with-a-long-random-secret \
-  ghcr.io/deploywhisper/deploywhisper:1.0.0
+  ghcr.io/deploywhisper/deploywhisper:1.2.0
 ```
 
 ## API Endpoints
@@ -368,7 +368,7 @@ Response shape:
   },
   "meta": {
     "app": "DeployWhisper",
-    "version": "0.1.0"
+    "version": "1.2.0"
   }
 }
 ```
@@ -416,11 +416,41 @@ Supports filtering by:
 - `page`
 - `page_size`
 
+Analysis list rows include the persisted report fields plus dashboard-friendly
+aliases for React consumers: `score` (`risk_score`), `verdict`
+(`recommendation`), `filenames` (`audit.files_analyzed`), `workspace_label`,
+`env_label`, `trigger_ref`, and `pr_ref`.
+
 Example:
 
 ```http
 GET /api/v1/analyses?project_key=payments&workspace_key=prod&toolchain=terraform&analysis_status=complete&created_from=2026-05-01T00:00:00Z&created_to=2026-05-20T00:00:00Z
 ```
+
+### Dashboard Stats
+
+```http
+GET /api/v1/stats/summary
+GET /api/v1/stats/verdict-distribution?days=30
+```
+
+`/api/v1/stats/summary` returns the dashboard KPI card data: total analyses,
+clean-verdict rate, open high/critical count, average time-to-verdict, and
+seven daily buckets for each KPI sparkline. `/api/v1/stats/verdict-distribution`
+returns recommendation counts for the dashboard verdict distribution.
+
+Both endpoints are read-only and accept optional `project_id`, `project_key`,
+`workspace_id`, and `workspace_key` query parameters.
+
+### Projects
+
+```http
+GET /api/v1/projects
+```
+
+Returns the existing project list envelope. Project rows now include
+dashboard-friendly `name` and `env_label` aliases alongside the stable
+`id`, `project_key`, `display_name`, and default-branch metadata.
 
 ### Fetch One Analysis
 
@@ -840,7 +870,7 @@ Near-term directions already visible in the repo and planning artifacts:
 
 ## Status as we’re in full swing
 
-### DeployWhisper is under active development, while release `v1.0.0` is stable.
+### DeployWhisper is under active development, while release `v1.2.0` is stable.
 
 Current implementation state:
 

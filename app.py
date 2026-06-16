@@ -36,6 +36,7 @@ from api.routes.incidents import router as incidents_router
 from api.routes.projects import router as projects_router
 from api.routes.settings import router as context_router
 from api.routes.skills import router as skills_router
+from api.routes.stats import router as stats_router
 from config import settings
 from logging_config import configure_logging
 from models.database import init_db
@@ -115,6 +116,8 @@ def _ensure_nicegui_config_defaults() -> None:
 
 
 _ensure_nicegui_config_defaults()
+fastapi_app.title = settings.app_name
+fastapi_app.version = settings.app_version
 if not getattr(fastapi_app, "_deploywhisper_assets_mounted", False):
     fastapi_app.add_static_files("/assets", ASSETS_DIR)
     fastapi_app._deploywhisper_assets_mounted = True
@@ -137,6 +140,7 @@ fastapi_app.include_router(github_app_router)
 fastapi_app.include_router(projects_router)
 fastapi_app.include_router(context_router)
 fastapi_app.include_router(skills_router)
+fastapi_app.include_router(stats_router)
 fastapi_app.include_router(incidents_router)
 
 

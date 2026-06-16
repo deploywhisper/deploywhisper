@@ -345,6 +345,22 @@ class ProjectData(BaseModel):
     created_at: str = Field(..., description="Creation timestamp")
     updated_at: str = Field(..., description="Last update timestamp")
 
+    @computed_field(return_type=str)
+    @property
+    def name(self) -> str:
+        """Dashboard-friendly alias for display_name."""
+        return self.display_name
+
+    @computed_field(return_type=str)
+    @property
+    def env_label(self) -> str:
+        """Short label for project switcher secondary text."""
+        if self.default_branch:
+            return self.default_branch
+        if self.is_default:
+            return "default"
+        return self.project_key
+
 
 class ConfidenceLedgerData(BaseModel):
     contributors: list[str] = Field(
@@ -456,6 +472,55 @@ class PersistedReportData(BaseModel):
         description="Durable artifact identity/status fallback retained outside manifest JSON",
     )
     audit: AuditMetadataData
+
+    @computed_field(return_type=int)
+    @property
+    def score(self) -> int:
+        """Dashboard-friendly alias for risk_score."""
+        return self.risk_score
+
+    @computed_field(return_type=str)
+    @property
+    def verdict(self) -> str:
+        """Dashboard-friendly alias for recommendation."""
+        return self.recommendation
+
+    @computed_field(return_type=list[str])
+    @property
+    def filenames(self) -> list[str]:
+        """Dashboard-friendly alias for analyzed artifact names."""
+        return list(self.audit.files_analyzed)
+
+    @computed_field(return_type=str)
+    @property
+    def workspace_label(self) -> str:
+        """Human-friendly workspace label for compact dashboard rows."""
+        if self.workspace is not None:
+            return self.workspace.display_name
+        return self.project.display_name
+
+    @computed_field(return_type=str)
+    @property
+    def env_label(self) -> str:
+        """Environment label for compact dashboard rows."""
+        if self.workspace is not None:
+            return self.workspace.environment or self.workspace.workspace_key
+        return self.project.env_label
+
+    @computed_field(return_type=str | None)
+    @property
+    def trigger_ref(self) -> str | None:
+        """Dashboard-friendly alias for audit trigger identifiers."""
+        return self.audit.trigger_id
+
+    @computed_field(return_type=str | None)
+    @property
+    def pr_ref(self) -> str | None:
+        """Pull-request reference when the trigger metadata identifies one."""
+        trigger_type = str(self.audit.trigger_type or "").strip().lower()
+        if trigger_type in {"pr", "pull_request", "pull-request", "github_pr"}:
+            return self.audit.trigger_id
+        return None
 
     @model_validator(mode="before")
     @classmethod
@@ -615,6 +680,75 @@ class DeploymentOutcomeListResponse(BaseModel):
 class DeploymentOutcomeResponse(BaseModel):
     data: DeploymentOutcomeData
     meta: ResourceOnlyMetaPayload
+
+
+class StatsBucketData(BaseModel):
+    date: str = Field(..., description="UTC calendar date for the bucket")
+    value: float = Field(..., description="Metric value for the bucket")
+
+
+class StatsSummaryTotalsData(BaseModel):
+    analyses: int = Field(..., description="Total persisted analyses")
+    clean_verdict_rate: float = Field(
+        ..., description="Percentage of low-severity analyses"
+    )
+    open_high_critical_count: int = Field(
+        ..., description="Count of high or critical analyses"
+    )
+    avg_time_to_verdict_seconds: float | None = Field(
+        default=None,
+        description="Average positive analysis_duration_seconds across reports",
+    )
+
+
+class StatsSummarySeriesData(BaseModel):
+    analyses: list[StatsBucketData] = Field(
+        default_factory=list, description="Seven daily analysis-count buckets"
+    )
+    clean_verdict_rate: list[StatsBucketData] = Field(
+        default_factory=list, description="Seven daily clean-rate buckets"
+    )
+    open_high_critical_count: list[StatsBucketData] = Field(
+        default_factory=list, description="Seven daily high/critical-count buckets"
+    )
+    avg_time_to_verdict_seconds: list[StatsBucketData] = Field(
+        default_factory=list, description="Seven daily average-duration buckets"
+    )
+
+
+class StatsSummaryData(BaseModel):
+    totals: StatsSummaryTotalsData
+    total_analyses: int = Field(..., description="Total persisted analyses")
+    clean_verdict_rate: float = Field(
+        ..., description="Percentage of low-severity analyses"
+    )
+    open_high_critical_count: int = Field(
+        ..., description="Count of high or critical analyses"
+    )
+    avg_time_to_verdict_seconds: float | None = Field(
+        default=None, description="Average positive analysis duration in seconds"
+    )
+    series: StatsSummarySeriesData
+
+
+class StatsSummaryResponse(BaseModel):
+    data: StatsSummaryData
+    meta: MetaPayload
+
+
+class VerdictDistributionData(BaseModel):
+    days: int = Field(..., description="Lookback window in days")
+    window_start: str = Field(..., description="Inclusive UTC window start")
+    window_end: str = Field(..., description="Inclusive UTC window end")
+    counts: dict[str, int] = Field(
+        default_factory=dict, description="Counts keyed by advisory recommendation"
+    )
+    total: int = Field(..., description="Total reports included in the window")
+
+
+class VerdictDistributionResponse(BaseModel):
+    data: VerdictDistributionData
+    meta: MetaPayload
 
 
 class TopologyStatusData(BaseModel):
