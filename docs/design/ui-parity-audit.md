@@ -1,22 +1,22 @@
 # UI Parity Audit
 
-Source: `docs/ui-migration-plan.md` Part D1, audited against the current NiceGUI `ui/` package plus the FastAPI shared-report HTML routes in `app.py`.
+Source: `docs/ui-migration-plan.md` Part D1. This is a historical parity record retained after cutover; the retired UI source package has been removed, and current replacements live in the React SPA under `frontend/`.
 
 Status: Phase 2 parity audit. Every row is classified; unresolved product decisions are explicitly marked `not-in-demo -> stop-and-ask`.
 
 ## Scope
 
-| Surface | Old route/source | Covered |
+| Surface | Current React route/source | Covered |
 | --- | --- | --- |
-| Shared shell | `ui/components/dashboard_shell.py`, `ui/components/project_workspace_switcher.py` | Yes |
-| Dashboard | `/`, `ui/routes/dashboard.py`, `ui/components/upload_panel.py` | Yes |
-| Report detail | `/history/{report_id}`, `ui/components/report_detail_page.py` | Yes |
-| Report comparison | `/history/{report_id}/compare`, `ui/routes/history.py` | Yes |
-| History | `/history`, `ui/routes/history.py`, `ui/components/analysis_history_row.py` | Yes |
-| Settings | `/settings`, `ui/routes/settings.py` | Yes |
-| Incidents | `/incidents`, `ui/routes/incidents.py` | Yes |
-| Skills | `/skills`, `/skills/{skill_id}`, `ui/routes/skills.py` | Yes |
-| Shared reports | `/reports/{id}`, `/reports/{id}/unlock`, `/reports/{id}/artifacts`, `app.py` | Yes |
+| Shared shell | `frontend/src/screens/Phase6Shell.tsx`, `frontend/src/screens/dashboard.css` | Yes |
+| Dashboard | `/`, `frontend/src/screens/Dashboard.tsx` | Yes |
+| Report detail | `/reports/{report_id}?private=1`, `frontend/src/screens/Report.tsx` | Yes |
+| Report comparison | `/reports/{report_id}?private=1&compare=previous`, `frontend/src/screens/Report.tsx` | Yes |
+| History | `/history`, `frontend/src/screens/History.tsx` | Yes |
+| Settings | `/settings`, `frontend/src/screens/Settings.tsx` | Yes |
+| Incidents | `/incidents`, `frontend/src/screens/Incidents.tsx` | Yes |
+| Skills | `/skills`, `/skills/{skill_id}`, `frontend/src/screens/Skills.tsx` | Yes |
+| Shared reports | `/reports/{id}`, `/reports/{id}/unlock`, `/reports/{id}/artifacts`, `frontend/src/screens/Report.tsx` plus `app.py` redirects/static serving | Yes |
 | Artifact viewer | `/history/{id}/artifacts`, `app.py` | Yes |
 
 ## Summary
@@ -32,8 +32,8 @@ Status: Phase 2 parity audit. Every row is classified; unresolved product decisi
 
 | Surface | Old UI element, control, message, or behavior | Classification | Migration target or proposed disposition |
 | --- | --- | --- | --- |
-| Shared shell | DeployWhisper brand mark, wordmark, and "Evidence engine" sidebar label | replaced-by-design (B1 typography, B2 Card/Button primitives, Phase 3 dashboard shell) | Keep brand in the React app shell using Part B tokens; visual treatment follows the mockup rather than NiceGUI CSS. |
-| Shared shell | Primary nav links: Dashboard, Skills, Incidents with badge, History, Settings | replaced-by-design (Part C Phase 3/5/6 navigation destinations) | Recreate navigation in React shell; current NiceGUI links map to SPA routes as each phase lands. |
+| Shared shell | DeployWhisper brand mark, wordmark, and "Evidence engine" sidebar label | replaced-by-design (B1 typography, B2 Card/Button primitives, Phase 3 dashboard shell) | Keep brand in the React app shell using Part B tokens; visual treatment follows the mockup rather than retired UI CSS. |
+| Shared shell | Primary nav links: Dashboard, Skills, Incidents with badge, History, Settings | replaced-by-design (Part C Phase 3/5/6 navigation destinations) | Recreate navigation in React shell; current retired UI links map to SPA routes as each phase lands. |
 | Shared shell | Active project card in sidebar with display name, key, repository context, hidden "Active Project" accessibility text | replaced-by-design (B2 ProjectSwitcher, Phase 3 dashboard scope) | Project context moves into the ProjectSwitcher/global header area; preserve project name, key, and repository context. |
 | Shared shell | Header "Search analyses, services..." input | sanctioned-change (A2: two header searches become global search) | Replace with the single global search command surface. |
 | Shared shell | Header project combobox search plus "New project" action | sanctioned-change (A2: ProjectSwitcher contains project search/list/New-project) | Replace with B2 ProjectSwitcher including search filtering, empty state, Escape close, listbox/option semantics, and New-project footer. |

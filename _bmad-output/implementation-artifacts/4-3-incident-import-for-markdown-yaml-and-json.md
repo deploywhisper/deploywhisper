@@ -58,7 +58,7 @@ So that organization memory can be added without integrating a ticketing system 
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -100,7 +100,7 @@ GPT-5 Codex
 - Static security check: `./.venv/bin/bandit -r services/ -x tests/ --severity-level high --confidence-level high` passed with no high-severity findings.
 - Full regression: `./.venv/bin/python -m unittest discover -q` passed 414 tests with 1 skipped.
 - Whitespace check: `git diff --check` passed.
-- UI validation not applicable; this story added a service-layer import path and documentation without changing UI routes, NiceGUI components, browser interaction, keyboard behavior, or accessibility semantics.
+- UI validation not applicable; this story added a service-layer import path and documentation without changing UI routes, retired Python UI components, browser interaction, keyboard behavior, or accessibility semantics.
 - Review fix focused regression: `./.venv/bin/python -m unittest tests.test_services.test_incident_import_service -q` passed 5 tests.
 - Review fix lint: `./.venv/bin/ruff check .` passed.
 - Review fix format check: `./.venv/bin/ruff format --check .` passed.

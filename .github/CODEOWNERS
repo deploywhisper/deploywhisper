@@ -12,6 +12,7 @@
 /data/          @pramodksahoo
 /docs/          @pramodksahoo
 /evidence/      @pramodksahoo
+/frontend/      @pramodksahoo
 /integrations/  @pramodksahoo
 /llm/           @pramodksahoo
 /migrations/    @pramodksahoo
@@ -23,7 +24,6 @@
 /services/      @pramodksahoo
 /skills/        @pramodksahoo
 /tests/         @pramodksahoo
-/ui/            @pramodksahoo
 
 # High-signal contribution workflow files
 /tests/skill-tests/ @pramodksahoo

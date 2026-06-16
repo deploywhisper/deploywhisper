@@ -77,7 +77,7 @@ function recommendationTabName(value: string) {
 }
 
 async function selectProject(page: Page) {
-  await page.goto("/app/history", { waitUntil: "networkidle" });
+  await page.goto("/history", { waitUntil: "networkidle" });
   await page.locator(".dw-project-trigger").click();
   await expect(page.getByRole("listbox", { name: "Projects" })).toBeVisible();
   await page.getByPlaceholder("Search projects...").fill(projectName);

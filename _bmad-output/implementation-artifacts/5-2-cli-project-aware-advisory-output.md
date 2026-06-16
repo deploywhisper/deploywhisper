@@ -63,7 +63,7 @@ So that local and CI workflows can consume the same core report.
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -109,7 +109,7 @@ GPT-5 Codex
 - Added first-class `evidence_law_status` and `evidence_law_detail` fields to the shared advisory JSON payload used by CLI and API analysis responses.
 - Included Evidence Law status in markdown and plain-text share summaries while preserving the advisory-only `should_block=false` posture.
 - Added deterministic CLI coverage for project/workspace keyed analysis output and high-risk advisory output without relying on narrative availability.
-- Updated operator/schema docs for the CLI/API advisory contract. UI validation not applicable; no UI route, NiceGUI component, rendered page, browser interaction, keyboard behavior, or accessibility semantics changed.
+- Updated operator/schema docs for the CLI/API advisory contract. UI validation not applicable; no UI route, retired Python UI component, rendered page, browser interaction, keyboard behavior, or accessibility semantics changed.
 - BMad code review follow-ups resolved: unsatisfied Evidence Law now forces human-review guidance, compact summaries can surface omitted evidence detail, project/workspace CLI coverage asserts the advisory contract, and docs no longer overstate list/detail Evidence Law fields.
 - BMad code review rerun follow-up resolved: project/workspace CLI coverage now asserts the Evidence Law detail field as part of the advisory contract.
 - BMad code review rerun follow-up resolved: unsatisfied Evidence Law now also sets advisory attention and an uncertainty flag for CI consumers that branch on `data.advisory.requires_attention`.

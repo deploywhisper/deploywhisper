@@ -40,6 +40,7 @@ Maintainers are expected to:
 | `data` | `/data/` | `@pramodksahoo` | Seeded local data, analytics snapshots, and topology examples |
 | `docs` | `/docs/` | `@pramodksahoo` | User, operator, contributor, governance, and integration documentation |
 | `evidence` | `/evidence/` | `@pramodksahoo` | Evidence models, extractors, and mapper contracts |
+| `frontend` | `/frontend/` | `@pramodksahoo` | React SPA screens, primitives, e2e tests, and accessibility-sensitive flows |
 | `integrations` | `/integrations/` | `@pramodksahoo` | External integration boundaries and GitHub app services |
 | `llm` | `/llm/` | `@pramodksahoo` | Provider adapters, prompt boundaries, narrative fallback behavior |
 | `migrations` | `/migrations/` | `@pramodksahoo` | Alembic migrations and schema evolution history |
@@ -51,7 +52,6 @@ Maintainers are expected to:
 | `services` | `/services/` | `@pramodksahoo` | Shared orchestration and business logic used by UI, API, and CLI |
 | `skills` | `/skills/` | `@pramodksahoo` | Skill manifests, registry content, harness scenarios, contribution flow |
 | `tests` | `/tests/` | `@pramodksahoo` | Regression coverage, fixtures, infrastructure guardrails |
-| `ui` | `/ui/` | `@pramodksahoo` | NiceGUI routes, review surfaces, accessibility-sensitive flows |
 
 ## Known Coverage Gaps
 

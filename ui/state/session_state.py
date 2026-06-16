@@ -1,1 +1,0 @@
-"""Session state placeholder."""

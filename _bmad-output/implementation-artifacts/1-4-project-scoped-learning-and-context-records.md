@@ -57,7 +57,7 @@ So that future learning and context never cross project boundaries.
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -96,7 +96,7 @@ GPT-5 Codex
 - `./.venv/bin/python -m pytest tests/test_api/test_deployments.py tests/test_api/test_context.py tests/test_cli/test_analyze.py -q` - passed, 51 tests.
 - `./.venv/bin/python -m pytest tests/test_infra/test_migrations.py tests/test_infra/test_container_contract.py -q` - passed, 22 tests.
 - `./.venv/bin/python -m pytest tests/test_analysis/test_incident_matcher.py tests/test_services/test_incident_service.py tests/test_services/test_deployment_outcome_service.py tests/test_services/test_feedback_service.py tests/test_services/test_topology_service.py tests/test_services/test_backtesting_service.py tests/test_services/test_analysis_service.py tests/test_api/test_deployments.py tests/test_api/test_context.py tests/test_cli/test_analyze.py tests/test_infra/test_migrations.py tests/test_infra/test_container_contract.py -q` - passed, 136 tests.
-- `./.venv/bin/python -m unittest tests.test_ui.test_history_page.HistoryPageRenderingTests.test_history_page_renders_calibration_snapshot_from_backtest_feed -q -b` - passed, 1 test.
+- `./.venv/bin/python -m unittest frontend.e2e.test_history_page.HistoryPageRenderingTests.test_history_page_renders_calibration_snapshot_from_backtest_feed -q -b` - passed, 1 test.
 - `./.venv/bin/ruff check .` - passed.
 - `./.venv/bin/ruff format --check .` - passed, 256 files already formatted.
 - `./.venv/bin/python -m unittest discover -q -b` - passed, 249 tests, 1 skipped.
@@ -140,7 +140,7 @@ GPT-5 Codex
 - `tests/test_services/test_feedback_service.py`
 - `tests/test_services/test_incident_service.py`
 - `tests/test_services/test_topology_service.py`
-- `tests/test_ui/test_history_page.py`
+- `frontend/e2e/test_history_page.py`
 
 ## Change Log
 

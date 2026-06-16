@@ -97,7 +97,7 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
   });
 
   test("settings renders provider, topology, feedback, and custom skills controls", async ({ page }) => {
-    await page.goto("/app/settings", { waitUntil: "networkidle" });
+    await page.goto("/settings", { waitUntil: "networkidle" });
     await selectProject(page);
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "AI provider" })).toBeVisible();
@@ -115,7 +115,7 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
   });
 
   test("incidents renders seeded source list and detail", async ({ page }) => {
-    await page.goto("/app/incidents", { waitUntil: "networkidle" });
+    await page.goto("/incidents", { waitUntil: "networkidle" });
     await selectProject(page);
     await expect(page.getByRole("heading", { name: "Incidents" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Checkout rollout incident/ })).toBeVisible();
@@ -125,11 +125,11 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
   });
 
   test("skills supports filtering and detail navigation", async ({ page }) => {
-    await page.goto("/app/skills?search=terraform&sort=recency", { waitUntil: "networkidle" });
+    await page.goto("/skills?search=terraform&sort=recency", { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
-    await expect(page.locator('a[href="/app/skills/terraform"]')).toBeVisible();
-    await page.locator('a[href="/app/skills/terraform"]').click();
-    await expect(page).toHaveURL(/\/app\/skills\/terraform/);
+    await expect(page.locator('a[href="/skills/terraform"]')).toBeVisible();
+    await page.locator('a[href="/skills/terraform"]').click();
+    await expect(page).toHaveURL(/\/skills\/terraform/);
     await expect(page.getByText(/deploywhisper skill install terraform/)).toBeVisible();
     await expect(page.getByText("Version history")).toBeVisible();
     await expectNoSeriousA11y(page);

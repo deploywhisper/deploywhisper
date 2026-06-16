@@ -293,7 +293,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/). Every co
 | `analysis`  | analysis/ — risk scoring, blast radius  |
 | `llm`       | llm/ — narrator, providers, prompts     |
 | `api`       | api/ — FastAPI routes and schemas       |
-| `ui`        | ui/ — NiceGUI dashboard and components  |
+| `ui`        | frontend/ — React SPA screens and components |
 | `cli`       | cli/ — command-line interface            |
 | `db`        | models/ and migrations/                 |
 | `skills`    | skills/ — AI skill documents            |

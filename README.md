@@ -16,7 +16,7 @@ DeployWhisper helps platform engineers, DevOps teams, and SREs review deployment
   <a href="https://github.com/deploywhisper/deploywhisper/network/members"><img src="https://img.shields.io/github/forks/deploywhisper/deploywhisper?style=flat-square" alt="GitHub forks"/></a>
   <a href="https://github.com/deploywhisper/deploywhisper/issues"><img src="https://img.shields.io/github/issues/deploywhisper/deploywhisper?style=flat-square" alt="GitHub issues"/></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square" alt="Python 3.11+"/>
-  <img src="https://img.shields.io/badge/runtime-NiceGUI%20%2B%20FastAPI%20%2B%20React%20SPA-0f766e?style=flat-square" alt="NiceGUI plus FastAPI plus React SPA"/>
+  <img src="https://img.shields.io/badge/runtime-React%20SPA%20%2B%20FastAPI-0f766e?style=flat-square" alt="React SPA plus FastAPI"/>
 </p>
 
 **Quick links:** [Quick Start](#quick-start) · [Skills Registry](https://deploywhisper.github.io/skills-registry/) · [API Endpoints](#api-endpoints) · [Development](#development) · [Contributing](#contributing) · [Open Source](#open-source)
@@ -51,8 +51,7 @@ DeployWhisper treats deployment review as a context problem. It combines multi-t
 
 The current implementation is built as a single-container application with:
 
-- NiceGUI for the current operator-facing web UI at `/`
-- React 18, Vite, and TypeScript for the in-progress replacement SPA served at `/app`
+- React 18, Vite, and TypeScript for the operator-facing web UI at `/`
 - FastAPI for the versioned API surface
 - SQLAlchemy and SQLite for persistence
 - Direct SDK adapters for OpenAI, Anthropic, Gemini, and local Ollama narrative generation
@@ -116,7 +115,7 @@ review layer before infrastructure changes are shipped.
 
 What users can use today:
 
-- **Web review workflow**: upload deployment artifacts in the NiceGUI dashboard and get a persisted advisory report with risk score, severity, recommendation, findings, evidence, public risk pattern/incident matches, context quality, blast radius, rollback guidance, and audit metadata.
+- **Web review workflow**: upload deployment artifacts in the React dashboard and get a persisted advisory report with risk score, severity, recommendation, findings, evidence, public risk pattern/incident matches, context quality, blast radius, rollback guidance, and audit metadata.
 - **Multi-tool analysis**: analyze Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation inputs through one shared pipeline instead of reviewing every tool in isolation.
 - **LLM-assisted narrative**: connect deterministic scoring with plain-English deployment guidance using Ollama, OpenAI, Anthropic, Gemini, OpenRouter, Groq, or xAI provider settings.
 - **Local-first safety posture**: keep raw IaC processing local, avoid storing provider API keys in the database, exclude sensitive files from unsafe handling, and keep every verdict advisory rather than automatically blocking a release.
@@ -184,7 +183,6 @@ python app.py
 The app starts on:
 
 - UI: `http://127.0.0.1:8080/`
-- React SPA shell during UI migration: `http://127.0.0.1:8080/app`
 - API docs: `http://127.0.0.1:8080/api/v1/docs`
 - Health: `http://127.0.0.1:8080/api/v1/health`
 
@@ -256,7 +254,7 @@ docker-compose up -d
 Default container behavior:
 
 - Port `8080` exposed from the app container
-- Existing NiceGUI UI served at `/`; the production React SPA shell is served from the same FastAPI process at `/app`
+- Production React SPA served from the same FastAPI process at `/`, with legacy `/app/...` links redirected
 - SQLite database stored under `/app/data`
 - Default provider set to Ollama directly in `docker-compose.yml`
 - `POST /api/v1/analyses/{id}/share` stays disabled until `DEPLOYWHISPER_SHARE_TOKEN` is set in Compose
@@ -526,7 +524,7 @@ DeployWhisper is designed so that:
 
 DeployWhisper uses one shared analysis core with three access surfaces:
 
-- Web UI via NiceGUI
+- Web UI via the React SPA served by FastAPI
 - REST API via FastAPI
 - CLI via `cli.py`
 
@@ -536,7 +534,7 @@ Primary runtime components:
 - `analysis/`: risk scoring, blast radius, rollback, and incident matching
 - `services/`: orchestration, persistence, settings, and topology workflows
 - `llm/`: provider routing, prompts, skill context, and narrative generation
-- `ui/`: dashboard, history, incidents, and settings pages
+- `frontend/`: React dashboard, reports, history, incidents, skills, and settings screens
 - `api/`: versioned routes and schema envelopes
 
 Key architectural constraints:
@@ -577,9 +575,8 @@ llm/          Narrative generation and skill context
 models/       ORM tables and repositories
 parsers/      Tool-specific parsers
 services/     Shared orchestration and persistence logic
-frontend/     React 18 + Vite + TypeScript migration workspace
-ui/           NiceGUI routes and components
-tests/        API, CLI, parser, service, UI, and infra tests
+frontend/     React 18 + Vite + TypeScript SPA workspace
+tests/        API, CLI, parser, service, frontend, and infra tests
 ```
 
 ### Common Development Commands
@@ -608,7 +605,7 @@ Run the local CI-equivalent checks:
 bash scripts/ci-local.sh
 ```
 
-Run the React SPA migration checks:
+Run the React SPA checks:
 
 ```bash
 npm run ui:dev
@@ -617,28 +614,21 @@ npm run ui:test
 npm run ui:build
 ```
 
-`npm run ui:dev` serves the SPA at `http://127.0.0.1:5173/app/`
+`npm run ui:dev` serves the SPA at `http://127.0.0.1:5173/`
 with `/api` proxied to the compose backend on `http://localhost:8080`.
 Production verification must use `docker compose up -d --build` and
-`http://localhost:8080/app` so the FastAPI static mount is exercised.
+`http://localhost:8080/` so the FastAPI static mount is exercised.
 
-Run the browser keyboard/accessibility smoke for the review flow:
+Run the browser keyboard/accessibility smoke for the SPA:
 
 ```bash
-npm install
+npm install --prefix frontend
 npm run test:ui-review
 ```
 
-This validates the seeded report review route with keyboard navigation, review
-section focus order, landmarks, labels, and live status announcements for
-evidence inspector open/close changes.
-
-Run the real macOS VoiceOver smoke on a GUI-enabled Mac:
-
-```bash
-npm run setup:ui-review
-npm run test:ui-review:voiceover
-```
+This runs the composed React Playwright suite under `frontend/e2e/` against the
+configured `BASE_URL` and includes the axe/keyboard smoke checks owned by the
+SPA migration.
 
 ## GitHub CI
 
@@ -765,14 +755,13 @@ Current CI stages:
 - `notify-failure`
 
 The CI pipeline includes frontend typecheck, tests, and production build for
-the React migration workspace. Compose-based browser verification remains the
-required local proof for UI migration PRs until the full e2e lane is cut over.
+the React workspace. UI migration PRs must also run the compose-based browser
+verification loop against `http://localhost:8080`.
 
-For accessibility-sensitive UI changes, the repo also ships an opt-in macOS verification lane:
+For accessibility-sensitive UI changes:
 
-- `npm run test:ui-review` exercises the seeded review flow with Playwright keyboard automation, including review landmarks and status announcements.
-- `npm run test:ui-review:voiceover` exercises the same flow with real VoiceOver on macOS after `npm run setup:ui-review`.
-- `RUN_UI_A11Y=1 bash scripts/ci-local.sh` appends both lanes locally when Node dependencies are installed. The VoiceOver step auto-skips on non-macOS hosts.
+- `npm run test:ui-review` exercises the SPA Playwright suite, including axe and keyboard smoke coverage.
+- `RUN_UI_A11Y=1 bash scripts/ci-local.sh` appends the SPA browser lane locally when `frontend/node_modules` is installed.
 
 ## Contributing
 

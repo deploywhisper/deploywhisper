@@ -31,7 +31,7 @@ function unique(values: (string | undefined)[]) {
 
 function SkillCard({ skill }: { skill: SkillRegistryItem }) {
   return (
-    <Link className="dw-phase6-list-item dw-skill-card" to={`/app/skills/${skill.id}`}>
+    <Link className="dw-phase6-list-item dw-skill-card" to={`/skills/${skill.id}`}>
       <div className="dw-phase6-row">
         <div className="dw-phase6-list-title">{skill.name}</div>
         {skill.is_official && <EvidenceTag>Official</EvidenceTag>}
@@ -169,7 +169,7 @@ function SkillDetailContent({ skillId }: { skillId: string }) {
           <h1>{skill?.name ?? "Skill"}</h1>
           <p className="lede">{skill?.description ?? "Loading registry metadata."}</p>
         </div>
-        <Link to="/app/skills">
+        <Link to="/skills">
           <Button variant="ghost">Back to skills</Button>
         </Link>
       </header>

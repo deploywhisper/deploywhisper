@@ -41,16 +41,14 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<ComponentGallery />} path="/app/dev/components" />
-        <Route element={<HistoryScreen />} path="/app/history" />
-        <Route element={<SettingsScreen />} path="/app/settings" />
-        <Route element={<IncidentsScreen />} path="/app/incidents" />
-        <Route element={<SkillsScreen />} path="/app/skills" />
-        <Route element={<SkillsScreen />} path="/app/skills/:skillId" />
-        <Route element={<ReportScreen />} path="/app/reports/:id" />
+        <Route element={<ComponentGallery />} path="/dev/components" />
+        <Route element={<HistoryScreen />} path="/history" />
+        <Route element={<SettingsScreen />} path="/settings" />
+        <Route element={<IncidentsScreen />} path="/incidents" />
+        <Route element={<SkillsScreen />} path="/skills" />
+        <Route element={<SkillsScreen />} path="/skills/:skillId" />
         <Route element={<ReportScreen />} path="/reports/:id" />
-        <Route element={<DashboardScreen />} path="/app" />
-        <Route element={<DashboardScreen />} path="/app/*" />
+        <Route element={<DashboardScreen />} path="/" />
         <Route element={<DashboardScreen />} path="*" />
       </Routes>
     </BrowserRouter>

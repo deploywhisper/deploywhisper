@@ -156,7 +156,7 @@ Alignment is generally strong:
 
 Alignment is also strong:
 
-- Desktop-first internal web application aligns with NiceGUI + FastAPI.
+- Desktop-first internal web application aligns with React SPA + FastAPI.
 - One-screen operational review aligns with the shared runtime and report-centric architecture.
 - UX emphasis on evidence-on-demand and visible uncertainty aligns with the architecture’s evidence-first and uncertainty-first principles.
 

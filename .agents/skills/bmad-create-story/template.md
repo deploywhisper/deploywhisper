@@ -28,7 +28,7 @@ so that {{benefit}}.
 - [ ] Task 2 (AC: #)
   - [ ] Subtask 2.1
 - [ ] UI validation gate (AC: UI-facing ACs, if applicable)
-  - [ ] If this story changes any UI route, NiceGUI component, rendered report/history/dashboard surface, browser interaction, keyboard behavior, or accessibility semantics, add or update Playwright coverage and run the relevant browser validation before review. Use `npm run test:ui-review` for review/report flows, `RUN_UI_A11Y=1 bash scripts/ci-local.sh` when the full local UI lane is needed, and `npm run test:ui-review:voiceover` on macOS for screen-reader or keyboard/a11y semantics. If no UI surface is touched, record "UI validation not applicable" in the Dev Agent Record.
+  - [ ] If this story changes any React route, UI primitive, rendered report/history/dashboard/settings/skills surface, browser interaction, keyboard behavior, or accessibility semantics, add or update Playwright coverage and run the relevant browser validation before review. Use `npm run test:ui-review` for review/report flows, `RUN_UI_A11Y=1 bash scripts/ci-local.sh` when the full local UI lane is needed. If no UI surface is touched, record "UI validation not applicable" in the Dev Agent Record.
 
 ## Dev Notes
 

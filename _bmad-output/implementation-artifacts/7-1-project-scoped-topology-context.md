@@ -35,12 +35,12 @@ So that affected services and dependencies are meaningful.
 - [x] [Review][Patch] Downstream topology edges are rendered as service dependencies [analysis/blast_radius.py:17]
 - [x] [Review][Patch] Legacy blast-radius payloads default to missing topology context [analysis/blast_radius.py:49]
 - [x] [Review][Patch] Singular owner accepts malformed non-string values without a partial-parse warning [services/topology_service.py:787]
-- [x] [Review][Patch] Freshness rendering can crash on non-numeric persisted age_days values [ui/components/blast_radius_graph.py:103]
+- [x] [Review][Patch] Freshness rendering can crash on non-numeric persisted age_days values [frontend/src/components/blast_radius_graph.py:103]
 - [x] [Review][Patch] Malformed entries inside `owners` lists are stringified and reported as real owners [services/topology_service.py:810]
 - [x] [Review][Patch] Legacy topology with missing source or freshness metadata can be classified as current [analysis/blast_radius.py:74]
 - [x] [Review][Patch] Whitespace-padded downstream service ids can drop transitive blast-radius services [analysis/blast_radius.py:225]
 - [x] [Review][Patch] Invalid topology `updated_at` can still serialize context state as current [analysis/blast_radius.py:83]
-- [x] [Review][Patch] Negative persisted freshness age renders impossible stale text [ui/components/blast_radius_graph.py:103]
+- [x] [Review][Patch] Negative persisted freshness age renders impossible stale text [frontend/src/components/blast_radius_graph.py:103]
 - [x] [Review][Patch] Partial persisted API context dictionaries can omit expected source/freshness keys [api/schemas.py:938]
 - [x] [Review][Patch] Malformed persisted blast-radius additive fields can break API/UI report loading [api/schemas.py:914]
 - [x] [Review][Patch] Partial or non-scalar topology source metadata is classified as current [analysis/blast_radius.py:67]
@@ -75,7 +75,7 @@ So that affected services and dependencies are meaningful.
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -151,8 +151,8 @@ GPT-5.4 Codex
 - `tests/test_api/test_analyses.py`
 - `tests/test_services/test_report_service.py`
 - `tests/test_services/test_topology_service.py`
-- `tests/test_ui/test_blast_radius_panel.py`
-- `ui/components/blast_radius_graph.py`
+- `frontend/e2e/test_blast_radius_panel.py`
+- `frontend/src/components/blast_radius_graph.py`
 
 ## Change Log
 

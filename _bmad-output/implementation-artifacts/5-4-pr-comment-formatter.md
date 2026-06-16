@@ -61,7 +61,7 @@ So that I can understand risk without opening the full UI.
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -109,7 +109,7 @@ GPT-5.4
 - Updated the action README behavior section to document the expanded PR comment content.
 - Resolved all five code-review patch findings: malformed payloads now degrade, Evidence Law fallback requires verified linked evidence, malformed pattern-match entries no longer hide later valid matches, rendered comment text/links are sanitized, and the `Uncertainty:` line no longer reuses advisory boilerplate.
 - Resolved the three follow-up code-review patch findings: non-dict API response sections now degrade before output/comment handling, rendered comment fields collapse control-line injection and escape common Markdown markers, and non-finite parser success rates are ignored instead of crashing scanner context rendering.
-- UI validation not applicable: this story changes GitHub PR comment text in the standalone Marketplace action, not a NiceGUI route, browser interaction, keyboard flow, or screen-reader surface.
+- UI validation not applicable: this story changes GitHub PR comment text in the standalone Marketplace action, not a retired Python UI route, browser interaction, keyboard flow, or screen-reader surface.
 - Validation passed:
   - `python3 -m unittest tests.test_action_runtime.BuildPrCommentTests.test_build_pr_comment_includes_full_advisory_context -q`
   - `python3 -m unittest discover -s tests -q` in `deploywhisper/analyze-action` (`33 tests OK`)
