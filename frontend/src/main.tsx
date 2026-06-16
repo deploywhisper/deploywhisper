@@ -29,6 +29,7 @@ import {
   demoProjects,
 } from "./components/ui";
 import { DashboardScreen } from "./screens/Dashboard";
+import { HistoryScreen } from "./screens/History";
 import { ReportScreen } from "./screens/Report";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<ComponentGallery />} path="/app/dev/components" />
+        <Route element={<HistoryScreen />} path="/app/history" />
         <Route element={<ReportScreen />} path="/app/reports/:id" />
         <Route element={<ReportScreen />} path="/reports/:id" />
         <Route element={<DashboardScreen />} path="/app" />

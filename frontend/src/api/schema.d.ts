@@ -50,7 +50,8 @@ export interface paths {
         put?: never;
         /** Create Analysis */
         post: operations["create_analysis_api_v1_analyses_post"];
-        delete?: never;
+        /** Delete Analyses */
+        delete: operations["delete_analyses_api_v1_analyses_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -460,6 +461,37 @@ export interface components {
              */
             uncertainty_flags?: string[];
         };
+        /** AnalysisBulkDeleteData */
+        AnalysisBulkDeleteData: {
+            /**
+             * Requested Count
+             * @description Number of requested report ids
+             */
+            requested_count: number;
+            /**
+             * Deleted Count
+             * @description Number of deleted reports
+             */
+            deleted_count: number;
+            /**
+             * Deleted Ids
+             * @description Report ids requested for deletion
+             */
+            deleted_ids?: number[];
+        };
+        /** AnalysisBulkDeleteRequest */
+        AnalysisBulkDeleteRequest: {
+            /**
+             * Ids
+             * @description Analysis report ids to delete.
+             */
+            ids: number[];
+        };
+        /** AnalysisBulkDeleteResponse */
+        AnalysisBulkDeleteResponse: {
+            data: components["schemas"]["AnalysisBulkDeleteData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
         /** AnalysisDetailData */
         AnalysisDetailData: {
             /** Id */
@@ -565,6 +597,8 @@ export interface components {
              */
             submission_manifest_fallback?: components["schemas"]["SubmissionManifestFallbackItemData"][];
             audit: components["schemas"]["AuditMetadataData"];
+            /** @description Compact rescan delta against the previous scan of matching artifacts. */
+            previous_scan_diff?: components["schemas"]["PreviousScanDiffData"] | null;
             /** @description Existing share-summary markdown and machine payload */
             share_summary: components["schemas"]["ShareSummaryData"];
             /** @description Public share configuration when available */
@@ -730,6 +764,8 @@ export interface components {
              */
             submission_manifest_fallback?: components["schemas"]["SubmissionManifestFallbackItemData"][];
             audit: components["schemas"]["AuditMetadataData"];
+            /** @description Compact rescan delta against the previous scan of matching artifacts. */
+            previous_scan_diff?: components["schemas"]["PreviousScanDiffData"] | null;
             /**
              * Score
              * @description Dashboard-friendly alias for risk_score.
@@ -2380,6 +2416,50 @@ export interface components {
              * @description Pull-request reference when the trigger metadata identifies one.
              */
             readonly pr_ref: string | null;
+        };
+        /** PreviousScanDiffData */
+        PreviousScanDiffData: {
+            /**
+             * Previous Report Id
+             * @description Prior scan report id
+             */
+            previous_report_id: number;
+            /**
+             * Previous Created At
+             * @description Prior scan timestamp
+             */
+            previous_created_at: string;
+            /**
+             * Score Delta
+             * @description Risk score delta from prior scan
+             */
+            score_delta: number;
+            /**
+             * Score Direction
+             * @description Risk score movement direction
+             * @enum {string}
+             */
+            score_direction: "up" | "down" | "flat";
+            /**
+             * Previous Severity
+             * @description Prior scan severity
+             */
+            previous_severity: string;
+            /**
+             * Current Severity
+             * @description Current scan severity
+             */
+            current_severity: string;
+            /**
+             * Previous Recommendation
+             * @description Prior recommendation
+             */
+            previous_recommendation: string;
+            /**
+             * Current Recommendation
+             * @description Current recommendation
+             */
+            current_recommendation: string;
         };
         /** ProjectCreateRequest */
         ProjectCreateRequest: {
@@ -4124,6 +4204,78 @@ export interface operations {
             };
             /** @description Request Entity Too Large */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_analyses_api_v1_analyses_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisBulkDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisBulkDeleteResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
