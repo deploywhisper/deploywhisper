@@ -35,6 +35,7 @@ from api.routes.health import router as health_router
 from api.routes.incidents import router as incidents_router
 from api.routes.projects import router as projects_router
 from api.routes.settings import router as context_router
+from api.routes.settings import settings_router
 from api.routes.skills import router as skills_router
 from api.routes.stats import router as stats_router
 from config import settings
@@ -139,6 +140,7 @@ fastapi_app.include_router(deployments_router)
 fastapi_app.include_router(github_app_router)
 fastapi_app.include_router(projects_router)
 fastapi_app.include_router(context_router)
+fastapi_app.include_router(settings_router)
 fastapi_app.include_router(skills_router)
 fastapi_app.include_router(stats_router)
 fastapi_app.include_router(incidents_router)
@@ -695,13 +697,16 @@ def _shared_report_html(
     )
 
 
-@fastapi_app.get("/reports/{report_id}", include_in_schema=False)
+@fastapi_app.get("/reports/{report_id}", include_in_schema=False, response_model=None)
 def shared_report_view(
     request: Request,
     report_id: int,
     compare: str | None = None,
-) -> HTMLResponse:
+) -> HTMLResponse | FileResponse:
     """Render one report via a read-only public sharing route."""
+    if FRONTEND_INDEX_PATH.is_file():
+        return FileResponse(FRONTEND_INDEX_PATH)
+
     report = fetch_analysis_report(report_id)
     if report is None:
         raise StarletteHTTPException(status_code=404, detail="Report not found")

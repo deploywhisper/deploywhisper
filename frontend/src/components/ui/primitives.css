@@ -319,11 +319,13 @@
   gap: 8px;
   min-height: 34px;
   padding: 7px 12px;
+  position: relative;
 }
 
 .dw-project-trigger-open {
   border-color: var(--dw-brand);
   box-shadow: 0 0 0 3px rgba(242,85,31,.12);
+  z-index: 51;
 }
 
 .dw-project-trigger-icon,

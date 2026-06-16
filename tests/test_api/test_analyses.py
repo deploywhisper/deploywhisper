@@ -228,6 +228,65 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertIsNone(payload["data"][0]["trigger_ref"])
         self.assertIsNone(payload["data"][0]["pr_ref"])
 
+    def test_delete_analyses_removes_requested_reports(self) -> None:
+        second = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="next-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk metadata-only update.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: second report.",
+                explanation="Second report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+
+        response = self.client.request(
+            "DELETE",
+            "/api/v1/analyses",
+            json={"ids": [self.persisted["id"], second["id"]]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["requested_count"], 2)
+        self.assertEqual(payload["data"]["deleted_count"], 2)
+        self.assertEqual(
+            payload["data"]["deleted_ids"], [self.persisted["id"], second["id"]]
+        )
+        remaining = self.client.get("/api/v1/analyses").json()
+        self.assertEqual(remaining["meta"]["total_count"], 0)
+
+    def test_delete_analyses_rejects_missing_report_without_partial_delete(self) -> None:
+        response = self.client.request(
+            "DELETE",
+            "/api/v1/analyses",
+            json={"ids": [self.persisted["id"], 9999]},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "analysis_not_found")
+        remaining = self.client.get("/api/v1/analyses").json()
+        self.assertEqual(remaining["meta"]["total_count"], 1)
+
     def test_list_analyses_rejects_reversed_activity_window(self) -> None:
         response = self.client.get(
             "/api/v1/analyses",
@@ -764,7 +823,7 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["error"]["code"], "project_not_found")
 
-    def test_get_analysis_defaults_to_unassigned_scope(self) -> None:
+    def test_get_analysis_allows_unscoped_id_lookup(self) -> None:
         project = project_service_module.create_project(
             project_key="payments",
             display_name="Payments",
@@ -803,8 +862,10 @@ class AnalysesApiTests(unittest.TestCase):
 
         response = self.client.get(f"/api/v1/analyses/{scoped['id']}")
 
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["error"]["code"], "analysis_not_found")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["data"]
+        self.assertEqual(payload["id"], scoped["id"])
+        self.assertEqual(payload["project"]["project_key"], "payments")
 
     def test_workspace_query_prevents_cross_workspace_report_lookup(self) -> None:
         project = project_service_module.create_project(
@@ -1299,9 +1360,35 @@ class AnalysesApiTests(unittest.TestCase):
             json={"password": "", "redact_filenames": False},
         )
         report_response = self.client.get(f"/reports/{self.persisted['id']}")
+        shared_response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}/shared"
+        )
+        invalid_unlock_response = self.client.post(
+            f"/api/v1/analyses/{self.persisted['id']}/shared/unlock",
+            json={"password": "wrong"},
+        )
+        unlock_response = self.client.post(
+            f"/api/v1/analyses/{self.persisted['id']}/shared/unlock",
+            json={"password": "s3cret-pass"},
+        )
+        share_cookie_name = f"dw_share_{self.persisted['id']}"
+        unlocked_response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}/shared",
+            cookies={share_cookie_name: unlock_response.cookies.get(share_cookie_name)},
+        )
 
         self.assertEqual(reset_response.status_code, 405)
-        self.assertIn("Password required", report_response.text)
+        self.assertIn('<div id="root"></div>', report_response.text)
+        self.assertEqual(shared_response.status_code, 401)
+        self.assertEqual(
+            shared_response.json()["error"]["code"],
+            "shared_report_password_required",
+        )
+        self.assertEqual(invalid_unlock_response.status_code, 401)
+        self.assertEqual(unlock_response.status_code, 200)
+        self.assertIn(share_cookie_name, unlock_response.cookies)
+        self.assertEqual(unlocked_response.status_code, 200)
+        self.assertTrue(unlocked_response.json()["data"]["share"]["redact_filenames"])
 
     def test_create_analysis_masks_foreign_workspace_for_scoped_actor(self) -> None:
         allowed = project_service_module.create_project(
@@ -1554,6 +1641,38 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(
             payload["data"]["findings"][0]["explanation"],
             "Security group exposure risk",
+        )
+        report_id = payload["data"]["persisted_report"]["id"]
+        finding_id = payload["data"]["findings"][0]["finding_id"]
+
+        detail = self.client.get(
+            f"/api/v1/analyses/{report_id}",
+            params={"project_key": "payments"},
+        )
+        self.assertEqual(detail.status_code, 200)
+        detail_payload = detail.json()
+        self.assertIn("share_summary", detail_payload["data"])
+        self.assertIn("markdown", detail_payload["data"]["share_summary"])
+        self.assertEqual(
+            detail_payload["data"]["feedback_state"]["finding_feedback"], {}
+        )
+
+        feedback_response = self.client.post(
+            f"/api/v1/analyses/{report_id}/findings/{finding_id}/feedback",
+            json={"outcome": "useful"},
+        )
+        self.assertEqual(feedback_response.status_code, 200)
+        self.assertEqual(feedback_response.json()["data"]["outcome_label"], "useful")
+
+        updated_detail = self.client.get(
+            f"/api/v1/analyses/{report_id}",
+            params={"project_key": "payments"},
+        )
+        self.assertEqual(updated_detail.status_code, 200)
+        feedback_state = updated_detail.json()["data"]["feedback_state"]
+        self.assertEqual(
+            feedback_state["finding_feedback"][finding_id]["outcome_label"],
+            "useful",
         )
         self.assertTrue(payload["data"]["findings"][0]["guidance"])
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})

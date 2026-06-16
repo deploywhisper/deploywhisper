@@ -85,6 +85,14 @@ Dashboard screens consume read-only `/api/v1` backend-for-ui endpoints for KPI
 summary cards, verdict distribution, project switching, and compact analysis
 rows. Backend support for the migration is additive only: no schema migrations,
 no destructive report contract changes, and no removal of existing API fields.
+Phase 3.1 implements the React dashboard at `/app` within the Part B0
+information budget: greeting and Evidence Law status, four KPI cards, five-row
+recent analyses table, Latest Briefing summary card, New Analysis upload card,
+and verdict-health donut only. The dashboard uses the Phase 2 primitives without
+restyling, binds all values to real API responses through TanStack Query, lets
+ProjectSwitcher drive the sidebar/greeting/upload scope, and navigates uploads
+or recent-row clicks to `/app/reports/{id}` instead of restoring the retired
+NiceGUI inline report/countdown flow.
 
 ### 1.4 Category
 

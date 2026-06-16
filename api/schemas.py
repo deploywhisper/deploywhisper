@@ -95,6 +95,67 @@ class ProviderCapabilityData(BaseModel):
     )
 
 
+class ProviderOptionData(BaseModel):
+    provider: str = Field(..., description="Provider identifier")
+    label: str = Field(..., description="Display label")
+    model: str = Field(..., description="Default model")
+    api_base: str = Field(..., description="Default API base URL")
+    local_mode: bool = Field(..., description="Default local-only mode")
+    requires_api_key: bool = Field(
+        ..., description="Whether this provider requires an API key"
+    )
+    capabilities: ProviderCapabilityData = Field(
+        ..., description="Provider capability metadata"
+    )
+
+
+class ProviderSettingsData(BaseModel):
+    provider: str = Field(..., description="Configured provider identifier")
+    model: str = Field(..., description="Configured model")
+    api_base: str = Field(..., description="Configured API base URL")
+    local_mode: bool = Field(..., description="Whether local-only mode is active")
+    request_timeout_seconds: float = Field(
+        ..., description="Provider request timeout in seconds"
+    )
+    source: str = Field(..., description="Where settings were resolved from")
+    api_key_present: bool = Field(
+        ..., description="Whether an API key is available from the runtime"
+    )
+    api_key_preview: str | None = Field(
+        default=None, description="Masked API key presence hint"
+    )
+    capabilities: ProviderCapabilityData = Field(
+        ..., description="Provider capability metadata"
+    )
+
+
+class ProviderSettingsRequest(BaseModel):
+    provider: str = Field(..., min_length=1, description="Provider identifier")
+    model: str = Field(..., min_length=1, description="Model identifier")
+    api_base: str = Field(..., min_length=1, description="Provider API base URL")
+    api_key: str | None = Field(
+        default=None, description="Optional API key used for immediate validation"
+    )
+    local_mode: bool = Field(
+        default=False, description="Whether to activate local-only mode"
+    )
+
+
+class ProviderValidationData(BaseModel):
+    valid: bool = Field(..., description="Whether settings validated")
+    message: str = Field(..., description="Validation message")
+
+
+class ProviderSettingsSaveData(BaseModel):
+    settings: ProviderSettingsData
+    validation: ProviderValidationData
+
+
+class ProviderSettingsResponse(BaseModel):
+    data: ProviderSettingsSaveData
+    meta: MetaPayload
+
+
 ToolType = Literal[
     "terraform", "kubernetes", "ansible", "jenkins", "cloudformation", "unsupported"
 ]
@@ -536,8 +597,46 @@ class PersistedReportData(BaseModel):
         return normalized
 
 
+class PreviousScanDiffData(BaseModel):
+    previous_report_id: int = Field(..., description="Prior scan report id")
+    previous_created_at: str = Field(..., description="Prior scan timestamp")
+    score_delta: int = Field(..., description="Risk score delta from prior scan")
+    score_direction: Literal["up", "down", "flat"] = Field(
+        ..., description="Risk score movement direction"
+    )
+    previous_severity: str = Field(..., description="Prior scan severity")
+    current_severity: str = Field(..., description="Current scan severity")
+    previous_recommendation: str = Field(..., description="Prior recommendation")
+    current_recommendation: str = Field(..., description="Current recommendation")
+
+
 class AnalysisReportData(PersistedReportData):
-    pass
+    previous_scan_diff: PreviousScanDiffData | None = Field(
+        default=None,
+        description="Compact rescan delta against the previous scan of matching artifacts.",
+    )
+
+
+class AnalysisBulkDeleteRequest(BaseModel):
+    ids: list[int] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Analysis report ids to delete.",
+    )
+
+
+class AnalysisBulkDeleteData(BaseModel):
+    requested_count: int = Field(..., description="Number of requested report ids")
+    deleted_count: int = Field(..., description="Number of deleted reports")
+    deleted_ids: list[int] = Field(
+        default_factory=list, description="Report ids requested for deletion"
+    )
+
+
+class AnalysisBulkDeleteResponse(BaseModel):
+    data: AnalysisBulkDeleteData
+    meta: MetaPayload
 
 
 class ProjectCreateRequest(BaseModel):
@@ -833,6 +932,126 @@ class TopologyContextData(BaseModel):
 
 class TopologyContextResponse(BaseModel):
     data: TopologyContextData
+    meta: MetaPayload
+
+
+class TopologyUploadRequest(BaseModel):
+    topology: dict[str, Any] = Field(..., description="Topology JSON payload")
+    project_id: int | None = Field(
+        default=None, description="Optional numeric project identifier"
+    )
+    project_key: str | None = Field(
+        default=None, description="Optional stable project key"
+    )
+    workspace_id: int | None = Field(
+        default=None, description="Optional numeric workspace identifier"
+    )
+    workspace_key: str | None = Field(
+        default=None, description="Optional stable workspace key"
+    )
+
+
+class TopologyValidationData(BaseModel):
+    topology: TopologyStatusData
+    success_message: str | None = Field(
+        default=None, description="Human-readable success message"
+    )
+    error_message: str | None = Field(
+        default=None, description="Human-readable validation error"
+    )
+
+
+class TopologyValidationResponse(BaseModel):
+    data: TopologyValidationData
+    meta: MetaPayload
+
+
+class TopologyDriftCadenceData(BaseModel):
+    interval_hours: int = Field(..., description="Active drift check cadence")
+    options: list[int] = Field(
+        default_factory=list, description="Supported cadence options in hours"
+    )
+
+
+class TopologyDriftCadenceRequest(BaseModel):
+    interval_hours: int = Field(..., description="Desired drift check cadence")
+
+
+class TopologyDriftCadenceResponse(BaseModel):
+    data: TopologyDriftCadenceData
+    meta: MetaPayload
+
+
+class FeedbackCurrentStateData(BaseModel):
+    useful_count: int = Field(default=0)
+    noisy_count: int = Field(default=0)
+    not_useful_count: int = Field(default=0)
+    false_positive_count: int = Field(default=0)
+    missed_finding_count: int = Field(default=0)
+
+
+class FeedbackTotalsData(BaseModel):
+    events_recorded: int = Field(default=0)
+
+
+class FeedbackRecentNoteData(BaseModel):
+    type: str = Field(..., description="Feedback note type")
+    text: str = Field(..., description="Reviewer note")
+    analysis_id: int | None = Field(default=None)
+    finding_id: str | None = Field(default=None)
+    created_at: str = Field(..., description="UTC timestamp")
+
+
+class FeedbackSummaryData(BaseModel):
+    project: ProjectData
+    current_state: FeedbackCurrentStateData
+    totals: FeedbackTotalsData
+    recent_notes: list[FeedbackRecentNoteData] = Field(default_factory=list)
+
+
+class CustomSkillStatusData(BaseModel):
+    name: str = Field(..., description="Stable skill name")
+    mode: Literal["override", "new"] = Field(
+        ..., description="Whether the skill overrides a built-in skill"
+    )
+    active: bool = Field(..., description="Whether the skill is active")
+    path: str = Field(..., description="Filesystem path")
+    warning: str | None = Field(default=None, description="Ignored-state warning")
+
+
+class CustomSkillUploadRequest(BaseModel):
+    filename: str = Field(..., min_length=1, description="Markdown skill filename")
+    content: str = Field(..., min_length=1, description="Markdown skill content")
+
+
+class CustomSkillUploadData(BaseModel):
+    statuses: list[CustomSkillStatusData] = Field(default_factory=list)
+    saved: CustomSkillStatusData | None = Field(default=None)
+    success_message: str | None = Field(default=None)
+    error_message: str | None = Field(default=None)
+
+
+class CustomSkillUploadResponse(BaseModel):
+    data: CustomSkillUploadData
+    meta: MetaPayload
+
+
+class CustomSkillListResponse(BaseModel):
+    data: list[CustomSkillStatusData]
+    meta: MetaPayload
+
+
+class SettingsSummaryData(BaseModel):
+    provider: ProviderSettingsData
+    provider_options: list[ProviderOptionData]
+    topology: TopologyStatusData
+    drift_cadence: TopologyDriftCadenceData
+    feedback: FeedbackSummaryData
+    custom_skills: list[CustomSkillStatusData] = Field(default_factory=list)
+
+
+class SettingsSummaryResponse(BaseModel):
+    data: SettingsSummaryData
     meta: MetaPayload
 
 
@@ -1551,13 +1770,86 @@ class AnalysisRunData(BaseModel):
     persisted_report: PersistedReportData
 
 
+class FeedbackEventData(BaseModel):
+    id: int = Field(..., description="Stable feedback event identifier")
+    project_id: int = Field(..., description="Owning project identifier")
+    workspace_id: int | None = Field(
+        default=None, description="Optional workspace identifier"
+    )
+    analysis_id: int = Field(..., description="Analysis report identifier")
+    finding_id: str | None = Field(
+        default=None, description="Finding identifier when feedback is finding-scoped"
+    )
+    reviewer_role: str | None = Field(default=None, description="Reviewer role label")
+    useful: bool | None = Field(
+        default=None, description="Whether the finding was useful"
+    )
+    correctness_rating: int | None = Field(
+        default=None, description="Legacy correctness rating"
+    )
+    false_positive_flag: bool = Field(
+        default=False, description="Whether the finding was marked false positive"
+    )
+    false_positive_reason: str | None = Field(
+        default=None, description="Optional false-positive reason"
+    )
+    false_negative_note: str | None = Field(
+        default=None, description="Optional missed-finding note"
+    )
+    outcome_label: str | None = Field(
+        default=None, description="Normalized feedback outcome label"
+    )
+    created_at: str = Field(..., description="Feedback creation timestamp")
+
+
+class FeedbackStateData(BaseModel):
+    finding_feedback: dict[str, FeedbackEventData] = Field(
+        default_factory=dict,
+        description="Latest persisted feedback event for each finding",
+    )
+    false_negative_by_finding: dict[str, FeedbackEventData] = Field(
+        default_factory=dict,
+        description="Latest missed-finding note keyed by finding id",
+    )
+    false_negative_notes: list[FeedbackEventData] = Field(
+        default_factory=list, description="Latest missed-finding feedback notes"
+    )
+
+
+class AnalysisShareConfigData(BaseModel):
+    share_url: str = Field(..., description="Public share URL for the report.")
+    password_protected: bool = Field(
+        ..., description="Whether the shared report currently requires a password."
+    )
+    redact_filenames: bool = Field(
+        ..., description="Whether file names are redacted in the shared view."
+    )
+
+
+class AnalysisDetailData(AnalysisReportData):
+    share_summary: ShareSummaryData = Field(
+        ..., description="Existing share-summary markdown and machine payload"
+    )
+    share: AnalysisShareConfigData | None = Field(
+        default=None, description="Public share configuration when available"
+    )
+    feedback_state: FeedbackStateData = Field(
+        default_factory=FeedbackStateData,
+        description="Latest reviewer feedback state for report findings",
+    )
+    comparison: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional previous-report comparison for shared report views",
+    )
+
+
 class AnalysisListResponse(BaseModel):
     data: list[AnalysisReportData]
     meta: CountMetaPayload
 
 
 class AnalysisDetailResponse(BaseModel):
-    data: AnalysisReportData
+    data: AnalysisDetailData
     meta: ResourceMetaPayload
 
 
@@ -1577,18 +1869,33 @@ class AnalysisShareConfigRequest(BaseModel):
     )
 
 
-class AnalysisShareConfigData(BaseModel):
-    share_url: str = Field(..., description="Public share URL for the report.")
-    password_protected: bool = Field(
-        ..., description="Whether the shared report currently requires a password."
-    )
-    redact_filenames: bool = Field(
-        ..., description="Whether file names are redacted in the shared view."
-    )
-
-
 class AnalysisShareConfigResponse(BaseModel):
     data: AnalysisShareConfigData
+    meta: ResourceMetaPayload
+
+
+class FindingFeedbackRequest(BaseModel):
+    outcome: Literal["useful", "noisy", "false_positive"] = Field(
+        ..., description="Reviewer feedback outcome for the finding"
+    )
+    false_positive_reason: str | None = Field(
+        default=None,
+        description="Optional reason when outcome is false_positive",
+    )
+    reviewer_role: str = Field(default="reviewer", description="Reviewer role label")
+
+
+class FindingFeedbackResponse(BaseModel):
+    data: FeedbackEventData
+    meta: ResourceMetaPayload
+
+
+class SharedReportUnlockRequest(BaseModel):
+    password: str = Field(..., description="Password for a protected shared report")
+
+
+class SharedReportAccessResponse(BaseModel):
+    data: AnalysisDetailData
     meta: ResourceMetaPayload
 
 
@@ -1684,6 +1991,9 @@ class SkillRegistryData(BaseModel):
     updated_at: str = Field(..., description="Last local update timestamp")
     available_versions: int = Field(
         ..., description="Number of versions discoverable for this skill id"
+    )
+    install_command: str = Field(
+        ..., description="CLI command for installing this skill"
     )
 
 
