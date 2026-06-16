@@ -25,7 +25,7 @@ export const colors = {
 
 export const severity = {
   CRITICAL: { fg: "#D92D20", bg: "#FEECEB", dot: "#F04438", label: "Critical" },
-  HIGH: { fg: "#E04F16", bg: "#FEF0E7", dot: "#F2551F", label: "High" },
+  HIGH: { fg: "#93370D", bg: "#FEF0E7", dot: "#F2551F", label: "High" },
   MEDIUM: { fg: "#B54708", bg: "#FEF4E4", dot: "#F5A60A", label: "Medium" },
   LOW: { fg: "#079455", bg: "#E9F8F0", dot: "#17B26A", label: "Low" },
 } as const;

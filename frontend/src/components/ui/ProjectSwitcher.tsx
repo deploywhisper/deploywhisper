@@ -23,6 +23,7 @@ export function ProjectSwitcher({
   initialOpen = false,
   initialQuery = "",
   suppressBackdrop = false,
+  openSignal,
 }: {
   projects?: ProjectOption[];
   selectedProject?: ProjectOption;
@@ -31,6 +32,7 @@ export function ProjectSwitcher({
   initialOpen?: boolean;
   initialQuery?: string;
   suppressBackdrop?: boolean;
+  openSignal?: number;
 }) {
   const [open, setOpen] = useState(initialOpen);
   const [query, setQuery] = useState(initialQuery);
@@ -62,6 +64,13 @@ export function ProjectSwitcher({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
+
+  useEffect(() => {
+    if (openSignal === undefined || openSignal <= 0) {
+      return;
+    }
+    setOpen(true);
+  }, [openSignal]);
 
   const selectProject = (project: ProjectOption) => {
     onChange?.(project);
