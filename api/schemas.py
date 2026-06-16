@@ -1551,13 +1551,86 @@ class AnalysisRunData(BaseModel):
     persisted_report: PersistedReportData
 
 
+class FeedbackEventData(BaseModel):
+    id: int = Field(..., description="Stable feedback event identifier")
+    project_id: int = Field(..., description="Owning project identifier")
+    workspace_id: int | None = Field(
+        default=None, description="Optional workspace identifier"
+    )
+    analysis_id: int = Field(..., description="Analysis report identifier")
+    finding_id: str | None = Field(
+        default=None, description="Finding identifier when feedback is finding-scoped"
+    )
+    reviewer_role: str | None = Field(default=None, description="Reviewer role label")
+    useful: bool | None = Field(
+        default=None, description="Whether the finding was useful"
+    )
+    correctness_rating: int | None = Field(
+        default=None, description="Legacy correctness rating"
+    )
+    false_positive_flag: bool = Field(
+        default=False, description="Whether the finding was marked false positive"
+    )
+    false_positive_reason: str | None = Field(
+        default=None, description="Optional false-positive reason"
+    )
+    false_negative_note: str | None = Field(
+        default=None, description="Optional missed-finding note"
+    )
+    outcome_label: str | None = Field(
+        default=None, description="Normalized feedback outcome label"
+    )
+    created_at: str = Field(..., description="Feedback creation timestamp")
+
+
+class FeedbackStateData(BaseModel):
+    finding_feedback: dict[str, FeedbackEventData] = Field(
+        default_factory=dict,
+        description="Latest persisted feedback event for each finding",
+    )
+    false_negative_by_finding: dict[str, FeedbackEventData] = Field(
+        default_factory=dict,
+        description="Latest missed-finding note keyed by finding id",
+    )
+    false_negative_notes: list[FeedbackEventData] = Field(
+        default_factory=list, description="Latest missed-finding feedback notes"
+    )
+
+
+class AnalysisShareConfigData(BaseModel):
+    share_url: str = Field(..., description="Public share URL for the report.")
+    password_protected: bool = Field(
+        ..., description="Whether the shared report currently requires a password."
+    )
+    redact_filenames: bool = Field(
+        ..., description="Whether file names are redacted in the shared view."
+    )
+
+
+class AnalysisDetailData(AnalysisReportData):
+    share_summary: ShareSummaryData = Field(
+        ..., description="Existing share-summary markdown and machine payload"
+    )
+    share: AnalysisShareConfigData | None = Field(
+        default=None, description="Public share configuration when available"
+    )
+    feedback_state: FeedbackStateData = Field(
+        default_factory=FeedbackStateData,
+        description="Latest reviewer feedback state for report findings",
+    )
+    comparison: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional previous-report comparison for shared report views",
+    )
+
+
 class AnalysisListResponse(BaseModel):
     data: list[AnalysisReportData]
     meta: CountMetaPayload
 
 
 class AnalysisDetailResponse(BaseModel):
-    data: AnalysisReportData
+    data: AnalysisDetailData
     meta: ResourceMetaPayload
 
 
@@ -1577,18 +1650,33 @@ class AnalysisShareConfigRequest(BaseModel):
     )
 
 
-class AnalysisShareConfigData(BaseModel):
-    share_url: str = Field(..., description="Public share URL for the report.")
-    password_protected: bool = Field(
-        ..., description="Whether the shared report currently requires a password."
-    )
-    redact_filenames: bool = Field(
-        ..., description="Whether file names are redacted in the shared view."
-    )
-
-
 class AnalysisShareConfigResponse(BaseModel):
     data: AnalysisShareConfigData
+    meta: ResourceMetaPayload
+
+
+class FindingFeedbackRequest(BaseModel):
+    outcome: Literal["useful", "noisy", "false_positive"] = Field(
+        ..., description="Reviewer feedback outcome for the finding"
+    )
+    false_positive_reason: str | None = Field(
+        default=None,
+        description="Optional reason when outcome is false_positive",
+    )
+    reviewer_role: str = Field(default="reviewer", description="Reviewer role label")
+
+
+class FindingFeedbackResponse(BaseModel):
+    data: FeedbackEventData
+    meta: ResourceMetaPayload
+
+
+class SharedReportUnlockRequest(BaseModel):
+    password: str = Field(..., description="Password for a protected shared report")
+
+
+class SharedReportAccessResponse(BaseModel):
+    data: AnalysisDetailData
     meta: ResourceMetaPayload
 
 

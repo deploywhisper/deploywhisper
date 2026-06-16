@@ -695,13 +695,16 @@ def _shared_report_html(
     )
 
 
-@fastapi_app.get("/reports/{report_id}", include_in_schema=False)
+@fastapi_app.get("/reports/{report_id}", include_in_schema=False, response_model=None)
 def shared_report_view(
     request: Request,
     report_id: int,
     compare: str | None = None,
-) -> HTMLResponse:
+) -> HTMLResponse | FileResponse:
     """Render one report via a read-only public sharing route."""
+    if FRONTEND_INDEX_PATH.is_file():
+        return FileResponse(FRONTEND_INDEX_PATH)
+
     report = fetch_analysis_report(report_id)
     if report is None:
         raise StarletteHTTPException(status_code=404, detail="Report not found")

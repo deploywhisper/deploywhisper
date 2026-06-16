@@ -4,10 +4,21 @@ from __future__ import annotations
 
 import hmac
 import os
+import hashlib
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from pydantic import ValidationError
 
 from api.errors import ApiError, ApiRoute
@@ -21,6 +32,10 @@ from api.schemas import (
     AnalysisShareConfigRequest,
     AnalysisShareConfigResponse,
     ErrorResponse,
+    FindingFeedbackRequest,
+    FindingFeedbackResponse,
+    SharedReportAccessResponse,
+    SharedReportUnlockRequest,
     build_analysis_run_data,
     build_report_meta,
 )
@@ -45,7 +60,14 @@ from services.report_service import build_report_advisory_payload
 from services.report_service import configure_report_share
 from services.report_service import fetch_analysis_report
 from services.report_service import fetch_filtered_analysis_history_page
+from services.report_service import fetch_shared_analysis_report
+from services.report_service import fetch_shared_report_comparison
 from services.report_service import normalize_report_schema_version
+from services.feedback_service import (
+    FeedbackError,
+    fetch_report_feedback_state,
+    record_finding_feedback,
+)
 from services.project_service import (
     ensure_default_project,
     has_restricted_project_scope,
@@ -57,6 +79,43 @@ router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=Api
 READ_CHUNK_BYTES = 1024 * 1024
 _HISTORY_ANALYSIS_STATUSES = {"complete", "degraded", "fallback"}
 AnalysisOutcomeFilter = Literal["success", "failure", "rolled_back", "rollback"]
+
+
+def _share_cookie_name(report_id: int) -> str:
+    return f"dw_share_{report_id}"
+
+
+def _share_cookie_value(report: dict) -> str:
+    return hashlib.sha256(
+        (
+            f"{report['id']}|{report.get('share_password_hash') or ''}|"
+            f"{report.get('share_password_salt') or ''}"
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _has_valid_share_cookie(report: dict, request: Request) -> bool:
+    if not report.get("share_password_hash"):
+        return True
+    cookie_value = request.cookies.get(_share_cookie_name(int(report["id"])))
+    expected = _share_cookie_value(report)
+    return bool(cookie_value) and hmac.compare_digest(cookie_value, expected)
+
+
+def _share_cookie_secure(report: dict) -> bool:
+    share_url = str((report.get("share") or {}).get("share_url") or "")
+    return share_url.startswith("https://")
+
+
+def _detail_payload(report: dict, *, comparison: dict | None = None) -> dict:
+    share_summary = build_share_summary(report)
+    return {
+        **report,
+        "share_summary": share_summary.model_dump(),
+        "share": report.get("share"),
+        "feedback_state": fetch_report_feedback_state(int(report["id"])),
+        "comparison": comparison,
+    }
 
 
 def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
@@ -771,26 +830,39 @@ def get_analysis(
             project_key=project_key,
             workspace_id=workspace_id,
         )
-        if (
+        unscoped_report_lookup = (
             project_id is None
             and project_key is None
             and workspace_id is None
             and workspace_key is None
-        ):
-            project_id = ensure_default_project().id
-        _require_api_project_permission(
-            authorization=authorization,
-            capability="report.read",
-            project_id=project_id,
-            project_key=project_key,
         )
-        report = fetch_analysis_report(
-            report_id,
-            project_id=project_id,
-            project_key=project_key,
-            workspace_id=workspace_id,
-            workspace_key=workspace_key,
-        )
+        if unscoped_report_lookup:
+            report = fetch_analysis_report(report_id)
+            if report is None:
+                raise ApiError(
+                    status_code=404,
+                    code="analysis_not_found",
+                    message="Analysis report not found.",
+                )
+            _require_api_project_permission(
+                authorization=authorization,
+                capability="report.read",
+                project_id=(report.get("project") or {}).get("id"),
+            )
+        else:
+            _require_api_project_permission(
+                authorization=authorization,
+                capability="report.read",
+                project_id=project_id,
+                project_key=project_key,
+            )
+            report = fetch_analysis_report(
+                report_id,
+                project_id=project_id,
+                project_key=project_key,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
+            )
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
@@ -811,7 +883,177 @@ def get_analysis(
             message="Analysis report not found.",
         )
     return AnalysisDetailResponse(
-        data=AnalysisReportData(**report),
+        data=_detail_payload(report),
+        meta=build_report_meta(
+            id=report_id,
+            report_schema_version=normalize_report_schema_version(
+                report.get("report_schema_version")
+            ),
+        ),
+    )
+
+
+@router.get(
+    "/{report_id}/shared",
+    response_model=SharedReportAccessResponse,
+    responses={
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def get_shared_analysis(
+    report_id: int,
+    request: Request,
+    compare: str | None = Query(default=None),
+) -> SharedReportAccessResponse:
+    report = fetch_analysis_report(report_id)
+    if report is None:
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    password_required = bool(report.get("share_password_hash"))
+    if password_required and not _has_valid_share_cookie(report, request):
+        raise ApiError(
+            status_code=401,
+            code="shared_report_password_required",
+            message="This shared report requires a password.",
+            details={"password_required": True},
+        )
+    shared_report = fetch_shared_analysis_report(
+        report_id,
+        bypass_password=password_required,
+    )
+    if shared_report is None:
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    comparison = (
+        fetch_shared_report_comparison(
+            report_id,
+            bypass_password=password_required,
+            previous_bypass_password=True,
+        )
+        if compare == "previous"
+        else None
+    )
+    return SharedReportAccessResponse(
+        data=_detail_payload(shared_report, comparison=comparison),
+        meta=build_report_meta(
+            id=report_id,
+            report_schema_version=normalize_report_schema_version(
+                shared_report.get("report_schema_version")
+            ),
+        ),
+    )
+
+
+@router.post(
+    "/{report_id}/shared/unlock",
+    response_model=SharedReportAccessResponse,
+    responses={
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def unlock_shared_analysis(
+    report_id: int,
+    payload: SharedReportUnlockRequest,
+    response: Response,
+) -> SharedReportAccessResponse:
+    shared_report = fetch_shared_analysis_report(report_id, password=payload.password)
+    if shared_report is None:
+        raise ApiError(
+            status_code=401,
+            code="shared_report_password_invalid",
+            message="Incorrect password. Try again.",
+        )
+    raw_report = fetch_analysis_report(report_id)
+    if raw_report is None:
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    response.set_cookie(
+        _share_cookie_name(report_id),
+        _share_cookie_value(raw_report),
+        httponly=True,
+        path="/",
+        secure=_share_cookie_secure(shared_report),
+        samesite="lax",
+    )
+    return SharedReportAccessResponse(
+        data=_detail_payload(shared_report),
+        meta=build_report_meta(
+            id=report_id,
+            report_schema_version=normalize_report_schema_version(
+                shared_report.get("report_schema_version")
+            ),
+        ),
+    )
+
+
+@router.post(
+    "/{report_id}/findings/{finding_id}/feedback",
+    response_model=FindingFeedbackResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def create_finding_feedback(
+    report_id: int,
+    finding_id: str,
+    payload: FindingFeedbackRequest,
+    authorization: dict[str, object] = Depends(_authorization_context),
+) -> FindingFeedbackResponse:
+    report = fetch_analysis_report(report_id)
+    if report is None:
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    try:
+        project = report.get("project") or {}
+        require_project_permission(
+            role=authorization["role"],
+            capability="feedback.create",
+            project_key=project.get("project_key"),
+            allowed_project_keys=authorization["allowed_project_keys"],
+        )
+        event = record_finding_feedback(
+            analysis_id=report_id,
+            finding_id=finding_id,
+            useful=payload.outcome == "useful",
+            false_positive_flag=payload.outcome == "false_positive",
+            false_positive_reason=payload.false_positive_reason,
+            reviewer_role=payload.reviewer_role,
+        )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
+    except FeedbackError as exc:
+        status_code = (
+            404 if exc.code in {"analysis_not_found", "finding_not_found"} else 400
+        )
+        raise ApiError(
+            status_code=status_code,
+            code=exc.code,
+            message=exc.message,
+        ) from exc
+    return FindingFeedbackResponse(
+        data=event,
         meta=build_report_meta(
             id=report_id,
             report_schema_version=normalize_report_schema_version(
