@@ -87,6 +87,7 @@ class SkillsApiTests(unittest.TestCase):
                     "tag": "iac",
                     "author": "DeployWhisper",
                     "search": "registry",
+                    "sort": "recency",
                     "page": 1,
                     "page_size": 25,
                 },
@@ -97,9 +98,14 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["count"], 1)
         self.assertEqual(payload["meta"]["total_count"], 1)
         self.assertEqual(payload["meta"]["filters"]["tool"], "terraform")
+        self.assertEqual(payload["meta"]["filters"]["sort"], "recency")
         self.assertEqual(payload["data"][0]["id"], "terraform")
         self.assertEqual(payload["data"][0]["name"], "Terraform")
         self.assertEqual(payload["data"][0]["tool"], "terraform")
+        self.assertEqual(
+            payload["data"][0]["install_command"],
+            "deploywhisper skill install terraform",
+        )
         self.assertEqual(
             payload["data"][0]["test_suite_path"], "tests/skill-tests/terraform"
         )
@@ -159,6 +165,10 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(detail_payload["data"]["source"], "built-in")
         self.assertEqual(detail_payload["data"]["name"], "Terraform")
         self.assertEqual(detail_payload["data"]["available_versions"], 1)
+        self.assertEqual(
+            detail_payload["data"]["install_command"],
+            "deploywhisper skill install terraform",
+        )
         self.assertIn("install_count", detail_payload["data"])
         self.assertIn("active_issue_count", detail_payload["data"])
         self.assertIn("analytics_updated_at", detail_payload["data"])

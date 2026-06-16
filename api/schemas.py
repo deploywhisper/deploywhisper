@@ -1992,6 +1992,9 @@ class SkillRegistryData(BaseModel):
     available_versions: int = Field(
         ..., description="Number of versions discoverable for this skill id"
     )
+    install_command: str = Field(
+        ..., description="CLI command for installing this skill"
+    )
 
 
 class SkillRegistryVersionData(SkillRegistryData):
