@@ -164,7 +164,7 @@ jobs:
       - name: Static security analysis with Bandit
         run: |
           bandit \
-            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ evidence/ \
+            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ \
             -f json \
             -o bandit-report.json \
             --severity-level medium \
@@ -173,7 +173,7 @@ jobs:
             2>&1 | tee bandit.log || true
           # Review report — fail on high severity
           bandit \
-            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ evidence/ \
+            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ \
             --severity-level high \
             --confidence-level high \
             -x tests/
@@ -315,8 +315,8 @@ jobs:
             targets: tests/test_analysis tests/test_parsers
           - shard: services
             targets: tests/test_services
-          - shard: ui-llm
-            targets: tests/test_ui tests/test_llm
+          - shard: llm
+            targets: tests/test_llm
     steps:
       - name: Checkout code
         uses: actions/checkout@v5

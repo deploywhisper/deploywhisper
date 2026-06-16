@@ -36,7 +36,7 @@ async function ensureProject(request: APIRequestContext): Promise<Project> {
 }
 
 async function selectProject(page: Page) {
-  await page.goto("/app", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /Run analysis/i }).waitFor({ state: "visible" });
   await page.locator(".dw-project-trigger").click();
   await expect(page.getByRole("listbox", { name: "Projects" })).toBeVisible();
@@ -82,7 +82,7 @@ test.describe("React dashboard", () => {
     await page.locator('input[type="file"]').setInputFiles(uploadArtifact);
     await expect(page.getByText("1 files staged")).toBeVisible();
     await page.getByRole("button", { name: /^Analyze$/ }).click();
-    await expect(page).toHaveURL(/\/app\/reports\/\d+$/, { timeout: 120_000 });
+    await expect(page).toHaveURL(/\/reports\/\d+\?private=1$/, { timeout: 120_000 });
     await expect(page.getByRole("tab", { name: /Overview/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Copy briefing/i })).toBeVisible();
   });

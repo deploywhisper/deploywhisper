@@ -36,7 +36,7 @@ fi
 "$PYTHON_BIN" -m pip check
 if [ -n "$BANDIT_BIN" ]; then
   "$BANDIT_BIN" \
-    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ evidence/ \
+    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ \
     -f json \
     -o bandit-report.json \
     --severity-level medium \
@@ -44,7 +44,7 @@ if [ -n "$BANDIT_BIN" ]; then
     -x tests/ \
     2>&1 | tee bandit.log || true
   "$BANDIT_BIN" \
-    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ evidence/ \
+    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ \
     --severity-level high \
     --confidence-level high \
     -x tests/
@@ -58,7 +58,6 @@ fi
   models \
   parsers \
   services \
-  ui \
   app.py \
   api_server.py \
   cli.py \
@@ -72,14 +71,9 @@ if [ "${RUN_UI_A11Y:-0}" = "1" ]; then
     echo "npm is required for RUN_UI_A11Y=1 but was not found." >&2
     exit 1
   fi
-  if [ ! -d node_modules ]; then
-    echo "node_modules is missing; run 'npm install' before RUN_UI_A11Y=1." >&2
+  if [ ! -d frontend/node_modules ]; then
+    echo "frontend/node_modules is missing; run 'npm install --prefix frontend' before RUN_UI_A11Y=1." >&2
     exit 1
   fi
   npm run test:ui-review
-  if [ "$(uname -s)" = "Darwin" ]; then
-    npm run test:ui-review:voiceover
-  else
-    echo "Skipping VoiceOver lane because this host is not macOS." >&2
-  fi
 fi

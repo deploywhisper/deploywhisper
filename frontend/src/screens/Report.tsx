@@ -272,7 +272,7 @@ function ReportHeader({
   const findingsTab = tabs.map((tab) => (tab.id === "findings" ? { ...tab, count: findings.length } : tab));
   const compareHref = publicView
     ? `/reports/${report.id}?compare=previous#report-comparison`
-    : `/app/reports/${report.id}?compare=previous#report-comparison`;
+    : `/reports/${report.id}?private=1&compare=previous#report-comparison`;
 
   return (
     <header className="dw-report-header">
@@ -281,7 +281,7 @@ function ReportHeader({
           <button
             aria-label={publicView ? "Back to shared report" : "Back to dashboard"}
             className="dw-report-back"
-            onClick={() => (publicView ? navigate(`/reports/${report.id}`) : navigate("/app"))}
+            onClick={() => (publicView ? navigate(`/reports/${report.id}`) : navigate("/"))}
             type="button"
           >
             <ArrowLeft size={16} />
@@ -707,7 +707,7 @@ export function ReportScreen() {
   const params = useParams();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const publicView = location.pathname.startsWith("/reports/");
+  const publicView = location.pathname.startsWith("/reports/") && searchParams.get("private") !== "1";
   const reportId = Number(params.id);
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
   const [toast, setToast] = useState<string | null>(null);

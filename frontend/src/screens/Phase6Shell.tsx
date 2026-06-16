@@ -39,11 +39,11 @@ export function useSelectedProject() {
 
 function Sidebar({ active, selectedProject }: { active: string; selectedProject?: ProjectOption }) {
   const nav = [
-    { label: "Dashboard", icon: LayoutGrid, href: "/app", key: "dashboard" },
-    { label: "Skills", icon: Zap, href: "/app/skills", key: "skills" },
-    { label: "Incidents", icon: AlertTriangle, href: "/app/incidents", key: "incidents" },
-    { label: "History", icon: History, href: "/app/history", key: "history" },
-    { label: "Settings", icon: Settings, href: "/app/settings", key: "settings" },
+    { label: "Dashboard", icon: LayoutGrid, href: "/", key: "dashboard" },
+    { label: "Skills", icon: Zap, href: "/skills", key: "skills" },
+    { label: "Incidents", icon: AlertTriangle, href: "/incidents", key: "incidents" },
+    { label: "History", icon: History, href: "/history", key: "history" },
+    { label: "Settings", icon: Settings, href: "/settings", key: "settings" },
   ];
 
   return (

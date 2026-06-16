@@ -202,15 +202,15 @@ const report = {
   pr_ref: "PR #42",
 } satisfies ReportDetail;
 
-function renderReport(path = "/app/reports/77") {
+function renderReport(path = "/reports/77?private=1") {
   const client = new QueryClient();
-  client.setQueryData(["report", 77, path.startsWith("/reports/"), false], report);
+  const publicView = path.startsWith("/reports/") && !path.includes("private=1");
+  client.setQueryData(["report", 77, publicView, false], report);
 
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
-          <Route element={<ReportScreen />} path="/app/reports/:id" />
           <Route element={<ReportScreen />} path="/reports/:id" />
         </Routes>
       </MemoryRouter>

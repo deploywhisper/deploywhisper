@@ -22,6 +22,7 @@ MAJOR_REPOSITORY_AREAS = {
     "data": "/data/",
     "docs": "/docs/",
     "evidence": "/evidence/",
+    "frontend": "/frontend/",
     "integrations": "/integrations/",
     "llm": "/llm/",
     "migrations": "/migrations/",
@@ -33,7 +34,6 @@ MAJOR_REPOSITORY_AREAS = {
     "services": "/services/",
     "skills": "/skills/",
     "tests": "/tests/",
-    "ui": "/ui/",
 }
 
 REQUIRED_MAINTAINERS_SECTIONS = (

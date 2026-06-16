@@ -57,7 +57,6 @@ COPY --chown=appuser:appuser models ./models
 COPY --chown=appuser:appuser parsers ./parsers
 COPY --chown=appuser:appuser services ./services
 COPY --chown=appuser:appuser skills ./skills
-COPY --chown=appuser:appuser ui ./ui
 
 USER appuser
 

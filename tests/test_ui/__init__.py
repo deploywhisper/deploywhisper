@@ -1,1 +1,0 @@
-"""UI smoke tests."""

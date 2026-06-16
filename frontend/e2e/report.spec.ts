@@ -87,7 +87,7 @@ async function openReport(page: Page, reportId: number) {
       },
     });
   });
-  await page.goto(`/app/reports/${reportId}`, { waitUntil: "networkidle" });
+  await page.goto(`/reports/${reportId}?private=1`, { waitUntil: "networkidle" });
   await expect(page.getByRole("heading").first()).toBeVisible();
 }
 

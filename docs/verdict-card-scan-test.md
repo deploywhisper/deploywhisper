@@ -47,7 +47,7 @@ Pass criteria for Story `2.1`:
 
 ## Supporting Evidence
 
-- UI regression coverage in `tests/test_ui/test_app_shell.py`
-- hero-level verdict rendering through `ui/routes/dashboard.py`
-- persisted detail rendering through `ui/components/upload_panel.py`
-- shared verdict rendering in `ui/components/verdict_card.py`
+- React UI regression coverage in `frontend/src/screens/Dashboard.test.tsx`
+- dashboard verdict rendering through `frontend/src/screens/Dashboard.tsx`
+- report verdict rendering through `frontend/src/screens/Report.tsx`
+- shared verdict rendering through the public React `/reports/{id}` route
