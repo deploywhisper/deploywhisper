@@ -73,6 +73,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analyses/{report_id}/shared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Shared Analysis */
+        get: operations["get_shared_analysis_api_v1_analyses__report_id__shared_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analyses/{report_id}/shared/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlock Shared Analysis */
+        post: operations["unlock_shared_analysis_api_v1_analyses__report_id__shared_unlock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analyses/{report_id}/findings/{finding_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Finding Feedback */
+        post: operations["create_finding_feedback_api_v1_analyses__report_id__findings__finding_id__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analyses/{report_id}/share": {
         parameters: {
             query?: never;
@@ -409,9 +460,163 @@ export interface components {
              */
             uncertainty_flags?: string[];
         };
+        /** AnalysisDetailData */
+        AnalysisDetailData: {
+            /** Id */
+            id: number;
+            /** @description Owning project/workspace */
+            project: components["schemas"]["ProjectData"];
+            /** @description Optional project-local workspace/environment scope */
+            workspace?: components["schemas"]["WorkspaceData"] | null;
+            /** Risk Score */
+            risk_score: number;
+            /** Severity */
+            severity: string;
+            /** Recommendation */
+            recommendation: string;
+            /**
+             * Confidence
+             * @description Overall verdict confidence
+             */
+            confidence: number;
+            /** Top Risk */
+            top_risk: string;
+            /**
+             * Report Schema Version
+             * @description Persisted report schema version
+             */
+            report_schema_version: string;
+            /**
+             * Tool Mix
+             * @description Supported toolchains represented in this persisted report
+             */
+            tool_mix?: string[];
+            /**
+             * Analysis Status
+             * @description High-level persisted analysis completion/degradation status
+             * @default complete
+             * @enum {string}
+             */
+            analysis_status: "complete" | "degraded" | "fallback";
+            /** Top Risk Contributors */
+            top_risk_contributors?: string[];
+            context_completeness?: components["schemas"]["ContextCompletenessData"];
+            blast_radius?: components["schemas"]["BlastRadiusData"];
+            rollback_plan?: components["schemas"]["RollbackPlanData"];
+            /** Parse Summary */
+            parse_summary: string;
+            /** Narrative Opening */
+            narrative_opening: string;
+            /**
+             * Narrative Available
+             * @description Whether narrative text is available
+             * @default true
+             */
+            narrative_available: boolean;
+            /**
+             * Narrative Degraded
+             * @description Whether narrative output used fallback mode or is inferred unavailable
+             */
+            narrative_degraded: boolean;
+            /**
+             * Narrative Failure Notice
+             * @description Visible explanation when narrative generation was unavailable
+             */
+            narrative_failure_notice?: string | null;
+            /** Assessment Source */
+            assessment_source?: ("heuristic-only" | "heuristic+llm") | null;
+            /** Narrative Source */
+            narrative_source?: ("llm" | "fallback") | null;
+            /** Narrative Provider */
+            narrative_provider?: string | null;
+            /** Narrative Model */
+            narrative_model?: string | null;
+            /** Narrative Local Mode */
+            narrative_local_mode?: boolean | null;
+            /** @description Stable advisory recommendation contract for automation */
+            advisory: components["schemas"]["AdvisorySummaryData"];
+            /** Skills Applied */
+            skills_applied?: string[];
+            /** Created At */
+            created_at: string;
+            /** Warnings */
+            warnings?: string[];
+            /** Findings */
+            findings?: components["schemas"]["FindingData"][];
+            /** Evidence Items */
+            evidence_items?: components["schemas"]["EvidenceItemData"][];
+            /** Incident Matches */
+            incident_matches?: components["schemas"]["IncidentMatchData"][];
+            /** Contributors */
+            contributors?: components["schemas"]["RiskContributorData"][];
+            /** @description Shared confidence ledger and why-not boundary explanations */
+            confidence_ledger?: components["schemas"]["ConfidenceLedgerData"];
+            /** Dashboard Display Duration Seconds */
+            dashboard_display_duration_seconds?: number | null;
+            /** Dashboard Remaining Seconds */
+            dashboard_remaining_seconds?: number | null;
+            /** Analysis Duration Seconds */
+            analysis_duration_seconds?: number | null;
+            /** @description Submission manifest metadata, or null when persisted manifest data is unavailable */
+            submission_manifest?: components["schemas"]["SubmissionManifestData"] | null;
+            /**
+             * Submission Manifest Fallback
+             * @description Durable artifact identity/status fallback retained outside manifest JSON
+             */
+            submission_manifest_fallback?: components["schemas"]["SubmissionManifestFallbackItemData"][];
+            audit: components["schemas"]["AuditMetadataData"];
+            /** @description Existing share-summary markdown and machine payload */
+            share_summary: components["schemas"]["ShareSummaryData"];
+            /** @description Public share configuration when available */
+            share?: components["schemas"]["AnalysisShareConfigData"] | null;
+            /** @description Latest reviewer feedback state for report findings */
+            feedback_state?: components["schemas"]["FeedbackStateData"];
+            /**
+             * Comparison
+             * @description Optional previous-report comparison for shared report views
+             */
+            comparison?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Score
+             * @description Dashboard-friendly alias for risk_score.
+             */
+            readonly score: number;
+            /**
+             * Verdict
+             * @description Dashboard-friendly alias for recommendation.
+             */
+            readonly verdict: string;
+            /**
+             * Filenames
+             * @description Dashboard-friendly alias for analyzed artifact names.
+             */
+            readonly filenames: string[];
+            /**
+             * Workspace Label
+             * @description Human-friendly workspace label for compact dashboard rows.
+             */
+            readonly workspace_label: string;
+            /**
+             * Env Label
+             * @description Environment label for compact dashboard rows.
+             */
+            readonly env_label: string;
+            /**
+             * Trigger Ref
+             * @description Dashboard-friendly alias for audit trigger identifiers.
+             */
+            readonly trigger_ref: string | null;
+            /**
+             * Pr Ref
+             * @description Pull-request reference when the trigger metadata identifies one.
+             */
+            readonly pr_ref: string | null;
+        };
         /** AnalysisDetailResponse */
         AnalysisDetailResponse: {
-            data: components["schemas"]["AnalysisReportData"];
+            data: components["schemas"]["AnalysisDetailData"];
             meta: components["schemas"]["ResourceMetaPayload"];
         };
         /** AnalysisListResponse */
@@ -1357,6 +1562,97 @@ export interface components {
              */
             related_change_ids?: string[];
         };
+        /** FeedbackEventData */
+        FeedbackEventData: {
+            /**
+             * Id
+             * @description Stable feedback event identifier
+             */
+            id: number;
+            /**
+             * Project Id
+             * @description Owning project identifier
+             */
+            project_id: number;
+            /**
+             * Workspace Id
+             * @description Optional workspace identifier
+             */
+            workspace_id?: number | null;
+            /**
+             * Analysis Id
+             * @description Analysis report identifier
+             */
+            analysis_id: number;
+            /**
+             * Finding Id
+             * @description Finding identifier when feedback is finding-scoped
+             */
+            finding_id?: string | null;
+            /**
+             * Reviewer Role
+             * @description Reviewer role label
+             */
+            reviewer_role?: string | null;
+            /**
+             * Useful
+             * @description Whether the finding was useful
+             */
+            useful?: boolean | null;
+            /**
+             * Correctness Rating
+             * @description Legacy correctness rating
+             */
+            correctness_rating?: number | null;
+            /**
+             * False Positive Flag
+             * @description Whether the finding was marked false positive
+             * @default false
+             */
+            false_positive_flag: boolean;
+            /**
+             * False Positive Reason
+             * @description Optional false-positive reason
+             */
+            false_positive_reason?: string | null;
+            /**
+             * False Negative Note
+             * @description Optional missed-finding note
+             */
+            false_negative_note?: string | null;
+            /**
+             * Outcome Label
+             * @description Normalized feedback outcome label
+             */
+            outcome_label?: string | null;
+            /**
+             * Created At
+             * @description Feedback creation timestamp
+             */
+            created_at: string;
+        };
+        /** FeedbackStateData */
+        FeedbackStateData: {
+            /**
+             * Finding Feedback
+             * @description Latest persisted feedback event for each finding
+             */
+            finding_feedback?: {
+                [key: string]: components["schemas"]["FeedbackEventData"];
+            };
+            /**
+             * False Negative By Finding
+             * @description Latest missed-finding note keyed by finding id
+             */
+            false_negative_by_finding?: {
+                [key: string]: components["schemas"]["FeedbackEventData"];
+            };
+            /**
+             * False Negative Notes
+             * @description Latest missed-finding feedback notes
+             */
+            false_negative_notes?: components["schemas"]["FeedbackEventData"][];
+        };
         /** FindingData */
         FindingData: {
             /**
@@ -1433,6 +1729,31 @@ export interface components {
              * @description Skill identifier when a skill contributed the finding
              */
             skill_id?: string | null;
+        };
+        /** FindingFeedbackRequest */
+        FindingFeedbackRequest: {
+            /**
+             * Outcome
+             * @description Reviewer feedback outcome for the finding
+             * @enum {string}
+             */
+            outcome: "useful" | "noisy" | "false_positive";
+            /**
+             * False Positive Reason
+             * @description Optional reason when outcome is false_positive
+             */
+            false_positive_reason?: string | null;
+            /**
+             * Reviewer Role
+             * @description Reviewer role label
+             * @default reviewer
+             */
+            reviewer_role: string;
+        };
+        /** FindingFeedbackResponse */
+        FindingFeedbackResponse: {
+            data: components["schemas"]["FeedbackEventData"];
+            meta: components["schemas"]["ResourceMetaPayload"];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2587,6 +2908,19 @@ export interface components {
              * @description Advisory-only review summary
              */
             advisory_summary: string;
+        };
+        /** SharedReportAccessResponse */
+        SharedReportAccessResponse: {
+            data: components["schemas"]["AnalysisDetailData"];
+            meta: components["schemas"]["ResourceMetaPayload"];
+        };
+        /** SharedReportUnlockRequest */
+        SharedReportUnlockRequest: {
+            /**
+             * Password
+             * @description Password for a protected shared report
+             */
+            password: string;
         };
         /** SkillRegistryContentData */
         SkillRegistryContentData: {
@@ -3874,6 +4208,203 @@ export interface operations {
             };
             /** @description Method Not Allowed */
             405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_shared_analysis_api_v1_analyses__report_id__shared_get: {
+        parameters: {
+            query?: {
+                compare?: string | null;
+            };
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedReportAccessResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unlock_shared_analysis_api_v1_analyses__report_id__shared_unlock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharedReportUnlockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedReportAccessResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_finding_feedback_api_v1_analyses__report_id__findings__finding_id__feedback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path: {
+                report_id: number;
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingFeedbackResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

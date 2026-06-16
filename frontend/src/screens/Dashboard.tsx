@@ -428,7 +428,7 @@ function RecentAnalysesCard({
   return (
     <Card
       right={
-        <Link className="dw-link-button" to="/history">
+        <Link className="dw-link-button" to="/app/history">
           View history <ChevronRight size={13} />
         </Link>
       }
@@ -547,7 +547,7 @@ export function DropzoneCard({
     mutationFn: () => createAnalysis({ files: stagedFiles, projectId: Number(project.id) }),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      navigate(`/reports/${result.data.persisted_report.id}`);
+      navigate(`/app/reports/${result.data.persisted_report.id}`);
     },
   });
 
@@ -808,7 +808,7 @@ export function DashboardScreen() {
   const hasGlobalError = projectsQuery.isError;
   const latest = analysesQuery.data?.[0];
 
-  const openReport = (id: number) => navigate(`/reports/${id}`);
+  const openReport = (id: number) => navigate(`/app/reports/${id}`);
   const refetchDashboard = () => {
     void statsQuery.refetch();
     void analysesQuery.refetch();
@@ -881,18 +881,5 @@ export function DashboardScreen() {
         </main>
       </div>
     </div>
-  );
-}
-
-export function ReportStub() {
-  return (
-    <main className="dw-report-stub dw-ui">
-      <Card eyebrow="Report screen" title="Briefing route ready">
-        <p className="dw-card-subtitle">The full report screen lands in Phase 4. This route keeps dashboard navigation stable.</p>
-        <Link className="dw-link-button" to="/">
-          Back to dashboard
-        </Link>
-      </Card>
-    </main>
   );
 }

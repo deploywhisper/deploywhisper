@@ -83,6 +83,7 @@ test.describe("React dashboard", () => {
     await expect(page.getByText("1 files staged")).toBeVisible();
     await page.getByRole("button", { name: /^Analyze$/ }).click();
     await expect(page).toHaveURL(/\/app\/reports\/\d+$/, { timeout: 120_000 });
-    await expect(page.getByText("Briefing route ready")).toBeVisible();
+    await expect(page.getByRole("tab", { name: /Overview/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Copy briefing/i })).toBeVisible();
   });
 });

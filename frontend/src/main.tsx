@@ -28,16 +28,20 @@ import {
   VerdictChip,
   demoProjects,
 } from "./components/ui";
-import { DashboardScreen, ReportStub } from "./screens/Dashboard";
+import { DashboardScreen } from "./screens/Dashboard";
+import { ReportScreen } from "./screens/Report";
 
 const queryClient = new QueryClient();
 
 function App() {
   return (
-    <BrowserRouter basename="/app">
+    <BrowserRouter>
       <Routes>
-        <Route element={<ComponentGallery />} path="/dev/components" />
-        <Route element={<ReportStub />} path="/reports/:id" />
+        <Route element={<ComponentGallery />} path="/app/dev/components" />
+        <Route element={<ReportScreen />} path="/app/reports/:id" />
+        <Route element={<ReportScreen />} path="/reports/:id" />
+        <Route element={<DashboardScreen />} path="/app" />
+        <Route element={<DashboardScreen />} path="/app/*" />
         <Route element={<DashboardScreen />} path="*" />
       </Routes>
     </BrowserRouter>
