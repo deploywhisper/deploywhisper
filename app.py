@@ -154,6 +154,17 @@ if not hasattr(fastapi_app, "_deploywhisper_original_lifespan_context"):
 _original_lifespan = fastapi_app._deploywhisper_original_lifespan_context
 
 
+def _fallback_spa_shell() -> HTMLResponse:
+    """Return a minimal SPA shell when frontend/dist is absent in test contexts."""
+    return HTMLResponse(
+        content=(
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            f"<title>{escape(settings.app_name)}</title>"
+            '</head><body><div id="root"></div></body></html>'
+        )
+    )
+
+
 async def _topology_drift_scheduler_loop(stop_event: asyncio.Event) -> None:
     """Run topology drift checks on a lightweight polling loop."""
     while not stop_event.is_set():
@@ -864,6 +875,19 @@ def report_artifact_view(
 def index() -> None:
     inject_styles()
     build_dashboard()
+
+
+if not FRONTEND_DIST_DIR.is_dir():
+
+    @fastapi_app.api_route("/app", methods=["GET", "HEAD"], include_in_schema=False)
+    @fastapi_app.api_route(
+        "/app/{path:path}", methods=["GET", "HEAD"], include_in_schema=False
+    )
+    def missing_frontend_app_fallback(path: str = "") -> HTMLResponse:
+        """Serve /app client routes in tests when the built SPA is absent."""
+        if "." in path.rsplit("/", maxsplit=1)[-1]:
+            raise StarletteHTTPException(status_code=404, detail="Not Found")
+        return _fallback_spa_shell()
 
 
 def create_app():

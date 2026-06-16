@@ -168,9 +168,7 @@ def _custom_skill_status_data(status) -> CustomSkillStatusData:
 
 
 def _custom_skill_statuses_data() -> list[CustomSkillStatusData]:
-    return [
-        _custom_skill_status_data(status) for status in get_custom_skill_statuses()
-    ]
+    return [_custom_skill_status_data(status) for status in get_custom_skill_statuses()]
 
 
 def _raise_authorization_error(exc: PermissionError) -> ApiError:
@@ -412,9 +410,7 @@ def update_provider_settings(
     )
 
 
-@settings_router.post(
-    "/topology/preview", response_model=TopologyValidationResponse
-)
+@settings_router.post("/topology/preview", response_model=TopologyValidationResponse)
 def preview_settings_topology(
     payload: TopologyUploadRequest,
     authorization: dict[str, object] = Depends(_authorization_context),

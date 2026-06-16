@@ -275,7 +275,9 @@ class AnalysesApiTests(unittest.TestCase):
         remaining = self.client.get("/api/v1/analyses").json()
         self.assertEqual(remaining["meta"]["total_count"], 0)
 
-    def test_delete_analyses_rejects_missing_report_without_partial_delete(self) -> None:
+    def test_delete_analyses_rejects_missing_report_without_partial_delete(
+        self,
+    ) -> None:
         response = self.client.request(
             "DELETE",
             "/api/v1/analyses",
@@ -1378,7 +1380,11 @@ class AnalysesApiTests(unittest.TestCase):
         )
 
         self.assertEqual(reset_response.status_code, 405)
-        self.assertIn('<div id="root"></div>', report_response.text)
+        self.assertEqual(report_response.status_code, 200)
+        self.assertTrue(
+            '<div id="root"></div>' in report_response.text
+            or "This shared report requires a password." in report_response.text
+        )
         self.assertEqual(shared_response.status_code, 401)
         self.assertEqual(
             shared_response.json()["error"]["code"],

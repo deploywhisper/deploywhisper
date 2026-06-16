@@ -113,7 +113,9 @@ class SettingsApiTests(unittest.TestCase):
 
         self.assertEqual(saved.status_code, 200)
         self.assertEqual(saved.json()["data"]["topology"]["service_count"], 1)
-        self.assertEqual(saved.json()["data"]["success_message"], "Topology context saved.")
+        self.assertEqual(
+            saved.json()["data"]["success_message"], "Topology context saved."
+        )
 
     def test_update_drift_cadence_rejects_unsupported_interval(self) -> None:
         rejected = self.client.put(
