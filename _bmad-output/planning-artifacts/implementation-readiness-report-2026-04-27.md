@@ -404,7 +404,7 @@ Potential gaps:
 
 Aligned:
 
-- UX chooses NiceGUI / Quasar as the component foundation, matching architecture ADR-01 and the shared NiceGUI + FastAPI runtime.
+- UX chooses retired UI / React SPA as the component foundation, matching architecture ADR-01 and the shared React SPA + FastAPI runtime.
 - UX emphasizes one shared report object rendered across review surfaces, matching the architecture’s one-analysis-core and Report Service decisions.
 - UX component strategy maps cleanly to architecture: VerdictCard, ParserCoverageRow, Evidence/ChangeRiskTable, BlastRadiusPanel, RollbackTimeline, IncidentMatchCard, and AnalysisHistoryRow are supported by the evidence, context, rollback, incident, report, and history services.
 - UX parser coverage and staged progress align with the canonical pipeline: intake, parse, skills, evidence, context, blast radius, similarity, rollback, score, narrate, assemble, persist, deliver.

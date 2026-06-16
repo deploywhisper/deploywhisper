@@ -1,11 +1,11 @@
-# DeployWhisper UI Migration Plan — NiceGUI → React SPA
+# DeployWhisper UI Migration Plan — retired UI to React SPA
 
 **Status:** approved · dashboard-first · this document is normative
 **Design references (commit both to the repo):**
 - `docs/design/deploywhisper-redesign-v3.jsx` — the approved interactive mockup. When this plan and the mockup disagree on an exact value, **the mockup wins**.
 - `docs/ui-migration-plan.md` — this file. It is the contract for scope, process, and completeness.
 
-**Target stack:** Vite + React 18 + TypeScript + Tailwind CSS, built to static files and served by the existing FastAPI app. Single-container model preserved. No Node in the runtime image. NiceGUI is fully removed at the end of this initiative.
+**Target stack:** Vite + React 18 + TypeScript + Tailwind CSS, built to static files and served by the existing FastAPI app. Single-container model preserved. No Node in the runtime image. The retired UI framework is fully removed at the end of this initiative.
 
 ---
 
@@ -26,14 +26,14 @@ A2. **Sanctioned UX/workflow changes.** The demo deliberately changes some flows
 A3. **Sanctioned backend changes — nothing else without human approval:**
 - New **read-only** stats endpoints (Phase 3.0): `GET /api/v1/stats/summary`, `GET /api/v1/stats/verdict-distribution`, `GET /api/v1/projects` (if not already exposed).
 - **Additive-only** serializer fields where a list/detail response lacks a field the design displays.
-- Phase 6 extraction of logic that today exists only inside NiceGUI callbacks (settings save, topology upload, skills management) into `/api/v1` endpoints — extraction means moving behavior, not changing it.
+- Phase 6 extraction of logic that existed only inside retired UI callbacks (settings save, topology upload, skills management) into `/api/v1` endpoints — extraction means moving behavior, not changing it.
 - Every backend change ships in its own PR labeled `backend-for-ui`, with the design field it serves named in the description.
 
 A4. **Stop-and-ask rule.** If implementing any screen appears to require changing application flow, validation behavior, or an API contract beyond A2/A3, the agent stops and raises the question in the PR/issue instead of deciding. "The old UI did X, the demo does not show X" is a stop-and-ask case (see Part D parity audit), not a license to drop X.
 
 A5. **Air-gap rule.** No CDN imports anywhere in production code — no Google Fonts, no unpkg/cdnjs/jsdelivr. Fonts ship via `@fontsource` packages; icons via the `lucide-react` npm package. The `@import url(fonts.googleapis…)` line in the mockup exists only because it is a sandbox demo; carrying it into the app is a defect.
 
-A6. **Definition of done for the whole initiative** (Part G is the checklist): every old screen has a new-design replacement at parity or with a sanctioned change; zero NiceGUI code, dependencies, styles, or assets remain; all documentation in Part E updated; all testing standards in Part F in place and green.
+A6. **Definition of done for the whole initiative** (Part G is the checklist): every old screen has a new-design replacement at parity or with a sanctioned change; zero retired UI code, dependencies, styles, or assets remain; all documentation in Part E updated; all testing standards in Part F in place and green.
 
 ---
 
@@ -183,7 +183,7 @@ Keyboard: full tab order; switcher and tabs arrow-key navigable; Escape closes p
 Vite react-ts; deps: tailwindcss + @tailwindcss/vite, lucide-react, @tanstack/react-query, react-router-dom, @fontsource-variable/plus-jakarta-sans, @fontsource/inter, @fontsource-variable/jetbrains-mono; dev: vitest, @testing-library/react, @playwright/test, axe-core/@axe-core/playwright, openapi-typescript. `vite.config.ts`: `base:'/app/'`, dev proxy `/api`→`http://localhost:8080` — the backend during development is the **compose-run container** (`docker compose up -d` from the repo root), not a local venv. Typed client: `scripts/gen-api.sh` dumps OpenAPI (from `http://localhost:8080/api/v1/openapi.json` of the running compose stack) → `src/api/schema.d.ts`; `src/api/client.ts` unwraps the `{data, meta}` envelope. Root scripts `ui:dev/ui:build/ui:test`; CI frontend job. **Done when:** with the compose stack up, the placeholder page renders the `GET /api/v1/health` version via the proxy.
 
 ### Phase 1 — Coexistence serving (includes the Dockerfile change)
-FastAPI mounts `frontend/dist` at `/app` with an SPA fallback route; NiceGUI untouched at `/`.
+FastAPI mounts `frontend/dist` at `/app` with an SPA fallback route; the retired UI remains temporarily at `/` during coexistence.
 
 **Dockerfile (explicit spec).** The existing multi-stage file (python:3.11-slim `builder` → `runtime`, venv copy, strip/prune, non-root `appuser`, healthcheck on `/api/v1/health`) stays exactly as is. Add one stage and one COPY:
 
@@ -200,7 +200,7 @@ RUN npm run build            # outputs /frontend/dist
 COPY --from=frontend --chown=appuser:appuser /frontend/dist ./frontend/dist
 ```
 
-Rules: package manifests are copied before source so `npm ci` layer-caches; `frontend/node_modules` and `frontend/dist` go in `.dockerignore`; Node never appears in the runtime stage. At Phase 7 cutover, the `COPY --chown=appuser:appuser ui ./ui` line is deleted along with the `nicegui` dependency.
+Rules: package manifests are copied before source so `npm ci` layer-caches; `frontend/node_modules` and `frontend/dist` go in `.dockerignore`; Node never appears in the runtime stage. At Phase 7 cutover, the retired UI package copy line and dependency are deleted.
 
 `docker-compose.yml` at the repo root needs **no changes** — it already builds this Dockerfile and exposes port 8080; the SPA simply appears at `http://localhost:8080/app`.
 
@@ -221,25 +221,25 @@ Implement B3 against `GET /api/v1/analyses/{id}`. First commit = a field-mapping
 TanStack Table: compact rows (timestamp, severity badge, verdict chip, score bar, tools, rescan delta as in the old UI), expandable detail, server-side `severity/recommendation/search/page/page_size` filters, bulk select + delete, pagination. No per-row repetition of full verdict sentences — summary text appears once, in the expanded detail.
 
 ### Phase 6 — Settings, Incidents, Skills
-Settings rebuilt with the design system: form fields capped ~560px, provider section (active provider select, model, API base, masked key with reveal, local-only toggle), topology upload via the Phase-2 dropzone + drift cadence, reviewer-feedback stat cards, custom-skills manager. Extract any NiceGUI-callback-only logic into `/api/v1` (A3). Incidents + Skills are list/detail ports. **This phase requires the Part D parity audit to be complete first.**
+Settings rebuilt with the design system: form fields capped ~560px, provider section (active provider select, model, API base, masked key with reveal, local-only toggle), topology upload via the Phase-2 dropzone + drift cadence, reviewer-feedback stat cards, custom-skills manager. Extract any retired UI callback-only logic into `/api/v1` (A3). Incidents + Skills are list/detail ports. **This phase requires the Part D parity audit to be complete first.**
 
 ### Phase 7 — Cutover and removal
-SPA moves to `/`; delete `ui/` package; remove `nicegui` from `requirements.txt` and prune now-orphaned transitive deps; redirect legacy routes; point all a11y lanes at SPA routes; execute Part D removal checklist and Part E doc updates that land at cutover; record final image-size delta in the PR and CHANGELOG.
+SPA moves to `/`; delete the retired UI package; remove its Python dependency and prune now-orphaned transitive deps; redirect legacy routes; point all a11y lanes at SPA routes; execute Part D removal checklist and Part E doc updates that land at cutover; record final image-size delta in the PR and CHANGELOG.
 
 ---
 
 # PART D — PARITY AUDIT & LEGACY REMOVAL
 
-**D1. Parity audit (do during Phase 2, before any screen ships).** The agent walks every NiceGUI page/route in `ui/` and produces `docs/design/ui-parity-audit.md`: a table of every element, control, message, and behavior in the old UI, each marked `replaced-by-design (B-ref)` / `sanctioned-change (A2-ref)` / `not-in-demo → stop-and-ask`. Examples that must appear in the audit: the dashboard's embedded full-report section and its expiry countdown → `sanctioned-change (A2: replaced by Latest Briefing card + Report navigation)`; the "Dashboard Result Display Duration" setting → `sanctioned-change (A2: retired)`; the ownership-context / CODEOWNERS follow-up rows, provider-capabilities notice, topology drift cadence, calibration snapshot block, rescan-diff line in history, select-all/delete-selected, dark-mode toggle, the `/reports/{id}` password flow. Nothing from the old UI may silently disappear: it is either in the new design, explicitly superseded, or explicitly raised. This document is the no-omissions guarantee.
+**D1. Parity audit (do during Phase 2, before any screen ships).** The agent walks every retired UI page/route and produces `docs/design/ui-parity-audit.md`: a table of every element, control, message, and behavior in the old UI, each marked `replaced-by-design (B-ref)` / `sanctioned-change (A2-ref)` / `not-in-demo → stop-and-ask`. Examples that must appear in the audit: the dashboard's embedded full-report section and its expiry countdown → `sanctioned-change (A2: replaced by Latest Briefing card + Report navigation)`; the "Dashboard Result Display Duration" setting → `sanctioned-change (A2: retired)`; the ownership-context / CODEOWNERS follow-up rows, provider-capabilities notice, topology drift cadence, calibration snapshot block, rescan-diff line in history, select-all/delete-selected, dark-mode toggle, the `/reports/{id}` password flow. Nothing from the old UI may silently disappear: it is either in the new design, explicitly superseded, or explicitly raised. This document is the no-omissions guarantee.
 
 **D2. Removal checklist (Phase 7; every box must be checked in the cutover PR):**
-- [ ] `ui/` package deleted; no Python imports of it remain.
-- [ ] `nicegui` removed from `requirements.txt`; orphaned transitive deps pruned; image rebuilt.
-- [ ] Old NiceGUI Playwright/VoiceOver scripts replaced by SPA equivalents; old scripts deleted; `package.json` scripts updated.
+- [ ] Retired UI package deleted; no Python imports of it remain.
+- [ ] Retired UI dependency removed from Python packaging; orphaned transitive deps pruned; image rebuilt.
+- [ ] Old UI Playwright scripts replaced by SPA equivalents; old scripts deleted; `package.json` scripts updated.
 - [ ] Old design assets replaced: `docs/assets/demo-dashboard.png`, `demo-history.png`, `demo-settings.png`, `demo-flow.gif` placeholder — re-captured from the new UI.
-- [ ] README runtime badge "NiceGUI + FastAPI" replaced.
-- [ ] Repo-wide grep gates pass: `grep -ri nicegui` and `grep -ri quasar` return matches only in CHANGELOG/history; no dead CSS, no orphaned static files, no unused npm packages (`depcheck`).
-- [ ] All NiceGUI-era UI tests removed from CI; no skipped/zombie test lanes.
+- [ ] README runtime badge confirms "React SPA + FastAPI".
+- [ ] Repo-wide grep gates pass for the retired framework names; no dead CSS, no orphaned static files, no unused npm packages (`depcheck`).
+- [ ] All retired UI-era tests removed from CI; no skipped/zombie test lanes.
 
 ---
 
@@ -249,10 +249,10 @@ SPA moves to `/`; delete `ui/` package; remove `nicegui` from `requirements.txt`
 |---|---|---|
 | `AGENTS.md` | Add frontend conventions: Part A ground rules, stack, scripts, test requirements, design-reference paths | Phase 0 |
 | `README.md` | Stack description, badges, dev commands (`ui:dev/build/test`), updated quickstart if ports/paths change, new screenshots, testing section | Phase 1 (interim note) + Phase 7 (full) |
-| `_bmad-output/planning-artifacts/architecture.md` | UI layer: NiceGUI → static React SPA served by FastAPI; update component diagram, runtime description, single-container statement, repo-structure listing (`frontend/` replaces `ui/`) | Phase 1 + Phase 7 |
+| `_bmad-output/planning-artifacts/architecture.md` | UI layer: retired UI → static React SPA served by FastAPI; update component diagram, runtime description, single-container statement, repo-structure listing (`frontend/` replaces the retired UI package) | Phase 1 + Phase 7 |
 | `_bmad-output/planning-artifacts/ux-design-specification.md` | Superseded by Part B of this plan + the mockup; rewrite to describe the new design system (tokens, components, screens) and link the design reference | Phase 2 |
 | `_bmad-output/planning-artifacts/prd.md` | UI requirements section updated to the new UX, including the sanctioned flow changes in A2 | Phase 3 |
-| `_bmad-output/planning-artifacts/epics.md` | Add the "UI modernization & migration" epic with these phases as stories; mark superseded NiceGUI UI stories | Phase 0 |
+| `_bmad-output/planning-artifacts/epics.md` | Add the "UI modernization & migration" epic with these phases as stories; mark superseded retired UI stories | Phase 0 |
 | `docs/ci.md` | Frontend job, e2e lane, screenshot artifacts, a11y gates | Phase 0 + Phase 3 |
 | `docs/github-app.md` / action docs | Verify `/reports/{id}` links and screenshots reflect the new shared-report page | Phase 4 |
 | `CHANGELOG.md` | Entry per phase; cutover entry includes image-size delta and removal summary | every phase |
@@ -278,10 +278,10 @@ Rule: a phase PR that changes behavior or structure without its row's doc update
 
 **F1. Unit/component:** vitest + React Testing Library for every primitive and screen-level logic (query hooks mocked); snapshots for primitives.
 **F2. E2E (the standard):** Playwright specs in `frontend/e2e/`, one spec file per screen, executed against the **composed container at `http://localhost:8080`** per F0 (CI runs the same compose-based flow); flows covered minimum: dashboard load + KPI assertions, artifact upload → report navigation, report tab walk + finding expand + feedback click, history filter + pagination, project switch updates context, shared-report password flow.
-**F3. Accessibility:** per-screen axe-core scan with zero serious/critical violations + keyboard-navigation smoke (port of the existing `test:ui-review`); the macOS VoiceOver lane remains opt-in and is pointed at SPA routes at cutover.
+**F3. Accessibility:** per-screen axe-core scan with zero serious/critical violations + keyboard-navigation smoke (port of the existing `test:ui-review`); the macOS screen-reader manual validation remains a separate opt-in check.
 **F4. Visual evidence:** every UI PR attaches Playwright screenshots of the affected screens at 1440px and 760px, captured from the composed container per F0; the `/app/dev/components` gallery screenshot is the standing visual-regression reference.
 **F5. CI gates:** typecheck, vitest, build, compose-based e2e (seeded), axe — all required; regenerating the OpenAPI types must produce no type errors (drift gate).
-**F6.** The legacy NiceGUI test lanes keep running until each screen's SPA equivalent is green, then are deleted (D2).
+**F6.** The retired UI test lanes keep running until each screen's SPA equivalent is green, then are deleted (D2).
 
 ---
 

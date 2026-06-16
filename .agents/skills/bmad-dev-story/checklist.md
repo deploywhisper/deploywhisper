@@ -43,7 +43,7 @@ validation-rules:
 - [ ] **Unit Tests:** Unit tests added/updated for ALL core functionality introduced/changed by this story
 - [ ] **Integration Tests:** Integration tests added/updated for component interactions when story requirements demand them
 - [ ] **End-to-End Tests:** End-to-end tests created for critical user flows when story requirements specify them
-- [ ] **UI Browser Validation:** If the story changes any UI route, NiceGUI component, rendered report/history/dashboard surface, browser interaction, keyboard behavior, or accessibility semantics, Playwright browser validation was run and recorded in the Dev Agent Record. If no UI was touched, the Dev Agent Record explicitly says "UI validation not applicable."
+- [ ] **UI Browser Validation:** If the story changes any React route, UI primitive, rendered report/history/dashboard/settings/skills surface, browser interaction, keyboard behavior, or accessibility semantics, Playwright browser validation was run and recorded in the Dev Agent Record. If no UI was touched, the Dev Agent Record explicitly says "UI validation not applicable."
 - [ ] **Test Coverage:** Tests cover acceptance criteria and edge cases from story Dev Notes
 - [ ] **Regression Prevention:** ALL existing tests pass (no regressions introduced)
 - [ ] **Code Quality:** Linting and static checks pass when configured in project

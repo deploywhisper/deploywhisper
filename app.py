@@ -250,7 +250,7 @@ def legacy_app_route_redirect(path: str, request: Request) -> RedirectResponse:
     "/history/{report_id}", methods=["GET", "HEAD"], include_in_schema=False
 )
 def legacy_history_report_redirect(report_id: int) -> RedirectResponse:
-    """Redirect legacy NiceGUI report detail links to the React report route."""
+    """Redirect retired report detail links to the React report route."""
     return RedirectResponse(url=f"/reports/{report_id}", status_code=308)
 
 

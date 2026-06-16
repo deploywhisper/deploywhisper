@@ -54,7 +54,7 @@ So that I know what data would improve future analysis.
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -88,9 +88,9 @@ GPT-5.4
 
 ### Debug Log References
 
-- Red regression check: `./.venv/bin/python -m unittest tests.test_ui.test_context_completeness_panel.ContextCompletenessPanelRenderingTests.test_context_panel_links_todos_to_guidance tests.test_ui.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_dedicated_report_page -q` failed as expected before implementation on missing TODO guidance links and missing summary-adjacent context callout.
-- Focused regression rerun: `./.venv/bin/python -m unittest tests.test_ui.test_context_completeness_panel tests.test_ui.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_dedicated_report_page -q` passed, `Ran 8 tests`.
-- Affected UI unittest suite: `./.venv/bin/python -m unittest tests.test_ui.test_context_completeness_panel tests.test_ui.test_history_page -q` passed, `Ran 49 tests`.
+- Red regression check: `./.venv/bin/python -m unittest frontend.e2e.test_context_completeness_panel.ContextCompletenessPanelRenderingTests.test_context_panel_links_todos_to_guidance frontend.e2e.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_dedicated_report_page -q` failed as expected before implementation on missing TODO guidance links and missing summary-adjacent context callout.
+- Focused regression rerun: `./.venv/bin/python -m unittest frontend.e2e.test_context_completeness_panel frontend.e2e.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_dedicated_report_page -q` passed, `Ran 8 tests`.
+- Affected UI unittest suite: `./.venv/bin/python -m unittest frontend.e2e.test_context_completeness_panel frontend.e2e.test_history_page -q` passed, `Ran 49 tests`.
 - Lint: `./.venv/bin/ruff check .` passed.
 - Format check: `./.venv/bin/ruff format --check .` passed, `271 files already formatted`.
 - Full unittest: `./.venv/bin/python -m unittest discover -q` passed, `Ran 400 tests` with `skipped=1`.
@@ -98,9 +98,9 @@ GPT-5.4
 - Dependency audit: `./.venv/bin/python -m pip_audit -r requirements.txt` passed, `No known vulnerabilities found`.
 - Local CI: `bash scripts/ci-local.sh` passed, including Ruff, format, pip check, Bandit, parser skill scenarios, and unittest discovery.
 - Browser validation: `APP_PORT=18092 npm run test:ui-review` passed, `3 passed`.
-- VoiceOver validation: not run locally per project directive that this system should not run the voiceover test.
+- manual screen-reader validation: not run locally per project directive that this system should not run the voiceover test.
 - Review finding fix: `git ls-files --error-unmatch _bmad-output/implementation-artifacts/3-5-context-completeness-and-todo-panel.md` passed after force-adding the ignored story artifact.
-- Review finding verification: `git diff --check`, `./.venv/bin/ruff format --check .`, `./.venv/bin/ruff check .`, and `./.venv/bin/python -m unittest tests.test_ui.test_context_completeness_panel tests.test_ui.test_history_page -q` all passed after resolving the reviewer finding.
+- Review finding verification: `git diff --check`, `./.venv/bin/ruff format --check .`, `./.venv/bin/ruff check .`, and `./.venv/bin/python -m unittest frontend.e2e.test_context_completeness_panel frontend.e2e.test_history_page -q` all passed after resolving the reviewer finding.
 
 ### Completion Notes List
 
@@ -117,11 +117,11 @@ GPT-5.4
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `tests/e2e/report_review.keyboard.spec.js`
 - `tests/e2e/seeded_server.py`
-- `tests/test_ui/test_context_completeness_panel.py`
-- `tests/test_ui/test_history_page.py`
-- `ui/components/context_completeness_panel.py`
-- `ui/components/report_detail_page.py`
-- `ui/components/upload_panel.py`
+- `frontend/e2e/test_context_completeness_panel.py`
+- `frontend/e2e/test_history_page.py`
+- `frontend/src/components/context_completeness_panel.py`
+- `frontend/src/components/report_detail_page.py`
+- `frontend/src/components/upload_panel.py`
 
 ## Change Log
 

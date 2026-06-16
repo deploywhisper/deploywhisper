@@ -256,7 +256,7 @@ This keeps future BMad outputs aligned with the canonical repo identity.
 
 ### 4.5 Internal Runtime Identifiers To Preserve
 
-**Artifacts:** [config.py](../../config.py), [pyproject.toml](../../pyproject.toml), [docker-compose.yml](../../docker-compose.yml), [api/routes/analyses.py](../../api/routes/analyses.py), [ui/theme.py](../../ui/theme.py)
+**Artifacts:** [config.py](../../config.py), [pyproject.toml](../../pyproject.toml), [docker-compose.yml](../../docker-compose.yml), [api/routes/analyses.py](../../api/routes/analyses.py), [frontend/src/theme/tokens.css](../../frontend/src/theme/tokens.css)
 
 **KEEP AS-IS**
 

@@ -40,7 +40,7 @@ completedAt: '2026-04-16'
 The approved React migration design system is now defined by
 [`docs/ui-migration-plan.md`](../../docs/ui-migration-plan.md) Part B and
 [`docs/design/deploywhisper-redesign-v3.jsx`](../../docs/design/deploywhisper-redesign-v3.jsx).
-Those files supersede older NiceGUI-era visual guidance when exact values,
+Those files supersede older retired UI-era visual guidance when exact values,
 component anatomy, or migration scope differ.
 
 For Phase 2 first-half delivery, the implemented design-system foundation is:
@@ -281,24 +281,24 @@ DeployWhisper should combine the information hierarchy of Datadog, the decision 
 
 ### 1.1 Design System Choice
 
-DeployWhisper will use an established-system-plus-custom-theme approach rather than a bespoke design system. The product will adopt NiceGUI’s Quasar-based component foundation for core UI primitives and layer a DeployWhisper-specific visual system on top. This provides mature tables, cards, tabs, dialogs, progress indicators, inputs, and navigation elements without requiring the team to design or implement a custom component library from scratch.
+DeployWhisper uses a React SPA with a focused custom theme rather than a bespoke design system. The app relies on reusable React primitives, TanStack Table where table mechanics are needed, and DeployWhisper-specific visual tokens for verdict, confidence, evidence, and operational context.
 
 The chosen approach is a balanced product-dashboard style: slightly polished, but still operationally credible. Summary panels and verdict surfaces should feel calm, intentional, and productized, while evidence-heavy areas such as the change table and blast radius remain information-dense and utilitarian.
 
 ### Rationale for Selection
 
 This approach best matches the project’s constraints and goals:
-- the team is Python-heavy and already committed to NiceGUI
+- the backend team remains Python-heavy while the web surface is now React
 - the product is an internal operational tool, not a consumer brand application
 - speed, consistency, and trust matter more than bespoke visual novelty
 - the interface must support both polished summary presentation and high-density operational detail
-- Quasar already provides stronger baseline components than a small team could responsibly recreate in the same scope
+- React, Tailwind, TanStack Table, and the Phase 2 primitives provide stronger baseline mechanics than a small team could responsibly recreate in the same scope
 
 A custom design system would add high cost without improving the core deploy-review experience. The correct strategy is to theme a proven system, then define a small number of product-specific components where the product has genuinely unique UX needs.
 
 ### Implementation Approach
 
-The UI foundation will use standard NiceGUI / Quasar components wherever possible:
+The UI foundation uses standard React component primitives wherever possible:
 - cards and panels for summary sections
 - tables for structured evidence
 - badges and chips for status
@@ -391,7 +391,7 @@ Color alone must never carry meaning.
 
 ### Design System Principles
 
-- **Theme, don’t reinvent:** reuse Quasar defaults wherever they already solve the problem well.
+- **Theme, don’t reinvent:** reuse React component defaults wherever they already solve the problem well.
 - **Brand with restraint:** enough identity to feel intentional, never enough to compete with the analysis.
 - **Flat, sharp, operational:** use contrast and spacing instead of shadows and ornamental depth.
 - **Summary polished, evidence dense:** top-level judgment surfaces feel calm and refined; detailed evidence surfaces stay practical and information-rich.
@@ -862,7 +862,7 @@ Across these flows, the product should standardize these interaction patterns:
 
 ### Design System Components
 
-The product should rely on NiceGUI / Quasar components for all standard application structure and interaction primitives. These should be themed, not reimplemented.
+The product should rely on React component primitives for all standard application structure and interaction primitives. These should be themed, not reimplemented.
 
 **Use design-system components directly for:**
 - app shell and sidebar navigation
@@ -877,7 +877,7 @@ The product should rely on NiceGUI / Quasar components for all standard applicat
 - base table behaviors
 - standard badges and chips as the structural base for status treatments
 
-These components should remain stock Quasar components with DeployWhisper token styling applied. They should not become custom abstractions unless a clear product-specific behavior requires it.
+These components should remain stock React component primitives with DeployWhisper token styling applied. They should not become custom abstractions unless a clear product-specific behavior requires it.
 
 ### Custom Components
 
@@ -959,7 +959,7 @@ Compact summary directly under the VerdictCard, with deeper detail reflected in 
 Present resource-level change evidence with risk cues.
 
 **Implementation Strategy:**
-Custom wrapper around Quasar `q-table`, not a bespoke table implementation.
+Custom wrapper around TanStack Table, not a bespoke table implementation.
 
 **Custom additions:**
 - risk-weight visual treatment
@@ -969,7 +969,7 @@ Custom wrapper around Quasar `q-table`, not a bespoke table implementation.
 - grouped or filterable evidence views
 
 **Reason:**
-Quasar already solves table mechanics; DeployWhisper adds domain-specific evidence semantics.
+React SPA already solves table mechanics; DeployWhisper adds domain-specific evidence semantics.
 
 #### BlastRadiusPanel
 
@@ -1117,10 +1117,10 @@ Filters should support tool, severity, comparator, and scenario outcome. Scenari
 
 ### Component Implementation Strategy
 
-- Stock Quasar components remain stock wherever possible.
+- Stock React component primitives remain stock wherever possible.
 - Custom components are reserved for domain-specific UI only.
 - The product should prefer wrappers and composition over reinvention.
-- The change table must be a wrapper around Quasar table mechanics.
+- The change table must be a wrapper around TanStack Table mechanics.
 - The blast radius UI must separate shell framing from graph rendering.
 - Parser coverage should appear in two levels:
   - compact trust signal near the top
@@ -1155,7 +1155,7 @@ These components improve repeat use, trust, and operational depth.
 
 - **Custom only where meaning is unique**
 - **Wrap, don’t rebuild**
-- **Quasar for mechanics, DeployWhisper for semantics**
+- **React primitives for mechanics, DeployWhisper for semantics**
 - **Verdict first, everything else supports it**
 - **Every custom component must earn its maintenance cost**
 
@@ -1221,7 +1221,7 @@ DeployWhisper favors in-page review over navigation-heavy workflows.
 
 **Main navigation**
 - route-level navigation for dashboard, history, settings, and admin areas
-- stable left-side shell navigation using stock Quasar patterns
+- stable left-side shell navigation using stock React shell patterns
 - the left navigation must remain visible on desktop and serve as the primary page-switching control
 - shared workspace chrome should keep the active project/workspace visible and allow project switching without forcing a detour through the dashboard upload flow
 - branding sits at the top of the navigation rail, followed by page links in a simple vertical list

@@ -18,7 +18,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ## Technology Stack & Versions
 
 - Python: code targets Python 3.11 runtime in CI/Docker; `pyproject.toml` currently allows `>=3.10`, so do not introduce syntax that would break 3.10 without intentionally raising the floor.
-- Web runtime: NiceGUI `3.12.0` and FastAPI `0.135.2` share one app in `app.py`.
+- Web runtime: React SPA in `frontend/`, built with Vite and served by FastAPI from `app.py`.
 - Persistence: SQLAlchemy `2.0.49`, Alembic `1.18.4`, default SQLite database at `data/deploywhisper.db`.
 - Data contracts: Pydantic `2.12.2` models and `Field(...)` metadata.
 - LLM layer: repo-owned provider boundary in `llm/providers.py`; OpenAI, Anthropic, Gemini, and Ollama run through direct adapters under `llm/adapters/`, while OpenRouter, Groq, and xAI use one explicit OpenAI-compatible adapter. The old meta-provider runtime dependency has been removed.
@@ -39,7 +39,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 - Preserve the shared-core architecture: API routes, UI flows, and CLI commands must reuse service-layer orchestration instead of duplicating analysis logic.
 - Register HTTP endpoints under `/api/v1` through `api/routes/*` and keep FastAPI error handling on the existing `ApiRoute` / `ApiError` envelope pattern.
-- Treat `app.py` as the canonical runtime entrypoint: NiceGUI pages, FastAPI routes, OpenAPI docs, and DB startup are composed there.
+- Treat `app.py` as the canonical runtime entrypoint: FastAPI routes, OpenAPI docs, DB startup, and static React SPA serving are composed there.
 - Keep the pipeline ordering intact: intake/parse -> assess -> blast radius -> rollback -> incident match -> narrative -> persist.
 - Narrative generation is downstream of scoring. If the LLM path fails, degrade gracefully and preserve deterministic report output instead of failing the analysis.
 - Treat provider independence as a DeployWhisper-owned boundary. Keep provider-specific behavior behind `llm/providers.py` and future `llm/adapters/*` modules instead of leaking it into services, API routes, CLI commands, or UI code.
@@ -49,7 +49,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 ### Testing Rules
 
-- Add tests in the existing layer-specific layout: `tests/test_api`, `tests/test_services`, `tests/test_analysis`, `tests/test_parsers`, `tests/test_ui`, `tests/test_cli`, `tests/test_infra`.
+- Add tests in the existing layer-specific layout: `tests/test_api`, `tests/test_services`, `tests/test_analysis`, `tests/test_parsers`, `tests/test_cli`, `tests/test_infra`, and React tests under `frontend/src` or `frontend/e2e`.
 - Default to `unittest`-style tests that pass under `python -m unittest discover -q`; do not assume `pytest` is the authoritative runner just because older docs mention it.
 - Use `fastapi.testclient.TestClient` for API and app-shell coverage instead of bespoke HTTP harnesses.
 - For persistence-related tests, use `tempfile.TemporaryDirectory()`, override `DATABASE_URL`, and initialize a fresh database for isolation.
@@ -70,8 +70,8 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 - When instructions conflict, prefer the implemented codebase plus `README.md`, `docs/ci.md`, and current scripts over stale contributor prose.
 - Validate changes with the repo’s real commands after edits. For Python changes, run `./.venv/bin/ruff check .` and `./.venv/bin/ruff format --check .` (or the equivalent through `bash scripts/ci-local.sh`) before concluding work. At minimum, keep relevant `unittest` coverage green; use `bash scripts/ci-local.sh` when the touched area is broad enough.
-- For review-flow or accessibility-sensitive UI changes, also run `npm run test:ui-review`; when working on macOS and the change affects keyboard or screen-reader semantics, run `npm run setup:ui-review` once per machine and `npm run test:ui-review:voiceover` before closing the task.
-- For any UI-facing story, include an explicit story task for browser validation. If the story changes a UI route, NiceGUI component, rendered report/history/dashboard surface, browser interaction, keyboard behavior, or accessibility semantics, the dev agent must run Playwright validation in a browser and record the command/result in the Dev Agent Record. Use `npm run test:ui-review` for review/report flows, `RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local UI lane, and `npm run test:ui-review:voiceover` on macOS for screen-reader or keyboard/a11y semantics. If no UI surface is touched, record `UI validation not applicable`; do not silently skip UI validation.
+- For review-flow or accessibility-sensitive UI changes, also run `npm run test:ui-review`.
+- For any UI-facing story, include an explicit story task for browser validation. If the story changes a React route, UI primitive, rendered report/history/dashboard/settings/skills surface, browser interaction, keyboard behavior, or accessibility semantics, the dev agent must run Playwright validation in a browser and record the command/result in the Dev Agent Record. Use `npm run test:ui-review` for the SPA e2e lane and `RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local UI lane. If no UI surface is touched, record `UI validation not applicable`; do not silently skip UI validation.
 - Treat security checks as part of normal completion criteria when they apply. Keep Bandit-compatible implementations in touched code, prefer modern hashes such as `sha256`/`blake2` over `sha1`/`md5`, and do not waive security findings when a safe fix is straightforward.
 - For AI-agent story execution, follow `CONTRIBUTING.md` Git Flow: start from `develop`, create one short-lived `feature/<identifier>-<short-description>` branch per story (or `bugfix/...` for defect work), commit incrementally on that branch, and target `develop` with a PR. Do not commit directly to `main` or `develop`.
 - For AI-agent story closure, the final reviewer must ensure the story ends on a Git Flow-compliant short-lived branch. If review happens on `develop`, the reviewer must create the proper `feature/*` or `bugfix/*` branch from that state, commit the story changes there, push it to remote, and optionally open the PR to `develop` before declaring the story lifecycle complete. A story is not properly closed if it remains only on `main`, `develop`, or detached HEAD.

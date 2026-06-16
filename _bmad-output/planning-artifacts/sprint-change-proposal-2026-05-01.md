@@ -126,7 +126,7 @@ Required action:
 - Update architecture to align with the final PRD.
 - Add or revise architecture sections for open-source/self-hosted-only posture, project/workspace/RBAC boundaries, Evidence Law enforcement, day-zero incident memory, AI-agent interfaces, external scanner ingestion, benchmark infrastructure, governance/supporting docs, supply-chain hardening, and CNCF readiness.
 - Remove or rewrite any architecture language implying SaaS, hosted control plane, open-core, or vendor-managed deployment assumptions.
-- Reconcile the target architecture with the current Python/NiceGUI/FastAPI/SQLite baseline and the local-first advisory core.
+- Reconcile the target architecture with the current Python/React/FastAPI/SQLite baseline and the local-first advisory core.
 
 #### Epics
 

@@ -31,7 +31,7 @@ inputDocuments:
   - services/report_service.py
   - services/settings_service.py
   - services/topology_service.py
-  - ui/components/upload_panel.py
+  - frontend/src/screens/Dashboard.tsx
 ---
 
 # NFR Assessment - DeployWhisper Foundation Scaffold
@@ -74,7 +74,7 @@ Note: This assessment summarizes existing repo evidence. It does not claim produ
 - Static diagnostics: no configured Python lint/typecheck gate found; `lsp_diagnostics_directory` reported no TS config
 - API review: `api/routes/analyses.py` exposes analysis endpoints without authentication/authorization dependencies
 - Security boundary review: `services/intake_service.py` excludes sensitive files; `services/settings_service.py` resolves API keys from environment and deletes DB key entries
-- Reliability / UX review: `ui/components/upload_panel.py` shows staged progress, provider-readiness fallback, and friendly failure UI; `services/report_service.py` persists reports before display; `services/topology_service.py` warns on stale or invalid topology
+- Reliability / UX review: `frontend/src/screens/Dashboard.tsx` shows staged progress, provider-readiness fallback, and friendly failure UI; `services/report_service.py` persists reports before display; `services/topology_service.py` warns on stale or invalid topology
 
 ## Executive Summary
 
@@ -132,7 +132,7 @@ Note: This assessment summarizes existing repo evidence. It does not claim produ
 
 - **Status:** CONCERNS
 - **Threshold:** Architecture should support a single-container internal deployment; no horizontal-scale target defined
-- **Actual:** NiceGUI server-side state plus SQLite persistence indicate a single-node-friendly design, not a horizontally hardened one
+- **Actual:** retired UI server-side state plus SQLite persistence indicate a single-node-friendly design, not a horizontally hardened one
 - **Evidence:** `app.py`, `models/database.py`, `docker-compose.yml`
 - **Findings:** Suitable for local/internal usage, but no evidence of bottleneck testing, concurrency tuning, or horizontal session strategy.
 
@@ -152,7 +152,7 @@ Note: This assessment summarizes existing repo evidence. It does not claim produ
 - **Status:** FAIL
 - **Threshold:** Least-privilege access and scoped access to reports/settings when shared beyond local mode
 - **Actual:** No role checks, tenant checks, or session ownership checks found in API/UI routes
-- **Evidence:** `api/routes/analyses.py`, `ui/routes/history.py`, `ui/routes/settings.py`
+- **Evidence:** `api/routes/analyses.py`, `frontend/src/screens/History.tsx`, `frontend/src/screens/Settings.tsx`
 - **Findings:** The app assumes trusted network access. That is acceptable for local dev only, not for shared deployment.
 
 ### Data Protection
@@ -210,7 +210,7 @@ Note: This assessment summarizes existing repo evidence. It does not claim produ
 - **Status:** CONCERNS
 - **Threshold:** Service should degrade safely when dependencies fail
 - **Actual:** Narrative generation falls back locally on provider failure; topology validation warns instead of silently trusting bad context
-- **Evidence:** `llm/narrator.py`, `services/topology_service.py`, `ui/components/upload_panel.py`
+- **Evidence:** `llm/narrator.py`, `services/topology_service.py`, `frontend/src/screens/Dashboard.tsx`
 - **Findings:** Degradation is good, but there are no circuit breakers, retry controls, or queue isolation boundaries.
 
 ### CI Burn-In (Stability)

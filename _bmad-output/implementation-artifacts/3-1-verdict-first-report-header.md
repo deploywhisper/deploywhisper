@@ -31,7 +31,7 @@ So that I can orient quickly before drilling into detail.
 
 ### Review Findings
 
-- [x] [Review][Patch] Compute Evidence Law status from linked deterministic evidence, not only finding booleans [ui/formatters/report_header.py:32]
+- [x] [Review][Patch] Compute Evidence Law status from linked deterministic evidence, not only finding booleans [frontend/src/screens/report_header.py:32]
 
 ## Dev Notes
 
@@ -54,7 +54,7 @@ So that I can orient quickly before drilling into detail.
 
 - API routes belong under `api/routes/` and should use existing `ApiRoute` / `ApiError` envelope patterns.
 - Shared orchestration belongs in `services/`; parsers normalize input, analysis modules score/derive risk, and surfaces adapt outputs.
-- UI work belongs under `ui/routes/` and `ui/components/`, following the existing NiceGUI composition style.
+- UI work belongs under `frontend/src/screens/` and `frontend/src/components/`, following the existing retired Python UI composition style.
 - CLI behavior belongs under `cli/` and must call the same service-layer paths as UI/API flows.
 - Persistence work belongs under `models/` with Alembic migrations when schema changes are required.
 - Documentation required by a story should be updated in the same workstream.
@@ -101,16 +101,16 @@ GPT-5.4
 - Fixed the review finding by requiring severe findings to reference deterministic evidence items before the header reports Evidence Law as satisfied, and by flagging severe reports without visible severe findings for review.
 - No separate documentation update was required; the story changed user-visible report copy only, and the copy is covered by UI tests.
 - Validation results:
-  - `./.venv/bin/python -m unittest tests.test_ui.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_verdict_first_header -q` - red-phase failed before implementation, then passed after implementation.
-  - `./.venv/bin/python -m unittest tests.test_ui.test_verdict_card tests.test_ui.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_verdict_first_header -q` - passed, 5 tests.
-  - `./.venv/bin/python -m unittest tests.test_ui.test_verdict_card -q` - red-phase failed for the review finding before the fix, then passed after the fix.
-  - `./.venv/bin/python -m unittest tests.test_ui.test_verdict_card tests.test_ui.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_verdict_first_header -q` - passed, 7 tests.
+  - `./.venv/bin/python -m unittest frontend.e2e.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_verdict_first_header -q` - red-phase failed before implementation, then passed after implementation.
+  - `./.venv/bin/python -m unittest frontend.e2e.test_verdict_card frontend.e2e.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_verdict_first_header -q` - passed, 5 tests.
+  - `./.venv/bin/python -m unittest frontend.e2e.test_verdict_card -q` - red-phase failed for the review finding before the fix, then passed after the fix.
+  - `./.venv/bin/python -m unittest frontend.e2e.test_verdict_card frontend.e2e.test_history_page.HistoryPageRenderingTests.test_history_detail_route_renders_verdict_first_header -q` - passed, 7 tests.
   - `APP_PORT=18080 npm run test:ui-review` - passed, 1 Playwright test.
   - `./.venv/bin/ruff check .` - passed.
-  - `./.venv/bin/ruff format --check .` - passed after formatting `ui/formatters/report_header.py`.
+  - `./.venv/bin/ruff format --check .` - passed after formatting `frontend/src/screens/report_header.py`.
   - `git diff --check` - passed.
   - `./.venv/bin/python -m pip check` - passed, no broken requirements.
-  - `./.venv/bin/bandit -r api/ analysis/ services/ parsers/ llm/ models/ cli/ ui/ evidence/ --severity-level high --confidence-level high -x tests/` - passed, no high issues.
+  - `./.venv/bin/bandit -r api/ analysis/ services/ parsers/ llm/ models/ cli/ frontend/ evidence/ --severity-level high --confidence-level high -x tests/` - passed, no high issues.
   - `./.venv/bin/python -m unittest discover -q` - passed, 354 tests, 1 skipped.
 
 ### File List
@@ -118,11 +118,11 @@ GPT-5.4
 - `_bmad-output/implementation-artifacts/3-1-verdict-first-report-header.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `tests/e2e/report_review.keyboard.spec.js`
-- `tests/test_ui/test_history_page.py`
-- `tests/test_ui/test_verdict_card.py`
-- `ui/components/report_detail_page.py`
-- `ui/components/verdict_card.py`
-- `ui/formatters/report_header.py`
+- `frontend/e2e/test_history_page.py`
+- `frontend/e2e/test_verdict_card.py`
+- `frontend/src/components/report_detail_page.py`
+- `frontend/src/components/verdict_card.py`
+- `frontend/src/screens/report_header.py`
 
 ## Change Log
 

@@ -311,7 +311,7 @@ This plan follows the finalized PRD's structure:
 
 ### Additional Requirements
 
-- Preserve the shared NiceGUI + FastAPI runtime as the baseline.
+- Preserve the shared React SPA + FastAPI runtime as the baseline.
 - Keep API, CLI, UI, GitHub, policy, and agent surfaces over one shared analysis orchestrator.
 - Keep SQLite valid for local/single-node installs and PostgreSQL as the shared/team install path.
 - Keep narrative generation downstream of deterministic evidence, context enrichment, and scoring.
@@ -448,7 +448,7 @@ Prepare the project for foundation-scale community maturity with public adopters
 
 ### Epic 15: UI modernization & migration
 
-Migrate the web UI from NiceGUI to a static React SPA served by FastAPI, following `docs/ui-migration-plan.md` and `docs/design/deploywhisper-redesign-v3.jsx` as the governing scope, design, and verification contract.
+Migrate the web UI from retired UI to a static React SPA served by FastAPI, following `docs/ui-migration-plan.md` and `docs/design/deploywhisper-redesign-v3.jsx` as the governing scope, design, and verification contract.
 
 **Primary coverage:** REV-01..10, HIS-03..05, ADM-01..05, SKL-05, UX-DR1..09, DOC-05..06, DOC-18, NFR-XAI-05.
 
@@ -1809,7 +1809,7 @@ So that submission is grounded in evidence rather than aspiration.
 
 ## Epic 15: UI modernization & migration
 
-Migrate DeployWhisper's web experience from NiceGUI to the approved React SPA without changing the advisory-first analysis core. This epic is governed by `docs/ui-migration-plan.md`; when exact visual values disagree, `docs/design/deploywhisper-redesign-v3.jsx` wins. Backend work is limited to the sanctioned Part A3 cases and must ship separately as `backend-for-ui`.
+Migrate DeployWhisper's web experience from retired UI to the approved React SPA without changing the advisory-first analysis core. This epic is governed by `docs/ui-migration-plan.md`; when exact visual values disagree, `docs/design/deploywhisper-redesign-v3.jsx` wins. Backend work is limited to the sanctioned Part A3 cases and must ship separately as `backend-for-ui`.
 
 ### Story 15.0: Phase 0 - Scaffold Frontend and Migration Documentation
 
@@ -1829,7 +1829,7 @@ So that later UI migration stories execute against the approved stack and operat
 ### Story 15.1: Phase 1 - Coexistence Serving
 
 As a maintainer,
-I want the built SPA served at `/app` while NiceGUI remains at `/`,
+I want the built SPA served at `/app` while retired UI remains at `/`,
 So that the migration can proceed screen by screen without breaking the current UI.
 
 **Acceptance Criteria:**
@@ -1854,7 +1854,7 @@ So that dashboard, report, history, settings, incidents, and skills share one te
 **Then** Tailwind theme variables and `src/components/ui/` primitives match the approved mockup
 **And** `/app/dev/components` renders every primitive and state as the permanent visual-regression gallery
 **And** each primitive has Vitest render and snapshot coverage
-**And** `docs/design/ui-parity-audit.md` inventories every NiceGUI page, element, control, message, and behavior as `replaced-by-design`, `sanctioned-change`, or `not-in-demo -> stop-and-ask`.
+**And** `docs/design/ui-parity-audit.md` inventories every retired UI page, element, control, message, and behavior as `replaced-by-design`, `sanctioned-change`, or `not-in-demo -> stop-and-ask`.
 
 ### Story 15.3: Phase 3 - Dashboard
 
@@ -1904,7 +1904,7 @@ So that I can find prior reports without scanning repeated verdict text.
 ### Story 15.6: Phase 6 - Settings, Incidents, and Skills
 
 As an administrator,
-I want the remaining NiceGUI operational screens rebuilt in the React design system,
+I want the remaining retired UI operational screens rebuilt in the React design system,
 So that configuration, incidents, topology, reviewer feedback, and Skills management are migrated before cutover.
 
 **Acceptance Criteria:**
@@ -1913,42 +1913,42 @@ So that configuration, incidents, topology, reviewer feedback, and Skills manage
 **When** Phase 6 screens are implemented
 **Then** settings, incidents, and skills list/detail flows match the design system
 **And** provider settings, topology upload and drift cadence, reviewer-feedback stats, and custom-skills management preserve current behavior unless Part A2 sanctions a change
-**And** any NiceGUI-callback-only behavior is extracted into `/api/v1` as Part A3-sanctioned backend work
+**And** any retired UI callback-only behavior is extracted into `/api/v1` as Part A3-sanctioned backend work
 **And** the retired Dashboard Result Display Duration setting is recorded as `sanctioned-change (A2)`.
 
-### Story 15.7: Phase 7 - Cutover and NiceGUI Removal
+### Story 15.7: Phase 7 - Cutover and retired UI Removal
 
 As a maintainer,
 I want the React SPA to become the only web UI,
-So that NiceGUI code, dependencies, assets, and tests no longer remain in the runtime.
+So that retired UI code, dependencies, assets, and tests no longer remain in the runtime.
 
 **Acceptance Criteria:**
 
 **Given** every screen has a React replacement or approved disposition
 **When** cutover is performed
 **Then** the SPA moves to `/` and legacy routes redirect appropriately
-**And** `ui/`, `nicegui`, old NiceGUI tests, old assets, dead CSS, and orphaned static files are removed
-**And** Part D2 grep gates pass for `nicegui` and `quasar` except historical references
+**And** the retired Python UI package, its dependency, old UI tests, old assets, dead CSS, and orphaned static files are removed
+**And** Part D2 grep gates pass for retired framework and old test-lane references
 **And** README screenshots, runtime badges, CI lanes, a11y routes, CHANGELOG, and final image-size delta are updated.
 
-### NiceGUI UI Story Supersession
+### retired UI Story Supersession
 
-The following existing stories were written for the NiceGUI-era UI. Their UI implementation scope is superseded by Epic 15 and the Part D parity audit. Non-UI backend, API, data, or documentation obligations remain in force unless a later planning update explicitly replaces them.
+The following existing stories were written for the retired UI-era UI. Their UI implementation scope is superseded by Epic 15 and the Part D parity audit. Non-UI backend, API, data, or documentation obligations remain in force unless a later planning update explicitly replaces them.
 
 | Existing story | Superseded UI scope | Replacement in Epic 15 |
 |---|---|---|
-| Story 3.1: Verdict-First Report Header | NiceGUI report header rendering | Story 15.4 |
-| Story 3.2: Findings Table With Evidence Badges | NiceGUI findings table and evidence badge rendering | Story 15.4 |
-| Story 3.3: Evidence Inspector Panel | NiceGUI evidence inspector UI | Story 15.4 |
-| Story 3.4: Confidence Ledger and Why-Not-Lower/Higher | NiceGUI confidence ledger UI | Story 15.4 |
-| Story 3.5: Context Completeness and TODO Panel | NiceGUI context and TODO panel UI | Story 15.4 and Story 15.6 |
-| Story 3.6: Report Diff After Rerun | NiceGUI report comparison/diff UI | Story 15.4 and Story 15.5 |
-| Story 3.7: Keyboard and Accessibility Review Pass | NiceGUI keyboard and accessibility review surface | Stories 15.2 through 15.7 |
-| Story 3.8: Historical Report Search and Filtering | NiceGUI history UI | Story 15.5 |
-| Story 4.5: Reviewer Feedback Capture | Separate NiceGUI reviewer-feedback UI placement | Story 15.4 inline finding feedback and Story 15.6 feedback stats |
-| Story 6.4: Outcome Calibration Metrics | NiceGUI dashboard trend/limitation labels | Story 15.3 |
-| Story 9.5: Skills Browser UI | NiceGUI skills browser UI | Story 15.6 |
-| Story 12.2: Provider Settings Administration | NiceGUI provider settings UI | Story 15.6 |
+| Story 3.1: Verdict-First Report Header | retired UI report header rendering | Story 15.4 |
+| Story 3.2: Findings Table With Evidence Badges | retired UI findings table and evidence badge rendering | Story 15.4 |
+| Story 3.3: Evidence Inspector Panel | retired UI evidence inspector UI | Story 15.4 |
+| Story 3.4: Confidence Ledger and Why-Not-Lower/Higher | retired UI confidence ledger UI | Story 15.4 |
+| Story 3.5: Context Completeness and TODO Panel | retired UI context and TODO panel UI | Story 15.4 and Story 15.6 |
+| Story 3.6: Report Diff After Rerun | retired UI report comparison/diff UI | Story 15.4 and Story 15.5 |
+| Story 3.7: Keyboard and Accessibility Review Pass | retired UI keyboard and accessibility review surface | Stories 15.2 through 15.7 |
+| Story 3.8: Historical Report Search and Filtering | retired UI history UI | Story 15.5 |
+| Story 4.5: Reviewer Feedback Capture | Separate retired UI reviewer-feedback UI placement | Story 15.4 inline finding feedback and Story 15.6 feedback stats |
+| Story 6.4: Outcome Calibration Metrics | retired UI dashboard trend/limitation labels | Story 15.3 |
+| Story 9.5: Skills Browser UI | retired UI skills browser UI | Story 15.6 |
+| Story 12.2: Provider Settings Administration | retired UI provider settings UI | Story 15.6 |
 
 ## Final Validation Notes
 

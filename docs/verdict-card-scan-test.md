@@ -47,7 +47,7 @@ Pass criteria for Story `2.1`:
 
 ## Supporting Evidence
 
-- React UI regression coverage in `frontend/src/screens/Dashboard.test.tsx`
+- React SPA regression coverage in `frontend/src/screens/Dashboard.test.tsx`
 - dashboard verdict rendering through `frontend/src/screens/Dashboard.tsx`
 - report verdict rendering through `frontend/src/screens/Report.tsx`
 - shared verdict rendering through the public React `/reports/{id}` route
