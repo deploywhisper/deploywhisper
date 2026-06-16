@@ -536,8 +536,46 @@ class PersistedReportData(BaseModel):
         return normalized
 
 
+class PreviousScanDiffData(BaseModel):
+    previous_report_id: int = Field(..., description="Prior scan report id")
+    previous_created_at: str = Field(..., description="Prior scan timestamp")
+    score_delta: int = Field(..., description="Risk score delta from prior scan")
+    score_direction: Literal["up", "down", "flat"] = Field(
+        ..., description="Risk score movement direction"
+    )
+    previous_severity: str = Field(..., description="Prior scan severity")
+    current_severity: str = Field(..., description="Current scan severity")
+    previous_recommendation: str = Field(..., description="Prior recommendation")
+    current_recommendation: str = Field(..., description="Current recommendation")
+
+
 class AnalysisReportData(PersistedReportData):
-    pass
+    previous_scan_diff: PreviousScanDiffData | None = Field(
+        default=None,
+        description="Compact rescan delta against the previous scan of matching artifacts.",
+    )
+
+
+class AnalysisBulkDeleteRequest(BaseModel):
+    ids: list[int] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Analysis report ids to delete.",
+    )
+
+
+class AnalysisBulkDeleteData(BaseModel):
+    requested_count: int = Field(..., description="Number of requested report ids")
+    deleted_count: int = Field(..., description="Number of deleted reports")
+    deleted_ids: list[int] = Field(
+        default_factory=list, description="Report ids requested for deletion"
+    )
+
+
+class AnalysisBulkDeleteResponse(BaseModel):
+    data: AnalysisBulkDeleteData
+    meta: MetaPayload
 
 
 class ProjectCreateRequest(BaseModel):

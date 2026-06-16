@@ -228,6 +228,65 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertIsNone(payload["data"][0]["trigger_ref"])
         self.assertIsNone(payload["data"][0]["pr_ref"])
 
+    def test_delete_analyses_removes_requested_reports(self) -> None:
+        second = report_service_module.persist_analysis_report(
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="next-plan.json",
+                        tool="terraform",
+                        status="parsed",
+                        changes=[],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=12,
+                severity="low",
+                recommendation="go",
+                top_risk="Low risk metadata-only update.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: second report.",
+                explanation="Second report.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+
+        response = self.client.request(
+            "DELETE",
+            "/api/v1/analyses",
+            json={"ids": [self.persisted["id"], second["id"]]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["requested_count"], 2)
+        self.assertEqual(payload["data"]["deleted_count"], 2)
+        self.assertEqual(
+            payload["data"]["deleted_ids"], [self.persisted["id"], second["id"]]
+        )
+        remaining = self.client.get("/api/v1/analyses").json()
+        self.assertEqual(remaining["meta"]["total_count"], 0)
+
+    def test_delete_analyses_rejects_missing_report_without_partial_delete(self) -> None:
+        response = self.client.request(
+            "DELETE",
+            "/api/v1/analyses",
+            json={"ids": [self.persisted["id"], 9999]},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "analysis_not_found")
+        remaining = self.client.get("/api/v1/analyses").json()
+        self.assertEqual(remaining["meta"]["total_count"], 1)
+
     def test_list_analyses_rejects_reversed_activity_window(self) -> None:
         response = self.client.get(
             "/api/v1/analyses",

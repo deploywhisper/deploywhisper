@@ -24,6 +24,8 @@ from pydantic import ValidationError
 from api.errors import ApiError, ApiRoute
 from api.schemas import (
     AnalysisDetailResponse,
+    AnalysisBulkDeleteRequest,
+    AnalysisBulkDeleteResponse,
     AnalysisListResponse,
     AnalysisReportData,
     AnalysisRunResponse,
@@ -37,6 +39,7 @@ from api.schemas import (
     SharedReportAccessResponse,
     SharedReportUnlockRequest,
     build_analysis_run_data,
+    build_meta,
     build_report_meta,
 )
 from config import settings
@@ -63,6 +66,7 @@ from services.report_service import fetch_filtered_analysis_history_page
 from services.report_service import fetch_shared_analysis_report
 from services.report_service import fetch_shared_report_comparison
 from services.report_service import normalize_report_schema_version
+from services.report_service import remove_analysis_reports
 from services.feedback_service import (
     FeedbackError,
     fetch_report_feedback_state,
@@ -377,6 +381,37 @@ def _require_report_share_permission(
     )
 
 
+def _require_report_delete_permission(
+    *,
+    authorization: dict[str, object],
+    report_id: int,
+) -> None:
+    require_project_permission(
+        role=authorization["role"],
+        capability="report.review",
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+    report = fetch_analysis_report(report_id)
+    if report is None:
+        if has_restricted_project_scope(
+            role=authorization["role"],
+            allowed_project_keys=authorization["allowed_project_keys"],
+        ):
+            raise _project_scope_forbidden_error()
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    project = report.get("project") or {}
+    require_project_permission(
+        role=authorization["role"],
+        capability="report.review",
+        project_key=project.get("project_key"),
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+
+
 def _reject_unscoped_workspace_id(
     *,
     project_id: int | None,
@@ -646,6 +681,41 @@ def list_analyses(
             page=page_payload["page"],
             page_size=page_payload["page_size"],
         ),
+    )
+
+
+@router.delete(
+    "",
+    response_model=AnalysisBulkDeleteResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def delete_analyses(
+    request: AnalysisBulkDeleteRequest,
+    authorization: dict[str, object] = Depends(_authorization_context),
+) -> AnalysisBulkDeleteResponse:
+    requested_ids = list(dict.fromkeys(request.ids))
+    for report_id in requested_ids:
+        try:
+            _require_report_delete_permission(
+                authorization=authorization,
+                report_id=report_id,
+            )
+        except PermissionError as exc:
+            _raise_authorization_error(exc)
+    removed_count = remove_analysis_reports(requested_ids)
+    return AnalysisBulkDeleteResponse(
+        data={
+            "requested_count": len(requested_ids),
+            "deleted_count": removed_count,
+            "deleted_ids": requested_ids,
+        },
+        meta=build_meta(),
     )
 
 
