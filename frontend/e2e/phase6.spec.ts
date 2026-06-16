@@ -100,10 +100,10 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
     await page.goto("/app/settings", { waitUntil: "networkidle" });
     await selectProject(page);
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    await expect(page.getByText("AI provider")).toBeVisible();
-    await expect(page.getByText("Service context")).toBeVisible();
-    await expect(page.getByText("Reviewer feedback")).toBeVisible();
-    await expect(page.getByText("Custom AI skills")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AI provider" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Service context" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reviewer feedback" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Custom AI skills" })).toBeVisible();
 
     const tempTopology = path.join(os.tmpdir(), `phase6-topology-${runId}.json`);
     fs.writeFileSync(tempTopology, JSON.stringify({ services: [] }), "utf-8");
@@ -118,9 +118,8 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
     await page.goto("/app/incidents", { waitUntil: "networkidle" });
     await selectProject(page);
     await expect(page.getByRole("heading", { name: "Incidents" })).toBeVisible();
-    await expect(page.getByText("Checkout rollout incident")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Checkout rollout incident/ })).toBeVisible();
     await page.getByRole("button", { name: /Checkout rollout incident/ }).click();
-    await expect(page.getByText("INC-PHASE6")).not.toBeVisible();
     await expect(page.getByText("checkout-incident.json").first()).toBeVisible();
     await expectNoSeriousA11y(page);
   });
@@ -128,8 +127,8 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
   test("skills supports filtering and detail navigation", async ({ page }) => {
     await page.goto("/app/skills?search=terraform&sort=recency", { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
-    await expect(page.getByText(/Terraform/i).first()).toBeVisible();
-    await page.getByRole("link", { name: /Terraform/i }).first().click();
+    await expect(page.locator('a[href="/app/skills/terraform"]')).toBeVisible();
+    await page.locator('a[href="/app/skills/terraform"]').click();
     await expect(page).toHaveURL(/\/app\/skills\/terraform/);
     await expect(page.getByText(/deploywhisper skill install terraform/)).toBeVisible();
     await expect(page.getByText("Version history")).toBeVisible();

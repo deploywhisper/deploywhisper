@@ -2,6 +2,13 @@
   padding-bottom: 42px;
 }
 
+.dw-phase6-shell .dw-global-search > span,
+.dw-phase6-shell .dw-project-trigger-env,
+.dw-phase6-content .eyebrow,
+.dw-phase6-content .dw-card-eyebrow {
+  color: #5b6473;
+}
+
 .dw-phase6-header {
   display: flex;
   align-items: flex-start;

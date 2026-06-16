@@ -132,7 +132,7 @@ export function Phase6Shell({
   const projectContext = useSelectedProject();
 
   return (
-    <div className="dw-app-shell dw-ui">
+    <div className="dw-app-shell dw-phase6-shell dw-ui">
       <Sidebar active={active} selectedProject={projectContext.selectedOption} />
       <main className="dw-main">
         <TopBar
