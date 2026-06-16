@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   Play,
   Search,
+  Settings,
   ShieldCheck,
   Trash2,
   Upload,
@@ -144,10 +145,11 @@ function DashboardError({ message, onRetry }: { message: string; onRetry: () => 
 
 function Sidebar({ selectedProject }: { selectedProject: ProjectOption }) {
   const nav = [
-    { label: "Dashboard", icon: LayoutGrid, active: true },
-    { label: "Skills", icon: Zap },
-    { label: "Incidents", icon: AlertTriangle, count: 0 },
-    { label: "History", icon: History },
+    { label: "Dashboard", icon: LayoutGrid, href: "/app", active: true },
+    { label: "Skills", icon: Zap, href: "/app/skills" },
+    { label: "Incidents", icon: AlertTriangle, href: "/app/incidents", count: 0 },
+    { label: "History", icon: History, href: "/app/history" },
+    { label: "Settings", icon: Settings, href: "/app/settings" },
   ];
 
   return (
@@ -164,12 +166,12 @@ function Sidebar({ selectedProject }: { selectedProject: ProjectOption }) {
         </div>
       </div>
       <nav className="dw-sidebar-nav" aria-label="Primary">
-        {nav.map(({ label, icon: Icon, active, count }) => (
-          <button key={label} className={`dw-nav-item${active ? " dw-nav-item-active" : ""}`} type="button">
+        {nav.map(({ label, icon: Icon, href, active, count }) => (
+          <Link key={label} className={`dw-nav-item${active ? " dw-nav-item-active" : ""}`} to={href}>
             <Icon color={active ? "var(--dw-brand)" : "var(--dw-faint)"} size={17} />
             <span>{label}</span>
             {typeof count === "number" && <span className="dw-nav-count">{count}</span>}
-          </button>
+          </Link>
         ))}
       </nav>
       <div className="dw-active-project-card">
@@ -428,7 +430,7 @@ function RecentAnalysesCard({
   return (
     <Card
       right={
-        <Link className="dw-link-button" to="/history">
+        <Link className="dw-link-button" to="/app/history">
           View history <ChevronRight size={13} />
         </Link>
       }
@@ -547,7 +549,7 @@ export function DropzoneCard({
     mutationFn: () => createAnalysis({ files: stagedFiles, projectId: Number(project.id) }),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      navigate(`/reports/${result.data.persisted_report.id}`);
+      navigate(`/app/reports/${result.data.persisted_report.id}`);
     },
   });
 
@@ -808,7 +810,7 @@ export function DashboardScreen() {
   const hasGlobalError = projectsQuery.isError;
   const latest = analysesQuery.data?.[0];
 
-  const openReport = (id: number) => navigate(`/reports/${id}`);
+  const openReport = (id: number) => navigate(`/app/reports/${id}`);
   const refetchDashboard = () => {
     void statsQuery.refetch();
     void analysesQuery.refetch();
@@ -881,18 +883,5 @@ export function DashboardScreen() {
         </main>
       </div>
     </div>
-  );
-}
-
-export function ReportStub() {
-  return (
-    <main className="dw-report-stub dw-ui">
-      <Card eyebrow="Report screen" title="Briefing route ready">
-        <p className="dw-card-subtitle">The full report screen lands in Phase 4. This route keeps dashboard navigation stable.</p>
-        <Link className="dw-link-button" to="/">
-          Back to dashboard
-        </Link>
-      </Card>
-    </main>
   );
 }

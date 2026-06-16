@@ -21,6 +21,7 @@ from api.schemas import (
 )
 from config import settings
 from services.skill_registry_service import (
+    SkillRegistrySort,
     fetch_skill_registry_content,
     fetch_skill_registry_entry,
     fetch_skill_registry_page,
@@ -53,6 +54,10 @@ def list_skills(
         default=None,
         description="Case-insensitive keyword search across name, description, tags, and triggers.",
     ),
+    sort: SkillRegistrySort = Query(
+        default="popularity",
+        description="Sort skills by popularity or recency.",
+    ),
     page: int = Query(default=1, ge=1, description="1-based results page."),
     page_size: int = Query(
         default=50,
@@ -66,6 +71,7 @@ def list_skills(
         tag=tag,
         author=author,
         search=search,
+        sort=sort,
         page=page,
         page_size=page_size,
     )
@@ -76,6 +82,7 @@ def list_skills(
             "tag": tag,
             "author": author,
             "search": search,
+            "sort": sort if sort != "popularity" else None,
         }.items()
         if value
     }
