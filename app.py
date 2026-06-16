@@ -62,6 +62,17 @@ class SPAStaticFiles(StaticFiles):
             raise
 
 
+def _fallback_spa_shell() -> HTMLResponse:
+    """Return a minimal SPA shell when frontend/dist is absent in test contexts."""
+    return HTMLResponse(
+        content=(
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            f"<title>{escape(settings.app_name)}</title>"
+            '</head><body><div id="root"></div></body></html>'
+        )
+    )
+
+
 async def _topology_drift_scheduler_loop(stop_event: asyncio.Event) -> None:
     """Run topology drift checks on a lightweight polling loop."""
     while not stop_event.is_set():
@@ -271,6 +282,20 @@ if FRONTEND_DIST_DIR.is_dir():
         SPAStaticFiles(directory=FRONTEND_DIST_DIR, html=True),
         name="frontend",
     )
+else:
+
+    @fastapi_app.api_route(
+        "/{path:path}", methods=["GET", "HEAD"], include_in_schema=False
+    )
+    def missing_frontend_spa_fallback(path: str) -> HTMLResponse:
+        """Serve client routes in tests when the built SPA has not been produced."""
+        blocked_prefixes = ("api/", "schemas/")
+        blocked_paths = {"api", "schemas", "openapi.json"}
+        if path in blocked_paths or path.startswith(blocked_prefixes):
+            raise StarletteHTTPException(status_code=404, detail="Not Found")
+        if "." in path.rsplit("/", maxsplit=1)[-1]:
+            raise StarletteHTTPException(status_code=404, detail="Not Found")
+        return _fallback_spa_shell()
 
 
 def create_app():

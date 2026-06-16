@@ -106,7 +106,6 @@ jobs:
             models \
             parsers \
             services \
-            ui \
             app.py \
             api_server.py \
             cli.py \
