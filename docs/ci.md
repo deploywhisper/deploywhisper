@@ -56,6 +56,18 @@ npm run ui:gen-api
 
 `frontend/scripts/gen-api.sh` reads `http://localhost:8080/api/v1/openapi.json` and commits the resulting `frontend/src/api/schema.d.ts`.
 
+Backend-for-ui changes must also run the compose verification loop before PR:
+
+```bash
+docker compose up -d --build
+curl -fsSL http://localhost:8080/api/v1/health
+curl -fsSL http://localhost:8080/api/v1/stats/summary
+curl -fsSL "http://localhost:8080/api/v1/stats/verdict-distribution?days=30"
+curl -fsSL http://localhost:8080/api/v1/projects
+```
+
+Record the response shapes in the PR body, then run `docker compose down`.
+
 For full local parity with the CI security lane, make sure `bandit` is installed in the active environment or available via `BANDIT_BIN`. When available, `scripts/ci-local.sh` runs the same two-pass Bandit gate used in CI.
 
 To run only changed tests relative to the default base branch:

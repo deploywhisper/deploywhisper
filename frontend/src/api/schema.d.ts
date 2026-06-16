@@ -50,7 +50,8 @@ export interface paths {
         put?: never;
         /** Create Analysis */
         post: operations["create_analysis_api_v1_analyses_post"];
-        delete?: never;
+        /** Delete Analyses */
+        delete: operations["delete_analyses_api_v1_analyses_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -67,6 +68,57 @@ export interface paths {
         get: operations["get_analysis_api_v1_analyses__report_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analyses/{report_id}/shared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Shared Analysis */
+        get: operations["get_shared_analysis_api_v1_analyses__report_id__shared_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analyses/{report_id}/shared/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlock Shared Analysis */
+        post: operations["unlock_shared_analysis_api_v1_analyses__report_id__shared_unlock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analyses/{report_id}/findings/{finding_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Finding Feedback */
+        post: operations["create_finding_feedback_api_v1_analyses__report_id__findings__finding_id__feedback_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -196,6 +248,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Settings Summary
+         * @description Return settings data needed by the React settings screen.
+         */
+        get: operations["get_settings_summary_api_v1_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/provider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Provider Settings
+         * @description Persist active narrative provider settings and return validation state.
+         */
+        put: operations["update_provider_settings_api_v1_settings_provider_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/topology/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Settings Topology
+         * @description Validate topology JSON without saving it.
+         */
+        post: operations["preview_settings_topology_api_v1_settings_topology_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/topology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Settings Topology
+         * @description Save topology JSON for the active project scope.
+         */
+        put: operations["update_settings_topology_api_v1_settings_topology_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/topology/drift-cadence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Topology Drift Cadence
+         * @description Persist the topology drift check cadence.
+         */
+        put: operations["update_topology_drift_cadence_api_v1_settings_topology_drift_cadence_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/custom-skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Custom Skills
+         * @description Return custom skill override status.
+         */
+        get: operations["list_custom_skills_api_v1_settings_custom_skills_get"];
+        put?: never;
+        /**
+         * Upload Custom Skill
+         * @description Persist a custom markdown skill and return the updated status list.
+         */
+        post: operations["upload_custom_skill_api_v1_settings_custom_skills_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills": {
         parameters: {
             query?: never;
@@ -281,6 +457,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Stats Summary */
+        get: operations["get_stats_summary_api_v1_stats_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/verdict-distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Verdict Distribution */
+        get: operations["get_verdict_distribution_api_v1_stats_verdict_distribution_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/incidents/ingestion": {
         parameters: {
             query?: never;
@@ -315,91 +525,6 @@ export interface paths {
          * @description Replace or remove stale incident index entries for one project scope.
          */
         post: operations["incident_reindex_api_v1_incidents_reindex_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_nicegui/client/371b6d87-3849-465d-a32b-3978ebd77dba/upload/146": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Route */
-        post: operations["upload_route__nicegui_client_371b6d87_3849_465d_a32b_3978ebd77dba_upload_146_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_nicegui/client/371b6d87-3849-465d-a32b-3978ebd77dba/upload/147": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Route */
-        post: operations["upload_route__nicegui_client_371b6d87_3849_465d_a32b_3978ebd77dba_upload_147_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_deploywhisper/dashboard-upload/{upload_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Dashboard Upload Route */
-        post: operations["dashboard_upload_route__deploywhisper_dashboard_upload__upload_key__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_nicegui/client/b7177ee1-0068-4be2-8fc1-c033e4761ce8/upload/145": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Route */
-        post: operations["upload_route__nicegui_client_b7177ee1_0068_4be2_8fc1_c033e4761ce8_upload_145_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/_nicegui/client/b7177ee1-0068-4be2-8fc1-c033e4761ce8/upload/146": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Route */
-        post: operations["upload_route__nicegui_client_b7177ee1_0068_4be2_8fc1_c033e4761ce8_upload_146_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -460,9 +585,196 @@ export interface components {
              */
             uncertainty_flags?: string[];
         };
+        /** AnalysisBulkDeleteData */
+        AnalysisBulkDeleteData: {
+            /**
+             * Requested Count
+             * @description Number of requested report ids
+             */
+            requested_count: number;
+            /**
+             * Deleted Count
+             * @description Number of deleted reports
+             */
+            deleted_count: number;
+            /**
+             * Deleted Ids
+             * @description Report ids requested for deletion
+             */
+            deleted_ids?: number[];
+        };
+        /** AnalysisBulkDeleteRequest */
+        AnalysisBulkDeleteRequest: {
+            /**
+             * Ids
+             * @description Analysis report ids to delete.
+             */
+            ids: number[];
+        };
+        /** AnalysisBulkDeleteResponse */
+        AnalysisBulkDeleteResponse: {
+            data: components["schemas"]["AnalysisBulkDeleteData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
+        /** AnalysisDetailData */
+        AnalysisDetailData: {
+            /** Id */
+            id: number;
+            /** @description Owning project/workspace */
+            project: components["schemas"]["ProjectData"];
+            /** @description Optional project-local workspace/environment scope */
+            workspace?: components["schemas"]["WorkspaceData"] | null;
+            /** Risk Score */
+            risk_score: number;
+            /** Severity */
+            severity: string;
+            /** Recommendation */
+            recommendation: string;
+            /**
+             * Confidence
+             * @description Overall verdict confidence
+             */
+            confidence: number;
+            /** Top Risk */
+            top_risk: string;
+            /**
+             * Report Schema Version
+             * @description Persisted report schema version
+             */
+            report_schema_version: string;
+            /**
+             * Tool Mix
+             * @description Supported toolchains represented in this persisted report
+             */
+            tool_mix?: string[];
+            /**
+             * Analysis Status
+             * @description High-level persisted analysis completion/degradation status
+             * @default complete
+             * @enum {string}
+             */
+            analysis_status: "complete" | "degraded" | "fallback";
+            /** Top Risk Contributors */
+            top_risk_contributors?: string[];
+            context_completeness?: components["schemas"]["ContextCompletenessData"];
+            blast_radius?: components["schemas"]["BlastRadiusData"];
+            rollback_plan?: components["schemas"]["RollbackPlanData"];
+            /** Parse Summary */
+            parse_summary: string;
+            /** Narrative Opening */
+            narrative_opening: string;
+            /**
+             * Narrative Available
+             * @description Whether narrative text is available
+             * @default true
+             */
+            narrative_available: boolean;
+            /**
+             * Narrative Degraded
+             * @description Whether narrative output used fallback mode or is inferred unavailable
+             */
+            narrative_degraded: boolean;
+            /**
+             * Narrative Failure Notice
+             * @description Visible explanation when narrative generation was unavailable
+             */
+            narrative_failure_notice?: string | null;
+            /** Assessment Source */
+            assessment_source?: ("heuristic-only" | "heuristic+llm") | null;
+            /** Narrative Source */
+            narrative_source?: ("llm" | "fallback") | null;
+            /** Narrative Provider */
+            narrative_provider?: string | null;
+            /** Narrative Model */
+            narrative_model?: string | null;
+            /** Narrative Local Mode */
+            narrative_local_mode?: boolean | null;
+            /** @description Stable advisory recommendation contract for automation */
+            advisory: components["schemas"]["AdvisorySummaryData"];
+            /** Skills Applied */
+            skills_applied?: string[];
+            /** Created At */
+            created_at: string;
+            /** Warnings */
+            warnings?: string[];
+            /** Findings */
+            findings?: components["schemas"]["FindingData"][];
+            /** Evidence Items */
+            evidence_items?: components["schemas"]["EvidenceItemData"][];
+            /** Incident Matches */
+            incident_matches?: components["schemas"]["IncidentMatchData"][];
+            /** Contributors */
+            contributors?: components["schemas"]["RiskContributorData"][];
+            /** @description Shared confidence ledger and why-not boundary explanations */
+            confidence_ledger?: components["schemas"]["ConfidenceLedgerData"];
+            /** Dashboard Display Duration Seconds */
+            dashboard_display_duration_seconds?: number | null;
+            /** Dashboard Remaining Seconds */
+            dashboard_remaining_seconds?: number | null;
+            /** Analysis Duration Seconds */
+            analysis_duration_seconds?: number | null;
+            /** @description Submission manifest metadata, or null when persisted manifest data is unavailable */
+            submission_manifest?: components["schemas"]["SubmissionManifestData"] | null;
+            /**
+             * Submission Manifest Fallback
+             * @description Durable artifact identity/status fallback retained outside manifest JSON
+             */
+            submission_manifest_fallback?: components["schemas"]["SubmissionManifestFallbackItemData"][];
+            audit: components["schemas"]["AuditMetadataData"];
+            /** @description Compact rescan delta against the previous scan of matching artifacts. */
+            previous_scan_diff?: components["schemas"]["PreviousScanDiffData"] | null;
+            /** @description Existing share-summary markdown and machine payload */
+            share_summary: components["schemas"]["ShareSummaryData"];
+            /** @description Public share configuration when available */
+            share?: components["schemas"]["AnalysisShareConfigData"] | null;
+            /** @description Latest reviewer feedback state for report findings */
+            feedback_state?: components["schemas"]["FeedbackStateData"];
+            /**
+             * Comparison
+             * @description Optional previous-report comparison for shared report views
+             */
+            comparison?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Score
+             * @description Dashboard-friendly alias for risk_score.
+             */
+            readonly score: number;
+            /**
+             * Verdict
+             * @description Dashboard-friendly alias for recommendation.
+             */
+            readonly verdict: string;
+            /**
+             * Filenames
+             * @description Dashboard-friendly alias for analyzed artifact names.
+             */
+            readonly filenames: string[];
+            /**
+             * Workspace Label
+             * @description Human-friendly workspace label for compact dashboard rows.
+             */
+            readonly workspace_label: string;
+            /**
+             * Env Label
+             * @description Environment label for compact dashboard rows.
+             */
+            readonly env_label: string;
+            /**
+             * Trigger Ref
+             * @description Dashboard-friendly alias for audit trigger identifiers.
+             */
+            readonly trigger_ref: string | null;
+            /**
+             * Pr Ref
+             * @description Pull-request reference when the trigger metadata identifies one.
+             */
+            readonly pr_ref: string | null;
+        };
         /** AnalysisDetailResponse */
         AnalysisDetailResponse: {
-            data: components["schemas"]["AnalysisReportData"];
+            data: components["schemas"]["AnalysisDetailData"];
             meta: components["schemas"]["ResourceMetaPayload"];
         };
         /** AnalysisListResponse */
@@ -576,6 +888,43 @@ export interface components {
              */
             submission_manifest_fallback?: components["schemas"]["SubmissionManifestFallbackItemData"][];
             audit: components["schemas"]["AuditMetadataData"];
+            /** @description Compact rescan delta against the previous scan of matching artifacts. */
+            previous_scan_diff?: components["schemas"]["PreviousScanDiffData"] | null;
+            /**
+             * Score
+             * @description Dashboard-friendly alias for risk_score.
+             */
+            readonly score: number;
+            /**
+             * Verdict
+             * @description Dashboard-friendly alias for recommendation.
+             */
+            readonly verdict: string;
+            /**
+             * Filenames
+             * @description Dashboard-friendly alias for analyzed artifact names.
+             */
+            readonly filenames: string[];
+            /**
+             * Workspace Label
+             * @description Human-friendly workspace label for compact dashboard rows.
+             */
+            readonly workspace_label: string;
+            /**
+             * Env Label
+             * @description Environment label for compact dashboard rows.
+             */
+            readonly env_label: string;
+            /**
+             * Trigger Ref
+             * @description Dashboard-friendly alias for audit trigger identifiers.
+             */
+            readonly trigger_ref: string | null;
+            /**
+             * Pr Ref
+             * @description Pull-request reference when the trigger metadata identifies one.
+             */
+            readonly pr_ref: string | null;
         };
         /** AnalysisRunData */
         AnalysisRunData: {
@@ -1110,6 +1459,69 @@ export interface components {
              */
             page_size?: number | null;
         };
+        /** CustomSkillListResponse */
+        CustomSkillListResponse: {
+            /** Data */
+            data: components["schemas"]["CustomSkillStatusData"][];
+            meta: components["schemas"]["MetaPayload"];
+        };
+        /** CustomSkillStatusData */
+        CustomSkillStatusData: {
+            /**
+             * Name
+             * @description Stable skill name
+             */
+            name: string;
+            /**
+             * Mode
+             * @description Whether the skill overrides a built-in skill
+             * @enum {string}
+             */
+            mode: "override" | "new";
+            /**
+             * Active
+             * @description Whether the skill is active
+             */
+            active: boolean;
+            /**
+             * Path
+             * @description Filesystem path
+             */
+            path: string;
+            /**
+             * Warning
+             * @description Ignored-state warning
+             */
+            warning?: string | null;
+        };
+        /** CustomSkillUploadData */
+        CustomSkillUploadData: {
+            /** Statuses */
+            statuses?: components["schemas"]["CustomSkillStatusData"][];
+            saved?: components["schemas"]["CustomSkillStatusData"] | null;
+            /** Success Message */
+            success_message?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+        };
+        /** CustomSkillUploadRequest */
+        CustomSkillUploadRequest: {
+            /**
+             * Filename
+             * @description Markdown skill filename
+             */
+            filename: string;
+            /**
+             * Content
+             * @description Markdown skill content
+             */
+            content: string;
+        };
+        /** CustomSkillUploadResponse */
+        CustomSkillUploadResponse: {
+            data: components["schemas"]["CustomSkillUploadData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
         /** DeploymentOutcomeCreateRequest */
         DeploymentOutcomeCreateRequest: {
             /**
@@ -1373,6 +1785,163 @@ export interface components {
              */
             related_change_ids?: string[];
         };
+        /** FeedbackCurrentStateData */
+        FeedbackCurrentStateData: {
+            /**
+             * Useful Count
+             * @default 0
+             */
+            useful_count: number;
+            /**
+             * Noisy Count
+             * @default 0
+             */
+            noisy_count: number;
+            /**
+             * Not Useful Count
+             * @default 0
+             */
+            not_useful_count: number;
+            /**
+             * False Positive Count
+             * @default 0
+             */
+            false_positive_count: number;
+            /**
+             * Missed Finding Count
+             * @default 0
+             */
+            missed_finding_count: number;
+        };
+        /** FeedbackEventData */
+        FeedbackEventData: {
+            /**
+             * Id
+             * @description Stable feedback event identifier
+             */
+            id: number;
+            /**
+             * Project Id
+             * @description Owning project identifier
+             */
+            project_id: number;
+            /**
+             * Workspace Id
+             * @description Optional workspace identifier
+             */
+            workspace_id?: number | null;
+            /**
+             * Analysis Id
+             * @description Analysis report identifier
+             */
+            analysis_id: number;
+            /**
+             * Finding Id
+             * @description Finding identifier when feedback is finding-scoped
+             */
+            finding_id?: string | null;
+            /**
+             * Reviewer Role
+             * @description Reviewer role label
+             */
+            reviewer_role?: string | null;
+            /**
+             * Useful
+             * @description Whether the finding was useful
+             */
+            useful?: boolean | null;
+            /**
+             * Correctness Rating
+             * @description Legacy correctness rating
+             */
+            correctness_rating?: number | null;
+            /**
+             * False Positive Flag
+             * @description Whether the finding was marked false positive
+             * @default false
+             */
+            false_positive_flag: boolean;
+            /**
+             * False Positive Reason
+             * @description Optional false-positive reason
+             */
+            false_positive_reason?: string | null;
+            /**
+             * False Negative Note
+             * @description Optional missed-finding note
+             */
+            false_negative_note?: string | null;
+            /**
+             * Outcome Label
+             * @description Normalized feedback outcome label
+             */
+            outcome_label?: string | null;
+            /**
+             * Created At
+             * @description Feedback creation timestamp
+             */
+            created_at: string;
+        };
+        /** FeedbackRecentNoteData */
+        FeedbackRecentNoteData: {
+            /**
+             * Type
+             * @description Feedback note type
+             */
+            type: string;
+            /**
+             * Text
+             * @description Reviewer note
+             */
+            text: string;
+            /** Analysis Id */
+            analysis_id?: number | null;
+            /** Finding Id */
+            finding_id?: string | null;
+            /**
+             * Created At
+             * @description UTC timestamp
+             */
+            created_at: string;
+        };
+        /** FeedbackStateData */
+        FeedbackStateData: {
+            /**
+             * Finding Feedback
+             * @description Latest persisted feedback event for each finding
+             */
+            finding_feedback?: {
+                [key: string]: components["schemas"]["FeedbackEventData"];
+            };
+            /**
+             * False Negative By Finding
+             * @description Latest missed-finding note keyed by finding id
+             */
+            false_negative_by_finding?: {
+                [key: string]: components["schemas"]["FeedbackEventData"];
+            };
+            /**
+             * False Negative Notes
+             * @description Latest missed-finding feedback notes
+             */
+            false_negative_notes?: components["schemas"]["FeedbackEventData"][];
+        };
+        /** FeedbackSummaryData */
+        FeedbackSummaryData: {
+            project: components["schemas"]["ProjectData"];
+            current_state: components["schemas"]["FeedbackCurrentStateData"];
+            totals: components["schemas"]["FeedbackTotalsData"];
+            /** Recent Notes */
+            recent_notes?: components["schemas"]["FeedbackRecentNoteData"][];
+        };
+        /** FeedbackTotalsData */
+        FeedbackTotalsData: {
+            /**
+             * Events Recorded
+             * @default 0
+             */
+            events_recorded: number;
+        };
         /** FindingData */
         FindingData: {
             /**
@@ -1449,6 +2018,31 @@ export interface components {
              * @description Skill identifier when a skill contributed the finding
              */
             skill_id?: string | null;
+        };
+        /** FindingFeedbackRequest */
+        FindingFeedbackRequest: {
+            /**
+             * Outcome
+             * @description Reviewer feedback outcome for the finding
+             * @enum {string}
+             */
+            outcome: "useful" | "noisy" | "false_positive";
+            /**
+             * False Positive Reason
+             * @description Optional reason when outcome is false_positive
+             */
+            false_positive_reason?: string | null;
+            /**
+             * Reviewer Role
+             * @description Reviewer role label
+             * @default reviewer
+             */
+            reviewer_role: string;
+        };
+        /** FindingFeedbackResponse */
+        FindingFeedbackResponse: {
+            data: components["schemas"]["FeedbackEventData"];
+            meta: components["schemas"]["ResourceMetaPayload"];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2040,6 +2634,85 @@ export interface components {
              */
             submission_manifest_fallback?: components["schemas"]["SubmissionManifestFallbackItemData"][];
             audit: components["schemas"]["AuditMetadataData"];
+            /**
+             * Score
+             * @description Dashboard-friendly alias for risk_score.
+             */
+            readonly score: number;
+            /**
+             * Verdict
+             * @description Dashboard-friendly alias for recommendation.
+             */
+            readonly verdict: string;
+            /**
+             * Filenames
+             * @description Dashboard-friendly alias for analyzed artifact names.
+             */
+            readonly filenames: string[];
+            /**
+             * Workspace Label
+             * @description Human-friendly workspace label for compact dashboard rows.
+             */
+            readonly workspace_label: string;
+            /**
+             * Env Label
+             * @description Environment label for compact dashboard rows.
+             */
+            readonly env_label: string;
+            /**
+             * Trigger Ref
+             * @description Dashboard-friendly alias for audit trigger identifiers.
+             */
+            readonly trigger_ref: string | null;
+            /**
+             * Pr Ref
+             * @description Pull-request reference when the trigger metadata identifies one.
+             */
+            readonly pr_ref: string | null;
+        };
+        /** PreviousScanDiffData */
+        PreviousScanDiffData: {
+            /**
+             * Previous Report Id
+             * @description Prior scan report id
+             */
+            previous_report_id: number;
+            /**
+             * Previous Created At
+             * @description Prior scan timestamp
+             */
+            previous_created_at: string;
+            /**
+             * Score Delta
+             * @description Risk score delta from prior scan
+             */
+            score_delta: number;
+            /**
+             * Score Direction
+             * @description Risk score movement direction
+             * @enum {string}
+             */
+            score_direction: "up" | "down" | "flat";
+            /**
+             * Previous Severity
+             * @description Prior scan severity
+             */
+            previous_severity: string;
+            /**
+             * Current Severity
+             * @description Current scan severity
+             */
+            current_severity: string;
+            /**
+             * Previous Recommendation
+             * @description Prior recommendation
+             */
+            previous_recommendation: string;
+            /**
+             * Current Recommendation
+             * @description Current recommendation
+             */
+            current_recommendation: string;
         };
         /** ProjectCreateRequest */
         ProjectCreateRequest: {
@@ -2117,6 +2790,16 @@ export interface components {
              * @description Last update timestamp
              */
             updated_at: string;
+            /**
+             * Name
+             * @description Dashboard-friendly alias for display_name.
+             */
+            readonly name: string;
+            /**
+             * Env Label
+             * @description Short label for project switcher secondary text.
+             */
+            readonly env_label: string;
         };
         /** ProjectListResponse */
         ProjectListResponse: {
@@ -2185,6 +2868,138 @@ export interface components {
              * @description Whether the provider supports fully local-only operation
              */
             supports_local_only_mode: boolean;
+        };
+        /** ProviderOptionData */
+        ProviderOptionData: {
+            /**
+             * Provider
+             * @description Provider identifier
+             */
+            provider: string;
+            /**
+             * Label
+             * @description Display label
+             */
+            label: string;
+            /**
+             * Model
+             * @description Default model
+             */
+            model: string;
+            /**
+             * Api Base
+             * @description Default API base URL
+             */
+            api_base: string;
+            /**
+             * Local Mode
+             * @description Default local-only mode
+             */
+            local_mode: boolean;
+            /**
+             * Requires Api Key
+             * @description Whether this provider requires an API key
+             */
+            requires_api_key: boolean;
+            /** @description Provider capability metadata */
+            capabilities: components["schemas"]["ProviderCapabilityData"];
+        };
+        /** ProviderSettingsData */
+        ProviderSettingsData: {
+            /**
+             * Provider
+             * @description Configured provider identifier
+             */
+            provider: string;
+            /**
+             * Model
+             * @description Configured model
+             */
+            model: string;
+            /**
+             * Api Base
+             * @description Configured API base URL
+             */
+            api_base: string;
+            /**
+             * Local Mode
+             * @description Whether local-only mode is active
+             */
+            local_mode: boolean;
+            /**
+             * Request Timeout Seconds
+             * @description Provider request timeout in seconds
+             */
+            request_timeout_seconds: number;
+            /**
+             * Source
+             * @description Where settings were resolved from
+             */
+            source: string;
+            /**
+             * Api Key Present
+             * @description Whether an API key is available from the runtime
+             */
+            api_key_present: boolean;
+            /**
+             * Api Key Preview
+             * @description Masked API key presence hint
+             */
+            api_key_preview?: string | null;
+            /** @description Provider capability metadata */
+            capabilities: components["schemas"]["ProviderCapabilityData"];
+        };
+        /** ProviderSettingsRequest */
+        ProviderSettingsRequest: {
+            /**
+             * Provider
+             * @description Provider identifier
+             */
+            provider: string;
+            /**
+             * Model
+             * @description Model identifier
+             */
+            model: string;
+            /**
+             * Api Base
+             * @description Provider API base URL
+             */
+            api_base: string;
+            /**
+             * Api Key
+             * @description Optional API key used for immediate validation
+             */
+            api_key?: string | null;
+            /**
+             * Local Mode
+             * @description Whether to activate local-only mode
+             * @default false
+             */
+            local_mode: boolean;
+        };
+        /** ProviderSettingsResponse */
+        ProviderSettingsResponse: {
+            data: components["schemas"]["ProviderSettingsSaveData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
+        /** ProviderSettingsSaveData */
+        ProviderSettingsSaveData: {
+            settings: components["schemas"]["ProviderSettingsData"];
+            validation: components["schemas"]["ProviderValidationData"];
+        };
+        /** ProviderValidationData */
+        ProviderValidationData: {
+            /**
+             * Valid
+             * @description Whether settings validated
+             */
+            valid: boolean;
+            /**
+             * Message
+             * @description Validation message
+             */
+            message: string;
         };
         /** ResourceMetaPayload */
         ResourceMetaPayload: {
@@ -2384,6 +3199,22 @@ export interface components {
              */
             critical: boolean;
         };
+        /** SettingsSummaryData */
+        SettingsSummaryData: {
+            provider: components["schemas"]["ProviderSettingsData"];
+            /** Provider Options */
+            provider_options: components["schemas"]["ProviderOptionData"][];
+            topology: components["schemas"]["TopologyStatusData"];
+            drift_cadence: components["schemas"]["TopologyDriftCadenceData"];
+            feedback: components["schemas"]["FeedbackSummaryData"];
+            /** Custom Skills */
+            custom_skills?: components["schemas"]["CustomSkillStatusData"][];
+        };
+        /** SettingsSummaryResponse */
+        SettingsSummaryResponse: {
+            data: components["schemas"]["SettingsSummaryData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
         /** ShareSummaryContextData */
         ShareSummaryContextData: {
             /**
@@ -2559,6 +3390,19 @@ export interface components {
              */
             advisory_summary: string;
         };
+        /** SharedReportAccessResponse */
+        SharedReportAccessResponse: {
+            data: components["schemas"]["AnalysisDetailData"];
+            meta: components["schemas"]["ResourceMetaPayload"];
+        };
+        /** SharedReportUnlockRequest */
+        SharedReportUnlockRequest: {
+            /**
+             * Password
+             * @description Password for a protected shared report
+             */
+            password: string;
+        };
         /** SkillRegistryContentData */
         SkillRegistryContentData: {
             /**
@@ -2713,6 +3557,11 @@ export interface components {
              * @description Number of versions discoverable for this skill id
              */
             available_versions: number;
+            /**
+             * Install Command
+             * @description CLI command for installing this skill
+             */
+            install_command: string;
         };
         /** SkillRegistryDetailResponse */
         SkillRegistryDetailResponse: {
@@ -2915,6 +3764,11 @@ export interface components {
              */
             available_versions: number;
             /**
+             * Install Command
+             * @description CLI command for installing this skill
+             */
+            install_command: string;
+            /**
              * Is Current
              * @description Whether this version is the current effective version
              */
@@ -3003,6 +3857,95 @@ export interface components {
              * @description Failure reasons when the scenario did not pass.
              */
             failures?: string[];
+        };
+        /** StatsBucketData */
+        StatsBucketData: {
+            /**
+             * Date
+             * @description UTC calendar date for the bucket
+             */
+            date: string;
+            /**
+             * Value
+             * @description Metric value for the bucket
+             */
+            value: number;
+        };
+        /** StatsSummaryData */
+        StatsSummaryData: {
+            totals: components["schemas"]["StatsSummaryTotalsData"];
+            /**
+             * Total Analyses
+             * @description Total persisted analyses
+             */
+            total_analyses: number;
+            /**
+             * Clean Verdict Rate
+             * @description Percentage of low-severity analyses
+             */
+            clean_verdict_rate: number;
+            /**
+             * Open High Critical Count
+             * @description Count of high or critical analyses
+             */
+            open_high_critical_count: number;
+            /**
+             * Avg Time To Verdict Seconds
+             * @description Average positive analysis duration in seconds
+             */
+            avg_time_to_verdict_seconds?: number | null;
+            series: components["schemas"]["StatsSummarySeriesData"];
+        };
+        /** StatsSummaryResponse */
+        StatsSummaryResponse: {
+            data: components["schemas"]["StatsSummaryData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
+        /** StatsSummarySeriesData */
+        StatsSummarySeriesData: {
+            /**
+             * Analyses
+             * @description Seven daily analysis-count buckets
+             */
+            analyses?: components["schemas"]["StatsBucketData"][];
+            /**
+             * Clean Verdict Rate
+             * @description Seven daily clean-rate buckets
+             */
+            clean_verdict_rate?: components["schemas"]["StatsBucketData"][];
+            /**
+             * Open High Critical Count
+             * @description Seven daily high/critical-count buckets
+             */
+            open_high_critical_count?: components["schemas"]["StatsBucketData"][];
+            /**
+             * Avg Time To Verdict Seconds
+             * @description Seven daily average-duration buckets
+             */
+            avg_time_to_verdict_seconds?: components["schemas"]["StatsBucketData"][];
+        };
+        /** StatsSummaryTotalsData */
+        StatsSummaryTotalsData: {
+            /**
+             * Analyses
+             * @description Total persisted analyses
+             */
+            analyses: number;
+            /**
+             * Clean Verdict Rate
+             * @description Percentage of low-severity analyses
+             */
+            clean_verdict_rate: number;
+            /**
+             * Open High Critical Count
+             * @description Count of high or critical analyses
+             */
+            open_high_critical_count: number;
+            /**
+             * Avg Time To Verdict Seconds
+             * @description Average positive analysis_duration_seconds across reports
+             */
+            avg_time_to_verdict_seconds?: number | null;
         };
         /** SubmissionManifestData */
         SubmissionManifestData: {
@@ -3211,6 +4154,32 @@ export interface components {
             data: components["schemas"]["TopologyContextData"];
             meta: components["schemas"]["MetaPayload"];
         };
+        /** TopologyDriftCadenceData */
+        TopologyDriftCadenceData: {
+            /**
+             * Interval Hours
+             * @description Active drift check cadence
+             */
+            interval_hours: number;
+            /**
+             * Options
+             * @description Supported cadence options in hours
+             */
+            options?: number[];
+        };
+        /** TopologyDriftCadenceRequest */
+        TopologyDriftCadenceRequest: {
+            /**
+             * Interval Hours
+             * @description Desired drift check cadence
+             */
+            interval_hours: number;
+        };
+        /** TopologyDriftCadenceResponse */
+        TopologyDriftCadenceResponse: {
+            data: components["schemas"]["TopologyDriftCadenceData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
         /** TopologyDriftStatusData */
         TopologyDriftStatusData: {
             /**
@@ -3330,6 +4299,55 @@ export interface components {
             /** @description Latest drift check summary when available */
             drift?: components["schemas"]["TopologyDriftStatusData"] | null;
         };
+        /** TopologyUploadRequest */
+        TopologyUploadRequest: {
+            /**
+             * Topology
+             * @description Topology JSON payload
+             */
+            topology: {
+                [key: string]: unknown;
+            };
+            /**
+             * Project Id
+             * @description Optional numeric project identifier
+             */
+            project_id?: number | null;
+            /**
+             * Project Key
+             * @description Optional stable project key
+             */
+            project_key?: string | null;
+            /**
+             * Workspace Id
+             * @description Optional numeric workspace identifier
+             */
+            workspace_id?: number | null;
+            /**
+             * Workspace Key
+             * @description Optional stable workspace key
+             */
+            workspace_key?: string | null;
+        };
+        /** TopologyValidationData */
+        TopologyValidationData: {
+            topology: components["schemas"]["TopologyStatusData"];
+            /**
+             * Success Message
+             * @description Human-readable success message
+             */
+            success_message?: string | null;
+            /**
+             * Error Message
+             * @description Human-readable validation error
+             */
+            error_message?: string | null;
+        };
+        /** TopologyValidationResponse */
+        TopologyValidationResponse: {
+            data: components["schemas"]["TopologyValidationData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -3342,6 +4360,41 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VerdictDistributionData */
+        VerdictDistributionData: {
+            /**
+             * Days
+             * @description Lookback window in days
+             */
+            days: number;
+            /**
+             * Window Start
+             * @description Inclusive UTC window start
+             */
+            window_start: string;
+            /**
+             * Window End
+             * @description Inclusive UTC window end
+             */
+            window_end: string;
+            /**
+             * Counts
+             * @description Counts keyed by advisory recommendation
+             */
+            counts?: {
+                [key: string]: number;
+            };
+            /**
+             * Total
+             * @description Total reports included in the window
+             */
+            total: number;
+        };
+        /** VerdictDistributionResponse */
+        VerdictDistributionResponse: {
+            data: components["schemas"]["VerdictDistributionData"];
+            meta: components["schemas"]["MetaPayload"];
         };
         /** WorkspaceCreateRequest */
         WorkspaceCreateRequest: {
@@ -3551,7 +4604,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3635,7 +4688,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request Entity Too Large */
+            /** @description Content Too Large */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -3644,7 +4697,79 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_analyses_api_v1_analyses_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisBulkDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisBulkDeleteResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3728,7 +4853,204 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_shared_analysis_api_v1_analyses__report_id__shared_get: {
+        parameters: {
+            query?: {
+                compare?: string | null;
+            };
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedReportAccessResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unlock_shared_analysis_api_v1_analyses__report_id__shared_unlock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharedReportUnlockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedReportAccessResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_finding_feedback_api_v1_analyses__report_id__findings__finding_id__feedback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path: {
+                report_id: number;
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingFeedbackResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3803,7 +5125,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3870,7 +5192,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3934,7 +5256,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4209,6 +5531,234 @@ export interface operations {
             };
         };
     };
+    get_settings_summary_api_v1_settings_get: {
+        parameters: {
+            query?: {
+                project_id?: number | null;
+                project_key?: string | null;
+                workspace_id?: number | null;
+                workspace_key?: string | null;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_provider_settings_api_v1_settings_provider_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_settings_topology_api_v1_settings_topology_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopologyUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyValidationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_settings_topology_api_v1_settings_topology_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopologyUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyValidationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_topology_drift_cadence_api_v1_settings_topology_drift_cadence_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopologyDriftCadenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyDriftCadenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_custom_skills_api_v1_settings_custom_skills_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSkillListResponse"];
+                };
+            };
+        };
+    };
+    upload_custom_skill_api_v1_settings_custom_skills_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomSkillUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSkillUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_skills_api_v1_skills_get: {
         parameters: {
             query?: {
@@ -4220,6 +5770,8 @@ export interface operations {
                 author?: string | null;
                 /** @description Case-insensitive keyword search across name, description, tags, and triggers. */
                 search?: string | null;
+                /** @description Sort skills by popularity or recency. */
+                sort?: "popularity" | "recency";
                 /** @description 1-based results page. */
                 page?: number;
                 /** @description Maximum number of results to return per page. */
@@ -4240,7 +5792,7 @@ export interface operations {
                     "application/json": components["schemas"]["SkillRegistryListResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4289,7 +5841,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4338,7 +5890,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4390,7 +5942,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4439,7 +5991,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4455,6 +6007,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_stats_summary_api_v1_stats_summary_get: {
+        parameters: {
+            query?: {
+                project_id?: number | null;
+                project_key?: string | null;
+                workspace_id?: number | null;
+                workspace_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_verdict_distribution_api_v1_stats_verdict_distribution_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                project_id?: number | null;
+                project_key?: string | null;
+                workspace_id?: number | null;
+                workspace_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerdictDistributionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4532,125 +6153,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_route__nicegui_client_371b6d87_3849_465d_a32b_3978ebd77dba_upload_146_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    upload_route__nicegui_client_371b6d87_3849_465d_a32b_3978ebd77dba_upload_147_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    dashboard_upload_route__deploywhisper_dashboard_upload__upload_key__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                upload_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_route__nicegui_client_b7177ee1_0068_4be2_8fc1_c033e4761ce8_upload_145_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    upload_route__nicegui_client_b7177ee1_0068_4be2_8fc1_c033e4761ce8_upload_146_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
                 };
             };
         };

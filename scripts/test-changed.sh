@@ -9,7 +9,10 @@ if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   exit 0
 fi
 
-mapfile -t CHANGED_TESTS < <(git diff --name-only "$BASE_REF"...HEAD | grep -E '^tests/.+\.py$' || true)
+mapfile -t CHANGED_TESTS < <(
+  git diff --name-only --diff-filter=ACMR "$BASE_REF"...HEAD \
+    | grep -E '^tests/.+\.py$' || true
+)
 
 if [ "${#CHANGED_TESTS[@]}" -eq 0 ]; then
   echo "No changed test files detected relative to $BASE_REF."
@@ -18,10 +21,18 @@ fi
 
 MODULES=()
 for path in "${CHANGED_TESTS[@]}"; do
+  if [ ! -f "$path" ]; then
+    continue
+  fi
   module="${path%.py}"
   module="${module//\//.}"
   MODULES+=("$module")
 done
+
+if [ "${#MODULES[@]}" -eq 0 ]; then
+  echo "No existing changed test files detected relative to $BASE_REF."
+  exit 0
+fi
 
 echo "Running changed tests relative to $BASE_REF:"
 printf ' - %s\n' "${MODULES[@]}"

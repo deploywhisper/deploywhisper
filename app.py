@@ -35,7 +35,9 @@ from api.routes.health import router as health_router
 from api.routes.incidents import router as incidents_router
 from api.routes.projects import router as projects_router
 from api.routes.settings import router as context_router
+from api.routes.settings import settings_router
 from api.routes.skills import router as skills_router
+from api.routes.stats import router as stats_router
 from config import settings
 from logging_config import configure_logging
 from models.database import init_db
@@ -115,6 +117,8 @@ def _ensure_nicegui_config_defaults() -> None:
 
 
 _ensure_nicegui_config_defaults()
+fastapi_app.title = settings.app_name
+fastapi_app.version = settings.app_version
 if not getattr(fastapi_app, "_deploywhisper_assets_mounted", False):
     fastapi_app.add_static_files("/assets", ASSETS_DIR)
     fastapi_app._deploywhisper_assets_mounted = True
@@ -136,7 +140,9 @@ fastapi_app.include_router(deployments_router)
 fastapi_app.include_router(github_app_router)
 fastapi_app.include_router(projects_router)
 fastapi_app.include_router(context_router)
+fastapi_app.include_router(settings_router)
 fastapi_app.include_router(skills_router)
+fastapi_app.include_router(stats_router)
 fastapi_app.include_router(incidents_router)
 
 
@@ -146,6 +152,17 @@ if not hasattr(fastapi_app, "_deploywhisper_original_lifespan_context"):
     )
 
 _original_lifespan = fastapi_app._deploywhisper_original_lifespan_context
+
+
+def _fallback_spa_shell() -> HTMLResponse:
+    """Return a minimal SPA shell when frontend/dist is absent in test contexts."""
+    return HTMLResponse(
+        content=(
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            f"<title>{escape(settings.app_name)}</title>"
+            '</head><body><div id="root"></div></body></html>'
+        )
+    )
 
 
 async def _topology_drift_scheduler_loop(stop_event: asyncio.Event) -> None:
@@ -691,13 +708,16 @@ def _shared_report_html(
     )
 
 
-@fastapi_app.get("/reports/{report_id}", include_in_schema=False)
+@fastapi_app.get("/reports/{report_id}", include_in_schema=False, response_model=None)
 def shared_report_view(
     request: Request,
     report_id: int,
     compare: str | None = None,
-) -> HTMLResponse:
+) -> HTMLResponse | FileResponse:
     """Render one report via a read-only public sharing route."""
+    if FRONTEND_INDEX_PATH.is_file():
+        return FileResponse(FRONTEND_INDEX_PATH)
+
     report = fetch_analysis_report(report_id)
     if report is None:
         raise StarletteHTTPException(status_code=404, detail="Report not found")
@@ -855,6 +875,19 @@ def report_artifact_view(
 def index() -> None:
     inject_styles()
     build_dashboard()
+
+
+if not FRONTEND_DIST_DIR.is_dir():
+
+    @fastapi_app.api_route("/app", methods=["GET", "HEAD"], include_in_schema=False)
+    @fastapi_app.api_route(
+        "/app/{path:path}", methods=["GET", "HEAD"], include_in_schema=False
+    )
+    def missing_frontend_app_fallback(path: str = "") -> HTMLResponse:
+        """Serve /app client routes in tests when the built SPA is absent."""
+        if "." in path.rsplit("/", maxsplit=1)[-1]:
+            raise StarletteHTTPException(status_code=404, detail="Not Found")
+        return _fallback_spa_shell()
 
 
 def create_app():

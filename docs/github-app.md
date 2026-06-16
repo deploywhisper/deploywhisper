@@ -66,6 +66,7 @@ Optional:
 - When checks are enabled, `APP_BASE_URL` or `PUBLIC_APP_URL` must point at a reachable DeployWhisper server so the GitHub PR Details link opens the full report
 - Do not configure `DeployWhisper / Risk Analysis` as a required status check in branch protection
 - Shared report URLs remain the deep-link target for richer investigation
+- `/reports/{id}` opens the React read-only Report screen, hides mutable internal actions, respects password-protected shares, and preserves `?compare=previous` comparison links
 
 ## Manual installation flow
 
