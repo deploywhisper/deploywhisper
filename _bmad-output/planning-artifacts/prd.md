@@ -77,6 +77,15 @@ Each DeployWhisper report should include:
 - Plain-English narrative generated downstream of scoring, never upstream of scoring.
 - Machine-readable output for API, CLI, CI/CD, PR bots, policy adapters, and AI agents.
 
+### 1.3.1 UI modernization requirements
+
+The React UI migration must preserve the Evidence Law, advisory-only posture,
+local-first assumptions, and existing NiceGUI behavior until the cutover phase.
+Dashboard screens consume read-only `/api/v1` backend-for-ui endpoints for KPI
+summary cards, verdict distribution, project switching, and compact analysis
+rows. Backend support for the migration is additive only: no schema migrations,
+no destructive report contract changes, and no removal of existing API fields.
+
 ### 1.4 Category
 
 DeployWhisper defines and serves the category:
