@@ -20,6 +20,7 @@ import {
   History as HistoryIcon,
   LayoutGrid,
   Search,
+  Settings,
   ShieldCheck,
   Trash2,
   Zap,
@@ -177,18 +178,22 @@ function HistorySidebar({ selectedProject }: { selectedProject: ProjectOption })
           <LayoutGrid color="var(--dw-faint)" size={17} />
           <span>Dashboard</span>
         </Link>
-        <button className="dw-nav-item" type="button">
+        <Link className="dw-nav-item" to="/app/skills">
           <Zap color="var(--dw-faint)" size={17} />
           <span>Skills</span>
-        </button>
-        <button className="dw-nav-item" type="button">
+        </Link>
+        <Link className="dw-nav-item" to="/app/incidents">
           <AlertTriangle color="var(--dw-faint)" size={17} />
           <span>Incidents</span>
           <span className="dw-nav-count">0</span>
-        </button>
+        </Link>
         <Link className="dw-nav-item dw-nav-item-active" to="/app/history">
           <HistoryIcon color="var(--dw-brand)" size={17} />
           <span>History</span>
+        </Link>
+        <Link className="dw-nav-item" to="/app/settings">
+          <Settings color="var(--dw-faint)" size={17} />
+          <span>Settings</span>
         </Link>
       </nav>
       <div className="dw-active-project-card">
