@@ -95,6 +95,67 @@ class ProviderCapabilityData(BaseModel):
     )
 
 
+class ProviderOptionData(BaseModel):
+    provider: str = Field(..., description="Provider identifier")
+    label: str = Field(..., description="Display label")
+    model: str = Field(..., description="Default model")
+    api_base: str = Field(..., description="Default API base URL")
+    local_mode: bool = Field(..., description="Default local-only mode")
+    requires_api_key: bool = Field(
+        ..., description="Whether this provider requires an API key"
+    )
+    capabilities: ProviderCapabilityData = Field(
+        ..., description="Provider capability metadata"
+    )
+
+
+class ProviderSettingsData(BaseModel):
+    provider: str = Field(..., description="Configured provider identifier")
+    model: str = Field(..., description="Configured model")
+    api_base: str = Field(..., description="Configured API base URL")
+    local_mode: bool = Field(..., description="Whether local-only mode is active")
+    request_timeout_seconds: float = Field(
+        ..., description="Provider request timeout in seconds"
+    )
+    source: str = Field(..., description="Where settings were resolved from")
+    api_key_present: bool = Field(
+        ..., description="Whether an API key is available from the runtime"
+    )
+    api_key_preview: str | None = Field(
+        default=None, description="Masked API key presence hint"
+    )
+    capabilities: ProviderCapabilityData = Field(
+        ..., description="Provider capability metadata"
+    )
+
+
+class ProviderSettingsRequest(BaseModel):
+    provider: str = Field(..., min_length=1, description="Provider identifier")
+    model: str = Field(..., min_length=1, description="Model identifier")
+    api_base: str = Field(..., min_length=1, description="Provider API base URL")
+    api_key: str | None = Field(
+        default=None, description="Optional API key used for immediate validation"
+    )
+    local_mode: bool = Field(
+        default=False, description="Whether to activate local-only mode"
+    )
+
+
+class ProviderValidationData(BaseModel):
+    valid: bool = Field(..., description="Whether settings validated")
+    message: str = Field(..., description="Validation message")
+
+
+class ProviderSettingsSaveData(BaseModel):
+    settings: ProviderSettingsData
+    validation: ProviderValidationData
+
+
+class ProviderSettingsResponse(BaseModel):
+    data: ProviderSettingsSaveData
+    meta: MetaPayload
+
+
 ToolType = Literal[
     "terraform", "kubernetes", "ansible", "jenkins", "cloudformation", "unsupported"
 ]
@@ -871,6 +932,126 @@ class TopologyContextData(BaseModel):
 
 class TopologyContextResponse(BaseModel):
     data: TopologyContextData
+    meta: MetaPayload
+
+
+class TopologyUploadRequest(BaseModel):
+    topology: dict[str, Any] = Field(..., description="Topology JSON payload")
+    project_id: int | None = Field(
+        default=None, description="Optional numeric project identifier"
+    )
+    project_key: str | None = Field(
+        default=None, description="Optional stable project key"
+    )
+    workspace_id: int | None = Field(
+        default=None, description="Optional numeric workspace identifier"
+    )
+    workspace_key: str | None = Field(
+        default=None, description="Optional stable workspace key"
+    )
+
+
+class TopologyValidationData(BaseModel):
+    topology: TopologyStatusData
+    success_message: str | None = Field(
+        default=None, description="Human-readable success message"
+    )
+    error_message: str | None = Field(
+        default=None, description="Human-readable validation error"
+    )
+
+
+class TopologyValidationResponse(BaseModel):
+    data: TopologyValidationData
+    meta: MetaPayload
+
+
+class TopologyDriftCadenceData(BaseModel):
+    interval_hours: int = Field(..., description="Active drift check cadence")
+    options: list[int] = Field(
+        default_factory=list, description="Supported cadence options in hours"
+    )
+
+
+class TopologyDriftCadenceRequest(BaseModel):
+    interval_hours: int = Field(..., description="Desired drift check cadence")
+
+
+class TopologyDriftCadenceResponse(BaseModel):
+    data: TopologyDriftCadenceData
+    meta: MetaPayload
+
+
+class FeedbackCurrentStateData(BaseModel):
+    useful_count: int = Field(default=0)
+    noisy_count: int = Field(default=0)
+    not_useful_count: int = Field(default=0)
+    false_positive_count: int = Field(default=0)
+    missed_finding_count: int = Field(default=0)
+
+
+class FeedbackTotalsData(BaseModel):
+    events_recorded: int = Field(default=0)
+
+
+class FeedbackRecentNoteData(BaseModel):
+    type: str = Field(..., description="Feedback note type")
+    text: str = Field(..., description="Reviewer note")
+    analysis_id: int | None = Field(default=None)
+    finding_id: str | None = Field(default=None)
+    created_at: str = Field(..., description="UTC timestamp")
+
+
+class FeedbackSummaryData(BaseModel):
+    project: ProjectData
+    current_state: FeedbackCurrentStateData
+    totals: FeedbackTotalsData
+    recent_notes: list[FeedbackRecentNoteData] = Field(default_factory=list)
+
+
+class CustomSkillStatusData(BaseModel):
+    name: str = Field(..., description="Stable skill name")
+    mode: Literal["override", "new"] = Field(
+        ..., description="Whether the skill overrides a built-in skill"
+    )
+    active: bool = Field(..., description="Whether the skill is active")
+    path: str = Field(..., description="Filesystem path")
+    warning: str | None = Field(default=None, description="Ignored-state warning")
+
+
+class CustomSkillUploadRequest(BaseModel):
+    filename: str = Field(..., min_length=1, description="Markdown skill filename")
+    content: str = Field(..., min_length=1, description="Markdown skill content")
+
+
+class CustomSkillUploadData(BaseModel):
+    statuses: list[CustomSkillStatusData] = Field(default_factory=list)
+    saved: CustomSkillStatusData | None = Field(default=None)
+    success_message: str | None = Field(default=None)
+    error_message: str | None = Field(default=None)
+
+
+class CustomSkillUploadResponse(BaseModel):
+    data: CustomSkillUploadData
+    meta: MetaPayload
+
+
+class CustomSkillListResponse(BaseModel):
+    data: list[CustomSkillStatusData]
+    meta: MetaPayload
+
+
+class SettingsSummaryData(BaseModel):
+    provider: ProviderSettingsData
+    provider_options: list[ProviderOptionData]
+    topology: TopologyStatusData
+    drift_cadence: TopologyDriftCadenceData
+    feedback: FeedbackSummaryData
+    custom_skills: list[CustomSkillStatusData] = Field(default_factory=list)
+
+
+class SettingsSummaryResponse(BaseModel):
+    data: SettingsSummaryData
     meta: MetaPayload
 
 
@@ -1810,6 +1991,9 @@ class SkillRegistryData(BaseModel):
     updated_at: str = Field(..., description="Last local update timestamp")
     available_versions: int = Field(
         ..., description="Number of versions discoverable for this skill id"
+    )
+    install_command: str = Field(
+        ..., description="CLI command for installing this skill"
     )
 
 

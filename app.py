@@ -35,6 +35,7 @@ from api.routes.health import router as health_router
 from api.routes.incidents import router as incidents_router
 from api.routes.projects import router as projects_router
 from api.routes.settings import router as context_router
+from api.routes.settings import settings_router
 from api.routes.skills import router as skills_router
 from api.routes.stats import router as stats_router
 from config import settings
@@ -139,6 +140,7 @@ fastapi_app.include_router(deployments_router)
 fastapi_app.include_router(github_app_router)
 fastapi_app.include_router(projects_router)
 fastapi_app.include_router(context_router)
+fastapi_app.include_router(settings_router)
 fastapi_app.include_router(skills_router)
 fastapi_app.include_router(stats_router)
 fastapi_app.include_router(incidents_router)

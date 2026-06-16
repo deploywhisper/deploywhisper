@@ -248,6 +248,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Settings Summary
+         * @description Return settings data needed by the React settings screen.
+         */
+        get: operations["get_settings_summary_api_v1_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/provider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Provider Settings
+         * @description Persist active narrative provider settings and return validation state.
+         */
+        put: operations["update_provider_settings_api_v1_settings_provider_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/topology/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Settings Topology
+         * @description Validate topology JSON without saving it.
+         */
+        post: operations["preview_settings_topology_api_v1_settings_topology_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/topology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Settings Topology
+         * @description Save topology JSON for the active project scope.
+         */
+        put: operations["update_settings_topology_api_v1_settings_topology_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/topology/drift-cadence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Topology Drift Cadence
+         * @description Persist the topology drift check cadence.
+         */
+        put: operations["update_topology_drift_cadence_api_v1_settings_topology_drift_cadence_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/custom-skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Custom Skills
+         * @description Return custom skill override status.
+         */
+        get: operations["list_custom_skills_api_v1_settings_custom_skills_get"];
+        put?: never;
+        /**
+         * Upload Custom Skill
+         * @description Persist a custom markdown skill and return the updated status list.
+         */
+        post: operations["upload_custom_skill_api_v1_settings_custom_skills_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills": {
         parameters: {
             query?: never;
@@ -1335,6 +1459,69 @@ export interface components {
              */
             page_size?: number | null;
         };
+        /** CustomSkillListResponse */
+        CustomSkillListResponse: {
+            /** Data */
+            data: components["schemas"]["CustomSkillStatusData"][];
+            meta: components["schemas"]["MetaPayload"];
+        };
+        /** CustomSkillStatusData */
+        CustomSkillStatusData: {
+            /**
+             * Name
+             * @description Stable skill name
+             */
+            name: string;
+            /**
+             * Mode
+             * @description Whether the skill overrides a built-in skill
+             * @enum {string}
+             */
+            mode: "override" | "new";
+            /**
+             * Active
+             * @description Whether the skill is active
+             */
+            active: boolean;
+            /**
+             * Path
+             * @description Filesystem path
+             */
+            path: string;
+            /**
+             * Warning
+             * @description Ignored-state warning
+             */
+            warning?: string | null;
+        };
+        /** CustomSkillUploadData */
+        CustomSkillUploadData: {
+            /** Statuses */
+            statuses?: components["schemas"]["CustomSkillStatusData"][];
+            saved?: components["schemas"]["CustomSkillStatusData"] | null;
+            /** Success Message */
+            success_message?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+        };
+        /** CustomSkillUploadRequest */
+        CustomSkillUploadRequest: {
+            /**
+             * Filename
+             * @description Markdown skill filename
+             */
+            filename: string;
+            /**
+             * Content
+             * @description Markdown skill content
+             */
+            content: string;
+        };
+        /** CustomSkillUploadResponse */
+        CustomSkillUploadResponse: {
+            data: components["schemas"]["CustomSkillUploadData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
         /** DeploymentOutcomeCreateRequest */
         DeploymentOutcomeCreateRequest: {
             /**
@@ -1598,6 +1785,34 @@ export interface components {
              */
             related_change_ids?: string[];
         };
+        /** FeedbackCurrentStateData */
+        FeedbackCurrentStateData: {
+            /**
+             * Useful Count
+             * @default 0
+             */
+            useful_count: number;
+            /**
+             * Noisy Count
+             * @default 0
+             */
+            noisy_count: number;
+            /**
+             * Not Useful Count
+             * @default 0
+             */
+            not_useful_count: number;
+            /**
+             * False Positive Count
+             * @default 0
+             */
+            false_positive_count: number;
+            /**
+             * Missed Finding Count
+             * @default 0
+             */
+            missed_finding_count: number;
+        };
         /** FeedbackEventData */
         FeedbackEventData: {
             /**
@@ -1667,6 +1882,28 @@ export interface components {
              */
             created_at: string;
         };
+        /** FeedbackRecentNoteData */
+        FeedbackRecentNoteData: {
+            /**
+             * Type
+             * @description Feedback note type
+             */
+            type: string;
+            /**
+             * Text
+             * @description Reviewer note
+             */
+            text: string;
+            /** Analysis Id */
+            analysis_id?: number | null;
+            /** Finding Id */
+            finding_id?: string | null;
+            /**
+             * Created At
+             * @description UTC timestamp
+             */
+            created_at: string;
+        };
         /** FeedbackStateData */
         FeedbackStateData: {
             /**
@@ -1688,6 +1925,22 @@ export interface components {
              * @description Latest missed-finding feedback notes
              */
             false_negative_notes?: components["schemas"]["FeedbackEventData"][];
+        };
+        /** FeedbackSummaryData */
+        FeedbackSummaryData: {
+            project: components["schemas"]["ProjectData"];
+            current_state: components["schemas"]["FeedbackCurrentStateData"];
+            totals: components["schemas"]["FeedbackTotalsData"];
+            /** Recent Notes */
+            recent_notes?: components["schemas"]["FeedbackRecentNoteData"][];
+        };
+        /** FeedbackTotalsData */
+        FeedbackTotalsData: {
+            /**
+             * Events Recorded
+             * @default 0
+             */
+            events_recorded: number;
         };
         /** FindingData */
         FindingData: {
@@ -2616,6 +2869,138 @@ export interface components {
              */
             supports_local_only_mode: boolean;
         };
+        /** ProviderOptionData */
+        ProviderOptionData: {
+            /**
+             * Provider
+             * @description Provider identifier
+             */
+            provider: string;
+            /**
+             * Label
+             * @description Display label
+             */
+            label: string;
+            /**
+             * Model
+             * @description Default model
+             */
+            model: string;
+            /**
+             * Api Base
+             * @description Default API base URL
+             */
+            api_base: string;
+            /**
+             * Local Mode
+             * @description Default local-only mode
+             */
+            local_mode: boolean;
+            /**
+             * Requires Api Key
+             * @description Whether this provider requires an API key
+             */
+            requires_api_key: boolean;
+            /** @description Provider capability metadata */
+            capabilities: components["schemas"]["ProviderCapabilityData"];
+        };
+        /** ProviderSettingsData */
+        ProviderSettingsData: {
+            /**
+             * Provider
+             * @description Configured provider identifier
+             */
+            provider: string;
+            /**
+             * Model
+             * @description Configured model
+             */
+            model: string;
+            /**
+             * Api Base
+             * @description Configured API base URL
+             */
+            api_base: string;
+            /**
+             * Local Mode
+             * @description Whether local-only mode is active
+             */
+            local_mode: boolean;
+            /**
+             * Request Timeout Seconds
+             * @description Provider request timeout in seconds
+             */
+            request_timeout_seconds: number;
+            /**
+             * Source
+             * @description Where settings were resolved from
+             */
+            source: string;
+            /**
+             * Api Key Present
+             * @description Whether an API key is available from the runtime
+             */
+            api_key_present: boolean;
+            /**
+             * Api Key Preview
+             * @description Masked API key presence hint
+             */
+            api_key_preview?: string | null;
+            /** @description Provider capability metadata */
+            capabilities: components["schemas"]["ProviderCapabilityData"];
+        };
+        /** ProviderSettingsRequest */
+        ProviderSettingsRequest: {
+            /**
+             * Provider
+             * @description Provider identifier
+             */
+            provider: string;
+            /**
+             * Model
+             * @description Model identifier
+             */
+            model: string;
+            /**
+             * Api Base
+             * @description Provider API base URL
+             */
+            api_base: string;
+            /**
+             * Api Key
+             * @description Optional API key used for immediate validation
+             */
+            api_key?: string | null;
+            /**
+             * Local Mode
+             * @description Whether to activate local-only mode
+             * @default false
+             */
+            local_mode: boolean;
+        };
+        /** ProviderSettingsResponse */
+        ProviderSettingsResponse: {
+            data: components["schemas"]["ProviderSettingsSaveData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
+        /** ProviderSettingsSaveData */
+        ProviderSettingsSaveData: {
+            settings: components["schemas"]["ProviderSettingsData"];
+            validation: components["schemas"]["ProviderValidationData"];
+        };
+        /** ProviderValidationData */
+        ProviderValidationData: {
+            /**
+             * Valid
+             * @description Whether settings validated
+             */
+            valid: boolean;
+            /**
+             * Message
+             * @description Validation message
+             */
+            message: string;
+        };
         /** ResourceMetaPayload */
         ResourceMetaPayload: {
             /**
@@ -2813,6 +3198,22 @@ export interface components {
              * @description Whether this step is critical to safe recovery
              */
             critical: boolean;
+        };
+        /** SettingsSummaryData */
+        SettingsSummaryData: {
+            provider: components["schemas"]["ProviderSettingsData"];
+            /** Provider Options */
+            provider_options: components["schemas"]["ProviderOptionData"][];
+            topology: components["schemas"]["TopologyStatusData"];
+            drift_cadence: components["schemas"]["TopologyDriftCadenceData"];
+            feedback: components["schemas"]["FeedbackSummaryData"];
+            /** Custom Skills */
+            custom_skills?: components["schemas"]["CustomSkillStatusData"][];
+        };
+        /** SettingsSummaryResponse */
+        SettingsSummaryResponse: {
+            data: components["schemas"]["SettingsSummaryData"];
+            meta: components["schemas"]["MetaPayload"];
         };
         /** ShareSummaryContextData */
         ShareSummaryContextData: {
@@ -3156,6 +3557,11 @@ export interface components {
              * @description Number of versions discoverable for this skill id
              */
             available_versions: number;
+            /**
+             * Install Command
+             * @description CLI command for installing this skill
+             */
+            install_command: string;
         };
         /** SkillRegistryDetailResponse */
         SkillRegistryDetailResponse: {
@@ -3357,6 +3763,11 @@ export interface components {
              * @description Number of versions discoverable for this skill id
              */
             available_versions: number;
+            /**
+             * Install Command
+             * @description CLI command for installing this skill
+             */
+            install_command: string;
             /**
              * Is Current
              * @description Whether this version is the current effective version
@@ -3743,6 +4154,32 @@ export interface components {
             data: components["schemas"]["TopologyContextData"];
             meta: components["schemas"]["MetaPayload"];
         };
+        /** TopologyDriftCadenceData */
+        TopologyDriftCadenceData: {
+            /**
+             * Interval Hours
+             * @description Active drift check cadence
+             */
+            interval_hours: number;
+            /**
+             * Options
+             * @description Supported cadence options in hours
+             */
+            options?: number[];
+        };
+        /** TopologyDriftCadenceRequest */
+        TopologyDriftCadenceRequest: {
+            /**
+             * Interval Hours
+             * @description Desired drift check cadence
+             */
+            interval_hours: number;
+        };
+        /** TopologyDriftCadenceResponse */
+        TopologyDriftCadenceResponse: {
+            data: components["schemas"]["TopologyDriftCadenceData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
         /** TopologyDriftStatusData */
         TopologyDriftStatusData: {
             /**
@@ -3861,6 +4298,55 @@ export interface components {
             blocking_errors?: string[];
             /** @description Latest drift check summary when available */
             drift?: components["schemas"]["TopologyDriftStatusData"] | null;
+        };
+        /** TopologyUploadRequest */
+        TopologyUploadRequest: {
+            /**
+             * Topology
+             * @description Topology JSON payload
+             */
+            topology: {
+                [key: string]: unknown;
+            };
+            /**
+             * Project Id
+             * @description Optional numeric project identifier
+             */
+            project_id?: number | null;
+            /**
+             * Project Key
+             * @description Optional stable project key
+             */
+            project_key?: string | null;
+            /**
+             * Workspace Id
+             * @description Optional numeric workspace identifier
+             */
+            workspace_id?: number | null;
+            /**
+             * Workspace Key
+             * @description Optional stable workspace key
+             */
+            workspace_key?: string | null;
+        };
+        /** TopologyValidationData */
+        TopologyValidationData: {
+            topology: components["schemas"]["TopologyStatusData"];
+            /**
+             * Success Message
+             * @description Human-readable success message
+             */
+            success_message?: string | null;
+            /**
+             * Error Message
+             * @description Human-readable validation error
+             */
+            error_message?: string | null;
+        };
+        /** TopologyValidationResponse */
+        TopologyValidationResponse: {
+            data: components["schemas"]["TopologyValidationData"];
+            meta: components["schemas"]["MetaPayload"];
         };
         /** ValidationError */
         ValidationError: {
@@ -4118,7 +4604,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4202,7 +4688,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request Entity Too Large */
+            /** @description Content Too Large */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4211,7 +4697,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4283,7 +4769,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4367,7 +4853,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4427,7 +4913,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4489,7 +4975,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4564,7 +5050,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4639,7 +5125,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4706,7 +5192,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4770,7 +5256,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5045,6 +5531,234 @@ export interface operations {
             };
         };
     };
+    get_settings_summary_api_v1_settings_get: {
+        parameters: {
+            query?: {
+                project_id?: number | null;
+                project_key?: string | null;
+                workspace_id?: number | null;
+                workspace_key?: string | null;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_provider_settings_api_v1_settings_provider_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_settings_topology_api_v1_settings_topology_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopologyUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyValidationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_settings_topology_api_v1_settings_topology_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopologyUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyValidationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_topology_drift_cadence_api_v1_settings_topology_drift_cadence_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopologyDriftCadenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyDriftCadenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_custom_skills_api_v1_settings_custom_skills_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSkillListResponse"];
+                };
+            };
+        };
+    };
+    upload_custom_skill_api_v1_settings_custom_skills_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomSkillUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSkillUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_skills_api_v1_skills_get: {
         parameters: {
             query?: {
@@ -5056,6 +5770,8 @@ export interface operations {
                 author?: string | null;
                 /** @description Case-insensitive keyword search across name, description, tags, and triggers. */
                 search?: string | null;
+                /** @description Sort skills by popularity or recency. */
+                sort?: "popularity" | "recency";
                 /** @description 1-based results page. */
                 page?: number;
                 /** @description Maximum number of results to return per page. */
@@ -5076,7 +5792,7 @@ export interface operations {
                     "application/json": components["schemas"]["SkillRegistryListResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5125,7 +5841,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5174,7 +5890,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5226,7 +5942,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5275,7 +5991,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;

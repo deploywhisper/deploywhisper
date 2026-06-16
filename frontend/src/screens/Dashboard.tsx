@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   Play,
   Search,
+  Settings,
   ShieldCheck,
   Trash2,
   Upload,
@@ -144,10 +145,11 @@ function DashboardError({ message, onRetry }: { message: string; onRetry: () => 
 
 function Sidebar({ selectedProject }: { selectedProject: ProjectOption }) {
   const nav = [
-    { label: "Dashboard", icon: LayoutGrid, active: true },
-    { label: "Skills", icon: Zap },
-    { label: "Incidents", icon: AlertTriangle, count: 0 },
-    { label: "History", icon: History },
+    { label: "Dashboard", icon: LayoutGrid, href: "/app", active: true },
+    { label: "Skills", icon: Zap, href: "/app/skills" },
+    { label: "Incidents", icon: AlertTriangle, href: "/app/incidents", count: 0 },
+    { label: "History", icon: History, href: "/app/history" },
+    { label: "Settings", icon: Settings, href: "/app/settings" },
   ];
 
   return (
@@ -164,12 +166,12 @@ function Sidebar({ selectedProject }: { selectedProject: ProjectOption }) {
         </div>
       </div>
       <nav className="dw-sidebar-nav" aria-label="Primary">
-        {nav.map(({ label, icon: Icon, active, count }) => (
-          <button key={label} className={`dw-nav-item${active ? " dw-nav-item-active" : ""}`} type="button">
+        {nav.map(({ label, icon: Icon, href, active, count }) => (
+          <Link key={label} className={`dw-nav-item${active ? " dw-nav-item-active" : ""}`} to={href}>
             <Icon color={active ? "var(--dw-brand)" : "var(--dw-faint)"} size={17} />
             <span>{label}</span>
             {typeof count === "number" && <span className="dw-nav-count">{count}</span>}
-          </button>
+          </Link>
         ))}
       </nav>
       <div className="dw-active-project-card">

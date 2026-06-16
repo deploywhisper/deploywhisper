@@ -30,7 +30,10 @@ import {
 } from "./components/ui";
 import { DashboardScreen } from "./screens/Dashboard";
 import { HistoryScreen } from "./screens/History";
+import { IncidentsScreen } from "./screens/Incidents";
 import { ReportScreen } from "./screens/Report";
+import { SettingsScreen } from "./screens/Settings";
+import { SkillsScreen } from "./screens/Skills";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +43,10 @@ function App() {
       <Routes>
         <Route element={<ComponentGallery />} path="/app/dev/components" />
         <Route element={<HistoryScreen />} path="/app/history" />
+        <Route element={<SettingsScreen />} path="/app/settings" />
+        <Route element={<IncidentsScreen />} path="/app/incidents" />
+        <Route element={<SkillsScreen />} path="/app/skills" />
+        <Route element={<SkillsScreen />} path="/app/skills/:skillId" />
         <Route element={<ReportScreen />} path="/app/reports/:id" />
         <Route element={<ReportScreen />} path="/reports/:id" />
         <Route element={<DashboardScreen />} path="/app" />
