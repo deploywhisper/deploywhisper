@@ -468,6 +468,70 @@ def _redact_text_value(value: Any, pairs: list[tuple[str, str]]) -> Any:
     return redacted
 
 
+def _redact_text_list(
+    values: object,
+    pairs: list[tuple[str, str]],
+) -> list[str]:
+    if not isinstance(values, list | tuple):
+        return []
+    return [
+        str(_redact_text_value(item, pairs)) for item in values if str(item).strip()
+    ]
+
+
+def _redact_context_source_metadata(
+    source: object,
+    pairs: list[tuple[str, str]],
+) -> object:
+    if not isinstance(source, dict):
+        return source
+    redacted = dict(source)
+    for key in ("source_id", "source_ref", "scope", "last_observed_at"):
+        redacted[key] = _redact_text_value(redacted.get(key), pairs)
+    redacted["conflicts"] = _redact_text_list(redacted.get("conflicts"), pairs)
+    redacted["limitations"] = _redact_text_list(redacted.get("limitations"), pairs)
+    return redacted
+
+
+def _redact_context_completeness(
+    context: object,
+    pairs: list[tuple[str, str]],
+) -> object:
+    if not isinstance(context, dict):
+        return context
+    redacted = dict(context)
+    redacted["uncertainty"] = _redact_text_value(redacted.get("uncertainty"), pairs)
+    redacted["context_todos"] = _redact_text_list(redacted.get("context_todos"), pairs)
+    redacted["escalation_hints"] = _redact_text_list(
+        redacted.get("escalation_hints"), pairs
+    )
+    redacted["ownership_unmapped_subjects"] = _redact_text_list(
+        redacted.get("ownership_unmapped_subjects"), pairs
+    )
+    redacted["context_sources"] = [
+        _redact_context_source_metadata(source, pairs)
+        for source in redacted.get("context_sources") or []
+    ]
+    owner_signals: list[object] = []
+    for signal in redacted.get("owner_signals") or []:
+        if not isinstance(signal, dict):
+            owner_signals.append(signal)
+            continue
+        signal_payload = dict(signal)
+        for key in (
+            "subject",
+            "source_ref",
+            "matched_pattern",
+            "resource_id",
+            "service_id",
+            "escalation_hint",
+        ):
+            signal_payload[key] = _redact_text_value(signal_payload.get(key), pairs)
+        owner_signals.append(signal_payload)
+    redacted["owner_signals"] = owner_signals
+    return redacted
+
+
 def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
     audit_names = list(report.get("audit", {}).get("files_analyzed") or [])
     original_names = list(audit_names)
@@ -502,6 +566,10 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
             **dict(report.get("audit") or {}),
             "files_analyzed": [redaction_map[name] for name in audit_names],
         },
+        "context_completeness": _redact_context_completeness(
+            report.get("context_completeness") or {},
+            pairs,
+        ),
         "submission_manifest": _redact_submission_manifest_file_names(
             dict(report.get("submission_manifest") or {}),
             redaction_map,
@@ -553,6 +621,10 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
                     evidence_item.get("location", ""), pairs
                 ),
                 "summary": _redact_text_value(evidence_item.get("summary"), pairs),
+                "context_source": _redact_context_source_metadata(
+                    evidence_item.get("context_source"),
+                    pairs,
+                ),
                 "redaction_status": (
                     "sensitive_blocked"
                     if evidence_item.get("redaction_status") == "sensitive_blocked"
@@ -3619,11 +3691,22 @@ def _context_with_incident_index_freshness(report, context_completeness: dict) -
             workspace_id=report.workspace_id,
         )
     except Exception:
+        if _incident_context_is_empty(context_completeness):
+            return context_completeness
         return _mark_incident_context_stale(context_completeness)
     current_version = str(current.get("incident_index_version") or "")
     if current_version and current_version != stored_version:
         return _mark_incident_context_stale(context_completeness)
     return context_completeness
+
+
+def _incident_context_is_empty(context_completeness: dict) -> bool:
+    return (
+        str(context_completeness.get("incident_index_version") or "")
+        in {"incidents:empty", "incidents:0:empty"}
+        or str(context_completeness.get("incident_index_freshness_status") or "")
+        == "empty"
+    )
 
 
 def _mark_incident_context_stale(context_completeness: dict) -> dict:
@@ -3650,6 +3733,10 @@ def _mark_incident_context_stale(context_completeness: dict) -> dict:
             else f"Uncertainty: {stale_message}."
         )
     context_sources = updated.get("context_sources")
+    stale_source_confidence = _incident_context_score(
+        _context_int_value(updated, "incident_index_size"),
+        stale=True,
+    )
     if isinstance(context_sources, list):
         updated_sources: list[object] = []
         stored_version = str(updated.get("incident_index_version") or "")
@@ -3671,6 +3758,12 @@ def _mark_incident_context_stale(context_completeness: dict) -> dict:
                 continue
             stale_source = dict(source)
             stale_source["freshness_status"] = "stale"
+            stale_source["confidence"] = min(
+                _context_float_value(
+                    stale_source, "confidence", missing_default=stale_source_confidence
+                ),
+                stale_source_confidence,
+            )
             limitations = _context_todo_items(stale_source.get("limitations"))
             if "stale_incident_index" not in limitations:
                 limitations.append("stale_incident_index")
@@ -3724,6 +3817,13 @@ def _load_evidence_context_source(
     ):
         decoded = dict(decoded)
         decoded["freshness_status"] = "stale"
+        decoded["confidence"] = min(
+            _context_float_value(decoded, "confidence", missing_default=0.0),
+            _incident_context_score(
+                _context_int_value(context_completeness, "incident_index_size"),
+                stale=True,
+            ),
+        )
         limitations = _context_todo_items(decoded.get("limitations"))
         if "stale_incident_index" not in limitations:
             limitations.append("stale_incident_index")

@@ -4339,6 +4339,8 @@ class ReportServiceTests(unittest.TestCase):
         }
         self.assertEqual(sources["incidents:1:old"]["freshness_status"], "stale")
         self.assertEqual(sources["incidents:2:other"]["freshness_status"], "current")
+        self.assertEqual(sources["incidents:1:old"]["confidence"], 0.1)
+        self.assertEqual(sources["incidents:2:other"]["confidence"], 0.8)
         self.assertEqual(context["context_score"], 0.76)
         self.assertEqual(context["confidence_level"], "medium")
 
@@ -4379,6 +4381,12 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(context["context_score"], 0.67)
         self.assertEqual(context["confidence_level"], "low")
         self.assertTrue(context["insufficient_context"])
+        incident_source = next(
+            source
+            for source in context["context_sources"]
+            if source["source_type"] == "incident"
+        )
+        self.assertEqual(incident_source["confidence"], 0.5)
 
     def test_load_evidence_context_source_marks_incident_source_stale(self) -> None:
         context_source = report_service_module._load_evidence_context_source(
@@ -4397,11 +4405,13 @@ class ReportServiceTests(unittest.TestCase):
             context_completeness={
                 "incident_index_freshness_status": "stale",
                 "incident_index_version": "incidents:1:old",
+                "incident_index_size": 1,
             },
         )
 
         self.assertIsNotNone(context_source)
         self.assertEqual(context_source["freshness_status"], "stale")
+        self.assertEqual(context_source["confidence"], 0.1)
         self.assertIn("stale_incident_index", context_source["limitations"])
 
     def test_load_evidence_context_source_rejects_invalid_payload(self) -> None:
@@ -4420,6 +4430,93 @@ class ReportServiceTests(unittest.TestCase):
         )
 
         self.assertIsNone(context_source)
+
+    def test_fetch_analysis_report_preserves_empty_incident_snapshot_on_lookup_failure(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group review.",
+            contributors=[],
+            interaction_risks=[],
+            context_completeness=ContextCompleteness(
+                context_score=0.76,
+                confidence_level="medium",
+                incident_index_size=0,
+                incident_index_version="incidents:empty",
+                incident_index_freshness_status="empty",
+                context_sources=[
+                    ContextSourceMetadata(
+                        source_id="incident:index:empty",
+                        source_type="incident",
+                        source_ref="incidents:empty",
+                        scope="project:payments",
+                        freshness_status="empty",
+                        confidence=0.0,
+                        limitations=["empty_incident_index"],
+                    )
+                ],
+            ),
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="Review the ingress change.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        with patch(
+            "services.incident_service.get_incident_index_snapshot",
+            side_effect=RuntimeError("snapshot unavailable"),
+        ):
+            fetched = report_service_module.fetch_analysis_report(persisted["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        context = fetched["context_completeness"]
+        self.assertEqual(context["incident_index_freshness_status"], "empty")
+        self.assertEqual(context["incident_index_version"], "incidents:empty")
+        self.assertNotIn(
+            "Refresh stale incident history for this project/workspace.",
+            context["context_todos"],
+        )
+        incident_source = context["context_sources"][0]
+        self.assertEqual(incident_source["freshness_status"], "empty")
+        self.assertEqual(incident_source["confidence"], 0.0)
 
     def test_persist_analysis_report_cleans_up_committed_row_after_artifact_failure(
         self,
@@ -4985,6 +5082,60 @@ class ReportServiceTests(unittest.TestCase):
             "prod/network/plan.json",
             shared_report["evidence_items"][0]["source_ref"],
         )
+
+    def test_shared_report_redaction_rewrites_context_source_metadata(self) -> None:
+        report = self._persist_shareable_report()
+        context_source = ContextSourceMetadata(
+            source_id="artifact:prod/network/plan.json",
+            source_type="artifact",
+            source_ref="prod/network/plan.json",
+            scope="project:prod/network/plan.json",
+            freshness_status="incomplete",
+            confidence=0.5,
+            conflicts=["conflict in prod/network/plan.json"],
+            limitations=["parser_issue: prod/network/plan.json"],
+        ).model_dump(mode="json")
+        context = ContextCompleteness(
+            context_score=0.8,
+            confidence_level="medium",
+            incident_index_size=0,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            context_sources=[ContextSourceMetadata.model_validate(context_source)],
+            owner_signals=[],
+            escalation_hints=["Escalate prod/network/plan.json."],
+            ownership_unmapped_subjects=["prod/network/plan.json"],
+        ).model_dump(mode="json")
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (json.dumps(context), report["id"]),
+            )
+            connection.execute(
+                "UPDATE evidence_items SET context_source_json = ? "
+                "WHERE analysis_id = ?",
+                (json.dumps(context_source), report["id"]),
+            )
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        serialized_context = json.dumps(shared_report["context_completeness"])
+        serialized_evidence = json.dumps(shared_report["evidence_items"])
+        self.assertNotIn("prod/network/plan.json", serialized_context)
+        self.assertNotIn("prod/network/plan.json", serialized_evidence)
+        self.assertIn("Artifact 1", serialized_context)
+        self.assertIn("Artifact 1", serialized_evidence)
 
     def test_fetch_analysis_report_builds_confidence_ledger_from_legacy_contributors(
         self,

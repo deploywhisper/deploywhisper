@@ -401,9 +401,40 @@ def _warning_conflicts(warnings: list[str] | None) -> list[str]:
         if not warning_text:
             continue
         lower_warning = warning_text.lower()
-        if "conflict" in lower_warning or "drift" in lower_warning:
-            conflicts.append(warning_text)
+        if "conflict" in lower_warning:
+            conflicts.append("topology_conflict")
+        elif "drift" in lower_warning:
+            conflicts.append("topology_drift")
     return _unique_texts(conflicts)
+
+
+def _topology_warning_limitations(warnings: list[str] | None) -> list[str]:
+    limitations: list[str] = []
+    for warning in warnings or []:
+        warning_text = str(warning or "").strip().lower()
+        if not warning_text:
+            continue
+        if "kubernetes live-state context todo" in warning_text:
+            limitations.append("kubernetes_live_state_context_todo")
+        elif "kubernetes live-state import partially parsed" in warning_text:
+            limitations.append("partial_kubernetes_live_state")
+        elif (
+            "kubernetes live-state import did not produce any supported resources"
+            in warning_text
+        ):
+            limitations.append("empty_kubernetes_live_state")
+        elif (
+            "kubernetes live-state import did not produce any non-namespace resources"
+            in warning_text
+        ):
+            limitations.append("namespace_only_kubernetes_live_state")
+        elif "conflict" in warning_text:
+            limitations.append("topology_conflict")
+        elif "drift" in warning_text:
+            limitations.append("topology_drift")
+        else:
+            limitations.append("topology_warning")
+    return _unique_texts(limitations)
 
 
 def _topology_context_source(
@@ -445,7 +476,7 @@ def _topology_context_source(
                 and topology_freshness_days > STALE_AFTER_DAYS
                 else []
             ),
-            *topology_warnings,
+            *_topology_warning_limitations(topology_warnings),
         ]
     )
     return ContextSourceMetadata(
@@ -478,8 +509,15 @@ def _incident_context_source(
     )
     limitations = [] if incident_index_size else ["empty_incident_index"]
     conflicts = [] if incident_index_size else ["missing_incident_history"]
-    if incident_index_size and freshness_status != "current":
+    if incident_index_size and freshness_status == "stale":
         limitations.append("stale_incident_index")
+    elif incident_index_size and freshness_status == "conflicting":
+        limitations.append("incident_index_conflicting")
+        conflicts.append("incident_index_conflicting")
+    elif incident_index_size and freshness_status == "incomplete":
+        limitations.append("incident_index_incomplete")
+    elif incident_index_size and freshness_status not in {"current", "empty"}:
+        limitations.append(f"incident_index_{freshness_status}")
     return ContextSourceMetadata(
         source_id=_source_id("incident:index", version),
         source_type="incident",
@@ -511,6 +549,8 @@ def _ownership_context_sources(
     owner_signals: list[OwnerSignal],
     ownership_unmapped_subjects: list[str],
     scope: str,
+    topology_freshness_status: str = "not_applicable",
+    topology_confidence: float = 0.0,
 ) -> list[ContextSourceMetadata]:
     sources: list[ContextSourceMetadata] = []
     grouped_signals: dict[tuple[str, str], list[OwnerSignal]] = {}
@@ -523,17 +563,31 @@ def _ownership_context_sources(
         owners = _unique_texts(
             owner for signal in signals for owner in list(signal.owners)
         )
+        source_is_topology = source_kind == "topology"
+        base_confidence = 1.0 if owners else 0.5
+        freshness_status = (
+            topology_freshness_status if source_is_topology else "current"
+        )
+        confidence = (
+            min(base_confidence, topology_confidence)
+            if source_is_topology
+            else base_confidence
+        )
+        limitations = [] if owners else [f"ownership_source_has_no_owners:{source_ref}"]
+        if source_is_topology and freshness_status not in {
+            "current",
+            "not_applicable",
+        }:
+            limitations.append(f"topology_ownership_source_{freshness_status}")
         sources.append(
             ContextSourceMetadata(
                 source_id=_source_id(f"ownership:{source_kind}", source_ref),
                 source_type="ownership",
                 source_ref=source_ref,
                 scope=scope,
-                freshness_status="current",
-                confidence=1.0 if owners else 0.5,
-                limitations=[]
-                if owners
-                else [f"ownership_source_has_no_owners:{source_ref}"],
+                freshness_status=freshness_status,
+                confidence=confidence,
+                limitations=limitations,
                 conflicts=[],
             )
         )
@@ -566,6 +620,12 @@ def _ownership_context_sources(
     return sources
 
 
+def _artifact_context_source_ref(file_name: str) -> tuple[str, list[str]]:
+    source_ref = str(file_name or "").strip() or "unknown-file"
+    limitations = [] if str(file_name or "").strip() else ["missing_artifact_name"]
+    return source_ref, limitations
+
+
 def _build_context_sources(
     *,
     parse_batch: ParseBatchResult,
@@ -585,17 +645,20 @@ def _build_context_sources(
 ) -> list[ContextSourceMetadata]:
     sources: list[ContextSourceMetadata] = []
     for file_result in parse_batch.files:
+        artifact_source_ref, artifact_limitations = _artifact_context_source_ref(
+            file_result.file_name
+        )
         status = "current" if file_result.status == "parsed" else "incomplete"
-        limitations: list[str] = []
+        limitations: list[str] = list(artifact_limitations)
         if file_result.status != "parsed":
             limitations.append(f"{file_result.status}_artifact")
         if file_result.issue is not None:
-            limitations.append(file_result.issue.message)
+            limitations.append("parser_issue")
         sources.append(
             ContextSourceMetadata(
-                source_id=_source_id("artifact", file_result.file_name),
+                source_id=_source_id("artifact", artifact_source_ref),
                 source_type="artifact",
-                source_ref=file_result.file_name,
+                source_ref=artifact_source_ref,
                 scope=scope,
                 freshness_status=status,
                 confidence=1.0 if file_result.status == "parsed" else 0.0,
@@ -603,15 +666,16 @@ def _build_context_sources(
             )
         )
     if include_topology_context:
-        sources.append(
-            _topology_context_source(
-                topology_status=topology_status,
-                topology_freshness_days=topology_freshness_days,
-                topology_warnings=topology_warnings,
-                topology_score=topology_score if topology_score is not None else 0.0,
-                scope=scope,
-            )
+        topology_context_source = _topology_context_source(
+            topology_status=topology_status,
+            topology_freshness_days=topology_freshness_days,
+            topology_warnings=topology_warnings,
+            topology_score=topology_score if topology_score is not None else 0.0,
+            scope=scope,
         )
+        sources.append(topology_context_source)
+    else:
+        topology_context_source = None
     if include_incident_context:
         sources.append(
             _incident_context_source(
@@ -665,6 +729,16 @@ def _build_context_sources(
             owner_signals=owner_signals,
             ownership_unmapped_subjects=ownership_unmapped_subjects,
             scope=scope,
+            topology_freshness_status=(
+                topology_context_source.freshness_status
+                if topology_context_source is not None
+                else "not_applicable"
+            ),
+            topology_confidence=(
+                topology_context_source.confidence
+                if topology_context_source is not None
+                else 0.0
+            ),
         )
     )
     return sources

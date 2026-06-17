@@ -1757,6 +1757,108 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertIn("ownership:topology:topology://cluster-a", ownership_sources)
         self.assertNotIn("ownership:mapping", ownership_sources)
 
+    def test_topology_ownership_source_inherits_topology_freshness(self) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            change_id="change-plan",
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_instance.api",
+                            action="modify",
+                            summary="Terraform changed an API instance.",
+                        )
+                    ],
+                )
+            ]
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-03-01T00:00:00Z",
+                    payload={
+                        "metadata": {"import": {"source_ref": "topology://cluster-a"}}
+                    },
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(1),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](
+                batch,
+                project_id=123,
+                topology={
+                    "metadata": {"import": {"source_ref": "topology://cluster-a"}},
+                    "services": [
+                        {
+                            "id": "checkout",
+                            "label": "checkout",
+                            "owners": ["@runtime"],
+                            "resource_keys": ["aws_instance.api"],
+                        }
+                    ],
+                },
+            )
+
+        ownership_source = next(
+            source
+            for source in context.context_sources
+            if source.source_id == "ownership:topology:topology://cluster-a"
+        )
+        self.assertEqual(ownership_source.freshness_status, "stale")
+        self.assertLess(ownership_source.confidence, 1.0)
+        self.assertIn(
+            "topology_ownership_source_stale",
+            ownership_source.limitations,
+        )
+
+    def test_blank_artifact_name_degrades_context_source_to_unknown_file(self) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="",
+                        tool="terraform",
+                        message="raw parser error for /private/tmp/secret.tf",
+                    ),
+                )
+            ]
+        )
+
+        context = build_analysis_artifacts.__globals__["_build_context_completeness"](
+            batch,
+            include_topology_context=False,
+            include_incident_context=False,
+        )
+
+        artifact_source = next(
+            source
+            for source in context.context_sources
+            if source.source_type == "artifact"
+        )
+        self.assertEqual(artifact_source.source_ref, "unknown-file")
+        self.assertIn("missing_artifact_name", artifact_source.limitations)
+        self.assertIn("parser_issue", artifact_source.limitations)
+        self.assertNotIn(
+            "/private/tmp/secret.tf",
+            " ".join(artifact_source.limitations),
+        )
+
     def test_evidence_context_source_matching_rejects_prefix_collisions(
         self,
     ) -> None:
@@ -2032,6 +2134,15 @@ class AnalysisServiceTests(unittest.TestCase):
             context.context_todos,
         )
         self.assertIn("incident history freshness is conflicting", context.uncertainty)
+        incident_source = next(
+            source
+            for source in context.context_sources
+            if source.source_type == "incident"
+        )
+        self.assertEqual(incident_source.freshness_status, "conflicting")
+        self.assertIn("incident_index_conflicting", incident_source.limitations)
+        self.assertIn("incident_index_conflicting", incident_source.conflicts)
+        self.assertNotIn("stale_incident_index", incident_source.limitations)
 
     def test_build_context_completeness_uses_raw_parser_rate_for_tiny_gap(
         self,
