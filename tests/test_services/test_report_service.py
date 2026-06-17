@@ -4204,7 +4204,7 @@ class ReportServiceTests(unittest.TestCase):
             fetched["context_completeness"]["incident_index_version"],
             snapshot["incident_index_version"],
         )
-        self.assertEqual(fetched["context_completeness"]["context_score"], 0.8)
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.76)
         self.assertEqual(fetched["context_completeness"]["confidence_level"], "medium")
         self.assertIn(
             "Refresh stale incident history for this project/workspace.",
@@ -4296,7 +4296,7 @@ class ReportServiceTests(unittest.TestCase):
             fetched["context_completeness"]["incident_index_freshness_status"],
             "stale",
         )
-        self.assertEqual(fetched["context_completeness"]["context_score"], 0.8)
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.76)
         self.assertEqual(fetched["context_completeness"]["confidence_level"], "medium")
         incident_source = fetched["context_completeness"]["context_sources"][0]
         self.assertEqual(incident_source["freshness_status"], "stale")
@@ -4307,6 +4307,7 @@ class ReportServiceTests(unittest.TestCase):
             {
                 "context_score": 0.9,
                 "confidence_level": "high",
+                "incident_index_size": 1,
                 "incident_index_version": "incidents:1:old",
                 "incident_index_freshness_status": "current",
                 "context_todos": [],
@@ -4338,8 +4339,46 @@ class ReportServiceTests(unittest.TestCase):
         }
         self.assertEqual(sources["incidents:1:old"]["freshness_status"], "stale")
         self.assertEqual(sources["incidents:2:other"]["freshness_status"], "current")
-        self.assertEqual(context["context_score"], 0.8)
+        self.assertEqual(context["context_score"], 0.76)
         self.assertEqual(context["confidence_level"], "medium")
+
+    def test_mark_incident_context_stale_recomputes_score_below_cap(self) -> None:
+        context = report_service_module._mark_incident_context_stale(
+            {
+                "context_score": 0.73,
+                "confidence_level": "medium",
+                "parser_success_rate": 0.8,
+                "evidence_success_rate": 0.8,
+                "incident_index_size": 8,
+                "incident_index_version": "incidents:8:old",
+                "incident_index_freshness_status": "current",
+                "context_todos": [],
+                "context_sources": [
+                    {
+                        "source_id": "topology:kubernetes:current-context",
+                        "source_type": "topology",
+                        "source_ref": "current-context",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.5,
+                        "limitations": [],
+                    },
+                    {
+                        "source_id": "incident:index:old",
+                        "source_type": "incident",
+                        "source_ref": "incidents:8:old",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.8,
+                        "limitations": [],
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(context["context_score"], 0.67)
+        self.assertEqual(context["confidence_level"], "low")
+        self.assertTrue(context["insufficient_context"])
 
     def test_load_evidence_context_source_marks_incident_source_stale(self) -> None:
         context_source = report_service_module._load_evidence_context_source(
@@ -4364,6 +4403,23 @@ class ReportServiceTests(unittest.TestCase):
         self.assertIsNotNone(context_source)
         self.assertEqual(context_source["freshness_status"], "stale")
         self.assertIn("stale_incident_index", context_source["limitations"])
+
+    def test_load_evidence_context_source_rejects_invalid_payload(self) -> None:
+        context_source = report_service_module._load_evidence_context_source(
+            json.dumps(
+                {
+                    "source_id": "incident:index:old",
+                    "source_type": "incident",
+                    "freshness_status": "current",
+                }
+            ),
+            context_completeness={
+                "incident_index_freshness_status": "current",
+                "incident_index_version": "incidents:1:old",
+            },
+        )
+
+        self.assertIsNone(context_source)
 
     def test_persist_analysis_report_cleans_up_committed_row_after_artifact_failure(
         self,

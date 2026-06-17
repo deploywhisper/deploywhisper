@@ -1901,6 +1901,138 @@ class AnalysisServiceTests(unittest.TestCase):
         self.assertLess(context.context_score, 1.0)
         self.assertIn("incident history is stale", context.uncertainty or "")
 
+    def test_partial_parser_and_evidence_sources_are_incomplete(self) -> None:
+        covered_change = UnifiedChange(
+            change_id="change-covered",
+            source_file="plan-a.json",
+            tool="terraform",
+            resource_id="aws_instance.web",
+            action="modify",
+            summary="Terraform changed a web instance.",
+        )
+        uncovered_change = UnifiedChange(
+            change_id="change-uncovered",
+            source_file="plan-b.json",
+            tool="terraform",
+            resource_id="aws_instance.api",
+            action="modify",
+            summary="Terraform changed an API instance.",
+        )
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan-a.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[covered_change],
+                ),
+                ParsedFileResult(
+                    file_name="plan-b.json",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="plan-b.json",
+                        tool="terraform",
+                        message="invalid plan JSON",
+                    ),
+                ),
+                ParsedFileResult(
+                    file_name="plan-c.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[uncovered_change],
+                ),
+            ]
+        )
+        evidence = EvidenceItem(
+            evidence_id="ev-plan-a",
+            analysis_id=0,
+            finding_id="finding-1",
+            source_type="artifact",
+            source_ref="artifact://plan-a.json#aws_instance.web?action=modify",
+            artifact="plan-a.json",
+            location="plan-a.json#aws_instance.web",
+            resource="aws_instance.web",
+            operation="modify",
+            summary="Web instance changed.",
+            severity_hint="medium",
+            deterministic=True,
+            confidence=1.0,
+            related_change_ids=["change-covered"],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(1),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, evidence_items=[evidence], project_id=123)
+
+        sources_by_type = {
+            source.source_type: source for source in context.context_sources
+        }
+        self.assertEqual(sources_by_type["parser"].freshness_status, "incomplete")
+        self.assertIn("partial_parser_coverage", sources_by_type["parser"].limitations)
+        self.assertEqual(sources_by_type["evidence"].freshness_status, "incomplete")
+        self.assertIn(
+            "partial_evidence_coverage", sources_by_type["evidence"].limitations
+        )
+
+    def test_non_stale_incident_freshness_uses_specific_guidance(self) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            change_id="change-plan",
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_instance.web",
+                            action="modify",
+                            summary="Terraform changed a web instance.",
+                        )
+                    ],
+                )
+            ]
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value={
+                    **_incident_snapshot(2),
+                    "incident_index_freshness_status": "conflicting",
+                },
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, evidence_items=[], project_id=123)
+
+        self.assertIn(
+            "Resolve incident history freshness: conflicting.",
+            context.context_todos,
+        )
+        self.assertNotIn(
+            "Refresh stale incident history for this project/workspace.",
+            context.context_todos,
+        )
+        self.assertIn("incident history freshness is conflicting", context.uncertainty)
+
     def test_build_context_completeness_uses_raw_parser_rate_for_tiny_gap(
         self,
     ) -> None:

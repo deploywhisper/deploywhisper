@@ -628,7 +628,7 @@ def _build_context_sources(
                 source_type="parser",
                 source_ref=tool_name,
                 scope=scope,
-                freshness_status="not_applicable",
+                freshness_status="not_applicable" if score >= 1.0 else "incomplete",
                 confidence=round(score, 2),
                 limitations=[] if score >= 1.0 else ["partial_parser_coverage"],
             )
@@ -651,7 +651,9 @@ def _build_context_sources(
             source_type="evidence",
             source_ref="analysis-evidence",
             scope=scope,
-            freshness_status="not_applicable",
+            freshness_status="not_applicable"
+            if evidence_success_rate >= 1.0
+            else "incomplete",
             confidence=round(evidence_success_rate, 2),
             limitations=[]
             if evidence_success_rate >= 1.0
@@ -752,8 +754,12 @@ def _context_todos(
             )
     if include_incident_context and incident_index_size == 0:
         todos.append("Import relevant incident history for this project/workspace.")
-    elif include_incident_context and incident_freshness_status != "current":
+    elif include_incident_context and incident_freshness_status == "stale":
         todos.append("Refresh stale incident history for this project/workspace.")
+    elif include_incident_context and incident_freshness_status != "current":
+        todos.append(
+            f"Resolve incident history freshness: {incident_freshness_status}."
+        )
     if parser_success_rate < 1.0:
         todos.append("Review parser errors and resubmit supported artifacts.")
     if evidence_success_rate < 1.0:
@@ -786,8 +792,12 @@ def _context_uncertainty(
             weak_signals.append("Kubernetes live-state context is degraded")
     if include_incident_context and incident_index_size == 0:
         weak_signals.append("incident history is unavailable")
-    elif include_incident_context and incident_freshness_status != "current":
+    elif include_incident_context and incident_freshness_status == "stale":
         weak_signals.append("incident history is stale")
+    elif include_incident_context and incident_freshness_status != "current":
+        weak_signals.append(
+            f"incident history freshness is {incident_freshness_status}"
+        )
     if parser_success_rate < 1.0:
         weak_signals.append("parser coverage is partial")
     if evidence_success_rate < 1.0:

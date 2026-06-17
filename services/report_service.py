@@ -30,7 +30,12 @@ from analysis.risk_scorer import (
 )
 from api.schemas import IntakeItem, PendingAnalysis
 from evidence.mappers import classify_finding_evidence
-from evidence.models import ContextCompleteness, EvidenceItem, Finding
+from evidence.models import (
+    ContextCompleteness,
+    ContextSourceMetadata,
+    EvidenceItem,
+    Finding,
+)
 from llm.narrator import NarrativeResult
 
 from models.database import SessionLocal
@@ -3290,6 +3295,23 @@ def _context_confidence_level_from_score(context_score: float) -> str:
     return "low"
 
 
+def _topology_freshness_score(topology_freshness_days: int | None) -> float:
+    if topology_freshness_days is None:
+        return 0.0
+    if topology_freshness_days <= STALE_AFTER_DAYS:
+        return 1.0
+    return max(0.0, 1.0 - ((topology_freshness_days - STALE_AFTER_DAYS) / 60))
+
+
+def _incident_context_score(
+    incident_index_size: int,
+    *,
+    stale: bool = False,
+) -> float:
+    score = min(max(incident_index_size, 0) / 10, 1.0)
+    return min(score, 0.5) if stale and incident_index_size else score
+
+
 def _context_float_value(
     decoded: dict,
     key: str,
@@ -3314,6 +3336,33 @@ def _context_int_value(decoded: dict, key: str) -> int:
     except (TypeError, ValueError):
         return 0
     return max(value, 0)
+
+
+def _context_sources(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [source for source in value if isinstance(source, dict)]
+
+
+def _has_context_source(context_completeness: dict, source_type: str) -> bool:
+    return any(
+        source.get("source_type") == source_type
+        for source in _context_sources(context_completeness.get("context_sources"))
+    )
+
+
+def _context_source_confidence(
+    context_completeness: dict,
+    source_type: str,
+) -> float | None:
+    confidences = [
+        _context_float_value(source, "confidence", missing_default=0.0)
+        for source in _context_sources(context_completeness.get("context_sources"))
+        if source.get("source_type") == source_type
+    ]
+    if not confidences:
+        return None
+    return max(confidences)
 
 
 def _context_todo_items(value: object) -> list[str]:
@@ -3503,6 +3552,56 @@ def _clamp_confidence_to_context(
     return round(min(confidence, max(0.0, min(context_score, 1.0))), 2)
 
 
+def _recomputed_stale_incident_context_score(context_completeness: dict) -> float:
+    weighted_scores = [
+        (
+            _context_float_value(
+                context_completeness, "parser_success_rate", missing_default=1.0
+            ),
+            0.35,
+        ),
+        (
+            _context_float_value(
+                context_completeness, "evidence_success_rate", missing_default=1.0
+            ),
+            0.20,
+        ),
+    ]
+    topology_score = _context_source_confidence(context_completeness, "topology")
+    topology_freshness_days = context_completeness.get("topology_freshness_days")
+    if topology_freshness_days is not None:
+        try:
+            topology_freshness_days = int(topology_freshness_days)
+        except (TypeError, ValueError):
+            topology_freshness_days = None
+    if topology_score is None:
+        topology_score = _topology_freshness_score(topology_freshness_days)
+    if topology_score is not None and (
+        topology_freshness_days is not None
+        or _has_context_source(context_completeness, "topology")
+    ):
+        weighted_scores.append((topology_score, 0.25))
+    incident_index_size = _context_int_value(
+        context_completeness, "incident_index_size"
+    )
+    if context_completeness.get("incident_index_version") not in {
+        None,
+        "",
+        "incidents:unknown",
+        "incidents:unscoped",
+    }:
+        weighted_scores.append(
+            (_incident_context_score(incident_index_size, stale=True), 0.20)
+        )
+    total_weight = sum(weight for _, weight in weighted_scores) or 1.0
+    return round(
+        min(
+            1.0, sum(score * weight for score, weight in weighted_scores) / total_weight
+        ),
+        2,
+    )
+
+
 def _context_with_incident_index_freshness(report, context_completeness: dict) -> dict:
     stored_version = str(context_completeness.get("incident_index_version") or "")
     if not stored_version or stored_version in {
@@ -3531,12 +3630,11 @@ def _mark_incident_context_stale(context_completeness: dict) -> dict:
     updated = dict(context_completeness)
     updated["incident_index_freshness_status"] = "stale"
     context_score = _context_float_value(updated, "context_score", missing_default=0.0)
-    if context_score > 0.8:
-        context_score = 0.8
-        updated["context_score"] = context_score
-        updated["confidence_level"] = _context_confidence_level_from_score(
-            context_score
-        )
+    recomputed_score = _recomputed_stale_incident_context_score(updated)
+    context_score = min(context_score, recomputed_score)
+    updated["context_score"] = context_score
+    updated["confidence_level"] = _context_confidence_level_from_score(context_score)
+    updated["insufficient_context"] = context_score < 0.7
     todos = _context_todo_items(updated.get("context_todos"))
     if not any(
         "incident" in item.lower() and "stale" in item.lower() for item in todos
@@ -3608,6 +3706,10 @@ def _load_evidence_context_source(
     except (TypeError, ValueError, json.JSONDecodeError):
         return None
     if not isinstance(decoded, dict):
+        return None
+    try:
+        decoded = ContextSourceMetadata.model_validate(decoded).model_dump(mode="json")
+    except ValidationError:
         return None
     if (
         decoded.get("source_type") == "incident"
