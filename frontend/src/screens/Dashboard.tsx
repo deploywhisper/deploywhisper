@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -45,6 +45,8 @@ import {
   type StatsSummary,
   type VerdictDistribution,
 } from "../api/dashboard";
+import { AppBrand } from "./AppBrand";
+import { projectToOption, usePersistentProjectSelection } from "./projectSelection";
 import "./dashboard.css";
 
 const supportedFilePattern = /\.(json|ya?ml|tf|tfvars|hcl|template)$/i;
@@ -83,15 +85,6 @@ function normalizeVerdict(value: string | null | undefined): Verdict {
   return "PROCEED";
 }
 
-function projectToOption(project: Project): ProjectOption {
-  return {
-    id: String(project.id),
-    name: project.name || project.display_name || project.project_key,
-    env: project.env_label || project.default_branch || "default",
-    description: project.description || project.repository_url || project.project_key,
-  };
-}
-
 function formatDuration(seconds: number | null | undefined) {
   if (!seconds || seconds <= 0) {
     return "n/a";
@@ -125,6 +118,35 @@ function getSparkPoints(series: { value: number }[] | undefined) {
   return values.length > 1 ? values : [0, 0, 0, 0, 0, 0, values[0] ?? 0];
 }
 
+type VerdictCounts = Record<string, number | undefined>;
+
+function countVerdicts(counts: VerdictCounts, keys: string[]) {
+  return keys.reduce((total, key) => total + (Number(counts[key]) || 0), 0);
+}
+
+export function verdictHealthCounts(distribution: VerdictDistribution | undefined) {
+  const counts = (distribution?.counts ?? {}) as VerdictCounts;
+  const high = countVerdicts(counts, ["NO-GO", "NO_GO", "NO GO", "no-go", "no_go", "no go", "HIGH", "high"]);
+  const caution = countVerdicts(counts, ["CAUTION", "caution", "WARN", "warn", "WARNING", "warning"]);
+  const clear = countVerdicts(counts, ["PROCEED", "proceed", "GO", "go", "CLEAR", "clear"]);
+  const total = Math.max(distribution?.total || high + caution + clear, 0);
+  return { high, caution, clear, total };
+}
+
+export function dashboardGreeting(now: Date = new Date()) {
+  const hour = now.getHours();
+  if (hour >= 5 && hour < 12) {
+    return "Good morning, DW";
+  }
+  if (hour >= 12 && hour < 17) {
+    return "Good afternoon, DW";
+  }
+  if (hour >= 17 && hour < 22) {
+    return "Good evening, DW";
+  }
+  return "Working late, DW";
+}
+
 function buildScope(project: Project | undefined) {
   return project ? { projectId: project.id } : {};
 }
@@ -154,17 +176,7 @@ function Sidebar({ selectedProject }: { selectedProject: ProjectOption }) {
 
   return (
     <aside className="dw-sidebar">
-      <div className="dw-brand">
-        <span className="dw-brand-tile">
-          <ShieldCheck size={18} />
-        </span>
-        <div>
-          <div className="dw-brand-wordmark">
-            Deploy<span>Whisper</span>
-          </div>
-          <div className="dw-brand-eyebrow">Evidence Engine</div>
-        </div>
-      </div>
+      <AppBrand />
       <nav className="dw-sidebar-nav" aria-label="Primary">
         {nav.map(({ label, icon: Icon, href, active, count }) => (
           <Link key={label} className={`dw-nav-item${active ? " dw-nav-item-active" : ""}`} to={href}>
@@ -706,11 +718,7 @@ function VerdictHealthCard({
     );
   }
 
-  const counts = distribution.counts ?? {};
-  const high = (counts["NO-GO"] ?? counts["no-go"] ?? 0) + (counts["HIGH"] ?? counts.high ?? 0);
-  const caution = counts.CAUTION ?? counts.caution ?? 0;
-  const clear = counts.PROCEED ?? counts.proceed ?? 0;
-  const total = Math.max(distribution.total || high + caution + clear, 0);
+  const { high, caution, clear, total } = verdictHealthCounts(distribution);
   const safeTotal = total || 1;
   const series = [
     ["High focus", high, "#F2551F"],
@@ -765,7 +773,6 @@ function VerdictHealthCard({
 
 export function DashboardScreen() {
   const navigate = useNavigate();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectSwitcherOpenSignal, setProjectSwitcherOpenSignal] = useState(0);
   const uploadRef = useRef<HTMLDivElement>(null);
 
@@ -776,12 +783,7 @@ export function DashboardScreen() {
   });
 
   const projects = projectsQuery.data ?? [];
-  const selectedProject = useMemo(() => {
-    if (projects.length === 0) {
-      return undefined;
-    }
-    return projects.find((project) => String(project.id) === selectedProjectId) ?? projects[0];
-  }, [projects, selectedProjectId]);
+  const { selectedProject, setSelectedProjectId } = usePersistentProjectSelection(projects);
   const projectOptions = projects.map(projectToOption);
   const selectedOption = selectedProject
     ? projectToOption(selectedProject)
@@ -809,6 +811,7 @@ export function DashboardScreen() {
 
   const hasGlobalError = projectsQuery.isError;
   const latest = analysesQuery.data?.[0];
+  const greeting = dashboardGreeting();
 
   const openReport = (id: number) => navigate(`/reports/${id}?private=1`);
   const refetchDashboard = () => {
@@ -833,7 +836,7 @@ export function DashboardScreen() {
             {hasGlobalError && <DashboardError message="Project list is unavailable." onRetry={() => void projectsQuery.refetch()} />}
             <div className="dw-dashboard-header">
               <div>
-                <h1 className="dw-dashboard-title">Good afternoon, DW</h1>
+                <h1 className="dw-dashboard-title">{greeting}</h1>
                 <p className="dw-dashboard-subtitle">
                   Real-time verdicts across every environment · <strong>{selectedOption.name}</strong>
                 </p>

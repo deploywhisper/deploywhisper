@@ -390,6 +390,7 @@ def update_provider_settings(
         saved = activate_local_mode(
             model=payload.model.strip(),
             api_base=payload.api_base.strip(),
+            request_timeout_seconds=payload.request_timeout_seconds,
         )
     else:
         saved = save_provider_settings(
@@ -398,6 +399,7 @@ def update_provider_settings(
             api_base=payload.api_base.strip(),
             api_key=payload.api_key.strip() if payload.api_key else None,
             local_mode=local_mode,
+            request_timeout_seconds=payload.request_timeout_seconds,
             activate=True,
         )
     validation = validate_provider_settings(saved)

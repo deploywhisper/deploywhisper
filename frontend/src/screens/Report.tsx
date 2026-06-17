@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -589,6 +590,120 @@ function ConfidenceTab({ report }: { report: ReportDetail }) {
   );
 }
 
+function BlastRadiusCard({ blastRadius }: { blastRadius: BlastRadius }) {
+  const affected = blastRadius.affected ?? [];
+  const directCount = blastRadius.direct_count ?? 0;
+  const transitiveCount = blastRadius.transitive_count ?? 0;
+  const totalImpact = directCount + transitiveCount;
+  const visualNodes = affected.slice(0, 8);
+  const overflowCount = Math.max(0, affected.length - visualNodes.length);
+  const isSafe = totalImpact === 0 && affected.length === 0;
+  const ringLabel = isSafe
+    ? "No mapped impact"
+    : totalImpact >= 8
+      ? "Wide radius"
+      : totalImpact >= 3
+        ? "Moderate radius"
+        : "Contained radius";
+  const topologyAge = blastRadius.freshness?.age_days;
+  const contextState = blastRadius.context_state || "unknown";
+
+  return (
+    <Card
+      eyebrow="BLAST RADIUS"
+      title={isSafe ? "No services affected" : `${affected.length || totalImpact} services affected`}
+    >
+      <div className={`dw-blast-card${isSafe ? " dw-blast-card-safe" : ""}`}>
+        <div
+          aria-label={`${ringLabel}: ${directCount} direct and ${transitiveCount} transitive services`}
+          className="dw-blast-map"
+          role="img"
+        >
+          <span className="dw-blast-ring dw-blast-ring-outer" />
+          <span className="dw-blast-ring dw-blast-ring-middle" />
+          <span className="dw-blast-ring dw-blast-ring-inner" />
+          <div className="dw-blast-core">
+            {isSafe ? <CheckCircle2 size={22} /> : <Network size={22} />}
+            <strong>{isSafe ? "Clear" : totalImpact}</strong>
+            <span>{ringLabel}</span>
+          </div>
+          {visualNodes.map((node, index) => {
+            const angle = visualNodes.length === 1 ? -90 : -90 + (360 / visualNodes.length) * index;
+            const distance = node.depth === 0 ? 74 : node.depth === 1 ? 104 : 126;
+            return (
+              <span
+                className={`dw-blast-node${node.depth === 0 ? " dw-blast-node-direct" : ""}`}
+                key={node.service_id}
+                style={
+                  {
+                    "--dw-blast-angle": `${angle}deg`,
+                    "--dw-blast-angle-negative": `${-angle}deg`,
+                    "--dw-blast-distance": `${distance}px`,
+                  } as CSSProperties
+                }
+              >
+                <i />
+                <b>{node.label || node.service_id}</b>
+                <em>{node.depth === 0 ? "direct" : `depth ${node.depth}`}</em>
+              </span>
+            );
+          })}
+        </div>
+        <div className="dw-blast-summary-panel">
+          <div className="dw-blast-stat-row">
+            <div>
+              <strong>{directCount}</strong>
+              <span>Direct</span>
+            </div>
+            <div>
+              <strong>{transitiveCount}</strong>
+              <span>Transitive</span>
+            </div>
+            <div>
+              <strong>{topologyAge == null ? "n/a" : topologyAge}</strong>
+              <span>Topology age</span>
+            </div>
+          </div>
+          <p className="dw-report-muted">
+            {isSafe
+              ? "No mapped downstream services are affected by this change."
+              : "Direct services are closest to the center; transitive services sit on the outer radius."}
+          </p>
+          <div className="dw-blast-context-row">
+            <EvidenceTag>{contextState}</EvidenceTag>
+            {blastRadius.context_limitations?.slice(0, 2).map((limitation) => (
+              <EvidenceTag key={limitation}>{limitation.replaceAll("_", " ")}</EvidenceTag>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="dw-blast-components" aria-label="Affected components">
+        {affected.length === 0 ? (
+          <div className="dw-blast-safe-line">
+            <CheckCircle2 size={14} />
+            No affected components found in the active topology.
+          </div>
+        ) : (
+          affected.map((node) => (
+            <span className={node.depth === 0 ? "dw-blast-chip-direct" : ""} key={node.service_id}>
+              <i />
+              {node.label || node.service_id}
+              <em>{node.depth === 0 ? "direct" : `depth ${node.depth}`}</em>
+            </span>
+          ))
+        )}
+        {overflowCount > 0 && <span>+{overflowCount} more</span>}
+      </div>
+      {blastRadius.warning && (
+        <div className="dw-report-warning">
+          <AlertTriangle size={15} />
+          <p>{blastRadius.warning}</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function ContextTab({ report }: { report: ReportDetail }) {
   const context = getContextCompleteness(report);
   const blastRadius = getBlastRadius(report);
@@ -601,7 +716,6 @@ function ContextTab({ report }: { report: ReportDetail }) {
     ["Evidence coverage", context.evidence_success_rate.toFixed(2), "material changes represented", context.evidence_success_rate >= 1],
     ["Open context TODOs", `${contextTodos.length}`, contextTodos[0] || "no open context TODOs", contextTodos.length === 0],
   ];
-  const affected = blastRadius.affected ?? [];
 
   return (
     <div className="dw-report-stack">
@@ -618,19 +732,7 @@ function ContextTab({ report }: { report: ReportDetail }) {
         </div>
         <Button variant="ghost">+ Resolve open context TODO</Button>
       </Card>
-      <Card eyebrow="BLAST RADIUS" title={`${affected.length || (blastRadius.direct_count + blastRadius.transitive_count)} services affected`}>
-        <div className="dw-service-chips">
-          {affected.map((node) => (
-            <span className={node.depth === 0 ? "dw-direct-service" : ""} key={node.service_id}>
-              <i />
-              {node.label}
-            </span>
-          ))}
-        </div>
-        <p className="dw-report-muted">
-          {blastRadius.direct_count} direct, {blastRadius.transitive_count} transitive - graph depth from topology - topology age {String(blastRadius.freshness?.age_days ?? "unknown")}.
-        </p>
-      </Card>
+      <BlastRadiusCard blastRadius={blastRadius} />
     </div>
   );
 }
@@ -805,13 +907,9 @@ export function ReportScreen() {
     />
   );
 
-  if (!publicView) {
-    return (
-      <Phase6Shell active="history" selectedProjectOverride={reportProjectOption(report)}>
-        {() => body}
-      </Phase6Shell>
-    );
-  }
-
-  return body;
+  return (
+    <Phase6Shell active="history" selectedProjectOverride={reportProjectOption(report)}>
+      {() => body}
+    </Phase6Shell>
+  );
 }

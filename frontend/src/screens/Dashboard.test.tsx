@@ -4,7 +4,14 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import type { AnalysisReport, Project, StatsSummary, VerdictDistribution } from "../api/dashboard";
-import { DashboardScreen, DropzoneCard, RecentAnalysesTable, isSupportedArtifact } from "./Dashboard";
+import {
+  DashboardScreen,
+  DropzoneCard,
+  RecentAnalysesTable,
+  dashboardGreeting,
+  isSupportedArtifact,
+  verdictHealthCounts,
+} from "./Dashboard";
 
 const project: Project = {
   id: 1,
@@ -146,13 +153,36 @@ describe("DashboardScreen", () => {
 
     const markup = renderWithQuery(<DashboardScreen />, client);
 
-    expect(markup).toContain("Good afternoon, DW");
+    expect(markup).toMatch(/(Good morning|Good afternoon|Good evening|Working late), DW/);
     expect(markup).toContain("Evidence Law enforced");
     expect(markup).toContain("Total analyses");
     expect(markup).toContain("4");
     expect(markup).toContain("CAUTION: RDS ingress widened during rollout.");
     expect(markup).toContain("Workspace");
     expect(markup).toContain("Payments");
+  });
+});
+
+describe("dashboardGreeting", () => {
+  it("uses local time buckets for the dashboard header", () => {
+    expect(dashboardGreeting(new Date(2026, 5, 17, 8))).toBe("Good morning, DW");
+    expect(dashboardGreeting(new Date(2026, 5, 17, 13))).toBe("Good afternoon, DW");
+    expect(dashboardGreeting(new Date(2026, 5, 17, 19))).toBe("Good evening, DW");
+    expect(dashboardGreeting(new Date(2026, 5, 17, 2))).toBe("Working late, DW");
+  });
+});
+
+describe("verdictHealthCounts", () => {
+  it("counts real API verdict keys as clear reports", () => {
+    expect(
+      verdictHealthCounts({
+        days: 30,
+        window_start: "2026-05-18T00:00:00Z",
+        window_end: "2026-06-17T00:00:00Z",
+        counts: { go: 6, caution: 1, "no-go": 2 },
+        total: 9,
+      }),
+    ).toEqual({ high: 2, caution: 1, clear: 6, total: 9 });
   });
 });
 

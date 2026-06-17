@@ -180,10 +180,10 @@ Keyboard: full tab order; switcher and tabs arrow-key navigable; Escape closes p
 # PART C — PHASED EXECUTION
 
 ### Phase 0 — Scaffold `frontend/`
-Vite react-ts; deps: tailwindcss + @tailwindcss/vite, lucide-react, @tanstack/react-query, react-router-dom, @fontsource-variable/plus-jakarta-sans, @fontsource/inter, @fontsource-variable/jetbrains-mono; dev: vitest, @testing-library/react, @playwright/test, axe-core/@axe-core/playwright, openapi-typescript. `vite.config.ts`: `base:'/app/'`, dev proxy `/api`→`http://localhost:8080` — the backend during development is the **compose-run container** (`docker compose up -d` from the repo root), not a local venv. Typed client: `scripts/gen-api.sh` dumps OpenAPI (from `http://localhost:8080/api/v1/openapi.json` of the running compose stack) → `src/api/schema.d.ts`; `src/api/client.ts` unwraps the `{data, meta}` envelope. Root scripts `ui:dev/ui:build/ui:test`; CI frontend job. **Done when:** with the compose stack up, the placeholder page renders the `GET /api/v1/health` version via the proxy.
+Vite react-ts; deps: tailwindcss + @tailwindcss/vite, lucide-react, @tanstack/react-query, react-router-dom, @fontsource-variable/plus-jakarta-sans, @fontsource/inter, @fontsource-variable/jetbrains-mono; dev: vitest, @testing-library/react, @playwright/test, axe-core/@axe-core/playwright, openapi-typescript. Current `vite.config.ts` uses `base:'/'`; the dev proxy `/api`→`http://localhost:8080` exists only for optional local iteration. Typed client: `scripts/gen-api.sh` dumps OpenAPI (from `http://localhost:8080/api/v1/openapi.json` of the running compose stack) → `src/api/schema.d.ts`; `src/api/client.ts` unwraps the `{data, meta}` envelope. Root scripts `ui:build/ui:test/ui:typecheck`; CI frontend job. **Current done state:** `docker compose up -d --build` serves the React SPA from `http://localhost:8080/`, and verification uses the composed app rather than the Vite dev server.
 
-### Phase 1 — Coexistence serving (includes the Dockerfile change)
-FastAPI mounts `frontend/dist` at `/app` with an SPA fallback route; the retired UI remains temporarily at `/` during coexistence.
+### Phase 1 — SPA serving (includes the Dockerfile change)
+FastAPI serves `frontend/dist` at `/` with an SPA fallback route. The retired UI has been removed, and legacy pre-cutover links redirect to root SPA routes.
 
 **Dockerfile (explicit spec).** The existing multi-stage file (python:3.11-slim `builder` → `runtime`, venv copy, strip/prune, non-root `appuser`, healthcheck on `/api/v1/health`) stays exactly as is. Add one stage and one COPY:
 
@@ -200,14 +200,14 @@ RUN npm run build            # outputs /frontend/dist
 COPY --from=frontend --chown=appuser:appuser /frontend/dist ./frontend/dist
 ```
 
-Rules: package manifests are copied before source so `npm ci` layer-caches; `frontend/node_modules` and `frontend/dist` go in `.dockerignore`; Node never appears in the runtime stage. At Phase 7 cutover, the retired UI package copy line and dependency are deleted.
+Rules: package manifests are copied before source so `npm ci` layer-caches; `frontend/node_modules` and `frontend/dist` go in `.dockerignore`; Node never appears in the runtime stage.
 
-`docker-compose.yml` at the repo root needs **no changes** — it already builds this Dockerfile and exposes port 8080; the SPA simply appears at `http://localhost:8080/app`.
+`docker-compose.yml` at the repo root needs **no changes** — it already builds this Dockerfile and exposes port 8080; the SPA appears at `http://localhost:8080/`.
 
-**Done when:** `docker compose up -d --build` from the repo root serves the old UI at `http://localhost:8080/` and the new shell at `http://localhost:8080/app`, with `/api/v1/health` green; image size before/after recorded in the PR.
+**Done when:** `docker compose up -d --build` from the repo root serves the React SPA at `http://localhost:8080/`, with `/api/v1/health` green; image size before/after recorded in the PR.
 
 ### Phase 2 — Design system foundation
-Implement Part B1 tokens as Tailwind theme + CSS variables and every Part B2 primitive in `src/components/ui/`, each with vitest render + snapshot tests. Build `/app/dev/components` gallery rendering every primitive in every state (all severities, both chip sizes, switcher open/closed/empty-search, ring at multiple scores, disabled buttons, skeletons). **Done when:** gallery screenshot matches the mockup component-for-component; this gallery becomes the permanent visual-regression target.
+Implement Part B1 tokens as Tailwind theme + CSS variables and every Part B2 primitive in `src/components/ui/`, each with vitest render + snapshot tests. Build `/dev/components` gallery rendering every primitive in every state (all severities, both chip sizes, switcher open/closed/empty-search, ring at multiple scores, disabled buttons, skeletons). **Done when:** gallery screenshot from `http://localhost:8080/dev/components` matches the mockup component-for-component; this gallery becomes the permanent visual-regression target.
 
 ### Phase 3 — Dashboard
 3.0 (backend-for-ui PR): `GET /api/v1/stats/summary` (totals, clean-verdict rate, open high/critical, avg time-to-verdict, 7-bucket series for sparklines), `GET /api/v1/stats/verdict-distribution?days=30`, `GET /api/v1/projects`; extend the analyses list serializer additively if it lacks severity/verdict/score/env/duration/filenames.
@@ -263,23 +263,25 @@ Rule: a phase PR that changes behavior or structure without its row's doc update
 
 # PART F — LOCAL RUN, VERIFICATION & TESTING STANDARD (applies to every UI task)
 
-**F0. Local run & per-phase verification loop (mandatory).** The application runs locally via the existing `docker-compose.yml` in the repo root — the agent must not invent an alternative serving setup. Two modes:
+**F0. Local run & per-phase verification loop (mandatory).** The application runs locally via the existing `docker-compose.yml` in the repo root — the agent must not invent an alternative serving setup. The Phase 7 cutover is complete, so the React SPA is verified at the root route of the composed app.
 
-- *Inner dev loop:* `docker compose up -d` provides the backend on `http://localhost:8080`; `npm run ui:dev` serves the SPA with the Vite proxy pointing at it. Fast iteration only — never the basis for claiming a task done.
-- *Verification loop (required before every PR, and at the end of every phase):*
+`npm run ui:dev` may be used only as an optional coding convenience. It is never accepted for Playwright, E2E, a11y, keyboard, screenshot, or final PR verification because it bypasses the FastAPI static mount, the Dockerfile frontend stage, and the production asset build.
+
+*Verification loop (required before every PR, and at the end of every UI task):*
   1. `docker compose up -d --build` from the repo root (rebuilds the image including the frontend stage — this also proves the Dockerfile change works, not just the dev server).
   2. Wait for health: poll `http://localhost:8080/api/v1/health` until 200 (the compose healthcheck does this; don't proceed on a cold container).
   3. Seed test data (the repo's seeded review-flow fixtures / sample artifacts under `samples/`).
-  4. Run the Playwright e2e suite with `BASE_URL=http://localhost:8080` — `/app/...` routes during coexistence (Phases 1–6), `/` after the Phase 7 cutover.
-  5. Capture the Part-F4 screenshots from this composed instance — screenshots from `ui:dev` don't count, because they bypass the FastAPI static mount and the production build.
-  6. `docker compose down` when finished.
+  4. Run the Playwright e2e suite with `BASE_URL=http://localhost:8080`.
+  5. Use root SPA routes only: `/`, `/history`, `/settings`, `/skills`, `/incidents`, `/reports/{id}`, and `/dev/components` when the component gallery is intentionally under test.
+  6. Capture the Part-F4 screenshots from this composed instance — screenshots from `ui:dev` don't count, because they bypass the FastAPI static mount and the production build.
+  7. `docker compose down` when finished.
 
   The compose default provider is Ollama, which may not be running on the agent's machine — e2e specs must therefore not depend on live LLM narrative generation: seed persisted reports, and assert the B4 "narrative-degraded" notice renders gracefully where narrative is unavailable. A failing e2e because no LLM is reachable is a test-design defect, not an excuse.
 
 **F1. Unit/component:** vitest + React Testing Library for every primitive and screen-level logic (query hooks mocked); snapshots for primitives.
-**F2. E2E (the standard):** Playwright specs in `frontend/e2e/`, one spec file per screen, executed against the **composed container at `http://localhost:8080`** per F0 (CI runs the same compose-based flow); flows covered minimum: dashboard load + KPI assertions, artifact upload → report navigation, report tab walk + finding expand + feedback click, history filter + pagination, project switch updates context, shared-report password flow.
+**F2. E2E (the standard):** Playwright specs in `frontend/e2e/`, one spec file per screen, executed against the **composed container at `http://localhost:8080`** per F0 (CI runs the same compose-based flow); flows covered minimum: dashboard load + KPI assertions, artifact upload → report navigation, report tab walk + finding expand + feedback click, history filter + pagination, project switch updates context, shared-report password flow. Do not use Vite dev-server URLs or legacy prefixed SPA paths.
 **F3. Accessibility:** per-screen axe-core scan with zero serious/critical violations + keyboard-navigation smoke (port of the existing `test:ui-review`); the macOS screen-reader manual validation remains a separate opt-in check.
-**F4. Visual evidence:** every UI PR attaches Playwright screenshots of the affected screens at 1440px and 760px, captured from the composed container per F0; the `/app/dev/components` gallery screenshot is the standing visual-regression reference.
+**F4. Visual evidence:** every UI PR attaches Playwright screenshots of the affected screens at 1440px and 760px, captured from the composed container per F0; the `/dev/components` gallery screenshot is the standing visual-regression reference when the component gallery is affected.
 **F5. CI gates:** typecheck, vitest, build, compose-based e2e (seeded), axe — all required; regenerating the OpenAPI types must produce no type errors (drift gate).
 **F6.** The retired UI test lanes keep running until each screen's SPA equivalent is green, then are deleted (D2).
 
@@ -300,7 +302,7 @@ Rule: a phase PR that changes behavior or structure without its row's doc update
 
 **Session start (every session):** read this file end-to-end, read `docs/design/deploywhisper-redesign-v3.jsx`, read `docs/design/ui-parity-audit.md` if it exists, then state which Phase/task you are executing before writing code.
 
-**Task loop:** one task → one branch → one PR. Before opening any PR, run the full F0 verification loop: `docker compose up -d --build` from the repo root, health-check `http://localhost:8080/api/v1/health`, seed, run e2e against `http://localhost:8080` (`/app` routes until cutover), capture screenshots from the composed instance. PR description must contain: the plan reference (e.g., "Phase 3, task 3.1, B2 Recent analyses table"), the doc-table rows from Part E it updates (or "none required"), the F0 e2e output against localhost:8080, and the Part-F4 screenshots. Backend changes only under an A3 label, never mixed with frontend in one PR.
+**Task loop:** one task → one branch → one PR. Before opening any PR, run the full F0 verification loop: `docker compose up -d --build` from the repo root, health-check `http://localhost:8080/api/v1/health`, seed, run e2e against `BASE_URL=http://localhost:8080` using root SPA routes, and capture screenshots from the composed instance. PR description must contain: the plan reference (e.g., "Phase 3, task 3.1, B2 Recent analyses table"), the doc-table rows from Part E it updates (or "none required"), the F0 e2e output against localhost:8080, and the Part-F4 screenshots. Backend changes only under an A3 label, never mixed with frontend in one PR.
 
 **Prohibitions:** no restyling or "improving" Part B values; no CDN imports; no demo data hard-coded; no deleting old-UI behavior without a parity-audit disposition; no skipping screenshots; no touching analysis pipeline, parsers, scoring, CLI, or Action code.
 

@@ -202,10 +202,10 @@ const report = {
   pr_ref: "PR #42",
 } satisfies ReportDetail;
 
-function renderReport(path = "/reports/77?private=1") {
+function renderReport(path = "/reports/77?private=1", detail: ReportDetail = report) {
   const client = new QueryClient();
   const publicView = path.startsWith("/reports/") && !path.includes("private=1");
-  client.setQueryData(["report", 77, publicView, false], report);
+  client.setQueryData(["report", detail.id, publicView, false], detail);
 
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
@@ -236,5 +236,34 @@ describe("ReportScreen", () => {
     expect(markup).toContain("Compare");
     expect(markup).not.toContain("Copy briefing");
     expect(markup).not.toContain("Share");
+  });
+
+  it("renders the blast radius as a visual impact map on the context tab", () => {
+    const markup = renderReport("/reports/77?private=1&tab=context");
+
+    expect(markup).toContain("BLAST RADIUS");
+    expect(markup).toContain("Contained radius");
+    expect(markup).toContain("checkout");
+    expect(markup).toContain("Direct");
+    expect(markup).toContain("Transitive");
+  });
+
+  it("renders a green safe state when the blast radius is zero", () => {
+    const safeReport = {
+      ...report,
+      blast_radius: {
+        ...report.blast_radius,
+        affected: [],
+        direct_count: 0,
+        transitive_count: 0,
+        warning: null,
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1&tab=context", safeReport);
+
+    expect(markup).toContain("No services affected");
+    expect(markup).toContain("No mapped impact");
+    expect(markup).toContain("No affected components found in the active topology.");
   });
 });

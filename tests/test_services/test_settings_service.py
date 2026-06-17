@@ -135,6 +135,21 @@ class SettingsServiceTests(unittest.TestCase):
         self.assertEqual(runtime["provider"], "openai")
         self.assertEqual(runtime["request_timeout_seconds"], 12.5)
 
+    def test_saved_provider_timeout_overrides_environment_default(self) -> None:
+        settings_service_module.save_provider_settings(
+            provider="ollama",
+            model="ollama/gemma4:e4b",
+            api_base="http://host.docker.internal:11434",
+            local_mode=True,
+            request_timeout_seconds=180,
+            activate=True,
+        )
+
+        runtime = settings_service_module.resolve_provider_runtime()
+
+        self.assertEqual(runtime["provider"], "ollama")
+        self.assertEqual(runtime["request_timeout_seconds"], 180)
+
     def test_invalid_request_timeout_env_falls_back_without_import_failure(
         self,
     ) -> None:
@@ -153,7 +168,7 @@ class SettingsServiceTests(unittest.TestCase):
                     runtime = settings_service_module.resolve_provider_runtime()
 
                 self.assertEqual(runtime["provider"], "openai")
-                self.assertEqual(runtime["request_timeout_seconds"], 30.0)
+                self.assertEqual(runtime["request_timeout_seconds"], 60.0)
 
     def test_saving_provider_as_active_switches_single_active_provider(self) -> None:
         settings_service_module.save_provider_settings(
@@ -303,7 +318,7 @@ class SettingsServiceTests(unittest.TestCase):
         self,
     ) -> None:
         settings_service_module.activate_local_mode(
-            model="ollama/llama3",
+            model="ollama/qwen2.5-coder:3b",
             api_base="http://localhost:11434",
         )
 
@@ -328,7 +343,7 @@ class SettingsServiceTests(unittest.TestCase):
 
         self.assertTrue(readiness.ready)
         self.assertEqual(readiness.provider, "ollama")
-        self.assertEqual(readiness.model, "ollama/llama3")
+        self.assertEqual(readiness.model, "ollama/qwen2.5-coder:3b")
         self.assertTrue(readiness.local_mode)
         self.assertFalse(readiness.requires_api_key)
         self.assertFalse(readiness.has_api_key)

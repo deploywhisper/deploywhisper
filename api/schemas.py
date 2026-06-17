@@ -133,6 +133,12 @@ class ProviderSettingsRequest(BaseModel):
     provider: str = Field(..., min_length=1, description="Provider identifier")
     model: str = Field(..., min_length=1, description="Model identifier")
     api_base: str = Field(..., min_length=1, description="Provider API base URL")
+    request_timeout_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        le=600,
+        description="Provider request timeout in seconds",
+    )
     api_key: str | None = Field(
         default=None, description="Optional API key used for immediate validation"
     )

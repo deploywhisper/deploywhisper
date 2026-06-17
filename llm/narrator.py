@@ -65,6 +65,26 @@ def _has_visible_text(value: str) -> bool:
     )
 
 
+def _normalize_guidance_items(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if _has_visible_text(value) else []
+    if isinstance(value, list):
+        items: list[str] = []
+        for item in value:
+            items.extend(_normalize_guidance_items(item))
+        return items
+    if isinstance(value, dict):
+        items = []
+        for item in value.values():
+            items.extend(_normalize_guidance_items(item))
+        return items
+
+    text = str(value)
+    return [text] if _has_visible_text(text) else []
+
+
 def _fallback_narrative(
     assessment: RiskAssessment,
     findings: list[Finding],
@@ -207,9 +227,7 @@ def generate_narrative(
         explanation = sanitize_scope_claims(payload["explanation"])
         if not (_has_visible_text(opening_sentence) or _has_visible_text(explanation)):
             raise ValueError("Narrative provider returned empty output.")
-        guidance_payload = payload.get("guidance", [])
-        if not isinstance(guidance_payload, list):
-            raise ValueError("Narrative provider returned invalid guidance payload.")
+        guidance_payload = _normalize_guidance_items(payload.get("guidance", []))
 
         return NarrativeResult(
             available=True,

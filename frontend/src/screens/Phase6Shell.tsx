@@ -1,32 +1,23 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, History, LayoutGrid, Search, Settings, ShieldCheck, Zap } from "lucide-react";
 
-import { getProjects, type Project } from "../api/dashboard";
+import { getProjects } from "../api/dashboard";
 import { ProjectSwitcher, SkeletonLine, type ProjectOption } from "../components/ui";
 import { useQuery } from "@tanstack/react-query";
+import { AppBrand } from "./AppBrand";
+import { projectToOption, usePersistentProjectSelection } from "./projectSelection";
 import "./dashboard.css";
-
-export function projectToOption(project: Project): ProjectOption {
-  return {
-    id: String(project.id),
-    name: project.name || project.display_name || project.project_key,
-    env: project.env_label || project.default_branch || "default",
-    description: project.description || project.repository_url || project.project_key,
-  };
-}
 
 export type ShellProjectContext = ReturnType<typeof useSelectedProject> & {
   selectedOption?: ProjectOption;
 };
 
 export function useSelectedProject() {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: getProjects });
   const projects = projectsQuery.data ?? [];
   const projectOptions = useMemo(() => projects.map(projectToOption), [projects]);
-  const selectedProject =
-    projects.find((project) => String(project.id) === selectedProjectId) ?? projects[0];
+  const { selectedProject, setSelectedProjectId } = usePersistentProjectSelection(projects);
   const selectedOption = selectedProject ? projectToOption(selectedProject) : undefined;
 
   return {
@@ -52,17 +43,7 @@ function Sidebar({ active, selectedProject }: { active: string; selectedProject?
 
   return (
     <aside className="dw-sidebar">
-      <div className="dw-brand">
-        <span className="dw-brand-tile">
-          <ShieldCheck size={18} />
-        </span>
-        <div>
-          <div className="dw-brand-wordmark">
-            Deploy<span>Whisper</span>
-          </div>
-          <div className="dw-brand-eyebrow">Evidence Engine</div>
-        </div>
-      </div>
+      <AppBrand />
       <nav className="dw-sidebar-nav" aria-label="Primary">
         {nav.map(({ label, icon: Icon, href, key }) => {
           const isActive = active === key;

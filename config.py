@@ -30,9 +30,9 @@ class Settings:
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///data/deploywhisper.db")
     llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")
-    llm_model: str = os.getenv("LLM_MODEL", "ollama/llama3")
+    llm_model: str = os.getenv("LLM_MODEL", "ollama/qwen2.5-coder:3b")
     llm_api_base: str = os.getenv("LLM_API_BASE", "http://localhost:11434")
-    llm_request_timeout_seconds: float = _float_env("LLM_REQUEST_TIMEOUT_SECONDS", 30.0)
+    llm_request_timeout_seconds: float = _float_env("LLM_REQUEST_TIMEOUT_SECONDS", 60.0)
     narrator_enabled: bool = os.getenv("NARRATOR_ENABLED", "true").lower() == "true"
     topology_path: str = os.getenv(
         "TOPOLOGY_PATH", "data/topology/service_topology.json"

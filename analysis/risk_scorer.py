@@ -683,6 +683,7 @@ def _apply_llm_scores(
             api_base=runtime["api_base"],
             api_key=runtime["api_key"],
             local_mode=runtime["local_mode"],
+            request_timeout_seconds=runtime.get("request_timeout_seconds", 30.0),
             completion_client=completion_client,
         )
         payload = json.loads(raw_response)

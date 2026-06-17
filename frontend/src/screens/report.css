@@ -654,16 +654,220 @@
   font-style: normal;
 }
 
-.dw-service-chips {
+.dw-blast-card {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+}
+
+.dw-blast-map {
+  position: relative;
+  display: grid;
+  min-height: 326px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 112, 67, 0.18);
+  border-radius: var(--dw-radius-inner);
+  background:
+    radial-gradient(circle at center, rgba(255, 112, 67, 0.14) 0 22%, transparent 23%),
+    linear-gradient(135deg, rgba(255, 112, 67, 0.08), rgba(255, 250, 245, 0.96));
+}
+
+.dw-blast-card-safe .dw-blast-map {
+  border-color: rgba(7, 148, 85, 0.2);
+  background:
+    radial-gradient(circle at center, rgba(7, 148, 85, 0.16) 0 22%, transparent 23%),
+    linear-gradient(135deg, rgba(7, 148, 85, 0.08), rgba(246, 254, 249, 0.98));
+}
+
+.dw-blast-ring {
+  position: absolute;
+  display: block;
+  border: 1px solid rgba(255, 112, 67, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.34);
+  pointer-events: none;
+}
+
+.dw-blast-card-safe .dw-blast-ring {
+  border-color: rgba(7, 148, 85, 0.25);
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.dw-blast-ring-inner {
+  width: 122px;
+  height: 122px;
+}
+
+.dw-blast-ring-middle {
+  width: 208px;
+  height: 208px;
+}
+
+.dw-blast-ring-outer {
+  width: 292px;
+  height: 292px;
+}
+
+.dw-blast-core {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 104px;
+  height: 104px;
+  place-items: center;
+  border: 1px solid rgba(255, 112, 67, 0.26);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 38px rgba(28, 31, 39, 0.12);
+  color: var(--dw-brand-dark);
+  text-align: center;
+}
+
+.dw-blast-card-safe .dw-blast-core {
+  border-color: rgba(7, 148, 85, 0.28);
+  color: var(--dw-low);
+}
+
+.dw-blast-core strong {
+  color: var(--dw-ink);
+  font-family: var(--dw-font-display);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.dw-blast-core span {
+  max-width: 78px;
+  color: var(--dw-muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.dw-blast-node {
+  --dw-blast-angle: 0deg;
+  --dw-blast-angle-negative: 0deg;
+  --dw-blast-distance: 104px;
+  --dw-blast-active-distance: var(--dw-blast-distance);
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  width: 96px;
+  min-height: 42px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 6px;
+  align-items: center;
+  border: 1px solid rgba(255, 112, 67, 0.28);
+  border-radius: var(--dw-radius-badge);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 22px rgba(28, 31, 39, 0.12);
+  color: var(--dw-text);
+  padding: 7px 8px;
+  transform: translate(-50%, -50%) rotate(var(--dw-blast-angle)) translate(var(--dw-blast-active-distance)) rotate(var(--dw-blast-angle-negative));
+  transition:
+    border-color var(--dw-motion-fast) var(--dw-motion-ease),
+    transform var(--dw-motion-fast) var(--dw-motion-ease);
+}
+
+.dw-blast-node:hover {
+  border-color: rgba(255, 112, 67, 0.52);
+  transform: translate(-50%, -50%) rotate(var(--dw-blast-angle)) translate(calc(var(--dw-blast-active-distance) + 4px)) rotate(var(--dw-blast-angle-negative));
+}
+
+.dw-blast-node i,
+.dw-blast-components i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--dw-faint);
+}
+
+.dw-blast-node-direct,
+.dw-blast-chip-direct {
+  border-color: rgba(255, 112, 67, 0.4);
+}
+
+.dw-blast-node-direct i,
+.dw-blast-chip-direct i {
+  background: var(--dw-brand);
+}
+
+.dw-blast-node b {
+  overflow: hidden;
+  color: var(--dw-ink);
+  font-size: 11.5px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dw-blast-node em {
+  grid-column: 2;
+  color: var(--dw-muted);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.dw-blast-summary-panel {
+  display: grid;
+  gap: 13px;
+}
+
+.dw-blast-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dw-blast-stat-row div {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--dw-border-soft);
+  border-radius: var(--dw-radius-inner);
+  background: var(--dw-bg);
+  padding: 11px 12px;
+}
+
+.dw-blast-stat-row strong {
+  color: var(--dw-ink);
+  font-family: var(--dw-font-display);
+  font-size: 24px;
+}
+
+.dw-blast-stat-row span,
+.dw-blast-context-row span {
+  min-width: 0;
+}
+
+.dw-blast-stat-row span {
+  color: var(--dw-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dw-blast-context-row,
+.dw-blast-components {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.dw-service-chips span {
+.dw-blast-components {
+  margin-top: 16px;
+}
+
+.dw-blast-components span,
+.dw-blast-safe-line {
   display: inline-flex;
+  max-width: 100%;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   border: 1px solid var(--dw-border);
   border-radius: var(--dw-radius-badge);
   background: var(--dw-bg);
@@ -672,15 +876,23 @@
   padding: 6px 10px;
 }
 
-.dw-service-chips i {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--dw-faint);
+.dw-blast-components span {
+  min-width: 0;
 }
 
-.dw-service-chips .dw-direct-service i {
-  background: var(--dw-brand);
+.dw-blast-components span em {
+  color: var(--dw-muted);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dw-blast-safe-line {
+  border-color: rgba(7, 148, 85, 0.22);
+  background: var(--dw-low-bg);
+  color: var(--dw-low);
+  font-weight: 800;
 }
 
 .dw-rollback-timeline li {
@@ -827,6 +1039,14 @@
     grid-template-columns: 1fr;
   }
 
+  .dw-blast-card {
+    grid-template-columns: 1fr;
+  }
+
+  .dw-blast-map {
+    min-height: 300px;
+  }
+
   .dw-finding-expanded {
     padding-left: 16px;
   }
@@ -854,5 +1074,33 @@
 
   .dw-report-dot {
     display: none;
+  }
+
+  .dw-blast-map {
+    min-height: 286px;
+  }
+
+  .dw-blast-ring-outer {
+    width: 250px;
+    height: 250px;
+  }
+
+  .dw-blast-ring-middle {
+    width: 184px;
+    height: 184px;
+  }
+
+  .dw-blast-ring-inner {
+    width: 116px;
+    height: 116px;
+  }
+
+  .dw-blast-node {
+    width: 82px;
+    --dw-blast-active-distance: 108px;
+  }
+
+  .dw-blast-stat-row {
+    grid-template-columns: 1fr;
   }
 }

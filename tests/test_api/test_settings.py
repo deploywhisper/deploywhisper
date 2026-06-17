@@ -76,6 +76,7 @@ class SettingsApiTests(unittest.TestCase):
                 "provider": "ollama",
                 "model": "ollama/llama3.1",
                 "api_base": "http://localhost:11434",
+                "request_timeout_seconds": 120,
                 "local_mode": True,
             },
         )
@@ -84,6 +85,7 @@ class SettingsApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["data"]["settings"]["provider"], "ollama")
         self.assertTrue(payload["data"]["settings"]["local_mode"])
+        self.assertEqual(payload["data"]["settings"]["request_timeout_seconds"], 120)
         self.assertIn("valid", payload["data"]["validation"])
 
     def test_preview_and_save_topology_return_validation_payloads(self) -> None:

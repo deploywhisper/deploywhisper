@@ -52,7 +52,7 @@ class ProviderSettings(BaseModel):
     api_base: str = Field(..., description="Configured API base")
     api_key: str | None = Field(default=None, description="Configured API key")
     request_timeout_seconds: float = Field(
-        default=30.0, description="Hosted provider request timeout in seconds"
+        default=60.0, description="Hosted provider request timeout in seconds"
     )
     local_mode: bool = Field(
         default=False, description="Whether local-only mode is active"
@@ -90,7 +90,7 @@ class ProviderReadiness(BaseModel):
 PROVIDER_CATALOG: dict[str, dict[str, str | bool | None]] = {
     "ollama": {
         "label": "Ollama (Local)",
-        "model": "ollama/llama3",
+        "model": "ollama/qwen2.5-coder:3b",
         "api_base": "http://localhost:11434",
         "local_mode": True,
         "requires_api_key": False,
@@ -143,6 +143,8 @@ DASHBOARD_RESULT_DURATION_OPTIONS = [60, 300, 600, 900, 1800]
 DEFAULT_DASHBOARD_RESULT_DURATION_SECONDS = 300
 TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS = [6, 12, 24, 168]
 DEFAULT_TOPOLOGY_DRIFT_CHECK_INTERVAL_HOURS = 24
+MIN_PROVIDER_TIMEOUT_SECONDS = 1.0
+MAX_PROVIDER_TIMEOUT_SECONDS = 600.0
 PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
     "openai": ("OPENAI_API_KEY",),
     "anthropic": ("ANTHROPIC_API_KEY",),
@@ -178,6 +180,20 @@ def _provider_key(provider: str, field: str) -> str:
     return f"llm_provider_config::{provider}::{field}"
 
 
+def _normalize_request_timeout_seconds(value: float | int | str | None) -> float:
+    if value is None:
+        return settings.llm_request_timeout_seconds
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return settings.llm_request_timeout_seconds
+    if parsed < MIN_PROVIDER_TIMEOUT_SECONDS:
+        return MIN_PROVIDER_TIMEOUT_SECONDS
+    if parsed > MAX_PROVIDER_TIMEOUT_SECONDS:
+        return MAX_PROVIDER_TIMEOUT_SECONDS
+    return parsed
+
+
 def _provider_capability_summary(provider: str) -> ProviderCapabilitySummary:
     try:
         capabilities = get_provider_capabilities(provider)
@@ -199,9 +215,11 @@ def save_provider_settings(
     api_base: str,
     api_key: str | None = None,
     local_mode: bool = False,
+    request_timeout_seconds: float | None = None,
     activate: bool = True,
 ) -> ProviderSettings:
     """Persist provider settings and optionally mark them as active."""
+    normalized_timeout = _normalize_request_timeout_seconds(request_timeout_seconds)
     with SessionLocal() as session:
         upsert_setting(session, key=_provider_key(provider, "model"), value=model)
         upsert_setting(session, key=_provider_key(provider, "api_base"), value=api_base)
@@ -210,6 +228,11 @@ def save_provider_settings(
             key=_provider_key(provider, "local_mode"),
             value="true" if local_mode else "false",
         )
+        upsert_setting(
+            session,
+            key=_provider_key(provider, "request_timeout_seconds"),
+            value=str(normalized_timeout),
+        )
         delete_setting(session, _provider_key(provider, "api_key"))
 
         if activate:
@@ -217,6 +240,11 @@ def save_provider_settings(
             upsert_setting(session, key="llm_provider", value=provider)
             upsert_setting(session, key="llm_model", value=model)
             upsert_setting(session, key="llm_api_base", value=api_base)
+            upsert_setting(
+                session,
+                key="llm_request_timeout_seconds",
+                value=str(normalized_timeout),
+            )
             upsert_setting(
                 session, key="llm_local_mode", value="true" if local_mode else "false"
             )
@@ -228,7 +256,7 @@ def save_provider_settings(
         api_base=api_base,
         api_key=api_key,
         local_mode=local_mode,
-        request_timeout_seconds=settings.llm_request_timeout_seconds,
+        request_timeout_seconds=normalized_timeout,
         capabilities=_provider_capability_summary(provider),
         source="database",
     )
@@ -255,6 +283,9 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
             local_mode = get_setting(
                 session, _provider_key(selected_provider, "local_mode")
             )
+            timeout = get_setting(
+                session, _provider_key(selected_provider, "request_timeout_seconds")
+            )
 
             if model and api_base and local_mode:
                 return ProviderSettings(
@@ -263,7 +294,9 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                     api_base=api_base.value,
                     api_key=_provider_env_api_key(selected_provider),
                     local_mode=local_mode.value == "true",
-                    request_timeout_seconds=settings.llm_request_timeout_seconds,
+                    request_timeout_seconds=_normalize_request_timeout_seconds(
+                        timeout.value if timeout else None
+                    ),
                     capabilities=_provider_capability_summary(selected_provider),
                     source="database",
                 )
@@ -272,6 +305,7 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                 legacy_model = get_setting(session, "llm_model")
                 legacy_api_base = get_setting(session, "llm_api_base")
                 legacy_local_mode = get_setting(session, "llm_local_mode")
+                legacy_timeout = get_setting(session, "llm_request_timeout_seconds")
                 if (
                     legacy_provider
                     and legacy_model
@@ -284,7 +318,9 @@ def get_provider_settings(provider: str | None = None) -> ProviderSettings:
                         api_base=legacy_api_base.value,
                         api_key=_provider_env_api_key(legacy_provider.value),
                         local_mode=legacy_local_mode.value == "true",
-                        request_timeout_seconds=settings.llm_request_timeout_seconds,
+                        request_timeout_seconds=_normalize_request_timeout_seconds(
+                            legacy_timeout.value if legacy_timeout else None
+                        ),
                         capabilities=_provider_capability_summary(
                             legacy_provider.value
                         ),
@@ -434,7 +470,9 @@ def get_provider_health_snapshot() -> ProviderReadiness:
     )
 
 
-def activate_local_mode(*, model: str, api_base: str) -> ProviderSettings:
+def activate_local_mode(
+    *, model: str, api_base: str, request_timeout_seconds: float | None = None
+) -> ProviderSettings:
     """Persist a fully local narrative provider configuration."""
     return save_provider_settings(
         provider="ollama",
@@ -442,6 +480,7 @@ def activate_local_mode(*, model: str, api_base: str) -> ProviderSettings:
         api_base=api_base,
         api_key=None,
         local_mode=True,
+        request_timeout_seconds=request_timeout_seconds,
         activate=True,
     )
 

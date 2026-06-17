@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { buildHistoryQueryParams, type HistoryReport } from "../api/history";
-import { HistoryTable, formatRescanDelta } from "./History";
+import { DeleteAnalysisDialog, HistoryTable, formatRescanDelta } from "./History";
 
 const project = {
   id: 1,
@@ -149,5 +149,18 @@ describe("HistoryTable", () => {
 
   it("formats reports without prior scans as first scans", () => {
     expect(formatRescanDelta({ ...report, previous_scan_diff: null })).toBe("First scan");
+  });
+});
+
+describe("DeleteAnalysisDialog", () => {
+  it("renders a destructive confirmation before report deletion", () => {
+    const markup = renderToStaticMarkup(
+      <DeleteAnalysisDialog count={1} deleting={false} onCancel={() => undefined} onConfirm={() => undefined} />,
+    );
+
+    expect(markup).toContain("Destructive action");
+    expect(markup).toContain("Delete 1 selected analysis report(s)? This delete cannot be undone.");
+    expect(markup).toContain("permanently removed");
+    expect(markup).toContain("dw-button-danger");
   });
 });

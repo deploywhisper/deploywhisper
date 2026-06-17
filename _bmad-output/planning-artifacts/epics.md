@@ -1822,23 +1822,23 @@ So that later UI migration stories execute against the approved stack and operat
 **Given** the migration plan is approved
 **When** Phase 0 work is performed
 **Then** `frontend/` is scaffolded with Vite, React 18, TypeScript, Tailwind CSS, local font packages, `lucide-react`, TanStack Query, React Router, Vitest, Testing Library, Playwright, axe, and OpenAPI type generation
-**And** root scripts expose `ui:dev`, `ui:build`, and `ui:test`
-**And** the placeholder page proves the Vite proxy can read `GET /api/v1/health` from the compose-run backend
+**And** root scripts expose `ui:typecheck`, `ui:build`, and `ui:test`
+**And** UI verification is performed against the compose-built app at `http://localhost:8080/`, not against the Vite dev server
 **And** the Part E Phase 0 documentation rows are complete.
 
-### Story 15.1: Phase 1 - Coexistence Serving
+### Story 15.1: Phase 1 - SPA Serving
 
 As a maintainer,
-I want the built SPA served at `/app` while retired UI remains at `/`,
-So that the migration can proceed screen by screen without breaking the current UI.
+I want the built SPA served at `/`,
+So that the current UI runs from the same FastAPI container users deploy.
 
 **Acceptance Criteria:**
 
 **Given** the frontend build exists
 **When** the FastAPI app and Docker image are updated
-**Then** `frontend/dist` is mounted at `/app` with SPA fallback routing
+**Then** `frontend/dist` is mounted at `/` with SPA fallback routing
 **And** the Dockerfile adds a Node 22 Alpine frontend build stage but keeps Node out of the runtime image
-**And** `docker compose up -d --build` serves the old UI at `/`, the new shell at `/app`, and `/api/v1/health` stays green
+**And** `docker compose up -d --build` serves the React SPA at `http://localhost:8080/`, and `/api/v1/health` stays green
 **And** the image size delta is recorded in the PR.
 
 ### Story 15.2: Phase 2 - Design System Foundation and Parity Audit
@@ -1852,7 +1852,7 @@ So that dashboard, report, history, settings, incidents, and skills share one te
 **Given** the Part B tokens and mockup source
 **When** the foundation is built
 **Then** Tailwind theme variables and `src/components/ui/` primitives match the approved mockup
-**And** `/app/dev/components` renders every primitive and state as the permanent visual-regression gallery
+**And** `/dev/components` renders every primitive and state as the permanent visual-regression gallery from the composed app at `http://localhost:8080/dev/components`
 **And** each primitive has Vitest render and snapshot coverage
 **And** `docs/design/ui-parity-audit.md` inventories every retired UI page, element, control, message, and behavior as `replaced-by-design`, `sanctioned-change`, or `not-in-demo -> stop-and-ask`.
 

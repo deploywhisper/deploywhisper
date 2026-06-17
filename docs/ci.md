@@ -28,10 +28,11 @@ To append the SPA browser/a11y checks locally:
 
 ```bash
 npm install --prefix frontend
-RUN_UI_A11Y=1 bash scripts/ci-local.sh
+docker compose up -d --build
+BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh
 ```
 
-This runs `npm run test:ui-review`, which delegates to the `frontend/e2e/` Playwright suite.
+This runs `npm run test:ui-review`, which delegates to the `frontend/e2e/` Playwright suite. UI browser validation must use the composed app at `http://localhost:8080/`; do not run E2E, a11y, keyboard, or screenshot checks through `npm run ui:dev` or legacy prefixed SPA routes.
 
 For the React SPA migration workspace, run:
 
@@ -40,6 +41,8 @@ npm run ui:typecheck
 npm run ui:test
 npm run ui:build
 ```
+
+These commands cover static frontend quality only. They do not replace the compose browser loop for UI-facing work.
 
 The Phase 0 API schema is generated from the compose-run backend:
 
@@ -61,6 +64,14 @@ curl -fsSL http://localhost:8080/api/v1/projects
 ```
 
 Record the response shapes in the PR body, then run `docker compose down`.
+
+UI-facing changes must run the browser loop from the same composed instance:
+
+```bash
+BASE_URL=http://localhost:8080 npm run test:ui-review
+```
+
+Use root SPA routes under `http://localhost:8080/`, for example `/`, `/history`, `/settings`, `/skills`, `/incidents`, and `/reports/{id}`.
 
 For full local parity with the CI security lane, make sure `bandit` is installed in the active environment or available via `BANDIT_BIN`. When available, `scripts/ci-local.sh` runs the same two-pass Bandit gate used in CI.
 
@@ -100,7 +111,7 @@ These logs are retained for 14 days.
 - Every shard must pass its assigned `unittest` targets
 - React SPA typecheck, Vitest, and build must pass in the `frontend` job
 - Pull requests get a changed-test fast-feedback run
-- UI-facing stories must record browser-side Playwright validation before moving to review. Use `npm run test:ui-review` for the SPA e2e/a11y lane or `RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local lane. If no UI surface is touched, record `UI validation not applicable` in the story Dev Agent Record.
+- UI-facing stories must record browser-side Playwright validation before moving to review. Use `docker compose up -d --build` plus `BASE_URL=http://localhost:8080 npm run test:ui-review` for the SPA e2e/a11y lane, or `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local lane. If no UI surface is touched, record `UI validation not applicable` in the story Dev Agent Record.
 
 ## Notes
 

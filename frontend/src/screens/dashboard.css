@@ -19,7 +19,18 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px 20px 26px;
+  min-height: 72px;
+  padding: 18px 16px 22px;
+}
+
+.dw-brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 196px;
+  height: auto;
+  max-height: 56px;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .dw-brand-tile {
@@ -256,6 +267,7 @@
 .dw-topbar > .dw-project-switcher {
   flex: 0 1 236px;
   min-width: 170px;
+  max-width: 236px;
 }
 
 .dw-topbar .dw-project-trigger {
@@ -266,6 +278,7 @@
 .dw-topbar .dw-project-trigger-name {
   flex: 1;
   max-width: none;
+  min-width: 0;
 }
 
 .dw-dashboard-wrap {

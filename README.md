@@ -228,9 +228,9 @@ services:
       DATABASE_URL: sqlite:///data/deploywhisper.db
       DEPLOYWHISPER_SHARE_TOKEN: "DEPLOYWHISPER_API_TOKEN-for-test-123"
       LLM_PROVIDER: ollama
-      LLM_MODEL: ollama/gemma4:e4b
+      LLM_MODEL: ollama/qwen2.5-coder:3b
       LLM_API_BASE: http://host.docker.internal:11434
-      LLM_REQUEST_TIMEOUT_SECONDS: 30
+      LLM_REQUEST_TIMEOUT_SECONDS: 60
       LLM_API_KEY: ""
       OPENAI_API_KEY: ""
       ANTHROPIC_API_KEY: ""
@@ -254,7 +254,7 @@ docker-compose up -d
 Default container behavior:
 
 - Port `8080` exposed from the app container
-- Production React SPA served from the same FastAPI process at `/`, with legacy `/app/...` links redirected
+- Production React SPA served from the same FastAPI process at `/`, with legacy pre-cutover links redirected
 - SQLite database stored under `/app/data`
 - Default provider set to Ollama directly in `docker-compose.yml`
 - `POST /api/v1/analyses/{id}/share` stays disabled until `DEPLOYWHISPER_SHARE_TOKEN` is set in Compose
@@ -296,8 +296,27 @@ services:
   deploywhisper:
     environment:
       LLM_PROVIDER: ollama
-      LLM_MODEL: ollama/llama3
+      LLM_MODEL: ollama/qwen2.5-coder:3b
       LLM_API_BASE: http://host.docker.internal:11434
+      LLM_REQUEST_TIMEOUT_SECONDS: 60
+```
+
+Recommended local model for Docker Compose development is
+`qwen2.5-coder:3b`: it is code-specialized, small enough for fast local
+iteration, and supports the JSON-style Ollama chat calls DeployWhisper uses for
+narrative generation.
+
+Install it on the host before running Compose:
+
+```bash
+OLLAMA_HOST=http://127.0.0.1:11434 ollama pull qwen2.5-coder:3b
+```
+
+For lower cold-start pressure, keep Ollama resident between requests:
+
+```bash
+export OLLAMA_KEEP_ALIVE=-1
+export OLLAMA_MAX_LOADED_MODELS=2
 ```
 
 After editing Compose settings, recreate the container:
@@ -356,7 +375,7 @@ Response shape:
       "status": "ok",
       "ready": true,
       "provider": "ollama",
-      "model": "ollama/llama3",
+      "model": "ollama/qwen2.5-coder:3b",
       "local_mode": true,
       "requires_api_key": false,
       "has_api_key": false,
@@ -608,27 +627,40 @@ bash scripts/ci-local.sh
 Run the React SPA checks:
 
 ```bash
-npm run ui:dev
 npm run ui:typecheck
 npm run ui:test
 npm run ui:build
 ```
 
-`npm run ui:dev` serves the SPA at `http://127.0.0.1:5173/`
-with `/api` proxied to the compose backend on `http://localhost:8080`.
-Production verification must use `docker compose up -d --build` and
-`http://localhost:8080/` so the FastAPI static mount is exercised.
+`npm run ui:dev` is an optional coding convenience only. It is not accepted as
+UI verification because it bypasses the FastAPI static mount, the Dockerfile
+frontend stage, and the production asset build.
+
+All UI, Playwright, E2E, a11y, keyboard, and screenshot verification must run
+against the composed application:
+
+```bash
+docker compose up -d --build
+curl -fsSL http://localhost:8080/api/v1/health
+BASE_URL=http://localhost:8080 npm run test:ui-review
+```
+
+Use `http://localhost:8080/` as the testing origin and root SPA routes such as
+`/`, `/history`, `/settings`, `/skills`, `/incidents`, and `/reports/{id}`.
+Do not verify against the Vite dev server or legacy prefixed SPA routes.
 
 Run the browser keyboard/accessibility smoke for the SPA:
 
 ```bash
 npm install --prefix frontend
-npm run test:ui-review
+docker compose up -d --build
+BASE_URL=http://localhost:8080 npm run test:ui-review
 ```
 
 This runs the composed React Playwright suite under `frontend/e2e/` against the
 configured `BASE_URL` and includes the axe/keyboard smoke checks owned by the
-SPA migration.
+SPA migration. `BASE_URL` must point at the composed app on
+`http://localhost:8080`; screenshots from `npm run ui:dev` do not count.
 
 ## GitHub CI
 
@@ -755,13 +787,13 @@ Current CI stages:
 - `notify-failure`
 
 The CI pipeline includes frontend typecheck, tests, and production build for
-the React workspace. UI migration PRs must also run the compose-based browser
-verification loop against `http://localhost:8080`.
+the React workspace. UI PRs must also run the compose-based browser
+verification loop against `http://localhost:8080` using root SPA routes.
 
 For accessibility-sensitive UI changes:
 
-- `npm run test:ui-review` exercises the SPA Playwright suite, including axe and keyboard smoke coverage.
-- `RUN_UI_A11Y=1 bash scripts/ci-local.sh` appends the SPA browser lane locally when `frontend/node_modules` is installed.
+- `BASE_URL=http://localhost:8080 npm run test:ui-review` exercises the SPA Playwright suite, including axe and keyboard smoke coverage, after `docker compose up -d --build`.
+- `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` appends the SPA browser lane locally when `frontend/node_modules` is installed.
 
 ## Contributing
 

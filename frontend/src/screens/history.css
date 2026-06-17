@@ -392,6 +392,117 @@
   padding: 9px 11px;
 }
 
+.dw-history-dialog-layer {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: fixed;
+  z-index: 80;
+}
+
+.dw-history-dialog-backdrop {
+  background: rgba(15, 23, 42, 0.42);
+  border: 0;
+  cursor: default;
+  inset: 0;
+  position: absolute;
+}
+
+.dw-history-dialog {
+  background: #fff;
+  border: 1px solid #fecaca;
+  border-radius: var(--dw-radius-card);
+  box-shadow: 0 24px 70px rgba(127, 29, 29, 0.24);
+  display: grid;
+  gap: 14px;
+  max-width: 460px;
+  padding: 20px;
+  position: relative;
+  width: min(100%, 460px);
+}
+
+.dw-history-dialog-warning {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.dw-history-dialog-icon {
+  align-items: center;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  color: #b42318;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+.dw-history-dialog-eyebrow {
+  color: #b42318;
+  font-family: var(--dw-font-mono);
+  font-size: var(--dw-eyebrow-size);
+  font-weight: 900;
+  letter-spacing: var(--dw-eyebrow-letter-spacing);
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.dw-history-dialog h2 {
+  color: var(--dw-ink);
+  font-family: var(--dw-font-display);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.dw-history-dialog-message {
+  color: var(--dw-text);
+  font-size: 0.94rem;
+  font-weight: 800;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.dw-history-dialog-danger {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--dw-radius-inner);
+  color: #991b1b;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.5;
+  padding: 11px 12px;
+}
+
+.dw-history-dialog-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.dw-button-danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.22);
+  color: #fff;
+}
+
+.dw-button-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #fff;
+}
+
 .dw-sr-only {
   height: 1px;
   overflow: hidden;

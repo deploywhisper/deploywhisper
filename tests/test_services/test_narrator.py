@@ -428,7 +428,7 @@ class NarratorTests(unittest.TestCase):
         self.assertEqual(narrative.source, "fallback")
         self.assertIn("empty output", narrative.failure_notice or "")
 
-    def test_generate_narrative_falls_back_when_provider_returns_non_list_guidance(
+    def test_generate_narrative_accepts_string_guidance(
         self,
     ) -> None:
         with (
@@ -468,10 +468,53 @@ class NarratorTests(unittest.TestCase):
                 ),
             )
 
-        self.assertFalse(narrative.available)
-        self.assertTrue(narrative.degraded)
-        self.assertEqual(narrative.source, "fallback")
-        self.assertIn("guidance", narrative.failure_notice or "")
+        self.assertTrue(narrative.available)
+        self.assertFalse(narrative.degraded)
+        self.assertEqual(narrative.source, "llm")
+        self.assertEqual(narrative.guidance, ["verify ingress rules"])
+
+    def test_generate_narrative_accepts_object_guidance(self) -> None:
+        with (
+            patch(
+                "llm.narrator.resolve_provider_runtime",
+                return_value={
+                    "provider": "openai",
+                    "model": "gpt-4.1-mini",
+                    "api_base": "https://api.openai.com/v1",
+                    "api_key": "sk-test",
+                    "local_mode": False,
+                },
+            ),
+            patch(
+                "llm.narrator.resolve_skills",
+                return_value=[SimpleNamespace(name="terraform")],
+            ),
+            patch("llm.narrator.build_skill_context", return_value="skill context"),
+            patch("llm.narrator.build_system_prompt", return_value="system prompt"),
+            patch("llm.narrator.build_user_payload", return_value="{}"),
+        ):
+            narrative = generate_narrative(
+                self._assessment(),
+                [],
+                completion_client=lambda **_: SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                content=(
+                                    '{"opening_sentence": "CAUTION: review the change.", '
+                                    '"explanation": "Security group change requires review.", '
+                                    '"guidance": {"verify": "check ingress", "rollback": ["prepare revert"]}}'
+                                )
+                            )
+                        )
+                    ]
+                ),
+            )
+
+        self.assertTrue(narrative.available)
+        self.assertFalse(narrative.degraded)
+        self.assertEqual(narrative.source, "llm")
+        self.assertEqual(narrative.guidance, ["check ingress", "prepare revert"])
 
     def test_generate_narrative_returns_deterministic_fallback_without_provider_call_when_no_contributors(
         self,

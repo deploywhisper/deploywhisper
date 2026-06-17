@@ -50,7 +50,7 @@ For Phase 2 first-half delivery, the implemented design-system foundation is:
 - Typography tokens use local `@fontsource` families only: Plus Jakarta Sans Variable for display, Inter for body, and JetBrains Mono Variable for deterministic evidence.
 - Geometry, depth, focus, and motion tokens cover card/inner/button/badge radii, all Part B1 shadows, score-ring animation, hover transitions, active-project ping, and reduced-motion behavior.
 - `frontend/src/components/ui/` implements the Phase 2 primitive set: `SeverityBadge`, `VerdictChip`, `EvidenceTag`, `ConfidenceBadge`, `MonoRef`, `ScoreRing`, `Sparkline`, `Card`, `Button`, `SegmentedTabs`, `ProjectSwitcher`, and B4 skeleton variants.
-- `/app/dev/components` is the temporary component-gallery route used for composed-container visual evidence. Product screens remain out of scope until later Phase 2/Phase 3 tasks.
+- `/dev/components` is the component-gallery route used for composed-container visual evidence. Browser screenshots and E2E checks must run against `http://localhost:8080/` after `docker compose up -d --build`; Vite dev-server screenshots and legacy prefixed SPA routes are not accepted verification.
 
 ### Project Vision
 

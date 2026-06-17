@@ -25,6 +25,7 @@ function defaultProviderForm(summary?: SettingsSummary): ProviderForm {
     provider: summary?.provider.provider ?? "ollama",
     model: summary?.provider.model ?? "",
     api_base: summary?.provider.api_base ?? "",
+    request_timeout_seconds: summary?.provider.request_timeout_seconds ?? 30,
     api_key: "",
     local_mode: summary?.provider.local_mode ?? false,
   };
@@ -60,6 +61,7 @@ function ProviderSettingsCard({ projectId, summary }: { projectId?: number; summ
       provider,
       model: option?.model ?? "",
       api_base: option?.api_base ?? "",
+      request_timeout_seconds: form.request_timeout_seconds,
       api_key: "",
       local_mode: provider === "ollama" ? Boolean(option?.local_mode) : false,
     });
@@ -86,6 +88,16 @@ function ProviderSettingsCard({ projectId, summary }: { projectId?: number; summ
         <label className="dw-field">
           <span>API base</span>
           <input onChange={(event) => setForm({ ...form, api_base: event.target.value })} value={form.api_base} />
+        </label>
+        <label className="dw-field">
+          <span>Request timeout</span>
+          <input
+            min={1}
+            max={600}
+            onChange={(event) => setForm({ ...form, request_timeout_seconds: Number(event.target.value) })}
+            type="number"
+            value={form.request_timeout_seconds ?? 30}
+          />
         </label>
         <label className="dw-field">
           <span>API key</span>
@@ -117,7 +129,13 @@ function ProviderSettingsCard({ projectId, summary }: { projectId?: number; summ
           <EvidenceTag>{summary.provider.source}</EvidenceTag>
         </div>
         <StatusNote
-          message={saveMutation.data?.validation.message ?? saveMutation.error?.message}
+          message={
+            saveMutation.data
+              ? saveMutation.data.validation.valid
+                ? `AI provider settings saved. Timeout is ${saveMutation.data.settings.request_timeout_seconds}s.`
+                : saveMutation.data.validation.message
+              : saveMutation.error?.message
+          }
           tone={saveMutation.data && !saveMutation.data.validation.valid ? "warning" : "info"}
         />
       </div>
@@ -214,6 +232,14 @@ function TopologyCard({ projectId, summary }: { projectId?: number; summary: Set
           </label>
         </div>
         <StatusNote message={parseError ?? preview?.error_message ?? preview?.success_message ?? saveMutation.data?.success_message} tone={parseError || preview?.error_message ? "warning" : "info"} />
+        <StatusNote
+          message={
+            cadenceMutation.data
+              ? `Drift cadence saved: every ${cadenceMutation.data.interval_hours === 168 ? "week" : `${cadenceMutation.data.interval_hours} hours`}.`
+              : cadenceMutation.error?.message
+          }
+          tone={cadenceMutation.error ? "warning" : "info"}
+        />
         <div className="dw-phase6-stat-grid">
           <div className="dw-phase6-stat"><strong>{topology.service_count}</strong><span>Services</span></div>
           <div className="dw-phase6-stat"><strong>{topology.dependency_count}</strong><span>Dependencies</span></div>

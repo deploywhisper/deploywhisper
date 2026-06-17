@@ -113,7 +113,9 @@ Operating rules:
 - Use one task, one branch, one PR for UI work, and state the active task before writing code.
 - The target stack is Vite + React 18 + TypeScript + Tailwind CSS, built to static files and served by the existing FastAPI app. Node must not be present in the runtime image.
 - Do not restyle, approximate, or "improve" approved design values; bind UI to real APIs and never hard-code mockup demo data.
+- Do not use `npm run ui:dev` as UI verification. It is only an optional coding convenience for local iteration and does not prove the FastAPI static mount, Dockerfile frontend stage, or production asset build.
 - Before every UI PR, run the compose verification loop: `docker compose up -d --build`, wait for `http://localhost:8080/api/v1/health`, seed data, run Playwright against `BASE_URL=http://localhost:8080`, capture required screenshots from the composed app, then `docker compose down`.
+- All Playwright, E2E, a11y, keyboard, and visual-regression URLs use the composed app at `http://localhost:8080/` and root SPA routes such as `/`, `/history`, `/settings`, `/skills`, `/incidents`, and `/reports/{id}`. Do not use Vite-dev-server URLs or legacy prefixed SPA routes for verification.
 - PR descriptions must include the design/plan reference, documentation rows updated when applicable, verification output, and screenshots.
 
 ## Validation Requirements
@@ -126,9 +128,11 @@ Minimum expectations:
   - `bash scripts/ci-local.sh`
 - If the app behavior changed, run the app locally when possible:
   - `python app.py`
-- If a story changes any React route, UI primitive, rendered report/history/dashboard/settings/skills surface, browser interaction, keyboard behavior, or accessibility semantics, run browser-side Playwright validation and record the command/result in the story Dev Agent Record before moving the story to review:
-  - `npm run test:ui-review` for review/report flows
-  - `RUN_UI_A11Y=1 bash scripts/ci-local.sh` when the full local UI lane is needed
+- If a story changes any React route, UI primitive, rendered report/history/dashboard/settings/skills surface, browser interaction, keyboard behavior, or accessibility semantics, run browser-side Playwright validation against the composed app and record the command/result in the story Dev Agent Record before moving the story to review:
+  - `docker compose up -d --build`
+  - `BASE_URL=http://localhost:8080 npm run test:ui-review` for review/report flows
+  - `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` when the full local UI lane is needed
+  - use root SPA routes only; never validate through legacy prefixed SPA routes or a Vite dev server
   - If no UI surface is touched, record `UI validation not applicable` instead of silently skipping UI validation.
 - If dependencies are not installed, bootstrap locally:
   - `python3 -m venv .venv`

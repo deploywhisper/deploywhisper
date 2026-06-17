@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest.mock import patch
 
 from analysis.risk_scorer import (
     RiskAssessment,
@@ -305,6 +306,54 @@ class RiskScorerTests(unittest.TestCase):
         self.assertEqual(assessment.source, "heuristic-only")
         self.assertEqual(assessment.score, 0)
         self.assertEqual(assessment.warnings, [])
+
+    def test_llm_scoring_uses_resolved_provider_timeout(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_completion(**kwargs: object) -> str:
+            captured.update(kwargs)
+            return json.dumps(
+                {
+                    "overall_severity": "low",
+                    "recommendation": "go",
+                    "top_risk": "Low-risk deployment label update.",
+                    "overall_reasoning": "No high-risk signal.",
+                    "change_scores": [
+                        {
+                            "source_file": "safe.yaml",
+                            "resource_id": "ConfigMap/test-demo-go",
+                            "severity": "low",
+                            "reasoning": "ConfigMap data update remains low risk.",
+                        }
+                    ],
+                }
+            )
+
+        with patch(
+            "analysis.risk_scorer.resolve_provider_runtime",
+            return_value={
+                "provider": "ollama",
+                "model": "ollama/gemma4:e4b",
+                "api_base": "http://host.docker.internal:11434",
+                "api_key": None,
+                "local_mode": True,
+                "request_timeout_seconds": 180,
+            },
+        ):
+            score_changes(
+                [
+                    UnifiedChange(
+                        source_file="safe.yaml",
+                        tool="kubernetes",
+                        resource_id="ConfigMap/test-demo-go",
+                        action="apply",
+                        summary="Kubernetes ConfigMap/test-demo-go supplied as a standalone manifest.",
+                    )
+                ],
+                completion_client=fake_completion,
+            )
+
+        self.assertEqual(captured["request_timeout_seconds"], 180)
 
     def test_high_impact_changes_can_reach_critical_and_no_go(self) -> None:
         assessment = score_changes(

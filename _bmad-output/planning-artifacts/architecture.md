@@ -199,7 +199,7 @@ All external systems are user-owned or community-owned integrations, not DeployW
 Responsible for accepting requests and presenting results:
 
 - React SPA at `/`, served as static files by FastAPI with client-route fallback.
-- Legacy `/app/...` and old report-detail links redirect to their root React equivalents.
+- Legacy pre-cutover SPA links and old report-detail links redirect to their root React equivalents.
 - FastAPI `/api/v1` routes.
 - CLI command surface.
 - GitHub Action and GitHub App integration.
@@ -586,7 +586,7 @@ Not a runtime service, but an architecture-owned delivery area covering docs gen
 
 After the Phase 7 UI cutover, the React SPA is the only web UI. It is built
 from `frontend/` and served by FastAPI from `frontend/dist` at `/`, with an SPA
-fallback so client-side routes survive refresh. Legacy `/app/...` coexistence
+fallback so client-side routes survive refresh. Legacy pre-cutover coexistence
 links redirect to the corresponding root routes.
 
 The target reviewer workflow remains:
@@ -1012,8 +1012,14 @@ bash scripts/ci-local.sh
 For review-flow or accessibility-sensitive UI changes:
 
 ```bash
-npm run test:ui-review
+docker compose up -d --build
+BASE_URL=http://localhost:8080 npm run test:ui-review
 ```
+
+All Playwright, E2E, a11y, keyboard, and screenshot validation runs against
+the compose-built FastAPI/React app at `http://localhost:8080/` using root SPA
+routes. `npm run ui:dev` is allowed only for local coding iteration; it is not
+valid verification. Do not use legacy prefixed SPA routes for current UI validation.
 
 ### 18.3 Evidence Law validation
 

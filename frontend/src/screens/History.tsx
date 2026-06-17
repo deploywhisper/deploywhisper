@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { Fragment, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createColumnHelper,
@@ -26,7 +26,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { getProjects, type Project } from "../api/dashboard";
+import { getProjects } from "../api/dashboard";
 import {
   buildHistoryQueryParams,
   deleteAnalyses,
@@ -48,6 +48,8 @@ import {
   type ProjectOption,
 } from "../components/ui";
 import type { Severity, Verdict } from "../theme/tokens";
+import { AppBrand } from "./AppBrand";
+import { projectToOption, usePersistentProjectSelection } from "./projectSelection";
 import "./dashboard.css";
 import "./history.css";
 
@@ -67,15 +69,6 @@ const verdictTabs = [
   { id: "caution", label: "Caution" },
   { id: "go", label: "Proceed" },
 ];
-
-function projectToOption(project: Project): ProjectOption {
-  return {
-    id: String(project.id),
-    name: project.name || project.display_name || project.project_key,
-    env: project.env_label || project.default_branch || "default",
-    description: project.description || project.repository_url || project.project_key,
-  };
-}
 
 function normalizeSeverity(value: string | null | undefined): Severity {
   const normalized = String(value || "low").toUpperCase();
@@ -162,17 +155,7 @@ function selectionLabel(count: number) {
 function HistorySidebar({ selectedProject }: { selectedProject: ProjectOption }) {
   return (
     <aside className="dw-sidebar">
-      <div className="dw-brand">
-        <span className="dw-brand-tile">
-          <ShieldCheck size={18} />
-        </span>
-        <div>
-          <div className="dw-brand-wordmark">
-            Deploy<span>Whisper</span>
-          </div>
-          <div className="dw-brand-eyebrow">Evidence Engine</div>
-        </div>
-      </div>
+      <AppBrand />
       <nav className="dw-sidebar-nav" aria-label="Primary">
         <Link className="dw-nav-item" to="/">
           <LayoutGrid color="var(--dw-faint)" size={17} />
@@ -251,6 +234,66 @@ function HistoryError({ message, onRetry }: { message: string; onRetry: () => vo
       <button className="dw-link-button" onClick={onRetry} type="button">
         Retry
       </button>
+    </div>
+  );
+}
+
+export function DeleteAnalysisDialog({
+  count,
+  deleting,
+  onCancel,
+  onConfirm,
+}: {
+  count: number;
+  deleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !deleting) {
+        onCancel();
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [deleting, onCancel]);
+
+  return (
+    <div className="dw-history-dialog-layer" role="presentation">
+      <button aria-label="Cancel report deletion" className="dw-history-dialog-backdrop" disabled={deleting} onClick={onCancel} type="button" />
+      <section
+        aria-describedby="delete-analysis-description"
+        aria-labelledby="delete-analysis-title"
+        aria-modal="true"
+        className="dw-history-dialog"
+        role="dialog"
+      >
+        <div className="dw-history-dialog-warning">
+          <span className="dw-history-dialog-icon">
+            <AlertTriangle size={22} />
+          </span>
+          <div>
+            <p className="dw-history-dialog-eyebrow">Destructive action</p>
+            <h2 id="delete-analysis-title">Delete selected reports</h2>
+          </div>
+        </div>
+        <p className="dw-history-dialog-message" id="delete-analysis-description">
+          Delete {count} selected analysis report(s)? This delete cannot be undone.
+        </p>
+        <div className="dw-history-dialog-danger">
+          Report history, findings, evidence, and share state for the selected run(s) will be permanently removed.
+        </div>
+        <div className="dw-history-dialog-actions">
+          <Button disabled={deleting} onClick={onCancel} variant="ghost">
+            Cancel
+          </Button>
+          <Button className="dw-button-danger" disabled={deleting} onClick={onConfirm} variant="ghost">
+            <Trash2 size={14} />
+            {deleting ? "Deleting..." : "Delete reports"}
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -533,7 +576,6 @@ function HistoryFiltersBar({
 export function HistoryScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [severity, setSeverity] = useState<FilterValue>("all");
   const [recommendation, setRecommendation] = useState<FilterValue>("all");
@@ -542,15 +584,15 @@ export function HistoryScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [toast, setToast] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: getProjects });
   const projects = projectsQuery.data ?? [];
   const projectOptions = projects.map(projectToOption);
+  const { selectedProject: selectedProjectData, setSelectedProjectId } = usePersistentProjectSelection(projects);
   const selectedProject =
-    projectOptions.find((project) => project.id === selectedProjectId) ||
-    projectOptions[0] ||
+    (selectedProjectData ? projectToOption(selectedProjectData) : undefined) ||
     ({ id: "loading", name: "Loading", env: "default", description: "Loading projects" } satisfies ProjectOption);
-  const selectedProjectData = projects.find((project) => String(project.id) === selectedProject.id) || projects[0];
 
   const filters: HistoryFilters = {
     projectId: selectedProjectData?.id,
@@ -577,6 +619,7 @@ export function HistoryScreen() {
       setToast(`Deleted ${response.data.deleted_count} analysis report(s).`);
       setSelectedIds(new Set());
       setExpanded({});
+      setDeleteDialogOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["history"] });
     },
   });
@@ -620,8 +663,14 @@ export function HistoryScreen() {
 
   const selectedCount = selectedIds.size;
   const runDelete = () => {
+    if (selectedIds.size > 0) {
+      setDeleteDialogOpen(true);
+    }
+  };
+  const confirmDelete = () => {
     const ids = Array.from(selectedIds);
-    if (ids.length === 0 || !window.confirm(`Delete ${ids.length} selected analysis report(s)?`)) {
+    if (ids.length === 0) {
+      setDeleteDialogOpen(false);
       return;
     }
     deleteMutation.mutate(ids);
@@ -731,6 +780,14 @@ export function HistoryScreen() {
               </>
             )}
           </Card>
+          {deleteDialogOpen && (
+            <DeleteAnalysisDialog
+              count={selectedCount}
+              deleting={deleteMutation.isPending}
+              onCancel={() => setDeleteDialogOpen(false)}
+              onConfirm={confirmDelete}
+            />
+          )}
           </div>
         </main>
       </div>
