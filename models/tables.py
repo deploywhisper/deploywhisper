@@ -437,6 +437,7 @@ if "EvidenceItem" not in globals():
         deterministic: Mapped[bool] = mapped_column(Boolean, default=True)
         confidence: Mapped[float] = mapped_column(Float, default=1.0)
         related_change_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+        context_source_json: Mapped[str | None] = mapped_column(Text, nullable=True)
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
         )

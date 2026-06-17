@@ -19,7 +19,12 @@ import services.deployment_outcome_service as deployment_outcome_service_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
-from api.schemas import BlastRadiusData, ContextCompletenessData, PersistedReportData
+from api.schemas import (
+    BlastRadiusData,
+    ContextCompletenessData,
+    EvidenceItemData,
+    PersistedReportData,
+)
 from services.analysis_service import AnalysisPersistenceError
 from services.analysis_service import AnalysisRunResult
 from analysis.rollback_planner import RollbackPlan
@@ -148,6 +153,71 @@ class AnalysesApiTests(unittest.TestCase):
         os.environ.pop("APP_BASE_URL", None)
         os.environ.pop("DEPLOYWHISPER_SHARE_TOKEN", None)
         self.tempdir.cleanup()
+
+    def test_context_completeness_api_schema_exposes_source_freshness_ledger(
+        self,
+    ) -> None:
+        context = ContextCompletenessData.model_validate(
+            {
+                "context_score": 0.68,
+                "confidence_level": "low",
+                "context_sources": [
+                    {
+                        "source_id": "topology:terraform-state:state://prod",
+                        "source_type": "topology",
+                        "source_ref": "state://prod",
+                        "scope": "project:payments/workspace:prod",
+                        "freshness_status": "stale",
+                        "last_observed_at": "2026-05-01T00:00:00Z",
+                        "age_days": 47,
+                        "confidence": 0.42,
+                        "conflicts": ["kubernetes-live-state"],
+                        "limitations": ["stale_topology"],
+                    }
+                ],
+            }
+        )
+
+        source = context.context_sources[0]
+        self.assertEqual(source.source_type, "topology")
+        self.assertEqual(source.freshness_status, "stale")
+        self.assertEqual(source.scope, "project:payments/workspace:prod")
+        self.assertEqual(source.confidence, 0.42)
+        self.assertEqual(source.conflicts, ["kubernetes-live-state"])
+
+    def test_evidence_item_api_schema_can_reference_context_source_metadata(
+        self,
+    ) -> None:
+        evidence = EvidenceItemData.model_validate(
+            {
+                "evidence_id": "ev-topology-1",
+                "analysis_id": 1,
+                "finding_id": "finding-1",
+                "source_type": "topology",
+                "source_ref": "state://prod#aws_instance.web",
+                "summary": "Terraform state mapped aws_instance.web to checkout.",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "confidence": 0.81,
+                "context_source": {
+                    "source_id": "topology:terraform-state:state://prod",
+                    "source_type": "topology",
+                    "source_ref": "state://prod",
+                    "scope": "project:payments/workspace:prod",
+                    "freshness_status": "current",
+                    "last_observed_at": "2026-06-16T00:00:00Z",
+                    "age_days": 1,
+                    "confidence": 0.81,
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        self.assertEqual(
+            evidence.context_source.source_id, "topology:terraform-state:state://prod"
+        )
+        self.assertEqual(evidence.context_source.freshness_status, "current")
 
     def _analysis_result_with_persisted_report(
         self,

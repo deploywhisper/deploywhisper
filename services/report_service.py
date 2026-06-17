@@ -3408,6 +3408,14 @@ def _normalize_context_completeness_payload(decoded: dict) -> dict:
         "incident" in item.lower() for item in todos
     ):
         todos.append("Import relevant incident history for this project/workspace.")
+    if (
+        normalized["incident_index_freshness_status"] == "stale"
+        and incident_index_size > 0
+        and not any(
+            "incident" in item.lower() and "stale" in item.lower() for item in todos
+        )
+    ):
+        todos.append("Refresh stale incident history for this project/workspace.")
     if parser_success_rate < 1.0 and not any(
         "parser" in item.lower() for item in todos
     ):
@@ -3512,15 +3520,113 @@ def _context_with_incident_index_freshness(report, context_completeness: dict) -
             workspace_id=report.workspace_id,
         )
     except Exception:
-        updated = dict(context_completeness)
-        updated["incident_index_freshness_status"] = "stale"
-        return updated
+        return _mark_incident_context_stale(context_completeness)
     current_version = str(current.get("incident_index_version") or "")
     if current_version and current_version != stored_version:
-        updated = dict(context_completeness)
-        updated["incident_index_freshness_status"] = "stale"
-        return updated
+        return _mark_incident_context_stale(context_completeness)
     return context_completeness
+
+
+def _mark_incident_context_stale(context_completeness: dict) -> dict:
+    updated = dict(context_completeness)
+    updated["incident_index_freshness_status"] = "stale"
+    context_score = _context_float_value(updated, "context_score", missing_default=0.0)
+    if context_score > 0.8:
+        context_score = 0.8
+        updated["context_score"] = context_score
+        updated["confidence_level"] = _context_confidence_level_from_score(
+            context_score
+        )
+    todos = _context_todo_items(updated.get("context_todos"))
+    if not any(
+        "incident" in item.lower() and "stale" in item.lower() for item in todos
+    ):
+        todos.append("Refresh stale incident history for this project/workspace.")
+    updated["context_todos"] = todos
+    uncertainty = str(updated.get("uncertainty") or "").strip()
+    stale_message = "incident history is stale"
+    if stale_message not in uncertainty.lower():
+        updated["uncertainty"] = (
+            f"{uncertainty} {stale_message}.".strip()
+            if uncertainty
+            else f"Uncertainty: {stale_message}."
+        )
+    context_sources = updated.get("context_sources")
+    if isinstance(context_sources, list):
+        updated_sources: list[object] = []
+        stored_version = str(updated.get("incident_index_version") or "")
+        incident_sources = [
+            source
+            for source in context_sources
+            if isinstance(source, dict) and source.get("source_type") == "incident"
+        ]
+        for source in context_sources:
+            if not isinstance(source, dict):
+                updated_sources.append(source)
+                continue
+            if not _incident_context_source_matches_stale_version(
+                source,
+                stored_version=stored_version,
+                incident_source_count=len(incident_sources),
+            ):
+                updated_sources.append(source)
+                continue
+            stale_source = dict(source)
+            stale_source["freshness_status"] = "stale"
+            limitations = _context_todo_items(stale_source.get("limitations"))
+            if "stale_incident_index" not in limitations:
+                limitations.append("stale_incident_index")
+            stale_source["limitations"] = limitations
+            updated_sources.append(stale_source)
+        updated["context_sources"] = updated_sources
+    return updated
+
+
+def _incident_context_source_matches_stale_version(
+    source: dict,
+    *,
+    stored_version: str,
+    incident_source_count: int,
+) -> bool:
+    if source.get("source_type") != "incident":
+        return False
+    source_ref = str(source.get("source_ref") or "")
+    if stored_version:
+        return source_ref == stored_version
+    return incident_source_count == 1
+
+
+def _load_evidence_context_source(
+    raw_value: str | None,
+    *,
+    context_completeness: dict,
+) -> dict[str, Any] | None:
+    if not raw_value:
+        return None
+    try:
+        decoded = json.loads(raw_value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(decoded, dict):
+        return None
+    if (
+        decoded.get("source_type") == "incident"
+        and context_completeness.get("incident_index_freshness_status") == "stale"
+        and _incident_context_source_matches_stale_version(
+            decoded,
+            stored_version=str(
+                context_completeness.get("incident_index_version") or ""
+            ),
+            incident_source_count=1,
+        )
+    ):
+        decoded = dict(decoded)
+        decoded["freshness_status"] = "stale"
+        limitations = _context_todo_items(decoded.get("limitations"))
+        if "stale_incident_index" not in limitations:
+            limitations.append("stale_incident_index")
+        decoded["limitations"] = limitations
+    return decoded
 
 
 def _context_with_partial_context_signal(
@@ -3817,6 +3923,10 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
                     "confidence": evidence_item.confidence,
                     "related_change_ids": json.loads(
                         evidence_item.related_change_ids_json or "[]"
+                    ),
+                    "context_source": _load_evidence_context_source(
+                        getattr(evidence_item, "context_source_json", None),
+                        context_completeness=context_completeness,
                     ),
                 }
             )

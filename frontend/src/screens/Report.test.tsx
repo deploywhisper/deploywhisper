@@ -95,6 +95,18 @@ const report = {
       severity_hint: "high",
       deterministic: true,
       confidence: 0.9,
+      context_source: {
+        source_id: "topology:kubernetes:current-context",
+        source_type: "topology",
+        source_ref: "current-context",
+        scope: "project:checkout",
+        freshness_status: "current",
+        last_observed_at: "2026-06-14T00:00:00Z",
+        age_days: 2,
+        confidence: 0.9,
+        conflicts: [],
+        limitations: [],
+      },
       related_change_ids: [],
     },
   ],
@@ -130,6 +142,32 @@ const report = {
     incident_index_version: null,
     incident_index_freshness_status: null,
     evidence_success_rate: 1,
+    context_sources: [
+      {
+        source_id: "topology:kubernetes:current-context",
+        source_type: "topology",
+        source_ref: "current-context",
+        scope: "project:checkout",
+        freshness_status: "current",
+        last_observed_at: "2026-06-14T00:00:00Z",
+        age_days: 2,
+        confidence: 0.9,
+        conflicts: [],
+        limitations: [],
+      },
+      {
+        source_id: "incident:index:checkout",
+        source_type: "incident",
+        source_ref: "incidents:empty",
+        scope: "project:checkout",
+        freshness_status: "empty",
+        last_observed_at: null,
+        age_days: null,
+        confidence: 0,
+        conflicts: ["missing_incident_history"],
+        limitations: ["empty_incident_index", "incident_pack_missing", "incident_dates_unknown", "incident_scope_unverified"],
+      },
+    ],
     context_todos: [],
     partial_context: false,
   },
@@ -242,10 +280,26 @@ describe("ReportScreen", () => {
     const markup = renderReport("/reports/77?private=1&tab=context");
 
     expect(markup).toContain("BLAST RADIUS");
+    expect(markup).toContain("CONTEXT SOURCES");
+    expect(markup).toContain("topology:kubernetes:current-context");
+    expect(markup).toContain("current-context");
+    expect(markup).toContain("90%");
+    expect(markup).toContain("missing_incident_history");
+    expect(markup).toContain("incident_pack_missing");
+    expect(markup).toContain("incident_dates_unknown");
+    expect(markup).toContain("incident_scope_unverified");
+    expect(markup).not.toContain("+2 more");
     expect(markup).toContain("Contained radius");
     expect(markup).toContain("checkout");
     expect(markup).toContain("Direct");
     expect(markup).toContain("Transitive");
+  });
+
+  it("renders evidence context source references on the confidence tab", () => {
+    const markup = renderReport("/reports/77?private=1&tab=confidence");
+
+    expect(markup).toContain("EVIDENCE REGISTER");
+    expect(markup).toContain("topology:kubernetes:current-context (current)");
   });
 
   it("renders a green safe state when the blast radius is zero", () => {

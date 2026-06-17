@@ -11,6 +11,26 @@ RiskSeverity = Literal["low", "medium", "high", "critical"]
 DeployRecommendation = Literal["go", "caution", "no-go"]
 ContextConfidenceLevel = Literal["high", "medium", "low"]
 OwnerSignalScope = Literal["file", "service"]
+ContextSourceFreshness = Literal[
+    "current",
+    "stale",
+    "missing",
+    "incomplete",
+    "conflicting",
+    "unknown",
+    "empty",
+    "not_applicable",
+]
+ContextSourceType = Literal[
+    "artifact",
+    "topology",
+    "incident",
+    "parser",
+    "evidence",
+    "ownership",
+    "external_scanner",
+    "user_context",
+]
 EvidenceSourceType = Literal[
     "artifact",
     "topology",
@@ -67,6 +87,33 @@ def _parse_source_ref(source_ref: str) -> dict[str, str]:
     }
 
 
+class ContextSourceMetadata(BaseModel):
+    """Freshness and confidence metadata for one report context source."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = Field(..., min_length=1)
+    source_type: ContextSourceType
+    source_ref: str | None = Field(default=None, min_length=1)
+    scope: str = Field(..., min_length=1)
+    freshness_status: ContextSourceFreshness = Field(default="unknown")
+    last_observed_at: str | None = Field(default=None, min_length=1)
+    age_days: int | None = Field(default=None, ge=0)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    conflicts: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("conflicts")
+    @classmethod
+    def _validate_conflicts(cls, value: list[str]) -> list[str]:
+        return _validate_string_list(value)
+
+    @field_validator("limitations")
+    @classmethod
+    def _validate_limitations(cls, value: list[str]) -> list[str]:
+        return _validate_string_list(value)
+
+
 class ContextCompleteness(BaseModel):
     """Frozen context quality inputs captured for one analysis."""
 
@@ -90,6 +137,7 @@ class ContextCompleteness(BaseModel):
     owner_signals: list["OwnerSignal"] = Field(default_factory=list)
     escalation_hints: list[str] = Field(default_factory=list)
     ownership_unmapped_subjects: list[str] = Field(default_factory=list)
+    context_sources: list[ContextSourceMetadata] = Field(default_factory=list)
 
     @field_validator("parser_success_by_tool")
     @classmethod
@@ -187,6 +235,7 @@ class EvidenceItem(BaseModel):
     deterministic: bool
     confidence: float = Field(..., ge=0.0, le=1.0)
     related_change_ids: list[str] = Field(default_factory=list)
+    context_source: ContextSourceMetadata | None = Field(default=None)
 
     @field_validator("related_change_ids")
     @classmethod

@@ -26,7 +26,12 @@ from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.incident_matcher import IncidentMatch
 from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from evidence.models import ContextCompleteness, EvidenceItem, Finding
+from evidence.models import (
+    ContextCompleteness,
+    ContextSourceMetadata,
+    EvidenceItem,
+    Finding,
+)
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 from parsers.terraform_parser import parse_terraform
@@ -4154,6 +4159,16 @@ class ReportServiceTests(unittest.TestCase):
                 incident_index_freshness_status=str(
                     snapshot["incident_index_freshness_status"]
                 ),
+                context_sources=[
+                    ContextSourceMetadata(
+                        source_id="incident:index:test",
+                        source_type="incident",
+                        source_ref=str(snapshot["incident_index_version"]),
+                        scope="project:payments",
+                        freshness_status="current",
+                        confidence=0.8,
+                    )
+                ],
             ),
             partial_context=False,
             warnings=[],
@@ -4189,6 +4204,19 @@ class ReportServiceTests(unittest.TestCase):
             fetched["context_completeness"]["incident_index_version"],
             snapshot["incident_index_version"],
         )
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.8)
+        self.assertEqual(fetched["context_completeness"]["confidence_level"], "medium")
+        self.assertIn(
+            "Refresh stale incident history for this project/workspace.",
+            fetched["context_completeness"]["context_todos"],
+        )
+        incident_sources = [
+            source
+            for source in fetched["context_completeness"]["context_sources"]
+            if source["source_type"] == "incident"
+        ]
+        self.assertEqual(incident_sources[0]["freshness_status"], "stale")
+        self.assertIn("stale_incident_index", incident_sources[0]["limitations"])
 
     def test_fetch_analysis_report_marks_incident_index_stale_when_lookup_fails(
         self,
@@ -4228,6 +4256,16 @@ class ReportServiceTests(unittest.TestCase):
                 incident_index_version="incidents:1:old",
                 incident_index_last_indexed_at="2026-05-20T00:00:00Z",
                 incident_index_freshness_status="current",
+                context_sources=[
+                    ContextSourceMetadata(
+                        source_id="incident:index:old",
+                        source_type="incident",
+                        source_ref="incidents:1:old",
+                        scope="project:payments",
+                        freshness_status="current",
+                        confidence=0.8,
+                    )
+                ],
             ),
             partial_context=False,
             warnings=[],
@@ -4258,6 +4296,74 @@ class ReportServiceTests(unittest.TestCase):
             fetched["context_completeness"]["incident_index_freshness_status"],
             "stale",
         )
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.8)
+        self.assertEqual(fetched["context_completeness"]["confidence_level"], "medium")
+        incident_source = fetched["context_completeness"]["context_sources"][0]
+        self.assertEqual(incident_source["freshness_status"], "stale")
+        self.assertIn("stale_incident_index", incident_source["limitations"])
+
+    def test_mark_incident_context_stale_targets_matching_source_version(self) -> None:
+        context = report_service_module._mark_incident_context_stale(
+            {
+                "context_score": 0.9,
+                "confidence_level": "high",
+                "incident_index_version": "incidents:1:old",
+                "incident_index_freshness_status": "current",
+                "context_todos": [],
+                "context_sources": [
+                    {
+                        "source_id": "incident:index:old",
+                        "source_type": "incident",
+                        "source_ref": "incidents:1:old",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.8,
+                        "limitations": [],
+                    },
+                    {
+                        "source_id": "incident:index:other",
+                        "source_type": "incident",
+                        "source_ref": "incidents:2:other",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.8,
+                        "limitations": [],
+                    },
+                ],
+            }
+        )
+
+        sources = {
+            source["source_ref"]: source for source in context["context_sources"]
+        }
+        self.assertEqual(sources["incidents:1:old"]["freshness_status"], "stale")
+        self.assertEqual(sources["incidents:2:other"]["freshness_status"], "current")
+        self.assertEqual(context["context_score"], 0.8)
+        self.assertEqual(context["confidence_level"], "medium")
+
+    def test_load_evidence_context_source_marks_incident_source_stale(self) -> None:
+        context_source = report_service_module._load_evidence_context_source(
+            json.dumps(
+                {
+                    "source_id": "incident:index:old",
+                    "source_type": "incident",
+                    "source_ref": "incidents:1:old",
+                    "scope": "project:payments",
+                    "freshness_status": "current",
+                    "confidence": 0.8,
+                    "conflicts": [],
+                    "limitations": [],
+                }
+            ),
+            context_completeness={
+                "incident_index_freshness_status": "stale",
+                "incident_index_version": "incidents:1:old",
+            },
+        )
+
+        self.assertIsNotNone(context_source)
+        self.assertEqual(context_source["freshness_status"], "stale")
+        self.assertIn("stale_incident_index", context_source["limitations"])
 
     def test_persist_analysis_report_cleans_up_committed_row_after_artifact_failure(
         self,

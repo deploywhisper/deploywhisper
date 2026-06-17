@@ -1220,6 +1220,27 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
         self.assertIn("context_completeness", payload["data"]["assessment"])
+        context_sources = payload["data"]["assessment"]["context_completeness"][
+            "context_sources"
+        ]
+        self.assertTrue(context_sources)
+        topology_sources = [
+            source for source in context_sources if source["source_type"] == "topology"
+        ]
+        self.assertTrue(topology_sources)
+        self.assertIn(
+            topology_sources[0]["freshness_status"],
+            {
+                "current",
+                "stale",
+                "missing",
+                "incomplete",
+                "conflicting",
+                "unknown",
+                "empty",
+                "not_applicable",
+            },
+        )
         self.assertEqual(
             payload["data"]["incident_matches"][0]["public_pattern_id"],
             "public-ingress-wide-open",
@@ -1264,6 +1285,14 @@ class AnalyzeCliTests(unittest.TestCase):
             expected_report_link,
         )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
+        self.assertIn(
+            "context_sources",
+            payload["data"]["persisted_report"]["context_completeness"],
+        )
+        self.assertIn(
+            "context_source",
+            payload["data"]["persisted_report"]["evidence_items"][0],
+        )
         self.assertEqual(
             payload["data"]["persisted_report"]["report_schema_version"], "v2"
         )

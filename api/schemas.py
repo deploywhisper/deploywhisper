@@ -6,7 +6,11 @@ import math
 from typing import Any, Literal
 
 from config import settings
-from evidence.models import FindingEvidenceClassification
+from evidence.models import (
+    ContextSourceFreshness,
+    ContextSourceType,
+    FindingEvidenceClassification,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -1176,6 +1180,50 @@ class FindingData(BaseModel):
     )
 
 
+class ContextSourceMetadataData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = Field(..., min_length=1, description="Stable context source id")
+    source_type: ContextSourceType = Field(..., description="Context source category")
+    source_ref: str | None = Field(
+        default=None, min_length=1, description="Source path, version, or URI"
+    )
+    scope: str = Field(
+        ..., min_length=1, description="Project/workspace scope for this source"
+    )
+    freshness_status: ContextSourceFreshness = Field(
+        default="unknown", description="Freshness state for this source"
+    )
+    last_observed_at: str | None = Field(
+        default=None,
+        min_length=1,
+        description="ISO timestamp when this source was last observed",
+    )
+    age_days: int | None = Field(
+        default=None, ge=0, description="Source age in days when available"
+    )
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        allow_inf_nan=False,
+        description="Confidence contribution from this source",
+    )
+    conflicts: list[str] = Field(
+        default_factory=list,
+        description="Conflicting sources or signals associated with this source",
+    )
+    limitations: list[str] = Field(
+        default_factory=list,
+        description="Freshness, completeness, or quality limitations",
+    )
+
+    @field_validator("conflicts", "limitations")
+    @classmethod
+    def _validate_context_source_strings(cls, value: list[str]) -> list[str]:
+        return _validate_non_empty_strings(value)
+
+
 class EvidenceItemData(BaseModel):
     evidence_id: str = Field(..., description="Stable evidence identifier")
     analysis_id: int = Field(..., description="Analysis identifier")
@@ -1216,6 +1264,10 @@ class EvidenceItemData(BaseModel):
     confidence: float = Field(..., description="Confidence score between 0 and 1")
     related_change_ids: list[str] = Field(
         default_factory=list, description="Traceable normalized change identifiers"
+    )
+    context_source: ContextSourceMetadataData | None = Field(
+        default=None,
+        description="Context source metadata that supplied or qualified this evidence",
     )
 
 
@@ -1345,6 +1397,10 @@ class ContextCompletenessData(BaseModel):
     ownership_unmapped_subjects: list[str] = Field(
         default_factory=list,
         description="Analyzed files, resources, or services missing ownership data",
+    )
+    context_sources: list[ContextSourceMetadataData] = Field(
+        default_factory=list,
+        description="Per-source freshness, confidence, scope, and conflict ledger",
     )
 
     @field_validator("escalation_hints", "ownership_unmapped_subjects")
