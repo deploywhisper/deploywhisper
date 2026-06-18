@@ -14,9 +14,10 @@ import secrets
 import unicodedata
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from functools import lru_cache
-from urllib.parse import urlsplit
 from typing import Any, get_args
+from urllib.parse import urlsplit
 
 from pydantic import ValidationError
 
@@ -3576,6 +3577,7 @@ def _normalize_context_completeness_payload(decoded: dict) -> dict:
         and incident_index_version.strip().lower()
         in _EXPLICIT_EMPTY_INCIDENT_INDEX_VERSIONS
     )
+    incident_freshness_was_persisted = "incident_index_freshness_status" in decoded
     normalized["incident_index_last_indexed_at"] = (
         str(decoded["incident_index_last_indexed_at"])
         if decoded.get("incident_index_last_indexed_at")
@@ -3618,6 +3620,7 @@ def _normalize_context_completeness_payload(decoded: dict) -> dict:
         todos.append("Refresh stale incident history for this project/workspace.")
     if (
         incident_freshness_status not in {"current", "empty", "stale"}
+        and incident_freshness_was_persisted
         and not incident_version_conflicts_with_size
         and not any(
             "incident" in item.lower()
@@ -3764,13 +3767,14 @@ def _recomputed_stale_incident_context_score(context_completeness: dict) -> floa
         weighted_scores.append(
             (_incident_context_score(incident_index_size, stale=True), 0.20)
         )
-    total_weight = sum(weight for _, weight in weighted_scores) or 1.0
-    return round(
-        min(
-            1.0, sum(score * weight for score, weight in weighted_scores) / total_weight
-        ),
-        2,
+    total_weight = sum(Decimal(str(weight)) for _, weight in weighted_scores)
+    if total_weight == 0:
+        total_weight = Decimal("1.0")
+    weighted_total = sum(
+        Decimal(str(score)) * Decimal(str(weight)) for score, weight in weighted_scores
     )
+    normalized_score = min(Decimal("1.0"), weighted_total / total_weight)
+    return float(normalized_score.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _context_with_incident_index_freshness(report, context_completeness: dict) -> dict:
