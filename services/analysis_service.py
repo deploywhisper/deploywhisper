@@ -23,7 +23,13 @@ from analysis.risk_scorer import (
 from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
 from evidence.extractor import extract_batch_evidence
 from evidence.mappers import build_findings
-from evidence.models import ContextCompleteness, EvidenceItem, Finding
+from evidence.models import (
+    ContextCompleteness,
+    ContextSourceMetadata,
+    EvidenceItem,
+    Finding,
+    OwnerSignal,
+)
 from llm.narrator import NarrativeResult, generate_narrative
 from llm.providers import generate_completion_with_settings
 from parsers.base import ParseBatchResult, UnifiedChange, is_non_mutating_action
@@ -370,6 +376,433 @@ def _context_confidence_level(context_score: float) -> str:
     return "low"
 
 
+def _scope_label(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+) -> str:
+    project = f"project:{project_key or project_id or 'unscoped'}"
+    if workspace_key is not None or workspace_id is not None:
+        return f"{project}/workspace:{workspace_key or workspace_id}"
+    return project
+
+
+def _source_id(source_type: str, source_ref: str | None) -> str:
+    cleaned_ref = str(source_ref or "unknown").strip() or "unknown"
+    return f"{source_type}:{cleaned_ref}"
+
+
+def _warning_conflicts(warnings: list[str] | None) -> list[str]:
+    conflicts: list[str] = []
+    for warning in warnings or []:
+        warning_text = str(warning or "").strip()
+        if not warning_text:
+            continue
+        lower_warning = warning_text.lower()
+        if "conflict" in lower_warning:
+            conflicts.append("topology_conflict")
+        elif "drift" in lower_warning:
+            conflicts.append("topology_drift")
+    return _unique_texts(conflicts)
+
+
+def _topology_warning_limitations(warnings: list[str] | None) -> list[str]:
+    limitations: list[str] = []
+    for warning in warnings or []:
+        warning_text = str(warning or "").strip().lower()
+        if not warning_text:
+            continue
+        if "kubernetes live-state context todo" in warning_text:
+            limitations.append("kubernetes_live_state_context_todo")
+        elif "kubernetes live-state import partially parsed" in warning_text:
+            limitations.append("partial_kubernetes_live_state")
+        elif (
+            "kubernetes live-state import did not produce any supported resources"
+            in warning_text
+        ):
+            limitations.append("empty_kubernetes_live_state")
+        elif (
+            "kubernetes live-state import did not produce any non-namespace resources"
+            in warning_text
+        ):
+            limitations.append("namespace_only_kubernetes_live_state")
+        elif "conflict" in warning_text:
+            limitations.append("topology_conflict")
+        elif "drift" in warning_text:
+            limitations.append("topology_drift")
+        else:
+            limitations.append("topology_warning")
+    return _unique_texts(limitations)
+
+
+def _topology_context_source(
+    *,
+    topology_status: Any | None,
+    topology_freshness_days: int | None,
+    topology_warnings: list[str],
+    topology_score: float,
+    scope: str,
+) -> ContextSourceMetadata:
+    topology_payload = getattr(topology_status, "payload", None)
+    import_metadata = {}
+    if isinstance(topology_payload, dict):
+        metadata = topology_payload.get("metadata")
+        if isinstance(metadata, dict) and isinstance(metadata.get("import"), dict):
+            import_metadata = metadata["import"]
+    source_kind = str(import_metadata.get("source_type") or "topology").strip()
+    source_ref = str(
+        import_metadata.get("source_ref")
+        or getattr(topology_status, "path", None)
+        or "topology:missing"
+    ).strip()
+    if topology_freshness_days is None:
+        freshness_status = "missing"
+    elif _warning_conflicts(topology_warnings):
+        freshness_status = "conflicting"
+    elif _has_kubernetes_live_state_degradation(topology_warnings):
+        freshness_status = "incomplete"
+    elif topology_freshness_days > STALE_AFTER_DAYS:
+        freshness_status = "stale"
+    else:
+        freshness_status = "current"
+    limitations = _unique_texts(
+        [
+            *(["missing_topology"] if topology_freshness_days is None else []),
+            *(
+                ["stale_topology"]
+                if topology_freshness_days
+                and topology_freshness_days > STALE_AFTER_DAYS
+                else []
+            ),
+            *_topology_warning_limitations(topology_warnings),
+        ]
+    )
+    return ContextSourceMetadata(
+        source_id=_source_id(f"topology:{source_kind}", source_ref),
+        source_type="topology",
+        source_ref=source_ref,
+        scope=scope,
+        freshness_status=freshness_status,
+        last_observed_at=getattr(topology_status, "updated_at", None),
+        age_days=topology_freshness_days,
+        confidence=round(topology_score, 2),
+        conflicts=_warning_conflicts(topology_warnings),
+        limitations=limitations,
+    )
+
+
+def _incident_context_source(
+    *,
+    incident_index_snapshot: dict[str, Any],
+    incident_index_size: int,
+    scope: str,
+) -> ContextSourceMetadata:
+    version = str(
+        incident_index_snapshot.get("incident_index_version") or "incidents:unknown"
+    )
+    last_indexed_at = incident_index_snapshot.get("incident_index_last_indexed_at")
+    freshness_status = str(
+        incident_index_snapshot.get("incident_index_freshness_status")
+        or ("current" if incident_index_size else "empty")
+    )
+    limitations = [] if incident_index_size else ["empty_incident_index"]
+    conflicts = [] if incident_index_size else ["missing_incident_history"]
+    if incident_index_size and freshness_status == "stale":
+        limitations.append("stale_incident_index")
+    elif incident_index_size and freshness_status == "conflicting":
+        limitations.append("incident_index_conflicting")
+        conflicts.append("incident_index_conflicting")
+    elif incident_index_size and freshness_status == "incomplete":
+        limitations.append("incident_index_incomplete")
+    elif incident_index_size and freshness_status not in {"current", "empty"}:
+        limitations.append(f"incident_index_{freshness_status}")
+    return ContextSourceMetadata(
+        source_id=_source_id("incident:index", version),
+        source_type="incident",
+        source_ref=version,
+        scope=scope,
+        freshness_status=freshness_status,
+        last_observed_at=last_indexed_at,
+        age_days=_topology_freshness_days(last_indexed_at),
+        confidence=round(
+            _incident_context_confidence(incident_index_size, freshness_status), 2
+        ),
+        conflicts=conflicts,
+        limitations=limitations,
+    )
+
+
+def _incident_context_confidence(
+    incident_index_size: int,
+    incident_freshness_status: str,
+) -> float:
+    score = _incident_score(incident_index_size)
+    if incident_index_size and incident_freshness_status != "current":
+        return min(score, 0.5)
+    return score
+
+
+def _ownership_context_sources(
+    *,
+    owner_signals: list[OwnerSignal],
+    ownership_unmapped_subjects: list[str],
+    scope: str,
+    topology_freshness_status: str = "not_applicable",
+    topology_confidence: float = 0.0,
+) -> list[ContextSourceMetadata]:
+    sources: list[ContextSourceMetadata] = []
+    grouped_signals: dict[tuple[str, str], list[OwnerSignal]] = {}
+    for signal in owner_signals:
+        source_kind = str(signal.source or "ownership").strip() or "ownership"
+        source_ref = str(signal.source_ref or source_kind).strip() or source_kind
+        grouped_signals.setdefault((source_kind, source_ref), []).append(signal)
+    for (source_kind, source_ref), signals in grouped_signals.items():
+        subjects = _unique_texts([signal.subject for signal in signals])
+        owners = _unique_texts(
+            owner for signal in signals for owner in list(signal.owners)
+        )
+        source_is_topology = source_kind == "topology"
+        base_confidence = 1.0 if owners else 0.5
+        freshness_status = (
+            topology_freshness_status if source_is_topology else "current"
+        )
+        confidence = (
+            min(base_confidence, topology_confidence)
+            if source_is_topology
+            else base_confidence
+        )
+        limitations = [] if owners else [f"ownership_source_has_no_owners:{source_ref}"]
+        if source_is_topology and freshness_status not in {
+            "current",
+            "not_applicable",
+        }:
+            limitations.append(f"topology_ownership_source_{freshness_status}")
+        sources.append(
+            ContextSourceMetadata(
+                source_id=_source_id(f"ownership:{source_kind}", source_ref),
+                source_type="ownership",
+                source_ref=source_ref,
+                scope=scope,
+                freshness_status=freshness_status,
+                confidence=confidence,
+                limitations=limitations,
+                conflicts=[],
+            )
+        )
+        if not subjects:
+            sources[-1].limitations.append("ownership_source_has_no_subjects")
+    if ownership_unmapped_subjects:
+        sources.append(
+            ContextSourceMetadata(
+                source_id="ownership:unmapped",
+                source_type="ownership",
+                source_ref="unmapped-subjects",
+                scope=scope,
+                freshness_status="incomplete",
+                confidence=0.5 if sources else 0.0,
+                limitations=list(ownership_unmapped_subjects),
+            )
+        )
+    if not sources:
+        sources.append(
+            ContextSourceMetadata(
+                source_id="ownership:none",
+                source_type="ownership",
+                source_ref="ownership-signals",
+                scope=scope,
+                freshness_status="not_applicable",
+                confidence=0.0,
+                limitations=["no_ownership_signals"],
+            )
+        )
+    return sources
+
+
+def _artifact_context_source_ref(file_name: str) -> tuple[str, list[str]]:
+    source_ref = str(file_name or "").strip() or "unknown-file"
+    limitations = [] if str(file_name or "").strip() else ["missing_artifact_name"]
+    return source_ref, limitations
+
+
+def _build_context_sources(
+    *,
+    parse_batch: ParseBatchResult,
+    scope: str,
+    topology_status: Any | None,
+    topology_freshness_days: int | None,
+    topology_warnings: list[str],
+    topology_score: float | None,
+    include_topology_context: bool,
+    incident_index_snapshot: dict[str, Any],
+    incident_index_size: int,
+    include_incident_context: bool,
+    raw_parser_success_rate: float,
+    evidence_success_rate: float,
+    owner_signals: list[OwnerSignal],
+    ownership_unmapped_subjects: list[str],
+) -> list[ContextSourceMetadata]:
+    sources: list[ContextSourceMetadata] = []
+    for file_result in parse_batch.files:
+        artifact_source_ref, artifact_limitations = _artifact_context_source_ref(
+            file_result.file_name
+        )
+        status = "current" if file_result.status == "parsed" else "incomplete"
+        limitations: list[str] = list(artifact_limitations)
+        if file_result.status != "parsed":
+            limitations.append(f"{file_result.status}_artifact")
+        if file_result.issue is not None:
+            limitations.append("parser_issue")
+        sources.append(
+            ContextSourceMetadata(
+                source_id=_source_id("artifact", artifact_source_ref),
+                source_type="artifact",
+                source_ref=artifact_source_ref,
+                scope=scope,
+                freshness_status=status,
+                confidence=1.0 if file_result.status == "parsed" else 0.0,
+                limitations=_unique_texts(limitations),
+            )
+        )
+    if include_topology_context:
+        topology_context_source = _topology_context_source(
+            topology_status=topology_status,
+            topology_freshness_days=topology_freshness_days,
+            topology_warnings=topology_warnings,
+            topology_score=topology_score if topology_score is not None else 0.0,
+            scope=scope,
+        )
+        sources.append(topology_context_source)
+    else:
+        topology_context_source = None
+    if include_incident_context:
+        sources.append(
+            _incident_context_source(
+                incident_index_snapshot=incident_index_snapshot,
+                incident_index_size=incident_index_size,
+                scope=scope,
+            )
+        )
+    parser_success_by_tool = _parser_success_by_tool(parse_batch)
+    for tool_name, score in parser_success_by_tool.items():
+        sources.append(
+            ContextSourceMetadata(
+                source_id=_source_id("parser", tool_name),
+                source_type="parser",
+                source_ref=tool_name,
+                scope=scope,
+                freshness_status="not_applicable" if score >= 1.0 else "incomplete",
+                confidence=round(score, 2),
+                limitations=[] if score >= 1.0 else ["partial_parser_coverage"],
+            )
+        )
+    if not parser_success_by_tool:
+        sources.append(
+            ContextSourceMetadata(
+                source_id="parser:none",
+                source_type="parser",
+                source_ref="submitted-artifacts",
+                scope=scope,
+                freshness_status="incomplete",
+                confidence=round(raw_parser_success_rate, 2),
+                limitations=["no_parser_results"],
+            )
+        )
+    sources.append(
+        ContextSourceMetadata(
+            source_id="evidence:extractor",
+            source_type="evidence",
+            source_ref="analysis-evidence",
+            scope=scope,
+            freshness_status="not_applicable"
+            if evidence_success_rate >= 1.0
+            else "incomplete",
+            confidence=round(evidence_success_rate, 2),
+            limitations=[]
+            if evidence_success_rate >= 1.0
+            else ["partial_evidence_coverage"],
+        )
+    )
+    sources.extend(
+        _ownership_context_sources(
+            owner_signals=owner_signals,
+            ownership_unmapped_subjects=ownership_unmapped_subjects,
+            scope=scope,
+            topology_freshness_status=(
+                topology_context_source.freshness_status
+                if topology_context_source is not None
+                else "not_applicable"
+            ),
+            topology_confidence=(
+                topology_context_source.confidence
+                if topology_context_source is not None
+                else 0.0
+            ),
+        )
+    )
+    return sources
+
+
+def _context_source_for_evidence(
+    evidence_item: EvidenceItem,
+    context_sources: list[ContextSourceMetadata],
+) -> ContextSourceMetadata | None:
+    if evidence_item.context_source is not None:
+        return evidence_item.context_source
+    if evidence_item.source_type == "artifact":
+        artifact = evidence_item.artifact.strip()
+        source_ref = evidence_item.source_ref.strip()
+        for source in context_sources:
+            if source.source_type != "artifact":
+                continue
+            if artifact and source.source_ref == artifact:
+                return source
+            if source.source_ref and _source_ref_matches(
+                source_ref, f"artifact://{source.source_ref}"
+            ):
+                return source
+    type_matches = [
+        source
+        for source in context_sources
+        if source.source_type == evidence_item.source_type
+    ]
+    if evidence_item.source_ref:
+        for source in type_matches:
+            if source.source_ref and _source_ref_matches(
+                evidence_item.source_ref, source.source_ref
+            ):
+                return source
+    return None
+
+
+def _source_ref_matches(candidate_ref: str, source_ref: str) -> bool:
+    if candidate_ref == source_ref:
+        return True
+    if not candidate_ref.startswith(source_ref):
+        return False
+    suffix = candidate_ref[len(source_ref) :]
+    return suffix == "" or suffix[0] in {"#", "?"}
+
+
+def _evidence_items_with_context_sources(
+    evidence_items: list[EvidenceItem],
+    context_sources: list[ContextSourceMetadata],
+) -> list[EvidenceItem]:
+    if not context_sources:
+        return evidence_items
+    enriched: list[EvidenceItem] = []
+    for evidence_item in evidence_items:
+        matched = _context_source_for_evidence(evidence_item, context_sources)
+        if matched is None:
+            enriched.append(evidence_item)
+        else:
+            enriched.append(
+                evidence_item.model_copy(update={"context_source": matched})
+            )
+    return enriched
+
+
 def _context_todos(
     *,
     evidence_success_rate: float,
@@ -377,6 +810,7 @@ def _context_todos(
     topology_warnings: list[str] | None = None,
     incident_index_size: int,
     parser_success_rate: float,
+    incident_freshness_status: str = "unknown",
     include_topology_context: bool = True,
     include_incident_context: bool = True,
 ) -> list[str]:
@@ -394,6 +828,12 @@ def _context_todos(
             )
     if include_incident_context and incident_index_size == 0:
         todos.append("Import relevant incident history for this project/workspace.")
+    elif include_incident_context and incident_freshness_status == "stale":
+        todos.append("Refresh stale incident history for this project/workspace.")
+    elif include_incident_context and incident_freshness_status != "current":
+        todos.append(
+            f"Resolve incident history freshness: {incident_freshness_status}."
+        )
     if parser_success_rate < 1.0:
         todos.append("Review parser errors and resubmit supported artifacts.")
     if evidence_success_rate < 1.0:
@@ -409,6 +849,7 @@ def _context_uncertainty(
     topology_warnings: list[str] | None = None,
     incident_index_size: int,
     parser_success_rate: float,
+    incident_freshness_status: str = "unknown",
     ownership_unmapped_subjects: list[str] | tuple[str, ...] = (),
     include_topology_context: bool = True,
     include_incident_context: bool = True,
@@ -425,6 +866,12 @@ def _context_uncertainty(
             weak_signals.append("Kubernetes live-state context is degraded")
     if include_incident_context and incident_index_size == 0:
         weak_signals.append("incident history is unavailable")
+    elif include_incident_context and incident_freshness_status == "stale":
+        weak_signals.append("incident history is stale")
+    elif include_incident_context and incident_freshness_status != "current":
+        weak_signals.append(
+            f"incident history freshness is {incident_freshness_status}"
+        )
     if parser_success_rate < 1.0:
         weak_signals.append("parser coverage is partial")
     if evidence_success_rate < 1.0:
@@ -557,6 +1004,8 @@ def _build_context_completeness(
     topology_warnings: list[str] = []
     topology_payload_is_usable = False
     topology_payload_is_kubernetes = False
+    topology_status = None
+    topology_score: float | None = None
     if include_topology_context:
         topology_status = get_topology_status(
             project_id=project_id,
@@ -607,6 +1056,10 @@ def _build_context_completeness(
         incident_index_size = int(
             incident_index_snapshot.get("incident_index_size") or 0
         )
+    incident_freshness_status = str(
+        incident_index_snapshot.get("incident_index_freshness_status")
+        or ("current" if incident_index_size else "empty")
+    )
     raw_parser_success_rate = parse_batch.parsed_count / max(len(parse_batch.files), 1)
     parser_success_rate = round(raw_parser_success_rate, 2)
     evidence_success_rate = _evidence_success_rate(
@@ -626,7 +1079,14 @@ def _build_context_completeness(
             )
         weighted_scores.append((topology_score, 0.25))
     if include_incident_context:
-        weighted_scores.append((_incident_score(incident_index_size), 0.20))
+        weighted_scores.append(
+            (
+                _incident_context_confidence(
+                    incident_index_size, incident_freshness_status
+                ),
+                0.20,
+            )
+        )
     total_weight = sum(weight for _, weight in weighted_scores) or 1.0
     raw_context_score = min(
         1.0,
@@ -644,11 +1104,34 @@ def _build_context_completeness(
         topology_freshness_days=topology_freshness_days,
         topology_warnings=topology_warnings,
         incident_index_size=incident_index_size,
+        incident_freshness_status=incident_freshness_status,
         parser_success_rate=raw_parser_success_rate,
         include_topology_context=include_topology_context,
         include_incident_context=include_incident_context,
     )
     context_todos = _unique_texts(context_todos + list(ownership_context.context_todos))
+    scope = _scope_label(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    context_sources = _build_context_sources(
+        parse_batch=parse_batch,
+        scope=scope,
+        topology_status=topology_status,
+        topology_freshness_days=topology_freshness_days,
+        topology_warnings=topology_warnings,
+        topology_score=topology_score,
+        include_topology_context=include_topology_context,
+        incident_index_snapshot=incident_index_snapshot,
+        incident_index_size=incident_index_size,
+        include_incident_context=include_incident_context,
+        raw_parser_success_rate=raw_parser_success_rate,
+        evidence_success_rate=evidence_success_rate,
+        owner_signals=list(ownership_context.owner_signals),
+        ownership_unmapped_subjects=list(ownership_context.unmapped_subjects),
+    )
     return ContextCompleteness(
         topology_freshness_days=topology_freshness_days,
         topology_last_imported_at=topology_last_imported_at,
@@ -659,9 +1142,7 @@ def _build_context_completeness(
         incident_index_last_indexed_at=incident_index_snapshot.get(
             "incident_index_last_indexed_at"
         ),
-        incident_index_freshness_status=str(
-            incident_index_snapshot.get("incident_index_freshness_status") or "empty"
-        ),
+        incident_index_freshness_status=incident_freshness_status,
         parser_success_rate=parser_success_rate,
         evidence_success_rate=round(evidence_success_rate, 2),
         parser_success_by_tool=_parser_success_by_tool(parse_batch),
@@ -673,6 +1154,7 @@ def _build_context_completeness(
             topology_freshness_days=topology_freshness_days,
             topology_warnings=topology_warnings,
             incident_index_size=incident_index_size,
+            incident_freshness_status=incident_freshness_status,
             parser_success_rate=raw_parser_success_rate,
             ownership_unmapped_subjects=ownership_context.unmapped_subjects,
             include_topology_context=include_topology_context,
@@ -683,6 +1165,7 @@ def _build_context_completeness(
         owner_signals=list(ownership_context.owner_signals),
         escalation_hints=list(ownership_context.escalation_hints),
         ownership_unmapped_subjects=list(ownership_context.unmapped_subjects),
+        context_sources=context_sources,
     )
 
 
@@ -1335,7 +1818,7 @@ def build_analysis_artifacts(
         completion_client=completion_client,
         allow_llm_assistance=allow_llm_assistance,
     )
-    assessment.context_completeness = _build_context_completeness(
+    context_completeness = _build_context_completeness(
         parse_batch,
         evidence_items=evidence_items,
         project_id=project_id,
@@ -1347,6 +1830,10 @@ def build_analysis_artifacts(
         topology=topology,
         codeowners_sources=codeowners_sources,
     )
+    evidence_items = _evidence_items_with_context_sources(
+        evidence_items, list(context_completeness.context_sources)
+    )
+    assessment.context_completeness = context_completeness
     assessment = apply_context_uncertainty(assessment)
     findings = build_findings(
         assessment=assessment,

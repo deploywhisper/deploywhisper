@@ -14,9 +14,10 @@ import secrets
 import unicodedata
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from functools import lru_cache
+from typing import Any, get_args
 from urllib.parse import urlsplit
-from typing import Any
 
 from pydantic import ValidationError
 
@@ -30,7 +31,13 @@ from analysis.risk_scorer import (
 )
 from api.schemas import IntakeItem, PendingAnalysis
 from evidence.mappers import classify_finding_evidence
-from evidence.models import ContextCompleteness, EvidenceItem, Finding
+from evidence.models import (
+    ContextCompleteness,
+    ContextSourceFreshness,
+    ContextSourceMetadata,
+    EvidenceItem,
+    Finding,
+)
 from llm.narrator import NarrativeResult
 
 from models.database import SessionLocal
@@ -136,6 +143,20 @@ _CONTEXT_UNAVAILABLE_UNCERTAINTY = (
 _AUDIT_ACTOR_MAX_LENGTH = 120
 _CONTEXT_UNAVAILABLE_TODO = (
     "Re-run analysis to regenerate context completeness metadata."
+)
+_CONTEXT_SOURCES_DROPPED_TODO = (
+    "Review dropped context source metadata for this report."
+)
+_CONTEXT_INCIDENT_IMPORT_TODO = (
+    "Import relevant incident history for this project/workspace."
+)
+_CONTEXT_INCIDENT_FRESHNESS_CONFLICT_TODO = (
+    "Resolve incident history freshness: empty state conflicts with populated index."
+)
+_CONTEXT_SOURCE_METADATA_FIELDS = frozenset(ContextSourceMetadata.model_fields)
+_CONTEXT_FRESHNESS_STATUSES = frozenset(get_args(ContextSourceFreshness))
+_EXPLICIT_EMPTY_INCIDENT_INDEX_VERSIONS = frozenset(
+    {"incidents:empty", "incidents:0:empty", "incidents:unscoped"}
 )
 _LEGACY_CONTEXT_CORE_FIELDS = {
     "topology_freshness_days",
@@ -463,6 +484,70 @@ def _redact_text_value(value: Any, pairs: list[tuple[str, str]]) -> Any:
     return redacted
 
 
+def _redact_text_list(
+    values: object,
+    pairs: list[tuple[str, str]],
+) -> list[str]:
+    if not isinstance(values, list | tuple):
+        return []
+    return [
+        str(_redact_text_value(item, pairs)) for item in values if str(item).strip()
+    ]
+
+
+def _redact_context_source_metadata(
+    source: object,
+    pairs: list[tuple[str, str]],
+) -> object:
+    if not isinstance(source, dict):
+        return source
+    redacted = dict(source)
+    for key in ("source_id", "source_ref", "scope", "last_observed_at"):
+        redacted[key] = _redact_text_value(redacted.get(key), pairs)
+    redacted["conflicts"] = _redact_text_list(redacted.get("conflicts"), pairs)
+    redacted["limitations"] = _redact_text_list(redacted.get("limitations"), pairs)
+    return redacted
+
+
+def _redact_context_completeness(
+    context: object,
+    pairs: list[tuple[str, str]],
+) -> object:
+    if not isinstance(context, dict):
+        return context
+    redacted = dict(context)
+    redacted["uncertainty"] = _redact_text_value(redacted.get("uncertainty"), pairs)
+    redacted["context_todos"] = _redact_text_list(redacted.get("context_todos"), pairs)
+    redacted["escalation_hints"] = _redact_text_list(
+        redacted.get("escalation_hints"), pairs
+    )
+    redacted["ownership_unmapped_subjects"] = _redact_text_list(
+        redacted.get("ownership_unmapped_subjects"), pairs
+    )
+    redacted["context_sources"] = [
+        _redact_context_source_metadata(source, pairs)
+        for source in redacted.get("context_sources") or []
+    ]
+    owner_signals: list[object] = []
+    for signal in redacted.get("owner_signals") or []:
+        if not isinstance(signal, dict):
+            owner_signals.append(signal)
+            continue
+        signal_payload = dict(signal)
+        for key in (
+            "subject",
+            "source_ref",
+            "matched_pattern",
+            "resource_id",
+            "service_id",
+            "escalation_hint",
+        ):
+            signal_payload[key] = _redact_text_value(signal_payload.get(key), pairs)
+        owner_signals.append(signal_payload)
+    redacted["owner_signals"] = owner_signals
+    return redacted
+
+
 def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
     audit_names = list(report.get("audit", {}).get("files_analyzed") or [])
     original_names = list(audit_names)
@@ -497,6 +582,10 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
             **dict(report.get("audit") or {}),
             "files_analyzed": [redaction_map[name] for name in audit_names],
         },
+        "context_completeness": _redact_context_completeness(
+            report.get("context_completeness") or {},
+            pairs,
+        ),
         "submission_manifest": _redact_submission_manifest_file_names(
             dict(report.get("submission_manifest") or {}),
             redaction_map,
@@ -548,6 +637,10 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
                     evidence_item.get("location", ""), pairs
                 ),
                 "summary": _redact_text_value(evidence_item.get("summary"), pairs),
+                "context_source": _redact_context_source_metadata(
+                    evidence_item.get("context_source"),
+                    pairs,
+                ),
                 "redaction_status": (
                     "sensitive_blocked"
                     if evidence_item.get("redaction_status") == "sensitive_blocked"
@@ -3290,6 +3383,23 @@ def _context_confidence_level_from_score(context_score: float) -> str:
     return "low"
 
 
+def _topology_freshness_score(topology_freshness_days: int | None) -> float:
+    if topology_freshness_days is None:
+        return 0.0
+    if topology_freshness_days <= STALE_AFTER_DAYS:
+        return 1.0
+    return max(0.0, 1.0 - ((topology_freshness_days - STALE_AFTER_DAYS) / 60))
+
+
+def _incident_context_score(
+    incident_index_size: int,
+    *,
+    stale: bool = False,
+) -> float:
+    score = min(max(incident_index_size, 0) / 10, 1.0)
+    return min(score, 0.5) if stale and incident_index_size else score
+
+
 def _context_float_value(
     decoded: dict,
     key: str,
@@ -3316,6 +3426,57 @@ def _context_int_value(decoded: dict, key: str) -> int:
     return max(value, 0)
 
 
+def _context_sources(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [source for source in value if isinstance(source, dict)]
+
+
+def _validated_context_sources(value: object) -> tuple[list[dict[str, Any]], int]:
+    if not isinstance(value, list):
+        return [], 1 if value is not None else 0
+    sources: list[dict[str, Any]] = []
+    dropped_count = 0
+    for source in value:
+        if not isinstance(source, dict):
+            dropped_count += 1
+            continue
+        candidate = {
+            key: field_value
+            for key, field_value in source.items()
+            if key in _CONTEXT_SOURCE_METADATA_FIELDS
+        }
+        try:
+            sources.append(
+                ContextSourceMetadata.model_validate(candidate).model_dump(mode="json")
+            )
+        except (TypeError, ValueError, ValidationError):
+            dropped_count += 1
+            continue
+    return sources, dropped_count
+
+
+def _has_context_source(context_completeness: dict, source_type: str) -> bool:
+    return any(
+        source.get("source_type") == source_type
+        for source in _context_sources(context_completeness.get("context_sources"))
+    )
+
+
+def _context_source_confidence(
+    context_completeness: dict,
+    source_type: str,
+) -> float | None:
+    confidences = [
+        _context_float_value(source, "confidence", missing_default=0.0)
+        for source in _context_sources(context_completeness.get("context_sources"))
+        if source.get("source_type") == source_type
+    ]
+    if not confidences:
+        return None
+    return max(confidences)
+
+
 def _context_todo_items(value: object) -> list[str]:
     if not isinstance(value, list | tuple):
         return []
@@ -3338,6 +3499,34 @@ def _persisted_bool_value(value: object, *, default: bool = False) -> bool:
         if normalized in {"false", "0", "no", "n", "off", ""}:
             return False
     return default
+
+
+def _incident_index_freshness_status(
+    value: object,
+    *,
+    incident_index_size: int,
+    incident_index_version: object,
+) -> str:
+    normalized_version = str(incident_index_version or "").strip().lower()
+    explicit_empty_version = (
+        normalized_version in _EXPLICIT_EMPTY_INCIDENT_INDEX_VERSIONS
+    )
+    if incident_index_size > 0 and explicit_empty_version:
+        return "conflicting"
+    if value is None or str(value).strip() == "":
+        if explicit_empty_version:
+            return "empty"
+        return "empty" if incident_index_size == 0 else "unknown"
+    normalized = str(value).strip().lower()
+    if incident_index_size == 0:
+        if explicit_empty_version or normalized == "empty":
+            return "empty"
+        if normalized == "stale" and normalized_version == "incidents:unknown":
+            return "stale"
+        return "unknown"
+    if normalized in _CONTEXT_FRESHNESS_STATUSES:
+        return normalized
+    return "unknown"
 
 
 def _require_mapping(value: object, *, field_name: str) -> dict:
@@ -3369,22 +3558,36 @@ def _normalize_context_completeness_payload(decoded: dict) -> dict:
             topology_gap = "missing"
 
     normalized = dict(decoded)
+    dropped_context_source_count = 0
+    if "context_sources" in normalized:
+        context_sources, dropped_context_source_count = _validated_context_sources(
+            normalized.get("context_sources")
+        )
+        normalized["context_sources"] = context_sources
     normalized["context_score"] = context_score
     normalized["parser_success_rate"] = parser_success_rate
     normalized["evidence_success_rate"] = evidence_success_rate
     normalized["incident_index_size"] = incident_index_size
-    normalized["incident_index_version"] = str(
+    incident_index_version = str(
         decoded.get("incident_index_version") or "incidents:unknown"
     )
+    normalized["incident_index_version"] = incident_index_version
+    incident_version_conflicts_with_size = (
+        incident_index_size > 0
+        and incident_index_version.strip().lower()
+        in _EXPLICIT_EMPTY_INCIDENT_INDEX_VERSIONS
+    )
+    incident_freshness_was_persisted = "incident_index_freshness_status" in decoded
     normalized["incident_index_last_indexed_at"] = (
         str(decoded["incident_index_last_indexed_at"])
         if decoded.get("incident_index_last_indexed_at")
         else None
     )
-    incident_freshness_status = decoded.get("incident_index_freshness_status")
-    if not incident_freshness_status:
-        incident_freshness_status = "unknown" if incident_index_size > 0 else "empty"
-    normalized["incident_index_freshness_status"] = str(incident_freshness_status)
+    normalized["incident_index_freshness_status"] = _incident_index_freshness_status(
+        decoded.get("incident_index_freshness_status"),
+        incident_index_size=incident_index_size,
+        incident_index_version=incident_index_version,
+    )
     normalized["topology_freshness_days"] = topology_freshness_days
 
     insufficient_context = context_score < 0.7
@@ -3404,10 +3607,38 @@ def _normalize_context_completeness_payload(decoded: dict) -> dict:
         "topology" in item.lower() for item in todos
     ):
         todos.append("Refresh stale topology context for this project/workspace.")
-    if incident_index_size == 0 and not any(
-        "incident" in item.lower() for item in todos
+    incident_freshness_status = normalized["incident_index_freshness_status"]
+    if (
+        incident_index_size == 0
+        and incident_freshness_status == "empty"
+        and _CONTEXT_INCIDENT_IMPORT_TODO not in todos
     ):
-        todos.append("Import relevant incident history for this project/workspace.")
+        todos.append(_CONTEXT_INCIDENT_IMPORT_TODO)
+    if incident_freshness_status == "stale" and not any(
+        "incident" in item.lower() and "stale" in item.lower() for item in todos
+    ):
+        todos.append("Refresh stale incident history for this project/workspace.")
+    if (
+        incident_freshness_status not in {"current", "empty", "stale"}
+        and incident_freshness_was_persisted
+        and not incident_version_conflicts_with_size
+        and not any(
+            "incident" in item.lower()
+            and "freshness" in item.lower()
+            and str(incident_freshness_status).lower() in item.lower()
+            for item in todos
+        )
+    ):
+        todos.append(
+            f"Resolve incident history freshness: {incident_freshness_status}."
+        )
+    if (
+        (incident_index_size > 0 and incident_freshness_status == "empty")
+        or incident_version_conflicts_with_size
+    ) and _CONTEXT_INCIDENT_FRESHNESS_CONFLICT_TODO not in todos:
+        todos.append(_CONTEXT_INCIDENT_FRESHNESS_CONFLICT_TODO)
+    if dropped_context_source_count > 0 and _CONTEXT_SOURCES_DROPPED_TODO not in todos:
+        todos.append(_CONTEXT_SOURCES_DROPPED_TODO)
     if parser_success_rate < 1.0 and not any(
         "parser" in item.lower() for item in todos
     ):
@@ -3495,6 +3726,57 @@ def _clamp_confidence_to_context(
     return round(min(confidence, max(0.0, min(context_score, 1.0))), 2)
 
 
+def _recomputed_stale_incident_context_score(context_completeness: dict) -> float:
+    weighted_scores = [
+        (
+            _context_float_value(
+                context_completeness, "parser_success_rate", missing_default=1.0
+            ),
+            0.35,
+        ),
+        (
+            _context_float_value(
+                context_completeness, "evidence_success_rate", missing_default=1.0
+            ),
+            0.20,
+        ),
+    ]
+    topology_score = _context_source_confidence(context_completeness, "topology")
+    topology_freshness_days = context_completeness.get("topology_freshness_days")
+    if topology_freshness_days is not None:
+        try:
+            topology_freshness_days = int(topology_freshness_days)
+        except (TypeError, ValueError):
+            topology_freshness_days = None
+    if topology_score is None:
+        topology_score = _topology_freshness_score(topology_freshness_days)
+    if topology_score is not None and (
+        topology_freshness_days is not None
+        or _has_context_source(context_completeness, "topology")
+    ):
+        weighted_scores.append((topology_score, 0.25))
+    incident_index_size = _context_int_value(
+        context_completeness, "incident_index_size"
+    )
+    if context_completeness.get("incident_index_version") not in {
+        None,
+        "",
+        "incidents:unknown",
+        "incidents:unscoped",
+    }:
+        weighted_scores.append(
+            (_incident_context_score(incident_index_size, stale=True), 0.20)
+        )
+    total_weight = sum(Decimal(str(weight)) for _, weight in weighted_scores)
+    if total_weight == 0:
+        total_weight = Decimal("1.0")
+    weighted_total = sum(
+        Decimal(str(score)) * Decimal(str(weight)) for score, weight in weighted_scores
+    )
+    normalized_score = min(Decimal("1.0"), weighted_total / total_weight)
+    return float(normalized_score.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
 def _context_with_incident_index_freshness(report, context_completeness: dict) -> dict:
     stored_version = str(context_completeness.get("incident_index_version") or "")
     if not stored_version or stored_version in {
@@ -3512,15 +3794,151 @@ def _context_with_incident_index_freshness(report, context_completeness: dict) -
             workspace_id=report.workspace_id,
         )
     except Exception:
-        updated = dict(context_completeness)
-        updated["incident_index_freshness_status"] = "stale"
-        return updated
+        if _incident_context_is_empty(context_completeness):
+            return context_completeness
+        return _mark_incident_context_stale(context_completeness)
     current_version = str(current.get("incident_index_version") or "")
     if current_version and current_version != stored_version:
-        updated = dict(context_completeness)
-        updated["incident_index_freshness_status"] = "stale"
-        return updated
+        return _mark_incident_context_stale(context_completeness)
     return context_completeness
+
+
+def _incident_context_is_empty(context_completeness: dict) -> bool:
+    return (
+        str(context_completeness.get("incident_index_version") or "")
+        in {"incidents:empty", "incidents:0:empty"}
+        or str(context_completeness.get("incident_index_freshness_status") or "")
+        == "empty"
+    )
+
+
+def _mark_incident_context_stale(context_completeness: dict) -> dict:
+    updated = dict(context_completeness)
+    updated["incident_index_freshness_status"] = "stale"
+    context_score = _context_float_value(updated, "context_score", missing_default=0.0)
+    recomputed_score = _recomputed_stale_incident_context_score(updated)
+    context_score = min(context_score, recomputed_score)
+    updated["context_score"] = context_score
+    updated["confidence_level"] = _context_confidence_level_from_score(context_score)
+    updated["insufficient_context"] = context_score < 0.7
+    todos = _context_todo_items(updated.get("context_todos"))
+    if not any(
+        "incident" in item.lower() and "stale" in item.lower() for item in todos
+    ):
+        todos.append("Refresh stale incident history for this project/workspace.")
+    updated["context_todos"] = todos
+    uncertainty = str(updated.get("uncertainty") or "").strip()
+    stale_message = "incident history is stale"
+    if stale_message not in uncertainty.lower():
+        updated["uncertainty"] = (
+            f"{uncertainty} {stale_message}.".strip()
+            if uncertainty
+            else f"Uncertainty: {stale_message}."
+        )
+    context_sources = updated.get("context_sources")
+    stale_source_confidence = _incident_context_score(
+        _context_int_value(updated, "incident_index_size"),
+        stale=True,
+    )
+    if isinstance(context_sources, list):
+        updated_sources: list[object] = []
+        stored_version = str(updated.get("incident_index_version") or "")
+        incident_sources = [
+            source
+            for source in context_sources
+            if isinstance(source, dict) and source.get("source_type") == "incident"
+        ]
+        for source in context_sources:
+            if not isinstance(source, dict):
+                updated_sources.append(source)
+                continue
+            if not _incident_context_source_matches_stale_version(
+                source,
+                stored_version=stored_version,
+                incident_source_count=len(incident_sources),
+            ):
+                updated_sources.append(source)
+                continue
+            stale_source = dict(source)
+            stale_source["freshness_status"] = "stale"
+            stale_source["confidence"] = min(
+                _context_float_value(
+                    stale_source, "confidence", missing_default=stale_source_confidence
+                ),
+                stale_source_confidence,
+            )
+            limitations = _context_todo_items(stale_source.get("limitations"))
+            if "stale_incident_index" not in limitations:
+                limitations.append("stale_incident_index")
+            stale_source["limitations"] = limitations
+            updated_sources.append(stale_source)
+        updated["context_sources"] = updated_sources
+    return updated
+
+
+def _incident_context_source_matches_stale_version(
+    source: dict,
+    *,
+    stored_version: str,
+    incident_source_count: int,
+) -> bool:
+    if source.get("source_type") != "incident":
+        return False
+    source_ref = str(source.get("source_ref") or "")
+    if stored_version:
+        return source_ref == stored_version
+    return incident_source_count == 1
+
+
+def _load_evidence_context_source(
+    raw_value: str | None,
+    *,
+    context_completeness: dict,
+) -> dict[str, Any] | None:
+    if not raw_value:
+        return None
+    try:
+        decoded = json.loads(raw_value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(decoded, dict):
+        return None
+    candidate = {
+        key: field_value
+        for key, field_value in decoded.items()
+        if key in _CONTEXT_SOURCE_METADATA_FIELDS
+    }
+    try:
+        decoded = ContextSourceMetadata.model_validate(candidate).model_dump(
+            mode="json"
+        )
+    except ValidationError:
+        return None
+    if (
+        decoded.get("source_type") == "incident"
+        and context_completeness.get("incident_index_freshness_status") == "stale"
+        and _incident_context_source_matches_stale_version(
+            decoded,
+            stored_version=str(
+                context_completeness.get("incident_index_version") or ""
+            ),
+            incident_source_count=1,
+        )
+    ):
+        decoded = dict(decoded)
+        decoded["freshness_status"] = "stale"
+        decoded["confidence"] = min(
+            _context_float_value(decoded, "confidence", missing_default=0.0),
+            _incident_context_score(
+                _context_int_value(context_completeness, "incident_index_size"),
+                stale=True,
+            ),
+        )
+        limitations = _context_todo_items(decoded.get("limitations"))
+        if "stale_incident_index" not in limitations:
+            limitations.append("stale_incident_index")
+        decoded["limitations"] = limitations
+    return decoded
 
 
 def _context_with_partial_context_signal(
@@ -3817,6 +4235,10 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
                     "confidence": evidence_item.confidence,
                     "related_change_ids": json.loads(
                         evidence_item.related_change_ids_json or "[]"
+                    ),
+                    "context_source": _load_evidence_context_source(
+                        getattr(evidence_item, "context_source_json", None),
+                        context_completeness=context_completeness,
                     ),
                 }
             )

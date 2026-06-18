@@ -251,6 +251,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("source_kind", self._table_columns("evidence_items"))
         self.assertIn("determinism_level", self._table_columns("evidence_items"))
         self.assertIn("redaction_status", self._table_columns("evidence_items"))
+        self.assertIn("context_source_json", self._table_columns("evidence_items"))
         self.assertIn("analysis_id", self._table_columns("findings"))
         self.assertIn("explanation", self._table_columns("findings"))
         self.assertIn("guidance_json", self._table_columns("findings"))
@@ -1101,7 +1102,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("topology_versions", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "025_add_event_analysis_indexes")
+        self.assertEqual(revision, "026_add_evidence_context_source")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1152,7 +1153,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("projects", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "025_add_event_analysis_indexes")
+        self.assertEqual(revision, "026_add_evidence_context_source")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1178,7 +1179,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "025_add_event_analysis_indexes")
+        self.assertEqual(revision, "026_add_evidence_context_source")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -1210,7 +1211,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "025_add_event_analysis_indexes")
+        self.assertEqual(revision, "026_add_evidence_context_source")
         self.assertEqual(
             self._index_columns("ix_deployment_outcomes_analysis_deployed_outcome"),
             ("analysis_id", "deployed_at", "outcome_label"),
@@ -1236,7 +1237,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "025_add_event_analysis_indexes")
+        self.assertEqual(revision, "026_add_evidence_context_source")
         self._assert_incident_ingestion_source_schema()
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
@@ -1668,7 +1669,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "025_add_event_analysis_indexes")
+        self.assertEqual(revision, "026_add_evidence_context_source")
         self._assert_incident_ingestion_source_schema()
 
 

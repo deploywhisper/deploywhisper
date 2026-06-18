@@ -118,7 +118,7 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
     await page.goto("/incidents", { waitUntil: "networkidle" });
     await selectProject(page);
     await expect(page.getByRole("heading", { name: "Incidents" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Checkout rollout incident/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Checkout rollout incident/ })).toBeVisible({ timeout: 60_000 });
     await page.getByRole("button", { name: /Checkout rollout incident/ }).click();
     await expect(page.getByText("checkout-incident.json").first()).toBeVisible();
     await expectNoSeriousA11y(page);

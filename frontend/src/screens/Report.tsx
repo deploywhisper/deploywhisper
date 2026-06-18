@@ -53,6 +53,7 @@ type EvidenceItem = NonNullable<ReportDetail["evidence_items"]>[number];
 type RollbackPlan = NonNullable<ReportDetail["rollback_plan"]>;
 type BlastRadius = NonNullable<ReportDetail["blast_radius"]>;
 type ContextCompleteness = NonNullable<ReportDetail["context_completeness"]>;
+type ContextSourceMetadata = NonNullable<ContextCompleteness["context_sources"]>[number];
 type ConfidenceLedger = NonNullable<ReportDetail["confidence_ledger"]>;
 type FeedbackState = NonNullable<ReportDetail["feedback_state"]>;
 
@@ -112,6 +113,7 @@ function getContextCompleteness(report: ReportDetail): ContextCompleteness {
       incident_index_freshness_status: null,
       evidence_success_rate: 0,
       context_todos: ["Context completeness was not persisted for this report."],
+      context_sources: [],
       partial_context: true,
     }
   );
@@ -580,7 +582,10 @@ function ConfidenceTab({ report }: { report: ReportDetail }) {
               <span>{item.evidence_id || `EV-${String(index + 1).padStart(2, "0")}`}</span>
               <MonoRef>{evidenceReference(item)}</MonoRef>
               <p>{item.summary}</p>
-              <em>{item.source_type}</em>
+              <em>
+                {item.source_type}
+                {item.context_source ? ` - ${item.context_source.source_id} (${item.context_source.freshness_status})` : ""}
+              </em>
             </div>
           ))}
         </div>
@@ -704,6 +709,61 @@ function BlastRadiusCard({ blastRadius }: { blastRadius: BlastRadius }) {
   );
 }
 
+function ContextSourcesCard({ context }: { context: ContextCompleteness }) {
+  const sources = context.context_sources ?? [];
+  const sourceNotes = (source: ContextSourceMetadata) =>
+    Array.from(new Set([...(source.conflicts ?? []), ...(source.limitations ?? [])])).sort();
+  const rowIdentityPayload = (source: ContextSourceMetadata) => [
+    source.source_id,
+    source.source_type,
+    source.source_ref ?? "",
+    source.scope,
+    source.freshness_status,
+    source.confidence ?? "",
+    source.last_observed_at ?? "",
+    source.age_days ?? "",
+    sourceNotes(source),
+  ];
+  const rowIdentity = (source: ContextSourceMetadata) =>
+    encodeURIComponent(JSON.stringify(rowIdentityPayload(source)));
+  const rowKey = (source: ContextSourceMetadata, index: number) =>
+    [
+      rowIdentity(source),
+      index,
+    ].join("|");
+
+  return (
+    <Card eyebrow="CONTEXT SOURCES" title={`${sources.length} source${sources.length === 1 ? "" : "s"} in freshness ledger`}>
+      {sources.length === 0 ? (
+        <div className="dw-report-empty">No context source metadata was persisted for this report.</div>
+      ) : (
+        <div className="dw-evidence-register">
+          {sources.map((source, index) => {
+            const notes = sourceNotes(source);
+            return (
+              <div
+                data-context-source-identity={rowIdentity(source)}
+                data-testid="context-source-row"
+                key={rowKey(source, index)}
+              >
+                <span>{source.source_type}</span>
+                <MonoRef>{source.source_id}</MonoRef>
+                <p>{source.source_ref || "source reference unavailable"}</p>
+                <em>
+                  {source.freshness_status} - {Math.round((source.confidence ?? 0) * 100)}% - {source.scope}
+                </em>
+                {notes.map((item) => (
+                  <EvidenceTag key={`${source.source_id}-${item}`}>{item}</EvidenceTag>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function ContextTab({ report }: { report: ReportDetail }) {
   const context = getContextCompleteness(report);
   const blastRadius = getBlastRadius(report);
@@ -732,6 +792,7 @@ function ContextTab({ report }: { report: ReportDetail }) {
         </div>
         <Button variant="ghost">+ Resolve open context TODO</Button>
       </Card>
+      <ContextSourcesCard context={context} />
       <BlastRadiusCard blastRadius={blastRadius} />
     </div>
   );

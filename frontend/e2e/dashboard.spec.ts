@@ -54,7 +54,11 @@ test.describe("React dashboard", () => {
   test("renders scoped KPIs and supports accessible keyboard navigation", async ({ page }) => {
     await selectProject(page);
 
-    await expect(page.getByRole("heading", { name: /Good afternoon/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: /(Good morning|Good afternoon|Good evening|Working late), DW/i,
+      }),
+    ).toBeVisible();
     await expect(page.getByText("Evidence Law enforced").first()).toBeVisible();
     await expect(page.getByText("Total analyses")).toBeVisible();
     await expect(page.getByText("0").first()).toBeVisible();

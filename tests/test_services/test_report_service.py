@@ -26,7 +26,12 @@ from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.incident_matcher import IncidentMatch
 from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from evidence.models import ContextCompleteness, EvidenceItem, Finding
+from evidence.models import (
+    ContextCompleteness,
+    ContextSourceMetadata,
+    EvidenceItem,
+    Finding,
+)
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 from parsers.terraform_parser import parse_terraform
@@ -4154,6 +4159,16 @@ class ReportServiceTests(unittest.TestCase):
                 incident_index_freshness_status=str(
                     snapshot["incident_index_freshness_status"]
                 ),
+                context_sources=[
+                    ContextSourceMetadata(
+                        source_id="incident:index:test",
+                        source_type="incident",
+                        source_ref=str(snapshot["incident_index_version"]),
+                        scope="project:payments",
+                        freshness_status="current",
+                        confidence=0.8,
+                    )
+                ],
             ),
             partial_context=False,
             warnings=[],
@@ -4189,6 +4204,19 @@ class ReportServiceTests(unittest.TestCase):
             fetched["context_completeness"]["incident_index_version"],
             snapshot["incident_index_version"],
         )
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.76)
+        self.assertEqual(fetched["context_completeness"]["confidence_level"], "medium")
+        self.assertIn(
+            "Refresh stale incident history for this project/workspace.",
+            fetched["context_completeness"]["context_todos"],
+        )
+        incident_sources = [
+            source
+            for source in fetched["context_completeness"]["context_sources"]
+            if source["source_type"] == "incident"
+        ]
+        self.assertEqual(incident_sources[0]["freshness_status"], "stale")
+        self.assertIn("stale_incident_index", incident_sources[0]["limitations"])
 
     def test_fetch_analysis_report_marks_incident_index_stale_when_lookup_fails(
         self,
@@ -4228,6 +4256,16 @@ class ReportServiceTests(unittest.TestCase):
                 incident_index_version="incidents:1:old",
                 incident_index_last_indexed_at="2026-05-20T00:00:00Z",
                 incident_index_freshness_status="current",
+                context_sources=[
+                    ContextSourceMetadata(
+                        source_id="incident:index:old",
+                        source_type="incident",
+                        source_ref="incidents:1:old",
+                        scope="project:payments",
+                        freshness_status="current",
+                        confidence=0.8,
+                    )
+                ],
             ),
             partial_context=False,
             warnings=[],
@@ -4258,6 +4296,690 @@ class ReportServiceTests(unittest.TestCase):
             fetched["context_completeness"]["incident_index_freshness_status"],
             "stale",
         )
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.76)
+        self.assertEqual(fetched["context_completeness"]["confidence_level"], "medium")
+        incident_source = fetched["context_completeness"]["context_sources"][0]
+        self.assertEqual(incident_source["freshness_status"], "stale")
+        self.assertIn("stale_incident_index", incident_source["limitations"])
+
+    def test_mark_incident_context_stale_targets_matching_source_version(self) -> None:
+        context = report_service_module._mark_incident_context_stale(
+            {
+                "context_score": 0.9,
+                "confidence_level": "high",
+                "incident_index_size": 1,
+                "incident_index_version": "incidents:1:old",
+                "incident_index_freshness_status": "current",
+                "context_todos": [],
+                "context_sources": [
+                    {
+                        "source_id": "incident:index:old",
+                        "source_type": "incident",
+                        "source_ref": "incidents:1:old",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.8,
+                        "limitations": [],
+                    },
+                    {
+                        "source_id": "incident:index:other",
+                        "source_type": "incident",
+                        "source_ref": "incidents:2:other",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.8,
+                        "limitations": [],
+                    },
+                ],
+            }
+        )
+
+        sources = {
+            source["source_ref"]: source for source in context["context_sources"]
+        }
+        self.assertEqual(sources["incidents:1:old"]["freshness_status"], "stale")
+        self.assertEqual(sources["incidents:2:other"]["freshness_status"], "current")
+        self.assertEqual(sources["incidents:1:old"]["confidence"], 0.1)
+        self.assertEqual(sources["incidents:2:other"]["confidence"], 0.8)
+        self.assertEqual(context["context_score"], 0.76)
+        self.assertEqual(context["confidence_level"], "medium")
+
+    def test_mark_incident_context_stale_recomputes_score_below_cap(self) -> None:
+        context = report_service_module._mark_incident_context_stale(
+            {
+                "context_score": 0.73,
+                "confidence_level": "medium",
+                "parser_success_rate": 0.8,
+                "evidence_success_rate": 0.8,
+                "incident_index_size": 8,
+                "incident_index_version": "incidents:8:old",
+                "incident_index_freshness_status": "current",
+                "context_todos": [],
+                "context_sources": [
+                    {
+                        "source_id": "topology:kubernetes:current-context",
+                        "source_type": "topology",
+                        "source_ref": "current-context",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.5,
+                        "limitations": [],
+                    },
+                    {
+                        "source_id": "incident:index:old",
+                        "source_type": "incident",
+                        "source_ref": "incidents:8:old",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.8,
+                        "limitations": [],
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(context["context_score"], 0.67)
+        self.assertEqual(context["confidence_level"], "low")
+        self.assertTrue(context["insufficient_context"])
+        incident_source = next(
+            source
+            for source in context["context_sources"]
+            if source["source_type"] == "incident"
+        )
+        self.assertEqual(incident_source["confidence"], 0.5)
+
+    def test_load_evidence_context_source_marks_incident_source_stale(self) -> None:
+        context_source = report_service_module._load_evidence_context_source(
+            json.dumps(
+                {
+                    "source_id": "incident:index:old",
+                    "source_type": "incident",
+                    "source_ref": "incidents:1:old",
+                    "scope": "project:payments",
+                    "freshness_status": "current",
+                    "confidence": 0.8,
+                    "conflicts": [],
+                    "limitations": [],
+                }
+            ),
+            context_completeness={
+                "incident_index_freshness_status": "stale",
+                "incident_index_version": "incidents:1:old",
+                "incident_index_size": 1,
+            },
+        )
+
+        self.assertIsNotNone(context_source)
+        self.assertEqual(context_source["freshness_status"], "stale")
+        self.assertEqual(context_source["confidence"], 0.1)
+        self.assertIn("stale_incident_index", context_source["limitations"])
+
+    def test_load_evidence_context_source_rejects_invalid_payload(self) -> None:
+        context_source = report_service_module._load_evidence_context_source(
+            json.dumps(
+                {
+                    "source_id": "incident:index:old",
+                    "source_type": "incident",
+                    "freshness_status": "current",
+                }
+            ),
+            context_completeness={
+                "incident_index_freshness_status": "current",
+                "incident_index_version": "incidents:1:old",
+            },
+        )
+
+        self.assertIsNone(context_source)
+
+    def test_load_evidence_context_source_preserves_forward_compatible_payload(
+        self,
+    ) -> None:
+        context_source = report_service_module._load_evidence_context_source(
+            json.dumps(
+                {
+                    "source_id": "topology:kubernetes:current-context",
+                    "source_type": "topology",
+                    "source_ref": "current-context",
+                    "scope": "project:checkout",
+                    "freshness_status": "current",
+                    "confidence": 0.9,
+                    "conflicts": [],
+                    "limitations": [],
+                    "future_writer_field": {"producer": "newer-deploywhisper"},
+                }
+            ),
+            context_completeness={
+                "incident_index_freshness_status": "current",
+                "incident_index_version": "incidents:1:current",
+            },
+        )
+
+        self.assertIsNotNone(context_source)
+        self.assertEqual(
+            context_source["source_id"],
+            "topology:kubernetes:current-context",
+        )
+        self.assertEqual(context_source["freshness_status"], "current")
+        self.assertNotIn("future_writer_field", context_source)
+
+    def test_load_context_completeness_adds_non_stale_incident_guidance(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=2,
+                    incident_index_version="incidents:2:conflict",
+                    incident_index_freshness_status="conflicting",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.88)
+        self.assertIn(
+            "Resolve incident history freshness: conflicting.",
+            context["context_todos"],
+        )
+        self.assertNotIn(
+            "Refresh stale incident history for this project/workspace.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_drops_only_malformed_context_sources(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.76,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=0,
+            incident_index_freshness_status="empty",
+            context_sources=[
+                ContextSourceMetadata(
+                    source_id="topology:kubernetes:current-context",
+                    source_type="topology",
+                    source_ref="current-context",
+                    scope="project:checkout",
+                    freshness_status="current",
+                    confidence=0.9,
+                )
+            ],
+        ).model_dump(mode="json")
+        payload["context_sources"].append(
+            {
+                "source_id": "",
+                "source_type": "topology",
+                "source_ref": "bad-context.json",
+                "scope": "project:checkout",
+                "freshness_status": "current",
+                "confidence": 0.5,
+            }
+        )
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.76)
+        self.assertEqual(len(context["context_sources"]), 1)
+        self.assertEqual(
+            context["context_sources"][0]["source_id"],
+            "topology:kubernetes:current-context",
+        )
+        self.assertIn(
+            "Review dropped context source metadata for this report.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_flags_all_malformed_context_sources(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.92,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=0,
+            incident_index_freshness_status="empty",
+        ).model_dump(mode="json")
+        payload["context_sources"] = [
+            {
+                "source_id": "",
+                "source_type": "topology",
+                "source_ref": "bad-context.json",
+                "scope": "project:checkout",
+                "freshness_status": "current",
+                "confidence": 0.5,
+            },
+            "not-a-source-row",
+        ]
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.92)
+        self.assertEqual(context["context_sources"], [])
+        self.assertIn(
+            "Review dropped context source metadata for this report.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_flags_malformed_context_source_shape(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.92,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=0,
+            incident_index_freshness_status="empty",
+        ).model_dump(mode="json")
+        payload["context_sources"] = {"source_id": "not-a-list"}
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.92)
+        self.assertEqual(context["context_sources"], [])
+        self.assertIn(
+            "Review dropped context source metadata for this report.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_preserves_forward_compatible_context_source(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.92,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=0,
+            incident_index_freshness_status="empty",
+            context_sources=[
+                ContextSourceMetadata(
+                    source_id="topology:kubernetes:current-context",
+                    source_type="topology",
+                    source_ref="current-context",
+                    scope="project:checkout",
+                    freshness_status="current",
+                    confidence=0.9,
+                )
+            ],
+        ).model_dump(mode="json")
+        payload["context_sources"][0]["future_writer_field"] = {
+            "producer": "newer-deploywhisper"
+        }
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.92)
+        self.assertEqual(len(context["context_sources"]), 1)
+        self.assertEqual(
+            context["context_sources"][0]["source_id"],
+            "topology:kubernetes:current-context",
+        )
+        self.assertNotIn(
+            "future_writer_field",
+            context["context_sources"][0],
+        )
+        self.assertNotIn(
+            "Review dropped context source metadata for this report.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_coerces_unknown_incident_freshness(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=2,
+                    incident_index_version="incidents:2:conflict",
+                    incident_index_freshness_status="currnet",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["incident_index_freshness_status"], "unknown")
+        self.assertIn(
+            "Resolve incident history freshness: unknown.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_coerces_invalid_zero_incident_freshness_to_unknown(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=0,
+                    incident_index_version="incidents:unknown",
+                    incident_index_freshness_status="currnet",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["incident_index_freshness_status"], "unknown")
+        self.assertIn(
+            "Resolve incident history freshness: unknown.",
+            context["context_todos"],
+        )
+        self.assertNotIn(
+            "Import relevant incident history for this project/workspace.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_coerces_supported_zero_incident_freshness_to_unknown(
+        self,
+    ) -> None:
+        for freshness_status in ("current", "stale", "conflicting", "incomplete"):
+            with self.subTest(freshness_status=freshness_status):
+                context, warning = (
+                    report_service_module._load_context_completeness_payload(
+                        json.dumps(
+                            ContextCompleteness(
+                                context_score=0.88,
+                                parser_success_rate=1.0,
+                                evidence_success_rate=1.0,
+                                incident_index_size=0,
+                                incident_index_version=f"incidents:0:{freshness_status}",
+                                incident_index_freshness_status=freshness_status,
+                                context_todos=[],
+                            ).model_dump(mode="json")
+                        )
+                    )
+                )
+
+                self.assertIsNone(warning)
+                self.assertEqual(
+                    context["incident_index_freshness_status"],
+                    "unknown",
+                )
+                self.assertIn(
+                    "Resolve incident history freshness: unknown.",
+                    context["context_todos"],
+                )
+                self.assertNotIn(
+                    "Import relevant incident history for this project/workspace.",
+                    context["context_todos"],
+                )
+
+    def test_load_context_completeness_flags_populated_empty_incident_freshness(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=2,
+                    incident_index_version="incidents:2:conflict",
+                    incident_index_freshness_status="empty",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertIn(
+            "Resolve incident history freshness: empty state conflicts with populated index.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_adds_empty_incident_import_guidance_with_other_incident_todos(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=0,
+                    incident_index_version="incidents:empty",
+                    incident_index_freshness_status="empty",
+                    context_todos=[
+                        "Resolve incident history freshness: unknown.",
+                    ],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertIn(
+            "Resolve incident history freshness: unknown.",
+            context["context_todos"],
+        )
+        self.assertIn(
+            "Import relevant incident history for this project/workspace.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_flags_blank_explicit_empty_incident_freshness(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.88,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=2,
+            incident_index_version="incidents:empty",
+            incident_index_freshness_status="empty",
+            context_todos=[],
+        ).model_dump(mode="json")
+        payload["incident_index_freshness_status"] = ""
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["incident_index_freshness_status"], "conflicting")
+        self.assertIn(
+            "Resolve incident history freshness: empty state conflicts with populated index.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_flags_populated_explicit_empty_incident_freshness(
+        self,
+    ) -> None:
+        for freshness_status in ("current", "empty", "stale", "unknown"):
+            with self.subTest(freshness_status=freshness_status):
+                context, warning = (
+                    report_service_module._load_context_completeness_payload(
+                        json.dumps(
+                            ContextCompleteness(
+                                context_score=0.88,
+                                parser_success_rate=1.0,
+                                evidence_success_rate=1.0,
+                                incident_index_size=2,
+                                incident_index_version="incidents:empty",
+                                incident_index_freshness_status=freshness_status,
+                                context_todos=[],
+                            ).model_dump(mode="json")
+                        )
+                    )
+                )
+
+                self.assertIsNone(warning)
+                self.assertEqual(
+                    context["incident_index_freshness_status"],
+                    "conflicting",
+                )
+                self.assertIn(
+                    "Resolve incident history freshness: empty state conflicts with populated index.",
+                    context["context_todos"],
+                )
+                self.assertNotIn(
+                    "Resolve incident history freshness: conflicting.",
+                    context["context_todos"],
+                )
+
+    def test_load_context_completeness_coerces_zero_incident_freshness_to_empty(
+        self,
+    ) -> None:
+        for freshness_status in ("current", "stale", "conflicting", "unknown"):
+            with self.subTest(freshness_status=freshness_status):
+                context, warning = (
+                    report_service_module._load_context_completeness_payload(
+                        json.dumps(
+                            ContextCompleteness(
+                                context_score=0.88,
+                                parser_success_rate=1.0,
+                                evidence_success_rate=1.0,
+                                incident_index_size=0,
+                                incident_index_version="incidents:empty",
+                                incident_index_freshness_status=freshness_status,
+                                context_todos=[],
+                            ).model_dump(mode="json")
+                        )
+                    )
+                )
+
+                self.assertIsNone(warning)
+                self.assertEqual(context["incident_index_freshness_status"], "empty")
+                self.assertNotIn(
+                    "Resolve incident history freshness:",
+                    "\n".join(context["context_todos"]),
+                )
+
+    def test_load_context_completeness_preserves_incident_lookup_failure_freshness(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=0,
+                    incident_index_version="incidents:unknown",
+                    incident_index_freshness_status="stale",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["incident_index_freshness_status"], "stale")
+        self.assertIn(
+            "Refresh stale incident history for this project/workspace.",
+            context["context_todos"],
+        )
+        self.assertNotIn(
+            "Import relevant incident history for this project/workspace.",
+            context["context_todos"],
+        )
+
+    def test_fetch_analysis_report_preserves_empty_incident_snapshot_on_lookup_failure(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group review.",
+            contributors=[],
+            interaction_risks=[],
+            context_completeness=ContextCompleteness(
+                context_score=0.76,
+                confidence_level="medium",
+                incident_index_size=0,
+                incident_index_version="incidents:empty",
+                incident_index_freshness_status="empty",
+                context_sources=[
+                    ContextSourceMetadata(
+                        source_id="incident:index:empty",
+                        source_type="incident",
+                        source_ref="incidents:empty",
+                        scope="project:payments",
+                        freshness_status="empty",
+                        confidence=0.0,
+                        limitations=["empty_incident_index"],
+                    )
+                ],
+            ),
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="Review the ingress change.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        with patch(
+            "services.incident_service.get_incident_index_snapshot",
+            side_effect=RuntimeError("snapshot unavailable"),
+        ):
+            fetched = report_service_module.fetch_analysis_report(persisted["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        context = fetched["context_completeness"]
+        self.assertEqual(context["incident_index_freshness_status"], "empty")
+        self.assertEqual(context["incident_index_version"], "incidents:empty")
+        self.assertNotIn(
+            "Refresh stale incident history for this project/workspace.",
+            context["context_todos"],
+        )
+        incident_source = context["context_sources"][0]
+        self.assertEqual(incident_source["freshness_status"], "empty")
+        self.assertEqual(incident_source["confidence"], 0.0)
 
     def test_persist_analysis_report_cleans_up_committed_row_after_artifact_failure(
         self,
@@ -4823,6 +5545,60 @@ class ReportServiceTests(unittest.TestCase):
             "prod/network/plan.json",
             shared_report["evidence_items"][0]["source_ref"],
         )
+
+    def test_shared_report_redaction_rewrites_context_source_metadata(self) -> None:
+        report = self._persist_shareable_report()
+        context_source = ContextSourceMetadata(
+            source_id="artifact:prod/network/plan.json",
+            source_type="artifact",
+            source_ref="prod/network/plan.json",
+            scope="project:prod/network/plan.json",
+            freshness_status="incomplete",
+            confidence=0.5,
+            conflicts=["conflict in prod/network/plan.json"],
+            limitations=["parser_issue: prod/network/plan.json"],
+        ).model_dump(mode="json")
+        context = ContextCompleteness(
+            context_score=0.8,
+            confidence_level="medium",
+            incident_index_size=0,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            context_sources=[ContextSourceMetadata.model_validate(context_source)],
+            owner_signals=[],
+            escalation_hints=["Escalate prod/network/plan.json."],
+            ownership_unmapped_subjects=["prod/network/plan.json"],
+        ).model_dump(mode="json")
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (json.dumps(context), report["id"]),
+            )
+            connection.execute(
+                "UPDATE evidence_items SET context_source_json = ? "
+                "WHERE analysis_id = ?",
+                (json.dumps(context_source), report["id"]),
+            )
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        serialized_context = json.dumps(shared_report["context_completeness"])
+        serialized_evidence = json.dumps(shared_report["evidence_items"])
+        self.assertNotIn("prod/network/plan.json", serialized_context)
+        self.assertNotIn("prod/network/plan.json", serialized_evidence)
+        self.assertIn("Artifact 1", serialized_context)
+        self.assertIn("Artifact 1", serialized_evidence)
 
     def test_fetch_analysis_report_builds_confidence_ledger_from_legacy_contributors(
         self,

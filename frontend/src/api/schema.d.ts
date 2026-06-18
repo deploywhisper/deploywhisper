@@ -1290,6 +1290,35 @@ export interface components {
              */
             uncertainty_drivers?: string[];
         };
+        /** ContextSourceMetadataData */
+        ContextSourceMetadataData: {
+            /** Source Id */
+            source_id: string;
+            /** Source Type */
+            source_type: "artifact" | "topology" | "incident" | "parser" | "evidence" | "ownership" | "external_scanner" | "user_context";
+            /** Source Ref */
+            source_ref?: string | null;
+            /** Scope */
+            scope: string;
+            /**
+             * Freshness Status
+             * @default unknown
+             */
+            freshness_status: "current" | "stale" | "missing" | "incomplete" | "conflicting" | "unknown" | "empty" | "not_applicable";
+            /** Last Observed At */
+            last_observed_at?: string | null;
+            /** Age Days */
+            age_days?: number | null;
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /** Conflicts */
+            conflicts?: string[];
+            /** Limitations */
+            limitations?: string[];
+        };
         /** ContextCompletenessData */
         ContextCompletenessData: {
             /**
@@ -1392,6 +1421,11 @@ export interface components {
              * @description Analyzed files, resources, or services missing ownership data
              */
             ownership_unmapped_subjects?: string[];
+            /**
+             * Context Sources
+             * @description Per-source freshness, confidence, scope, and conflict ledger
+             */
+            context_sources?: components["schemas"]["ContextSourceMetadataData"][];
         };
         /** CountMetaPayload */
         CountMetaPayload: {
@@ -1767,6 +1801,11 @@ export interface components {
              * @description Traceable normalized change identifiers
              */
             related_change_ids?: string[];
+            /**
+             * Context Source
+             * @description Context source metadata that supplied or qualified this evidence
+             */
+            context_source?: components["schemas"]["ContextSourceMetadataData"] | null;
         };
         /** FeedbackCurrentStateData */
         FeedbackCurrentStateData: {

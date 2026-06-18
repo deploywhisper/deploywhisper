@@ -752,6 +752,11 @@ def create_analysis_report(
                     related_change_ids_json=json.dumps(
                         evidence.get("related_change_ids", [])
                     ),
+                    context_source_json=(
+                        json.dumps(evidence["context_source"])
+                        if evidence.get("context_source") is not None
+                        else None
+                    ),
                 )
             )
 
