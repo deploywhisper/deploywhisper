@@ -1162,6 +1162,18 @@ class AnalyzeCliTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        admin_artifact_path = Path(self.tempdir.name) / "admin-plan.json"
+        admin_artifact_path.write_text(
+            (
+                '{"planned_values": {}, "resource_changes": [{"address": "module.network.aws_security_group.admin", '
+                '"module_address": "module.network", "type": "aws_security_group", '
+                '"name": "admin", "provider_name": "registry.terraform.io/hashicorp/aws", '
+                '"change": {"actions": ["update"], "after_unknown": {"arn": true}, '
+                '"after_sensitive": {"ingress": [{"description": true}]}, '
+                '"replace_paths": [["ingress", 0, "cidr_blocks"]]}}]}'
+            ),
+            encoding="utf-8",
+        )
         narrative = NarrativeResult(
             opening_sentence="CAUTION: review the security group update.",
             explanation="The deployment widens database access and should be reviewed.",
@@ -1205,6 +1217,7 @@ class AnalyzeCliTests(unittest.TestCase):
                     "--project",
                     "payments",
                     str(artifact_path),
+                    str(admin_artifact_path),
                 ],
             ),
             redirect_stdout(output),
@@ -1217,30 +1230,75 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["interface"], "cli")
         self.assertEqual(payload["meta"]["report_schema_version"], "v2")
         self.assertTrue(payload["meta"]["advisory_only"])
-        self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
+        self.assertEqual(payload["meta"]["accepted_artifact_count"], 2)
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
         self.assertIn("context_completeness", payload["data"]["assessment"])
         context_sources = payload["data"]["assessment"]["context_completeness"][
             "context_sources"
         ]
         self.assertTrue(context_sources)
+
+        def context_source_identity(source: dict) -> tuple[object, ...]:
+            notes = tuple(
+                sorted(
+                    {
+                        *(source.get("conflicts") or []),
+                        *(source.get("limitations") or []),
+                    }
+                )
+            )
+            return (
+                source.get("source_id"),
+                source.get("source_type"),
+                source.get("source_ref") or "",
+                source.get("scope"),
+                source.get("freshness_status"),
+                source.get("confidence"),
+                notes,
+            )
+
+        def distinct_context_sources(sources: list[dict]) -> list[dict]:
+            seen: set[tuple[object, ...]] = set()
+            distinct_sources: list[dict] = []
+            for source in sources:
+                identity = context_source_identity(source)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                distinct_sources.append(source)
+            return distinct_sources
+
+        def assert_context_source_fields(source: dict) -> None:
+            self.assertIn(
+                source["freshness_status"],
+                {
+                    "current",
+                    "stale",
+                    "missing",
+                    "incomplete",
+                    "conflicting",
+                    "unknown",
+                    "empty",
+                    "not_applicable",
+                },
+            )
+            self.assertIn("confidence", source)
+            self.assertGreaterEqual(source["confidence"], 0.0)
+            self.assertLessEqual(source["confidence"], 1.0)
+            self.assertIn("scope", source)
+            self.assertTrue(source["scope"])
+            self.assertIn("conflicts", source)
+            self.assertIsInstance(source["conflicts"], list)
+
+        distinct_sources = distinct_context_sources(context_sources)
+        self.assertGreater(len(distinct_sources), 1)
+        for source in distinct_sources[:2]:
+            assert_context_source_fields(source)
         topology_sources = [
             source for source in context_sources if source["source_type"] == "topology"
         ]
         self.assertTrue(topology_sources)
-        self.assertIn(
-            topology_sources[0]["freshness_status"],
-            {
-                "current",
-                "stale",
-                "missing",
-                "incomplete",
-                "conflicting",
-                "unknown",
-                "empty",
-                "not_applicable",
-            },
-        )
+        assert_context_source_fields(topology_sources[0])
         self.assertEqual(
             payload["data"]["incident_matches"][0]["public_pattern_id"],
             "public-ingress-wide-open",
@@ -1289,10 +1347,45 @@ class AnalyzeCliTests(unittest.TestCase):
             "context_sources",
             payload["data"]["persisted_report"]["context_completeness"],
         )
+        self.assertGreater(
+            len(
+                payload["data"]["persisted_report"]["context_completeness"][
+                    "context_sources"
+                ]
+            ),
+            1,
+        )
+        persisted_context_sources = payload["data"]["persisted_report"][
+            "context_completeness"
+        ]["context_sources"]
+        persisted_distinct_sources = distinct_context_sources(persisted_context_sources)
+        self.assertGreater(len(persisted_distinct_sources), 1)
+        for source in persisted_distinct_sources[:2]:
+            assert_context_source_fields(source)
         self.assertIn(
             "context_source",
             payload["data"]["persisted_report"]["evidence_items"][0],
         )
+        evidence_context_sources = [
+            item["context_source"]
+            for item in payload["data"]["persisted_report"]["evidence_items"]
+            if item.get("context_source") is not None
+        ]
+        distinct_evidence_context_sources = distinct_context_sources(
+            evidence_context_sources
+        )
+        self.assertGreater(len(distinct_evidence_context_sources), 1)
+        for evidence_context_source in distinct_evidence_context_sources[:2]:
+            self.assertIn("source_id", evidence_context_source)
+            self.assertIn("freshness_status", evidence_context_source)
+            self.assertIn("confidence", evidence_context_source)
+            self.assertGreaterEqual(evidence_context_source["confidence"], 0.0)
+            self.assertLessEqual(evidence_context_source["confidence"], 1.0)
+            self.assertIn("scope", evidence_context_source)
+            self.assertTrue(evidence_context_source["scope"])
+            self.assertIn("source_ref", evidence_context_source)
+            self.assertIn("conflicts", evidence_context_source)
+            self.assertIsInstance(evidence_context_source["conflicts"], list)
         self.assertEqual(
             payload["data"]["persisted_report"]["report_schema_version"], "v2"
         )

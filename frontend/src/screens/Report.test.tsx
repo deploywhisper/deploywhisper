@@ -165,7 +165,7 @@ const report = {
         age_days: null,
         confidence: 0,
         conflicts: ["missing_incident_history"],
-        limitations: ["empty_incident_index", "incident_pack_missing", "incident_dates_unknown", "incident_scope_unverified"],
+        limitations: ["missing_incident_history", "empty_incident_index", "incident_pack_missing", "incident_dates_unknown", "incident_scope_unverified"],
       },
     ],
     context_todos: [],
@@ -285,6 +285,7 @@ describe("ReportScreen", () => {
     expect(markup).toContain("current-context");
     expect(markup).toContain("90%");
     expect(markup).toContain("missing_incident_history");
+    expect(markup.match(/>missing_incident_history</g)?.length).toBe(1);
     expect(markup).toContain("incident_pack_missing");
     expect(markup).toContain("incident_dates_unknown");
     expect(markup).toContain("incident_scope_unverified");
@@ -293,6 +294,88 @@ describe("ReportScreen", () => {
     expect(markup).toContain("checkout");
     expect(markup).toContain("Direct");
     expect(markup).toContain("Transitive");
+  });
+
+  it("renders context sources with duplicate source ids as separate rows", () => {
+    const duplicateSourceReport = {
+      ...report,
+      context_completeness: {
+        ...report.context_completeness,
+        context_sources: [
+          ...report.context_completeness.context_sources,
+          {
+            ...report.context_completeness.context_sources[0],
+            source_ref: "current-context-shadow",
+            scope: "project:checkout/workspace:shadow",
+            freshness_status: "stale",
+            confidence: 0.4,
+          },
+        ],
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport(
+      "/reports/77?private=1&tab=context",
+      duplicateSourceReport,
+    );
+
+    expect(markup.match(/data-testid="context-source-row"/g)?.length).toBe(3);
+    expect(markup).toContain("current-context");
+    expect(markup).toContain("current-context-shadow");
+    expect(markup).toContain("project:checkout/workspace:shadow");
+    expect(markup).toContain("stale - 40%");
+  });
+
+  it("renders note-only duplicate context sources with distinct row identities", () => {
+    const noteOnlyDuplicateReport = {
+      ...report,
+      context_completeness: {
+        ...report.context_completeness,
+        context_sources: [
+          ...report.context_completeness.context_sources,
+          {
+            ...report.context_completeness.context_sources[0],
+            limitations: ["note_only_shadow"],
+          },
+        ],
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport(
+      "/reports/77?private=1&tab=context",
+      noteOnlyDuplicateReport,
+    );
+
+    expect(markup.match(/data-testid="context-source-row"/g)?.length).toBe(3);
+    expect(markup).toContain("note_only_shadow");
+    expect(markup).toContain("data-context-source-identity");
+  });
+
+  it("encodes selector-sensitive context source row identities", () => {
+    const encodedIdentityReport = {
+      ...report,
+      context_completeness: {
+        ...report.context_completeness,
+        context_sources: [
+          {
+            ...report.context_completeness.context_sources[0],
+            source_ref: "current|context\"]",
+            scope: "project:checkout|workspace:prod]",
+            limitations: ["note|with]delimiter"],
+          },
+        ],
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport(
+      "/reports/77?private=1&tab=context",
+      encodedIdentityReport,
+    );
+
+    expect(markup).toContain("current|context&quot;]");
+    expect(markup).toContain("note|with]delimiter");
+    expect(markup).toContain("current%7Ccontext%5C%22%5D");
+    expect(markup).toContain("note%7Cwith%5Ddelimiter");
   });
 
   it("renders evidence context source references on the confidence tab", () => {

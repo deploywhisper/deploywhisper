@@ -16,7 +16,7 @@ from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from functools import lru_cache
 from urllib.parse import urlsplit
-from typing import Any
+from typing import Any, get_args
 
 from pydantic import ValidationError
 
@@ -32,6 +32,7 @@ from api.schemas import IntakeItem, PendingAnalysis
 from evidence.mappers import classify_finding_evidence
 from evidence.models import (
     ContextCompleteness,
+    ContextSourceFreshness,
     ContextSourceMetadata,
     EvidenceItem,
     Finding,
@@ -141,6 +142,20 @@ _CONTEXT_UNAVAILABLE_UNCERTAINTY = (
 _AUDIT_ACTOR_MAX_LENGTH = 120
 _CONTEXT_UNAVAILABLE_TODO = (
     "Re-run analysis to regenerate context completeness metadata."
+)
+_CONTEXT_SOURCES_DROPPED_TODO = (
+    "Review dropped context source metadata for this report."
+)
+_CONTEXT_INCIDENT_IMPORT_TODO = (
+    "Import relevant incident history for this project/workspace."
+)
+_CONTEXT_INCIDENT_FRESHNESS_CONFLICT_TODO = (
+    "Resolve incident history freshness: empty state conflicts with populated index."
+)
+_CONTEXT_SOURCE_METADATA_FIELDS = frozenset(ContextSourceMetadata.model_fields)
+_CONTEXT_FRESHNESS_STATUSES = frozenset(get_args(ContextSourceFreshness))
+_EXPLICIT_EMPTY_INCIDENT_INDEX_VERSIONS = frozenset(
+    {"incidents:empty", "incidents:0:empty", "incidents:unscoped"}
 )
 _LEGACY_CONTEXT_CORE_FIELDS = {
     "topology_freshness_days",
@@ -3416,6 +3431,30 @@ def _context_sources(value: object) -> list[dict[str, Any]]:
     return [source for source in value if isinstance(source, dict)]
 
 
+def _validated_context_sources(value: object) -> tuple[list[dict[str, Any]], int]:
+    if not isinstance(value, list):
+        return [], 1 if value is not None else 0
+    sources: list[dict[str, Any]] = []
+    dropped_count = 0
+    for source in value:
+        if not isinstance(source, dict):
+            dropped_count += 1
+            continue
+        candidate = {
+            key: field_value
+            for key, field_value in source.items()
+            if key in _CONTEXT_SOURCE_METADATA_FIELDS
+        }
+        try:
+            sources.append(
+                ContextSourceMetadata.model_validate(candidate).model_dump(mode="json")
+            )
+        except (TypeError, ValueError, ValidationError):
+            dropped_count += 1
+            continue
+    return sources, dropped_count
+
+
 def _has_context_source(context_completeness: dict, source_type: str) -> bool:
     return any(
         source.get("source_type") == source_type
@@ -3461,6 +3500,34 @@ def _persisted_bool_value(value: object, *, default: bool = False) -> bool:
     return default
 
 
+def _incident_index_freshness_status(
+    value: object,
+    *,
+    incident_index_size: int,
+    incident_index_version: object,
+) -> str:
+    normalized_version = str(incident_index_version or "").strip().lower()
+    explicit_empty_version = (
+        normalized_version in _EXPLICIT_EMPTY_INCIDENT_INDEX_VERSIONS
+    )
+    if incident_index_size > 0 and explicit_empty_version:
+        return "conflicting"
+    if value is None or str(value).strip() == "":
+        if explicit_empty_version:
+            return "empty"
+        return "empty" if incident_index_size == 0 else "unknown"
+    normalized = str(value).strip().lower()
+    if incident_index_size == 0:
+        if explicit_empty_version or normalized == "empty":
+            return "empty"
+        if normalized == "stale" and normalized_version == "incidents:unknown":
+            return "stale"
+        return "unknown"
+    if normalized in _CONTEXT_FRESHNESS_STATUSES:
+        return normalized
+    return "unknown"
+
+
 def _require_mapping(value: object, *, field_name: str) -> dict:
     if not isinstance(value, dict):
         raise ValueError(f"{field_name} must be an object")
@@ -3490,22 +3557,35 @@ def _normalize_context_completeness_payload(decoded: dict) -> dict:
             topology_gap = "missing"
 
     normalized = dict(decoded)
+    dropped_context_source_count = 0
+    if "context_sources" in normalized:
+        context_sources, dropped_context_source_count = _validated_context_sources(
+            normalized.get("context_sources")
+        )
+        normalized["context_sources"] = context_sources
     normalized["context_score"] = context_score
     normalized["parser_success_rate"] = parser_success_rate
     normalized["evidence_success_rate"] = evidence_success_rate
     normalized["incident_index_size"] = incident_index_size
-    normalized["incident_index_version"] = str(
+    incident_index_version = str(
         decoded.get("incident_index_version") or "incidents:unknown"
+    )
+    normalized["incident_index_version"] = incident_index_version
+    incident_version_conflicts_with_size = (
+        incident_index_size > 0
+        and incident_index_version.strip().lower()
+        in _EXPLICIT_EMPTY_INCIDENT_INDEX_VERSIONS
     )
     normalized["incident_index_last_indexed_at"] = (
         str(decoded["incident_index_last_indexed_at"])
         if decoded.get("incident_index_last_indexed_at")
         else None
     )
-    incident_freshness_status = decoded.get("incident_index_freshness_status")
-    if not incident_freshness_status:
-        incident_freshness_status = "unknown" if incident_index_size > 0 else "empty"
-    normalized["incident_index_freshness_status"] = str(incident_freshness_status)
+    normalized["incident_index_freshness_status"] = _incident_index_freshness_status(
+        decoded.get("incident_index_freshness_status"),
+        incident_index_size=incident_index_size,
+        incident_index_version=incident_index_version,
+    )
     normalized["topology_freshness_days"] = topology_freshness_days
 
     insufficient_context = context_score < 0.7
@@ -3525,18 +3605,37 @@ def _normalize_context_completeness_payload(decoded: dict) -> dict:
         "topology" in item.lower() for item in todos
     ):
         todos.append("Refresh stale topology context for this project/workspace.")
-    if incident_index_size == 0 and not any(
-        "incident" in item.lower() for item in todos
-    ):
-        todos.append("Import relevant incident history for this project/workspace.")
+    incident_freshness_status = normalized["incident_index_freshness_status"]
     if (
-        normalized["incident_index_freshness_status"] == "stale"
-        and incident_index_size > 0
-        and not any(
-            "incident" in item.lower() and "stale" in item.lower() for item in todos
-        )
+        incident_index_size == 0
+        and incident_freshness_status == "empty"
+        and _CONTEXT_INCIDENT_IMPORT_TODO not in todos
+    ):
+        todos.append(_CONTEXT_INCIDENT_IMPORT_TODO)
+    if incident_freshness_status == "stale" and not any(
+        "incident" in item.lower() and "stale" in item.lower() for item in todos
     ):
         todos.append("Refresh stale incident history for this project/workspace.")
+    if (
+        incident_freshness_status not in {"current", "empty", "stale"}
+        and not incident_version_conflicts_with_size
+        and not any(
+            "incident" in item.lower()
+            and "freshness" in item.lower()
+            and str(incident_freshness_status).lower() in item.lower()
+            for item in todos
+        )
+    ):
+        todos.append(
+            f"Resolve incident history freshness: {incident_freshness_status}."
+        )
+    if (
+        (incident_index_size > 0 and incident_freshness_status == "empty")
+        or incident_version_conflicts_with_size
+    ) and _CONTEXT_INCIDENT_FRESHNESS_CONFLICT_TODO not in todos:
+        todos.append(_CONTEXT_INCIDENT_FRESHNESS_CONFLICT_TODO)
+    if dropped_context_source_count > 0 and _CONTEXT_SOURCES_DROPPED_TODO not in todos:
+        todos.append(_CONTEXT_SOURCES_DROPPED_TODO)
     if parser_success_rate < 1.0 and not any(
         "parser" in item.lower() for item in todos
     ):
@@ -3800,8 +3899,15 @@ def _load_evidence_context_source(
         return None
     if not isinstance(decoded, dict):
         return None
+    candidate = {
+        key: field_value
+        for key, field_value in decoded.items()
+        if key in _CONTEXT_SOURCE_METADATA_FIELDS
+    }
     try:
-        decoded = ContextSourceMetadata.model_validate(decoded).model_dump(mode="json")
+        decoded = ContextSourceMetadata.model_validate(candidate).model_dump(
+            mode="json"
+        )
     except ValidationError:
         return None
     if (

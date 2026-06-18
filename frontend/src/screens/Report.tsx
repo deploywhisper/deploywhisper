@@ -53,6 +53,7 @@ type EvidenceItem = NonNullable<ReportDetail["evidence_items"]>[number];
 type RollbackPlan = NonNullable<ReportDetail["rollback_plan"]>;
 type BlastRadius = NonNullable<ReportDetail["blast_radius"]>;
 type ContextCompleteness = NonNullable<ReportDetail["context_completeness"]>;
+type ContextSourceMetadata = NonNullable<ContextCompleteness["context_sources"]>[number];
 type ConfidenceLedger = NonNullable<ReportDetail["confidence_ledger"]>;
 type FeedbackState = NonNullable<ReportDetail["feedback_state"]>;
 
@@ -710,6 +711,26 @@ function BlastRadiusCard({ blastRadius }: { blastRadius: BlastRadius }) {
 
 function ContextSourcesCard({ context }: { context: ContextCompleteness }) {
   const sources = context.context_sources ?? [];
+  const sourceNotes = (source: ContextSourceMetadata) =>
+    Array.from(new Set([...(source.conflicts ?? []), ...(source.limitations ?? [])])).sort();
+  const rowIdentityPayload = (source: ContextSourceMetadata) => [
+    source.source_id,
+    source.source_type,
+    source.source_ref ?? "",
+    source.scope,
+    source.freshness_status,
+    source.confidence ?? "",
+    source.last_observed_at ?? "",
+    source.age_days ?? "",
+    sourceNotes(source),
+  ];
+  const rowIdentity = (source: ContextSourceMetadata) =>
+    encodeURIComponent(JSON.stringify(rowIdentityPayload(source)));
+  const rowKey = (source: ContextSourceMetadata, index: number) =>
+    [
+      rowIdentity(source),
+      index,
+    ].join("|");
 
   return (
     <Card eyebrow="CONTEXT SOURCES" title={`${sources.length} source${sources.length === 1 ? "" : "s"} in freshness ledger`}>
@@ -717,17 +738,21 @@ function ContextSourcesCard({ context }: { context: ContextCompleteness }) {
         <div className="dw-report-empty">No context source metadata was persisted for this report.</div>
       ) : (
         <div className="dw-evidence-register">
-          {sources.map((source) => {
-            const sourceNotes = [...(source.conflicts ?? []), ...(source.limitations ?? [])];
+          {sources.map((source, index) => {
+            const notes = sourceNotes(source);
             return (
-              <div key={source.source_id}>
+              <div
+                data-context-source-identity={rowIdentity(source)}
+                data-testid="context-source-row"
+                key={rowKey(source, index)}
+              >
                 <span>{source.source_type}</span>
                 <MonoRef>{source.source_id}</MonoRef>
                 <p>{source.source_ref || "source reference unavailable"}</p>
                 <em>
                   {source.freshness_status} - {Math.round((source.confidence ?? 0) * 100)}% - {source.scope}
                 </em>
-                {sourceNotes.map((item) => (
+                {notes.map((item) => (
                   <EvidenceTag key={`${source.source_id}-${item}`}>{item}</EvidenceTag>
                 ))}
               </div>

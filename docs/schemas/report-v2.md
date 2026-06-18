@@ -264,7 +264,33 @@ without storing raw plan internals in a separate contract.
       "Escalate file review for services/payments/plan.json to @payments-sre.",
       "Escalate service review for Payments API to @payments-runtime."
     ],
-    "ownership_unmapped_subjects": []
+    "ownership_unmapped_subjects": [],
+    "context_sources": [
+      {
+        "source_id": "artifact:plan.json",
+        "source_type": "artifact",
+        "source_ref": "plan.json",
+        "scope": "project:payments/workspace:prod",
+        "freshness_status": "current",
+        "last_observed_at": null,
+        "age_days": null,
+        "confidence": 1.0,
+        "conflicts": [],
+        "limitations": []
+      },
+      {
+        "source_id": "incident:index:incidents:empty",
+        "source_type": "incident",
+        "source_ref": "incidents:empty",
+        "scope": "project:payments",
+        "freshness_status": "empty",
+        "last_observed_at": null,
+        "age_days": null,
+        "confidence": 0.0,
+        "conflicts": ["missing_incident_history"],
+        "limitations": ["empty_incident_index"]
+      }
+    ]
   },
   "blast_radius": {
     "affected": [
@@ -411,8 +437,49 @@ without storing raw plan internals in a separate contract.
       "actor": "api-reviewer@example.com"
     }
   ],
-  "findings": [],
-  "evidence_items": [],
+  "findings": [
+    {
+      "finding_id": "finding-public-ingress",
+      "analysis_id": 42,
+      "title": "Public ingress exposure",
+      "description": "Terraform opened SSH ingress from 0.0.0.0/0 on port 22.",
+      "explanation": "Administrative ingress from the public internet has caused common deployment incidents.",
+      "guidance": [
+        "Confirm whether the public CIDR is intentional and time-bound.",
+        "Restrict administrative ingress to trusted networks or a managed access path."
+      ],
+      "severity": "high",
+      "category": "network_exposure",
+      "deterministic": true,
+      "confidence": 1.0,
+      "uncertainty_note": null,
+      "evidence_classification": "deterministic",
+      "evidence_refs": ["ev-plan-json-1"],
+      "skill_id": "terraform"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ev-plan-json-1",
+      "finding_id": "finding-public-ingress",
+      "source_type": "artifact",
+      "source_ref": "plan.json",
+      "artifact": "plan.json",
+      "summary": "Terraform opened SSH ingress from 0.0.0.0/0 on port 22.",
+      "deterministic": true,
+      "confidence": 1.0,
+      "context_source": {
+        "source_id": "artifact:plan.json",
+        "source_type": "artifact",
+        "source_ref": "plan.json",
+        "scope": "project:payments/workspace:prod",
+        "freshness_status": "current",
+        "confidence": 1.0,
+        "conflicts": [],
+        "limitations": []
+      }
+    }
+  ],
   "incident_matches": [
     {
       "incident_id": 0,
@@ -464,6 +531,28 @@ without storing raw plan internals in a separate contract.
   }
 }
 ```
+
+### Context source freshness ledger
+
+`context_completeness.context_sources` is the per-report freshness ledger for
+the context inputs used during analysis. Each row exposes `source_id`,
+`source_type`, optional `source_ref`, `scope`, `freshness_status`,
+`confidence`, `conflicts`, and `limitations` so API, CLI, and UI consumers can
+show whether topology, incident history, artifact, parser, evidence, ownership,
+or external context was current enough to trust.
+
+`freshness_status` uses the same values as the report context state:
+`current`, `stale`, `missing`, `incomplete`, `conflicting`, `unknown`, `empty`,
+or `not_applicable`. Non-current populated incident ledgers should surface
+remediation from `context_todos`; for example stale indexes ask reviewers to
+refresh incident history, while conflicting or incomplete indexes ask reviewers
+to resolve the specific incident freshness state.
+
+Evidence rows may include `context_source` when DeployWhisper can tie that
+evidence item to one ledger source. Consumers should render the relationship as
+provenance, not as a separate finding. Legacy persisted reports can contain
+malformed context-source rows; readers may drop invalid source rows while
+preserving the rest of the context completeness payload.
 
 ### Blast-radius topology context
 
