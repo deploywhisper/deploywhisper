@@ -136,6 +136,142 @@ if "IncidentIngestionSource" not in globals():
         )
 
 
+if "ScannerImport" not in globals():
+
+    class ScannerImport(Base):
+        """Durable scanner import status for one project scope."""
+
+        __tablename__ = "scanner_imports"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                name="fk_scanner_imports_project_workspace_scope",
+            ),
+            CheckConstraint(
+                "status IN ('imported', 'failed')",
+                name="ck_scanner_imports_status",
+            ),
+        )
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        workspace_id: Mapped[int | None] = mapped_column(
+            ForeignKey("project_workspaces.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        )
+        workspace_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+        source_file: Mapped[str] = mapped_column(String(255))
+        format: Mapped[str] = mapped_column(String(40), default="sarif")
+        tool_names_json: Mapped[str] = mapped_column(Text, default="[]")
+        status: Mapped[str] = mapped_column(String(20), default="imported")
+        imported_count: Mapped[int] = mapped_column(Integer, default=0)
+        rejected_count: Mapped[int] = mapped_column(Integer, default=0)
+        failure_summaries_json: Mapped[str] = mapped_column(Text, default="[]")
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True),
+            default=lambda: datetime.now(UTC),
+            onupdate=lambda: datetime.now(UTC),
+        )
+        evidence: Mapped[list["ExternalScannerEvidence"]] = relationship(
+            back_populates="scanner_import",
+            cascade="all, delete-orphan",
+        )
+
+
+if "ExternalScannerEvidence" not in globals():
+
+    class ExternalScannerEvidence(Base):
+        """Scanner finding normalized as external evidence."""
+
+        __tablename__ = "external_scanner_evidence"
+        __table_args__ = (
+            UniqueConstraint(
+                "project_id",
+                "workspace_id",
+                "source_ref",
+                name="uq_external_scanner_evidence_scope_source_ref",
+            ),
+            Index(
+                "uq_external_scanner_evidence_project_source_ref",
+                "project_id",
+                "source_ref",
+                unique=True,
+                sqlite_where=text("workspace_id IS NULL AND workspace_key IS NULL"),
+                postgresql_where=text("workspace_id IS NULL AND workspace_key IS NULL"),
+            ),
+            Index(
+                "uq_external_scanner_evidence_workspace_key_source_ref",
+                "project_id",
+                "workspace_key",
+                "source_ref",
+                unique=True,
+                sqlite_where=text("workspace_id IS NULL AND workspace_key IS NOT NULL"),
+                postgresql_where=text(
+                    "workspace_id IS NULL AND workspace_key IS NOT NULL"
+                ),
+            ),
+            Index(
+                "ix_external_scanner_evidence_project_rule",
+                "project_id",
+                "rule_id",
+            ),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                name="fk_external_scanner_evidence_project_workspace_scope",
+            ),
+            CheckConstraint(
+                "source_type = 'external_scanner'",
+                name="ck_external_scanner_evidence_source_type",
+            ),
+        )
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+        import_id: Mapped[int] = mapped_column(
+            ForeignKey("scanner_imports.id", ondelete="CASCADE"),
+            index=True,
+        )
+        evidence_id: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="CASCADE"),
+            index=True,
+        )
+        project_key: Mapped[str] = mapped_column(String(120))
+        workspace_id: Mapped[int | None] = mapped_column(
+            ForeignKey("project_workspaces.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        )
+        workspace_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+        source_type: Mapped[str] = mapped_column(String(30), default="external_scanner")
+        source_file: Mapped[str] = mapped_column(String(255))
+        source_ref: Mapped[str] = mapped_column(String(512))
+        tool_name: Mapped[str] = mapped_column(String(120))
+        rule_id: Mapped[str] = mapped_column(String(255))
+        rule_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+        severity: Mapped[str] = mapped_column(String(20))
+        level: Mapped[str | None] = mapped_column(String(40), nullable=True)
+        message: Mapped[str] = mapped_column(Text)
+        location: Mapped[str] = mapped_column(Text)
+        artifact_uri: Mapped[str] = mapped_column(Text)
+        region_json: Mapped[str] = mapped_column(Text, default="{}")
+        properties_json: Mapped[str] = mapped_column(Text, default="{}")
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        )
+        scanner_import: Mapped["ScannerImport"] = relationship(
+            back_populates="evidence"
+        )
+
+
 if "Project" not in globals():
 
     class Project(Base):

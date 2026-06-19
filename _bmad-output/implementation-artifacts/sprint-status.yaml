@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-06-18
+last_updated: 2026-06-19
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -118,7 +118,7 @@ development_status:
   epic-7-retrospective: optional
 
   epic-8: in-progress
-  8-1-sarif-ingestion: ready-for-dev
+  8-1-sarif-ingestion: review
   8-2-scanner-json-adapter-v1: ready-for-dev
   8-3-external-evidence-report-context: ready-for-dev
   8-4-scanner-conflict-handling: ready-for-dev
