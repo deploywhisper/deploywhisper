@@ -40,6 +40,7 @@ class ContainerContractTests(unittest.TestCase):
                 "024_add_analysis_duration_seconds.py",
                 "025_add_event_analysis_indexes.py",
                 "026_add_evidence_context_source.py",
+                "027_add_scanner_imports.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -65,6 +66,7 @@ class ContainerContractTests(unittest.TestCase):
         analysis_duration_content = migrations[20].read_text(encoding="utf-8")
         event_indexes_content = migrations[21].read_text(encoding="utf-8")
         evidence_context_source_content = migrations[22].read_text(encoding="utf-8")
+        scanner_imports_content = migrations[23].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -185,6 +187,16 @@ class ContainerContractTests(unittest.TestCase):
             evidence_context_source_content,
         )
         self.assertIn('"context_source_json"', evidence_context_source_content)
+        self.assertIn(
+            'down_revision = "026_add_evidence_context_source"',
+            scanner_imports_content,
+        )
+        self.assertIn('"scanner_imports"', scanner_imports_content)
+        self.assertIn('"external_scanner_evidence"', scanner_imports_content)
+        self.assertIn(
+            "uq_external_scanner_evidence_project_source_ref",
+            scanner_imports_content,
+        )
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())

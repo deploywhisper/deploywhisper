@@ -262,6 +262,38 @@ class MigrationTests(unittest.TestCase):
         )
         self.assertIn("analysis_id", self._table_columns("risk_assessments"))
         self.assertIn("analysis_id", self._table_columns("context_snapshots"))
+        self.assertIn("source_file", self._table_columns("scanner_imports"))
+        self.assertIn("workspace_key", self._table_columns("scanner_imports"))
+        self.assertIn("tool_names_json", self._table_columns("scanner_imports"))
+        self.assertIn("source_type", self._table_columns("external_scanner_evidence"))
+        self.assertIn("rule_id", self._table_columns("external_scanner_evidence"))
+        self.assertIn("location", self._table_columns("external_scanner_evidence"))
+        self.assertEqual(
+            self._index_columns("ix_external_scanner_evidence_project_rule"),
+            ("project_id", "rule_id"),
+        )
+        self.assertIn(
+            ("project_id", "workspace_id", "source_ref"),
+            self._unique_constraint_columns("external_scanner_evidence"),
+        )
+        self.assertEqual(
+            self._index_columns("uq_external_scanner_evidence_project_source_ref"),
+            ("project_id", "source_ref"),
+        )
+        self.assertEqual(
+            self._index_columns(
+                "uq_external_scanner_evidence_workspace_key_source_ref"
+            ),
+            ("project_id", "workspace_key", "source_ref"),
+        )
+        self.assertIn(
+            "workspace_id IS NULL",
+            self._index_sql("uq_external_scanner_evidence_project_source_ref"),
+        )
+        self.assertIn(
+            "workspace_key IS NULL",
+            self._index_sql("uq_external_scanner_evidence_project_source_ref"),
+        )
         self.assertIn("project_id", self._table_columns("analysis_reports"))
         self.assertIn("workspace_id", self._table_columns("analysis_reports"))
         self.assertIn("project_key", self._table_columns("projects"))
@@ -1102,7 +1134,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("topology_versions", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "026_add_evidence_context_source")
+        self.assertEqual(revision, "027_add_scanner_imports")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1153,7 +1185,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("projects", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "026_add_evidence_context_source")
+        self.assertEqual(revision, "027_add_scanner_imports")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1179,7 +1211,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "026_add_evidence_context_source")
+        self.assertEqual(revision, "027_add_scanner_imports")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -1211,7 +1243,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "026_add_evidence_context_source")
+        self.assertEqual(revision, "027_add_scanner_imports")
         self.assertEqual(
             self._index_columns("ix_deployment_outcomes_analysis_deployed_outcome"),
             ("analysis_id", "deployed_at", "outcome_label"),
@@ -1237,7 +1269,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "026_add_evidence_context_source")
+        self.assertEqual(revision, "027_add_scanner_imports")
         self._assert_incident_ingestion_source_schema()
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
@@ -1409,6 +1441,7 @@ class MigrationTests(unittest.TestCase):
                 id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL,
                 workspace_id INTEGER,
+                workspace_key VARCHAR(120),
                 source_file VARCHAR(255) NOT NULL,
                 status VARCHAR(20) NOT NULL,
                 indexed_count INTEGER NOT NULL,
@@ -1460,6 +1493,275 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(
             RuntimeError, "partial incident ingestion source schema"
         ):
+            database_module.init_db()
+
+    def test_init_db_rejects_partial_scanner_import_constraints(self) -> None:
+        command.upgrade(self._config(), "026_add_evidence_context_source")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            """
+            CREATE TABLE scanner_imports (
+                id INTEGER NOT NULL,
+                project_id INTEGER NOT NULL,
+                workspace_id INTEGER,
+                source_file VARCHAR(255) NOT NULL,
+                format VARCHAR(40) NOT NULL,
+                tool_names_json TEXT NOT NULL,
+                status VARCHAR(20) NOT NULL,
+                imported_count INTEGER NOT NULL,
+                rejected_count INTEGER NOT NULL,
+                failure_summaries_json TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                CHECK (status IN ('imported', 'failed'))
+            )
+            """
+        )
+        sqlite_conn.execute(
+            """
+            CREATE TABLE external_scanner_evidence (
+                id INTEGER NOT NULL,
+                import_id INTEGER NOT NULL,
+                evidence_id VARCHAR(120) NOT NULL,
+                project_id INTEGER NOT NULL,
+                project_key VARCHAR(120) NOT NULL,
+                workspace_id INTEGER,
+                workspace_key VARCHAR(120),
+                source_type VARCHAR(30) NOT NULL,
+                source_file VARCHAR(255) NOT NULL,
+                source_ref VARCHAR(512) NOT NULL,
+                tool_name VARCHAR(120) NOT NULL,
+                rule_id VARCHAR(255) NOT NULL,
+                rule_name VARCHAR(255),
+                severity VARCHAR(20) NOT NULL,
+                level VARCHAR(40),
+                message TEXT NOT NULL,
+                location TEXT NOT NULL,
+                artifact_uri TEXT NOT NULL,
+                region_json TEXT NOT NULL,
+                properties_json TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                CHECK (source_type = 'external_scanner')
+            )
+            """
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        from sqlalchemy import create_engine
+
+        validation_engine = create_engine(self.database_url, future=True)
+        try:
+            with validation_engine.connect() as connection:
+                self.assertFalse(
+                    database_module._scanner_imports_schema_complete(connection)
+                )
+        finally:
+            validation_engine.dispose()
+        with self.assertRaisesRegex(RuntimeError, "partial scanner import schema"):
+            database_module.init_db()
+
+    def test_init_db_rejects_wrong_scanner_import_column_types(self) -> None:
+        command.upgrade(self._config(), "026_add_evidence_context_source")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            """
+            CREATE TABLE scanner_imports (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                workspace_id INTEGER,
+                source_file VARCHAR(255) NOT NULL,
+                format VARCHAR(40) NOT NULL,
+                tool_names_json TEXT NOT NULL,
+                status VARCHAR(20) NOT NULL,
+                imported_count TEXT NOT NULL,
+                rejected_count INTEGER NOT NULL,
+                failure_summaries_json TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT ck_scanner_imports_status CHECK (status IN ('imported', 'failed')),
+                CONSTRAINT fk_scanner_imports_project_id_projects FOREIGN KEY(project_id) REFERENCES projects (id) ON DELETE CASCADE,
+                CONSTRAINT fk_scanner_imports_workspace_id_project_workspaces FOREIGN KEY(workspace_id) REFERENCES project_workspaces (id) ON DELETE SET NULL,
+                CONSTRAINT fk_scanner_imports_project_workspace_scope FOREIGN KEY(project_id, workspace_id) REFERENCES project_workspaces (project_id, id)
+            )
+            """
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_scanner_imports_project_id ON scanner_imports (project_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_scanner_imports_workspace_id "
+            "ON scanner_imports (workspace_id)"
+        )
+        sqlite_conn.execute(
+            """
+            CREATE TABLE external_scanner_evidence (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                import_id INTEGER NOT NULL,
+                evidence_id VARCHAR(120) NOT NULL,
+                project_id INTEGER NOT NULL,
+                project_key VARCHAR(120) NOT NULL,
+                workspace_id INTEGER,
+                workspace_key VARCHAR(120),
+                source_type VARCHAR(30) NOT NULL,
+                source_file VARCHAR(255) NOT NULL,
+                source_ref VARCHAR(512) NOT NULL,
+                tool_name VARCHAR(120) NOT NULL,
+                rule_id VARCHAR(255) NOT NULL,
+                rule_name VARCHAR(255),
+                severity VARCHAR(20) NOT NULL,
+                level VARCHAR(40),
+                message TEXT NOT NULL,
+                location TEXT NOT NULL,
+                artifact_uri TEXT NOT NULL,
+                region_json TEXT NOT NULL,
+                properties_json TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                CONSTRAINT ck_external_scanner_evidence_source_type CHECK (source_type = 'external_scanner'),
+                CONSTRAINT fk_external_scanner_evidence_import_id_scanner_imports FOREIGN KEY(import_id) REFERENCES scanner_imports (id) ON DELETE CASCADE,
+                CONSTRAINT fk_external_scanner_evidence_project_id_projects FOREIGN KEY(project_id) REFERENCES projects (id) ON DELETE CASCADE,
+                CONSTRAINT fk_external_scanner_evidence_workspace_id_project_workspaces FOREIGN KEY(workspace_id) REFERENCES project_workspaces (id) ON DELETE SET NULL,
+                CONSTRAINT fk_external_scanner_evidence_project_workspace_scope FOREIGN KEY(project_id, workspace_id) REFERENCES project_workspaces (project_id, id),
+                CONSTRAINT uq_external_scanner_evidence_evidence_id UNIQUE (evidence_id),
+                CONSTRAINT uq_external_scanner_evidence_scope_source_ref UNIQUE (project_id, workspace_id, source_ref)
+            )
+            """
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_import_id "
+            "ON external_scanner_evidence (import_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_evidence_id "
+            "ON external_scanner_evidence (evidence_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_project_id "
+            "ON external_scanner_evidence (project_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_workspace_id "
+            "ON external_scanner_evidence (workspace_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_project_rule "
+            "ON external_scanner_evidence (project_id, rule_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE UNIQUE INDEX uq_external_scanner_evidence_project_source_ref "
+            "ON external_scanner_evidence (project_id, source_ref) "
+            "WHERE workspace_id IS NULL AND workspace_key IS NULL"
+        )
+        sqlite_conn.execute(
+            "CREATE UNIQUE INDEX uq_external_scanner_evidence_workspace_key_source_ref "
+            "ON external_scanner_evidence (project_id, workspace_key, source_ref) "
+            "WHERE workspace_id IS NULL AND workspace_key IS NOT NULL"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        from sqlalchemy import create_engine
+
+        validation_engine = create_engine(self.database_url, future=True)
+        try:
+            with validation_engine.connect() as connection:
+                self.assertFalse(
+                    database_module._scanner_imports_schema_complete(connection)
+                )
+        finally:
+            validation_engine.dispose()
+        with self.assertRaisesRegex(RuntimeError, "partial scanner import schema"):
+            database_module.init_db()
+
+    def test_init_db_rejects_nullable_required_scanner_import_columns(self) -> None:
+        command.upgrade(self._config(), "head")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute("DROP TABLE external_scanner_evidence")
+        sqlite_conn.execute(
+            """
+            CREATE TABLE external_scanner_evidence (
+                id INTEGER NOT NULL,
+                import_id INTEGER NOT NULL,
+                evidence_id VARCHAR(120) NOT NULL,
+                project_id INTEGER NOT NULL,
+                project_key VARCHAR(120) NOT NULL,
+                workspace_id INTEGER,
+                workspace_key VARCHAR(120),
+                source_type VARCHAR(30) NOT NULL,
+                source_file VARCHAR(255),
+                source_ref VARCHAR(512) NOT NULL,
+                tool_name VARCHAR(120) NOT NULL,
+                rule_id VARCHAR(255) NOT NULL,
+                rule_name VARCHAR(255),
+                severity VARCHAR(20) NOT NULL,
+                level VARCHAR(40),
+                message TEXT NOT NULL,
+                location TEXT NOT NULL,
+                artifact_uri TEXT NOT NULL,
+                region_json TEXT NOT NULL,
+                properties_json TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                CONSTRAINT ck_external_scanner_evidence_source_type CHECK (source_type = 'external_scanner'),
+                CONSTRAINT fk_external_scanner_evidence_import_id_scanner_imports FOREIGN KEY(import_id) REFERENCES scanner_imports (id) ON DELETE CASCADE,
+                CONSTRAINT fk_external_scanner_evidence_project_id_projects FOREIGN KEY(project_id) REFERENCES projects (id) ON DELETE CASCADE,
+                CONSTRAINT fk_external_scanner_evidence_workspace_id_project_workspaces FOREIGN KEY(workspace_id) REFERENCES project_workspaces (id) ON DELETE SET NULL,
+                CONSTRAINT fk_external_scanner_evidence_project_workspace_scope FOREIGN KEY(project_id, workspace_id) REFERENCES project_workspaces (project_id, id),
+                CONSTRAINT uq_external_scanner_evidence_evidence_id UNIQUE (evidence_id)
+            )
+            """
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_import_id "
+            "ON external_scanner_evidence (import_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_evidence_id "
+            "ON external_scanner_evidence (evidence_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_project_id "
+            "ON external_scanner_evidence (project_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_workspace_id "
+            "ON external_scanner_evidence (workspace_id)"
+        )
+        sqlite_conn.execute(
+            "CREATE INDEX ix_external_scanner_evidence_project_rule "
+            "ON external_scanner_evidence (project_id, rule_id)"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        from sqlalchemy import create_engine
+
+        validation_engine = create_engine(self.database_url, future=True)
+        try:
+            with validation_engine.connect() as connection:
+                self.assertFalse(
+                    database_module._scanner_imports_schema_complete(connection)
+                )
+        finally:
+            validation_engine.dispose()
+        with self.assertRaisesRegex(RuntimeError, "partial scanner import schema"):
             database_module.init_db()
 
     def test_init_db_rejects_full_incident_ingestion_project_source_unique_index(
@@ -1534,6 +1836,39 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(
             RuntimeError, "partial incident ingestion source schema"
         ):
+            database_module.init_db()
+
+    def test_init_db_rejects_full_scanner_project_source_ref_unique_index(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "head")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            "DROP INDEX uq_external_scanner_evidence_project_source_ref"
+        )
+        sqlite_conn.execute(
+            "CREATE UNIQUE INDEX uq_external_scanner_evidence_project_source_ref "
+            "ON external_scanner_evidence (project_id, source_ref)"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        from sqlalchemy import create_engine
+
+        validation_engine = create_engine(self.database_url, future=True)
+        try:
+            with validation_engine.connect() as connection:
+                self.assertFalse(
+                    database_module._scanner_imports_schema_complete(connection)
+                )
+        finally:
+            validation_engine.dispose()
+        with self.assertRaisesRegex(RuntimeError, "partial scanner import schema"):
             database_module.init_db()
 
     def test_init_db_rejects_partial_project_workspace_schema(self) -> None:
@@ -1669,7 +2004,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "026_add_evidence_context_source")
+        self.assertEqual(revision, "027_add_scanner_imports")
         self._assert_incident_ingestion_source_schema()
 
 

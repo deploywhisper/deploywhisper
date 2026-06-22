@@ -101,6 +101,18 @@ async def http_error_envelope_handler(
     if not is_api_request(request):
         return await http_exception_handler(request, exc)
 
+    if isinstance(exc.detail, dict) and {
+        "code",
+        "message",
+    }.issubset(exc.detail):
+        details = exc.detail.get("details")
+        return build_error_response(
+            status_code=exc.status_code,
+            code=str(exc.detail["code"]),
+            message=str(exc.detail["message"]),
+            details=details if isinstance(details, dict) else {},
+        )
+
     detail = (
         exc.detail
         if isinstance(exc.detail, str)

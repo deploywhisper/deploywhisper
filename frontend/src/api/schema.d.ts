@@ -514,6 +514,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scanner-imports/sarif": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Sarif
+         * @description Import SARIF scanner findings as external evidence.
+         */
+        post: operations["import_sarif_api_v1_scanner_imports_sarif_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1290,35 +1310,6 @@ export interface components {
              */
             uncertainty_drivers?: string[];
         };
-        /** ContextSourceMetadataData */
-        ContextSourceMetadataData: {
-            /** Source Id */
-            source_id: string;
-            /** Source Type */
-            source_type: "artifact" | "topology" | "incident" | "parser" | "evidence" | "ownership" | "external_scanner" | "user_context";
-            /** Source Ref */
-            source_ref?: string | null;
-            /** Scope */
-            scope: string;
-            /**
-             * Freshness Status
-             * @default unknown
-             */
-            freshness_status: "current" | "stale" | "missing" | "incomplete" | "conflicting" | "unknown" | "empty" | "not_applicable";
-            /** Last Observed At */
-            last_observed_at?: string | null;
-            /** Age Days */
-            age_days?: number | null;
-            /**
-             * Confidence
-             * @default 0
-             */
-            confidence: number;
-            /** Conflicts */
-            conflicts?: string[];
-            /** Limitations */
-            limitations?: string[];
-        };
         /** ContextCompletenessData */
         ContextCompletenessData: {
             /**
@@ -1426,6 +1417,63 @@ export interface components {
              * @description Per-source freshness, confidence, scope, and conflict ledger
              */
             context_sources?: components["schemas"]["ContextSourceMetadataData"][];
+        };
+        /** ContextSourceMetadataData */
+        ContextSourceMetadataData: {
+            /**
+             * Source Id
+             * @description Stable context source id
+             */
+            source_id: string;
+            /**
+             * Source Type
+             * @description Context source category
+             * @enum {string}
+             */
+            source_type: "artifact" | "topology" | "incident" | "parser" | "evidence" | "ownership" | "external_scanner" | "user_context";
+            /**
+             * Source Ref
+             * @description Source path, version, or URI
+             */
+            source_ref?: string | null;
+            /**
+             * Scope
+             * @description Project/workspace scope for this source
+             */
+            scope: string;
+            /**
+             * Freshness Status
+             * @description Freshness state for this source
+             * @default unknown
+             * @enum {string}
+             */
+            freshness_status: "current" | "stale" | "missing" | "incomplete" | "conflicting" | "unknown" | "empty" | "not_applicable";
+            /**
+             * Last Observed At
+             * @description ISO timestamp when this source was last observed
+             */
+            last_observed_at?: string | null;
+            /**
+             * Age Days
+             * @description Source age in days when available
+             */
+            age_days?: number | null;
+            /**
+             * Confidence
+             * @description Confidence contribution from this source
+             * @default 0
+             */
+            confidence: number;
+            /**
+             * Conflicts
+             * @description Conflicting sources or signals associated with this source
+             */
+            conflicts?: string[];
+            /**
+             * Limitations
+             * @description Freshness, completeness, or quality limitations
+             */
+            limitations?: string[];
         };
         /** CountMetaPayload */
         CountMetaPayload: {
@@ -1801,11 +1849,58 @@ export interface components {
              * @description Traceable normalized change identifiers
              */
             related_change_ids?: string[];
-            /**
-             * Context Source
-             * @description Context source metadata that supplied or qualified this evidence
-             */
+            /** @description Context source metadata that supplied or qualified this evidence */
             context_source?: components["schemas"]["ContextSourceMetadataData"] | null;
+        };
+        /**
+         * ExternalScannerEvidenceRecord
+         * @description Scanner finding normalized as external evidence.
+         */
+        ExternalScannerEvidenceRecord: {
+            /** Id */
+            id: number;
+            /** Import Id */
+            import_id: number;
+            /** Evidence Id */
+            evidence_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Project Key */
+            project_key: string;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+            /** Source Type */
+            source_type: string;
+            /** Source File */
+            source_file: string;
+            /** Source Ref */
+            source_ref: string;
+            /** Tool Name */
+            tool_name: string;
+            /** Rule Id */
+            rule_id: string;
+            /** Rule Name */
+            rule_name?: string | null;
+            /** Severity */
+            severity: string;
+            /** Level */
+            level?: string | null;
+            /** Message */
+            message: string;
+            /** Location */
+            location: string;
+            /** Artifact Uri */
+            artifact_uri: string;
+            /** Region */
+            region?: {
+                [key: string]: unknown;
+            };
+            /** Properties */
+            properties?: {
+                [key: string]: unknown;
+            };
         };
         /** FeedbackCurrentStateData */
         FeedbackCurrentStateData: {
@@ -3226,6 +3321,64 @@ export interface components {
              */
             critical: boolean;
         };
+        /**
+         * SarifImportRequest
+         * @description SARIF import API request.
+         */
+        SarifImportRequest: {
+            /** Source File */
+            source_file: string;
+            /** Content */
+            content: string;
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+        };
+        /**
+         * ScannerImportResponse
+         * @description SARIF import API response.
+         */
+        ScannerImportResponse: {
+            data: components["schemas"]["ScannerImportResult"];
+            meta: components["schemas"]["ListMetaPayload"];
+        };
+        /**
+         * ScannerImportResult
+         * @description Result of a successful scanner import.
+         */
+        ScannerImportResult: {
+            /** Import Id */
+            import_id: number;
+            /** Project Id */
+            project_id: number;
+            /** Project Key */
+            project_key: string;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+            /** Source File */
+            source_file: string;
+            /** Tool Names */
+            tool_names?: string[];
+            /**
+             * Imported Count
+             * @default 0
+             */
+            imported_count: number;
+            /**
+             * Rejected Count
+             * @default 0
+             */
+            rejected_count: number;
+            /** Evidence */
+            evidence?: components["schemas"]["ExternalScannerEvidenceRecord"][];
+        };
         /** SettingsSummaryData */
         SettingsSummaryData: {
             provider: components["schemas"]["ProviderSettingsData"];
@@ -4600,7 +4753,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4684,7 +4837,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request Entity Too Large */
+            /** @description Content Too Large */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4693,7 +4846,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4765,7 +4918,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4849,7 +5002,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4909,7 +5062,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4971,7 +5124,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5046,7 +5199,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5121,7 +5274,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5188,7 +5341,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5252,7 +5405,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5788,7 +5941,7 @@ export interface operations {
                     "application/json": components["schemas"]["SkillRegistryListResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5837,7 +5990,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5886,7 +6039,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5938,7 +6091,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5987,7 +6140,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6149,6 +6302,87 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_sarif_api_v1_scanner_imports_sarif_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SarifImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScannerImportResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

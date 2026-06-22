@@ -56,6 +56,8 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "023_add_incident_ingestion_sources",
     "024_add_analysis_duration_seconds",
     "025_add_event_analysis_indexes",
+    "026_add_evidence_context_source",
+    "027_add_scanner_imports",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -458,6 +460,52 @@ def _incident_ingestion_project_source_index_complete(index: dict) -> bool:
     )
 
 
+def _scanner_evidence_project_source_ref_index_complete(index: dict) -> bool:
+    dialect_options = index.get("dialect_options") or {}
+    predicate = dialect_options.get("sqlite_where")
+    if predicate is None:
+        predicate = dialect_options.get("postgresql_where")
+    if predicate is None:
+        predicate = index.get("where")
+    predicate_sql = str(predicate) if predicate is not None else ""
+    normalized = re.sub(r"\s+", " ", predicate_sql).lower().replace('"', "")
+    return (
+        index.get("unique")
+        and (index.get("column_names") or []) == ["project_id", "source_ref"]
+        and "workspace_id is null" in normalized
+        and "workspace_key is null" in normalized
+    )
+
+
+def _scanner_evidence_workspace_key_source_ref_index_complete(index: dict) -> bool:
+    dialect_options = index.get("dialect_options") or {}
+    predicate = dialect_options.get("sqlite_where")
+    if predicate is None:
+        predicate = dialect_options.get("postgresql_where")
+    if predicate is None:
+        predicate = index.get("where")
+    predicate_sql = str(predicate) if predicate is not None else ""
+    normalized = re.sub(r"\s+", " ", predicate_sql).lower().replace('"', "")
+    return (
+        index.get("unique")
+        and (index.get("column_names") or [])
+        == ["project_id", "workspace_key", "source_ref"]
+        and "workspace_id is null" in normalized
+        and "workspace_key is not null" in normalized
+    )
+
+
+def _columns_have_type_affinities(
+    columns: dict,
+    expected_affinities: dict[str, type],
+) -> bool:
+    for column_name, expected_affinity in expected_affinities.items():
+        column_type = columns.get(column_name, {}).get("type")
+        if getattr(column_type, "_type_affinity", None) is not expected_affinity:
+            return False
+    return True
+
+
 def _incident_ingestion_sources_schema_complete(connection) -> bool:
     inspector = inspect(connection)
     column_map = {
@@ -547,6 +595,235 @@ def _incident_ingestion_sources_schema_complete(connection) -> bool:
         and has_project_source_unique_index
         and ("project_id",) in indexed_columns
         and ("workspace_id",) in indexed_columns
+    )
+
+
+def _scanner_imports_schema_complete(connection) -> bool:
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    if not {"scanner_imports", "external_scanner_evidence"}.issubset(tables):
+        return False
+    scanner_columns = {
+        column["name"]: column for column in inspector.get_columns("scanner_imports")
+    }
+    evidence_columns = {
+        column["name"]: column
+        for column in inspector.get_columns("external_scanner_evidence")
+    }
+    required_scanner_columns = {
+        "id",
+        "project_id",
+        "workspace_id",
+        "workspace_key",
+        "source_file",
+        "format",
+        "tool_names_json",
+        "status",
+        "imported_count",
+        "rejected_count",
+        "failure_summaries_json",
+        "created_at",
+        "updated_at",
+    }
+    required_evidence_columns = {
+        "id",
+        "import_id",
+        "evidence_id",
+        "project_id",
+        "project_key",
+        "workspace_id",
+        "workspace_key",
+        "source_type",
+        "source_file",
+        "source_ref",
+        "tool_name",
+        "rule_id",
+        "rule_name",
+        "severity",
+        "level",
+        "message",
+        "location",
+        "artifact_uri",
+        "region_json",
+        "properties_json",
+        "created_at",
+    }
+    required_scanner_non_nullable = required_scanner_columns - {
+        "workspace_id",
+        "workspace_key",
+    }
+    required_evidence_non_nullable = required_evidence_columns - {
+        "workspace_id",
+        "workspace_key",
+        "rule_name",
+        "level",
+    }
+    required_scanner_type_affinities = {
+        "id": Integer,
+        "project_id": Integer,
+        "workspace_id": Integer,
+        "workspace_key": String,
+        "source_file": String,
+        "format": String,
+        "tool_names_json": String,
+        "status": String,
+        "imported_count": Integer,
+        "rejected_count": Integer,
+        "failure_summaries_json": String,
+        "created_at": DateTime,
+        "updated_at": DateTime,
+    }
+    required_evidence_type_affinities = {
+        "id": Integer,
+        "import_id": Integer,
+        "evidence_id": String,
+        "project_id": Integer,
+        "project_key": String,
+        "workspace_id": Integer,
+        "workspace_key": String,
+        "source_type": String,
+        "source_file": String,
+        "source_ref": String,
+        "tool_name": String,
+        "rule_id": String,
+        "rule_name": String,
+        "severity": String,
+        "level": String,
+        "message": String,
+        "location": String,
+        "artifact_uri": String,
+        "region_json": String,
+        "properties_json": String,
+        "created_at": DateTime,
+    }
+    has_required_nullability = all(
+        scanner_columns.get(name, {}).get("nullable") is False
+        for name in required_scanner_non_nullable
+    ) and all(
+        evidence_columns.get(name, {}).get("nullable") is False
+        for name in required_evidence_non_nullable
+    )
+    has_required_type_affinities = _columns_have_type_affinities(
+        scanner_columns,
+        required_scanner_type_affinities,
+    ) and _columns_have_type_affinities(
+        evidence_columns,
+        required_evidence_type_affinities,
+    )
+    scanner_fks = inspector.get_foreign_keys("scanner_imports")
+    evidence_fks = inspector.get_foreign_keys("external_scanner_evidence")
+    has_scanner_project_fk = any(
+        foreign_key.get("referred_table") == "projects"
+        and (foreign_key.get("constrained_columns") or []) == ["project_id"]
+        and (foreign_key.get("referred_columns") or []) == ["id"]
+        and (foreign_key.get("options") or {}).get("ondelete") == "CASCADE"
+        for foreign_key in scanner_fks
+    )
+    has_scanner_workspace_fk = any(
+        foreign_key.get("referred_table") == "project_workspaces"
+        and (foreign_key.get("constrained_columns") or []) == ["workspace_id"]
+        and (foreign_key.get("referred_columns") or []) == ["id"]
+        and (foreign_key.get("options") or {}).get("ondelete") == "SET NULL"
+        for foreign_key in scanner_fks
+    )
+    has_scanner_workspace_scope_fk = any(
+        foreign_key.get("referred_table") == "project_workspaces"
+        and (foreign_key.get("constrained_columns") or [])
+        == ["project_id", "workspace_id"]
+        and (foreign_key.get("referred_columns") or []) == ["project_id", "id"]
+        for foreign_key in scanner_fks
+    )
+    has_evidence_import_fk = any(
+        foreign_key.get("referred_table") == "scanner_imports"
+        and (foreign_key.get("constrained_columns") or []) == ["import_id"]
+        and (foreign_key.get("referred_columns") or []) == ["id"]
+        and (foreign_key.get("options") or {}).get("ondelete") == "CASCADE"
+        for foreign_key in evidence_fks
+    )
+    has_evidence_project_fk = any(
+        foreign_key.get("referred_table") == "projects"
+        and (foreign_key.get("constrained_columns") or []) == ["project_id"]
+        and (foreign_key.get("referred_columns") or []) == ["id"]
+        and (foreign_key.get("options") or {}).get("ondelete") == "CASCADE"
+        for foreign_key in evidence_fks
+    )
+    has_evidence_workspace_fk = any(
+        foreign_key.get("referred_table") == "project_workspaces"
+        and (foreign_key.get("constrained_columns") or []) == ["workspace_id"]
+        and (foreign_key.get("referred_columns") or []) == ["id"]
+        and (foreign_key.get("options") or {}).get("ondelete") == "SET NULL"
+        for foreign_key in evidence_fks
+    )
+    has_evidence_workspace_scope_fk = any(
+        foreign_key.get("referred_table") == "project_workspaces"
+        and (foreign_key.get("constrained_columns") or [])
+        == ["project_id", "workspace_id"]
+        and (foreign_key.get("referred_columns") or []) == ["project_id", "id"]
+        for foreign_key in evidence_fks
+    )
+    scanner_indexes = {
+        index.get("name"): tuple(index.get("column_names") or [])
+        for index in inspector.get_indexes("scanner_imports")
+    }
+    evidence_indexes = {
+        index.get("name"): tuple(index.get("column_names") or [])
+        for index in inspector.get_indexes("external_scanner_evidence")
+    }
+    has_project_source_ref_unique_index = any(
+        _scanner_evidence_project_source_ref_index_complete(index)
+        for index in inspector.get_indexes("external_scanner_evidence")
+    )
+    has_workspace_key_source_ref_unique_index = any(
+        _scanner_evidence_workspace_key_source_ref_index_complete(index)
+        for index in inspector.get_indexes("external_scanner_evidence")
+    )
+    evidence_unique_columns = {
+        tuple(unique.get("column_names") or [])
+        for unique in inspector.get_unique_constraints("external_scanner_evidence")
+    }
+    evidence_unique_columns.update(
+        tuple(index.get("column_names") or [])
+        for index in inspector.get_indexes("external_scanner_evidence")
+        if index.get("unique")
+    )
+    check_sql = " ".join(
+        str(constraint.get("sqltext") or "")
+        for table_name in ("scanner_imports", "external_scanner_evidence")
+        for constraint in inspector.get_check_constraints(table_name)
+    )
+    return (
+        required_scanner_columns.issubset(scanner_columns)
+        and required_evidence_columns.issubset(evidence_columns)
+        and has_required_nullability
+        and has_required_type_affinities
+        and bool(scanner_columns.get("id", {}).get("primary_key"))
+        and bool(evidence_columns.get("id", {}).get("primary_key"))
+        and has_scanner_project_fk
+        and has_scanner_workspace_fk
+        and has_scanner_workspace_scope_fk
+        and has_evidence_import_fk
+        and has_evidence_project_fk
+        and has_evidence_workspace_fk
+        and has_evidence_workspace_scope_fk
+        and ("evidence_id",) in evidence_unique_columns
+        and ("project_id", "workspace_id", "source_ref") in evidence_unique_columns
+        and has_project_source_ref_unique_index
+        and has_workspace_key_source_ref_unique_index
+        and scanner_indexes.get("ix_scanner_imports_project_id") == ("project_id",)
+        and scanner_indexes.get("ix_scanner_imports_workspace_id") == ("workspace_id",)
+        and evidence_indexes.get("ix_external_scanner_evidence_import_id")
+        == ("import_id",)
+        and evidence_indexes.get("ix_external_scanner_evidence_evidence_id")
+        == ("evidence_id",)
+        and evidence_indexes.get("ix_external_scanner_evidence_project_id")
+        == ("project_id",)
+        and evidence_indexes.get("ix_external_scanner_evidence_workspace_id")
+        == ("workspace_id",)
+        and evidence_indexes.get("ix_external_scanner_evidence_project_rule")
+        == ("project_id", "rule_id")
+        and "external_scanner" in check_sql
+        and "imported" in check_sql
+        and "failed" in check_sql
     )
 
 
@@ -782,6 +1059,10 @@ def _bootstrap_brownfield_revision() -> None:
         has_complete_event_analysis_indexes = _event_analysis_indexes_complete(
             connection
         )
+        has_scanner_imports = bool(
+            {"scanner_imports", "external_scanner_evidence"} & tables
+        )
+        has_complete_scanner_imports = _scanner_imports_schema_complete(connection)
         if has_incident_ingestion_sources and not (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload
@@ -811,6 +1092,38 @@ def _bootstrap_brownfield_revision() -> None:
                 "Detected a partial analysis duration metric schema without a "
                 "complete migration history. Manual recovery is required."
             )
+        if has_scanner_imports and not (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+            and has_deployment_outcome_notes
+            and has_complete_incident_ingestion_sources
+            and has_complete_analysis_duration_metric
+            and has_complete_event_analysis_indexes
+            and has_complete_scanner_imports
+        ):
+            raise RuntimeError(
+                "Detected a partial scanner import schema without a complete "
+                "migration history. Manual recovery is required."
+            )
+        if (
+            has_complete_learning_context_scope
+            and has_complete_submission_manifest_payload
+            and has_complete_evidence_identity_fields
+            and has_complete_finding_context_fields
+            and has_complete_narrative_state_fields
+            and has_complete_incident_matches_payload
+            and has_deployment_outcome_notes
+            and has_complete_incident_ingestion_sources
+            and has_complete_analysis_duration_metric
+            and has_complete_event_analysis_indexes
+            and has_complete_scanner_imports
+        ):
+            _write_alembic_revision(connection, "027_add_scanner_imports")
+            return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:
             raise RuntimeError(
                 "Detected a partial learning/context scope schema without a complete "
