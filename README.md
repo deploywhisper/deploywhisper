@@ -81,7 +81,7 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 - **Day-zero risk patterns**: fresh installs can flag built-in public risk patterns such as wide-open administrative ingress or stateful resource deletion, separately labeled from organization incident memory.
 - **Safe sample incident pack**: optional synthetic incidents for demos, with provenance and limitations documented in `docs/sample-incident-pack.md`.
 - **Incident file import**: project-scoped Markdown, YAML, and JSON incident records with validation for source and redaction metadata, documented in `docs/incident-import.md`.
-- **SARIF scanner import**: project-scoped SARIF findings are normalized as external scanner evidence, documented in `docs/scanner-imports.md`.
+- **Scanner imports**: project-scoped SARIF and Semgrep JSON findings are normalized as external scanner evidence, documented in `docs/scanner-imports.md`.
 - Incident-history matching for operational memory
 - API, CLI, and web entrypoints over one shared analysis pipeline
 - Local-first security model that keeps raw IaC local and avoids persisting API keys
@@ -470,16 +470,18 @@ Returns the existing project list envelope. Project rows now include
 dashboard-friendly `name` and `env_label` aliases alongside the stable
 `id`, `project_key`, `display_name`, and default-branch metadata.
 
-### Import SARIF Scanner Evidence
+### Import Scanner Evidence
 
 ```http
 POST /api/v1/scanner-imports/sarif
+POST /api/v1/scanner-imports/semgrep
 ```
 
-Imports SARIF 2.1.0 scanner findings for a project. The endpoint stores
-normalized external evidence with scanner tool, rule, severity, location, and
-project scope. Unsupported SARIF structures return field-level correction
-guidance without storing partial findings.
+Imports SARIF 2.1.0 or Semgrep native JSON scanner findings for a project. The
+endpoints store normalized external evidence with scanner tool, rule, severity,
+location, project scope, and bounded scanner-specific report context.
+Unsupported scanner structures return field-level correction guidance without
+storing partial findings.
 
 ### Fetch One Analysis
 

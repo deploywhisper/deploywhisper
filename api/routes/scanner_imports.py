@@ -21,6 +21,7 @@ from services.scanner_import_service import (
     ScannerImportPayloadTooLarge,
     ScannerImportResult,
     ScannerImportValidationError,
+    import_semgrep_json_file,
     import_sarif_file,
     scanner_import_failure_summaries,
 )
@@ -93,8 +94,12 @@ class SarifImportRequest(BaseModel):
     workspace_key: str | None = Field(default=None, min_length=1)
 
 
+class ScannerImportRequest(SarifImportRequest):
+    """Scanner import API request."""
+
+
 class ScannerImportResponse(BaseModel):
-    """SARIF import API response."""
+    """Scanner import API response."""
 
     data: ScannerImportResult
     meta: ListMetaPayload
@@ -201,11 +206,16 @@ def _raise_project_error(
     raise _project_api_error(exc) from exc
 
 
-def _validation_error(exc: ScannerImportValidationError) -> ApiError:
+def _validation_error(
+    exc: ScannerImportValidationError,
+    *,
+    code: str = "sarif_import_validation_failed",
+    message: str = "SARIF import validation failed.",
+) -> ApiError:
     return ApiError(
         status_code=422,
-        code="sarif_import_validation_failed",
-        message="SARIF import validation failed.",
+        code=code,
+        message=message,
         details={"failures": scanner_import_failure_summaries(exc.field_errors)},
     )
 
@@ -294,6 +304,73 @@ def import_sarif(
         raise _payload_too_large_error() from exc
     except ScannerImportValidationError as exc:
         raise _validation_error(exc) from exc
+    except ValueError as exc:
+        _raise_project_error(
+            exc,
+            authorization=auth_context,
+            project_id=request.project_id,
+        )
+    return {
+        "data": result.model_dump(mode="json"),
+        "meta": build_meta(count=result.imported_count),
+    }
+
+
+@router.post(
+    "/semgrep",
+    response_model=ScannerImportResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "Bad Request"},
+        403: {"model": ErrorResponse, "description": "Forbidden"},
+        404: {"model": ErrorResponse, "description": "Not Found"},
+        413: {"model": ErrorResponse, "description": "Content Too Large"},
+        422: {"model": ErrorResponse, "description": "Unprocessable Content"},
+        500: {"model": ErrorResponse, "description": "Internal Server Error"},
+    },
+)
+def import_semgrep(
+    request: ScannerImportRequest,
+    project_role: Annotated[
+        str | None,
+        Header(alias="X-DeployWhisper-Project-Role"),
+    ] = None,
+    project_keys: Annotated[
+        str | None,
+        Header(alias="X-DeployWhisper-Project-Keys"),
+    ] = None,
+) -> dict:
+    """Import Semgrep native JSON findings as external evidence."""
+    auth_context = _authorization_context(project_role, project_keys)
+    try:
+        _require_scanner_permission(
+            authorization=auth_context,
+            project_id=request.project_id,
+            project_key=request.project_key,
+        )
+        result = import_semgrep_json_file(
+            ScannerImportFile(
+                source_file=request.source_file,
+                content=request.content,
+            ),
+            project_id=request.project_id,
+            project_key=request.project_key,
+            workspace_id=request.workspace_id,
+            workspace_key=request.workspace_key,
+        )
+    except PermissionError as exc:
+        raise ApiError(
+            status_code=403,
+            code=getattr(exc, "code", "project_permission_denied"),
+            message=getattr(exc, "message", str(exc)),
+        ) from exc
+    except ScannerImportPayloadTooLarge as exc:
+        raise _payload_too_large_error(scope=exc.scope) from exc
+    except ScannerImportValidationError as exc:
+        raise _validation_error(
+            exc,
+            code="semgrep_import_validation_failed",
+            message="Semgrep JSON import validation failed.",
+        ) from exc
     except ValueError as exc:
         _raise_project_error(
             exc,

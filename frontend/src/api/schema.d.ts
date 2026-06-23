@@ -534,6 +534,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scanner-imports/semgrep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Semgrep
+         * @description Import Semgrep native JSON findings as external evidence.
+         */
+        post: operations["import_semgrep_api_v1_scanner_imports_semgrep_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3340,8 +3360,26 @@ export interface components {
             workspace_key?: string | null;
         };
         /**
+         * ScannerImportRequest
+         * @description Scanner import API request.
+         */
+        ScannerImportRequest: {
+            /** Source File */
+            source_file: string;
+            /** Content */
+            content: string;
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+        };
+        /**
          * ScannerImportResponse
-         * @description SARIF import API response.
+         * @description Scanner import API response.
          */
         ScannerImportResponse: {
             data: components["schemas"]["ScannerImportResult"];
@@ -6319,6 +6357,87 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SarifImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScannerImportResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    import_semgrep_api_v1_scanner_imports_semgrep_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScannerImportRequest"];
             };
         };
         responses: {
