@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from importlib import reload
 from pathlib import Path
+from urllib.parse import quote
 from unittest.mock import patch
 
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +18,13 @@ import models.database as database_module
 import models.tables as tables_module
 import services.project_service as project_service_module
 import services.scanner_import_service as scanner_import_service_module
+
+
+def _percent_encode_rounds(value: str, rounds: int) -> str:
+    encoded = value
+    for _ in range(rounds):
+        encoded = quote(encoded, safe="")
+    return encoded
 
 
 class ScannerImportServiceTests(unittest.TestCase):
@@ -109,6 +117,603 @@ class ScannerImportServiceTests(unittest.TestCase):
         self.assertEqual(evidence[0].project_id, self.project.id)
         self.assertEqual(evidence[0].project_key, "payments")
         self.assertIn("ruleId=CKV_AWS_20", evidence[0].source_ref)
+
+    def test_imports_semgrep_json_as_project_scoped_external_evidence(self) -> None:
+        result = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(
+                    {
+                        "version": "1.130.0",
+                        "results": [
+                            {
+                                "check_id": "terraform.aws.security.public-ingress",
+                                "path": "network.tf",
+                                "start": {"line": 4, "col": 1},
+                                "end": {"line": 9, "col": 2},
+                                "extra": {
+                                    "message": "Security group ingress is broad.",
+                                    "severity": "ERROR",
+                                    "engine_kind": "oss",
+                                    "fingerprint": "semgrep-stable-fingerprint",
+                                    "metadata": {
+                                        "cwe": ["CWE-284"],
+                                        "confidence": "HIGH",
+                                        "owasp": ["A01:2021"],
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ),
+            ),
+            project_key="payments",
+        )
+
+        self.assertEqual(result.imported_count, 1)
+        self.assertEqual(result.rejected_count, 0)
+        [evidence] = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence.source_type, "external_scanner")
+        self.assertEqual(evidence.source_file, "semgrep.json")
+        self.assertEqual(evidence.tool_name, "Semgrep")
+        self.assertEqual(evidence.rule_id, "terraform.aws.security.public-ingress")
+        self.assertEqual(evidence.rule_name, "terraform.aws.security.public-ingress")
+        self.assertEqual(evidence.severity, "high")
+        self.assertEqual(evidence.level, "ERROR")
+        self.assertEqual(evidence.message, "Security group ingress is broad.")
+        self.assertEqual(evidence.location, "network.tf:4:1")
+        self.assertEqual(evidence.artifact_uri, "network.tf")
+        self.assertEqual(
+            evidence.region,
+            {"startLine": 4, "startColumn": 1, "endLine": 9, "endColumn": 2},
+        )
+        self.assertEqual(
+            evidence.properties["semgrep"]["metadata"],
+            {
+                "confidence": "HIGH",
+                "cwe": ["CWE-284"],
+                "owasp": ["A01:2021"],
+            },
+        )
+        self.assertEqual(
+            evidence.properties["semgrep"]["fingerprint"],
+            "semgrep-stable-fingerprint",
+        )
+        self.assertEqual(evidence.properties["semgrep"]["engine_kind"], "oss")
+        self.assertIn(
+            "ruleId=terraform.aws.security.public-ingress", evidence.source_ref
+        )
+        with database_module.SessionLocal() as session:
+            [scanner_import] = session.query(tables_module.ScannerImport).all()
+            self.assertEqual(scanner_import.format, "semgrep")
+
+        update_result = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(
+                    {
+                        "version": "1.130.0",
+                        "results": [
+                            {
+                                "check_id": "terraform.aws.security.public-ingress",
+                                "path": "network.tf",
+                                "start": {"line": 4, "col": 1},
+                                "end": {"line": 9, "col": 2},
+                                "extra": {
+                                    "message": "Updated scanner message.",
+                                    "severity": "ERROR",
+                                    "fingerprint": "semgrep-stable-fingerprint",
+                                },
+                            }
+                        ],
+                    }
+                ),
+            ),
+            project_key="payments",
+        )
+
+        self.assertEqual(update_result.imported_count, 1)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0].message, "Updated scanner message.")
+
+    def test_rejects_semgrep_json_without_partial_storage(self) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.absolute",
+                                    "path": "/Users/alice/project/network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Absolute paths must not persist.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].path")
+        self.assertIn("repository-relative", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_double_encoded_semgrep_source_file(self) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="%252FUsers%252Falice%252Fsemgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.path",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Encoded source must fail.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "source_file")
+        self.assertIn("safe relative", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_double_encoded_semgrep_result_path(self) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.path",
+                                    "path": "%252FUsers%252Falice%252Fnetwork.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Encoded path must fail.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].path")
+        self.assertIn("repository-relative", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_deeply_encoded_semgrep_source_file(self) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file=_percent_encode_rounds(
+                        "/Users/alice/semgrep.json",
+                        6,
+                    ),
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.path",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Deep encoded source must fail.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "source_file")
+        self.assertIn("safe relative", error.message)
+
+    def test_accepts_semgrep_source_file_encoded_at_decode_round_cap(self) -> None:
+        result = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file=_percent_encode_rounds(
+                    "semgrep output.json",
+                    scanner_import_service_module.SEMGREP_PERCENT_DECODE_MAX_ROUNDS,
+                ),
+                content=json.dumps(
+                    {
+                        "results": [
+                            {
+                                "check_id": "terraform.aws.security.path",
+                                "path": "network.tf",
+                                "start": {"line": 4, "col": 1},
+                                "extra": {
+                                    "message": "Boundary encoded source imports.",
+                                    "severity": "ERROR",
+                                },
+                            }
+                        ],
+                    }
+                ),
+            ),
+            project_key="payments",
+        )
+
+        self.assertEqual(result.source_file, "semgrep output.json")
+        self.assertEqual(result.imported_count, 1)
+
+    def test_rejects_over_encoded_semgrep_source_file_without_unbounded_decode(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file=_percent_encode_rounds(
+                        "/Users/alice/semgrep.json",
+                        scanner_import_service_module.SEMGREP_PERCENT_DECODE_MAX_ROUNDS
+                        + 1,
+                    ),
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.path",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Over encoded source must fail.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "source_file")
+        self.assertIn("too deeply percent-encoded", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_encoded_semgrep_source_file_with_control_characters(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep%250Ahidden.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.path",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Encoded control source must fail.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "source_file")
+        self.assertIn("control characters", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_deeply_encoded_semgrep_result_path(self) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.path",
+                                    "path": _percent_encode_rounds(
+                                        "/Users/alice/network.tf",
+                                        6,
+                                    ),
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Deep encoded path must fail.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].path")
+        self.assertIn("repository-relative", error.message)
+
+    def test_accepts_semgrep_result_path_encoded_at_decode_round_cap(self) -> None:
+        result = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(
+                    {
+                        "results": [
+                            {
+                                "check_id": "terraform.aws.security.path",
+                                "path": _percent_encode_rounds(
+                                    "network space.tf",
+                                    scanner_import_service_module.SEMGREP_PERCENT_DECODE_MAX_ROUNDS,
+                                ),
+                                "start": {"line": 4, "col": 1},
+                                "extra": {
+                                    "message": "Boundary encoded path imports.",
+                                    "severity": "ERROR",
+                                },
+                            }
+                        ],
+                    }
+                ),
+            ),
+            project_key="payments",
+        )
+
+        [evidence] = result.evidence
+        self.assertEqual(evidence.artifact_uri, "network space.tf")
+        self.assertEqual(evidence.location, "network space.tf:4:1")
+
+    def test_rejects_over_encoded_semgrep_result_path_without_unbounded_decode(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.path",
+                                    "path": _percent_encode_rounds(
+                                        "/Users/alice/network.tf",
+                                        scanner_import_service_module.SEMGREP_PERCENT_DECODE_MAX_ROUNDS
+                                        + 1,
+                                    ),
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Over encoded path must fail.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].path")
+        self.assertIn("too deeply percent-encoded", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_semgrep_json_missing_severity_without_downgrading_risk(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.missing-severity",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Security group ingress is broad.",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].extra.severity")
+        self.assertIn("severity", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_semgrep_json_with_top_level_errors_without_partial_storage(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "errors": [
+                                {
+                                    "type": "SemgrepError",
+                                    "message": "Scan failed for one file.",
+                                }
+                            ],
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.partial",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Partial scan must not import.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "errors")
+        self.assertIn("scan errors", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_semgrep_json_with_malformed_errors_without_partial_storage(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "errors": {
+                                "type": "SemgrepError",
+                                "message": "Scan failed for one file.",
+                            },
+                            "results": [
+                                {
+                                    "check_id": "terraform.aws.security.partial",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Malformed errors must not import.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "errors")
+        self.assertIn("errors must be an array", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_semgrep_result_count_above_import_limit_before_parsing(
+        self,
+    ) -> None:
+        previous_limit = scanner_import_service_module.SEMGREP_IMPORT_MAX_RESULTS
+        scanner_import_service_module.SEMGREP_IMPORT_MAX_RESULTS = 1
+        try:
+            with self.assertRaises(
+                scanner_import_service_module.ScannerImportValidationError
+            ) as captured:
+                scanner_import_service_module.import_semgrep_json_file(
+                    scanner_import_service_module.ScannerImportFile(
+                        source_file="too-many-results.json",
+                        content=json.dumps(
+                            {
+                                "results": [
+                                    {"check_id": 123},
+                                    {"check_id": 456},
+                                ],
+                            }
+                        ),
+                    ),
+                    project_key="payments",
+                )
+        finally:
+            scanner_import_service_module.SEMGREP_IMPORT_MAX_RESULTS = previous_limit
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results")
+        self.assertIn("1 results", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
 
     def test_rejects_unsupported_sarif_without_partial_storage(self) -> None:
         with self.assertRaises(
@@ -966,6 +1571,28 @@ class ScannerImportServiceTests(unittest.TestCase):
             )
         )
 
+    def test_rejects_lone_surrogate_escape_in_semgrep_strings(self) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=(
+                        '{"results":[{"check_id":"bad.surrogate",'
+                        '"path":"network.tf","start":{"line":4},'
+                        '"extra":{"message":"bad \\ud800 value",'
+                        '"severity":"ERROR"}}]}'
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].extra.message")
+        self.assertIn("Semgrep JSON", error.message)
+        self.assertNotIn("SARIF", error.message)
+
     def test_rejects_lone_surrogate_escape_in_sarif_object_keys(self) -> None:
         with self.assertRaises(
             scanner_import_service_module.ScannerImportValidationError
@@ -1225,6 +1852,81 @@ class ScannerImportServiceTests(unittest.TestCase):
             )
         self.assertEqual(refreshed.evidence[0].message, "Refreshed workspace finding.")
 
+    def test_reimport_refreshes_workspace_key_history_for_semgrep_after_delete(
+        self,
+    ) -> None:
+        workspace = project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="prod",
+            display_name="Production",
+        )
+
+        def semgrep_with_message(message: str) -> str:
+            return json.dumps(
+                {
+                    "results": [
+                        {
+                            "check_id": "workspace.delete",
+                            "path": "workspace.tf",
+                            "start": {"line": 7},
+                            "fingerprint": "workspace-stable",
+                            "extra": {
+                                "message": message,
+                                "severity": "WARNING",
+                            },
+                        }
+                    ],
+                }
+            )
+
+        scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="workspace-delete.json",
+                content=semgrep_with_message("Original workspace finding."),
+            ),
+            project_key="payments",
+            workspace_key="prod",
+        )
+        with database_module.SessionLocal() as session:
+            session.delete(session.get(tables_module.ProjectWorkspace, workspace.id))
+            session.commit()
+        recreated_workspace = project_service_module.create_workspace(
+            project_key="payments",
+            workspace_key="prod",
+            display_name="Production Recreated",
+        )
+
+        refreshed = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="workspace-delete-rerun.json",
+                content=semgrep_with_message("Refreshed workspace finding."),
+            ),
+            project_key="payments",
+            workspace_key="prod",
+        )
+
+        with database_module.SessionLocal() as session:
+            scanner_imports = (
+                session.query(tables_module.ScannerImport)
+                .order_by(tables_module.ScannerImport.id)
+                .all()
+            )
+            evidence_records = session.query(
+                tables_module.ExternalScannerEvidence
+            ).all()
+            self.assertEqual(len(scanner_imports), 2)
+            self.assertIsNone(scanner_imports[0].workspace_id)
+            self.assertEqual(scanner_imports[0].workspace_key, "prod")
+            self.assertEqual(scanner_imports[1].workspace_id, recreated_workspace.id)
+            self.assertEqual(scanner_imports[1].workspace_key, "prod")
+            self.assertEqual(len(evidence_records), 1)
+            self.assertEqual(evidence_records[0].workspace_id, recreated_workspace.id)
+            self.assertEqual(evidence_records[0].workspace_key, "prod")
+            self.assertEqual(
+                evidence_records[0].message, "Refreshed workspace finding."
+            )
+        self.assertEqual(refreshed.evidence[0].message, "Refreshed workspace finding.")
+
     def test_rejects_storage_bound_violations_before_insert(self) -> None:
         with self.assertRaises(
             scanner_import_service_module.ScannerImportValidationError
@@ -1264,6 +1966,47 @@ class ScannerImportServiceTests(unittest.TestCase):
 
         fields = {error.field for error in captured.exception.field_errors}
         self.assertIn("runs[0].results[0].ruleId", fields)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_semgrep_storage_bound_violations_with_semgrep_fields(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "R" * 256,
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Rule id is too long.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        fields = {error.field for error in captured.exception.field_errors}
+        self.assertIn("results[0].check_id", fields)
+        self.assertTrue(
+            all(
+                "Semgrep JSON" in error.message
+                for error in captured.exception.field_errors
+            )
+        )
         evidence = scanner_import_service_module.list_external_scanner_evidence(
             project_id=self.project.id
         )
@@ -1509,6 +2252,503 @@ class ScannerImportServiceTests(unittest.TestCase):
 
         self.assertEqual(result.evidence[0].severity, "high")
         self.assertEqual(result.evidence[0].properties, {})
+
+    def test_semgrep_metadata_context_is_bounded_and_report_safe(self) -> None:
+        result = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(
+                    {
+                        "results": [
+                            {
+                                "check_id": "metadata.bounds",
+                                "path": "network.tf",
+                                "start": {"line": 4, "col": 1},
+                                "extra": {
+                                    "message": "Metadata should stay bounded.",
+                                    "severity": "WARNING",
+                                    "engine_kind": "file:///Users/alice/project",
+                                    "metadata": {
+                                        "confidence": "HIGH",
+                                        "cwe": ["CWE-284"],
+                                        "technology": ["terraform"],
+                                        "category": "modules/network",
+                                        "likelihood": "/Users/alice/project/main.tf",
+                                        "subcategory": "terraform\\main.tf",
+                                        "vulnerability_class": [
+                                            "valid class",
+                                            "file:///Users/alice/project/main.tf",
+                                        ],
+                                        "impact": "H" * 513,
+                                        "references": [
+                                            "https://docs.example.test/rule",
+                                            "file:///Users/alice/project/main.tf",
+                                        ],
+                                        "source": "resource with embedded context",
+                                        "unsafe_object": {
+                                            "path": "/Users/alice/main.tf"
+                                        },
+                                    },
+                                },
+                                "fingerprint": "semgrep-stable-fingerprint",
+                            }
+                        ],
+                    }
+                ),
+            ),
+            project_key="payments",
+        )
+
+        metadata = result.evidence[0].properties["semgrep"]["metadata"]
+        self.assertEqual(
+            metadata,
+            {
+                "confidence": "HIGH",
+                "cwe": ["CWE-284"],
+                "technology": ["terraform"],
+            },
+        )
+        self.assertEqual(
+            result.evidence[0].properties["semgrep"]["fingerprint"],
+            "semgrep-stable-fingerprint",
+        )
+        self.assertNotIn("engine_kind", result.evidence[0].properties["semgrep"])
+
+    def test_semgrep_drops_unsafe_fingerprint_and_double_encoded_metadata(
+        self,
+    ) -> None:
+        result = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(
+                    {
+                        "results": [
+                            {
+                                "check_id": "metadata.encoded",
+                                "path": "network.tf",
+                                "start": {"line": 4, "col": 1},
+                                "extra": {
+                                    "message": "Metadata should not echo paths.",
+                                    "severity": "WARNING",
+                                    "fingerprint": "/Users/alice/project/main.tf",
+                                    "metadata": {
+                                        "confidence": "HIGH",
+                                        "category": (
+                                            "https%253A%252F%252Fexample.test"
+                                        ),
+                                        "technology": [
+                                            "terraform",
+                                            "..%252Fsecrets",
+                                        ],
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ),
+            ),
+            project_key="payments",
+        )
+
+        semgrep = result.evidence[0].properties["semgrep"]
+        self.assertEqual(semgrep["metadata"], {"confidence": "HIGH"})
+        self.assertNotIn("fingerprint", semgrep)
+
+    def test_semgrep_drops_deeply_encoded_metadata_values(self) -> None:
+        result = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(
+                    {
+                        "results": [
+                            {
+                                "check_id": "metadata.deep-encoded",
+                                "path": "network.tf",
+                                "start": {"line": 4, "col": 1},
+                                "extra": {
+                                    "message": "Metadata should not echo paths.",
+                                    "severity": "WARNING",
+                                    "metadata": {
+                                        "confidence": "HIGH",
+                                        "category": _percent_encode_rounds(
+                                            "https://example.test/rule",
+                                            6,
+                                        ),
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ),
+            ),
+            project_key="payments",
+        )
+
+        semgrep = result.evidence[0].properties["semgrep"]
+        self.assertEqual(semgrep["metadata"], {"confidence": "HIGH"})
+
+    def test_semgrep_drops_metadata_values_with_uri_schemes(self) -> None:
+        result = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(
+                    {
+                        "results": [
+                            {
+                                "check_id": "metadata.uri-scheme",
+                                "path": "network.tf",
+                                "start": {"line": 4, "col": 1},
+                                "extra": {
+                                    "message": "Metadata should not echo URIs.",
+                                    "severity": "WARNING",
+                                    "metadata": {
+                                        "confidence": "HIGH",
+                                        "category": "mailto:security@example.test",
+                                        "technology": [
+                                            "terraform",
+                                            "urn:semgrep:rule",
+                                        ],
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ),
+            ),
+            project_key="payments",
+        )
+
+        semgrep = result.evidence[0].properties["semgrep"]
+        self.assertEqual(semgrep["metadata"], {"confidence": "HIGH"})
+
+    def test_unsafe_semgrep_fingerprint_does_not_drive_source_identity(
+        self,
+    ) -> None:
+        content = {
+            "results": [
+                {
+                    "check_id": "fingerprint.unsafe",
+                    "path": "network.tf",
+                    "start": {"line": 4, "col": 1},
+                    "extra": {
+                        "message": "Stable finding message.",
+                        "severity": "WARNING",
+                        "fingerprint": "/Users/alice/one/network.tf",
+                    },
+                }
+            ],
+        }
+        scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(content),
+            ),
+            project_key="payments",
+        )
+        content["results"][0]["extra"]["severity"] = "ERROR"
+        content["results"][0]["extra"]["fingerprint"] = "/Users/alice/two/network.tf"
+
+        scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(content),
+            ),
+            project_key="payments",
+        )
+
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0].severity, "high")
+        self.assertNotIn("fingerprint", evidence[0].properties.get("semgrep", {}))
+
+    def test_safe_top_level_semgrep_fingerprint_replaces_unsafe_extra_fingerprint(
+        self,
+    ) -> None:
+        content = {
+            "results": [
+                {
+                    "check_id": "fingerprint.fallback",
+                    "path": "network.tf",
+                    "start": {"line": 4, "col": 1},
+                    "fingerprint": "safe-top-level-fingerprint",
+                    "extra": {
+                        "message": "Original finding message.",
+                        "severity": "WARNING",
+                        "fingerprint": "/Users/alice/one/network.tf",
+                    },
+                }
+            ],
+        }
+        scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(content),
+            ),
+            project_key="payments",
+        )
+        content["results"][0]["extra"]["message"] = "Updated finding message."
+        content["results"][0]["extra"]["severity"] = "ERROR"
+        content["results"][0]["extra"]["fingerprint"] = "/Users/alice/two/network.tf"
+
+        scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(content),
+            ),
+            project_key="payments",
+        )
+
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0].message, "Updated finding message.")
+        self.assertEqual(evidence[0].severity, "high")
+        self.assertEqual(
+            evidence[0].properties["semgrep"]["fingerprint"],
+            "safe-top-level-fingerprint",
+        )
+
+    def test_rejects_semgrep_path_with_control_characters(self) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "path.control",
+                                    "path": "network.tf\nsecret",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Control path must fail.",
+                                        "severity": "ERROR",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].path")
+        self.assertIn("control characters", error.message)
+
+    def test_rejects_semgrep_required_strings_with_control_characters(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "rule\nid",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Control rule id must fail.",
+                                        "severity": "WARNING",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].check_id")
+        self.assertIn("control characters", error.message)
+
+    def test_rejects_non_string_semgrep_required_fields_without_missing_duplicate(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": 123,
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Rule id must be a string.",
+                                        "severity": "WARNING",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        errors = captured.exception.field_errors
+        self.assertEqual(
+            [error.field for error in errors],
+            ["results[0].check_id"],
+        )
+        self.assertIn("must be a string", errors[0].message)
+        self.assertNotIn("missing", errors[0].message)
+
+    def test_semgrep_drops_report_context_with_control_characters(self) -> None:
+        result = scanner_import_service_module.import_semgrep_json_file(
+            scanner_import_service_module.ScannerImportFile(
+                source_file="semgrep.json",
+                content=json.dumps(
+                    {
+                        "results": [
+                            {
+                                "check_id": "metadata.control",
+                                "path": "network.tf",
+                                "start": {"line": 4, "col": 1},
+                                "extra": {
+                                    "message": "Control metadata must drop.",
+                                    "severity": "WARNING",
+                                    "fingerprint": "stable\nfingerprint",
+                                    "engine_kind": "oss\u0000pro",
+                                    "metadata": {
+                                        "confidence": "HIGH\nLOW",
+                                        "technology": ["terraform", "k8s\u0000"],
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ),
+            ),
+            project_key="payments",
+        )
+
+        self.assertEqual(result.evidence[0].properties, {})
+
+    def test_rejects_malformed_semgrep_extra_metadata_without_partial_storage(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "metadata.malformed",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "extra": {
+                                        "message": "Metadata shape must fail.",
+                                        "severity": "WARNING",
+                                        "metadata": ["confidence", "HIGH"],
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].extra.metadata")
+        self.assertIn("metadata must be an object", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_malformed_semgrep_end_coordinates_without_partial_storage(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "coordinates.malformed",
+                                    "path": "network.tf",
+                                    "start": {"line": 4, "col": 1},
+                                    "end": ["line", 5],
+                                    "extra": {
+                                        "message": "Malformed end must fail.",
+                                        "severity": "WARNING",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].end")
+        self.assertIn("end coordinates must be an object", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
+
+    def test_rejects_malformed_semgrep_start_coordinates_without_partial_storage(
+        self,
+    ) -> None:
+        with self.assertRaises(
+            scanner_import_service_module.ScannerImportValidationError
+        ) as captured:
+            scanner_import_service_module.import_semgrep_json_file(
+                scanner_import_service_module.ScannerImportFile(
+                    source_file="semgrep.json",
+                    content=json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "check_id": "coordinates.malformed",
+                                    "path": "network.tf",
+                                    "start": ["line", 4],
+                                    "extra": {
+                                        "message": "Malformed start must fail.",
+                                        "severity": "WARNING",
+                                    },
+                                }
+                            ],
+                        }
+                    ),
+                ),
+                project_key="payments",
+            )
+
+        [error] = captured.exception.field_errors
+        self.assertEqual(error.field, "results[0].start")
+        self.assertIn("start coordinates must be an object", error.message)
+        evidence = scanner_import_service_module.list_external_scanner_evidence(
+            project_id=self.project.id
+        )
+        self.assertEqual(evidence, [])
 
     def test_rejects_boolean_sarif_region_coordinates(self) -> None:
         with self.assertRaises(
