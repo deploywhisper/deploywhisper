@@ -1,7 +1,7 @@
 # =============================================================================
 # Release Pipeline — DeployWhisper
 # =============================================================================
-# Triggers when a version tag (v*) is pushed to main.
+# Triggers when a version tag (v*) is pushed from the repository default branch.
 #
 # Pipeline stages (in order):
 #   1. validate   — verify tag format, extract version, check branch
@@ -12,7 +12,7 @@
 #   6. notify     — post release announcement to Slack (optional)
 #
 # Prerequisites:
-#   - Push a tag matching v*.*.* from the main branch
+#   - Push a tag matching v*.*.* from the repository default branch
 #   - Example: git tag -a v1.0.0 -m "Release v1.0.0" && git push origin v1.0.0
 # =============================================================================
 
@@ -66,14 +66,15 @@ jobs:
             echo "Stable release detected: $TAG"
           fi
 
-      - name: Verify tag is on main branch
+      - name: Verify tag is on default branch
         run: |
-          # Ensure the tagged commit exists on main
-          if git branch -r --contains "$GITHUB_SHA" | grep -q 'origin/main'; then
-            echo "Tag is on main branch. OK."
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          # Ensure the tagged commit exists on the repository default branch.
+          if git branch -r --contains "$GITHUB_SHA" | grep -q "origin/${DEFAULT_BRANCH}$"; then
+            echo "Tag is on default branch (${DEFAULT_BRANCH}). OK."
           else
-            echo "::error::Release tags must be created from the main branch."
-            echo "::error::This tag points to a commit not on main."
+            echo "::error::Release tags must be created from the repository default branch (${DEFAULT_BRANCH})."
+            echo "::error::This tag points to a commit not on ${DEFAULT_BRANCH}."
             exit 1
           fi
 
@@ -296,6 +297,14 @@ jobs:
         id: notes
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
+          CURATED_NOTES="docs/releases/${VERSION}.md"
+
+          if [ -f "$CURATED_NOTES" ]; then
+            echo "Using curated release notes from $CURATED_NOTES"
+            cp "$CURATED_NOTES" release-notes.md
+            cat release-notes.md
+            exit 0
+          fi
 
           # Find the previous tag for changelog range
           PREV_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -2 | tail -1)

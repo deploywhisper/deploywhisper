@@ -142,7 +142,7 @@ class StatsApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["meta"]["app"], "DeployWhisper")
-        self.assertEqual(payload["meta"]["version"], "1.2.0")
+        self.assertEqual(payload["meta"]["version"], "1.3.0")
         data = payload["data"]
         self.assertEqual(data["total_analyses"], 2)
         self.assertEqual(data["totals"]["analyses"], 2)

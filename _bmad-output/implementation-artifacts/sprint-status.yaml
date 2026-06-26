@@ -114,14 +114,14 @@ development_status:
   7-2-terraform-state-connector: done
   7-3-kubernetes-live-state-connector: done
   7-4-codeowners-and-ownership-mapping: done
-  7-5-context-graph-and-freshness-ledger: review
+  7-5-context-graph-and-freshness-ledger: done
   epic-7-retrospective: optional
 
   epic-8: in-progress
-  8-1-sarif-ingestion: review
+  8-1-sarif-ingestion: done
   8-2-scanner-json-adapter-v1: done
   8-3-external-evidence-report-context: done
-  8-4-scanner-conflict-handling: review
+  8-4-scanner-conflict-handling: done
   8-5-existing-security-tools-comparison-guide: ready-for-dev
   epic-8-retrospective: optional
 

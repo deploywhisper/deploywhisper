@@ -112,7 +112,7 @@ DeployWhisper is an open-source project in active development. The current
 released version is useful today for teams that want a local-first, advisory
 review layer before infrastructure changes are shipped.
 
-### Released version `v1.2.0`
+### Released version `v1.3.0`
 
 What users can use today:
 
@@ -121,6 +121,10 @@ What users can use today:
 - **LLM-assisted narrative**: connect deterministic scoring with plain-English deployment guidance using Ollama, OpenAI, Anthropic, Gemini, OpenRouter, Groq, or xAI provider settings.
 - **Local-first safety posture**: keep raw IaC processing local, avoid storing provider API keys in the database, exclude sensitive files from unsafe handling, and keep every verdict advisory rather than automatically blocking a release.
 - **Evidence-backed confidence**: trace the report back to findings, resource-level contributors, uploaded artifact references, confidence factors, why-not-lower/higher reasoning, parser coverage, topology freshness, context TODOs, and warning signals when context is limited.
+- **Context freshness ledger**: inspect context source freshness, confidence, scope, conflicts, limitations, and evidence-to-context provenance across report, API, and CLI output.
+- **External scanner ingestion**: import SARIF 2.1.0 and Semgrep JSON scanner findings as project/workspace-scoped external evidence with normalized tool, rule, severity, location, source identity, and report-safe metadata.
+- **Scanner-aware report context**: view scanner findings as clearly labeled external context without automatically promoting scanner severity into DeployWhisper findings.
+- **Scanner conflict handling**: surface scanner-vs-deterministic disagreements with scanner source, deterministic source, freshness, verification guidance, uncertainty, and confidence impact while keeping severity governed by DeployWhisper scoring and Evidence Law.
 - **Blast-radius and rollback context**: use service-topology input to explain likely downstream impact and generate rollback steps with complexity scoring.
 - **Analysis history**: review saved reports later, filter previous analyses by project, workspace, time range, risk verdict, toolchain, and analysis status, inspect audit metadata, and compare repeated scans of the same artifact set with new, resolved, persistent, severity-changed, and context-changed findings.
 - **Provider and admin settings UI**: configure LLM provider metadata, upload topology context, manage custom AI Skills, and see provider readiness before running analysis.
@@ -128,7 +132,7 @@ What users can use today:
 - **Shareable reports**: create read-only report links, optionally protect sensitive shared reports with a password, redact filenames, and compare shared reruns when previous scans exist.
 - **Published Skills Registry**: browse published built-in skills at <https://deploywhisper.github.io/skills-registry/> and extend guidance with custom skills.
 - **Published GitHub Action path**: use the dedicated `deploywhisper/analyze-action@v1` action to analyze PR artifact changes, post/update an advisory PR comment, and expose report outputs for follow-on workflow steps.
-- **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.2.0` with SQLite-backed persistence for a self-hosted single-container setup.
+- **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.3.0` with SQLite-backed persistence for a self-hosted single-container setup.
 - **Project quality baseline**: GitHub Actions CI, Python quality checks, sharded tests, local CI scripts, and optional UI accessibility smoke checks are in place.
 
 Why this gives users value:
@@ -216,7 +220,7 @@ example: Docker compose file `docker-compose.yml`
 services:
   deploywhisper:
     # If you want to use the already published image, uncomment the "image" section and comment out the build section.
-    image: ghcr.io/deploywhisper/deploywhisper:1.2.0
+    image: ghcr.io/deploywhisper/deploywhisper:1.3.0
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -353,7 +357,7 @@ docker run -d \
   -e APP_PORT=8080 \
   -e APP_BASE_URL=https://deploywhisper.example.com \
   -e DEPLOYWHISPER_SHARE_TOKEN=replace-with-a-long-random-secret \
-  ghcr.io/deploywhisper/deploywhisper:1.2.0
+  ghcr.io/deploywhisper/deploywhisper:1.3.0
 ```
 
 ## API Endpoints
@@ -386,7 +390,7 @@ Response shape:
   },
   "meta": {
     "app": "DeployWhisper",
-    "version": "1.2.0"
+    "version": "1.3.0"
   }
 }
 ```
@@ -906,7 +910,7 @@ Near-term directions already visible in the repo and planning artifacts:
 
 ## Status as we’re in full swing
 
-### DeployWhisper is under active development, while release `v1.2.0` is stable.
+### DeployWhisper is under active development, while release `v1.3.0` is stable.
 
 Current implementation state:
 
