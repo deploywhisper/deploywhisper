@@ -1798,6 +1798,26 @@ class ShareSummaryContextData(BaseModel):
     summary: str = Field(..., description="Short context completeness summary")
 
 
+class ShareSummaryScannerConflictData(BaseModel):
+    finding_id: str = Field(..., description="Finding with conflicting scanner context")
+    finding_title: str = Field(..., description="Reviewer-facing finding title")
+    scanner_source: str = Field(..., description="Scanner evidence source reference")
+    scanner_freshness: str = Field(..., description="Scanner source freshness status")
+    deterministic_source: str = Field(
+        ..., description="DeployWhisper deterministic evidence source"
+    )
+    deterministic_freshness: str = Field(
+        ..., description="DeployWhisper deterministic source freshness status"
+    )
+    conflict_summary: str = Field(..., description="Short conflict explanation")
+    confidence_impact: str = Field(
+        ..., description="How the conflict affects confidence interpretation"
+    )
+    recommended_verification: str = Field(
+        ..., description="Reviewer action for resolving the conflict"
+    )
+
+
 class ShareSummaryJsonPayloadData(BaseModel):
     version: str = Field(..., description="Share-summary payload version")
     report_schema_version: str = Field(
@@ -1828,6 +1848,10 @@ class ShareSummaryJsonPayloadData(BaseModel):
     external_evidence_summary: str | None = Field(
         default=None,
         description="How external scanner context should be interpreted",
+    )
+    scanner_conflicts: list[ShareSummaryScannerConflictData] = Field(
+        default_factory=list,
+        description="Scanner-vs-deterministic/context conflicts requiring review",
     )
     blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
     rollback_summary: str = Field(..., description="Concise rollback summary")

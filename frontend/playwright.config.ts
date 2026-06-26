@@ -5,6 +5,7 @@ const baseURL = process.env.BASE_URL ?? "http://127.0.0.1:8080";
 export default defineConfig({
   testDir: "./e2e",
   timeout: 5 * 60 * 1000,
+  workers: 1,
   expect: {
     timeout: 15_000,
   },

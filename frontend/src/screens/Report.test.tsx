@@ -411,6 +411,54 @@ describe("ReportScreen", () => {
     expect(markup).not.toContain("External evidence</span><span class=\"dw-cross-tool");
   });
 
+  it("renders scanner conflicts with both sources and verification guidance", () => {
+    const conflictReport = {
+      ...report,
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          scanner_conflicts: [
+            {
+              finding_id: "finding-ingress",
+              finding_title: "Ingress exposes checkout service",
+              scanner_source: "semgrep://results/sg-1",
+              scanner_freshness: "current",
+              deterministic_source: "ev-ingress",
+              deterministic_freshness: "current",
+              conflict_summary: "Scanner severity high differs from DeployWhisper severity medium.",
+              confidence_impact: "Scanner confidence high; DeployWhisper confidence remains medium.",
+              recommended_verification: "Review scanner evidence against deterministic evidence before acting.",
+            },
+            {
+              finding_id: "finding-ingress",
+              finding_title: "Ingress exposes checkout service",
+              scanner_source: "semgrep://results/sg-1",
+              scanner_freshness: "current",
+              deterministic_source: "ev-topology",
+              deterministic_freshness: "stale",
+              conflict_summary: "Scanner freshness is current while deterministic evidence freshness is stale.",
+              confidence_impact: "Scanner confidence high; DeployWhisper confidence remains medium.",
+              recommended_verification: "Review scanner evidence against deterministic evidence before acting.",
+            },
+          ],
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1&tab=confidence", conflictReport);
+
+    expect(markup).toContain("SCANNER CONFLICTS");
+    expect(markup).toContain("Ingress exposes checkout service");
+    expect(markup).toContain("semgrep://results/sg-1");
+    expect(markup).toContain("ev-ingress");
+    expect(markup).toContain("ev-topology");
+    expect(markup).toContain("scanner current - deterministic current");
+    expect(markup).toContain("scanner current - deterministic stale");
+    expect(markup).toContain("Scanner confidence high; DeployWhisper confidence remains medium.");
+    expect(markup).toContain("Review scanner evidence against deterministic evidence before acting.");
+  });
+
   it("keeps legacy fallback labels aligned with linked evidence provenance", () => {
     const legacyReport = {
       ...report,

@@ -3547,6 +3547,54 @@ export interface components {
              */
             evidence_label?: string | null;
         };
+        /** ShareSummaryScannerConflictData */
+        ShareSummaryScannerConflictData: {
+            /**
+             * Finding Id
+             * @description Finding with conflicting scanner context
+             */
+            finding_id: string;
+            /**
+             * Finding Title
+             * @description Reviewer-facing finding title
+             */
+            finding_title: string;
+            /**
+             * Scanner Source
+             * @description Scanner evidence source reference
+             */
+            scanner_source: string;
+            /**
+             * Scanner Freshness
+             * @description Scanner source freshness status
+             */
+            scanner_freshness: string;
+            /**
+             * Deterministic Source
+             * @description DeployWhisper deterministic evidence source
+             */
+            deterministic_source: string;
+            /**
+             * Deterministic Freshness
+             * @description DeployWhisper deterministic source freshness status
+             */
+            deterministic_freshness: string;
+            /**
+             * Conflict Summary
+             * @description Short conflict explanation
+             */
+            conflict_summary: string;
+            /**
+             * Confidence Impact
+             * @description How the conflict affects confidence interpretation
+             */
+            confidence_impact: string;
+            /**
+             * Recommended Verification
+             * @description Reviewer action for resolving the conflict
+             */
+            recommended_verification: string;
+        };
         /** ShareSummaryJsonPayloadData */
         ShareSummaryJsonPayloadData: {
             /**
@@ -3615,6 +3663,11 @@ export interface components {
              * @description How external scanner context should be interpreted
              */
             external_evidence_summary?: string | null;
+            /**
+             * Scanner Conflicts
+             * @description Scanner-vs-deterministic/context conflicts requiring review
+             */
+            scanner_conflicts?: components["schemas"]["ShareSummaryScannerConflictData"][];
             /**
              * Blast Radius Summary
              * @description Concise blast-radius summary
@@ -5147,7 +5200,9 @@ export interface operations {
     };
     unlock_shared_analysis_api_v1_analyses__report_id__shared_unlock_post: {
         parameters: {
-            query?: never;
+            query?: {
+                compare?: string | null;
+            };
             header?: never;
             path: {
                 report_id: number;

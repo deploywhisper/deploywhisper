@@ -19,7 +19,9 @@ import models.tables as tables_module
 import services.report_service as report_service_module
 import services.analysis_service as analysis_service_module
 import services.project_service as project_service_module
+from analysis.blast_radius import BlastRadiusResult
 from analysis.incident_matcher import IncidentMatch
+from analysis.rollback_planner import RollbackPlan
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from cli.analyze import _load_artifacts, main
 from importlib import reload
@@ -61,6 +63,201 @@ class AnalyzeCliTests(unittest.TestCase):
         os.environ.pop("APP_BASE_URL", None)
         self.tempdir.cleanup()
 
+    def _persisted_report_with_scanner_conflict(self) -> dict:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=56,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Scanner severity disagrees with deterministic proof.",
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-det",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=20,
+                    summary="Terraform proof marks the finding medium.",
+                    severity="medium",
+                    reasoning="Terraform proof marks the finding medium.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence=(
+                "CAUTION: scanner output needs deterministic reconciliation."
+            ),
+            explanation="Scanner output disagrees with deterministic proof.",
+            guidance=["Review scanner evidence before acting."],
+            degraded=False,
+            warnings=[],
+        )
+        persisted_report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+        )
+        analysis_id = persisted_report["id"]
+        persisted_report.update(
+            {
+                "findings": [
+                    {
+                        "finding_id": "finding-001",
+                        "analysis_id": analysis_id,
+                        "title": "MEDIUM: aws_security_group.main",
+                        "description": "Security group exposure should be reviewed.",
+                        "explanation": "Scanner severity disagrees with proof.",
+                        "guidance": ["Review scanner evidence before acting."],
+                        "severity": "medium",
+                        "category": "network",
+                        "deterministic": True,
+                        "confidence": 0.62,
+                        "evidence_classification": "deterministic",
+                        "evidence_refs": ["ev-det", "ev-scan"],
+                    }
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-det",
+                        "analysis_id": analysis_id,
+                        "finding_id": "finding-001",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://plan#aws_security_group.main",
+                        "artifact": "plan.json",
+                        "location": "plan.json",
+                        "resource": "aws_security_group.main",
+                        "operation": "modify",
+                        "source_kind": "artifact",
+                        "summary": "Terraform proof marks the finding medium.",
+                        "severity_hint": "medium",
+                        "deterministic": True,
+                        "determinism_level": "deterministic",
+                        "confidence": 0.9,
+                        "context_source": {
+                            "source_id": "evidence:terraform:plan",
+                            "source_type": "artifact",
+                            "source_ref": "plan.json",
+                            "scope": "project:payments",
+                            "freshness_status": "current",
+                            "confidence": 0.9,
+                            "conflicts": [],
+                            "limitations": [],
+                        },
+                    },
+                    {
+                        "evidence_id": "ev-scan",
+                        "analysis_id": analysis_id,
+                        "finding_id": "finding-001",
+                        "source_type": "external_scanner",
+                        "source_ref": "semgrep://results/cli-conflict",
+                        "artifact": "semgrep.sarif",
+                        "location": "main.tf:12",
+                        "resource": "aws_security_group.main",
+                        "operation": "scan",
+                        "source_kind": "external_scanner",
+                        "summary": "Semgrep marks the same exposure high.",
+                        "severity_hint": "high",
+                        "deterministic": True,
+                        "determinism_level": "deterministic",
+                        "confidence": 0.88,
+                        "context_source": {
+                            "source_id": "scanner:semgrep:semgrep.sarif",
+                            "source_type": "external_scanner",
+                            "source_ref": "semgrep.sarif",
+                            "scope": "project:payments",
+                            "freshness_status": "current",
+                            "confidence": 0.88,
+                            "conflicts": [],
+                            "limitations": [],
+                        },
+                    },
+                ],
+                "top_risk_contributors": ["ev-det"],
+                "context_completeness": {"context_score": 0.84},
+            }
+        )
+        return persisted_report
+
+    def _analysis_result_with_persisted_report(
+        self,
+        persisted_report: dict,
+    ) -> analysis_service_module.AnalysisRunResult:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        return analysis_service_module.AnalysisRunResult(
+            parse_batch=parse_batch,
+            evidence_items=[],
+            findings=[],
+            assessment=RiskAssessment(
+                score=56,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Scanner severity disagrees with deterministic proof.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            blast_radius=BlastRadiusResult(
+                affected=[],
+                direct_count=0,
+                transitive_count=0,
+            ),
+            rollback_plan=RollbackPlan(
+                steps=[],
+                complexity="low",
+                complexity_score=1,
+            ),
+            incident_matches=[],
+            narrative=NarrativeResult(
+                opening_sentence=(
+                    "CAUTION: scanner output needs deterministic reconciliation."
+                ),
+                explanation="Scanner output disagrees with deterministic proof.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            persisted_report=persisted_report,
+        )
+
     def test_load_artifacts_preserves_relative_paths_for_common_parent(self) -> None:
         repo = Path(self.tempdir.name) / "repo"
         codeowners_path = repo / ".github" / "CODEOWNERS"
@@ -78,6 +275,57 @@ class AnalyzeCliTests(unittest.TestCase):
             [name for name, _ in artifacts],
             [".github/CODEOWNERS", "services/payments/plan.json"],
         )
+
+    def test_analyze_command_serializes_scanner_conflict_share_summary_payload(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        output = io.StringIO()
+        persisted_report = self._persisted_report_with_scanner_conflict()
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                return_value=self._analysis_result_with_persisted_report(
+                    persisted_report
+                ),
+            ),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        share_summary = json.loads(output.getvalue())["data"]["share_summary"]
+        conflicts = share_summary["json_payload"]["scanner_conflicts"]
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(
+            conflicts[0]["scanner_source"], "semgrep://results/cli-conflict"
+        )
+        self.assertEqual(
+            conflicts[0]["deterministic_source"],
+            "ev-det",
+        )
+        self.assertEqual(conflicts[0]["scanner_freshness"], "current")
+        self.assertEqual(conflicts[0]["deterministic_freshness"], "current")
+        self.assertIn("Evidence Law", conflicts[0]["confidence_impact"])
+        self.assertIn("recommended_verification", conflicts[0])
+        self.assertIn("Scanner conflict", share_summary["markdown"])
 
     def test_load_artifacts_preserves_mixed_relative_codeowners_absolute_artifact(
         self,

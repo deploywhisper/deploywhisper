@@ -257,6 +257,10 @@ function evidenceSummaryLabel(totalCount: number, externalCount: number) {
   return evidenceItemCountLabel(totalCount);
 }
 
+function scannerConflicts(report: ReportDetail) {
+  return report.share_summary.json_payload.scanner_conflicts ?? [];
+}
+
 function findingCounts(report: ReportDetail) {
   const findings = getFindings(report);
   const high = findings.filter((finding) => ["high", "critical"].includes(finding.severity)).length;
@@ -286,18 +290,20 @@ function Toast({ message }: { message: string | null }) {
 
 function PasswordGate({
   reportId,
+  comparePrevious,
   onUnlocked,
 }: {
   reportId: number;
-  onUnlocked: () => void;
+  comparePrevious: boolean;
+  onUnlocked: (report: ReportDetail) => void;
 }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mutation = useMutation({
-    mutationFn: () => unlockSharedReport(reportId, password),
-    onSuccess: () => {
+    mutationFn: () => unlockSharedReport(reportId, password, { comparePrevious }),
+    onSuccess: (report) => {
       setError(null);
-      onUnlocked();
+      onUnlocked(report);
     },
     onError: () => setError("Incorrect password. Try again."),
   });
@@ -640,6 +646,7 @@ function ConfidenceTab({ report }: { report: ReportDetail }) {
   const evidenceItems = getEvidenceItems(report);
   const evidenceCounts = evidenceSummaryCounts(report, evidenceItems);
   const evidenceRegisterTitle = evidenceSummaryLabel(evidenceCounts.total, evidenceCounts.external);
+  const conflicts = scannerConflicts(report);
   const ledgerCard = (title: string, items: string[], hot = false) => (
     <Card eyebrow="CONFIDENCE LEDGER" title={title}>
       <ol className="dw-ledger-list">
@@ -659,6 +666,25 @@ function ConfidenceTab({ report }: { report: ReportDetail }) {
         {ledgerCard("Why not lower", ledger.why_not_lower ?? [], true)}
         {ledgerCard("Why not higher", ledger.why_not_higher ?? [])}
       </div>
+      {conflicts.length > 0 && (
+        <Card eyebrow="SCANNER CONFLICTS" title={`${conflicts.length} source ${conflicts.length === 1 ? "conflict" : "conflicts"}`}>
+          <div className="dw-evidence-register">
+            {conflicts.map((conflict, index) => (
+              <div key={`${conflict.finding_id}-${conflict.scanner_source}-${conflict.deterministic_source}-${index}`}>
+                <span>{conflict.finding_title}</span>
+                <MonoRef>{conflict.scanner_source}</MonoRef>
+                <p>{conflict.conflict_summary}</p>
+                <em>
+                  scanner {conflict.scanner_freshness} - deterministic {conflict.deterministic_freshness}
+                </em>
+                <p>{conflict.confidence_impact}</p>
+                <p>{conflict.recommended_verification}</p>
+                <MonoRef>{conflict.deterministic_source}</MonoRef>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
       <Card eyebrow="EVIDENCE REGISTER" title={evidenceRegisterTitle}>
         <div className="dw-evidence-register">
           {evidenceItems.length === 0 && evidenceCounts.total > 0 ? (
@@ -1006,10 +1032,12 @@ export function ReportScreen() {
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
   const [toast, setToast] = useState<string | null>(null);
   const comparePrevious = searchParams.get("compare") === "previous";
+  const queryClient = useQueryClient();
+  const reportQueryKey = ["report", reportId, publicView, comparePrevious];
 
   const reportQuery = useQuery({
     enabled: Number.isFinite(reportId),
-    queryKey: ["report", reportId, publicView, comparePrevious],
+    queryKey: reportQueryKey,
     queryFn: () => getReportDetail(reportId, { publicView, comparePrevious }),
     retry: false,
   });
@@ -1026,7 +1054,13 @@ export function ReportScreen() {
     return <ReportLoading />;
   }
   if (reportQuery.error instanceof ApiClientError && reportQuery.error.status === 401 && publicView) {
-    return <PasswordGate reportId={reportId} onUnlocked={() => void reportQuery.refetch()} />;
+    return (
+      <PasswordGate
+        comparePrevious={comparePrevious}
+        reportId={reportId}
+        onUnlocked={(report) => queryClient.setQueryData(reportQueryKey, report)}
+      />
+    );
   }
   if (reportQuery.isError || !reportQuery.data) {
     return (

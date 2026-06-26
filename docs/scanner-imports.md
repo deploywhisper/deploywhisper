@@ -61,6 +61,17 @@ tool names, and normalized evidence rows. Each evidence row includes:
 - `source_ref`
 - `project_id` and `project_key`
 
+## Conflict Handling
+
+Scanner findings remain external evidence even when they mention a higher or
+lower severity than DeployWhisper's deterministic score. When report synthesis
+finds scanner-linked evidence that conflicts with DeployWhisper deterministic
+evidence or context freshness, the report share summary includes
+`share_summary.json_payload.scanner_conflicts`. Each conflict names the scanner
+source, deterministic evidence source, source freshness, confidence impact, and
+recommended verification step. UI, API, CLI, and PR-comment consumers should
+render that payload instead of choosing one side silently.
+
 ## Semgrep JSON Endpoint
 
 ```http

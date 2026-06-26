@@ -315,6 +315,59 @@ class AdapterOutputContractTests(unittest.TestCase):
         )
         self.assertIn("external scanner evidence item", summary.plain_text)
 
+    def test_adapter_contract_preserves_scanner_conflict_payload(self) -> None:
+        payload = _report_payload()
+        payload["findings"][0]["evidence_refs"].append("ev-scanner")
+        payload["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        payload["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "critical",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+        summary = build_share_summary(payload)
+
+        contract = build_adapter_output_contract(
+            summary,
+            AdapterMetadata(
+                adapter="github-actions",
+                format="pr_comment",
+                project_key="payments",
+            ),
+        )
+
+        conflicts = contract.canonical_summary.json_payload.scanner_conflicts
+        self.assertEqual(len(conflicts), 1)
+        conflict = conflicts[0]
+        self.assertEqual(conflict.finding_id, "finding-001")
+        self.assertEqual(conflict.scanner_source, "semgrep://results/sg-1")
+        self.assertEqual(conflict.scanner_freshness, "current")
+        self.assertEqual(conflict.deterministic_source, "ev-001")
+        self.assertEqual(conflict.deterministic_freshness, "current")
+        self.assertIn("critical", conflict.conflict_summary)
+        self.assertIn("Evidence Law", conflict.confidence_impact)
+        self.assertIn("Review scanner evidence", conflict.recommended_verification)
+        dumped = contract.model_dump(mode="json")
+        dumped_conflict = dumped["canonical_summary"]["json_payload"][
+            "scanner_conflicts"
+        ][0]
+        self.assertEqual(dumped_conflict["scanner_source"], "semgrep://results/sg-1")
+        self.assertEqual(dumped_conflict["deterministic_source"], "ev-001")
+        self.assertIn("scanner_conflicts", contract.model_dump_json())
+
     def test_share_summary_preserves_external_context_when_evidence_rows_omitted(
         self,
     ) -> None:
