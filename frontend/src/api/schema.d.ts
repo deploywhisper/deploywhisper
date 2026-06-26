@@ -1865,6 +1865,11 @@ export interface components {
              */
             confidence: number;
             /**
+             * Evidence Label
+             * @description Reviewer-facing label for external evidence context
+             */
+            evidence_label?: string | null;
+            /**
              * Related Change Ids
              * @description Traceable normalized change identifiers
              */
@@ -2150,6 +2155,11 @@ export interface components {
              * @description Evidence IDs linked to the finding
              */
             evidence_refs?: string[];
+            /**
+             * Evidence Label
+             * @description Reviewer-facing label for external or mixed evidence context
+             */
+            evidence_label?: string | null;
             /**
              * Skill Id
              * @description Skill identifier when a skill contributed the finding
@@ -3531,6 +3541,11 @@ export interface components {
              * @description Finding confidence score
              */
             confidence: number;
+            /**
+             * Evidence Label
+             * @description Reviewer-facing label for external or non-DeployWhisper evidence
+             */
+            evidence_label?: string | null;
         };
         /** ShareSummaryJsonPayloadData */
         ShareSummaryJsonPayloadData: {
@@ -3590,6 +3605,16 @@ export interface components {
              * @description Total evidence-item count
              */
             evidence_count: number;
+            /**
+             * External Evidence Count
+             * @description External scanner evidence items included as review context
+             */
+            external_evidence_count?: number;
+            /**
+             * External Evidence Summary
+             * @description How external scanner context should be interpreted
+             */
+            external_evidence_summary?: string | null;
             /**
              * Blast Radius Summary
              * @description Concise blast-radius summary

@@ -281,6 +281,369 @@ class AdapterOutputContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             contract.canonical_summary.json_payload.evidence_law_status = "Needs review"
 
+    def test_share_summary_labels_external_scanner_context_for_comments(self) -> None:
+        payload = _report_payload()
+        payload["findings"][0]["evidence_refs"].append("ev-scanner")
+        payload["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-scanner-context",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            }
+        )
+
+        summary = build_share_summary(payload)
+
+        self.assertEqual(summary.json_payload.external_evidence_count, 1)
+        self.assertEqual(
+            summary.json_payload.external_evidence_summary,
+            "1 external scanner evidence item is included as context, not DeployWhisper severity proof.",
+        )
+        self.assertEqual(
+            summary.json_payload.top_findings[0].evidence_label,
+            "Includes external context",
+        )
+        self.assertEqual(summary.json_payload.top_findings[0].evidence_count, 2)
+        self.assertIn("[Includes external context]", summary.markdown)
+        self.assertIn("External scanner context", summary.markdown)
+        self.assertIn(
+            "HIGH: aws_security_group.db: Includes external context.",
+            summary.plain_text,
+        )
+        self.assertIn("external scanner evidence item", summary.plain_text)
+
+    def test_share_summary_preserves_external_context_when_evidence_rows_omitted(
+        self,
+    ) -> None:
+        payload = _report_payload()
+        payload["findings"][0]["evidence_refs"].append("ev-scanner")
+        payload["findings"][0]["evidence_label"] = "Includes external context"
+        payload["evidence_items"] = []
+        payload["share_summary"] = {
+            "json_payload": {
+                "evidence_count": 2,
+                "external_evidence_count": 1,
+            },
+        }
+
+        summary = build_share_summary(payload, evidence_detail_available=False)
+
+        self.assertEqual(summary.json_payload.evidence_count, 2)
+        self.assertEqual(summary.json_payload.external_evidence_count, 1)
+        self.assertEqual(
+            summary.json_payload.external_evidence_summary,
+            "1 external scanner evidence item is included as context, not DeployWhisper severity proof.",
+        )
+        self.assertEqual(
+            summary.json_payload.top_findings[0].evidence_label,
+            "Includes external context",
+        )
+        self.assertEqual(summary.json_payload.top_findings[0].evidence_count, 2)
+        self.assertIn("[Includes external context]", summary.markdown)
+        self.assertIn("External scanner context", summary.markdown)
+        self.assertIn("- Evidence Law: Detail omitted", summary.markdown)
+
+    def test_share_summary_caps_external_context_when_rows_are_partially_redacted(
+        self,
+    ) -> None:
+        payload = _report_payload()
+        payload["findings"][0]["evidence_refs"].append("ev-scanner")
+        payload["findings"][0]["evidence_label"] = "Includes external context"
+        payload["evidence_items"] = [
+            {
+                "evidence_id": "ev-001",
+                "finding_id": "finding-001",
+                "source_type": "artifact",
+                "source_kind": "artifact",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            },
+        ]
+        payload["share_summary"] = {
+            "json_payload": {
+                "evidence_count": 2,
+                "external_evidence_count": 9,
+            },
+        }
+
+        summary = build_share_summary(payload, evidence_detail_available=False)
+
+        self.assertEqual(summary.json_payload.evidence_count, 2)
+        self.assertEqual(summary.json_payload.external_evidence_count, 1)
+        self.assertIn("2 evidence items", summary.markdown)
+        self.assertIn("1 external scanner evidence item", summary.markdown)
+        self.assertNotIn("9 external scanner evidence", summary.markdown)
+
+    def test_share_summary_keeps_external_scanner_findings_after_top_three(
+        self,
+    ) -> None:
+        payload = _report_payload()
+        payload["findings"] = [
+            {
+                "finding_id": f"finding-high-{index}",
+                "title": f"HIGH: internal finding {index}",
+                "severity": "high",
+                "confidence": 0.99 - (index / 100),
+                "evidence_refs": [f"ev-high-{index}"],
+            }
+            for index in range(3)
+        ] + [
+            {
+                "finding_id": "finding-scanner-context",
+                "title": "LOW: semgrep scanner context",
+                "severity": "low",
+                "confidence": 0.1,
+                "evidence_refs": ["ev-scanner"],
+            }
+        ]
+        payload["evidence_items"] = [
+            {
+                "evidence_id": f"ev-high-{index}",
+                "finding_id": f"finding-high-{index}",
+                "source_type": "artifact",
+                "source_kind": "artifact",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            }
+            for index in range(3)
+        ] + [
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-scanner-context",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            }
+        ]
+
+        summary = build_share_summary(payload)
+        titles = [finding.title for finding in summary.json_payload.top_findings]
+
+        self.assertIn("LOW: semgrep scanner context", titles)
+        self.assertGreater(len(summary.json_payload.top_findings), 3)
+        self.assertIn(
+            "LOW: semgrep scanner context [External evidence]",
+            summary.markdown,
+        )
+        self.assertNotIn("LOW: LOW: semgrep scanner context", summary.markdown)
+        self.assertIn(
+            "LOW: semgrep scanner context: External evidence.",
+            summary.plain_text,
+        )
+
+    def test_share_summary_caps_external_scanner_findings_after_top_three(
+        self,
+    ) -> None:
+        payload = _report_payload()
+        payload["findings"] = (
+            [
+                {
+                    "finding_id": f"finding-high-{index}",
+                    "title": f"HIGH: internal finding {index}",
+                    "severity": "high",
+                    "confidence": 0.99 - (index / 100),
+                    "evidence_refs": [f"ev-high-{index}"],
+                }
+                for index in range(3)
+            ]
+            + [
+                {
+                    "finding_id": f"finding-mixed-{index}",
+                    "title": f"LOW: mixed scanner context {index}",
+                    "severity": "low",
+                    "confidence": 0.95 - (index / 100),
+                    "evidence_refs": [f"ev-mixed-{index}", f"ev-scanner-mixed-{index}"],
+                }
+                for index in range(2)
+            ]
+            + [
+                {
+                    "finding_id": f"finding-scanner-{index}",
+                    "title": f"LOW: scanner-only context {index}",
+                    "severity": "low",
+                    "confidence": 0.1 - (index / 100),
+                    "evidence_refs": [f"ev-scanner-only-{index}"],
+                }
+                for index in range(3)
+            ]
+        )
+        payload["evidence_items"] = (
+            [
+                {
+                    "evidence_id": f"ev-high-{index}",
+                    "finding_id": f"finding-high-{index}",
+                    "source_type": "artifact",
+                    "source_kind": "artifact",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                }
+                for index in range(3)
+            ]
+            + [
+                {
+                    "evidence_id": f"ev-mixed-{index}",
+                    "finding_id": f"finding-mixed-{index}",
+                    "source_type": "artifact",
+                    "source_kind": "artifact",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                }
+                for index in range(2)
+            ]
+            + [
+                {
+                    "evidence_id": f"ev-scanner-mixed-{index}",
+                    "finding_id": f"finding-mixed-{index}",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                }
+                for index in range(2)
+            ]
+            + [
+                {
+                    "evidence_id": f"ev-scanner-only-{index}",
+                    "finding_id": f"finding-scanner-{index}",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                }
+                for index in range(3)
+            ]
+        )
+
+        summary = build_share_summary(payload)
+        titles = [finding.title for finding in summary.json_payload.top_findings]
+
+        self.assertEqual(len(summary.json_payload.top_findings), 5)
+        self.assertEqual(
+            sum(
+                1
+                for finding in summary.json_payload.top_findings
+                if finding.evidence_label == "External evidence"
+            ),
+            2,
+        )
+        self.assertIn("LOW: scanner-only context 0", titles)
+        self.assertIn("LOW: scanner-only context 1", titles)
+        self.assertNotIn("LOW: scanner-only context 2", titles)
+        self.assertNotIn("LOW: mixed scanner context 0", titles)
+
+    def test_share_summary_compact_markdown_keeps_duplicate_title_external_label(
+        self,
+    ) -> None:
+        payload = _report_payload()
+        payload["findings"] = [
+            {
+                "finding_id": "finding-internal-duplicate",
+                "title": "DUPLICATE: shared title",
+                "severity": "high",
+                "confidence": 0.99,
+                "evidence_refs": ["ev-internal-duplicate"],
+            },
+            {
+                "finding_id": "finding-internal-other",
+                "title": "HIGH: another internal finding",
+                "severity": "high",
+                "confidence": 0.98,
+                "evidence_refs": ["ev-internal-other"],
+            },
+            {
+                "finding_id": "finding-internal-third",
+                "title": "HIGH: third internal finding",
+                "severity": "high",
+                "confidence": 0.97,
+                "evidence_refs": ["ev-internal-third"],
+            },
+            {
+                "finding_id": "finding-external-duplicate",
+                "title": "DUPLICATE: shared title",
+                "severity": "low",
+                "confidence": 0.1,
+                "evidence_refs": ["ev-scanner-duplicate"],
+            },
+        ]
+        payload["evidence_items"] = [
+            {
+                "evidence_id": evidence_id,
+                "finding_id": finding_id,
+                "source_type": "artifact",
+                "source_kind": "artifact",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            }
+            for evidence_id, finding_id in (
+                ("ev-internal-duplicate", "finding-internal-duplicate"),
+                ("ev-internal-other", "finding-internal-other"),
+                ("ev-internal-third", "finding-internal-third"),
+            )
+        ] + [
+            {
+                "evidence_id": "ev-scanner-duplicate",
+                "finding_id": "finding-external-duplicate",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            }
+        ]
+        payload["context_completeness"] = {
+            "context_score": 0.9,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+
+        summary = build_share_summary(payload)
+
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("HIGH: third internal finding", summary.markdown)
+        self.assertIn(
+            "LOW: DUPLICATE: shared title [External evidence]",
+            summary.markdown,
+        )
+        self.assertNotIn("LOW: LOW: DUPLICATE", summary.markdown)
+        self.assertIn(
+            "LOW: DUPLICATE: shared title: External evidence.",
+            summary.plain_text,
+        )
+
+    def test_share_summary_does_not_treat_user_context_as_deploywhisper_support(
+        self,
+    ) -> None:
+        payload = _report_payload()
+        payload["findings"][0]["evidence_refs"] = ["ev-scanner", "ev-user"]
+        payload["evidence_items"] = [
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            },
+            {
+                "evidence_id": "ev-user",
+                "finding_id": "finding-001",
+                "source_type": "user_context",
+                "source_kind": "user_context",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            },
+        ]
+
+        summary = build_share_summary(payload)
+
+        self.assertEqual(
+            summary.json_payload.top_findings[0].evidence_label,
+            "External evidence",
+        )
+        self.assertNotIn("Includes external context", summary.markdown)
+
     def test_adapter_owned_maps_are_immutable_after_validation(self) -> None:
         contract = build_adapter_output_contract(
             build_share_summary(_report_payload()),

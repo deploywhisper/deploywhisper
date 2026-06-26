@@ -264,6 +264,10 @@ class ShareSummaryFinding(BaseModel):
     severity: str = Field(..., description="Finding severity")
     evidence_count: int = Field(..., description="Evidence items linked to the finding")
     confidence: float = Field(..., description="Finding confidence score")
+    evidence_label: str | None = Field(
+        default=None,
+        description="Reviewer-facing label for external or non-DeployWhisper evidence",
+    )
 
 
 class ShareSummaryContext(BaseModel):
@@ -295,12 +299,24 @@ class ShareSummaryJsonPayload(BaseModel):
         default_factory=list, description="Top findings to surface"
     )
     evidence_count: int = Field(..., description="Total evidence-item count")
+    external_evidence_count: int = Field(
+        default=0,
+        description="External scanner evidence items included as review context",
+    )
+    external_evidence_summary: str | None = Field(
+        default=None,
+        description="How external scanner context should be interpreted",
+    )
     blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
     rollback_summary: str = Field(..., description="Concise rollback summary")
     context_completeness: ShareSummaryContext = Field(
         ..., description="Context completeness summary"
     )
     advisory_summary: str = Field(..., description="Advisory-only review summary")
+
+
+_SHARE_SUMMARY_BASE_FINDING_LIMIT = 3
+_SHARE_SUMMARY_EXTERNAL_CONTEXT_EXTRA_LIMIT = 2
 
 
 def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
@@ -1473,11 +1489,70 @@ def _finding_severity_rank(severity: str) -> int:
 def _finding_evidence_count(
     finding: dict, evidence_items: list[dict[str, object]]
 ) -> int:
-    finding_id = finding.get("finding_id")
-    count = sum(1 for item in evidence_items if item.get("finding_id") == finding_id)
+    count = len(_finding_evidence_items(finding, evidence_items))
     if count:
         return count
     return len(finding.get("evidence_refs") or [])
+
+
+def _finding_evidence_items(
+    finding: dict, evidence_items: list[dict[str, object]]
+) -> list[dict[str, object]]:
+    finding_id = finding.get("finding_id")
+    matched = [item for item in evidence_items if item.get("finding_id") == finding_id]
+    refs = {str(ref) for ref in finding.get("evidence_refs") or []}
+    ref_items = [
+        item for item in evidence_items if str(item.get("evidence_id") or "") in refs
+    ]
+    merged = {
+        str(item.get("evidence_id") or ""): item
+        for item in [*matched, *ref_items]
+        if str(item.get("evidence_id") or "")
+    }
+    return list(merged.values())
+
+
+def _is_external_scanner_evidence(item: dict[str, object]) -> bool:
+    return any(
+        str(item.get(key) or "") == "external_scanner"
+        for key in ("source_kind", "source_type")
+    )
+
+
+_NON_DEPLOYWHISPER_EVIDENCE_SOURCES = frozenset({"external_scanner", "user_context"})
+
+
+def _is_deploywhisper_evidence(item: dict[str, object]) -> bool:
+    if _is_external_scanner_evidence(item):
+        return False
+    sources = {
+        str(item.get(key) or "")
+        for key in ("source_kind", "source_type")
+        if str(item.get(key) or "")
+    }
+    return not (sources & _NON_DEPLOYWHISPER_EVIDENCE_SOURCES)
+
+
+def _finding_evidence_label(
+    finding: dict, evidence_items: list[dict[str, object]]
+) -> str | None:
+    linked_evidence_items = _finding_evidence_items(finding, evidence_items)
+    has_external_scanner = any(
+        _is_external_scanner_evidence(item) for item in linked_evidence_items
+    )
+    has_deploywhisper_evidence = any(
+        _is_deploywhisper_evidence(item) for item in linked_evidence_items
+    )
+    if has_external_scanner and has_deploywhisper_evidence:
+        return "Includes external context"
+    if has_external_scanner:
+        return "External evidence"
+    persisted_label = str(finding.get("evidence_label") or "").strip()
+    if persisted_label in {"External evidence", "Includes external context"}:
+        return persisted_label
+    if str(finding.get("evidence_classification") or "") == "external":
+        return "External evidence"
+    return None
 
 
 def _mapping_items(value: object) -> list[dict]:
@@ -1613,15 +1688,109 @@ def _share_findings(report: dict) -> list[ShareSummaryFinding]:
             str(item.get("title", "")),
         ),
     )
+    selected_findings = list(sorted_findings[:_SHARE_SUMMARY_BASE_FINDING_LIMIT])
+    selected_ids = {
+        str(finding.get("finding_id") or id(finding)) for finding in selected_findings
+    }
+    external_context_extra_count = 0
+    extra_candidates = sorted_findings[_SHARE_SUMMARY_BASE_FINDING_LIMIT:]
+    for preferred_label in ("External evidence", None):
+        for finding in extra_candidates:
+            if (
+                external_context_extra_count
+                >= _SHARE_SUMMARY_EXTERNAL_CONTEXT_EXTRA_LIMIT
+            ):
+                break
+            finding_id = str(finding.get("finding_id") or id(finding))
+            if finding_id in selected_ids:
+                continue
+            evidence_label = _finding_evidence_label(finding, evidence_items)
+            if not evidence_label:
+                continue
+            if preferred_label is not None and evidence_label != preferred_label:
+                continue
+            selected_findings.append(finding)
+            selected_ids.add(finding_id)
+            external_context_extra_count += 1
     return [
         ShareSummaryFinding(
             title=_shorten(str(finding.get("title", "")), 72),
             severity=str(finding.get("severity", "medium")),
             evidence_count=_finding_evidence_count(finding, evidence_items),
             confidence=round(_share_finding_confidence(finding.get("confidence")), 2),
+            evidence_label=_finding_evidence_label(finding, evidence_items),
         )
-        for finding in sorted_findings[:3]
+        for finding in selected_findings
     ]
+
+
+def _external_scanner_evidence_count(report: dict) -> int:
+    evidence_items = _mapping_items(report.get("evidence_items"))
+    row_count = sum(1 for item in evidence_items if _is_external_scanner_evidence(item))
+    visible_deploywhisper_count = len(evidence_items) - row_count
+    total_count = _share_summary_evidence_count(report)
+    existing_count = _existing_share_summary_int(report, "external_evidence_count")
+    candidate_count = max(row_count, existing_count or 0)
+    max_external_count = max(row_count, total_count - visible_deploywhisper_count)
+    return min(candidate_count, max_external_count)
+
+
+def _share_summary_evidence_count(report: dict) -> int:
+    row_count = len(_mapping_items(report.get("evidence_items")))
+    existing_count = _existing_share_summary_int(report, "evidence_count")
+    return max(row_count, existing_count or 0)
+
+
+def _existing_share_summary_int(report: dict, key: str) -> int | None:
+    json_payload = _existing_share_summary_json_payload(report)
+    if json_payload is None:
+        return None
+    value = json_payload.get(key)
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0, count)
+
+
+def _existing_share_summary_json_payload(report: dict) -> dict | None:
+    share_summary = report.get("share_summary")
+    if isinstance(share_summary, BaseModel):
+        share_summary = share_summary.model_dump()
+    if not isinstance(share_summary, dict):
+        return None
+    json_payload = share_summary.get("json_payload")
+    if isinstance(json_payload, BaseModel):
+        json_payload = json_payload.model_dump()
+    if not isinstance(json_payload, dict):
+        return None
+    return json_payload
+
+
+def _external_scanner_evidence_summary(count: int) -> str | None:
+    if count <= 0:
+        return None
+    noun = "item is" if count == 1 else "items are"
+    return (
+        f"{count} external scanner evidence {noun} included as context, "
+        "not DeployWhisper severity proof."
+    )
+
+
+def _share_finding_line(finding: ShareSummaryFinding) -> str:
+    label = f"[{finding.evidence_label}] " if finding.evidence_label else ""
+    return (
+        f"  - {_share_finding_plain_title(finding)} "
+        f"{label}({finding.evidence_count} evidence)"
+    )
+
+
+def _share_finding_plain_title(finding: ShareSummaryFinding) -> str:
+    title = finding.title.strip()
+    severity_prefix = f"{finding.severity.upper()}:"
+    if title.upper().startswith(severity_prefix):
+        return title
+    return f"{finding.severity.upper()}: {title}"
 
 
 def build_share_summary(
@@ -1638,7 +1807,11 @@ def build_share_summary(
     )
     verdict_banner = f"DeployWhisper {severity.upper()} · {recommendation.upper()}"
     top_findings = _share_findings(report)
-    evidence_count = len(_mapping_items(report.get("evidence_items")))
+    evidence_count = _share_summary_evidence_count(report)
+    external_evidence_count = _external_scanner_evidence_count(report)
+    external_evidence_summary = _external_scanner_evidence_summary(
+        external_evidence_count
+    )
     evidence_status, evidence_detail = evidence_law_status(
         report, evidence_detail_available=evidence_detail_available
     )
@@ -1687,6 +1860,8 @@ def build_share_summary(
         headline=headline,
         top_findings=top_findings,
         evidence_count=evidence_count,
+        external_evidence_count=external_evidence_count,
+        external_evidence_summary=external_evidence_summary,
         blast_radius_summary=blast_radius_summary,
         rollback_summary=rollback_summary,
         context_completeness=context_summary,
@@ -1698,9 +1873,12 @@ def build_share_summary(
         f"**Summary:** {headline}",
         f"- Findings: {len(top_findings)} shown / {len(report.get('findings') or [])} total · {evidence_count} evidence items",
     ]
+    if external_evidence_summary is not None:
+        markdown_lines.append(
+            f"- External scanner context: {external_evidence_summary}"
+        )
     markdown_lines.extend(
-        f"  - {finding.severity.upper()}: {finding.title} ({finding.evidence_count} evidence)"
-        for finding in json_payload.top_findings
+        _share_finding_line(finding) for finding in json_payload.top_findings
     )
     markdown_lines.extend(
         [
@@ -1717,15 +1895,23 @@ def build_share_summary(
     )
     markdown = "\n".join(markdown_lines)
     if len(markdown) > 1500:
-        finding_lines = [
-            f"  - {finding.severity.upper()}: {finding.title} ({finding.evidence_count} evidence)"
-            for finding in json_payload.top_findings[:2]
-        ]
+        compact_findings = list(json_payload.top_findings[:3])
+        for finding in json_payload.top_findings[3:]:
+            if finding.evidence_label:
+                compact_findings.append(finding)
+        finding_lines = [_share_finding_line(finding) for finding in compact_findings]
         markdown = "\n".join(
             [
                 f"### {verdict_banner}",
                 f"**Summary:** {_shorten(headline, 120)}",
                 f"- Findings: {len(report.get('findings') or [])} total · {evidence_count} evidence items",
+                *(
+                    [
+                        f"- External scanner context: {_shorten(external_evidence_summary, 120)}"
+                    ]
+                    if external_evidence_summary is not None
+                    else []
+                ),
                 *finding_lines,
                 f"- Blast radius: {_shorten(blast_radius_summary, 120)}",
                 (
@@ -1743,6 +1929,16 @@ def build_share_summary(
             verdict_banner + ".",
             f"Summary: {headline}",
             f"Findings: {len(top_findings)} shown / {len(report.get('findings') or [])} total and {evidence_count} evidence items.",
+            " ".join(
+                f"{_share_finding_plain_title(finding)}: {finding.evidence_label}."
+                for finding in top_findings
+                if finding.evidence_label
+            ),
+            (
+                f"External scanner context: {external_evidence_summary}"
+                if external_evidence_summary is not None
+                else ""
+            ),
             f"Blast radius: {blast_radius_summary}.",
             f"Rollback: {rollback_summary}.",
             f"Evidence Law: {evidence_status} - {evidence_detail}.",

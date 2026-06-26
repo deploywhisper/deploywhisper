@@ -1174,6 +1174,10 @@ class FindingData(BaseModel):
     evidence_refs: list[str] = Field(
         default_factory=list, description="Evidence IDs linked to the finding"
     )
+    evidence_label: str | None = Field(
+        default=None,
+        description="Reviewer-facing label for external or mixed evidence context",
+    )
     skill_id: str | None = Field(
         default=None,
         description="Skill identifier when a skill contributed the finding",
@@ -1262,6 +1266,10 @@ class EvidenceItemData(BaseModel):
         ..., description="Whether the evidence came from deterministic logic"
     )
     confidence: float = Field(..., description="Confidence score between 0 and 1")
+    evidence_label: str | None = Field(
+        default=None,
+        description="Reviewer-facing label for external evidence context",
+    )
     related_change_ids: list[str] = Field(
         default_factory=list, description="Traceable normalized change identifiers"
     )
@@ -1778,6 +1786,10 @@ class ShareSummaryFindingData(BaseModel):
     severity: RiskSeverity = Field(..., description="Finding severity")
     evidence_count: int = Field(..., description="Evidence count for the finding")
     confidence: float = Field(..., description="Finding confidence score")
+    evidence_label: str | None = Field(
+        default=None,
+        description="Reviewer-facing label for external or non-DeployWhisper evidence",
+    )
 
 
 class ShareSummaryContextData(BaseModel):
@@ -1809,6 +1821,14 @@ class ShareSummaryJsonPayloadData(BaseModel):
         default_factory=list, description="Top findings to surface"
     )
     evidence_count: int = Field(..., description="Total evidence-item count")
+    external_evidence_count: int = Field(
+        default=0,
+        description="External scanner evidence items included as review context",
+    )
+    external_evidence_summary: str | None = Field(
+        default=None,
+        description="How external scanner context should be interpreted",
+    )
     blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
     rollback_summary: str = Field(..., description="Concise rollback summary")
     context_completeness: ShareSummaryContextData = Field(

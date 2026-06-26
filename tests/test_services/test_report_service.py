@@ -217,6 +217,42 @@ class ReportServiceTests(unittest.TestCase):
                     ],
                     evidence_payload=[string_false_evidence],
                 )
+        user_context_evidence = {
+            **heuristic_evidence,
+            "evidence_id": "ev-user-context",
+            "source_type": "user_context",
+            "source_ref": "user://review-note/1",
+            "deterministic": True,
+            "determinism_level": "deterministic",
+        }
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without linked deterministic evidence",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-user-context",
+                            "severity": "high",
+                            "evidence_refs": ["ev-user-context"],
+                        }
+                    ],
+                    evidence_payload=[user_context_evidence],
+                )
+        self.assertTrue(
+            analysis_reports_repository_module._is_deploywhisper_evidence(
+                {"source_type": "parser"}
+            )
+        )
+        self.assertFalse(
+            analysis_reports_repository_module._is_deploywhisper_evidence(
+                {"source_type": "user_context"}
+            )
+        )
         string_true_evidence = {
             **heuristic_evidence,
             "evidence_id": "ev-string-true",
@@ -781,6 +817,7 @@ class ReportServiceTests(unittest.TestCase):
             "analysis_id": 0,
             "finding_id": "finding-external-high",
             "source_type": "external_scanner",
+            "source_kind": "artifact",
             "source_ref": "scanner://sast.json#rule.high?action=flag",
             "summary": "External scanner flagged a high risk.",
             "severity_hint": "high",
@@ -789,24 +826,60 @@ class ReportServiceTests(unittest.TestCase):
             "related_change_ids": ["chg-001"],
         }
         with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without linked deterministic evidence",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 72,
+                        "severity": "high",
+                        "recommendation": "no-go",
+                        "top_risk": "HIGH: External scanner high risk.",
+                        "narrative_opening": "NO-GO: External scanner high risk.",
+                        "narrative_explanation": (
+                            "External scanner evidence is reviewer context."
+                        ),
+                        "top_risk_contributors_json": '["ev-external-high"]',
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-external-high",
+                            "title": "HIGH: External scanner high risk.",
+                            "severity": "high",
+                            "deterministic": True,
+                            "evidence_classification": "external",
+                            "evidence_refs": ["ev-external-high"],
+                        }
+                    ],
+                    evidence_payload=[external_evidence],
+                )
+        with database_module.SessionLocal() as session:
             report = analysis_reports_repository_module.create_analysis_report(
                 session,
                 **{
                     **report_kwargs,
-                    "risk_score": 72,
-                    "severity": "high",
-                    "recommendation": "no-go",
-                    "top_risk": "HIGH: External scanner high risk.",
-                    "narrative_opening": "NO-GO: External scanner high risk.",
-                    "narrative_explanation": "External scanner evidence is deterministic.",
+                    "risk_score": 55,
+                    "severity": "medium",
+                    "recommendation": "caution",
+                    "top_risk": "MEDIUM: External scanner context needs review.",
+                    "narrative_opening": (
+                        "CAUTION: External scanner context needs review."
+                    ),
+                    "narrative_explanation": (
+                        "External scanner evidence is reviewer context."
+                    ),
                     "top_risk_contributors_json": '["ev-external-high"]',
                 },
                 findings_payload=[
                     {
                         **finding,
                         "finding_id": "finding-external-high",
-                        "title": "HIGH: External scanner high risk.",
-                        "severity": "high",
+                        "title": "MEDIUM: External scanner context needs review.",
+                        "severity": "medium",
                         "deterministic": True,
                         "evidence_classification": "external",
                         "evidence_refs": ["ev-external-high"],
@@ -1093,6 +1166,189 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(
             report["evidence_items"][0]["finding_id"],
             report["findings"][0]["finding_id"],
+        )
+
+    def test_persist_analysis_report_labels_ref_linked_external_scanner_context(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="scanner.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=55,
+            severity="medium",
+            recommendation="caution",
+            top_risk="External scanner context supports manual review.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: scanner context supports manual review.",
+            explanation="Scanner context is present alongside DeployWhisper evidence.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-scanner",
+                    analysis_id=0,
+                    title="MEDIUM: scanner context",
+                    description="External scanner context needs review.",
+                    severity="medium",
+                    category="external/scanner",
+                    deterministic=False,
+                    confidence=0.8,
+                    uncertainty_note=None,
+                    evidence_classification="external",
+                    evidence_refs=["ev-scanner"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-mixed",
+                    analysis_id=0,
+                    title="MEDIUM: mixed context",
+                    description="DeployWhisper evidence has supporting scanner context.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.85,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-internal", "ev-scanner"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-scanner",
+                    analysis_id=0,
+                    finding_id="finding-scanner",
+                    source_type="external_scanner",
+                    source_ref="scanner://semgrep.json#rule.one?action=flag",
+                    summary="External scanner flagged related context.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                ),
+                EvidenceItem(
+                    evidence_id="ev-internal",
+                    analysis_id=0,
+                    finding_id="finding-mixed",
+                    source_type="artifact",
+                    source_ref="terraform://plan.json#aws_security_group.db?action=modify",
+                    summary="DeployWhisper found ingress evidence.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                ),
+            ],
+        )
+
+        labels_by_title = {
+            finding["title"]: finding["evidence_label"]
+            for finding in report["findings"]
+        }
+        self.assertEqual(
+            labels_by_title["MEDIUM: scanner context"], "External evidence"
+        )
+        self.assertEqual(
+            labels_by_title["MEDIUM: mixed context"],
+            "Includes external context",
+        )
+
+    def test_persist_analysis_report_does_not_label_user_context_as_deploywhisper_support(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="scanner.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=50,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Scanner finding has user-supplied context.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: scanner finding has user context.",
+            explanation="External context is present without DeployWhisper evidence.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-scanner-user-context",
+                    analysis_id=0,
+                    title="MEDIUM: scanner plus user context",
+                    description="Scanner evidence has user-supplied context only.",
+                    severity="medium",
+                    category="external/scanner",
+                    deterministic=False,
+                    confidence=0.75,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-scanner", "ev-user-context"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-scanner",
+                    analysis_id=0,
+                    finding_id="finding-scanner-user-context",
+                    source_type="external_scanner",
+                    source_ref="scanner://semgrep.json#rule.one?action=flag",
+                    summary="External scanner flagged related context.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                ),
+                EvidenceItem(
+                    evidence_id="ev-user-context",
+                    analysis_id=0,
+                    finding_id="finding-scanner-user-context",
+                    source_type="user_context",
+                    source_ref="user://review-note/1",
+                    summary="Reviewer supplied additional context.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                ),
+            ],
+        )
+
+        self.assertEqual(
+            report["findings"][0]["evidence_label"],
+            "External evidence",
         )
 
     def test_persist_analysis_report_prefers_severe_owner_for_generated_shared_evidence(
@@ -2963,7 +3219,7 @@ class ReportServiceTests(unittest.TestCase):
         )
         self.assertNotIn("Evidence Law downgraded", " ".join(report["warnings"]))
 
-    def test_persist_analysis_report_preserves_external_deterministic_severe_finding(
+    def test_persist_analysis_report_downgrades_external_scanner_only_severe_finding(
         self,
     ) -> None:
         parse_batch = ParseBatchResult(
@@ -3020,6 +3276,7 @@ class ReportServiceTests(unittest.TestCase):
                     analysis_id=0,
                     finding_id="pending:scanner-1",
                     source_type="external_scanner",
+                    source_kind="artifact",
                     source_ref="scanner://sast.json#rule.high?action=flag",
                     summary="External scanner flagged a high risk.",
                     severity_hint="high",
@@ -3030,10 +3287,18 @@ class ReportServiceTests(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(report["severity"], "high")
-        self.assertEqual(report["findings"][0]["severity"], "high")
-        self.assertTrue(report["findings"][0]["deterministic"])
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "caution")
+        self.assertEqual(report["findings"][0]["severity"], "medium")
+        self.assertFalse(report["findings"][0]["deterministic"])
         self.assertEqual(report["findings"][0]["evidence_classification"], "external")
+        self.assertEqual(report["findings"][0]["evidence_label"], "External evidence")
+        self.assertIn("Evidence Law downgraded", " ".join(report["warnings"]))
+        self.assertEqual(report["evidence_items"][0]["source_type"], "external_scanner")
+        self.assertEqual(report["evidence_items"][0]["source_kind"], "external_scanner")
+        self.assertEqual(
+            report["evidence_items"][0]["evidence_label"], "External evidence"
+        )
 
     def test_persist_analysis_report_rejects_unmatched_single_finding_evidence(
         self,
