@@ -427,7 +427,9 @@ def _validate_finding_evidence_refs(
                 _evidence_classification(evidence_by_id[evidence_id])
                 for evidence_id in evidence_refs
                 if evidence_id in evidence_by_id
-                and _is_deterministic_evidence(evidence_by_id[evidence_id])
+                and _is_deploywhisper_deterministic_evidence(
+                    evidence_by_id[evidence_id]
+                )
             }
             if not linked_deterministic_classifications:
                 raise ValueError(
@@ -471,7 +473,7 @@ def _validate_finding_evidence_refs(
             for persisted_finding, evidence_refs in finding_rows
             if persisted_finding.severity in {"high", "critical"}
             and any(
-                _is_deterministic_evidence(evidence_by_id[evidence_id])
+                _is_deploywhisper_deterministic_evidence(evidence_by_id[evidence_id])
                 for evidence_id in evidence_refs
                 if evidence_id in evidence_by_id
             )
@@ -518,10 +520,35 @@ def _is_deterministic_evidence(evidence: dict[str, Any]) -> bool:
     )
 
 
+def _is_deploywhisper_deterministic_evidence(evidence: dict[str, Any]) -> bool:
+    return _is_deploywhisper_evidence(evidence) and _is_deterministic_evidence(evidence)
+
+
+def _is_external_scanner_evidence(evidence: dict[str, Any]) -> bool:
+    return any(
+        str(evidence.get(key) or "") == "external_scanner"
+        for key in ("source_kind", "source_type")
+    )
+
+
+_NON_DEPLOYWHISPER_EVIDENCE_SOURCES = frozenset({"external_scanner", "user_context"})
+
+
+def _is_deploywhisper_evidence(evidence: dict[str, Any]) -> bool:
+    if _is_external_scanner_evidence(evidence):
+        return False
+    sources = {
+        str(evidence.get(key) or "")
+        for key in ("source_kind", "source_type")
+        if str(evidence.get(key) or "")
+    }
+    return not (sources & _NON_DEPLOYWHISPER_EVIDENCE_SOURCES)
+
+
 def _evidence_classification(evidence: dict[str, Any]) -> str:
-    source_kind = str(evidence.get("source_kind") or evidence.get("source_type") or "")
-    if source_kind == "external_scanner":
+    if _is_external_scanner_evidence(evidence):
         return "external"
+    source_kind = str(evidence.get("source_kind") or evidence.get("source_type") or "")
     if source_kind == "user_context":
         return "user_provided"
     determinism_level = str(evidence.get("determinism_level") or "deterministic")

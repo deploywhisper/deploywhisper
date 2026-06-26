@@ -326,6 +326,299 @@ describe("ReportScreen", () => {
     expect(markup).toContain("stale - 40%");
   });
 
+  it("labels scanner findings as external evidence across report surfaces", () => {
+    const scannerReport = {
+      ...report,
+      findings: [
+        {
+          ...report.findings[0],
+          evidence_classification: "external",
+          evidence_label: "External evidence",
+          evidence_refs: ["ev-scanner"],
+        },
+      ],
+      evidence_items: [
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-scanner",
+          source_type: "external_scanner",
+          source_kind: "artifact",
+          source_ref: "semgrep://finding/abc123",
+          summary: "Semgrep flagged a scanner finding.",
+          evidence_label: "External evidence",
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          external_evidence_count: 0,
+          external_evidence_summary: "1 external scanner evidence item is included as context, not DeployWhisper severity proof.",
+        },
+      },
+    } satisfies ReportDetail;
+
+    const overviewMarkup = renderReport("/reports/77?private=1", scannerReport);
+    const findingsMarkup = renderReport("/reports/77?private=1&tab=findings", scannerReport);
+    const confidenceMarkup = renderReport("/reports/77?private=1&tab=confidence", scannerReport);
+
+    expect(overviewMarkup).toContain("External evidence");
+    expect(overviewMarkup).toContain("1 evidence item - includes 1 external context item");
+    expect(overviewMarkup).not.toContain("1 deterministic items");
+    expect(findingsMarkup).toContain("External evidence");
+    expect(confidenceMarkup).toContain("1 evidence item - includes 1 external context item");
+    expect(confidenceMarkup).toContain("External evidence");
+    expect(confidenceMarkup).toContain("Semgrep flagged a scanner finding.");
+    expect(`${overviewMarkup}${findingsMarkup}${confidenceMarkup}`).not.toContain(">external_scanner<");
+  });
+
+  it("labels mixed scanner findings as including external context", () => {
+    const mixedReport = {
+      ...report,
+      findings: [
+        {
+          ...report.findings[0],
+          evidence_label: "Includes external context",
+          evidence_refs: ["ev-ingress", "ev-scanner"],
+        },
+      ],
+      evidence_items: [
+        ...report.evidence_items,
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-scanner",
+          source_type: "external_scanner",
+          source_kind: "external_scanner",
+          source_ref: "semgrep://finding/abc123",
+          summary: "Semgrep flagged supporting scanner context.",
+          evidence_label: "External evidence",
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          external_evidence_count: 1,
+          external_evidence_summary: "1 external scanner evidence item is included as context, not DeployWhisper severity proof.",
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1&tab=findings", mixedReport);
+
+    expect(markup).toContain("Includes external context");
+    expect(markup).toContain("Includes external context</span><span class=\"dw-cross-tool");
+    expect(markup).not.toContain("External evidence</span><span class=\"dw-cross-tool");
+  });
+
+  it("keeps legacy fallback labels aligned with linked evidence provenance", () => {
+    const legacyReport = {
+      ...report,
+      findings: [
+        {
+          ...report.findings[0],
+          evidence_classification: "external",
+          evidence_label: null,
+          evidence_refs: ["ev-ingress", "ev-scanner"],
+        },
+      ],
+      evidence_items: [
+        ...report.evidence_items,
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-scanner",
+          source_type: "external_scanner",
+          source_kind: "external_scanner",
+          source_ref: "semgrep://finding/abc123",
+          summary: "Semgrep flagged supporting scanner context.",
+          evidence_label: null,
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          external_evidence_count: 1,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1&tab=findings", legacyReport);
+
+    expect(markup).toContain("Includes external context");
+    expect(markup).not.toContain("External evidence</span><span class=\"dw-cross-tool");
+  });
+
+  it("uses one evidence-count source for external context summaries", () => {
+    const redactedEvidenceReport = {
+      ...report,
+      findings: [],
+      evidence_items: [],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 2,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", redactedEvidenceReport);
+    const confidenceMarkup = renderReport("/reports/77?private=1&tab=confidence", redactedEvidenceReport);
+
+    expect(markup).toContain("4 evidence items - includes 2 external context items");
+    expect(markup).not.toContain("0 evidence items - includes 2 external context items");
+    expect(confidenceMarkup).toContain("4 evidence items - includes 2 external context items");
+    expect(confidenceMarkup).toContain("Evidence detail was omitted or redacted for this view.");
+  });
+
+  it("uses payload totals for redacted internal-only evidence summaries", () => {
+    const redactedInternalReport = {
+      ...report,
+      findings: [],
+      evidence_items: [],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 0,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", redactedInternalReport);
+
+    expect(markup).toContain("4 evidence items");
+    expect(markup).not.toContain("4 deterministic items");
+    expect(markup).not.toContain("0 evidence items");
+  });
+
+  it("does not undercount rendered evidence rows when summary counts lag", () => {
+    const stalePayloadReport = {
+      ...report,
+      evidence_items: [
+        ...report.evidence_items,
+        ...Array.from({ length: 4 }, (_, index) => ({
+          ...report.evidence_items[0],
+          evidence_id: `ev-extra-${index}`,
+          source_type: index < 3 ? "external_scanner" : "artifact",
+          source_kind: index < 3 ? "external_scanner" : "artifact",
+          source_ref: `scanner://finding/${index}`,
+          summary: `Additional evidence row ${index}.`,
+        })),
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 1,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", stalePayloadReport);
+
+    expect(markup).toContain("5 evidence items - includes 3 external context items");
+    expect(markup).not.toContain("5 evidence items - includes 1 external context item");
+  });
+
+  it("does not let stale external evidence counts exceed total evidence", () => {
+    const staleHighExternalReport = {
+      ...report,
+      evidence_items: [],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 9,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", staleHighExternalReport);
+
+    expect(markup).toContain("4 evidence items - includes 4 external context items");
+    expect(markup).not.toContain("4 evidence items - includes 9 external context items");
+  });
+
+  it("does not count visible internal evidence rows as stale external context", () => {
+    const partiallyRedactedReport = {
+      ...report,
+      evidence_items: [
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-visible-internal-1",
+          source_type: "artifact",
+          source_kind: "artifact",
+          source_ref: "terraform://plan.json#internal-1",
+          summary: "Visible DeployWhisper evidence.",
+        },
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-visible-internal-2",
+          source_type: "parser",
+          source_kind: "parser",
+          source_ref: "parser://plan.json#internal-2",
+          summary: "Visible parser evidence.",
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 9,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", partiallyRedactedReport);
+
+    expect(markup).toContain("4 evidence items - includes 2 external context items");
+    expect(markup).not.toContain("4 evidence items - includes 4 external context items");
+  });
+
+  it("does not overcount external context when rendered evidence already matches payload total", () => {
+    const staleHighRenderedReport = {
+      ...report,
+      evidence_items: [
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-internal",
+          source_type: "artifact",
+          source_kind: "artifact",
+          source_ref: "terraform://plan.json#internal",
+          summary: "Internal DeployWhisper evidence.",
+        },
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-scanner",
+          source_type: "external_scanner",
+          source_kind: "external_scanner",
+          source_ref: "scanner://finding/1",
+          summary: "External scanner context.",
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 2,
+          external_evidence_count: 4,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", staleHighRenderedReport);
+
+    expect(markup).toContain("2 evidence items - includes 1 external context item");
+    expect(markup).not.toContain("2 evidence items - includes 2 external context items");
+  });
+
   it("renders note-only duplicate context sources with distinct row identities", () => {
     const noteOnlyDuplicateReport = {
       ...report,

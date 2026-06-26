@@ -2478,10 +2478,82 @@ def _has_linked_deterministic_evidence(
 ) -> bool:
     return any(
         (evidence_item := evidence_by_id.get(evidence_ref)) is not None
-        and evidence_item.deterministic
-        and evidence_item.determinism_level == "deterministic"
+        and _is_deploywhisper_deterministic_evidence(evidence_item)
         for evidence_ref in finding.evidence_refs
     )
+
+
+def _is_deploywhisper_deterministic_evidence(evidence_item: EvidenceItem) -> bool:
+    return (
+        _is_deploywhisper_evidence_item(evidence_item)
+        and evidence_item.deterministic
+        and evidence_item.determinism_level == "deterministic"
+    )
+
+
+def _is_external_scanner_evidence_item(evidence_item: EvidenceItem) -> bool:
+    return any(
+        source == "external_scanner"
+        for source in (evidence_item.source_kind, evidence_item.source_type)
+    )
+
+
+_NON_DEPLOYWHISPER_EVIDENCE_SOURCES = frozenset({"external_scanner", "user_context"})
+
+
+def _is_deploywhisper_evidence_item(evidence_item: EvidenceItem) -> bool:
+    if _is_external_scanner_evidence_item(evidence_item):
+        return False
+    sources = {
+        source
+        for source in (evidence_item.source_kind, evidence_item.source_type)
+        if source
+    }
+    return not (sources & _NON_DEPLOYWHISPER_EVIDENCE_SOURCES)
+
+
+def _evidence_item_label(evidence_item: EvidenceItem) -> str | None:
+    if _is_external_scanner_evidence_item(evidence_item):
+        return "External evidence"
+    return None
+
+
+def _finding_evidence_label(finding, evidence_items: list[EvidenceItem]) -> str | None:
+    has_external_scanner = any(
+        _is_external_scanner_evidence_item(item) for item in evidence_items
+    )
+    has_deploywhisper_evidence = any(
+        _is_deploywhisper_evidence_item(item) for item in evidence_items
+    )
+    if has_external_scanner and has_deploywhisper_evidence:
+        return "Includes external context"
+    if has_external_scanner:
+        return "External evidence"
+    if finding.evidence_classification == "external":
+        return "External evidence"
+    return None
+
+
+def _finding_linked_evidence_items(
+    finding,
+    evidence_items_by_finding_id: dict[str, list[EvidenceItem]],
+    evidence_items_by_id: dict[str, EvidenceItem],
+) -> list[EvidenceItem]:
+    refs = set(json.loads(finding.evidence_refs_json or "[]"))
+    linked_items = [
+        *evidence_items_by_finding_id.get(finding.finding_id, []),
+        *(
+            evidence_items_by_id[evidence_ref]
+            for evidence_ref in refs
+            if evidence_ref in evidence_items_by_id
+        ),
+    ]
+    merged = {
+        evidence_item.evidence_id: evidence_item
+        for evidence_item in linked_items
+        if evidence_item.evidence_id
+    }
+    return list(merged.values())
 
 
 def _linked_deterministic_evidence_refs(
@@ -2492,8 +2564,7 @@ def _linked_deterministic_evidence_refs(
         evidence_ref
         for evidence_ref in finding.evidence_refs
         if (evidence_item := evidence_by_id.get(evidence_ref)) is not None
-        and evidence_item.deterministic
-        and evidence_item.determinism_level == "deterministic"
+        and _is_deploywhisper_deterministic_evidence(evidence_item)
     ]
 
 
@@ -4206,8 +4277,13 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
     confidence = _clamp_confidence_to_context(confidence, context_completeness)
     full_evidence_items: list[dict[str, Any]] = []
     seen_evidence_ids: set[str] = set()
+    evidence_items_by_finding_id: dict[str, list[EvidenceItem]] = {}
+    evidence_items_by_id: dict[str, EvidenceItem] = {}
     for finding in report.findings:
-        for evidence_item in finding.evidence_items:
+        finding_evidence_items = list(finding.evidence_items)
+        evidence_items_by_finding_id[finding.finding_id] = finding_evidence_items
+        for evidence_item in finding_evidence_items:
+            evidence_items_by_id[evidence_item.evidence_id] = evidence_item
             if evidence_item.evidence_id in seen_evidence_ids:
                 continue
             seen_evidence_ids.add(evidence_item.evidence_id)
@@ -4233,6 +4309,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
                     "severity_hint": evidence_item.severity_hint,
                     "deterministic": evidence_item.deterministic,
                     "confidence": evidence_item.confidence,
+                    "evidence_label": _evidence_item_label(evidence_item),
                     "related_change_ids": json.loads(
                         evidence_item.related_change_ids_json or "[]"
                     ),
@@ -4360,6 +4437,14 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
                 "uncertainty_note": finding.uncertainty_note,
                 "evidence_classification": finding.evidence_classification,
                 "evidence_refs": json.loads(finding.evidence_refs_json or "[]"),
+                "evidence_label": _finding_evidence_label(
+                    finding,
+                    _finding_linked_evidence_items(
+                        finding,
+                        evidence_items_by_finding_id,
+                        evidence_items_by_id,
+                    ),
+                ),
                 "skill_id": finding.skill_id,
             }
             for finding in report.findings

@@ -123,6 +123,10 @@ Evidence Law status values are `Satisfied`, `Needs review`, `Reconciled`, and
 `Detail omitted`. CLI/API analysis responses include evidence detail and should
 not emit `Detail omitted`; compact report-list style views may use it when
 evidence rows were intentionally excluded.
+When scanner evidence is present, share-summary JSON and PR-comment markdown
+label it as external scanner context. External scanner severity is not
+DeployWhisper severity proof on its own; high/critical DeployWhisper findings
+still require linked DeployWhisper deterministic evidence.
 
 ```json
 {
@@ -155,10 +159,13 @@ evidence rows were intentionally excluded.
           "title": "HIGH: public ingress exposure",
           "severity": "high",
           "evidence_count": 2,
-          "confidence": 1.0
+          "confidence": 1.0,
+          "evidence_label": "Includes external context"
         }
       ],
       "evidence_count": 4,
+      "external_evidence_count": 1,
+      "external_evidence_summary": "1 external scanner evidence item is included as context, not DeployWhisper severity proof.",
       "context_completeness": {
         "score": 0.22,
         "label": "LIMITED CONTEXT",
@@ -454,6 +461,7 @@ without storing raw plan internals in a separate contract.
       "confidence": 1.0,
       "uncertainty_note": null,
       "evidence_classification": "deterministic",
+      "evidence_label": null,
       "evidence_refs": ["ev-plan-json-1"],
       "skill_id": "terraform"
     }
@@ -467,6 +475,7 @@ without storing raw plan internals in a separate contract.
       "artifact": "plan.json",
       "summary": "Terraform opened SSH ingress from 0.0.0.0/0 on port 22.",
       "deterministic": true,
+      "evidence_label": null,
       "confidence": 1.0,
       "context_source": {
         "source_id": "artifact:plan.json",
