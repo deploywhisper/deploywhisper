@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import math
 from datetime import UTC, datetime
@@ -276,6 +277,26 @@ class ShareSummaryContext(BaseModel):
     summary: str = Field(..., description="Short context completeness summary")
 
 
+class ShareSummaryScannerConflict(BaseModel):
+    finding_id: str = Field(..., description="Finding with conflicting scanner context")
+    finding_title: str = Field(..., description="Reviewer-facing finding title")
+    scanner_source: str = Field(..., description="Scanner evidence source reference")
+    scanner_freshness: str = Field(..., description="Scanner source freshness status")
+    deterministic_source: str = Field(
+        ..., description="DeployWhisper deterministic evidence source"
+    )
+    deterministic_freshness: str = Field(
+        ..., description="DeployWhisper deterministic source freshness status"
+    )
+    conflict_summary: str = Field(..., description="Short conflict explanation")
+    confidence_impact: str = Field(
+        ..., description="How the conflict affects confidence interpretation"
+    )
+    recommended_verification: str = Field(
+        ..., description="Reviewer action for resolving the conflict"
+    )
+
+
 class ShareSummaryJsonPayload(BaseModel):
     version: str = Field(default="v1", description="Share-summary payload version")
     report_schema_version: str = Field(
@@ -306,6 +327,10 @@ class ShareSummaryJsonPayload(BaseModel):
     external_evidence_summary: str | None = Field(
         default=None,
         description="How external scanner context should be interpreted",
+    )
+    scanner_conflicts: list[ShareSummaryScannerConflict] = Field(
+        default_factory=list,
+        description="Scanner-vs-deterministic/context conflicts requiring review",
     )
     blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
     rollback_summary: str = Field(..., description="Concise rollback summary")
@@ -1498,18 +1523,32 @@ def _finding_evidence_count(
 def _finding_evidence_items(
     finding: dict, evidence_items: list[dict[str, object]]
 ) -> list[dict[str, object]]:
-    finding_id = finding.get("finding_id")
-    matched = [item for item in evidence_items if item.get("finding_id") == finding_id]
+    finding_id = str(finding.get("finding_id") or "").strip()
+    matched = (
+        [
+            item
+            for item in evidence_items
+            if str(item.get("finding_id") or "").strip() == finding_id
+        ]
+        if finding_id
+        else []
+    )
     refs = {str(ref) for ref in finding.get("evidence_refs") or []}
     ref_items = [
         item for item in evidence_items if str(item.get("evidence_id") or "") in refs
     ]
-    merged = {
-        str(item.get("evidence_id") or ""): item
-        for item in [*matched, *ref_items]
-        if str(item.get("evidence_id") or "")
-    }
-    return list(merged.values())
+    merged: list[dict[str, object]] = []
+    seen: set[tuple[str, str | int]] = set()
+    for item in [*matched, *ref_items]:
+        evidence_id = str(item.get("evidence_id") or "").strip()
+        identity: tuple[str, str | int] = (
+            ("evidence_id", evidence_id) if evidence_id else ("object", id(item))
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        merged.append(item)
+    return merged
 
 
 def _is_external_scanner_evidence(item: dict[str, object]) -> bool:
@@ -1777,6 +1816,419 @@ def _external_scanner_evidence_summary(count: int) -> str | None:
     )
 
 
+def _evidence_context_source(item: dict[str, object]) -> dict[str, object]:
+    context_source = item.get("context_source")
+    return context_source if isinstance(context_source, dict) else {}
+
+
+def _evidence_freshness(item: dict[str, object]) -> str:
+    context_source = _evidence_context_source(item)
+    freshness = str(context_source.get("freshness_status") or "").strip().lower()
+    return freshness or "unknown"
+
+
+def _evidence_severity_signal(item: dict[str, object]) -> str:
+    for key in ("severity_hint", "severity", "level"):
+        value = str(item.get(key) or "").strip().lower()
+        if value:
+            return value
+    return "unknown"
+
+
+def _evidence_source_detail(item: dict[str, object]) -> str:
+    for key in ("source_ref", "evidence_id", "artifact", "location"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    return "unknown source"
+
+
+def _scanner_identity_detail(item: dict[str, object], index: int) -> str:
+    evidence_id = str(item.get("evidence_id") or "").strip()
+    if evidence_id:
+        return evidence_id
+    artifact = str(item.get("artifact") or "").strip()
+    location = str(item.get("location") or "").strip()
+    if artifact or location:
+        return f"{artifact}:{location}"
+    source_ref = str(item.get("source_ref") or "").strip()
+    if source_ref:
+        return f"{source_ref}#{index}"
+    return f"scanner-evidence-{index}"
+
+
+def _context_conflict_signals(item: dict[str, object]) -> list[str]:
+    context_source = _evidence_context_source(item)
+    signals: list[str] = []
+    for field_name in ("conflicts", "limitations"):
+        values = context_source.get(field_name)
+        if values is None:
+            continue
+        if not isinstance(values, list | tuple):
+            values = [values]
+        signals.extend(str(value).strip() for value in values if str(value).strip())
+    return signals
+
+
+_CONFLICTING_FRESHNESS_STATUSES = frozenset(
+    {"conflicting", "stale", "incomplete", "missing"}
+)
+_COMPACT_SCANNER_CONFLICT_LIMIT = 1
+_PLAIN_SCANNER_CONFLICT_LIMIT = 3
+_MARKDOWN_ESCAPE_CHARS = frozenset("\\`*_{}[]()#+!|")
+
+
+def _clean_inline_text(value: object) -> str:
+    return " ".join(str(value or "").split())
+
+
+def _markdown_escape_inline(value: object) -> str:
+    escaped = html.escape(_clean_inline_text(value), quote=False)
+    return "".join(
+        f"\\{char}" if char in _MARKDOWN_ESCAPE_CHARS else char for char in escaped
+    )
+
+
+def _scanner_conflict_source_summary(
+    *,
+    scanner_conflicts: list[str],
+    deterministic_conflicts: list[str],
+) -> str | None:
+    parts: list[str] = []
+    if scanner_conflicts:
+        parts.append("scanner: " + "; ".join(scanner_conflicts[:2]))
+    if deterministic_conflicts:
+        parts.append("deterministic: " + "; ".join(deterministic_conflicts[:2]))
+    if not parts:
+        return None
+    return "Evidence carries conflicting context (" + " | ".join(parts) + ")."
+
+
+def _freshness_conflict_summary(
+    *, scanner_freshness: str, deterministic_freshness: str
+) -> str:
+    if scanner_freshness == deterministic_freshness:
+        return (
+            "Scanner and deterministic evidence freshness are both "
+            f"{scanner_freshness}."
+        )
+    return (
+        f"Scanner freshness is {scanner_freshness} while deterministic "
+        f"evidence freshness is {deterministic_freshness}."
+    )
+
+
+def _scanner_conflict_summary(
+    *,
+    scanner_severity: str,
+    finding_severity: str,
+    deterministic_severity: str,
+    scanner_freshness: str,
+    deterministic_freshness: str,
+    scanner_context_conflicts: list[str],
+    deterministic_context_conflicts: list[str],
+    has_severity_conflict: bool,
+    has_deterministic_severity_conflict: bool,
+    has_freshness_conflict: bool,
+) -> str:
+    parts: list[str] = []
+    if has_severity_conflict:
+        parts.append(
+            f"Scanner severity {scanner_severity} differs from "
+            f"DeployWhisper severity {finding_severity}."
+        )
+    if has_deterministic_severity_conflict:
+        parts.append(
+            f"Scanner severity {scanner_severity} differs from "
+            f"deterministic evidence severity {deterministic_severity}."
+        )
+    source_summary = _scanner_conflict_source_summary(
+        scanner_conflicts=scanner_context_conflicts,
+        deterministic_conflicts=deterministic_context_conflicts,
+    )
+    if source_summary is not None:
+        parts.append(source_summary)
+    if has_freshness_conflict:
+        parts.append(
+            _freshness_conflict_summary(
+                scanner_freshness=scanner_freshness,
+                deterministic_freshness=deterministic_freshness,
+            )
+        )
+    return " ".join(parts)
+
+
+def _share_scanner_conflict_detail(
+    conflict: ShareSummaryScannerConflict,
+    *,
+    summary_limit: int,
+    source_limit: int | None = None,
+    markdown: bool = False,
+) -> str:
+    format_text = _markdown_escape_inline if markdown else _clean_inline_text
+    finding_label = _clean_inline_text(conflict.finding_title)
+    if conflict.finding_id and conflict.finding_id not in finding_label:
+        finding_label = f"{finding_label} ({conflict.finding_id})"
+    conflict_summary = _shorten(
+        _clean_inline_text(conflict.conflict_summary), summary_limit
+    )
+    scanner_source = _clean_inline_text(conflict.scanner_source)
+    deterministic_source = _clean_inline_text(conflict.deterministic_source)
+    if source_limit is not None:
+        scanner_source = _shorten(scanner_source, source_limit)
+        deterministic_source = _shorten(deterministic_source, source_limit)
+    return (
+        f"Finding: {format_text(finding_label)}. "
+        f"{format_text(conflict_summary)} "
+        f"Scanner source: {format_text(scanner_source)} "
+        f"({format_text(conflict.scanner_freshness)}); deterministic source: "
+        f"{format_text(deterministic_source)} "
+        f"({format_text(conflict.deterministic_freshness)}). "
+        f"Verification: {format_text(conflict.recommended_verification)} "
+        f"{format_text(conflict.confidence_impact)}"
+    )
+
+
+def _scanner_conflict_priority(
+    conflict: ShareSummaryScannerConflict,
+) -> tuple[int, int, int]:
+    summary = conflict.conflict_summary.lower()
+    severity_priority = (
+        2 if "scanner severity" in summary and "differs" in summary else 0
+    )
+    freshness_priority = max(
+        (
+            {
+                "conflicting": 4,
+                "missing": 3,
+                "stale": 2,
+                "incomplete": 2,
+                "unknown": 1,
+            }.get(status, 0)
+            for status in (
+                conflict.scanner_freshness.lower(),
+                conflict.deterministic_freshness.lower(),
+            )
+        ),
+        default=0,
+    )
+    context_priority = 1 if "conflicting context" in summary else 0
+    return severity_priority, freshness_priority, context_priority
+
+
+def _prioritized_scanner_conflicts(
+    scanner_conflicts: list[ShareSummaryScannerConflict],
+) -> list[ShareSummaryScannerConflict]:
+    return [
+        conflict
+        for _, conflict in sorted(
+            enumerate(scanner_conflicts),
+            key=lambda indexed: (
+                *_scanner_conflict_priority(indexed[1]),
+                -indexed[0],
+            ),
+            reverse=True,
+        )
+    ]
+
+
+def _share_scanner_conflict_markdown_lines(
+    scanner_conflicts: list[ShareSummaryScannerConflict],
+    *,
+    compact: bool = False,
+) -> list[str]:
+    if not scanner_conflicts:
+        return []
+    conflict_limit = (
+        _COMPACT_SCANNER_CONFLICT_LIMIT if compact else len(scanner_conflicts)
+    )
+    summary_limit = 120 if compact else 640
+    rendered_conflicts = (
+        _prioritized_scanner_conflicts(scanner_conflicts)
+        if compact
+        else scanner_conflicts
+    )
+    lines = [
+        "- Scanner conflict: "
+        + _share_scanner_conflict_detail(
+            conflict,
+            summary_limit=summary_limit,
+            source_limit=96 if compact else None,
+            markdown=True,
+        )
+        for conflict in rendered_conflicts[:conflict_limit]
+    ]
+    omitted_count = len(scanner_conflicts) - conflict_limit
+    if omitted_count > 0:
+        lines.append(
+            "- Scanner conflicts: "
+            f"{omitted_count} additional conflicts are available in the JSON "
+            "payload/report; review all before acting."
+        )
+    return lines
+
+
+def _share_scanner_conflict_plain_text(
+    scanner_conflicts: list[ShareSummaryScannerConflict],
+) -> str:
+    if not scanner_conflicts:
+        return ""
+    conflict_limit = _PLAIN_SCANNER_CONFLICT_LIMIT
+    rendered_conflicts = _prioritized_scanner_conflicts(scanner_conflicts)
+    parts = [
+        "Scanner conflict: "
+        + _share_scanner_conflict_detail(
+            conflict,
+            summary_limit=180,
+        )
+        for conflict in rendered_conflicts[:conflict_limit]
+    ]
+    omitted_count = len(scanner_conflicts) - conflict_limit
+    if omitted_count > 0:
+        parts.append(
+            f"{omitted_count} additional scanner conflicts are available in "
+            "the JSON payload/report."
+        )
+    return " ".join(parts)
+
+
+def _scanner_conflicts(report: dict) -> list[ShareSummaryScannerConflict]:
+    evidence_items = _mapping_items(report.get("evidence_items"))
+    findings = _mapping_items(report.get("findings"))
+    conflicts: list[ShareSummaryScannerConflict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for finding in findings:
+        linked_items = _finding_evidence_items(finding, evidence_items)
+        scanner_items = [
+            item for item in linked_items if _is_external_scanner_evidence(item)
+        ]
+        deterministic_items = [
+            item
+            for item in linked_items
+            if _is_deploywhisper_evidence(item)
+            and _truthy_bool_signal(item.get("deterministic"))
+            and str(item.get("determinism_level") or "deterministic").lower()
+            == "deterministic"
+        ]
+        if not scanner_items or not deterministic_items:
+            continue
+        finding_severity = str(finding.get("severity") or "unknown").lower()
+        finding_confidence = _share_finding_confidence(finding.get("confidence"))
+        for scanner_index, scanner_item in enumerate(scanner_items):
+            scanner_severity = _evidence_severity_signal(scanner_item)
+            scanner_freshness = _evidence_freshness(scanner_item)
+            scanner_context_conflicts = _context_conflict_signals(scanner_item)
+            has_severity_conflict = (
+                scanner_severity != "unknown"
+                and finding_severity != "unknown"
+                and scanner_severity != finding_severity
+            )
+            scanner_source = _evidence_source_detail(scanner_item)
+            scanner_identity = _scanner_identity_detail(scanner_item, scanner_index)
+            finding_id = str(finding.get("finding_id") or "").strip()
+            finding_identity = finding_id or f"finding-object:{id(finding)}"
+            for deterministic_item in deterministic_items:
+                deterministic_severity = _evidence_severity_signal(deterministic_item)
+                deterministic_freshness = _evidence_freshness(deterministic_item)
+                deterministic_context_conflicts = _context_conflict_signals(
+                    deterministic_item
+                )
+                has_deterministic_severity_conflict = (
+                    scanner_severity != "unknown"
+                    and deterministic_severity != "unknown"
+                    and scanner_severity != deterministic_severity
+                )
+                has_freshness_conflict = scanner_freshness != deterministic_freshness
+                if not (
+                    has_severity_conflict
+                    or has_deterministic_severity_conflict
+                    or has_freshness_conflict
+                    or scanner_context_conflicts
+                    or deterministic_context_conflicts
+                ):
+                    continue
+                deterministic_source = str(
+                    deterministic_item.get("evidence_id")
+                    or _evidence_source_detail(deterministic_item)
+                )
+                conflict_key = (
+                    finding_identity,
+                    scanner_identity,
+                    deterministic_source,
+                )
+                if conflict_key in seen:
+                    continue
+                seen.add(conflict_key)
+                confidence_impact = (
+                    f"Scanner confidence impact: scanner signal is {scanner_severity}; "
+                    f"DeployWhisper confidence remains {finding_confidence:.2f} and "
+                    f"severity remains {finding_severity} under Evidence Law."
+                )
+                conflicts.append(
+                    ShareSummaryScannerConflict(
+                        finding_id=finding_id,
+                        finding_title=_shorten(
+                            str(finding.get("title") or finding_id), 96
+                        ),
+                        scanner_source=scanner_source,
+                        scanner_freshness=scanner_freshness,
+                        deterministic_source=deterministic_source,
+                        deterministic_freshness=deterministic_freshness,
+                        conflict_summary=_scanner_conflict_summary(
+                            scanner_severity=scanner_severity,
+                            finding_severity=finding_severity,
+                            deterministic_severity=deterministic_severity,
+                            scanner_freshness=scanner_freshness,
+                            deterministic_freshness=deterministic_freshness,
+                            scanner_context_conflicts=scanner_context_conflicts,
+                            deterministic_context_conflicts=(
+                                deterministic_context_conflicts
+                            ),
+                            has_severity_conflict=has_severity_conflict,
+                            has_deterministic_severity_conflict=(
+                                has_deterministic_severity_conflict
+                            ),
+                            has_freshness_conflict=has_freshness_conflict,
+                        ),
+                        confidence_impact=confidence_impact,
+                        recommended_verification=(
+                            "Review scanner evidence against deterministic evidence "
+                            "before acting."
+                        ),
+                    )
+                )
+    return conflicts
+
+
+def _redacted_scanner_conflicts(
+    scanner_conflicts: list[ShareSummaryScannerConflict],
+) -> list[ShareSummaryScannerConflict]:
+    return [
+        conflict.model_copy(
+            update={
+                "finding_id": "detail omitted",
+                "finding_title": "Finding detail omitted",
+                "scanner_source": "scanner evidence detail omitted",
+                "scanner_freshness": "detail omitted",
+                "deterministic_source": "deterministic evidence detail omitted",
+                "deterministic_freshness": "detail omitted",
+                "conflict_summary": (
+                    "Scanner evidence conflicts with deterministic evidence; "
+                    "source details are omitted for this view."
+                ),
+                "confidence_impact": (
+                    "Scanner conflict exists, but evidence detail is omitted; "
+                    "DeployWhisper confidence and severity remain evidence-law bounded."
+                ),
+                "recommended_verification": (
+                    "Open the private report or underlying evidence before acting."
+                ),
+            }
+        )
+        for conflict in scanner_conflicts
+    ]
+
+
 def _share_finding_line(finding: ShareSummaryFinding) -> str:
     label = f"[{finding.evidence_label}] " if finding.evidence_label else ""
     return (
@@ -1812,6 +2264,9 @@ def build_share_summary(
     external_evidence_summary = _external_scanner_evidence_summary(
         external_evidence_count
     )
+    scanner_conflicts = _scanner_conflicts(report)
+    if not evidence_detail_available:
+        scanner_conflicts = _redacted_scanner_conflicts(scanner_conflicts)
     evidence_status, evidence_detail = evidence_law_status(
         report, evidence_detail_available=evidence_detail_available
     )
@@ -1862,6 +2317,7 @@ def build_share_summary(
         evidence_count=evidence_count,
         external_evidence_count=external_evidence_count,
         external_evidence_summary=external_evidence_summary,
+        scanner_conflicts=scanner_conflicts,
         blast_radius_summary=blast_radius_summary,
         rollback_summary=rollback_summary,
         context_completeness=context_summary,
@@ -1877,6 +2333,7 @@ def build_share_summary(
         markdown_lines.append(
             f"- External scanner context: {external_evidence_summary}"
         )
+    markdown_lines.extend(_share_scanner_conflict_markdown_lines(scanner_conflicts))
     markdown_lines.extend(
         _share_finding_line(finding) for finding in json_payload.top_findings
     )
@@ -1912,6 +2369,12 @@ def build_share_summary(
                     if external_evidence_summary is not None
                     else []
                 ),
+                *(
+                    _share_scanner_conflict_markdown_lines(
+                        scanner_conflicts,
+                        compact=True,
+                    )
+                ),
                 *finding_lines,
                 f"- Blast radius: {_shorten(blast_radius_summary, 120)}",
                 (
@@ -1939,6 +2402,7 @@ def build_share_summary(
                 if external_evidence_summary is not None
                 else ""
             ),
+            _share_scanner_conflict_plain_text(scanner_conflicts),
             f"Blast radius: {blast_radius_summary}.",
             f"Rollback: {rollback_summary}.",
             f"Evidence Law: {evidence_status} - {evidence_detail}.",

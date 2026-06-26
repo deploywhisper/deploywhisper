@@ -276,6 +276,95 @@ class AnalysesApiTests(unittest.TestCase):
             persisted_report=persisted_report,
         )
 
+    def _persisted_report_with_scanner_conflict(self) -> dict:
+        analysis_id = self.persisted["id"]
+        persisted_report = dict(self.persisted)
+        persisted_report.update(
+            {
+                "severity": "medium",
+                "recommendation": "caution",
+                "top_risk": "Scanner severity disagrees with deterministic proof.",
+                "narrative_opening": (
+                    "CAUTION: scanner output needs deterministic reconciliation."
+                ),
+                "findings": [
+                    {
+                        "finding_id": "finding-001",
+                        "analysis_id": analysis_id,
+                        "title": "MEDIUM: aws_security_group.main",
+                        "description": "Security group exposure should be reviewed.",
+                        "explanation": "Scanner severity disagrees with proof.",
+                        "guidance": ["Review scanner evidence before acting."],
+                        "severity": "medium",
+                        "category": "network",
+                        "deterministic": True,
+                        "confidence": 0.62,
+                        "evidence_classification": "deterministic",
+                        "evidence_refs": ["ev-det", "ev-scan"],
+                    }
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-det",
+                        "analysis_id": analysis_id,
+                        "finding_id": "finding-001",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://plan#aws_security_group.main",
+                        "artifact": "plan.json",
+                        "location": "plan.json",
+                        "resource": "aws_security_group.main",
+                        "operation": "modify",
+                        "source_kind": "artifact",
+                        "summary": "Terraform proof marks the finding medium.",
+                        "severity_hint": "medium",
+                        "deterministic": True,
+                        "determinism_level": "deterministic",
+                        "confidence": 0.9,
+                        "context_source": {
+                            "source_id": "evidence:terraform:plan",
+                            "source_type": "artifact",
+                            "source_ref": "plan.json",
+                            "scope": "project:payments",
+                            "freshness_status": "current",
+                            "confidence": 0.9,
+                            "conflicts": [],
+                            "limitations": [],
+                        },
+                    },
+                    {
+                        "evidence_id": "ev-scan",
+                        "analysis_id": analysis_id,
+                        "finding_id": "finding-001",
+                        "source_type": "external_scanner",
+                        "source_ref": "semgrep://results/api-conflict",
+                        "artifact": "semgrep.sarif",
+                        "location": "main.tf:12",
+                        "resource": "aws_security_group.main",
+                        "operation": "scan",
+                        "source_kind": "external_scanner",
+                        "summary": "Semgrep marks the same exposure high.",
+                        "severity_hint": "high",
+                        "deterministic": True,
+                        "determinism_level": "deterministic",
+                        "confidence": 0.88,
+                        "context_source": {
+                            "source_id": "scanner:semgrep:semgrep.sarif",
+                            "source_type": "external_scanner",
+                            "source_ref": "semgrep.sarif",
+                            "scope": "project:payments",
+                            "freshness_status": "current",
+                            "confidence": 0.88,
+                            "conflicts": [],
+                            "limitations": [],
+                        },
+                    },
+                ],
+                "top_risk_contributors": ["ev-det"],
+                "context_completeness": {"context_score": 0.84},
+            }
+        )
+        return persisted_report
+
     def test_list_analyses_returns_persisted_reports(self) -> None:
         response = self.client.get("/api/v1/analyses")
         self.assertEqual(response.status_code, 200)
@@ -1462,6 +1551,57 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(unlocked_response.status_code, 200)
         self.assertTrue(unlocked_response.json()["data"]["share"]["redact_filenames"])
 
+    def test_unlock_shared_report_preserves_requested_previous_comparison(
+        self,
+    ) -> None:
+        report_service_module.configure_report_share(
+            self.persisted["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+        comparison_payload = {
+            "risk_score_delta": 7,
+            "summary": {"warnings": []},
+        }
+
+        with patch(
+            "api.routes.analyses.fetch_shared_report_comparison",
+            return_value=comparison_payload,
+        ) as comparison_mock:
+            response = self.client.post(
+                f"/api/v1/analyses/{self.persisted['id']}/shared/unlock?compare=previous",
+                json={"password": "s3cret-pass"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["comparison"], comparison_payload)
+        comparison_mock.assert_called_once_with(
+            self.persisted["id"],
+            bypass_password=True,
+            previous_bypass_password=True,
+        )
+
+    def test_unlock_shared_report_does_not_fail_when_comparison_is_unavailable(
+        self,
+    ) -> None:
+        report_service_module.configure_report_share(
+            self.persisted["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        with patch(
+            "api.routes.analyses.fetch_shared_report_comparison",
+            side_effect=ValueError("comparison cannot be built"),
+        ):
+            response = self.client.post(
+                f"/api/v1/analyses/{self.persisted['id']}/shared/unlock?compare=previous",
+                json={"password": "s3cret-pass"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["data"]["comparison"])
+
     def test_create_analysis_masks_foreign_workspace_for_scoped_actor(self) -> None:
         allowed = project_service_module.create_project(
             project_key="payments",
@@ -1950,6 +2090,42 @@ class AnalysesApiTests(unittest.TestCase):
             [name for name, _ in raw_files],
             [".github/CODEOWNERS", "services/payments/plan.json"],
         )
+
+    def test_create_analysis_serializes_scanner_conflict_share_summary_payload(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-conflict",
+            display_name="Payments API Conflict",
+        )
+        persisted_report = self._persisted_report_with_scanner_conflict()
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files={"files": ("plan.json", b'{"resource_changes": []}')},
+                data={"project_key": "payments-api-conflict"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        share_summary = response.json()["data"]["share_summary"]
+        conflicts = share_summary["json_payload"]["scanner_conflicts"]
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(
+            conflicts[0]["scanner_source"], "semgrep://results/api-conflict"
+        )
+        self.assertEqual(
+            conflicts[0]["deterministic_source"],
+            "ev-det",
+        )
+        self.assertEqual(conflicts[0]["scanner_freshness"], "current")
+        self.assertEqual(conflicts[0]["deterministic_freshness"], "current")
+        self.assertIn("Evidence Law", conflicts[0]["confidence_impact"])
+        self.assertIn("recommended_verification", conflicts[0])
+        self.assertIn("Scanner conflict", share_summary["markdown"])
 
     def test_create_analysis_does_not_trust_pathlike_filenames_without_metadata(
         self,

@@ -2852,6 +2852,1004 @@ class AnalysisServiceTests(unittest.TestCase):
             summary.json_payload.context_completeness.label, "STRONG CONTEXT"
         )
 
+    def test_build_share_summary_surfaces_scanner_conflicts_without_overriding_severity(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["confidence"] = 0.62
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["findings"][1]["severity"] = "low"
+        report["findings"][2]["severity"] = "low"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "artifact": "semgrep.sarif",
+                "location": "main.tf:12",
+                "resource": "aws_security_group.main",
+                "operation": "scan",
+                "summary": "Semgrep marked public ingress as high severity.",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "confidence": 0.9,
+                "context_source": {
+                    "source_id": "scanner:semgrep:semgrep.sarif",
+                    "source_type": "scanner",
+                    "source_ref": "semgrep.sarif",
+                    "scope": "project:payments",
+                    "freshness_status": "current",
+                    "confidence": 0.9,
+                    "conflicts": ["DeployWhisper finding severity is medium."],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.top_findings[0].severity, "medium")
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 2)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(conflict.finding_id, "finding-001")
+        self.assertEqual(conflict.scanner_source, "semgrep://results/sg-1")
+        self.assertEqual(conflict.scanner_freshness, "current")
+        self.assertEqual(conflict.deterministic_source, "ev-001")
+        self.assertEqual(conflict.deterministic_freshness, "current")
+        self.assertIn("high", conflict.confidence_impact)
+        self.assertIn("medium", conflict.confidence_impact)
+        self.assertIn("Review scanner evidence", conflict.recommended_verification)
+        self.assertIn("Scanner conflict", summary.markdown)
+        self.assertIn("finding-001", summary.markdown)
+        self.assertIn("semgrep://results/sg-1", summary.markdown)
+        self.assertIn("scanner confidence impact", summary.plain_text.lower())
+        self.assertIn("finding-001", summary.plain_text)
+
+    def test_build_share_summary_surfaces_stale_deterministic_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "stale",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(conflict.scanner_freshness, "current")
+        self.assertEqual(conflict.deterministic_freshness, "stale")
+        self.assertIn(
+            "Scanner freshness is current while deterministic evidence freshness is stale.",
+            conflict.conflict_summary,
+        )
+
+    def test_build_share_summary_surfaces_each_conflicting_deterministic_source(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].extend(
+            ["ev-scanner", "ev-deterministic-context"]
+        )
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "stale",
+        }
+        report["evidence_items"].extend(
+            [
+                {
+                    "evidence_id": "ev-deterministic-context",
+                    "finding_id": "finding-001",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": ["topology scope differs from scanner scope"],
+                    },
+                },
+                {
+                    "evidence_id": "ev-scanner",
+                    "finding_id": "finding-001",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "source_ref": "semgrep://results/sg-1",
+                    "severity_hint": "high",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": [],
+                        "limitations": [],
+                    },
+                },
+            ]
+        )
+
+        summary = build_share_summary(report)
+
+        conflicts = summary.json_payload.scanner_conflicts
+        self.assertEqual(
+            {conflict.deterministic_source for conflict in conflicts},
+            {"ev-002", "ev-deterministic-context"},
+        )
+        by_source = {conflict.deterministic_source: conflict for conflict in conflicts}
+        self.assertEqual(by_source["ev-002"].deterministic_freshness, "stale")
+        self.assertIn(
+            "deterministic: topology scope differs from scanner scope",
+            by_source["ev-deterministic-context"].conflict_summary,
+        )
+        self.assertNotIn(
+            "ev-001",
+            {conflict.deterministic_source for conflict in conflicts},
+        )
+
+    def test_build_share_summary_surfaces_deterministic_severity_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        conflicts = summary.json_payload.scanner_conflicts
+        self.assertEqual(len(conflicts), 1)
+        conflict = conflicts[0]
+        self.assertEqual(conflict.deterministic_source, "ev-001")
+        self.assertIn(
+            "Scanner severity high differs from deterministic evidence severity medium.",
+            conflict.conflict_summary,
+        )
+        self.assertEqual(summary.json_payload.top_findings[0].severity, "high")
+
+    def test_build_share_summary_keeps_all_scanner_only_deterministic_sources(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        for item in report["evidence_items"]:
+            item["context_source"] = {"freshness_status": "current"}
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            {
+                conflict.deterministic_source
+                for conflict in summary.json_payload.scanner_conflicts
+            },
+            {"ev-001", "ev-002"},
+        )
+
+    def test_build_share_summary_ignores_string_false_deterministic_signal(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["deterministic"] = "false"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.scanner_conflicts, [])
+
+    def test_build_share_summary_keeps_distinct_scanner_rows_with_same_source(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].extend(["ev-scanner-a", "ev-scanner-b"])
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        for scanner_id, conflict_text in (
+            ("ev-scanner-a", "scanner result A disagrees with deterministic scope"),
+            ("ev-scanner-b", "scanner result B disagrees with deterministic scope"),
+        ):
+            report["evidence_items"].append(
+                {
+                    "evidence_id": scanner_id,
+                    "finding_id": "finding-001",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "source_ref": "semgrep://results/shared-source",
+                    "severity_hint": "high",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": [conflict_text],
+                        "limitations": [],
+                    },
+                }
+            )
+
+        summary = build_share_summary(report)
+
+        conflicts = summary.json_payload.scanner_conflicts
+        self.assertEqual(len(conflicts), 4)
+        self.assertEqual(
+            [conflict.scanner_source for conflict in conflicts],
+            [
+                "semgrep://results/shared-source",
+                "semgrep://results/shared-source",
+                "semgrep://results/shared-source",
+                "semgrep://results/shared-source",
+            ],
+        )
+        self.assertIn("scanner result A", conflicts[0].conflict_summary)
+        self.assertIn("scanner result A", conflicts[1].conflict_summary)
+        self.assertIn("scanner result B", conflicts[2].conflict_summary)
+        self.assertIn("scanner result B", conflicts[3].conflict_summary)
+
+    def test_build_share_summary_ignores_missing_only_scanner_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://missing-freshness",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.scanner_conflicts, [])
+        self.assertNotIn("scanner://missing-freshness", summary.markdown)
+
+    def test_build_share_summary_ignores_equal_degraded_freshness_only_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "Stale",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://same-stale-freshness",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "STALE",
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.scanner_conflicts, [])
+        self.assertNotIn("same-stale-freshness", summary.markdown)
+
+    def test_build_share_summary_reports_unknown_when_only_one_side_has_freshness(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://missing-freshness",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(conflict.scanner_freshness, "unknown")
+        self.assertEqual(conflict.deterministic_freshness, "current")
+        self.assertIn("scanner://missing-freshness", summary.markdown)
+
+    def test_build_share_summary_normalizes_freshness_case_for_conflicts(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "Current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://case-normalized-freshness",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.scanner_conflicts, [])
+        self.assertNotIn("case-normalized-freshness", summary.markdown)
+
+    def test_build_share_summary_compact_markdown_prioritizes_severity_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].extend(
+            ["ev-scanner-context", "ev-scanner-priority"]
+        )
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].extend(
+            [
+                {
+                    "evidence_id": "ev-scanner-context",
+                    "finding_id": "finding-001",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "source_ref": "semgrep://results/context-only",
+                    "severity_hint": "medium",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": ["scanner scope needs reviewer reconciliation"],
+                        "limitations": [],
+                    },
+                },
+                {
+                    "evidence_id": "ev-scanner-priority",
+                    "finding_id": "finding-001",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "source_ref": "semgrep://results/priority-severity",
+                    "severity_hint": "high",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": [],
+                        "limitations": [],
+                    },
+                },
+            ]
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("semgrep://results/priority-severity", summary.markdown)
+        self.assertNotIn("semgrep://results/context-only (current)", summary.markdown)
+
+    def test_build_share_summary_escapes_scanner_conflict_markdown(self) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://[bad](https://example.test)<b>&raw</b>\n@here",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": ["scanner says **override severity** <i>&now</i>"],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertNotIn("[bad](https://example.test)", summary.markdown)
+        self.assertNotIn("scanner says **override severity**", summary.markdown)
+        self.assertNotIn("<b>", summary.markdown)
+        self.assertNotIn("<i>", summary.markdown)
+        self.assertIn(
+            "scanner://\\[bad\\]\\(https://example.test\\)&lt;b&gt;&amp;raw&lt;/b&gt; @here",
+            summary.markdown,
+        )
+        self.assertIn(
+            "scanner says \\*\\*override severity\\*\\* &lt;i&gt;&amp;now&lt;/i&gt;",
+            summary.markdown,
+        )
+        self.assertNotIn("\n@here", summary.plain_text)
+
+    def test_build_share_summary_redacts_scanner_conflicts_without_evidence_detail(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/hidden-when-detail-omitted",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report, evidence_detail_available=False)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(conflict.scanner_source, "scanner evidence detail omitted")
+        self.assertEqual(
+            conflict.deterministic_source, "deterministic evidence detail omitted"
+        )
+        self.assertEqual(conflict.finding_id, "detail omitted")
+        self.assertEqual(conflict.finding_title, "Finding detail omitted")
+        self.assertEqual(conflict.scanner_freshness, "detail omitted")
+        self.assertEqual(conflict.deterministic_freshness, "detail omitted")
+        self.assertIn("source details are omitted", conflict.conflict_summary)
+        self.assertNotIn("hidden-when-detail-omitted", summary.markdown)
+        self.assertNotIn("hidden-when-detail-omitted", summary.plain_text)
+        self.assertIn("scanner evidence detail omitted", summary.markdown)
+        self.assertIn("scanner evidence detail omitted", summary.plain_text)
+
+    def test_build_share_summary_surfaces_context_limitations_as_conflicts(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/limitation-only",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "limitations": ["scanner scope excludes generated manifests"],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertIn(
+            "scanner scope excludes generated manifests", conflict.conflict_summary
+        )
+        self.assertIn("limitation-only", summary.markdown)
+
+    def test_build_share_summary_normalizes_scalar_context_conflict_signals(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+            "conflicts": "deterministic scalar conflict",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/scalar-context",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "limitations": "scanner scalar limitation",
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertIn("deterministic scalar conflict", conflict.conflict_summary)
+        self.assertIn("scanner scalar limitation", conflict.conflict_summary)
+        self.assertIn("scalar-context", summary.markdown)
+
+    def test_build_share_summary_isolates_idless_findings_by_evidence_refs(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"] = [
+            {
+                "title": "First idless finding",
+                "severity": "medium",
+                "confidence": 0.7,
+                "evidence_refs": ["det-a", "scan-a"],
+            },
+            {
+                "title": "Second idless finding",
+                "severity": "medium",
+                "confidence": 0.7,
+                "evidence_refs": ["det-b", "scan-b"],
+            },
+        ]
+        report["evidence_items"] = [
+            {
+                "evidence_id": "det-a",
+                "source_ref": "terraform://a",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {"freshness_status": "current"},
+            },
+            {
+                "evidence_id": "scan-a",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/a",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {"freshness_status": "current"},
+            },
+            {
+                "evidence_id": "det-b",
+                "source_ref": "terraform://b",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {"freshness_status": "current"},
+            },
+            {
+                "evidence_id": "scan-b",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/b",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {"freshness_status": "current"},
+            },
+        ]
+
+        summary = build_share_summary(report)
+
+        conflict_pairs = {
+            (
+                conflict.finding_title,
+                conflict.scanner_source,
+                conflict.deterministic_source,
+            )
+            for conflict in summary.json_payload.scanner_conflicts
+        }
+        self.assertEqual(
+            conflict_pairs,
+            {
+                ("First idless finding", "semgrep://results/a", "det-a"),
+                ("Second idless finding", "semgrep://results/b", "det-b"),
+            },
+        )
+
+    def test_build_share_summary_compares_idless_linked_evidence_rows(self) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"] = ["ev-scanner"]
+        report["evidence_items"] = [
+            {
+                "finding_id": "finding-001",
+                "source_ref": "terraform://plan#aws_security_group.main",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                },
+            },
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/idless-linked-row",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            },
+        ]
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(
+            conflict.deterministic_source,
+            "terraform://plan#aws_security_group.main",
+        )
+        self.assertIn("idless-linked-row", conflict.scanner_source)
+
+    def test_build_share_summary_compact_markdown_keeps_conflict_fields(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "stale",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("finding-001", summary.markdown)
+        self.assertIn("semgrep://results/sg-1 (current)", summary.markdown)
+        self.assertIn("ev-001 (stale)", summary.markdown)
+        self.assertIn("Verification: Review scanner evidence", summary.markdown)
+        self.assertIn("Scanner confidence impact", summary.markdown)
+
+    def test_build_share_summary_compact_markdown_preserves_fields_after_long_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "stale",
+            "conflicts": ["deterministic context " + "very long detail " * 60],
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": ["scanner context " + "very long detail " * 60],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("finding-001", summary.markdown)
+        self.assertIn("semgrep://results/sg-1 (current)", summary.markdown)
+        self.assertIn("ev-001 (stale)", summary.markdown)
+        self.assertIn("Verification: Review scanner evidence", summary.markdown)
+        self.assertIn("Scanner confidence impact", summary.markdown)
+
+    def test_build_share_summary_compact_markdown_caps_long_sources(self) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0].pop("evidence_id")
+        report["evidence_items"][0]["source_ref"] = "terraform://" + "a" * 1000
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "stale",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://" + "b" * 1000,
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("Scanner source: semgrep://", summary.markdown)
+        self.assertIn("deterministic source: terraform://", summary.markdown)
+
+    def test_build_share_summary_compact_markdown_caps_multiple_conflicts(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        for index in range(8):
+            evidence_id = f"ev-conflicting-{index}"
+            report["findings"][0]["evidence_refs"].append(evidence_id)
+            report["evidence_items"].append(
+                {
+                    "evidence_id": evidence_id,
+                    "finding_id": "finding-001",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "stale",
+                        "conflicts": [
+                            f"scanner scope conflicts with deterministic scope {index}"
+                        ],
+                    },
+                }
+            )
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-many",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 8)
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("semgrep://results/sg-many (current)", summary.markdown)
+        self.assertIn("ev-conflicting-0 (stale)", summary.markdown)
+        self.assertIn("additional conflicts are available", summary.markdown)
+        self.assertIn("JSON payload/report", summary.plain_text)
+
     def test_build_share_summary_requires_attention_for_unsatisfied_evidence_law(
         self,
     ) -> None:

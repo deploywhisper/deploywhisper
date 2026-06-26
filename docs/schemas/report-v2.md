@@ -127,6 +127,9 @@ When scanner evidence is present, share-summary JSON and PR-comment markdown
 label it as external scanner context. External scanner severity is not
 DeployWhisper severity proof on its own; high/critical DeployWhisper findings
 still require linked DeployWhisper deterministic evidence.
+When scanner output conflicts with deterministic evidence or context,
+`share_summary.json_payload.scanner_conflicts` lists both source references,
+freshness states, the confidence impact, and the recommended verification step.
 
 ```json
 {
@@ -166,6 +169,19 @@ still require linked DeployWhisper deterministic evidence.
       "evidence_count": 4,
       "external_evidence_count": 1,
       "external_evidence_summary": "1 external scanner evidence item is included as context, not DeployWhisper severity proof.",
+      "scanner_conflicts": [
+        {
+          "finding_id": "finding-public-ingress",
+          "finding_title": "HIGH: public ingress exposure",
+          "scanner_source": "semgrep://results/sg-1",
+          "scanner_freshness": "current",
+          "deterministic_source": "ev-public-ingress",
+          "deterministic_freshness": "current",
+          "conflict_summary": "Scanner severity critical differs from DeployWhisper severity high.",
+          "confidence_impact": "Scanner confidence impact: scanner signal is critical; DeployWhisper confidence remains 1.00 and severity remains high under Evidence Law.",
+          "recommended_verification": "Review scanner evidence against deterministic evidence before acting."
+        }
+      ],
       "context_completeness": {
         "score": 0.22,
         "label": "LIMITED CONTEXT",

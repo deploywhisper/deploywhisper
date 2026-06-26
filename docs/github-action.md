@@ -99,8 +99,9 @@ still require the configured share password before the public payload loads, and
 
 The machine payload in `share_summary.json_payload` includes
 `report_schema_version`, Evidence Law status, top findings, evidence count,
-context completeness, and report/rollback links. Consumers that need to branch
-on persisted report shape should use `report_schema_version` and the
+context completeness, scanner conflict details, and report/rollback links.
+Consumers that need to branch on persisted report shape should use
+`report_schema_version` and the
 `docs/schemas/report-v2.md` contract rather than parsing PR comment text.
 
 ## Action-Owned GitHub Metadata Outputs

@@ -122,6 +122,22 @@ def _detail_payload(report: dict, *, comparison: dict | None = None) -> dict:
     }
 
 
+def _shared_report_comparison_or_none(
+    report_id: int,
+    *,
+    bypass_password: bool,
+    previous_bypass_password: bool,
+) -> dict | None:
+    try:
+        return fetch_shared_report_comparison(
+            report_id,
+            bypass_password=bypass_password,
+            previous_bypass_password=previous_bypass_password,
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def _list_report_schema_meta(reports: list[dict]) -> dict[str, object]:
     def schema_major(schema_version: str) -> int:
         return int(schema_version[1:]) if schema_version.startswith("v") else 0
@@ -1004,7 +1020,7 @@ def get_shared_analysis(
             message="Analysis report not found.",
         )
     comparison = (
-        fetch_shared_report_comparison(
+        _shared_report_comparison_or_none(
             report_id,
             bypass_password=password_required,
             previous_bypass_password=True,
@@ -1037,6 +1053,7 @@ def unlock_shared_analysis(
     report_id: int,
     payload: SharedReportUnlockRequest,
     response: Response,
+    compare: str | None = Query(default=None),
 ) -> SharedReportAccessResponse:
     shared_report = fetch_shared_analysis_report(report_id, password=payload.password)
     if shared_report is None:
@@ -1060,8 +1077,17 @@ def unlock_shared_analysis(
         secure=_share_cookie_secure(shared_report),
         samesite="lax",
     )
+    comparison = (
+        _shared_report_comparison_or_none(
+            report_id,
+            bypass_password=True,
+            previous_bypass_password=True,
+        )
+        if compare == "previous"
+        else None
+    )
     return SharedReportAccessResponse(
-        data=_detail_payload(shared_report),
+        data=_detail_payload(shared_report, comparison=comparison),
         meta=build_report_meta(
             id=report_id,
             report_schema_version=normalize_report_schema_version(
