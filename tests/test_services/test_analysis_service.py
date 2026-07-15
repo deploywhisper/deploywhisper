@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import unittest
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 import os
@@ -41,6 +42,10 @@ def _incident_snapshot(count: int = 0) -> dict:
         "incident_index_last_indexed_at": ("2026-05-20T00:00:00Z" if count else None),
         "incident_index_freshness_status": freshness,
     }
+
+
+def _fresh_context_timestamp() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 class AnalysisServiceTests(unittest.TestCase):
@@ -387,8 +392,9 @@ class AnalysisServiceTests(unittest.TestCase):
             partial_context=False,
             warnings=[],
         )
+        fresh_updated_at = _fresh_context_timestamp()
         topology = {
-            "updated_at": "2026-06-08T12:00:00Z",
+            "updated_at": fresh_updated_at,
             "metadata": {
                 "import": {
                     "source_type": "custom",
@@ -414,7 +420,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.get_topology_status",
                 return_value=SimpleNamespace(
-                    updated_at="2026-06-08T12:00:00Z",
+                    updated_at=fresh_updated_at,
                     payload=topology,
                     warnings=[],
                 ),
@@ -585,8 +591,9 @@ class AnalysisServiceTests(unittest.TestCase):
             partial_context=False,
             warnings=[],
         )
+        fresh_updated_at = _fresh_context_timestamp()
         topology = {
-            "updated_at": "2026-06-08T12:00:00Z",
+            "updated_at": fresh_updated_at,
             "metadata": {
                 "import": {
                     "source_type": "custom",
@@ -612,7 +619,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.get_topology_status",
                 return_value=SimpleNamespace(
-                    updated_at="2026-06-08T12:00:00Z",
+                    updated_at=fresh_updated_at,
                     payload=topology,
                     warnings=[],
                 ),
@@ -675,8 +682,9 @@ class AnalysisServiceTests(unittest.TestCase):
             partial_context=False,
             warnings=[],
         )
+        fresh_updated_at = _fresh_context_timestamp()
         topology = {
-            "updated_at": "2026-06-08T12:00:00Z",
+            "updated_at": fresh_updated_at,
             "metadata": {
                 "import": {
                     "source_type": "custom",
@@ -702,7 +710,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.get_topology_status",
                 return_value=SimpleNamespace(
-                    updated_at="2026-06-08T12:00:00Z",
+                    updated_at=fresh_updated_at,
                     payload=topology,
                     warnings=[],
                 ),
@@ -767,8 +775,9 @@ class AnalysisServiceTests(unittest.TestCase):
             partial_context=False,
             warnings=[],
         )
+        fresh_updated_at = _fresh_context_timestamp()
         topology = {
-            "updated_at": "2026-06-08T12:00:00Z",
+            "updated_at": fresh_updated_at,
             "metadata": {
                 "import": {
                     "source_type": "custom",
@@ -794,7 +803,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.get_topology_status",
                 return_value=SimpleNamespace(
-                    updated_at="2026-06-08T12:00:00Z",
+                    updated_at=fresh_updated_at,
                     payload=topology,
                     warnings=[],
                 ),
@@ -1135,7 +1144,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch("services.analysis_service._freshness_score", return_value=0.984),
             patch(
@@ -1173,7 +1182,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 warnings=[
                     "Kubernetes live-state context TODO: cluster access is unavailable."
                 ],
@@ -1209,7 +1218,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "services": [
                         {
@@ -1255,7 +1264,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "services": [
                         {
@@ -1303,7 +1312,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "services": [
                         {
@@ -1347,7 +1356,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "metadata": {
                         "import": {
@@ -1393,7 +1402,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "services": [
                         {
@@ -1437,7 +1446,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "metadata": {
                         "import": {
@@ -1532,7 +1541,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -1569,7 +1578,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -1638,7 +1647,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -1717,7 +1726,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -1978,7 +1987,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -2066,7 +2075,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -2111,7 +2120,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -2169,7 +2178,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
