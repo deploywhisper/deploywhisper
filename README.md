@@ -81,7 +81,7 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 - **Day-zero risk patterns**: fresh installs can flag built-in public risk patterns such as wide-open administrative ingress or stateful resource deletion, separately labeled from organization incident memory.
 - **Safe sample incident pack**: optional synthetic incidents for demos, with provenance and limitations documented in `docs/sample-incident-pack.md`.
 - **Incident file import**: project-scoped Markdown, YAML, and JSON incident records with validation for source and redaction metadata, documented in `docs/incident-import.md`.
-- **Scanner imports**: project-scoped SARIF and Semgrep JSON findings are normalized as external scanner evidence, documented in `docs/scanner-imports.md`.
+- **Scanner imports**: project-scoped SARIF and Semgrep JSON findings are normalized as external scanner evidence, documented in `docs/scanner-imports.md`, with complementary-tool positioning in `docs/comparisons/deploywhisper-alongside-security-tools.md`.
 - Incident-history matching for operational memory
 - API, CLI, and web entrypoints over one shared analysis pipeline
 - Local-first security model that keeps raw IaC local and avoids persisting API keys
@@ -596,6 +596,7 @@ Project documentation currently lives in a few places:
 - [Project Model Guide](./docs/concepts/project-model.md)
 - [Project Workspaces](./docs/project-workspaces.md)
 - [Scanner Imports](./docs/scanner-imports.md)
+- [DeployWhisper Alongside Security Tools](./docs/comparisons/deploywhisper-alongside-security-tools.md)
 - [Kubernetes Live-State Connector](./docs/kubernetes-live-state-connector.md)
 - [Evidence Model Foundation](./docs/evidence-model.md)
 - [CI Guide](./docs/ci.md)
