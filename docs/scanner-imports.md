@@ -4,7 +4,9 @@ DeployWhisper can ingest SARIF 2.1.0 output and Semgrep native JSON output from
 external scanners, then store each scanner result as project-scoped external
 evidence. Scanner severity stays labeled as scanner context; it does not
 automatically become a high or critical DeployWhisper finding without
-DeployWhisper evidence and scoring.
+DeployWhisper evidence and scoring. For positioning guidance across scanners,
+policy tools, and DeployWhisper, see the
+[security tools comparison guide](./comparisons/deploywhisper-alongside-security-tools.md).
 
 ## SARIF Endpoint
 

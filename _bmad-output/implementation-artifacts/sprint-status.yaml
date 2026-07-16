@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-06-26
+# last_updated: 2026-07-16
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-06-26
+last_updated: 2026-07-16
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -122,7 +122,7 @@ development_status:
   8-2-scanner-json-adapter-v1: done
   8-3-external-evidence-report-context: done
   8-4-scanner-conflict-handling: done
-  8-5-existing-security-tools-comparison-guide: ready-for-dev
+  8-5-existing-security-tools-comparison-guide: done
   epic-8-retrospective: optional
 
   epic-9: in-progress
