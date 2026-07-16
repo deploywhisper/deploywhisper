@@ -8,6 +8,10 @@ token_budget: 1200
 tags: [jsonnet, templating, kubernetes]
 description: Jsonnet guidance for import-graph drift, hidden defaults, and rendered secret exposure.
 test_suite_path: tests/skill-tests/jsonnet
+supported_toolchains: [jsonnet]
+trust_level: official
+scenario_references: [tests/skill-tests/jsonnet]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Critical risk patterns

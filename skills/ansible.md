@@ -8,6 +8,10 @@ token_budget: 1600
 tags: [ansible, automation, iac]
 description: Deep Ansible operational knowledge covering dangerous module classification, idempotency violations, inventory targeting risks, privilege escalation patterns, and handler ordering pitfalls.
 test_suite_path: tests/skill-tests/ansible
+supported_toolchains: [ansible]
+trust_level: official
+scenario_references: [tests/skill-tests/ansible]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: [hosts, tasks, roles, become, ansible, playbook, handlers]
 ---
 

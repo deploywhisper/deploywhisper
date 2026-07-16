@@ -8,6 +8,10 @@ token_budget: 1300
 tags: [flux, gitops, kubernetes]
 description: Flux GitOps guidance for reconciliation, pruning, and source-driven rollout safety.
 test_suite_path: tests/skill-tests/flux
+supported_toolchains: [flux, kubernetes, helm]
+trust_level: official
+scenario_references: [tests/skill-tests/flux]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["source.toolkit.fluxcd.io", "helm.toolkit.fluxcd.io", "kustomize.toolkit.fluxcd.io"]
 ---
 

@@ -8,6 +8,10 @@ token_budget: 1200
 tags: [git, diff, review]
 description: Git-based change context intelligence covering commit analysis, sensitive file detection, branch risk signals, author patterns, and co-change analysis. This skill is always loaded because Git context enriches every other tool's analysis.
 test_suite_path: tests/skill-tests/git
+supported_toolchains: [git]
+trust_level: official
+scenario_references: [tests/skill-tests/git]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 always_load: true
 ---
 

@@ -67,6 +67,41 @@
       "title": "Test Suite Path",
       "type": "string"
     },
+    "supported_toolchains": {
+      "description": "Toolchains, runtimes, or artifact families this skill supports.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Supported Toolchains",
+      "type": "array"
+    },
+    "trust_level": {
+      "description": "Trust classification for governance and installation surfaces.",
+      "enum": [
+        "official",
+        "community",
+        "local",
+        "experimental"
+      ],
+      "title": "Trust Level",
+      "type": "string"
+    },
+    "scenario_references": {
+      "description": "Repo-relative deterministic scenario paths validating the skill.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Scenario References",
+      "type": "array"
+    },
+    "documentation_links": {
+      "description": "Repo-relative documentation paths or HTTPS links for authors.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Documentation Links",
+      "type": "array"
+    },
     "always_load": {
       "default": false,
       "description": "Whether the runtime should always include this skill.",
@@ -110,7 +145,11 @@
     "token_budget",
     "tags",
     "description",
-    "test_suite_path"
+    "test_suite_path",
+    "supported_toolchains",
+    "trust_level",
+    "scenario_references",
+    "documentation_links"
   ],
   "title": "SkillManifestV1",
   "type": "object",

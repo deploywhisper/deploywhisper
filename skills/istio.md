@@ -8,6 +8,10 @@ token_budget: 1350
 tags: [istio, service-mesh, kubernetes]
 description: Istio traffic-management and policy guidance for routing, mTLS, and authorization changes.
 test_suite_path: tests/skill-tests/istio
+supported_toolchains: [istio, kubernetes]
+trust_level: official
+scenario_references: [tests/skill-tests/istio]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["networking.istio.io", "security.istio.io"]
 ---
 

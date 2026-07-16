@@ -8,6 +8,10 @@ token_budget: 1300
 tags: [tanka, jsonnet, kubernetes]
 description: Tanka guidance for environment fan-out, cluster targeting, and Jsonnet-driven drift.
 test_suite_path: tests/skill-tests/tanka
+supported_toolchains: [tanka, jsonnet, kubernetes]
+trust_level: official
+scenario_references: [tests/skill-tests/tanka]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["tanka.dev/v1alpha1", "tk.libsonnet"]
 ---
 

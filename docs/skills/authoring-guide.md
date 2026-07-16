@@ -1,6 +1,6 @@
 # Skills Authoring Guide
 
-Story 4.2 formalizes the DeployWhisper skill manifest into a versioned v1
+Story 9.1 formalizes the DeployWhisper skill manifest into a versioned v1
 contract. New community or local skills should use the v1 frontmatter shape even
 though the analysis runtime still tolerates older lightweight markdown files for
 backward compatibility.
@@ -24,6 +24,14 @@ Required frontmatter fields:
 - `description`: short summary shown in registry and authoring surfaces.
 - `test_suite_path`: repo-relative path for the skill harness introduced by the
   next story.
+- `supported_toolchains`: toolchains, runtimes, or artifact families that the
+  skill supports.
+- `trust_level`: governance classification. Accepted values are `official`,
+  `community`, `local`, and `experimental`.
+- `scenario_references`: repo-relative paths to deterministic scenarios that
+  validate the skill.
+- `documentation_links`: repo-relative documentation paths or HTTP(S) links that
+  help authors maintain and verify the skill.
 
 Optional extension fields supported today:
 
@@ -52,6 +60,10 @@ token_budget: 1800
 tags: [terraform, iac, infrastructure]
 description: Deep Terraform risk knowledge for stateful infrastructure changes.
 test_suite_path: tests/skill-tests/terraform
+supported_toolchains: [terraform]
+trust_level: official
+scenario_references: [tests/skill-tests/terraform]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Critical risk patterns
@@ -86,6 +98,11 @@ Validation fails when:
 - `token_budget` is not a positive integer
 - `test_suite_path` is absolute or escapes the repo with `..`
 - `test_suite_path` does not exist under the current repository root
+- `supported_toolchains`, `scenario_references`, or `documentation_links` are
+  empty
+- `trust_level` is not one of the accepted values
+- local `scenario_references` or `documentation_links` are absolute, escape the
+  repo with `..`, or do not exist during strict linting
 
 ## Authoring rules
 

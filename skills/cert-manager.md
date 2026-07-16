@@ -8,6 +8,10 @@ token_budget: 1250
 tags: [cert-manager, tls, kubernetes]
 description: Cert-Manager issuance and renewal guidance for issuer, solver, and secret-rotation changes.
 test_suite_path: tests/skill-tests/cert-manager
+supported_toolchains: [cert-manager, kubernetes]
+trust_level: official
+scenario_references: [tests/skill-tests/cert-manager]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["cert-manager.io/"]
 ---
 

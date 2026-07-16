@@ -8,6 +8,10 @@ token_budget: 1250
 tags: [prometheus, monitoring, alerts]
 description: Prometheus rule guidance for alert timing, recording rules, and query-cardinality safety.
 test_suite_path: tests/skill-tests/prometheus-rules
+supported_toolchains: [prometheus-rules, prometheus]
+trust_level: official
+scenario_references: [tests/skill-tests/prometheus-rules]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["kind: PrometheusRule"]
 ---
 

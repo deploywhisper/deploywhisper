@@ -8,6 +8,10 @@ token_budget: 1300
 tags: [helmfile, helm, gitops]
 description: Helmfile guidance for environment inheritance, release targeting, and shared values safety.
 test_suite_path: tests/skill-tests/helmfile
+supported_toolchains: [helmfile, helm, kubernetes]
+trust_level: official
+scenario_references: [tests/skill-tests/helmfile]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Critical risk patterns

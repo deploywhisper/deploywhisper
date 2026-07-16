@@ -20,6 +20,11 @@ class SkillManifestServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir)
             (project_root / "tests/skill-tests/terraform").mkdir(parents=True)
+            (project_root / "docs/skills").mkdir(parents=True)
+            (project_root / "docs/skills/authoring-guide.md").write_text(
+                "# Skill Authoring\n",
+                encoding="utf-8",
+            )
             document = parse_skill_document(
                 "---\n"
                 "name: terraform\n"
@@ -31,6 +36,10 @@ class SkillManifestServiceTests(unittest.TestCase):
                 "tags: [terraform, iac]\n"
                 "description: Terraform review guidance.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: official\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [docs/skills/authoring-guide.md]\n"
                 "---\n"
                 "# Terraform\nGuidance.\n",
                 expected_name="terraform",
@@ -41,7 +50,150 @@ class SkillManifestServiceTests(unittest.TestCase):
         assert document.manifest is not None
         self.assertEqual(document.manifest.name, "terraform")
         self.assertEqual(document.manifest.version, "1.0.0")
+        self.assertEqual(document.manifest.supported_toolchains, ["terraform"])
+        self.assertEqual(document.manifest.trust_level, "official")
+        self.assertEqual(
+            document.manifest.scenario_references, ["tests/skill-tests/terraform"]
+        )
+        self.assertEqual(
+            document.manifest.documentation_links,
+            ["docs/skills/authoring-guide.md"],
+        )
         self.assertEqual(document.body, "# Terraform\nGuidance.")
+
+    def test_strict_manifest_validation_reports_missing_v1_contract_fields(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            (project_root / "tests/skill-tests/terraform").mkdir(parents=True)
+            with self.assertRaises(SkillManifestValidationError) as ctx:
+                parse_skill_document(
+                    "---\n"
+                    "name: terraform\n"
+                    "version: 1.0.0\n"
+                    "author: DeployWhisper\n"
+                    "license: MIT\n"
+                    "triggers: [.tf]\n"
+                    "token_budget: 1200\n"
+                    "tags: [terraform, iac]\n"
+                    "description: Terraform review guidance.\n"
+                    "test_suite_path: tests/skill-tests/terraform\n"
+                    "---\n"
+                    "# Terraform\nGuidance.\n",
+                    expected_name="terraform",
+                    strict_manifest=True,
+                    project_root=project_root,
+                )
+
+        message = str(ctx.exception)
+        self.assertIn("supported_toolchains", message)
+        self.assertIn("trust_level", message)
+        self.assertIn("scenario_references", message)
+        self.assertIn("documentation_links", message)
+
+    def test_strict_manifest_validation_rejects_invalid_trust_level(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            (project_root / "tests/skill-tests/terraform").mkdir(parents=True)
+            (project_root / "docs/skills").mkdir(parents=True)
+            (project_root / "docs/skills/authoring-guide.md").write_text(
+                "# Skill Authoring\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(SkillManifestValidationError) as ctx:
+                parse_skill_document(
+                    "---\n"
+                    "name: terraform\n"
+                    "version: 1.0.0\n"
+                    "author: DeployWhisper\n"
+                    "license: MIT\n"
+                    "triggers: [.tf]\n"
+                    "token_budget: 1200\n"
+                    "tags: [terraform, iac]\n"
+                    "description: Terraform review guidance.\n"
+                    "test_suite_path: tests/skill-tests/terraform\n"
+                    "supported_toolchains: [terraform]\n"
+                    "trust_level: production-root\n"
+                    "scenario_references: [tests/skill-tests/terraform]\n"
+                    "documentation_links: [docs/skills/authoring-guide.md]\n"
+                    "---\n"
+                    "# Terraform\nGuidance.\n",
+                    expected_name="terraform",
+                    strict_manifest=True,
+                    project_root=project_root,
+                )
+
+        self.assertIn("trust_level", str(ctx.exception))
+
+    def test_strict_manifest_validation_rejects_missing_scenario_reference(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            (project_root / "tests/skill-tests/terraform").mkdir(parents=True)
+            (project_root / "docs/skills").mkdir(parents=True)
+            (project_root / "docs/skills/authoring-guide.md").write_text(
+                "# Skill Authoring\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(SkillManifestValidationError) as ctx:
+                parse_skill_document(
+                    "---\n"
+                    "name: terraform\n"
+                    "version: 1.0.0\n"
+                    "author: DeployWhisper\n"
+                    "license: MIT\n"
+                    "triggers: [.tf]\n"
+                    "token_budget: 1200\n"
+                    "tags: [terraform, iac]\n"
+                    "description: Terraform review guidance.\n"
+                    "test_suite_path: tests/skill-tests/terraform\n"
+                    "supported_toolchains: [terraform]\n"
+                    "trust_level: official\n"
+                    "scenario_references: [tests/skill-tests/missing]\n"
+                    "documentation_links: [docs/skills/authoring-guide.md]\n"
+                    "---\n"
+                    "# Terraform\nGuidance.\n",
+                    expected_name="terraform",
+                    strict_manifest=True,
+                    project_root=project_root,
+                )
+
+        self.assertIn("scenario_references", str(ctx.exception))
+        self.assertIn("path does not exist", str(ctx.exception))
+
+    def test_strict_manifest_validation_rejects_missing_documentation_link(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            (project_root / "tests/skill-tests/terraform").mkdir(parents=True)
+            with self.assertRaises(SkillManifestValidationError) as ctx:
+                parse_skill_document(
+                    "---\n"
+                    "name: terraform\n"
+                    "version: 1.0.0\n"
+                    "author: DeployWhisper\n"
+                    "license: MIT\n"
+                    "triggers: [.tf]\n"
+                    "token_budget: 1200\n"
+                    "tags: [terraform, iac]\n"
+                    "description: Terraform review guidance.\n"
+                    "test_suite_path: tests/skill-tests/terraform\n"
+                    "supported_toolchains: [terraform]\n"
+                    "trust_level: official\n"
+                    "scenario_references: [tests/skill-tests/terraform]\n"
+                    "documentation_links: [docs/skills/missing.md]\n"
+                    "---\n"
+                    "# Terraform\nGuidance.\n",
+                    expected_name="terraform",
+                    strict_manifest=True,
+                    project_root=project_root,
+                )
+
+        self.assertIn("documentation_links", str(ctx.exception))
+        self.assertIn("path does not exist", str(ctx.exception))
 
     def test_strict_manifest_validation_rejects_name_filename_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -59,6 +211,10 @@ class SkillManifestServiceTests(unittest.TestCase):
                     "tags: [helm]\n"
                     "description: Helm guidance.\n"
                     "test_suite_path: tests/skill-tests/helm\n"
+                    "supported_toolchains: [helm]\n"
+                    "trust_level: official\n"
+                    "scenario_references: [tests/skill-tests/helm]\n"
+                    "documentation_links: [https://docs.deploywhisper.example/skills/helm]\n"
                     "---\n"
                     "# Helm\nGuidance.\n",
                     expected_name="terraform",
@@ -83,6 +239,10 @@ class SkillManifestServiceTests(unittest.TestCase):
                     "tags: [terraform, iac]\n"
                     "description: Terraform review guidance.\n"
                     "test_suite_path: tests/skill-tests/terraform\n"
+                    "supported_toolchains: [terraform]\n"
+                    "trust_level: official\n"
+                    "scenario_references: [tests/skill-tests/terraform]\n"
+                    "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                     "---\n"
                     "# Terraform\nGuidance.\n",
                     expected_name="terraform",
@@ -112,6 +272,10 @@ class SkillManifestServiceTests(unittest.TestCase):
         self.assertIn("name", payload["required"])
         self.assertIn("triggers", payload["required"])
         self.assertIn("test_suite_path", payload["required"])
+        self.assertIn("supported_toolchains", payload["required"])
+        self.assertIn("trust_level", payload["required"])
+        self.assertIn("scenario_references", payload["required"])
+        self.assertIn("documentation_links", payload["required"])
 
     def test_load_skill_document_reads_repo_file_in_strict_mode(self) -> None:
         document = load_skill_document(
@@ -144,6 +308,10 @@ class SkillManifestServiceTests(unittest.TestCase):
                 "tags: [community]\n"
                 "description: Community review guidance.\n"
                 "test_suite_path: tests/skill-tests/community-skill\n"
+                "supported_toolchains: [community-skill]\n"
+                "trust_level: community\n"
+                "scenario_references: [tests/skill-tests/community-skill]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/community-skill]\n"
                 "---\n"
                 "# Community Skill\nGuidance.\n",
                 expected_name="community-skill",
@@ -172,6 +340,10 @@ class SkillManifestServiceTests(unittest.TestCase):
                     "tags: [official]\n"
                     "description: First-party guidance.\n"
                     "test_suite_path: tests/skill-tests/official-skill\n"
+                    "supported_toolchains: [official-skill]\n"
+                    "trust_level: official\n"
+                    "scenario_references: [tests/skill-tests/official-skill]\n"
+                    "documentation_links: [https://docs.deploywhisper.example/skills/official-skill]\n"
                     "---\n"
                     "# Official Skill\nGuidance.\n",
                     expected_name="official-skill",
@@ -201,6 +373,10 @@ class SkillManifestServiceTests(unittest.TestCase):
                     "tags: [official]\n"
                     "description: First-party guidance.\n"
                     "test_suite_path: tests/skill-tests/official-skill\n"
+                    "supported_toolchains: [official-skill]\n"
+                    "trust_level: official\n"
+                    "scenario_references: [tests/skill-tests/official-skill]\n"
+                    "documentation_links: [https://docs.deploywhisper.example/skills/official-skill]\n"
                     "---\n"
                     "# Official Skill\nGuidance.\n",
                     expected_name="official-skill",

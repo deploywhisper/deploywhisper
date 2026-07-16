@@ -8,6 +8,10 @@ token_budget: 1350
 tags: [opa, gatekeeper, policy]
 description: OPA Gatekeeper policy guidance for deny rollouts, match scope, and inventory sync safety.
 test_suite_path: tests/skill-tests/opa-gatekeeper
+supported_toolchains: [opa-gatekeeper, kubernetes]
+trust_level: official
+scenario_references: [tests/skill-tests/opa-gatekeeper]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["templates.gatekeeper.sh", "constraints.gatekeeper.sh"]
 ---
 

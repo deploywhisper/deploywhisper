@@ -56,6 +56,10 @@ class SkillTestHarnessServiceTests(unittest.TestCase):
                 "tags: [terraform]\n"
                 "description: Terraform guidance.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: official\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "---\n"
                 "# Terraform\nGuidance.\n",
                 encoding="utf-8",
@@ -90,6 +94,10 @@ class SkillTestHarnessServiceTests(unittest.TestCase):
                 "tags: [terraform]\n"
                 "description: Terraform guidance.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: official\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "---\n"
                 "# Terraform\nGuidance.\n",
                 encoding="utf-8",

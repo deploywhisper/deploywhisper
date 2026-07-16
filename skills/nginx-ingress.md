@@ -8,6 +8,10 @@ token_budget: 1250
 tags: [nginx, ingress, kubernetes]
 description: Nginx Ingress controller guidance for routing, annotations, and TLS handling.
 test_suite_path: tests/skill-tests/nginx-ingress
+supported_toolchains: [nginx-ingress, kubernetes]
+trust_level: official
+scenario_references: [tests/skill-tests/nginx-ingress]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["nginx.ingress.kubernetes.io"]
 ---
 

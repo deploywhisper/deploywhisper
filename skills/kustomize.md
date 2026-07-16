@@ -8,6 +8,10 @@ token_budget: 1250
 tags: [kustomize, kubernetes, gitops]
 description: Kustomize overlay guidance for name transforms, patch targeting, and namespace drift.
 test_suite_path: tests/skill-tests/kustomize
+supported_toolchains: [kustomize, kubernetes]
+trust_level: official
+scenario_references: [tests/skill-tests/kustomize]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Critical risk patterns

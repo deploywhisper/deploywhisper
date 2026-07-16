@@ -126,7 +126,7 @@ development_status:
   epic-8-retrospective: optional
 
   epic-9: in-progress
-  9-1-skill-manifest-spec-v1: ready-for-dev
+  9-1-skill-manifest-spec-v1: review
   9-2-skills-registry-api: ready-for-dev
   9-3-skill-test-harness: ready-for-dev
   9-4-skills-installer-cli: ready-for-dev

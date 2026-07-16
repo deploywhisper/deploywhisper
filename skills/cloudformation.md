@@ -8,6 +8,10 @@ token_budget: 1500
 tags: [cloudformation, aws, iac]
 description: Deep CloudFormation risk intelligence covering resource replacement detection, deletion policies, drift patterns, stack dependencies, IAM resource risks, and service quota awareness.
 test_suite_path: tests/skill-tests/cloudformation
+supported_toolchains: [cloudformation, aws]
+trust_level: official
+scenario_references: [tests/skill-tests/cloudformation]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: [AWSTemplateFormatVersion, Resources, "AWS::", CloudFormation]
 ---
 

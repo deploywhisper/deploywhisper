@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -20,6 +20,8 @@ from yaml import YAMLError
 
 _SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
+_HTTP_URL_PATTERN = re.compile(r"^https?://", re.IGNORECASE)
+SkillTrustLevel = Literal["official", "community", "local", "experimental"]
 
 
 def _is_deploywhisper_label(value: str | None) -> bool:
@@ -58,6 +60,22 @@ class SkillManifestV1(BaseModel):
     description: str = Field(..., description="Short summary of the skill.")
     test_suite_path: str = Field(
         ..., description="Repo-relative path to the skill validation suite."
+    )
+    supported_toolchains: list[str] = Field(
+        ...,
+        description="Toolchains, runtimes, or artifact families this skill supports.",
+    )
+    trust_level: SkillTrustLevel = Field(
+        ...,
+        description="Trust classification for governance and installation surfaces.",
+    )
+    scenario_references: list[str] = Field(
+        ...,
+        description="Repo-relative deterministic scenario paths validating the skill.",
+    )
+    documentation_links: list[str] = Field(
+        ...,
+        description="Repo-relative documentation paths or HTTPS links for authors.",
     )
     always_load: bool = Field(
         default=False,
@@ -115,7 +133,14 @@ class SkillManifestV1(BaseModel):
             raise ValueError("must not traverse outside the repository")
         return normalized
 
-    @field_validator("triggers", "tags", "trigger_content_patterns")
+    @field_validator(
+        "triggers",
+        "tags",
+        "supported_toolchains",
+        "scenario_references",
+        "documentation_links",
+        "trigger_content_patterns",
+    )
     @classmethod
     def _validate_string_list(cls, value: list[str]) -> list[str]:
         normalized: list[str] = []
@@ -131,11 +156,31 @@ class SkillManifestV1(BaseModel):
             normalized.append(candidate)
         return normalized
 
-    @field_validator("triggers")
+    @field_validator(
+        "triggers",
+        "supported_toolchains",
+        "scenario_references",
+        "documentation_links",
+    )
     @classmethod
-    def _validate_triggers_not_empty(cls, value: list[str]) -> list[str]:
+    def _validate_required_lists_not_empty(cls, value: list[str]) -> list[str]:
         if not value:
-            raise ValueError("must include at least one trigger")
+            raise ValueError("must include at least one value")
+        return value
+
+    @field_validator("scenario_references")
+    @classmethod
+    def _validate_scenario_references(cls, value: list[str]) -> list[str]:
+        for item in value:
+            _validate_repo_relative_path_shape("scenario_references", item)
+        return value
+
+    @field_validator("documentation_links")
+    @classmethod
+    def _validate_documentation_links(cls, value: list[str]) -> list[str]:
+        for item in value:
+            if not _is_http_url(item):
+                _validate_repo_relative_path_shape("documentation_links", item)
         return value
 
     @field_validator("tool")
@@ -199,6 +244,52 @@ def _validate_test_suite_path_exists(
     if not candidate.exists():
         raise SkillManifestValidationError(
             [f"test_suite_path: path does not exist: {value}"]
+        )
+
+
+def _is_http_url(value: str) -> bool:
+    return bool(_HTTP_URL_PATTERN.match(value.strip()))
+
+
+def _strip_local_link_fragment(value: str) -> str:
+    return value.split("#", 1)[0].strip()
+
+
+def _validate_repo_relative_path_shape(field_name: str, value: str) -> None:
+    normalized = _strip_local_link_fragment(value)
+    path = Path(normalized)
+    if path.is_absolute():
+        raise ValueError(f"{field_name} entries must be relative repository paths")
+    if ".." in path.parts:
+        raise ValueError(
+            f"{field_name} entries must not traverse outside the repository"
+        )
+    if not normalized:
+        raise ValueError(f"{field_name} entries must not be empty")
+
+
+def _validate_repo_reference_exists(
+    field_name: str,
+    value: str,
+    *,
+    project_root: Path | None,
+    allow_urls: bool = False,
+) -> None:
+    if project_root is None:
+        return
+    if allow_urls and _is_http_url(value):
+        return
+    normalized = _strip_local_link_fragment(value)
+    candidate = (project_root / normalized).resolve()
+    try:
+        candidate.relative_to(project_root.resolve())
+    except ValueError as exc:
+        raise SkillManifestValidationError(
+            [f"{field_name}: must resolve inside the repository root: {value}"]
+        ) from exc
+    if not candidate.exists():
+        raise SkillManifestValidationError(
+            [f"{field_name}: path does not exist: {value}"]
         )
 
 
@@ -292,6 +383,19 @@ def parse_skill_document(
             manifest.test_suite_path,
             project_root=project_root,
         )
+        for scenario_reference in manifest.scenario_references:
+            _validate_repo_reference_exists(
+                "scenario_references",
+                scenario_reference,
+                project_root=project_root,
+            )
+        for documentation_link in manifest.documentation_links:
+            _validate_repo_reference_exists(
+                "documentation_links",
+                documentation_link,
+                project_root=project_root,
+                allow_urls=True,
+            )
 
     return SkillDocument(
         manifest=manifest,

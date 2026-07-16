@@ -8,6 +8,10 @@ token_budget: 1400
 tags: [helm, kubernetes, gitops]
 description: Helm chart rollout guidance covering hooks, chart drift, and value-driven production failures.
 test_suite_path: tests/skill-tests/helm
+supported_toolchains: [helm, kubernetes]
+trust_level: official
+scenario_references: [tests/skill-tests/helm]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["apiVersion: v2", "dependencies:"]
 ---
 

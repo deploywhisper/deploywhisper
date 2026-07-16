@@ -8,6 +8,10 @@ token_budget: 1400
 tags: [pulumi, gcp, iac]
 description: Pulumi GCP guidance for IAM authority, project targeting, and state exposure risks.
 test_suite_path: tests/skill-tests/pulumi-gcp
+supported_toolchains: [pulumi, gcp]
+trust_level: official
+scenario_references: [tests/skill-tests/pulumi-gcp]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["@pulumi/gcp", "pulumi_gcp"]
 ---
 

@@ -52,6 +52,10 @@ class SkillInstallerServiceTests(unittest.TestCase):
                 "tags: [helm]\n"
                 "description: Helm rollout checks.\n"
                 "test_suite_path: tests/skill-tests/helm\n"
+                "supported_toolchains: [helm]\n"
+                "trust_level: community\n"
+                "scenario_references: [tests/skill-tests/helm]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/helm]\n"
                 "---\n"
                 "# Helm\nCommunity guidance.\n"
             )
@@ -112,6 +116,10 @@ class SkillInstallerServiceTests(unittest.TestCase):
                 "tags: [helm]\n"
                 "description: Helm rollout checks.\n"
                 "test_suite_path: tests/skill-tests/helm\n"
+                "supported_toolchains: [helm]\n"
+                "trust_level: community\n"
+                "scenario_references: [tests/skill-tests/helm]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/helm]\n"
                 "---\n"
                 "# Helm\nOld guidance.\n",
                 encoding="utf-8",
@@ -127,6 +135,10 @@ class SkillInstallerServiceTests(unittest.TestCase):
                 "tags: [helm]\n"
                 "description: Helm rollout checks.\n"
                 "test_suite_path: tests/skill-tests/helm\n"
+                "supported_toolchains: [helm]\n"
+                "trust_level: community\n"
+                "scenario_references: [tests/skill-tests/helm]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/helm]\n"
                 "---\n"
                 "# Helm\nNew guidance.\n"
             )
@@ -180,6 +192,10 @@ class SkillInstallerServiceTests(unittest.TestCase):
                 "tags: [helm]\n"
                 "description: Helm rollout checks.\n"
                 "test_suite_path: tests/skill-tests/helm\n"
+                "supported_toolchains: [helm]\n"
+                "trust_level: community\n"
+                "scenario_references: [tests/skill-tests/helm]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/helm]\n"
                 "---\n"
                 "# Helm\nLocally drifted guidance.\n",
                 encoding="utf-8",
@@ -195,6 +211,10 @@ class SkillInstallerServiceTests(unittest.TestCase):
                 "tags: [helm]\n"
                 "description: Helm rollout checks.\n"
                 "test_suite_path: tests/skill-tests/helm\n"
+                "supported_toolchains: [helm]\n"
+                "trust_level: community\n"
+                "scenario_references: [tests/skill-tests/helm]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/helm]\n"
                 "---\n"
                 "# Helm\nCanonical registry guidance.\n"
             )
@@ -249,6 +269,10 @@ class SkillInstallerServiceTests(unittest.TestCase):
                 "tags: [helm]\n"
                 "description: Helm rollout checks.\n"
                 "test_suite_path: tests/skill-tests/helm\n"
+                "supported_toolchains: [helm]\n"
+                "trust_level: local\n"
+                "scenario_references: [tests/skill-tests/helm]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/helm]\n"
                 "---\n"
                 "# Helm\nGuidance.\n",
                 encoding="utf-8",
@@ -286,6 +310,10 @@ class SkillInstallerServiceTests(unittest.TestCase):
                 "tags: [terraform]\n"
                 "description: Team terraform guidance.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: local\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "---\n"
                 "# Terraform\nOverride guidance.\n",
                 encoding="utf-8",
