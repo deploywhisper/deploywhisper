@@ -42,7 +42,9 @@ class SecurityToolsComparisonGuideTests(unittest.TestCase):
             "POST /api/v1/scanner-imports/sarif",
             "POST /api/v1/scanner-imports/semgrep",
             "`project_key`",
+            "`project_id`",
             "`workspace_key`",
+            "`workspace_id`",
             "`share_summary.json_payload.scanner_conflicts`",
             "recommended verification",
             "freshness",
@@ -66,30 +68,41 @@ class SecurityToolsComparisonGuideTests(unittest.TestCase):
                 self.assertTrue((COMPARISON_GUIDE.parent / expected_href).exists())
 
     def test_comparison_guide_includes_team_usage_examples(self) -> None:
-        content = self._normalized_prose(COMPARISON_GUIDE.read_text(encoding="utf-8"))
+        content = COMPARISON_GUIDE.read_text(encoding="utf-8")
+        normalized_content = self._normalized_prose(content)
+        team_usage = self._normalized_prose(
+            content.split("## Team Usage", maxsplit=1)[1].split(
+                "## Examples",
+                maxsplit=1,
+            )[0]
+        )
 
-        self.assert_section_exists(content, "Examples")
+        self.assert_section_exists(normalized_content, "Examples")
+        for expected in ("AppSec", "Platform", "SRE"):
+            with self.subTest(section="team_usage", expected=expected):
+                self.assertIn(expected, team_usage)
+
         expected_clauses = (
-            "AppSec",
-            "Platform",
-            "SRE",
             "Scanner reports critical public ingress",
             "Scanner reports no issue, but DeployWhisper flags high rollback risk",
             "Scanner output is stale",
         )
         for expected in expected_clauses:
             with self.subTest(expected=expected):
-                self.assertIn(expected, content)
+                self.assertIn(expected, normalized_content)
 
     def test_primary_docs_link_to_comparison_guide(self) -> None:
         guide_relative = "docs/comparisons/deploywhisper-alongside-security-tools.md"
         readme_content = README.read_text(encoding="utf-8")
         scanner_doc_content = SCANNER_IMPORTS_DOC.read_text(encoding="utf-8")
+        key_features_content = readme_content.split("## Key Features", maxsplit=1)[
+            1
+        ].split("## Screenshots And Demo", maxsplit=1)[0]
         readme_links = self._markdown_links_by_label(readme_content)
         scanner_links = self._markdown_links_by_label(scanner_doc_content)
 
         self.assertRegex(
-            self._normalized_prose(readme_content),
+            self._normalized_prose(key_features_content),
             r"\*\*Scanner imports\*\*:.*docs/comparisons/deploywhisper-alongside-security-tools\.md",
         )
         self.assertEqual(
