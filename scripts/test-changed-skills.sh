@@ -9,11 +9,14 @@ if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   exit 0
 fi
 
-mapfile -t CHANGED_PATHS < <(git diff --name-only "$BASE_REF"...HEAD || true)
+CHANGED_PATHS=()
+while IFS= read -r path; do
+  CHANGED_PATHS+=("$path")
+done < <(git diff --name-only "$BASE_REF"...HEAD || true)
 
 SKILLS=()
 for path in "${CHANGED_PATHS[@]}"; do
-  if [[ "$path" =~ ^skills/([^.]+)\.md$ ]]; then
+  if [[ "$path" =~ ^skills/([^/]+)\.md$ ]]; then
     skill="${BASH_REMATCH[1]}"
   elif [[ "$path" =~ ^tests/skill-tests/([^/]+)/ ]]; then
     skill="${BASH_REMATCH[1]}"
@@ -31,7 +34,10 @@ if [ "${#SKILLS[@]}" -eq 0 ]; then
   exit 0
 fi
 
-mapfile -t UNIQUE_SKILLS < <(printf '%s\n' "${SKILLS[@]}" | sort -u)
+UNIQUE_SKILLS=()
+while IFS= read -r skill; do
+  UNIQUE_SKILLS+=("$skill")
+done < <(printf '%s\n' "${SKILLS[@]}" | sort -u)
 
 echo "Running changed skill lint and harness checks relative to $BASE_REF:"
 printf ' - %s\n' "${UNIQUE_SKILLS[@]}"

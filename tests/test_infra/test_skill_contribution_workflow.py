@@ -6,8 +6,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from scripts.collect_changed_skills import _changed_skill_ids
 from scripts.publish_skills_registry import publish_skill
 from scripts.refresh_skill_analytics import (
     DEFAULT_METRICS_URL,
@@ -38,8 +40,27 @@ class SkillContributionWorkflowTests(unittest.TestCase):
     def test_changed_skill_script_runs_lint_before_harness(self) -> None:
         script = Path("scripts/test-changed-skills.sh").read_text(encoding="utf-8")
 
+        self.assertIn("^skills/([^/]+)\\.md$", script)
         self.assertIn('cli.py skill lint "skills/${skill}.md"', script)
         self.assertIn('cli.py skill test "${UNIQUE_SKILLS[@]}"', script)
+
+    def test_changed_skill_script_excludes_nested_skill_docs(self) -> None:
+        diff_output = "\n".join(
+            [
+                "skills/custom/README.md",
+                "skills/custom/team-skill.md",
+                "skills/helm.md",
+                "tests/skill-tests/terraform/scenario.json",
+            ]
+        )
+
+        with patch(
+            "scripts.collect_changed_skills.subprocess.run",
+            return_value=SimpleNamespace(stdout=diff_output),
+        ):
+            skill_ids = _changed_skill_ids("origin/develop", "HEAD")
+
+        self.assertEqual(skill_ids, ["helm", "terraform"])
 
     def test_publish_workflow_exists_and_targets_main_skill_changes(self) -> None:
         workflow = Path(".github/workflows/publish-skills-registry.yml").read_text(
