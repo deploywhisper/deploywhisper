@@ -12,7 +12,7 @@ tags: [terragrunt, terraform, iac, community]
 description: Community-authored Terragrunt guidance for include hierarchy drift, dependency output coupling, and run-all blast radius review.
 test_suite_path: tests/skill-tests/terragrunt
 supported_toolchains: [terragrunt, terraform]
-trust_level: community
+trust_level: verified
 scenario_references: [tests/skill-tests/terragrunt]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---

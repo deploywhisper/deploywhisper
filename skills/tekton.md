@@ -9,7 +9,7 @@ tags: [tekton, ci-cd, kubernetes]
 description: Tekton pipeline guidance for credentials, finally tasks, and shared-workspace safety.
 test_suite_path: tests/skill-tests/tekton
 supported_toolchains: [tekton, kubernetes]
-trust_level: official
+trust_level: core
 scenario_references: [tests/skill-tests/tekton]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["tekton.dev/"]

@@ -9,7 +9,7 @@ tags: [datadog, monitoring, alerts]
 description: Datadog monitor guidance for threshold drift, no-data handling, and alert-routing changes.
 test_suite_path: tests/skill-tests/datadog-monitors
 supported_toolchains: [datadog-monitors, datadog]
-trust_level: official
+trust_level: core
 scenario_references: [tests/skill-tests/datadog-monitors]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---

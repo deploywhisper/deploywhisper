@@ -9,7 +9,7 @@ tags: [jsonnet, templating, kubernetes]
 description: Jsonnet guidance for import-graph drift, hidden defaults, and rendered secret exposure.
 test_suite_path: tests/skill-tests/jsonnet
 supported_toolchains: [jsonnet]
-trust_level: official
+trust_level: core
 scenario_references: [tests/skill-tests/jsonnet]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---

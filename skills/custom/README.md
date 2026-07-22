@@ -22,7 +22,7 @@ tags: [terraform, internal, platform]
 description: Internal Terraform guidance for the platform team.
 test_suite_path: tests/skill-tests/terraform
 supported_toolchains: [terraform]
-trust_level: local
+trust_level: experimental
 scenario_references: [tests/skill-tests/terraform]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
@@ -55,7 +55,7 @@ tags: [helm, kubernetes, platform]
 description: Helm chart review guidance for team-owned charts.
 test_suite_path: tests/skill-tests/helm
 supported_toolchains: [helm, kubernetes]
-trust_level: local
+trust_level: experimental
 scenario_references: [tests/skill-tests/helm]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
@@ -85,7 +85,7 @@ when matching file extensions are detected in the upload.
 | `description` | Yes | Human-readable description |
 | `test_suite_path` | Yes | Repo-relative path for the skill test suite |
 | `supported_toolchains` | Yes | Toolchains, runtimes, or artifact families this skill supports |
-| `trust_level` | Yes | One of `official`, `community`, `local`, or `experimental` |
+| `trust_level` | Yes | One of `experimental`, `verified`, `core`, or `deprecated` |
 | `scenario_references` | Yes | Repo-relative deterministic scenario paths validating the skill |
 | `documentation_links` | Yes | Repo-relative documentation paths or HTTP(S) links for authors |
 | `always_load` | No | If true, loads regardless of file detection |

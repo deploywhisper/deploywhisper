@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import (
     BaseModel,
@@ -19,9 +20,33 @@ from yaml import YAMLError
 
 
 _SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-_SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
-_HTTP_URL_PATTERN = re.compile(r"^https?://", re.IGNORECASE)
-SkillTrustLevel = Literal["official", "community", "local", "experimental"]
+_SEMVER_PATTERN = re.compile(
+    r"^(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)"
+    r"(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?"
+    r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
+)
+_WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:")
+_SCHEMA_REPO_PATH_PATTERN = (
+    r"^(?![A-Za-z][A-Za-z0-9+.-]*:)(?!/)(?!.*(?:^|/)\.\.(?:/|$))(?!.*\\).+"
+)
+_SCHEMA_PORT_PATTERN = (
+    r"(?:0|[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|"
+    r"65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])"
+)
+_SCHEMA_HTTP_URL_PATTERN = (
+    r"^[Hh][Tt][Tt][Pp][Ss]?://"
+    r"(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9][A-Za-z0-9.-]*)"
+    rf"(?::{_SCHEMA_PORT_PATTERN})?(?:[/?#][^\\\s]*)?$"
+)
+_HTTP_URL_PATTERN = re.compile(_SCHEMA_HTTP_URL_PATTERN, re.IGNORECASE)
+MISSING_MANIFEST_FRONTMATTER_ISSUE = (
+    "Skill manifest frontmatter is required for manifest v1 validation."
+)
+SkillTrustLevel = Literal["experimental", "verified", "core", "deprecated"]
+NonEmptyString = Annotated[str, Field(min_length=1)]
 
 
 def _is_deploywhisper_label(value: str | None) -> bool:
@@ -49,33 +74,39 @@ class SkillManifestV1(BaseModel):
         description="Optional current maintainer label when it differs from author.",
     )
     license: str = Field(..., description="Distribution license identifier.")
-    triggers: list[str] = Field(
+    triggers: list[NonEmptyString] = Field(
         ...,
+        min_length=1,
         description="Filename and extension triggers for loading the skill.",
     )
     token_budget: int = Field(
         ..., ge=1, description="Suggested token budget for this skill."
     )
-    tags: list[str] = Field(..., description="Search and categorization tags.")
+    tags: list[NonEmptyString] = Field(
+        ..., description="Search and categorization tags."
+    )
     description: str = Field(..., description="Short summary of the skill.")
     test_suite_path: str = Field(
         ..., description="Repo-relative path to the skill validation suite."
     )
-    supported_toolchains: list[str] = Field(
+    supported_toolchains: list[NonEmptyString] = Field(
         ...,
+        min_length=1,
         description="Toolchains, runtimes, or artifact families this skill supports.",
     )
     trust_level: SkillTrustLevel = Field(
         ...,
         description="Trust classification for governance and installation surfaces.",
     )
-    scenario_references: list[str] = Field(
+    scenario_references: list[NonEmptyString] = Field(
         ...,
+        min_length=1,
         description="Repo-relative deterministic scenario paths validating the skill.",
     )
-    documentation_links: list[str] = Field(
+    documentation_links: list[NonEmptyString] = Field(
         ...,
-        description="Repo-relative documentation paths or HTTPS links for authors.",
+        min_length=1,
+        description="Repo-relative documentation paths or HTTP(S) links for authors.",
     )
     always_load: bool = Field(
         default=False,
@@ -94,10 +125,17 @@ class SkillManifestV1(BaseModel):
         description="Whether this is a curated featured community skill.",
     )
 
+    @field_validator("name", "version", mode="before")
+    @classmethod
+    def _reject_surrounding_whitespace(cls, value: Any) -> Any:
+        if isinstance(value, str) and value != value.strip():
+            raise ValueError("must not include leading or trailing whitespace")
+        return value
+
     @field_validator("name")
     @classmethod
     def _validate_name(cls, value: str) -> str:
-        normalized = value.strip().lower()
+        normalized = value.strip()
         if not _SKILL_NAME_PATTERN.fullmatch(normalized):
             raise ValueError("must use lowercase letters, digits, and hyphens only")
         return normalized
@@ -126,11 +164,7 @@ class SkillManifestV1(BaseModel):
     @classmethod
     def _validate_test_suite_path(cls, value: str) -> str:
         normalized = value.strip()
-        path = Path(normalized)
-        if path.is_absolute():
-            raise ValueError("must be a relative repository path")
-        if ".." in path.parts:
-            raise ValueError("must not traverse outside the repository")
+        _validate_repo_relative_path_shape("test_suite_path", normalized)
         return normalized
 
     @field_validator(
@@ -179,8 +213,14 @@ class SkillManifestV1(BaseModel):
     @classmethod
     def _validate_documentation_links(cls, value: list[str]) -> list[str]:
         for item in value:
-            if not _is_http_url(item):
-                _validate_repo_relative_path_shape("documentation_links", item)
+            if _is_http_url(item):
+                continue
+            if _has_http_url_scheme(item):
+                raise ValueError(
+                    "documentation_links URL entries must be valid HTTP(S) URLs "
+                    "with a host and no whitespace or backslashes"
+                )
+            _validate_repo_relative_path_shape("documentation_links", item)
         return value
 
     @field_validator("tool")
@@ -218,12 +258,55 @@ class SkillDocument(BaseModel):
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def is_missing_manifest_frontmatter_error(
+    exc: SkillManifestValidationError,
+) -> bool:
+    """Return whether strict manifest parsing failed only because v1 metadata is absent."""
+
+    return exc.issues == [MISSING_MANIFEST_FRONTMATTER_ISSUE]
+
+
 def build_skill_manifest_v1_schema() -> dict[str, Any]:
     """Return the published JSON Schema payload for skill manifest v1."""
 
     schema = SkillManifestV1.model_json_schema()
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["$id"] = "/schemas/skill-manifest-v1.json"
+    properties = schema.get("properties", {})
+    if isinstance(properties, dict):
+        name = properties.get("name")
+        if isinstance(name, dict):
+            name["pattern"] = _SKILL_NAME_PATTERN.pattern
+        version = properties.get("version")
+        if isinstance(version, dict):
+            version["pattern"] = _SEMVER_PATTERN.pattern
+        test_suite_path = properties.get("test_suite_path")
+        if isinstance(test_suite_path, dict):
+            test_suite_path["minLength"] = 1
+            test_suite_path["pattern"] = _SCHEMA_REPO_PATH_PATTERN
+        scenario_references = properties.get("scenario_references")
+        if isinstance(scenario_references, dict):
+            scenario_references["items"] = {
+                "type": "string",
+                "minLength": 1,
+                "pattern": _SCHEMA_REPO_PATH_PATTERN,
+            }
+        documentation_links = properties.get("documentation_links")
+        if isinstance(documentation_links, dict):
+            documentation_links["items"] = {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": _SCHEMA_HTTP_URL_PATTERN,
+                    },
+                    {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": _SCHEMA_REPO_PATH_PATTERN,
+                    },
+                ]
+            }
     return schema
 
 
@@ -248,7 +331,21 @@ def _validate_test_suite_path_exists(
 
 
 def _is_http_url(value: str) -> bool:
-    return bool(_HTTP_URL_PATTERN.match(value.strip()))
+    candidate = value.strip()
+    if not _HTTP_URL_PATTERN.fullmatch(candidate):
+        return False
+    try:
+        parsed = urlparse(candidate)
+        hostname = parsed.hostname
+        parsed.port
+    except ValueError:
+        return False
+    return parsed.scheme.lower() in {"http", "https"} and bool(hostname)
+
+
+def _has_http_url_scheme(value: str) -> bool:
+    parsed = urlparse(value.strip())
+    return parsed.scheme.lower() in {"http", "https"}
 
 
 def _strip_local_link_fragment(value: str) -> str:
@@ -257,6 +354,12 @@ def _strip_local_link_fragment(value: str) -> str:
 
 def _validate_repo_relative_path_shape(field_name: str, value: str) -> None:
     normalized = _strip_local_link_fragment(value)
+    if urlparse(normalized).scheme:
+        raise ValueError(f"{field_name} entries must be relative repository paths")
+    if "\\" in normalized:
+        raise ValueError(f"{field_name} entries must use forward slashes")
+    if _WINDOWS_DRIVE_PATTERN.match(normalized):
+        raise ValueError(f"{field_name} entries must be relative repository paths")
     path = Path(normalized)
     if path.is_absolute():
         raise ValueError(f"{field_name} entries must be relative repository paths")
@@ -339,9 +442,7 @@ def parse_skill_document(
 
     if not had_frontmatter:
         if strict_manifest:
-            raise SkillManifestValidationError(
-                ["Skill manifest frontmatter is required for manifest v1 validation."]
-            )
+            raise SkillManifestValidationError([MISSING_MANIFEST_FRONTMATTER_ISSUE])
         return SkillDocument(
             manifest=None,
             body=body,

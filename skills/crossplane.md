@@ -9,7 +9,7 @@ tags: [crossplane, platform, kubernetes]
 description: Crossplane composition guidance for control-plane fan-out, provider config, and managed resource safety.
 test_suite_path: tests/skill-tests/crossplane
 supported_toolchains: [crossplane, kubernetes]
-trust_level: official
+trust_level: core
 scenario_references: [tests/skill-tests/crossplane]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["apiextensions.crossplane.io", "pkg.crossplane.io"]

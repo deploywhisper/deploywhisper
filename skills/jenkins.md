@@ -9,7 +9,7 @@ tags: [jenkins, ci-cd, pipelines]
 description: Deep Jenkins pipeline safety knowledge covering approval gate analysis, credential exposure patterns, agent security, deployment stage risks, and shared library vulnerabilities.
 test_suite_path: tests/skill-tests/jenkins
 supported_toolchains: [jenkins]
-trust_level: official
+trust_level: core
 scenario_references: [tests/skill-tests/jenkins]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: [pipeline, stage, agent, steps, post, input, parallel]

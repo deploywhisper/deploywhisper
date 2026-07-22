@@ -26,8 +26,8 @@ Required frontmatter fields:
   next story.
 - `supported_toolchains`: toolchains, runtimes, or artifact families that the
   skill supports.
-- `trust_level`: governance classification. Accepted values are `official`,
-  `community`, `local`, and `experimental`.
+- `trust_level`: governance classification. Accepted values are `experimental`,
+  `verified`, `core`, and `deprecated`.
 - `scenario_references`: repo-relative paths to deterministic scenarios that
   validate the skill.
 - `documentation_links`: repo-relative documentation paths or HTTP(S) links that
@@ -44,7 +44,7 @@ Optional extension fields supported today:
   the original `author`.
 - `featured`: marks a curated community skill for the marketplace featured
   badge. Featured skills must stay community-authored and community-maintained;
-  DeployWhisper-owned skills should rely on the automatic `Official` badge
+  DeployWhisper-owned skills should rely on the automatic official badge
   instead of `featured: true`.
 
 ## Example
@@ -61,7 +61,7 @@ tags: [terraform, iac, infrastructure]
 description: Deep Terraform risk knowledge for stateful infrastructure changes.
 test_suite_path: tests/skill-tests/terraform
 supported_toolchains: [terraform]
-trust_level: official
+trust_level: core
 scenario_references: [tests/skill-tests/terraform]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
@@ -102,7 +102,9 @@ Validation fails when:
   empty
 - `trust_level` is not one of the accepted values
 - local `scenario_references` or `documentation_links` are absolute, escape the
-  repo with `..`, or do not exist during strict linting
+  repo with `..`, use Windows or UNC path forms, or do not exist during strict
+  linting
+- external `documentation_links` are not valid HTTP(S) URLs with a host
 
 ## Authoring rules
 

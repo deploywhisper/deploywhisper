@@ -9,7 +9,7 @@ tags: [aws, cdk, iac]
 description: AWS CDK guidance for logical IDs, removal policies, and synth-time environment drift.
 test_suite_path: tests/skill-tests/aws-cdk
 supported_toolchains: [aws-cdk, cloudformation]
-trust_level: official
+trust_level: core
 scenario_references: [tests/skill-tests/aws-cdk]
 documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["aws-cdk-lib", "PolicyStatement"]
