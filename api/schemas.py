@@ -25,6 +25,7 @@ from services.confidence_ledger import (
     EvidenceLawStatus,
     normalize_confidence_ledger_payload,
 )
+from services.skill_manifest_service import SkillTrustLevel
 
 
 class MetaPayload(BaseModel):
@@ -2044,6 +2045,9 @@ class SkillRegistryData(BaseModel):
     id: str = Field(..., description="Stable skill identifier")
     name: str = Field(..., description="Human-readable skill name")
     version: str = Field(..., description="Current effective version")
+    trust_level: SkillTrustLevel = Field(
+        ..., description="Manifest trust classification for the skill"
+    )
     source: SkillRegistrySource = Field(
         ..., description="Where the skill definition currently resolves from"
     )

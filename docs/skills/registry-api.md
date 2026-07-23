@@ -1,6 +1,6 @@
 # Skills Registry API
 
-Story 4.1 introduces a read-only registry surface under `/api/v1/skills` that
+Story 9.2 completes the read-only registry surface under `/api/v1/skills` that
 normalizes the existing markdown-backed skills catalog into a stable API
 contract.
 
@@ -22,6 +22,8 @@ contract.
 
 - The current implementation serves the bundled canonical catalog from
   `skills/*.md`.
+- List, detail, and version responses expose each Skill's manifest trust level,
+  latest deterministic test summary, source, and last-update timestamp.
 - Installed or team-local cache files under `skills/custom/*.md` are excluded
   from this API so the browser and installer surfaces do not drift per
   instance.

@@ -8,11 +8,14 @@ DeployWhisper uses GitHub Actions at [`.github/workflows/ci.yml`](../.github/wor
 - `security`: runs dependency audit, Bandit static analysis, and secret-pattern scanning.
 - `frontend`: installs the React SPA workspace, then runs typecheck, Vitest, and the production build.
 - `changed-tests`: on pull requests, runs only changed Python test modules for faster early feedback.
-- `test`: runs the full unittest suite in four logical shards with `fail-fast: false`.
+- `test`: runs the Python suite with pytest in four logical shards with `fail-fast: false`.
 - `report`: publishes a GitHub Actions summary and downloads any failure artifacts.
 - `notify-failure`: optional Slack notification when `SLACK_WEBHOOK_URL` is configured.
 
-Backend burn-in is intentionally skipped by default. The current repo uses a deterministic Python `unittest` stack plus a React frontend job for typecheck, Vitest, and production build.
+Backend burn-in is intentionally skipped by default. Tests remain written in
+the standard-library `unittest` style, while GitHub executes them through
+pytest for discovery, coverage, and sharding. The React frontend job covers
+typecheck, Vitest, and the production build.
 
 Accessibility-focused UI verification now lives in the SPA Playwright lane. It is available through the root `test:ui-review` script and through the composed-container F0 loop required for UI PRs.
 
@@ -23,6 +26,10 @@ Run the local CI-equivalent checks with:
 ```bash
 bash scripts/ci-local.sh
 ```
+
+The local script runs each `tests/test_*` directory explicitly. A root
+`python -m unittest discover` command is only a smoke check because unittest
+does not recurse into non-package directories such as `tests/test_cli`.
 
 To append the SPA browser/a11y checks locally:
 
@@ -90,7 +97,7 @@ BASE_REF=origin/develop bash scripts/test-changed.sh
 To mirror one CI shard locally:
 
 ```bash
-PYTHON_BIN=./.venv/bin/python bash scripts/run-test-targets.sh tests/test_api tests/test_cli tests/test_infra
+./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short
 ```
 
 ## Failure Artifacts
@@ -108,7 +115,7 @@ These logs are retained for 14 days.
 - Dependency graph must pass `pip check`
 - Security scan must pass dependency audit, Bandit high/high gate, and secret-leak checks
 - Source tree must compile with `python -m compileall`
-- Every shard must pass its assigned `unittest` targets
+- Every pytest shard must pass its assigned targets
 - React SPA typecheck, Vitest, and build must pass in the `frontend` job
 - Pull requests get a changed-test fast-feedback run
 - UI-facing stories must record browser-side Playwright validation before moving to review. Use `docker compose up -d --build` plus `BASE_URL=http://localhost:8080 npm run test:ui-review` for the SPA e2e/a11y lane, or `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local lane. If no UI surface is touched, record `UI validation not applicable` in the story Dev Agent Record.

@@ -85,6 +85,7 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertEqual(len(page.items), 1)
         self.assertEqual(page.items[0].id, "terraform")
         self.assertEqual(page.items[0].name, "Terraform")
+        self.assertEqual(page.items[0].trust_level, "core")
         self.assertEqual(page.items[0].test_suite_path, "tests/skill-tests/terraform")
         self.assertEqual(
             page.items[0].install_command, "deploywhisper skill install terraform"
@@ -163,6 +164,7 @@ class SkillRegistryServiceTests(unittest.TestCase):
 
         assert entry is not None
         self.assertEqual(entry.source, "built-in")
+        self.assertEqual(entry.trust_level, "core")
         self.assertEqual(entry.version, "1.0.0")
         self.assertEqual(entry.name, "Terraform")
         self.assertEqual(entry.available_versions, 1)
@@ -175,6 +177,7 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertTrue(versions[0].is_current)
         self.assertEqual(versions[0].author, "DeployWhisper")
         self.assertEqual(versions[0].source, "built-in")
+        self.assertEqual(versions[0].trust_level, "core")
 
     def test_registry_page_ignores_local_custom_cache_for_canonical_results(
         self,

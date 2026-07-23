@@ -109,6 +109,7 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["filters"]["sort"], "recency")
         self.assertEqual(payload["data"][0]["id"], "terraform")
         self.assertEqual(payload["data"][0]["name"], "Terraform")
+        self.assertEqual(payload["data"][0]["trust_level"], "core")
         self.assertEqual(payload["data"][0]["tool"], "terraform")
         self.assertEqual(
             payload["data"][0]["install_command"],
@@ -179,6 +180,7 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(detail_response.status_code, 200)
         detail_payload = detail_response.json()
         self.assertEqual(detail_payload["data"]["source"], "built-in")
+        self.assertEqual(detail_payload["data"]["trust_level"], "core")
         self.assertEqual(detail_payload["data"]["name"], "Terraform")
         self.assertEqual(detail_payload["data"]["available_versions"], 1)
         self.assertEqual(
@@ -197,6 +199,7 @@ class SkillsApiTests(unittest.TestCase):
         self.assertEqual(versions_payload["data"][0]["version"], "1.0.0")
         self.assertTrue(versions_payload["data"][0]["is_current"])
         self.assertEqual(versions_payload["data"][0]["source"], "built-in")
+        self.assertEqual(versions_payload["data"][0]["trust_level"], "core")
 
     def test_get_skill_content_returns_raw_markdown_payload(self) -> None:
         content = (
@@ -328,6 +331,10 @@ class SkillsApiTests(unittest.TestCase):
         self.assertIn("/api/v1/skills/{skill_id}", payload["paths"])
         self.assertIn("/api/v1/skills/{skill_id}/content", payload["paths"])
         self.assertIn("/api/v1/skills/{skill_id}/versions", payload["paths"])
+        self.assertIn(
+            "trust_level",
+            payload["components"]["schemas"]["SkillRegistryData"]["required"],
+        )
 
     def test_schema_route_publishes_skill_manifest_v1(self) -> None:
         response = self.client.get("/schemas/skill-manifest-v1.json")
