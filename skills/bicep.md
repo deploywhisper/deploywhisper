@@ -8,6 +8,10 @@ token_budget: 1300
 tags: [azure, bicep, iac]
 description: Azure Bicep guidance for deployment modes, secret exposure, and subscription-target drift.
 test_suite_path: tests/skill-tests/bicep
+supported_toolchains: [bicep, azure]
+trust_level: core
+scenario_references: [tests/skill-tests/bicep]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Critical risk patterns

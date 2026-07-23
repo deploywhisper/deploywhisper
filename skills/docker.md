@@ -8,6 +8,10 @@ token_budget: 1200
 tags: [docker, containers, supply-chain]
 description: Container image and build risk knowledge covering Dockerfile security patterns, image provenance, multi-stage build risks, compose file analysis, and runtime container security.
 test_suite_path: tests/skill-tests/docker
+supported_toolchains: [docker, docker-compose]
+trust_level: core
+scenario_references: [tests/skill-tests/docker]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Dockerfile risk patterns

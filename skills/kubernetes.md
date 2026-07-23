@@ -8,6 +8,10 @@ token_budget: 1800
 tags: [kubernetes, containers, orchestration]
 description: Deep Kubernetes operational knowledge covering workload safety, rolling update risks, RBAC escalation, network policy gaps, and resource management pitfalls.
 test_suite_path: tests/skill-tests/kubernetes
+supported_toolchains: [kubernetes]
+trust_level: core
+scenario_references: [tests/skill-tests/kubernetes]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: [apiVersion, kind, metadata, spec.containers, spec.replicas]
 ---
 

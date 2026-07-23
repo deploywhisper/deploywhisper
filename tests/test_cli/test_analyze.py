@@ -596,6 +596,10 @@ class AnalyzeCliTests(unittest.TestCase):
             "tags: [terraform, iac]\n"
             "description: Terraform review guidance.\n"
             "test_suite_path: tests/skill-tests/terraform\n"
+            "supported_toolchains: [terraform]\n"
+            "trust_level: core\n"
+            "scenario_references: [tests/skill-tests/terraform]\n"
+            "documentation_links: [terraform.md]\n"
             "---\n"
             "# Terraform\nGuidance.\n",
             encoding="utf-8",
@@ -656,6 +660,10 @@ class AnalyzeCliTests(unittest.TestCase):
             "tags: [terraform, iac]\n"
             "description: Terraform review guidance.\n"
             "test_suite_path: tests/skill-tests/terraform\n"
+            "supported_toolchains: [terraform]\n"
+            "trust_level: core\n"
+            "scenario_references: [tests/skill-tests/terraform]\n"
+            "documentation_links: [terraform.md]\n"
             "---\n"
             "# Terraform\nGuidance.\n",
             encoding="utf-8",
@@ -693,6 +701,10 @@ class AnalyzeCliTests(unittest.TestCase):
             "tags: [terraform, iac]\n"
             "description: Terraform review guidance.\n"
             "test_suite_path: tests/skill-tests/terraform\n"
+            "supported_toolchains: [terraform]\n"
+            "trust_level: core\n"
+            "scenario_references: [tests/skill-tests/terraform]\n"
+            "documentation_links: [skills/terraform.md]\n"
             "---\n"
             "# Terraform\nGuidance.\n",
             encoding="utf-8",

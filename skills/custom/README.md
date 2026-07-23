@@ -21,6 +21,10 @@ token_budget: 500
 tags: [terraform, internal, platform]
 description: Internal Terraform guidance for the platform team.
 test_suite_path: tests/skill-tests/terraform
+supported_toolchains: [terraform]
+trust_level: experimental
+scenario_references: [tests/skill-tests/terraform]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Internal module patterns
@@ -50,6 +54,10 @@ token_budget: 800
 tags: [helm, kubernetes, platform]
 description: Helm chart review guidance for team-owned charts.
 test_suite_path: tests/skill-tests/helm
+supported_toolchains: [helm, kubernetes]
+trust_level: experimental
+scenario_references: [tests/skill-tests/helm]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Helm chart risks
@@ -76,6 +84,10 @@ when matching file extensions are detected in the upload.
 | `tags` | Yes | Search/filter tags |
 | `description` | Yes | Human-readable description |
 | `test_suite_path` | Yes | Repo-relative path for the skill test suite |
+| `supported_toolchains` | Yes | Toolchains, runtimes, or artifact families this skill supports |
+| `trust_level` | Yes | One of `experimental`, `verified`, `core`, or `deprecated` |
+| `scenario_references` | Yes | Repo-relative deterministic scenario paths validating the skill |
+| `documentation_links` | Yes | Repo-relative documentation paths or HTTP(S) links for authors |
 | `always_load` | No | If true, loads regardless of file detection |
 | `trigger_content_patterns` | No | Strings to look for inside files for disambiguation |
 

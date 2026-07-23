@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import ipaddress
 import json
 from pathlib import Path
 import re
@@ -14,6 +15,7 @@ from pydantic import BaseModel, Field
 from config import settings
 from services.skill_manifest_service import (
     SkillManifestValidationError,
+    is_missing_manifest_frontmatter_error,
     load_skill_document,
     parse_skill_document,
 )
@@ -22,6 +24,7 @@ SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
 CUSTOM_DIR = SKILLS_DIR / "custom"
 SkillInstallMode = Literal["override", "new"]
 _SKILL_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+MISSING_MANIFEST_WARNING = "Skill manifest frontmatter is required."
 
 
 class SkillInstallerError(ValueError):
@@ -140,6 +143,12 @@ def _current_checksum(path: Path) -> str | None:
 def _registry_base_url() -> str:
     configured = (settings.skills_registry_base_url or "").strip()
     if configured:
+        _validate_registry_url(
+            configured,
+            invalid_code="skills_registry_invalid_url",
+            insecure_code="skills_registry_insecure_url",
+            allow_query=False,
+        )
         return configured.rstrip("/")
     raise SkillInstallerError(
         "skills_registry_unconfigured",
@@ -147,7 +156,136 @@ def _registry_base_url() -> str:
     )
 
 
+def _is_local_registry_host(hostname: str | None) -> bool:
+    normalized = (hostname or "").strip().lower()
+    if normalized == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(normalized).is_loopback
+    except ValueError:
+        return False
+
+
+def _redact_registry_url(url: str) -> str:
+    try:
+        parsed = parse.urlparse(url)
+        if not parsed.username and not parsed.password:
+            return url
+        hostname = parsed.hostname or ""
+        if ":" in hostname and not hostname.startswith("["):
+            hostname = f"[{hostname}]"
+        try:
+            port = parsed.port
+        except ValueError:
+            port = None
+        netloc = f"{hostname}:{port}" if port else hostname
+        return parse.urlunparse(
+            (
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+    except ValueError:
+        return url
+
+
+def _validate_registry_url(
+    url: str,
+    *,
+    invalid_code: str,
+    insecure_code: str,
+    allow_query: bool = True,
+    allow_fragment: bool = False,
+) -> parse.ParseResult:
+    parsed = parse.urlparse(url)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must be an HTTP(S) URL with a host.",
+            {"url": _redact_registry_url(url)},
+        )
+    if parsed.username or parsed.password:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must not include embedded credentials.",
+            {"url": _redact_registry_url(url)},
+        )
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must include a valid port when a port is specified.",
+            {"url": _redact_registry_url(url)},
+        ) from exc
+    if parsed.query and not allow_query:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must not include query parameters.",
+            {"url": _redact_registry_url(url)},
+        )
+    if parsed.fragment and not allow_fragment:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must not include a fragment.",
+            {"url": _redact_registry_url(url)},
+        )
+    if parsed.scheme.lower() == "http" and not _is_local_registry_host(parsed.hostname):
+        raise SkillInstallerError(
+            insecure_code,
+            "Skill registry URL must use HTTPS unless it targets a local development host.",
+            {"url": _redact_registry_url(url)},
+        )
+    return parsed
+
+
+def _registry_authority(parsed: parse.ParseResult) -> tuple[str, int | None]:
+    default_port = 443 if parsed.scheme.lower() == "https" else 80
+    return (parsed.hostname or "").lower(), parsed.port or default_port
+
+
+class _RegistryRedirectHandler(request.HTTPRedirectHandler):
+    """Validate registry redirects before urllib follows them."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+        requested = _validate_registry_url(
+            req.full_url,
+            invalid_code="skills_registry_invalid_url",
+            insecure_code="skills_registry_insecure_url",
+        )
+        target_url = parse.urljoin(req.full_url, newurl)
+        target = _validate_registry_url(
+            target_url,
+            invalid_code="skills_registry_invalid_redirect",
+            insecure_code="skills_registry_insecure_redirect",
+        )
+        if _registry_authority(target) != _registry_authority(requested):
+            raise SkillInstallerError(
+                "skills_registry_redirect_host_mismatch",
+                "Skill registry redirects must stay on the configured registry host.",
+                {
+                    "url": _redact_registry_url(req.full_url),
+                    "redirect_url": _redact_registry_url(target_url),
+                },
+            )
+        return super().redirect_request(req, fp, code, msg, headers, target_url)
+
+
+def _open_registry_request(req: request.Request):
+    opener = request.build_opener(_RegistryRedirectHandler)
+    return opener.open(req, timeout=15)
+
+
 def _load_json(url: str) -> dict:
+    requested = _validate_registry_url(
+        url,
+        invalid_code="skills_registry_invalid_url",
+        insecure_code="skills_registry_insecure_url",
+    )
     req = request.Request(
         url,
         headers={
@@ -156,8 +294,33 @@ def _load_json(url: str) -> dict:
         },
     )
     try:
-        with request.urlopen(req, timeout=15) as response:
-            payload = response.read().decode("utf-8")
+        with _open_registry_request(req) as response:
+            try:
+                final_url = response.geturl()
+            except AttributeError:
+                final_url = req.full_url
+            final = _validate_registry_url(
+                final_url,
+                invalid_code="skills_registry_invalid_redirect",
+                insecure_code="skills_registry_insecure_redirect",
+            )
+            if _registry_authority(final) != _registry_authority(requested):
+                raise SkillInstallerError(
+                    "skills_registry_redirect_host_mismatch",
+                    "Skill registry redirects must stay on the configured registry host.",
+                    {
+                        "url": _redact_registry_url(url),
+                        "redirect_url": _redact_registry_url(final_url),
+                    },
+                )
+            try:
+                payload = response.read().decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise SkillInstallerError(
+                    "skills_registry_invalid_response",
+                    "Skill registry returned invalid JSON.",
+                    {"url": url},
+                ) from exc
     except error.HTTPError as exc:
         try:
             payload = json.loads(exc.read().decode("utf-8"))
@@ -182,13 +345,20 @@ def _load_json(url: str) -> dict:
         ) from exc
 
     try:
-        return json.loads(payload)
+        data = json.loads(payload)
     except json.JSONDecodeError as exc:
         raise SkillInstallerError(
             "skills_registry_invalid_response",
             "Skill registry returned invalid JSON.",
             {"url": url},
         ) from exc
+    if not isinstance(data, dict):
+        raise SkillInstallerError(
+            "skills_registry_invalid_response",
+            "Skill registry returned invalid JSON.",
+            {"url": url},
+        )
+    return data
 
 
 def fetch_registry_skill_content(
@@ -230,7 +400,12 @@ def fetch_registry_skill_content(
             {"issues": "; ".join(exc.issues)},
         ) from exc
 
-    assert document.manifest is not None
+    if document.manifest is None:
+        raise SkillInstallerError(
+            "invalid_skill_manifest",
+            "Fetched skill manifest failed validation.",
+            {"issues": "Skill manifest frontmatter is required."},
+        )
     checksum = sha256(content.encode("utf-8")).hexdigest()
     advertised_checksum = str(data.get("sha256") or "").strip()
     if advertised_checksum and advertised_checksum != checksum:
@@ -271,8 +446,9 @@ def list_installed_skills() -> list[InstalledSkillEntry]:
         try:
             document = load_skill_document(
                 path,
-                strict_manifest=False,
-                allow_legacy_name=True,
+                strict_manifest=True,
+                allow_legacy_name=False,
+                project_root=None,
             )
             manifest = document.manifest
             entries.append(
@@ -286,6 +462,19 @@ def list_installed_skills() -> list[InstalledSkillEntry]:
                 )
             )
         except SkillManifestValidationError as exc:
+            if is_missing_manifest_frontmatter_error(exc):
+                entries.append(
+                    InstalledSkillEntry(
+                        id=skill_id,
+                        version=None,
+                        mode=mode,
+                        active=False,
+                        path=str(path),
+                        description=None,
+                        warning=MISSING_MANIFEST_WARNING,
+                    )
+                )
+                continue
             entries.append(
                 InstalledSkillEntry(
                     id=skill_id,
@@ -296,6 +485,17 @@ def list_installed_skills() -> list[InstalledSkillEntry]:
                     warning=exc.issues[0]
                     if exc.issues
                     else "Skill manifest is invalid.",
+                )
+            )
+        except (OSError, UnicodeDecodeError):
+            entries.append(
+                InstalledSkillEntry(
+                    id=skill_id,
+                    version=None,
+                    mode=mode,
+                    active=False,
+                    path=str(path),
+                    warning="Skill file could not be read as UTF-8.",
                 )
             )
     return entries

@@ -8,6 +8,10 @@ token_budget: 1400
 tags: [pulumi, iac, cloud]
 description: Pulumi stack guidance for aliasing, protection, and stateful replacement risks.
 test_suite_path: tests/skill-tests/pulumi
+supported_toolchains: [pulumi]
+trust_level: core
+scenario_references: [tests/skill-tests/pulumi]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["pulumi config", "@pulumi/"]
 ---
 
