@@ -34,6 +34,8 @@ So that Skills do not add ungrounded guidance.
 - [x] [Review][Patch] Count coverage categories only when their scenarios actually pass [services/skill_test_harness_service.py:244]
 - [x] [Review][Patch] Match full-path triggers exactly like the runtime resolver [services/skill_test_harness_service.py:216]
 - [x] [Review][Patch] Do not report a synthetic suite-coverage sentinel as a failed declared scenario [services/skill_test_harness_service.py:300]
+- [x] [Review][Patch] Keep suite-level coverage failures out of the public declared-scenarios list [services/skill_test_harness_service.py:340]
+- [x] [Review][Patch] Do not assume every future built-in Skill requires verified/core gating [tests/test_services/test_skill_test_harness_service.py:293]
 
 ## Dev Notes
 
@@ -102,6 +104,11 @@ OpenAI Codex (GPT-5.4)
 - REVIEW CI parity, services: `COVERAGE_FILE=/tmp/deploywhisper-story-9-3-review-services.coverage ./.venv/bin/python -m pytest tests/test_services --cov=. --cov-report=xml:/tmp/coverage-services-review.xml --cov-report=term-missing -v --tb=short` — 840 tests and 171 subtests passed.
 - REVIEW CI parity, API/CLI/infra: `COVERAGE_FILE=/tmp/deploywhisper-story-9-3-review-api-cli-infra.coverage ./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra --cov=. --cov-report=xml:/tmp/coverage-api-cli-infra-review.xml --cov-report=term-missing -v --tb=short` — 339 tests and 15 subtests passed.
 - REVIEW FULL: `bash scripts/ci-local.sh` — all quality gates and 840 Python tests passed.
+- RE-REVIEW RED: `./.venv/bin/python -m pytest tests/test_services/test_skill_test_harness_service.py -q --tb=short` — failed because incomplete verified coverage still added a synthetic second scenario.
+- RE-REVIEW GREEN focused: `./.venv/bin/python -m pytest tests/test_services/test_skill_test_harness_service.py tests/test_api/test_skills.py tests/test_cli/test_analyze.py -q --tb=short` — 102 tests and 28 subtests passed.
+- RE-REVIEW CI parity, services: `COVERAGE_FILE=/tmp/deploywhisper-story-9-3-rereview-services.coverage ./.venv/bin/python -m pytest tests/test_services --cov=. --cov-report=xml:/tmp/coverage-services-rereview.xml --cov-report=term-missing -v --tb=short` — 840 tests and 171 subtests passed.
+- RE-REVIEW CI parity, API/CLI/infra: `COVERAGE_FILE=/tmp/deploywhisper-story-9-3-rereview-api-cli-infra.coverage ./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra --cov=. --cov-report=xml:/tmp/coverage-api-cli-infra-rereview.xml --cov-report=term-missing -v --tb=short` — 339 tests and 15 subtests passed.
+- RE-REVIEW FULL: after applying the required Ruff formatting, `bash scripts/ci-local.sh` passed all quality gates and 840 Python tests.
 
 ### Completion Notes List
 
@@ -112,6 +119,7 @@ OpenAI Codex (GPT-5.4)
 - Added negative safety scenarios for the seven foundational core Skills that previously had only positive selection scenarios.
 - Updated authoring, harness, and registry API documentation with the completed Story 9.3 contract.
 - Resolved all three code-review findings: coverage now derives only from passing scenarios, full-path trigger matching mirrors runtime resolution, and synthetic coverage failures are not described as failed declared scenarios.
+- Resolved the fresh code-review findings: trust-gate failures now affect suite status without entering the declared-scenarios list, and catalog assertions derive enforcement from each Skill's trust level.
 - UI validation not applicable: no React route, component, browser interaction, keyboard behavior, or accessibility semantics changed.
 
 ### File List
@@ -140,3 +148,4 @@ OpenAI Codex (GPT-5.4)
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-07-23: Completed Story 9.3 with deterministic coverage classification, verified/core trust enforcement, public API/CLI results, negative safety fixtures, and CI-parity regression coverage.
 - 2026-07-23: Addressed code review findings — 3 items resolved and verified with focused, shard-level, and full local CI coverage.
+- 2026-07-23: Addressed fresh code review findings — 2 additional items resolved and verified through focused, shard-level, and full local CI coverage.

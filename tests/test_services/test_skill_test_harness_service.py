@@ -229,9 +229,12 @@ class SkillTestHarnessServiceTests(unittest.TestCase):
 
         assert result is not None
         self.assertEqual(result.summary.status, "failing")
+        self.assertEqual(result.summary.total_scenarios, 1)
+        self.assertEqual(result.summary.passed_scenarios, 1)
+        self.assertEqual(result.summary.failed_scenarios, 0)
         self.assertFalse(result.coverage.safety_constraints)
         self.assertFalse(result.trust_requirement.satisfied)
-        self.assertEqual(result.scenarios[-1].name, "suite-coverage")
+        self.assertEqual([scenario.name for scenario in result.scenarios], ["positive"])
         self.assertNotIn(
             "Every declared scenario must pass for verified/core trust.",
             result.trust_requirement.failures,
@@ -292,9 +295,15 @@ class SkillTestHarnessServiceTests(unittest.TestCase):
         )
         for result in results:
             with self.subTest(skill_id=result.skill_id):
-                self.assertTrue(result.coverage.complete)
-                self.assertTrue(result.trust_requirement.required)
+                requires_gate = result.trust_requirement.trust_level in {
+                    "verified",
+                    "core",
+                }
+                self.assertEqual(result.trust_requirement.required, requires_gate)
+                if requires_gate:
+                    self.assertTrue(result.coverage.complete)
                 self.assertTrue(result.trust_requirement.satisfied)
+                self.assertEqual(result.summary.status, "passing")
 
 
 if __name__ == "__main__":

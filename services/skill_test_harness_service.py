@@ -139,6 +139,8 @@ def _timestamp() -> str:
 def _build_summary(
     skill_id: str,
     scenario_results: list[SkillTestScenarioResult],
+    *,
+    suite_failed: bool = False,
 ) -> SkillTestSummary:
     total = len(scenario_results)
     passed = sum(1 for result in scenario_results if result.passed)
@@ -146,7 +148,7 @@ def _build_summary(
     status: SkillHarnessStatus
     if total == 0:
         status = "missing"
-    elif failed > 0:
+    elif failed > 0 or suite_failed:
         status = "failing"
     else:
         status = "passing"
@@ -336,30 +338,22 @@ def _build_suite_result(
     scenario_results: list[SkillTestScenarioResult],
 ) -> SkillTestSuiteResult:
     coverage = _evaluate_coverage(active_skill, scenarios, scenario_results)
-    effective_results = list(scenario_results)
-    if scenarios and trust_level in {"verified", "core"} and not coverage.complete:
-        effective_results.append(
-            SkillTestScenarioResult(
-                name="suite-coverage",
-                description="Required deterministic coverage categories.",
-                passed=False,
-                failures=[
-                    "Verified/core suites must cover expected triggers, expected "
-                    "outputs, evidence assumptions, and safety constraints."
-                ],
-            )
-        )
+    trust_requirement = _evaluate_trust_requirement(
+        trust_level,
+        coverage,
+        scenario_results,
+    )
     return SkillTestSuiteResult(
         skill_id=skill_id,
         version=version,
-        summary=_build_summary(skill_id, effective_results),
-        coverage=coverage,
-        trust_requirement=_evaluate_trust_requirement(
-            trust_level,
-            coverage,
+        summary=_build_summary(
+            skill_id,
             scenario_results,
+            suite_failed=trust_requirement.required and not trust_requirement.satisfied,
         ),
-        scenarios=effective_results,
+        coverage=coverage,
+        trust_requirement=trust_requirement,
+        scenarios=scenario_results,
     )
 
 
