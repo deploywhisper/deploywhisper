@@ -64,7 +64,16 @@ fi
   config.py \
   logging_config.py
 "$PYTHON_BIN" cli.py skill test
-"$PYTHON_BIN" -m unittest discover -q
+PYTHON_BIN="$PYTHON_BIN" bash scripts/run-test-targets.sh \
+  tests/test_analysis \
+  tests/test_api \
+  tests/test_cli \
+  tests/test_docs \
+  tests/test_infra \
+  tests/test_llm \
+  tests/test_models \
+  tests/test_parsers \
+  tests/test_services
 
 if [ "${RUN_UI_A11Y:-0}" = "1" ]; then
   if ! command -v npm >/dev/null 2>&1; then

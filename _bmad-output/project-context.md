@@ -51,6 +51,13 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 - Add tests in the existing layer-specific layout: `tests/test_api`, `tests/test_services`, `tests/test_analysis`, `tests/test_parsers`, `tests/test_cli`, `tests/test_infra`, and React tests under `frontend/src` or `frontend/e2e`.
 - Default to `unittest`-style tests that pass under `python -m unittest discover -q`; do not assume `pytest` is the authoritative runner just because older docs mention it.
+- Root `unittest discover` is only a smoke check because it does not recurse
+  into non-package directories such as `tests/test_cli`. Use
+  `bash scripts/ci-local.sh` to exercise every test directory, and run the
+  affected GitHub pytest shard for CI parity before closing a story.
+- When a Pydantic model, API schema, dataclass, or other constructor contract
+  changes, search the entire repository for every direct instantiation and
+  fixture before concluding the implementation.
 - Use `fastapi.testclient.TestClient` for API and app-shell coverage instead of bespoke HTTP harnesses.
 - For persistence-related tests, use `tempfile.TemporaryDirectory()`, override `DATABASE_URL`, and initialize a fresh database for isolation.
 - Patch unstable boundaries such as LLM generation, incident matching, or filesystem-dependent helpers so tests stay deterministic and local.
