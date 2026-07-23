@@ -1,0 +1,13 @@
+{
+  "name": "jenkins-non-match",
+  "description": "Does not load the Jenkins skill without pipeline evidence.",
+  "assessment_tool": "unrelated",
+  "contributor_summary": "A documentation-only change with no Jenkins artifacts.",
+  "raw_files": {
+    "notes.txt": "Documentation update only.\n"
+  },
+  "expect_selected": false,
+  "expected_absent_substrings": [
+    "Secrets echoed to console"
+  ]
+}
