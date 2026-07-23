@@ -22,8 +22,7 @@ Required frontmatter fields:
 - `token_budget`: positive integer budget for narrator context assembly.
 - `tags`: search/filter tags used by the registry and browser experiences.
 - `description`: short summary shown in registry and authoring surfaces.
-- `test_suite_path`: repo-relative path for the skill harness introduced by the
-  next story.
+- `test_suite_path`: repo-relative path for the deterministic Skill harness.
 - `supported_toolchains`: toolchains, runtimes, or artifact families that the
   skill supports.
 - `trust_level`: governance classification. Accepted values are `experimental`,
@@ -88,6 +87,8 @@ deploywhisper skill test terraform
 ```
 
 Scenario layout and harness behavior are documented in `docs/skills/test-harness.md`.
+Verified and core Skills must include positive trigger/output/evidence scenarios
+and a negative safety scenario, and every declared scenario must pass.
 
 Validation fails when:
 

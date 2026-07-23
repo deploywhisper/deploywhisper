@@ -407,9 +407,15 @@ def _run_skill_test(skill_ids: list[str], *, emit_json: bool = False) -> int:
                 if scenario.passed:
                     continue
                 print(f"  - {scenario.name}: {'; '.join(scenario.failures)}")
+            for failure in result.trust_requirement.failures:
+                print(f"  - trust requirement: {failure}")
     return (
         0
-        if results and all(result.summary.status == "passing" for result in results)
+        if results
+        and all(
+            result.summary.status == "passing" and result.trust_requirement.satisfied
+            for result in results
+        )
         else 1
     )
 

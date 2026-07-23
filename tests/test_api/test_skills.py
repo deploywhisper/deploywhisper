@@ -335,6 +335,9 @@ class SkillsApiTests(unittest.TestCase):
             "trust_level",
             payload["components"]["schemas"]["SkillRegistryData"]["required"],
         )
+        test_results_schema = payload["components"]["schemas"]["SkillTestResultsData"]
+        self.assertIn("coverage", test_results_schema["required"])
+        self.assertIn("trust_requirement", test_results_schema["required"])
 
     def test_schema_route_publishes_skill_manifest_v1(self) -> None:
         response = self.client.get("/schemas/skill-manifest-v1.json")
@@ -353,6 +356,14 @@ class SkillsApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["data"]["skill_id"], "terraform")
         self.assertEqual(payload["data"]["summary"]["status"], "passing")
+        self.assertTrue(payload["data"]["coverage"]["expected_triggers"])
+        self.assertTrue(payload["data"]["coverage"]["expected_outputs"])
+        self.assertTrue(payload["data"]["coverage"]["evidence_assumptions"])
+        self.assertTrue(payload["data"]["coverage"]["safety_constraints"])
+        self.assertTrue(payload["data"]["coverage"]["complete"])
+        self.assertEqual(payload["data"]["trust_requirement"]["trust_level"], "core")
+        self.assertTrue(payload["data"]["trust_requirement"]["required"])
+        self.assertTrue(payload["data"]["trust_requirement"]["satisfied"])
         self.assertGreaterEqual(len(payload["data"]["scenarios"]), 1)
 
     def test_skill_api_exposes_editorial_curation_metadata(self) -> None:

@@ -1,0 +1,13 @@
+{
+  "name": "git-non-match",
+  "description": "Does not load the Git skill without repository-change evidence.",
+  "assessment_tool": "unrelated",
+  "contributor_summary": "An unrelated runtime observation with no Git artifact.",
+  "raw_files": {
+    "notes.txt": "Runtime observation only.\n"
+  },
+  "expect_selected": false,
+  "expected_absent_substrings": [
+    "Force push to shared branch"
+  ]
+}

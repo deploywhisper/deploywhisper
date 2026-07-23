@@ -1,12 +1,32 @@
 # Skills Test Harness
 
-Story 4.3 adds a deterministic harness for built-in skill suites. The harness
+Story 9.3 completes the deterministic harness for built-in Skill suites. The harness
 does not try to execute skill prose. Instead, it validates the real runtime
 behavior that exists today:
 
 - the target skill is selected in isolation
 - trigger-based skills load from representative raw files
 - the emitted skill context contains required guidance snippets
+- unrelated evidence does not load the Skill or leak its guidance
+
+Every suite reports four coverage categories:
+
+- `expected_triggers`: a positive scenario selects the Skill through its tool,
+  filename trigger, or declared content marker
+- `expected_outputs`: a positive scenario checks one or more required guidance
+  substrings
+- `evidence_assumptions`: a positive scenario provides an explicit assessment
+  tool, contributor summary, and deterministic raw-file fixture
+- `safety_constraints`: a negative scenario proves unrelated evidence does not
+  select the Skill and checks that Skill guidance is absent
+
+The `coverage.complete` field is true only when all four categories are present.
+The `trust_requirement` result evaluates the manifest `trust_level`.
+`verified` and `core` Skills require complete coverage and every scenario to
+pass. Missing or incomplete suites fail that trust requirement and cause the
+CLI/CI harness command to exit nonzero. Experimental and deprecated Skills
+still report coverage and scenario failures, but incomplete coverage alone does
+not block their trust classification.
 
 Harness summary states:
 
@@ -46,6 +66,11 @@ Scenario file shape:
 }
 ```
 
+Positive scenarios declare evidence through `assessment_tool`,
+`contributor_summary`, and `raw_files`; `expected_substrings` verifies emitted
+guidance. Add a negative scenario with `expect_selected: false` and at least one
+`expected_absent_substrings` entry to lock the suite's safety boundary.
+
 ## CLI usage
 
 Run all built-in skill suites:
@@ -79,3 +104,6 @@ The skills API exposes harness status through:
 - `GET /api/v1/skills`
 - `GET /api/v1/skills/{id}`
 - `GET /api/v1/skills/{id}/test-results`
+
+The test-results response includes scenario results, coverage by required
+category, and the trust-level requirement decision with actionable failures.

@@ -37,9 +37,11 @@ from services.benchmark_runner_service import BenchmarkRunResult, BenchmarkRunSu
 from services.skill_installer_service import InstalledSkillEntry, SkillInstallResult
 from services.skill_registry_service import SkillRegistryEntry
 from services.skill_test_harness_service import (
+    SkillTestCoverage,
     SkillTestScenarioResult,
     SkillTestSuiteResult,
     SkillTestSummary,
+    SkillTrustRequirement,
 )
 
 
@@ -1080,6 +1082,8 @@ class AnalyzeCliTests(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["data"][0]["skill_id"], "terraform")
         self.assertEqual(payload["data"][0]["summary"]["status"], "passing")
+        self.assertTrue(payload["data"][0]["coverage"]["complete"])
+        self.assertTrue(payload["data"][0]["trust_requirement"]["satisfied"])
 
     def test_skill_test_command_rejects_unknown_skill_id(self) -> None:
         stderr = io.StringIO()
@@ -1132,6 +1136,21 @@ class AnalyzeCliTests(unittest.TestCase):
                 display_text="0/0 scenarios passing",
                 generated_at="2026-04-24T00:00:00Z",
             ),
+            coverage=SkillTestCoverage(
+                expected_triggers=False,
+                expected_outputs=False,
+                evidence_assumptions=False,
+                safety_constraints=False,
+                complete=False,
+            ),
+            trust_requirement=SkillTrustRequirement(
+                trust_level="core",
+                required=True,
+                satisfied=False,
+                failures=[
+                    "A verified/core Skill must have at least one passing scenario."
+                ],
+            ),
             scenarios=[SkillTestScenarioResult(name="suite-missing", passed=False)],
         )
 
@@ -1145,6 +1164,53 @@ class AnalyzeCliTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, 1)
         self.assertIn("[missing]", output.getvalue())
+
+    def test_skill_test_command_enforces_verified_core_trust_requirement(
+        self,
+    ) -> None:
+        output = io.StringIO()
+        result = SkillTestSuiteResult(
+            skill_id="terraform",
+            version="1.0.0",
+            summary=SkillTestSummary(
+                skill_id="terraform",
+                total_scenarios=1,
+                passed_scenarios=1,
+                failed_scenarios=0,
+                pass_rate=1.0,
+                status="passing",
+                display_text="1/1 scenarios passing",
+                generated_at="2026-07-23T00:00:00Z",
+            ),
+            coverage=SkillTestCoverage(
+                expected_triggers=True,
+                expected_outputs=True,
+                evidence_assumptions=True,
+                safety_constraints=False,
+                complete=False,
+            ),
+            trust_requirement=SkillTrustRequirement(
+                trust_level="core",
+                required=True,
+                satisfied=False,
+                failures=["Verified/core suites must cover safety constraints."],
+            ),
+            scenarios=[SkillTestScenarioResult(name="positive", passed=True)],
+        )
+
+        with (
+            patch("cli.analyze.run_skill_test_suites", return_value=[result]),
+            patch("sys.argv", ["deploywhisper", "skill", "test", "terraform"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn(
+            "Verified/core suites must cover safety constraints.",
+            output.getvalue(),
+        )
 
     def test_skill_install_command_reports_install_location(self) -> None:
         output = io.StringIO()

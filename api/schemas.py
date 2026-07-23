@@ -2034,10 +2034,46 @@ class SkillTestScenarioResultData(BaseModel):
     )
 
 
+class SkillTestCoverageData(BaseModel):
+    expected_triggers: bool = Field(
+        ..., description="Whether deterministic trigger selection is covered."
+    )
+    expected_outputs: bool = Field(
+        ..., description="Whether expected guidance output is covered."
+    )
+    evidence_assumptions: bool = Field(
+        ..., description="Whether scenarios declare deterministic evidence inputs."
+    )
+    safety_constraints: bool = Field(
+        ..., description="Whether non-selection safety behavior is covered."
+    )
+    complete: bool = Field(
+        ..., description="Whether all required harness coverage categories are present."
+    )
+
+
+class SkillTrustRequirementData(BaseModel):
+    trust_level: SkillTrustLevel = Field(
+        ..., description="Manifest trust level evaluated by the harness."
+    )
+    required: bool = Field(
+        ..., description="Whether this trust level requires a passing complete suite."
+    )
+    satisfied: bool = Field(
+        ..., description="Whether the suite satisfies its trust-level requirement."
+    )
+    failures: list[str] = Field(
+        default_factory=list,
+        description="Actionable reasons the trust requirement was not satisfied.",
+    )
+
+
 class SkillTestResultsData(BaseModel):
     skill_id: str = Field(..., description="Stable skill identifier.")
     version: str = Field(..., description="Skill version under test.")
     summary: SkillTestResultsSummaryData
+    coverage: SkillTestCoverageData
+    trust_requirement: SkillTrustRequirementData
     scenarios: list[SkillTestScenarioResultData] = Field(default_factory=list)
 
 
