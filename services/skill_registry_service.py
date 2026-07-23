@@ -11,7 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from services.skill_analytics_service import fetch_skill_analytics
-from services.skill_manifest_service import load_skill_document
+from services.skill_manifest_service import SkillTrustLevel, load_skill_document
 from services.skill_test_harness_service import (
     SkillTestSummary,
     summarize_skill_test_suite,
@@ -31,6 +31,9 @@ class SkillRegistryEntry(BaseModel):
     id: str = Field(..., description="Stable skill identifier")
     name: str = Field(..., description="Human-readable skill name")
     version: str = Field(..., description="Current effective version")
+    trust_level: SkillTrustLevel = Field(
+        ..., description="Manifest trust classification for the skill"
+    )
     source: SkillSource = Field(..., description="Where the skill was resolved from")
     author: str = Field(..., description="Skill author or owner label")
     maintainer: str = Field(..., description="Current maintainer label")
@@ -121,6 +124,7 @@ class _SkillRecord(BaseModel):
     id: str
     name: str
     version: str
+    trust_level: SkillTrustLevel
     source: SkillSource
     author: str
     maintainer: str
@@ -235,6 +239,7 @@ def _record_to_entry(
         "id": record.id,
         "name": record.name,
         "version": record.version,
+        "trust_level": record.trust_level,
         "source": record.source,
         "author": record.author,
         "maintainer": record.maintainer,
@@ -287,6 +292,7 @@ def _load_skill_record(path: Path, *, source: SkillSource) -> _SkillRecord | Non
         id=skill_id,
         name=_display_name(skill_id),
         version=parsed.manifest.version,
+        trust_level=parsed.manifest.trust_level,
         source=source,
         author=parsed.manifest.author or _default_author(source),
         maintainer=(
