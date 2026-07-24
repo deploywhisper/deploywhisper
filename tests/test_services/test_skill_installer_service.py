@@ -1,9 +1,10 @@
-"""Tests for registry-backed skill installer operations."""
+"""Tests for configured-source skill installer operations."""
 
 from __future__ import annotations
 
 from hashlib import sha256
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -51,6 +52,467 @@ class _FakeHttpResponse:
 
 
 class SkillInstallerServiceTests(unittest.TestCase):
+    @staticmethod
+    def _local_skill_content(
+        *,
+        version: str = "1.2.0",
+        guidance: str = "Community guidance.",
+    ) -> str:
+        return (
+            "---\n"
+            "name: helm\n"
+            f"version: {version}\n"
+            "author: Community\n"
+            "license: MIT\n"
+            "triggers: [Chart.yaml]\n"
+            "token_budget: 900\n"
+            "tags: [helm]\n"
+            "description: Helm rollout checks.\n"
+            "test_suite_path: tests/skill-tests/helm\n"
+            "supported_toolchains: [helm]\n"
+            "trust_level: verified\n"
+            "scenario_references: [tests/skill-tests/helm]\n"
+            "documentation_links: [https://docs.deploywhisper.example/skills/helm]\n"
+            "---\n"
+            f"# Helm\n{guidance}\n"
+        )
+
+    def test_install_skill_reads_configured_local_source_without_network(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            source_dir = repo_root / "private-skills"
+            skills_dir.mkdir(parents=True)
+            source_dir.mkdir()
+            content = self._local_skill_content()
+            source_path = source_dir / "helm.md"
+            source_path.write_text(content, encoding="utf-8")
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_installer_service.CUSTOM_DIR", custom_dir),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url="https://registry.example.com",
+                    ),
+                ),
+                patch(
+                    "services.skill_installer_service._open_registry_request"
+                ) as mocked_open,
+            ):
+                result = install_skill("helm")
+
+            self.assertEqual(result.action, "installed")
+            self.assertEqual(result.version, "1.2.0")
+            self.assertEqual(result.source_url, source_path.resolve().as_uri())
+            self.assertEqual(
+                (custom_dir / "helm.md").read_text(encoding="utf-8"),
+                content,
+            )
+            mocked_open.assert_not_called()
+
+    def test_update_skill_refreshes_from_configured_local_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            source_dir = repo_root / "private-skills"
+            custom_dir.mkdir(parents=True)
+            source_dir.mkdir()
+            installed_path = custom_dir / "helm.md"
+            installed_path.write_text(
+                self._local_skill_content(
+                    version="1.0.0",
+                    guidance="Old guidance.",
+                ),
+                encoding="utf-8",
+            )
+            source_content = self._local_skill_content(
+                version="1.2.0",
+                guidance="New private guidance.",
+            )
+            (source_dir / "helm.md").write_text(source_content, encoding="utf-8")
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_installer_service.CUSTOM_DIR", custom_dir),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                result = update_skill("helm")
+
+            self.assertEqual(result.action, "updated")
+            self.assertEqual(result.previous_version, "1.0.0")
+            self.assertEqual(result.version, "1.2.0")
+            self.assertEqual(installed_path.read_text(encoding="utf-8"), source_content)
+
+    def test_invalid_local_source_never_writes_or_executes_skill_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            source_dir = repo_root / "private-skills"
+            marker_path = repo_root / "untrusted-content-executed"
+            skills_dir.mkdir(parents=True)
+            source_dir.mkdir()
+            (source_dir / "helm.md").write_text(
+                "---\n"
+                "name: ../helm\n"
+                "version: not-semver\n"
+                "---\n"
+                f"# Untrusted\nopen({str(marker_path)!r}, 'w').write('executed')\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_installer_service.CUSTOM_DIR", custom_dir),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "invalid_skill_manifest")
+            self.assertFalse((custom_dir / "helm.md").exists())
+            self.assertFalse(marker_path.exists())
+
+    def test_invalid_local_update_preserves_installed_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            source_dir = repo_root / "private-skills"
+            custom_dir.mkdir(parents=True)
+            source_dir.mkdir()
+            installed_path = custom_dir / "helm.md"
+            installed_content = self._local_skill_content(version="1.0.0")
+            installed_path.write_text(installed_content, encoding="utf-8")
+            (source_dir / "helm.md").write_text(
+                "---\nname: wrong-name\nversion: 2.0.0\n---\n# Invalid\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_installer_service.CUSTOM_DIR", custom_dir),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    update_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "invalid_skill_manifest")
+            self.assertEqual(
+                installed_path.read_text(encoding="utf-8"),
+                installed_content,
+            )
+
+    def test_local_source_rejects_missing_skill_with_actionable_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            source_dir = repo_root / "private-skills"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch(
+                    "services.skill_installer_service.CUSTOM_DIR",
+                    skills_dir / "custom",
+                ),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "skill_source_not_found")
+            self.assertEqual(ctx.exception.details["skill_id"], "helm")
+
+    def test_install_skill_reports_all_supported_source_configuration_options(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skills_dir = Path(tmpdir) / "skills"
+            skills_dir.mkdir()
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch(
+                    "services.skill_installer_service.CUSTOM_DIR",
+                    skills_dir / "custom",
+                ),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=None,
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+        self.assertEqual(ctx.exception.code, "skills_source_unconfigured")
+        self.assertIn("DEPLOYWHISPER_SKILLS_SOURCE_DIR", ctx.exception.message)
+        self.assertIn("DEPLOYWHISPER_SKILLS_REGISTRY_URL", ctx.exception.message)
+
+    def test_local_source_rejects_symlink_outside_configured_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            source_dir = repo_root / "private-skills"
+            outside_dir = repo_root / "outside"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+            outside_dir.mkdir()
+            outside_path = outside_dir / "helm.md"
+            outside_path.write_text(self._local_skill_content(), encoding="utf-8")
+            (source_dir / "helm.md").symlink_to(outside_path)
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch(
+                    "services.skill_installer_service.CUSTOM_DIR",
+                    skills_dir / "custom",
+                ),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "skills_local_source_invalid")
+
+    def test_local_source_rejects_symlink_swap_between_validation_and_read(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            source_dir = repo_root / "private-skills"
+            outside_path = repo_root / "outside.md"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+            source_path = source_dir / "helm.md"
+            source_path.write_text(self._local_skill_content(), encoding="utf-8")
+            outside_path.write_text(self._local_skill_content(), encoding="utf-8")
+            real_open = os.open
+            source_opened = False
+
+            def swap_before_file_open(path, flags, *args, **kwargs):
+                nonlocal source_opened
+                if kwargs.get("dir_fd") is not None and not source_opened:
+                    source_opened = True
+                    source_path.unlink()
+                    source_path.symlink_to(outside_path)
+                return real_open(path, flags, *args, **kwargs)
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch(
+                    "services.skill_installer_service.CUSTOM_DIR",
+                    skills_dir / "custom",
+                ),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+                patch(
+                    "services.skill_installer_service.os.open",
+                    side_effect=swap_before_file_open,
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "skills_local_source_invalid")
+            self.assertFalse((skills_dir / "custom" / "helm.md").exists())
+
+    def test_local_source_reports_non_utf8_file_as_unreadable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            source_dir = repo_root / "private-skills"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+            (source_dir / "helm.md").write_bytes(b"\xff\xfe\x00")
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch(
+                    "services.skill_installer_service.CUSTOM_DIR",
+                    skills_dir / "custom",
+                ),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "skill_source_unreadable")
+
+    def test_local_source_reports_permission_failure_as_unreadable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            source_dir = repo_root / "private-skills"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+            (source_dir / "helm.md").write_text(
+                self._local_skill_content(),
+                encoding="utf-8",
+            )
+            real_stat = os.stat
+
+            def deny_skill_stat(path, *args, **kwargs):
+                if Path(path).name == "helm.md":
+                    raise PermissionError("permission denied")
+                return real_stat(path, *args, **kwargs)
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch(
+                    "services.skill_installer_service.CUSTOM_DIR",
+                    skills_dir / "custom",
+                ),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+                patch(
+                    "services.skill_installer_service.os.stat",
+                    side_effect=deny_skill_stat,
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "skill_source_unreadable")
+
+    def test_configured_local_source_reports_missing_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            missing_source_dir = repo_root / "missing-private-skills"
+            skills_dir.mkdir()
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch(
+                    "services.skill_installer_service.CUSTOM_DIR",
+                    skills_dir / "custom",
+                ),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(missing_source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "skills_local_source_unavailable")
+
+    def test_configured_local_source_rejects_regular_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            source_path = repo_root / "private-skills"
+            skills_dir.mkdir()
+            source_path.write_text("not a directory", encoding="utf-8")
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch(
+                    "services.skill_installer_service.CUSTOM_DIR",
+                    skills_dir / "custom",
+                ),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_path),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "skills_local_source_invalid")
+
+    def test_update_skill_reports_unchanged_for_matching_local_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            source_dir = repo_root / "private-skills"
+            custom_dir.mkdir(parents=True)
+            source_dir.mkdir()
+            content = self._local_skill_content()
+            installed_path = custom_dir / "helm.md"
+            installed_path.write_text(content, encoding="utf-8")
+            (source_dir / "helm.md").write_text(content, encoding="utf-8")
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_installer_service.CUSTOM_DIR", custom_dir),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+            ):
+                result = update_skill("helm")
+
+            self.assertEqual(result.action, "unchanged")
+            self.assertEqual(result.previous_version, "1.2.0")
+            self.assertEqual(installed_path.read_text(encoding="utf-8"), content)
+
     def test_install_skill_fetches_registry_content_into_custom_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
