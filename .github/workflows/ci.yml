@@ -41,6 +41,7 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.11"
+  RUFF_VERSION: "0.15.11"
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_NO_PYTHON_VERSION_WARNING: "1"
   COVERAGE_THRESHOLD: "70"  # fail if new code drops below this %
@@ -68,7 +69,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff mypy
+          # Keep CI aligned with the version used by scripts/ci-local.sh.
+          # Unpinned Ruff upgrades can enable new rules across untouched files.
+          pip install "ruff==${RUFF_VERSION}" mypy
 
       - name: Lint with Ruff
         run: ruff check . --output-format=github

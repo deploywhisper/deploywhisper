@@ -127,6 +127,7 @@ OpenAI Codex (GPT-5.4)
 - Review re-run CI services shard: `COVERAGE_FILE=/tmp/deploywhisper-story-9-4-rerun-services.coverage ./.venv/bin/python -m pytest tests/test_services --cov=. --cov-report=xml:/tmp/coverage-services-9-4-rerun.xml --cov-report=term-missing -v --tb=short` — 855 passed, 554 warnings, 171 subtests passed.
 - Review re-run CI API/CLI/infra shard: `COVERAGE_FILE=/tmp/deploywhisper-story-9-4-rerun-api-cli-infra.coverage ./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra --cov=. --cov-report=xml:/tmp/coverage-api-cli-infra-9-4-rerun.xml --cov-report=term-missing -v --tb=short` — 341 passed, 335 warnings, 15 subtests passed.
 - Review re-run full local CI: `bash scripts/ci-local.sh` — passed Ruff, formatting, dependency validation, Bandit, compilation, Skill benchmark corpus, and all unittest discovery lanes; services reported 855 tests passed.
+- Review re-run remote CI diagnosis: GitHub installed unpinned Ruff 0.16.0 while local CI used Ruff 0.15.11, enabling new repository-wide rules and stopping the test matrix before execution; the workflow now pins Ruff 0.15.11 to the locally verified toolchain.
 - UI validation not applicable: no React route, component, interaction, or accessibility behavior changed.
 
 ### Completion Notes List
@@ -143,6 +144,7 @@ OpenAI Codex (GPT-5.4)
 
 ### File List
 
+- `.github/workflows/ci.yml`
 - `_bmad-output/implementation-artifacts/9-4-skills-installer-cli.md`
 - `_bmad-output/implementation-artifacts/deferred-work.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
@@ -159,3 +161,4 @@ OpenAI Codex (GPT-5.4)
 - 2026-07-23: Implemented and verified registry/local-source Skill install and update behavior, safe validation, CLI help, tests, and operator documentation.
 - 2026-07-24: Resolved all code-review findings with descriptor-anchored local reads, precise error contracts, expanded regression coverage, and full CI verification.
 - 2026-07-24: Resolved the review re-run with bounded source reads, atomic writes, CLI-path regressions, corrected operator guidance, and repeat full-CI verification.
+- 2026-07-24: Pinned the CI Ruff version to the locally verified release so tool upgrades cannot introduce unrelated repository-wide lint failures between stories.
