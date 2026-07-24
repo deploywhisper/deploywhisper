@@ -476,7 +476,7 @@ class SkillInstallerServiceTests(unittest.TestCase):
             real_stat = os.stat
 
             def deny_skill_stat(path, *args, **kwargs):
-                if Path(path).name == "helm.md":
+                if Path(path).name == "helm.md" and kwargs.get("dir_fd") is not None:
                     raise PermissionError("permission denied")
                 return real_stat(path, *args, **kwargs)
 

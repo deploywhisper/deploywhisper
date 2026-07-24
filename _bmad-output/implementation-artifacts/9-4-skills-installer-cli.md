@@ -47,6 +47,7 @@ So that self-hosted teams can manage extensions without manual file copying.
 - [x] [Review][Patch] Replace remaining registry-only update guidance with configured-source behavior [docs/skills/installer-cli.md:63]
 - [x] [Review][Patch] Clarify Dev Agent Record fallback wording so it does not imply registry fallback after a local source is selected [\_bmad-output/implementation-artifacts/9-4-skills-installer-cli.md:100]
 - [x] [Review][Patch] Make installed Skill replacement atomic so update write failures cannot corrupt the existing file [services/skill_installer_service.py:734]
+- [x] [Review][Patch] Scope the unreadable-source test double to descriptor-anchored source stats so it behaves consistently on CI Python 3.11 and local Python 3.14 [tests/test_services/test_skill_installer_service.py:477]
 
 ## Dev Notes
 
@@ -128,6 +129,7 @@ OpenAI Codex (GPT-5.4)
 - Review re-run CI API/CLI/infra shard: `COVERAGE_FILE=/tmp/deploywhisper-story-9-4-rerun-api-cli-infra.coverage ./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra --cov=. --cov-report=xml:/tmp/coverage-api-cli-infra-9-4-rerun.xml --cov-report=term-missing -v --tb=short` — 341 passed, 335 warnings, 15 subtests passed.
 - Review re-run full local CI: `bash scripts/ci-local.sh` — passed Ruff, formatting, dependency validation, Bandit, compilation, Skill benchmark corpus, and all unittest discovery lanes; services reported 855 tests passed.
 - Review re-run remote CI diagnosis: GitHub installed unpinned Ruff 0.16.0 while local CI used Ruff 0.15.11, enabling new repository-wide rules and stopping the test matrix before execution; the workflow now pins Ruff 0.15.11 to the locally verified toolchain.
+- Review re-run fast-feedback diagnosis: CI Python 3.11 propagated a broadly mocked destination `stat` error that local Python 3.14 suppresses in `Path.exists`; the mock now denies only descriptor-anchored source-file stats. Installer service regression: 41 passed, 6 subtests passed.
 - UI validation not applicable: no React route, component, interaction, or accessibility behavior changed.
 
 ### Completion Notes List
@@ -162,3 +164,4 @@ OpenAI Codex (GPT-5.4)
 - 2026-07-24: Resolved all code-review findings with descriptor-anchored local reads, precise error contracts, expanded regression coverage, and full CI verification.
 - 2026-07-24: Resolved the review re-run with bounded source reads, atomic writes, CLI-path regressions, corrected operator guidance, and repeat full-CI verification.
 - 2026-07-24: Pinned the CI Ruff version to the locally verified release so tool upgrades cannot introduce unrelated repository-wide lint failures between stories.
+- 2026-07-24: Made the unreadable local-source regression portable across the repository's local Python 3.14 and CI Python 3.11 runtimes.
