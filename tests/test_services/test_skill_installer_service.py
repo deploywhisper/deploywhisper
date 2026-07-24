@@ -226,6 +226,44 @@ class SkillInstallerServiceTests(unittest.TestCase):
                 installed_content,
             )
 
+    def test_update_write_failure_preserves_installed_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            source_dir = repo_root / "private-skills"
+            custom_dir.mkdir(parents=True)
+            source_dir.mkdir()
+            installed_path = custom_dir / "helm.md"
+            installed_content = self._local_skill_content(version="1.0.0")
+            installed_path.write_text(installed_content, encoding="utf-8")
+            (source_dir / "helm.md").write_text(
+                self._local_skill_content(version="2.0.0"),
+                encoding="utf-8",
+            )
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch("services.skill_installer_service.CUSTOM_DIR", custom_dir),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+                patch.object(Path, "replace", side_effect=OSError("disk full")),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    update_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "skill_write_failed")
+            self.assertEqual(
+                installed_path.read_text(encoding="utf-8"),
+                installed_content,
+            )
+            self.assertEqual(list(custom_dir.glob(".helm.md.*.tmp")), [])
+
     def test_local_source_rejects_missing_skill_with_actionable_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
@@ -388,6 +426,41 @@ class SkillInstallerServiceTests(unittest.TestCase):
                     install_skill("helm")
 
             self.assertEqual(ctx.exception.code, "skill_source_unreadable")
+
+    def test_local_source_rejects_oversized_file_before_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            source_dir = repo_root / "private-skills"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+            content = self._local_skill_content()
+            (source_dir / "helm.md").write_text(content, encoding="utf-8")
+
+            with (
+                patch("services.skill_installer_service.SKILLS_DIR", skills_dir),
+                patch(
+                    "services.skill_installer_service.CUSTOM_DIR",
+                    skills_dir / "custom",
+                ),
+                patch(
+                    "services.skill_installer_service.settings",
+                    SimpleNamespace(
+                        skills_local_source_dir=str(source_dir),
+                        skills_registry_base_url=None,
+                    ),
+                ),
+                patch(
+                    "services.skill_installer_service.MAX_SKILL_SOURCE_BYTES",
+                    len(content.encode("utf-8")) - 1,
+                    create=True,
+                ),
+            ):
+                with self.assertRaises(SkillInstallerError) as ctx:
+                    install_skill("helm")
+
+            self.assertEqual(ctx.exception.code, "skill_source_too_large")
+            self.assertFalse((skills_dir / "custom" / "helm.md").exists())
 
     def test_local_source_reports_permission_failure_as_unreadable(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

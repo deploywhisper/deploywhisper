@@ -61,10 +61,11 @@ commands fail with a clear configuration error instead of guessing a source.
   the same filename
 - Skill ids must use lowercase letters, digits, and hyphens only
 - `deploywhisper skill install` refuses to overwrite an existing custom file;
-  use `deploywhisper skill update` when you intentionally want the latest
-  registry version
-- `deploywhisper skill update` also restores the canonical registry copy when
-  the installed file has drifted locally but still reports the same version
+  use `deploywhisper skill update` when you intentionally want to refresh from
+  the currently configured source
+- `deploywhisper skill update` also restores the configured source copy when
+  the installed file has drifted locally but still reports the same version;
+  with a local source configured, it does not fall back to the registry
 
 ## Validation behavior
 
@@ -74,6 +75,7 @@ commands fail with a clear configuration error instead of guessing a source.
 - Local source paths must be regular UTF-8 files inside the configured
   directory; symlinks and special files are rejected, and reads are anchored
   to the validated directory to prevent path-swap races
+- Local source files are limited to 1 MiB and are read with a bounded buffer
 - Skill Markdown is parsed as data and is never imported, evaluated, or
   executed, including on validation errors
 - `deploywhisper skill list` reports both active installed skills and ignored

@@ -53,3 +53,7 @@
 ## Deferred from: code review of 9-4-skills-installer-cli.md (2026-07-23)
 
 - Resolved 2026-07-24: The no-source remediation text now includes `PUBLIC_APP_URL`, matching the documented registry URL resolution order [services/skill_installer_service.py:153].
+
+## Deferred from: code review of 9-4-skills-installer-cli.md (2026-07-24)
+
+- Resolved 2026-07-24: Skill install and update now write a same-directory temporary file and atomically replace the destination, preserving the prior installed file when writes or replacement fail [services/skill_installer_service.py:625].

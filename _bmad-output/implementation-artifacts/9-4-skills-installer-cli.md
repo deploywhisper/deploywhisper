@@ -40,6 +40,14 @@ So that self-hosted teams can manage extensions without manual file copying.
 - [x] [Review][Patch] Add the ignored Story 9.4 artifact to the delivered change set so its File List and review record are auditable [\_bmad-output/implementation-artifacts/9-4-skills-installer-cli.md:110]
 - [x] [Review][Patch] Include `PUBLIC_APP_URL` in no-source remediation because it participates in registry URL resolution [services/skill_installer_service.py:153]
 
+### Review Findings (Re-run 2026-07-24)
+
+- [x] [Review][Patch] Bound local Skill source size before reading to prevent memory exhaustion from oversized Markdown [services/skill_installer_service.py:485]
+- [x] [Review][Patch] Add CLI-path regression coverage for local-source install/update behavior and surfaced errors [tests/test_cli/test_analyze.py:1215]
+- [x] [Review][Patch] Replace remaining registry-only update guidance with configured-source behavior [docs/skills/installer-cli.md:63]
+- [x] [Review][Patch] Clarify Dev Agent Record fallback wording so it does not imply registry fallback after a local source is selected [\_bmad-output/implementation-artifacts/9-4-skills-installer-cli.md:100]
+- [x] [Review][Patch] Make installed Skill replacement atomic so update write failures cannot corrupt the existing file [services/skill_installer_service.py:734]
+
 ## Dev Notes
 
 ### Epic Context
@@ -97,7 +105,7 @@ OpenAI Codex (GPT-5.4)
 
 - Reuse the existing registry-backed installer and shared CLI/service path rather than introducing a second installer.
 - Add an optional local self-hosted source with explicit precedence, strict manifest validation, and path-containment checks.
-- Preserve registry behavior as the fallback and verify both focused behavior and the repository's exact CI test lanes.
+- Preserve registry behavior when no local source is configured and verify both focused behavior and the repository's exact CI test lanes.
 
 ### Debug Log References
 
@@ -113,16 +121,23 @@ OpenAI Codex (GPT-5.4)
 - Review CI services shard: `COVERAGE_FILE=/tmp/deploywhisper-story-9-4-review-services.coverage ./.venv/bin/python -m pytest tests/test_services --cov=. --cov-report=xml:/tmp/coverage-services-9-4-review.xml --cov-report=term-missing -v --tb=short` — 853 passed, 554 warnings, 171 subtests passed.
 - Review CI API/CLI/infra shard: `COVERAGE_FILE=/tmp/deploywhisper-story-9-4-review-api-cli-infra.coverage ./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra --cov=. --cov-report=xml:/tmp/coverage-api-cli-infra-9-4-review.xml --cov-report=term-missing -v --tb=short` — 339 passed, 330 warnings, 15 subtests passed.
 - Review full local CI: `bash scripts/ci-local.sh` — passed Ruff, formatting, dependency validation, Bandit, compilation, Skill benchmark corpus, and all unittest discovery lanes; services reported 853 tests passed.
+- Review re-run RED: selected oversized-source and atomic-update regressions — 2 failed before implementation, proving unbounded reads and direct destination writes remained.
+- Review re-run targeted GREEN: selected service regressions — 2 passed; CLI local-source install/update/error regressions — 2 passed.
+- Review re-run focused cross-layer regression: `./.venv/bin/python -m pytest tests/test_services/test_skill_installer_service.py tests/test_api/test_skills.py tests/test_cli/test_analyze.py -q --tb=short` — 135 passed, 94 warnings, 6 subtests passed.
+- Review re-run CI services shard: `COVERAGE_FILE=/tmp/deploywhisper-story-9-4-rerun-services.coverage ./.venv/bin/python -m pytest tests/test_services --cov=. --cov-report=xml:/tmp/coverage-services-9-4-rerun.xml --cov-report=term-missing -v --tb=short` — 855 passed, 554 warnings, 171 subtests passed.
+- Review re-run CI API/CLI/infra shard: `COVERAGE_FILE=/tmp/deploywhisper-story-9-4-rerun-api-cli-infra.coverage ./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra --cov=. --cov-report=xml:/tmp/coverage-api-cli-infra-9-4-rerun.xml --cov-report=term-missing -v --tb=short` — 341 passed, 335 warnings, 15 subtests passed.
+- Review re-run full local CI: `bash scripts/ci-local.sh` — passed Ruff, formatting, dependency validation, Bandit, compilation, Skill benchmark corpus, and all unittest discovery lanes; services reported 855 tests passed.
 - UI validation not applicable: no React route, component, interaction, or accessibility behavior changed.
 
 ### Completion Notes List
 
 - Added `DEPLOYWHISPER_SKILLS_SOURCE_DIR` for private, organization-owned, and air-gapped Skill Markdown sources.
-- Local sources take precedence over the registry, while existing registry installation remains the unchanged fallback.
+- Local sources take precedence without network fallback; registry installation remains available when no local source is configured.
 - Local files must be UTF-8 regular files contained within the configured source directory; symlinks and special files are rejected.
 - Local reads are anchored to an open directory descriptor and verify file identity before reading, closing the review-reported path-swap race.
+- Local source reads are capped at 1 MiB and use a bounded binary buffer before UTF-8 decoding.
 - Source Markdown is strictly parsed and validated as data before writes and is never imported, evaluated, or executed.
-- Invalid installs write nothing, invalid updates preserve the installed Skill, and actionable source/configuration errors are returned.
+- Installs and updates use same-directory atomic replacement; invalid inputs and write failures preserve the installed Skill.
 - Missing, unavailable, invalid, and unreadable sources have distinct error contracts, including complete configuration remediation.
 - Updated CLI help and operator documentation for configured source resolution and validation behavior.
 
@@ -135,6 +150,7 @@ OpenAI Codex (GPT-5.4)
 - `config.py`
 - `docs/skills/installer-cli.md`
 - `services/skill_installer_service.py`
+- `tests/test_cli/test_analyze.py`
 - `tests/test_services/test_skill_installer_service.py`
 
 ## Change Log
@@ -142,3 +158,4 @@ OpenAI Codex (GPT-5.4)
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-07-23: Implemented and verified registry/local-source Skill install and update behavior, safe validation, CLI help, tests, and operator documentation.
 - 2026-07-24: Resolved all code-review findings with descriptor-anchored local reads, precise error contracts, expanded regression coverage, and full CI verification.
+- 2026-07-24: Resolved the review re-run with bounded source reads, atomic writes, CLI-path regressions, corrected operator guidance, and repeat full-CI verification.

@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import tempfile
 from typing import Literal
 from urllib import error, parse, request
 
@@ -28,6 +29,7 @@ CUSTOM_DIR = SKILLS_DIR / "custom"
 SkillInstallMode = Literal["override", "new"]
 _SKILL_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MISSING_MANIFEST_WARNING = "Skill manifest frontmatter is required."
+MAX_SKILL_SOURCE_BYTES = 1024 * 1024
 
 
 class SkillInstallerError(ValueError):
@@ -507,6 +509,17 @@ def fetch_local_skill_content(
                 "Local Skill source must be a regular file, not a symlink or special file.",
                 {"skill_id": normalized_id, "path": str(candidate)},
             )
+        if initial_stat.st_size > MAX_SKILL_SOURCE_BYTES:
+            raise SkillInstallerError(
+                "skill_source_too_large",
+                "Local Skill source exceeds the maximum allowed size.",
+                {
+                    "skill_id": normalized_id,
+                    "path": str(candidate),
+                    "size_bytes": str(initial_stat.st_size),
+                    "max_bytes": str(MAX_SKILL_SOURCE_BYTES),
+                },
+            )
 
         open_flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
         open_flags |= getattr(os, "O_NOFOLLOW", 0)
@@ -562,9 +575,20 @@ def fetch_local_skill_content(
             )
 
         try:
-            with os.fdopen(file_fd, encoding="utf-8") as source_file:
+            with os.fdopen(file_fd, "rb") as source_file:
                 file_fd = None
-                content = source_file.read()
+                payload = source_file.read(MAX_SKILL_SOURCE_BYTES + 1)
+            if len(payload) > MAX_SKILL_SOURCE_BYTES:
+                raise SkillInstallerError(
+                    "skill_source_too_large",
+                    "Local Skill source exceeds the maximum allowed size.",
+                    {
+                        "skill_id": normalized_id,
+                        "path": str(candidate),
+                        "max_bytes": str(MAX_SKILL_SOURCE_BYTES),
+                    },
+                )
+            content = payload.decode("utf-8")
         except (OSError, UnicodeDecodeError) as exc:
             raise SkillInstallerError(
                 "skill_source_unreadable",
@@ -599,6 +623,40 @@ def fetch_configured_skill_content(skill_id: str) -> SkillRemoteContent:
     if local_source_dir is not None:
         return fetch_local_skill_content(skill_id, local_source_dir)
     return fetch_registry_skill_content(skill_id)
+
+
+def _replace_skill_content(destination: Path, content: str) -> None:
+    """Atomically replace an installed Skill while preserving the old file on errors."""
+
+    file_descriptor: int | None = None
+    temporary_path: Path | None = None
+    try:
+        file_descriptor, temporary_name = tempfile.mkstemp(
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+        )
+        temporary_path = Path(temporary_name)
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as temporary_file:
+            file_descriptor = None
+            temporary_file.write(content)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        temporary_path.replace(destination)
+    except (OSError, UnicodeEncodeError) as exc:
+        raise SkillInstallerError(
+            "skill_write_failed",
+            "Installed Skill could not be written safely.",
+            {"path": str(destination)},
+        ) from exc
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def list_installed_skills() -> list[InstalledSkillEntry]:
@@ -692,7 +750,7 @@ def install_skill(skill_id: str) -> SkillInstallResult:
 
     source = fetch_configured_skill_content(normalized_id)
     CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
-    destination.write_text(source.content, encoding="utf-8")
+    _replace_skill_content(destination, source.content)
     return SkillInstallResult(
         action="installed",
         skill_id=normalized_id,
@@ -731,7 +789,7 @@ def update_skill(skill_id: str) -> SkillInstallResult:
             source_url=source.source_url,
         )
 
-    destination.write_text(source.content, encoding="utf-8")
+    _replace_skill_content(destination, source.content)
     return SkillInstallResult(
         action="updated",
         skill_id=normalized_id,
