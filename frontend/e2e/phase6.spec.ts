@@ -127,9 +127,16 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
   test("skills supports filtering and detail navigation", async ({ page }) => {
     await page.goto("/skills?search=terraform&sort=recency", { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
-    await expect(page.locator('a[href="/skills/terraform"]')).toBeVisible();
-    await page.locator('a[href="/skills/terraform"]').click();
+    const terraformSkill = page.locator('a[href="/skills/terraform"]');
+    await expect(terraformSkill).toBeVisible();
+    await expect(terraformSkill.getByText("Core trust")).toBeVisible();
+    await expect(terraformSkill.getByText("Public registry")).toBeVisible();
+    await expect(terraformSkill.getByText("Tests missing")).toBeVisible();
+    await terraformSkill.click();
     await expect(page).toHaveURL(/\/skills\/terraform/);
+    await expect(page.getByText("Core trust")).toBeVisible();
+    await expect(page.getByText("Public registry")).toBeVisible();
+    await expect(page.getByText("Tests missing")).toBeVisible();
     await expect(page.getByText(/deploywhisper skill install terraform/)).toBeVisible();
     await expect(page.getByText("Version history")).toBeVisible();
     await expectNoSeriousA11y(page);

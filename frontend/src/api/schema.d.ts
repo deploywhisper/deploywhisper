@@ -3547,54 +3547,6 @@ export interface components {
              */
             evidence_label?: string | null;
         };
-        /** ShareSummaryScannerConflictData */
-        ShareSummaryScannerConflictData: {
-            /**
-             * Finding Id
-             * @description Finding with conflicting scanner context
-             */
-            finding_id: string;
-            /**
-             * Finding Title
-             * @description Reviewer-facing finding title
-             */
-            finding_title: string;
-            /**
-             * Scanner Source
-             * @description Scanner evidence source reference
-             */
-            scanner_source: string;
-            /**
-             * Scanner Freshness
-             * @description Scanner source freshness status
-             */
-            scanner_freshness: string;
-            /**
-             * Deterministic Source
-             * @description DeployWhisper deterministic evidence source
-             */
-            deterministic_source: string;
-            /**
-             * Deterministic Freshness
-             * @description DeployWhisper deterministic source freshness status
-             */
-            deterministic_freshness: string;
-            /**
-             * Conflict Summary
-             * @description Short conflict explanation
-             */
-            conflict_summary: string;
-            /**
-             * Confidence Impact
-             * @description How the conflict affects confidence interpretation
-             */
-            confidence_impact: string;
-            /**
-             * Recommended Verification
-             * @description Reviewer action for resolving the conflict
-             */
-            recommended_verification: string;
-        };
         /** ShareSummaryJsonPayloadData */
         ShareSummaryJsonPayloadData: {
             /**
@@ -3656,8 +3608,9 @@ export interface components {
             /**
              * External Evidence Count
              * @description External scanner evidence items included as review context
+             * @default 0
              */
-            external_evidence_count?: number;
+            external_evidence_count: number;
             /**
              * External Evidence Summary
              * @description How external scanner context should be interpreted
@@ -3685,6 +3638,54 @@ export interface components {
              * @description Advisory-only review summary
              */
             advisory_summary: string;
+        };
+        /** ShareSummaryScannerConflictData */
+        ShareSummaryScannerConflictData: {
+            /**
+             * Finding Id
+             * @description Finding with conflicting scanner context
+             */
+            finding_id: string;
+            /**
+             * Finding Title
+             * @description Reviewer-facing finding title
+             */
+            finding_title: string;
+            /**
+             * Scanner Source
+             * @description Scanner evidence source reference
+             */
+            scanner_source: string;
+            /**
+             * Scanner Freshness
+             * @description Scanner source freshness status
+             */
+            scanner_freshness: string;
+            /**
+             * Deterministic Source
+             * @description DeployWhisper deterministic evidence source
+             */
+            deterministic_source: string;
+            /**
+             * Deterministic Freshness
+             * @description DeployWhisper deterministic source freshness status
+             */
+            deterministic_freshness: string;
+            /**
+             * Conflict Summary
+             * @description Short conflict explanation
+             */
+            conflict_summary: string;
+            /**
+             * Confidence Impact
+             * @description How the conflict affects confidence interpretation
+             */
+            confidence_impact: string;
+            /**
+             * Recommended Verification
+             * @description Reviewer action for resolving the conflict
+             */
+            recommended_verification: string;
         };
         /** SharedReportAccessResponse */
         SharedReportAccessResponse: {
@@ -3744,6 +3745,12 @@ export interface components {
              * @description Current effective version
              */
             version: string;
+            /**
+             * Trust Level
+             * @description Manifest trust classification for the skill
+             * @enum {string}
+             */
+            trust_level: "experimental" | "verified" | "core" | "deprecated";
             /**
              * Source
              * @description Where the skill definition currently resolves from
@@ -3951,6 +3958,12 @@ export interface components {
              */
             version: string;
             /**
+             * Trust Level
+             * @description Manifest trust classification for the skill
+             * @enum {string}
+             */
+            trust_level: "experimental" | "verified" | "core" | "deprecated";
+            /**
              * Source
              * @description Where the skill definition currently resolves from
              * @enum {string}
@@ -4076,6 +4089,34 @@ export interface components {
             data: components["schemas"]["SkillRegistryVersionData"][];
             meta: components["schemas"]["SkillRegistryResourceMetaPayload"];
         };
+        /** SkillTestCoverageData */
+        SkillTestCoverageData: {
+            /**
+             * Expected Triggers
+             * @description Whether deterministic trigger selection is covered.
+             */
+            expected_triggers: boolean;
+            /**
+             * Expected Outputs
+             * @description Whether expected guidance output is covered.
+             */
+            expected_outputs: boolean;
+            /**
+             * Evidence Assumptions
+             * @description Whether scenarios declare deterministic evidence inputs.
+             */
+            evidence_assumptions: boolean;
+            /**
+             * Safety Constraints
+             * @description Whether non-selection safety behavior is covered.
+             */
+            safety_constraints: boolean;
+            /**
+             * Complete
+             * @description Whether all required harness coverage categories are present.
+             */
+            complete: boolean;
+        };
         /** SkillTestResultsData */
         SkillTestResultsData: {
             /**
@@ -4089,6 +4130,8 @@ export interface components {
              */
             version: string;
             summary: components["schemas"]["SkillTestResultsSummaryData"];
+            coverage: components["schemas"]["SkillTestCoverageData"];
+            trust_requirement: components["schemas"]["SkillTrustRequirementData"];
             /** Scenarios */
             scenarios?: components["schemas"]["SkillTestScenarioResultData"][];
         };
@@ -4151,6 +4194,30 @@ export interface components {
             /**
              * Failures
              * @description Failure reasons when the scenario did not pass.
+             */
+            failures?: string[];
+        };
+        /** SkillTrustRequirementData */
+        SkillTrustRequirementData: {
+            /**
+             * Trust Level
+             * @description Manifest trust level evaluated by the harness.
+             * @enum {string}
+             */
+            trust_level: "experimental" | "verified" | "core" | "deprecated";
+            /**
+             * Required
+             * @description Whether this trust level requires a passing complete suite.
+             */
+            required: boolean;
+            /**
+             * Satisfied
+             * @description Whether the suite satisfies its trust-level requirement.
+             */
+            satisfied: boolean;
+            /**
+             * Failures
+             * @description Actionable reasons the trust requirement was not satisfied.
              */
             failures?: string[];
         };

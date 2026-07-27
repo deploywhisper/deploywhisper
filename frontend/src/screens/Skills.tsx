@@ -25,17 +25,41 @@ function passRate(skill: SkillRegistryItem) {
   return `${Math.round(summary.pass_rate * 100)}%`;
 }
 
+export function skillTrustLabel(trustLevel: SkillRegistryItem["trust_level"]) {
+  return `${trustLevel.charAt(0).toUpperCase()}${trustLevel.slice(1)} trust`;
+}
+
+export function skillSourceLabel(source: SkillRegistryItem["source"]) {
+  if (source === "custom-override") {
+    return "Local override";
+  }
+  if (source === "custom-new") {
+    return "Private local";
+  }
+  return "Public registry";
+}
+
+export function skillTestStatusLabel(testResults: SkillRegistryItem["test_results"]) {
+  if (!testResults || testResults.status === "missing") {
+    return "Tests missing";
+  }
+  return testResults.status === "passing" ? "Tests passing" : "Tests failing";
+}
+
 function unique(values: (string | undefined)[]) {
   return Array.from(new Set(values.filter(Boolean) as string[])).sort();
 }
 
-function SkillCard({ skill }: { skill: SkillRegistryItem }) {
+export function SkillCard({ skill }: { skill: SkillRegistryItem }) {
   return (
     <Link className="dw-phase6-list-item dw-skill-card" to={`/skills/${skill.id}`}>
       <div className="dw-phase6-row">
         <div className="dw-phase6-list-title">{skill.name}</div>
         {skill.is_official && <EvidenceTag>Official</EvidenceTag>}
         {skill.is_featured && <EvidenceTag>Featured</EvidenceTag>}
+        <EvidenceTag>{skillTrustLabel(skill.trust_level)}</EvidenceTag>
+        <EvidenceTag>{skillSourceLabel(skill.source)}</EvidenceTag>
+        <EvidenceTag>{skillTestStatusLabel(skill.test_results)}</EvidenceTag>
       </div>
       <div className="dw-phase6-list-copy">{skill.description}</div>
       <div className="dw-skill-tags">
@@ -104,7 +128,12 @@ function SkillsListContent() {
             <span>Search</span>
             <div className="dw-phase6-row">
               <Search size={15} />
-              <input className="dw-phase6-search" onChange={(event) => updateFilter("search", event.target.value)} value={search} />
+              <input
+                aria-label="Search skills"
+                className="dw-phase6-search"
+                onChange={(event) => updateFilter("search", event.target.value)}
+                value={search}
+              />
             </div>
           </label>
           <label className="dw-field">
@@ -188,7 +217,9 @@ function SkillDetailContent({ skillId }: { skillId: string }) {
                 <div className="dw-phase6-row">
                   {skill.is_official && <EvidenceTag>Official</EvidenceTag>}
                   {skill.is_featured && <EvidenceTag>Featured</EvidenceTag>}
-                  <EvidenceTag>{skill.source}</EvidenceTag>
+                  <EvidenceTag>{skillTrustLabel(skill.trust_level)}</EvidenceTag>
+                  <EvidenceTag>{skillSourceLabel(skill.source)}</EvidenceTag>
+                  <EvidenceTag>{skillTestStatusLabel(skill.test_results)}</EvidenceTag>
                 </div>
                 <div className="dw-skill-command-box">{skill.install_command}</div>
                 <div className="dw-phase6-stat-grid">

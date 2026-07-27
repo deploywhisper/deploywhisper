@@ -57,3 +57,8 @@
 ## Deferred from: code review of 9-4-skills-installer-cli.md (2026-07-24)
 
 - Resolved 2026-07-24: Skill install and update now write a same-directory temporary file and atomically replace the destination, preserving the prior installed file when writes or replacement fail [services/skill_installer_service.py:625].
+
+## Deferred from: code review of 9-5-skills-browser-ui.md (2026-07-27)
+
+- Render the full deterministic harness summary and analytics refresh timestamp on the Skill detail page [frontend/src/screens/Skills.tsx:224]. Deferred as a pre-existing documentation-to-UI gap: Story 9.5 adds the required trust and test-status visibility but did not introduce the missing detail metadata.
+- Expose registry contributors through `SkillRegistryData` and render them on the Skill detail page [api/schemas.py:2080]. Deferred as a pre-existing API/UI contract gap outside Story 9.5's search, filter, trust, test-status, source, and install-instruction acceptance criterion.

@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-07-24
+# last_updated: 2026-07-27
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-07-24
+last_updated: 2026-07-27
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -130,7 +130,7 @@ development_status:
   9-2-skills-registry-api: done
   9-3-skill-test-harness: done
   9-4-skills-installer-cli: done
-  9-5-skills-browser-ui: ready-for-dev
+  9-5-skills-browser-ui: done
   9-6-skill-contribution-workflow: ready-for-dev
   9-7-skill-analytics-and-deprecation-signals: ready-for-dev
   epic-9-retrospective: optional
