@@ -82,6 +82,34 @@ describe("Skills browser labels", () => {
     expect(markup).toContain("Public registry");
     expect(markup).toContain("Tests passing");
     expect(markup).toContain("100%");
+    expect(markup).toContain("0 active issues");
+    expect(markup).toContain("Updated Jul 27, 2026");
+  });
+
+  it("clearly marks deprecated skills in catalog results", () => {
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <SkillCard skill={{ ...skill, trust_level: "deprecated" }} />
+      </MemoryRouter>,
+    );
+
+    expect(markup).toContain("Deprecated");
+    expect(markup).toContain("This Skill is deprecated");
+  });
+
+  it("uses singular analytics labels for one install and one active issue", () => {
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <SkillCard
+          skill={{ ...skill, install_count: 1, active_issue_count: 1 }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(markup).toContain("1 install");
+    expect(markup).not.toContain("1 installs");
+    expect(markup).toContain("1 active issue");
+    expect(markup).not.toContain("1 active issues");
   });
 
   it("distinguishes private local skills from public registry skills", () => {
@@ -141,5 +169,26 @@ describe("Skills browser labels", () => {
     expect(markup).toContain("Analytics refreshed");
     expect(markup).toContain("DeployWhisper");
     expect(markup).toContain("Platform Safety");
+  });
+
+  it("warns before installing a deprecated skill from detail", () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      ["skill", "terraform"],
+      { ...skill, trust_level: "deprecated", active_issue_count: 1 },
+    );
+    client.setQueryData(["skill-versions", "terraform"], []);
+
+    const markup = renderWithQuery(
+      <SkillDetailContent skillId="terraform" />,
+      client,
+    );
+
+    expect(markup).toContain("Deprecated");
+    expect(markup).toContain(
+      "This Skill is deprecated and may no longer be maintained.",
+    );
+    expect(markup).toContain("1 active issue");
+    expect(markup).not.toContain("1 active issues");
   });
 });

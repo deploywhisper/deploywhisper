@@ -7,6 +7,7 @@ import os from "node:os";
 const runId = Date.now();
 const projectKey = `phase-6-${runId}`;
 const projectName = `Phase 6 ${runId}`;
+const deprecatedSkillId = `deprecated-phase6-${runId}`;
 
 type ApiEnvelope<T> = { data: T };
 type Project = { id: number; project_key: string; name: string; env_label: string };
@@ -88,6 +89,18 @@ async function expectNoSeriousA11y(page: Page) {
   expect(violations).toEqual([]);
 }
 
+function formatSkillDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function countLabel(count: number, singular: string) {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
 test.describe("Phase 6 settings, incidents, and skills", () => {
   let project: Project;
 
@@ -132,9 +145,14 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
         trust_level: string;
         source: "built-in" | "custom-override" | "custom-new";
         contributors: string[];
+        author: string;
+        install_count: number;
+        active_issue_count: number;
+        updated_at: string;
         test_results: {
           status: "passing" | "failing" | "missing";
           display_text: string;
+          pass_rate: number;
         } | null;
       };
     };
@@ -150,6 +168,10 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
       : registrySkill.test_results?.status === "failing"
         ? "Tests failing"
         : "Tests missing";
+    const passRateLabel = !registrySkill.test_results || registrySkill.test_results.status === "missing"
+      ? "n/a"
+      : `${Math.round(registrySkill.test_results.pass_rate * 100)}%`;
+    const updatedDate = formatSkillDate(registrySkill.updated_at);
 
     await page.goto("/skills?search=terraform&sort=recency", { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
@@ -158,6 +180,12 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
     await expect(terraformSkill.getByText(trustLabel)).toBeVisible();
     await expect(terraformSkill.getByText(sourceLabel)).toBeVisible();
     await expect(terraformSkill.getByText(testStatusLabel)).toBeVisible();
+    await expect(terraformSkill.getByLabel(countLabel(registrySkill.install_count, "install"))).toBeVisible();
+    await expect(terraformSkill.getByLabel(countLabel(registrySkill.active_issue_count, "active issue"))).toBeVisible();
+    await expect(
+      terraformSkill.getByText(`${registrySkill.author} / Updated ${updatedDate}`, { exact: true }),
+    ).toBeVisible();
+    await expect(terraformSkill.getByLabel(`${passRateLabel} test pass rate`)).toBeVisible();
     await terraformSkill.click();
     await expect(page).toHaveURL(/\/skills\/terraform/);
     await expect(page.getByText(trustLabel)).toBeVisible();
@@ -165,6 +193,8 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
     await expect(page.getByText(testStatusLabel)).toBeVisible();
     await expect(page.getByText("Harness run")).toBeVisible();
     await expect(page.getByText("Analytics refreshed", { exact: false })).toBeVisible();
+    await expect(page.getByText(countLabel(registrySkill.active_issue_count, "active issue"))).toBeVisible();
+    await expect(page.getByText(`Updated ${updatedDate}`, { exact: true })).toBeVisible();
     if (registrySkill.test_results) {
       await expect(page.getByText(registrySkill.test_results.display_text)).toBeVisible();
     }
@@ -174,6 +204,70 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
     }
     await expect(page.getByText(/deploywhisper skill install terraform/)).toBeVisible();
     await expect(page.getByText("Version history")).toBeVisible();
+    await expectNoSeriousA11y(page);
+  });
+
+  test("deprecated skill is clearly marked in catalog and detail routes", async ({ page }) => {
+    const skillResponse = await page.request.get("/api/v1/skills/terraform");
+    expect(skillResponse.ok()).toBeTruthy();
+    const skillPayload = await skillResponse.json() as {
+      data: Record<string, unknown>;
+      meta: Record<string, unknown>;
+    };
+    const deprecatedSkillData = {
+      ...skillPayload.data,
+      id: deprecatedSkillId,
+      name: "Deprecated Phase 6 Skill",
+      trust_level: "deprecated",
+      author: "Phase 6 Test",
+      maintainer: "Phase 6 Test",
+      is_official: false,
+      is_featured: false,
+      description: "Synthetic deprecated Skill for composed browser coverage.",
+      install_count: 1,
+      active_issue_count: 1,
+      install_command: `deploywhisper skill install ${deprecatedSkillId}`,
+    };
+    const listPayload = {
+      data: [deprecatedSkillData],
+      meta: {
+        ...skillPayload.meta,
+        count: 1,
+        total_count: 1,
+        page: 1,
+        page_size: 100,
+        filters: {},
+      },
+    };
+
+    await page.route("**/api/v1/skills?*", async (route) => {
+      await route.fulfill({ contentType: "application/json", json: listPayload });
+    });
+    await page.route(`**/api/v1/skills/${deprecatedSkillId}/versions`, async (route) => {
+      await route.fulfill({ contentType: "application/json", json: { data: [], meta: skillPayload.meta } });
+    });
+    await page.route(`**/api/v1/skills/${deprecatedSkillId}`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        json: { data: deprecatedSkillData, meta: skillPayload.meta },
+      });
+    });
+
+    await page.goto(`/skills?search=${deprecatedSkillId}`, { waitUntil: "networkidle" });
+    const deprecatedSkill = page.locator(`a[href="/skills/${deprecatedSkillId}"]`);
+    await expect(deprecatedSkill).toBeVisible();
+    await expect(deprecatedSkill.getByText("Deprecated trust", { exact: true })).toBeVisible();
+    await expect(deprecatedSkill.getByText("This Skill is deprecated.", { exact: true })).toBeVisible();
+    await expect(deprecatedSkill.getByLabel("1 install")).toBeVisible();
+    await expect(deprecatedSkill.getByLabel("1 active issue")).toBeVisible();
+
+    await deprecatedSkill.click();
+    await expect(page).toHaveURL(new RegExp(`/skills/${deprecatedSkillId}$`));
+    await expect(page.getByText("Deprecated trust", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("This Skill is deprecated and may no longer be maintained.", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("1 active issue", { exact: true })).toBeVisible();
     await expectNoSeriousA11y(page);
   });
 });
