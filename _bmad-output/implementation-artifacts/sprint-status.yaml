@@ -131,7 +131,7 @@ development_status:
   9-3-skill-test-harness: done
   9-4-skills-installer-cli: done
   9-5-skills-browser-ui: done
-  9-6-skill-contribution-workflow: review
+  9-6-skill-contribution-workflow: done
   9-7-skill-analytics-and-deprecation-signals: ready-for-dev
   epic-9-retrospective: optional
 
