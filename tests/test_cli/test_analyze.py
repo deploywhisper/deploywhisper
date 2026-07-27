@@ -1239,6 +1239,151 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertIn("Installed helm@1.2.0", output.getvalue())
         self.assertIn("skills/custom/helm.md", output.getvalue())
 
+    def test_skill_install_and_update_commands_use_environment_local_source(
+        self,
+    ) -> None:
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            source_dir = repo_root / "private-skills"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+
+            def local_content(version: str, guidance: str) -> str:
+                return (
+                    "---\n"
+                    "name: helm\n"
+                    f"version: {version}\n"
+                    "author: Community\n"
+                    "license: MIT\n"
+                    "triggers: [Chart.yaml]\n"
+                    "token_budget: 900\n"
+                    "tags: [helm]\n"
+                    "description: Helm rollout checks.\n"
+                    "test_suite_path: tests/skill-tests/helm\n"
+                    "supported_toolchains: [helm]\n"
+                    "trust_level: verified\n"
+                    "scenario_references: [tests/skill-tests/helm]\n"
+                    "documentation_links: [docs/skills/helm.md]\n"
+                    "---\n"
+                    f"# Helm\n{guidance}\n"
+                )
+
+            source_path = source_dir / "helm.md"
+            source_path.write_text(
+                local_content("1.0.0", "Initial guidance."),
+                encoding="utf-8",
+            )
+            try:
+                with patch.dict(
+                    os.environ,
+                    {"DEPLOYWHISPER_SKILLS_SOURCE_DIR": str(source_dir)},
+                ):
+                    reload(config_module)
+                    with (
+                        patch(
+                            "services.skill_installer_service.SKILLS_DIR",
+                            skills_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.CUSTOM_DIR",
+                            custom_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.settings",
+                            config_module.settings,
+                        ),
+                        patch(
+                            "sys.argv",
+                            ["deploywhisper", "skill", "install", "helm"],
+                        ),
+                        redirect_stdout(output),
+                    ):
+                        with self.assertRaises(SystemExit) as install_ctx:
+                            main()
+
+                    source_path.write_text(
+                        local_content("2.0.0", "Updated guidance."),
+                        encoding="utf-8",
+                    )
+                    with (
+                        patch(
+                            "services.skill_installer_service.SKILLS_DIR",
+                            skills_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.CUSTOM_DIR",
+                            custom_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.settings",
+                            config_module.settings,
+                        ),
+                        patch(
+                            "sys.argv",
+                            ["deploywhisper", "skill", "update", "helm"],
+                        ),
+                        redirect_stdout(output),
+                    ):
+                        with self.assertRaises(SystemExit) as update_ctx:
+                            main()
+            finally:
+                reload(config_module)
+
+            self.assertEqual(install_ctx.exception.code, 0)
+            self.assertEqual(update_ctx.exception.code, 0)
+            installed = (custom_dir / "helm.md").read_text(encoding="utf-8")
+            self.assertIn("version: 2.0.0", installed)
+            self.assertIn("Updated guidance.", installed)
+            self.assertIn("Installed helm@1.0.0", output.getvalue())
+            self.assertIn("Updated helm 1.0.0 -> 2.0.0", output.getvalue())
+
+    def test_skill_install_command_surfaces_local_source_error(self) -> None:
+        error_output = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            source_dir = repo_root / "private-skills"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+            try:
+                with patch.dict(
+                    os.environ,
+                    {"DEPLOYWHISPER_SKILLS_SOURCE_DIR": str(source_dir)},
+                ):
+                    reload(config_module)
+                    with (
+                        patch(
+                            "services.skill_installer_service.SKILLS_DIR",
+                            skills_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.CUSTOM_DIR",
+                            skills_dir / "custom",
+                        ),
+                        patch(
+                            "services.skill_installer_service.settings",
+                            config_module.settings,
+                        ),
+                        patch(
+                            "sys.argv",
+                            ["deploywhisper", "skill", "install", "helm"],
+                        ),
+                        redirect_stderr(error_output),
+                    ):
+                        with self.assertRaises(SystemExit) as ctx:
+                            main()
+            finally:
+                reload(config_module)
+
+            self.assertEqual(ctx.exception.code, 2)
+            self.assertIn(
+                "Skill was not found in the configured local source.",
+                error_output.getvalue(),
+            )
+
     def test_skill_list_command_prints_installed_skill_inventory(self) -> None:
         output = io.StringIO()
 

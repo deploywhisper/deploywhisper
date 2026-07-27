@@ -1102,7 +1102,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     skill_subparsers = skill_parser.add_subparsers(dest="skill_command")
     skill_install_parser = skill_subparsers.add_parser(
-        "install", help="Fetch and install a registry skill into skills/custom."
+        "install", help="Install a Skill from the configured source into skills/custom."
     )
     skill_install_parser.add_argument("skill_id", help="Skill id to install.")
     skill_list_parser = skill_subparsers.add_parser(
@@ -1131,7 +1131,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit machine-readable JSON instead of human-readable output.",
     )
     skill_update_parser = skill_subparsers.add_parser(
-        "update", help="Refresh an installed skill to the latest registry version."
+        "update", help="Refresh an installed Skill from the configured source."
     )
     skill_update_parser.add_argument("skill_id", help="Installed skill id to update.")
     skill_remove_parser = skill_subparsers.add_parser(

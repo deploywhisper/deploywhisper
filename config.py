@@ -72,6 +72,9 @@ class Settings:
         or os.getenv("PUBLIC_APP_URL")
         or None
     )
+    skills_local_source_dir: str | None = (
+        os.getenv("DEPLOYWHISPER_SKILLS_SOURCE_DIR") or None
+    )
     public_skills_registry_url: str = os.getenv(
         "DEPLOYWHISPER_PUBLIC_SKILLS_REGISTRY_URL",
         "https://deploywhisper.github.io/skills-registry/",
