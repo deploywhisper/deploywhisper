@@ -280,12 +280,8 @@ jobs:
         env:
           BASE_REF: origin/${{ github.base_ref }}
         run: |
-          if [ -f scripts/test-changed-skills.sh ]; then
-            bash scripts/test-changed-skills.sh 2>&1 | tee changed-skill-harness.log
-            test ${PIPESTATUS[0]} -eq 0
-          else
-            echo "scripts/test-changed-skills.sh not found — skipping changed skill lint and harness checks"
-          fi
+          bash scripts/test-changed-skills.sh 2>&1 | tee changed-skill-harness.log
+          test ${PIPESTATUS[0]} -eq 0
 
       - name: Upload changed-test logs
         if: failure()

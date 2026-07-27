@@ -392,7 +392,9 @@ def calculate_risk_score(changes: list[ParsedChange], context: AnalysisContext) 
 ### Project structure rules
 
 - Parsers go in `parsers/`, one file per IaC tool.
-- AI Skills go in `skills/`, one markdown file per tool.
+- AI Skills go in `skills/`, one markdown file per tool. Follow the dedicated
+  workflow in `docs/contributing/skills.md` for the Skill PR template,
+  deterministic harness, reviewer routing, and publication gates.
 - API routes go in `api/routes/`, grouped by domain.
 - All database models live in `models/`.
 - Tests mirror the source structure under `tests/`.

@@ -65,6 +65,25 @@ jobs:
         if: steps.config.outputs.configured == 'true' && steps.changed.outputs.skill_ids == ''
         run: echo "No skill changes detected for publish."
 
+      - name: Validate changed skills before publish
+        if: steps.config.outputs.configured == 'true' && steps.changed.outputs.skill_ids != ''
+        env:
+          SKILL_IDS: ${{ steps.changed.outputs.skill_ids }}
+        run: |
+          IFS=',' read -r -a changed_skill_ids <<< "$SKILL_IDS"
+          active_skill_ids=()
+          for skill_id in "${changed_skill_ids[@]}"; do
+            if [ ! -f "skills/${skill_id}.md" ]; then
+              echo "Skill ${skill_id} was removed; its registry entry will be removed."
+              continue
+            fi
+            python cli.py skill lint "skills/${skill_id}.md"
+            active_skill_ids+=("$skill_id")
+          done
+          if [ "${#active_skill_ids[@]}" -gt 0 ]; then
+            python cli.py skill test "${active_skill_ids[@]}"
+          fi
+
       - name: Checkout registry repository
         if: steps.config.outputs.configured == 'true' && steps.changed.outputs.skill_ids != ''
         env:
