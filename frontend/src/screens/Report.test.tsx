@@ -216,6 +216,7 @@ const report = {
       headline: "Ingress widened",
       top_findings: [],
       evidence_count: 1,
+      external_evidence_count: 0,
       blast_radius_summary: "1 service affected",
       rollback_summary: "1 rollback step",
       context_completeness: { score: 0.72, label: "medium", summary: "Context mostly complete." },

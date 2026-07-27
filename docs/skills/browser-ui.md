@@ -11,6 +11,13 @@ The shared skills catalog is exposed through the React SPA:
   registry and installer surfaces.
 - Tool and author filters use the same canonical metadata returned by the shared
   registry service.
+- Every catalog result exposes its manifest trust level and deterministic harness
+  status. The detail view repeats both values alongside the install command.
+- Source labels distinguish registry content from organization-owned content:
+  - `Public registry` identifies bundled/public registry Skills.
+  - `Local override` identifies a private Skill replacing a registry Skill.
+  - `Private local` identifies a private Skill available only in the self-hosted
+    installation.
 - Sorting supports:
   - `popularity` using the seeded browser download/star snapshot in the shared
     registry service
@@ -22,6 +29,9 @@ The shared skills catalog is exposed through the React SPA:
 Each skill detail page surfaces:
 
 - description
+- trust label (`Experimental trust`, `Verified trust`, `Core trust`, or `Deprecated trust`)
+- deterministic test status (`Tests passing`, `Tests failing`, or `Tests missing`)
+- source (`Public registry`, `Local override`, or `Private local`)
 - editorial badges for `Official` and curated-community `Featured` states
 - install command
 - latest harness summary and pass rate
