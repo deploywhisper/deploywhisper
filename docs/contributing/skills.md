@@ -28,7 +28,7 @@ deploywhisper skill test <skill>
   - the skill id and version
   - the risk patterns introduced or changed
   - the lint and harness commands that were run
-  - the requested maintainer or domain reviewer and review focus
+  - any additional domain reviewer and the review focus
 
 ## Automated checks on skill PRs
 

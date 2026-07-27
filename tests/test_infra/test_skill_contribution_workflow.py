@@ -12,6 +12,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import yaml
+
 from scripts.collect_changed_skills import _changed_skill_ids
 from scripts.publish_skills_registry import publish_skill
 from scripts.refresh_skill_analytics import (
@@ -32,7 +34,8 @@ class SkillContributionWorkflowTests(unittest.TestCase):
         self.assertIn("deploywhisper skill lint", template)
         self.assertIn("deploywhisper skill test", template)
         self.assertIn("## Reviewer Assignment", template)
-        self.assertIn("Requested maintainer or domain reviewer:", template)
+        self.assertIn("Additional domain reviewer (if any):", template)
+        self.assertNotIn("Requested maintainer or domain reviewer:", template)
 
     def test_codeowners_contains_explicit_skill_contribution_paths(self) -> None:
         rules: dict[str, tuple[str, ...]] = {}
@@ -43,17 +46,15 @@ class SkillContributionWorkflowTests(unittest.TestCase):
             pattern, *owners = stripped.split()
             rules[pattern] = tuple(owners)
 
-        expected_paths = (
-            "/skills/",
-            "/tests/skill-tests/",
-            "/.github/PULL_REQUEST_TEMPLATE/skill.md",
-            "/docs/contributing/skills.md",
-        )
-        for path in expected_paths:
+        expected_routes = {
+            "/skills/": ("@pramodksahoo",),
+            "/tests/skill-tests/": ("@pramodksahoo",),
+            "/.github/PULL_REQUEST_TEMPLATE/skill.md": ("@pramodksahoo",),
+            "/docs/contributing/skills.md": ("@pramodksahoo",),
+        }
+        for path, expected_owners in expected_routes.items():
             with self.subTest(path=path):
-                self.assertIn(path, rules)
-                self.assertTrue(rules[path])
-                self.assertTrue(all(owner.startswith("@") for owner in rules[path]))
+                self.assertEqual(rules.get(path), expected_owners)
 
     def test_changed_skill_script_runs_lint_before_harness(self) -> None:
         script = Path("scripts/test-changed-skills.sh").read_text(encoding="utf-8")
@@ -64,10 +65,18 @@ class SkillContributionWorkflowTests(unittest.TestCase):
 
     def test_changed_skill_ci_preserves_actionable_failure_logs(self) -> None:
         workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+        payload = yaml.load(workflow, Loader=yaml.BaseLoader)
+        steps = payload["jobs"]["changed-tests"]["steps"]
+        upload_step = next(
+            step for step in steps if step["name"] == "Upload changed-test logs"
+        )
 
         self.assertIn("Run changed skill lint and harness checks", workflow)
-        self.assertIn("changed-skill-harness.log", workflow)
-        self.assertIn("if: failure()", workflow)
+        self.assertEqual(upload_step["if"], "failure()")
+        self.assertIn(
+            "changed-skill-harness.log",
+            upload_step["with"]["path"].splitlines(),
+        )
         self.assertNotIn(
             "if [ -f scripts/test-changed-skills.sh ]; then",
             workflow,
@@ -154,15 +163,16 @@ class SkillContributionWorkflowTests(unittest.TestCase):
         workflow = Path(".github/workflows/publish-skills-registry.yml").read_text(
             encoding="utf-8"
         )
+        payload = yaml.load(workflow, Loader=yaml.BaseLoader)
+        triggers = payload["on"]
 
         self.assertIn("Publish Skills Registry", workflow)
-        self.assertIn("branches:", workflow)
-        self.assertIn("- main", workflow)
-        self.assertIn("skills/*.md", workflow)
+        self.assertEqual(set(triggers), {"push", "workflow_dispatch"})
+        self.assertEqual(triggers["push"]["branches"], ["main"])
+        self.assertIn("skills/*.md", triggers["push"]["paths"])
         self.assertIn("REGISTRY_REPO: deploywhisper/skills-registry", workflow)
         self.assertIn("DEPLOYWHISPER_SKILLS_REGISTRY_PUSH_TOKEN", workflow)
         self.assertIn("scripts/publish_skills_registry.py", workflow)
-        self.assertNotIn("pull_request:", workflow)
 
     def test_publish_workflow_revalidates_before_registry_checkout(self) -> None:
         workflow = Path(".github/workflows/publish-skills-registry.yml").read_text(

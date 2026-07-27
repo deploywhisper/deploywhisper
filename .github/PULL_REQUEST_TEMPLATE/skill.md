@@ -22,7 +22,7 @@
 
 ## Reviewer Assignment
 
-- Requested maintainer or domain reviewer:
+- Additional domain reviewer (if any):
 - Review focus:
 
 <!-- CODEOWNERS requests the Skill maintainer automatically. Name any additional
