@@ -1,9 +1,17 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import type { SkillRegistryItem } from "../api/phase6";
-import { SkillCard, skillSourceLabel, skillTestStatusLabel, skillTrustLabel } from "./Skills";
+import {
+  SkillCard,
+  SkillDetailContent,
+  SkillsListContent,
+  skillSourceLabel,
+  skillTestStatusLabel,
+  skillTrustLabel,
+} from "./Skills";
 
 const skill: SkillRegistryItem = {
   id: "terraform",
@@ -32,6 +40,7 @@ const skill: SkillRegistryItem = {
   },
   triggers: [".tf"],
   trigger_content_patterns: [],
+  contributors: ["DeployWhisper", "Platform Safety"],
   install_count: 12,
   active_issue_count: 0,
   analytics_updated_at: "2026-07-27T00:00:00Z",
@@ -42,13 +51,23 @@ const skill: SkillRegistryItem = {
   install_command: "deploywhisper skill install terraform",
 };
 
+function renderWithQuery(node: React.ReactElement, client: QueryClient) {
+  return renderToStaticMarkup(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>{node}</MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 describe("Skills browser labels", () => {
   it("uses explicit trust, source, and deterministic test-status labels", () => {
     expect(skillTrustLabel("core")).toBe("Core trust");
     expect(skillSourceLabel("built-in")).toBe("Public registry");
     expect(skillSourceLabel("custom-override")).toBe("Local override");
     expect(skillSourceLabel("custom-new")).toBe("Private local");
+    expect(skillSourceLabel("future-source" as SkillRegistryItem["source"])).toBe("Unknown source");
     expect(skillTestStatusLabel(skill.test_results)).toBe("Tests passing");
+    expect(skillTestStatusLabel({ ...skill.test_results!, status: "failing" })).toBe("Tests failing");
     expect(skillTestStatusLabel(null)).toBe("Tests missing");
   });
 
@@ -84,5 +103,43 @@ describe("Skills browser labels", () => {
     expect(markup).toContain("Experimental trust");
     expect(markup).toContain("Private local");
     expect(markup).not.toContain("Public registry");
+  });
+
+  it("renders accessible search semantics from preloaded registry data", () => {
+    const client = new QueryClient();
+    const envelope = {
+      data: [skill],
+      meta: {
+        app: "deploywhisper",
+        version: "test",
+        count: 1,
+        total_count: 1,
+        page: 1,
+        page_size: 100,
+        filters: {},
+      },
+    };
+    client.setQueryData(["skills", "", "", "", "", "popularity"], envelope);
+    client.setQueryData(["skills", "all-options"], envelope);
+
+    const markup = renderWithQuery(<SkillsListContent />, client);
+
+    expect(markup).toContain('aria-label="Search skills"');
+    expect(markup).toContain("Core trust");
+    expect(markup).toContain("Public registry");
+  });
+
+  it("renders harness freshness, analytics freshness, and contributors in detail", () => {
+    const client = new QueryClient();
+    client.setQueryData(["skill", "terraform"], skill);
+    client.setQueryData(["skill-versions", "terraform"], []);
+
+    const markup = renderWithQuery(<SkillDetailContent skillId="terraform" />, client);
+
+    expect(markup).toContain("3/3 scenarios passed");
+    expect(markup).toContain("Harness run");
+    expect(markup).toContain("Analytics refreshed");
+    expect(markup).toContain("DeployWhisper");
+    expect(markup).toContain("Platform Safety");
   });
 });

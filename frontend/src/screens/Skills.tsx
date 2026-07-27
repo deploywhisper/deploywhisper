@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, GitBranch, PackageCheck, Search, ShieldCheck } from "lucide-react";
+import { Clock3, ExternalLink, GitBranch, PackageCheck, Search, ShieldCheck, UsersRound } from "lucide-react";
 
 import { getSkill, getSkills, getSkillVersions, type SkillRegistryItem } from "../api/phase6";
 import { Button, Card, EvidenceTag, MonoRef, SkeletonCard } from "../components/ui";
@@ -17,6 +17,18 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", year: "numeric" }).format(parsed);
 }
 
+function formatTimestamp(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(parsed);
+}
+
 function passRate(skill: SkillRegistryItem) {
   const summary = skill.test_results;
   if (!summary || summary.status === "missing") {
@@ -30,13 +42,19 @@ export function skillTrustLabel(trustLevel: SkillRegistryItem["trust_level"]) {
 }
 
 export function skillSourceLabel(source: SkillRegistryItem["source"]) {
-  if (source === "custom-override") {
-    return "Local override";
+  switch (source) {
+    case "built-in":
+      return "Public registry";
+    case "custom-override":
+      return "Local override";
+    case "custom-new":
+      return "Private local";
+    default: {
+      const unknownSource: never = source;
+      void unknownSource;
+      return "Unknown source";
+    }
   }
-  if (source === "custom-new") {
-    return "Private local";
-  }
-  return "Public registry";
 }
 
 export function skillTestStatusLabel(testResults: SkillRegistryItem["test_results"]) {
@@ -75,7 +93,7 @@ export function SkillCard({ skill }: { skill: SkillRegistryItem }) {
   );
 }
 
-function SkillsListContent() {
+export function SkillsListContent() {
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get("search") ?? "";
   const tool = searchParams.get("tool") ?? "";
@@ -185,7 +203,7 @@ function SkillsListContent() {
   );
 }
 
-function SkillDetailContent({ skillId }: { skillId: string }) {
+export function SkillDetailContent({ skillId }: { skillId: string }) {
   const skillQuery = useQuery({ queryFn: () => getSkill(skillId), queryKey: ["skill", skillId] });
   const versionsQuery = useQuery({ queryFn: () => getSkillVersions(skillId), queryKey: ["skill-versions", skillId] });
   const skill = skillQuery.data;
@@ -228,8 +246,36 @@ function SkillDetailContent({ skillId }: { skillId: string }) {
                   <div className="dw-phase6-stat"><strong>{skill.install_count}</strong><span>Installs</span></div>
                   <div className="dw-phase6-stat"><strong>{passRate(skill)}</strong><span>Pass rate</span></div>
                 </div>
+                <section aria-labelledby="skill-contributors-title" className="dw-phase6-stack">
+                  <div className="dw-phase6-row">
+                    <UsersRound size={16} />
+                    <span className="dw-phase6-list-copy" id="skill-contributors-title">Contributors</span>
+                  </div>
+                  <div className="dw-skill-tags">
+                    {skill.contributors.length > 0
+                      ? skill.contributors.map((contributor) => <EvidenceTag key={contributor}>{contributor}</EvidenceTag>)
+                      : <span className="dw-phase6-list-copy">No contributors listed</span>}
+                  </div>
+                </section>
                 <div className="dw-skill-tags">
                   {skill.tags?.map((tag) => <EvidenceTag key={tag}>{tag}</EvidenceTag>)}
+                </div>
+              </div>
+            </Card>
+            <Card eyebrow="Validation" title="Deterministic harness">
+              <div className="dw-phase6-stack">
+                <div className="dw-phase6-row">
+                  <ShieldCheck size={16} />
+                  <span className="dw-phase6-list-copy">
+                    {skill.test_results?.display_text ?? "No deterministic harness result available."}
+                  </span>
+                </div>
+                <div className="dw-phase6-row">
+                  <Clock3 size={16} />
+                  <span className="dw-phase6-list-copy">Harness run</span>
+                  {skill.test_results
+                    ? <MonoRef><time dateTime={skill.test_results.generated_at}>{formatTimestamp(skill.test_results.generated_at)}</time></MonoRef>
+                    : <MonoRef>Not available</MonoRef>}
                 </div>
               </div>
             </Card>
@@ -249,6 +295,12 @@ function SkillDetailContent({ skillId }: { skillId: string }) {
                 <div className="dw-phase6-row"><PackageCheck size={16} /> <span className="dw-phase6-list-copy">{skill.available_versions} tracked versions</span></div>
                 <div className="dw-phase6-row"><ShieldCheck size={16} /> <span className="dw-phase6-list-copy">{skill.active_issue_count} active issues</span></div>
                 <div className="dw-phase6-row"><GitBranch size={16} /> <span className="dw-phase6-list-copy">Updated {formatDate(skill.updated_at)}</span></div>
+                <div className="dw-phase6-row">
+                  <Clock3 size={16} />
+                  <span className="dw-phase6-list-copy">
+                    Analytics refreshed <time dateTime={skill.analytics_updated_at}>{formatTimestamp(skill.analytics_updated_at)}</time>
+                  </span>
+                </div>
               </div>
             </Card>
             <Card eyebrow="Versions" title="Version history">

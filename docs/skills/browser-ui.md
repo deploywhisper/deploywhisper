@@ -29,7 +29,7 @@ The shared skills catalog is exposed through the React SPA:
 Each skill detail page surfaces:
 
 - description
-- trust level (`Experimental`, `Verified`, `Core`, or `Deprecated`)
+- trust label (`Experimental trust`, `Verified trust`, `Core trust`, or `Deprecated trust`)
 - deterministic test status (`Tests passing`, `Tests failing`, or `Tests missing`)
 - source (`Public registry`, `Local override`, or `Private local`)
 - editorial badges for `Official` and curated-community `Featured` states

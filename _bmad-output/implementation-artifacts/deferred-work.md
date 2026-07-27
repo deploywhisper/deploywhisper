@@ -60,5 +60,5 @@
 
 ## Deferred from: code review of 9-5-skills-browser-ui.md (2026-07-27)
 
-- Render the full deterministic harness summary and analytics refresh timestamp on the Skill detail page [frontend/src/screens/Skills.tsx:224]. Deferred as a pre-existing documentation-to-UI gap: Story 9.5 adds the required trust and test-status visibility but did not introduce the missing detail metadata.
-- Expose registry contributors through `SkillRegistryData` and render them on the Skill detail page [api/schemas.py:2080]. Deferred as a pre-existing API/UI contract gap outside Story 9.5's search, filter, trust, test-status, source, and install-instruction acceptance criterion.
+- Resolved 2026-07-27: The Skill detail page now renders the full deterministic harness summary together with harness-run and analytics-refresh timestamps [frontend/src/screens/Skills.tsx:224].
+- Resolved 2026-07-27: `SkillRegistryData` now requires visible contributors, the generated frontend contract includes them, and the Skill detail page renders them [api/schemas.py:2080].

@@ -2118,6 +2118,10 @@ class SkillRegistryData(BaseModel):
     trigger_content_patterns: list[str] = Field(
         default_factory=list, description="Content markers used for matching"
     )
+    contributors: list[str] = Field(
+        ...,
+        description="Visible contributor names for the Skills browser.",
+    )
     install_count: int = Field(
         default=0, description="Current install count from the analytics snapshot"
     )

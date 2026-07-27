@@ -121,6 +121,7 @@ class SkillsApiTests(unittest.TestCase):
         self.assertIn("install_count", payload["data"][0])
         self.assertIn("active_issue_count", payload["data"][0])
         self.assertIn("analytics_updated_at", payload["data"][0])
+        self.assertEqual(payload["data"][0]["contributors"], ["DeployWhisper"])
         self.assertEqual(payload["data"][0]["test_results"]["status"], "passing")
         self.assertEqual(payload["data"][0]["triggers"], [".tf"])
 
@@ -190,6 +191,7 @@ class SkillsApiTests(unittest.TestCase):
         self.assertIn("install_count", detail_payload["data"])
         self.assertIn("active_issue_count", detail_payload["data"])
         self.assertIn("analytics_updated_at", detail_payload["data"])
+        self.assertEqual(detail_payload["data"]["contributors"], ["DeployWhisper"])
         self.assertEqual(detail_payload["data"]["test_results"]["status"], "passing")
         self.assertEqual(detail_payload["meta"]["id"], "terraform")
 
@@ -333,6 +335,10 @@ class SkillsApiTests(unittest.TestCase):
         self.assertIn("/api/v1/skills/{skill_id}/versions", payload["paths"])
         self.assertIn(
             "trust_level",
+            payload["components"]["schemas"]["SkillRegistryData"]["required"],
+        )
+        self.assertIn(
+            "contributors",
             payload["components"]["schemas"]["SkillRegistryData"]["required"],
         )
         test_results_schema = payload["components"]["schemas"]["SkillTestResultsData"]

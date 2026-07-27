@@ -125,18 +125,53 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
   });
 
   test("skills supports filtering and detail navigation", async ({ page }) => {
+    const skillResponse = await page.request.get("/api/v1/skills/terraform");
+    expect(skillResponse.ok()).toBeTruthy();
+    const skillPayload = await skillResponse.json() as {
+      data: {
+        trust_level: string;
+        source: "built-in" | "custom-override" | "custom-new";
+        contributors: string[];
+        test_results: {
+          status: "passing" | "failing" | "missing";
+          display_text: string;
+        } | null;
+      };
+    };
+    const registrySkill = skillPayload.data;
+    const trustLabel = `${registrySkill.trust_level.charAt(0).toUpperCase()}${registrySkill.trust_level.slice(1)} trust`;
+    const sourceLabel = {
+      "built-in": "Public registry",
+      "custom-override": "Local override",
+      "custom-new": "Private local",
+    }[registrySkill.source];
+    const testStatusLabel = registrySkill.test_results?.status === "passing"
+      ? "Tests passing"
+      : registrySkill.test_results?.status === "failing"
+        ? "Tests failing"
+        : "Tests missing";
+
     await page.goto("/skills?search=terraform&sort=recency", { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
     const terraformSkill = page.locator('a[href="/skills/terraform"]');
     await expect(terraformSkill).toBeVisible();
-    await expect(terraformSkill.getByText("Core trust")).toBeVisible();
-    await expect(terraformSkill.getByText("Public registry")).toBeVisible();
-    await expect(terraformSkill.getByText("Tests missing")).toBeVisible();
+    await expect(terraformSkill.getByText(trustLabel)).toBeVisible();
+    await expect(terraformSkill.getByText(sourceLabel)).toBeVisible();
+    await expect(terraformSkill.getByText(testStatusLabel)).toBeVisible();
     await terraformSkill.click();
     await expect(page).toHaveURL(/\/skills\/terraform/);
-    await expect(page.getByText("Core trust")).toBeVisible();
-    await expect(page.getByText("Public registry")).toBeVisible();
-    await expect(page.getByText("Tests missing")).toBeVisible();
+    await expect(page.getByText(trustLabel)).toBeVisible();
+    await expect(page.getByText(sourceLabel)).toBeVisible();
+    await expect(page.getByText(testStatusLabel)).toBeVisible();
+    await expect(page.getByText("Harness run")).toBeVisible();
+    await expect(page.getByText("Analytics refreshed", { exact: false })).toBeVisible();
+    if (registrySkill.test_results) {
+      await expect(page.getByText(registrySkill.test_results.display_text)).toBeVisible();
+    }
+    const contributors = page.locator('section[aria-labelledby="skill-contributors-title"]');
+    for (const contributor of registrySkill.contributors) {
+      await expect(contributors.getByText(contributor, { exact: true })).toBeVisible();
+    }
     await expect(page.getByText(/deploywhisper skill install terraform/)).toBeVisible();
     await expect(page.getByText("Version history")).toBeVisible();
     await expectNoSeriousA11y(page);
