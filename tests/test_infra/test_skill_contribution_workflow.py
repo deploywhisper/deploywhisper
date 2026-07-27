@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+
+import yaml
 
 from scripts.collect_changed_skills import _changed_skill_ids
 from scripts.publish_skills_registry import publish_skill
@@ -28,14 +33,28 @@ class SkillContributionWorkflowTests(unittest.TestCase):
         self.assertIn("## Skill Summary", template)
         self.assertIn("deploywhisper skill lint", template)
         self.assertIn("deploywhisper skill test", template)
+        self.assertIn("## Reviewer Assignment", template)
+        self.assertIn("Additional domain reviewer (if any):", template)
+        self.assertNotIn("Requested maintainer or domain reviewer:", template)
 
     def test_codeowners_contains_explicit_skill_contribution_paths(self) -> None:
-        codeowners = Path(".github/CODEOWNERS").read_text(encoding="utf-8")
+        rules: dict[str, tuple[str, ...]] = {}
+        for line in Path(".github/CODEOWNERS").read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            pattern, *owners = stripped.split()
+            rules[pattern] = tuple(owners)
 
-        self.assertIn("/skills/", codeowners)
-        self.assertIn("/tests/skill-tests/", codeowners)
-        self.assertIn("/.github/PULL_REQUEST_TEMPLATE/skill.md", codeowners)
-        self.assertIn("/docs/contributing/skills.md", codeowners)
+        expected_routes = {
+            "/skills/": ("@pramodksahoo",),
+            "/tests/skill-tests/": ("@pramodksahoo",),
+            "/.github/PULL_REQUEST_TEMPLATE/skill.md": ("@pramodksahoo",),
+            "/docs/contributing/skills.md": ("@pramodksahoo",),
+        }
+        for path, expected_owners in expected_routes.items():
+            with self.subTest(path=path):
+                self.assertEqual(rules.get(path), expected_owners)
 
     def test_changed_skill_script_runs_lint_before_harness(self) -> None:
         script = Path("scripts/test-changed-skills.sh").read_text(encoding="utf-8")
@@ -43,6 +62,84 @@ class SkillContributionWorkflowTests(unittest.TestCase):
         self.assertIn("^skills/([^/]+)\\.md$", script)
         self.assertIn('cli.py skill lint "skills/${skill}.md"', script)
         self.assertIn('cli.py skill test "${UNIQUE_SKILLS[@]}"', script)
+
+    def test_changed_skill_ci_preserves_actionable_failure_logs(self) -> None:
+        workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+        payload = yaml.load(workflow, Loader=yaml.BaseLoader)
+        steps = payload["jobs"]["changed-tests"]["steps"]
+        upload_step = next(
+            step for step in steps if step["name"] == "Upload changed-test logs"
+        )
+
+        self.assertIn("Run changed skill lint and harness checks", workflow)
+        self.assertEqual(upload_step["if"], "failure()")
+        self.assertIn(
+            "changed-skill-harness.log",
+            upload_step["with"]["path"].splitlines(),
+        )
+        self.assertNotIn(
+            "if [ -f scripts/test-changed-skills.sh ]; then",
+            workflow,
+        )
+
+    def test_changed_skill_script_handles_an_empty_diff(self) -> None:
+        result = subprocess.run(
+            ["bash", "scripts/test-changed-skills.sh"],
+            check=False,
+            capture_output=True,
+            env={
+                **os.environ,
+                "BASE_REF": "HEAD",
+                "PYTHON_BIN": sys.executable,
+            },
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("No changed built-in skills detected", result.stdout)
+
+    def test_changed_skill_script_fails_closed_when_base_is_missing(self) -> None:
+        result = subprocess.run(
+            ["bash", "scripts/test-changed-skills.sh"],
+            check=False,
+            capture_output=True,
+            env={
+                **os.environ,
+                "BASE_REF": "missing/story-9-6-base",
+                "PYTHON_BIN": sys.executable,
+            },
+            text=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Base ref 'missing/story-9-6-base' is unavailable", result.stderr)
+
+    def test_changed_skill_script_fails_closed_when_diff_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_git = Path(tmpdir) / "git"
+            fake_git.write_text(
+                "#!/bin/sh\n"
+                'if [ "$1" = "rev-parse" ]; then exit 0; fi\n'
+                'if [ "$1" = "diff" ]; then echo "diff failed" >&2; exit 7; fi\n'
+                "exit 1\n",
+                encoding="utf-8",
+            )
+            fake_git.chmod(0o755)
+            result = subprocess.run(
+                ["bash", "scripts/test-changed-skills.sh"],
+                check=False,
+                capture_output=True,
+                env={
+                    **os.environ,
+                    "BASE_REF": "develop",
+                    "PATH": f"{tmpdir}{os.pathsep}{os.environ['PATH']}",
+                    "PYTHON_BIN": sys.executable,
+                },
+                text=True,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("diff failed", result.stderr)
 
     def test_changed_skill_script_excludes_nested_skill_docs(self) -> None:
         diff_output = "\n".join(
@@ -66,14 +163,45 @@ class SkillContributionWorkflowTests(unittest.TestCase):
         workflow = Path(".github/workflows/publish-skills-registry.yml").read_text(
             encoding="utf-8"
         )
+        payload = yaml.load(workflow, Loader=yaml.BaseLoader)
+        triggers = payload["on"]
 
         self.assertIn("Publish Skills Registry", workflow)
-        self.assertIn("branches:", workflow)
-        self.assertIn("- main", workflow)
-        self.assertIn("skills/*.md", workflow)
+        self.assertEqual(set(triggers), {"push", "workflow_dispatch"})
+        self.assertEqual(triggers["push"]["branches"], ["main"])
+        self.assertIn("skills/*.md", triggers["push"]["paths"])
         self.assertIn("REGISTRY_REPO: deploywhisper/skills-registry", workflow)
         self.assertIn("DEPLOYWHISPER_SKILLS_REGISTRY_PUSH_TOKEN", workflow)
         self.assertIn("scripts/publish_skills_registry.py", workflow)
+
+    def test_publish_workflow_revalidates_before_registry_checkout(self) -> None:
+        workflow = Path(".github/workflows/publish-skills-registry.yml").read_text(
+            encoding="utf-8"
+        )
+
+        validation_index = workflow.index("Validate changed skills before publish")
+        checkout_index = workflow.index("Checkout registry repository")
+        publish_index = workflow.index("scripts/publish_skills_registry.py")
+
+        self.assertLess(validation_index, checkout_index)
+        self.assertLess(validation_index, publish_index)
+        self.assertIn("python cli.py skill lint", workflow)
+        self.assertIn("python cli.py skill test", workflow)
+
+    def test_contribution_docs_define_failure_and_publish_boundary(self) -> None:
+        guide = Path("docs/contributing/skills.md").read_text(encoding="utf-8")
+        normalized_guide = " ".join(guide.split())
+        contributing = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
+        authoring = Path("docs/skills/authoring-guide.md").read_text(encoding="utf-8")
+
+        self.assertIn("Story 9.6", guide)
+        self.assertIn(
+            "A failed manifest lint or harness check stops the workflow before",
+            normalized_guide,
+        )
+        self.assertIn("No pull request event can publish a Skill", normalized_guide)
+        self.assertIn("docs/contributing/skills.md", contributing)
+        self.assertIn("docs/contributing/skills.md", authoring)
 
     def test_daily_skill_analytics_refresh_workflow_exists(self) -> None:
         workflow = Path(".github/workflows/refresh-skill-analytics.yml").read_text(

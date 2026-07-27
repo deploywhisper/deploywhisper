@@ -89,6 +89,8 @@ deploywhisper skill test terraform
 Scenario layout and harness behavior are documented in `docs/skills/test-harness.md`.
 Verified and core Skills must include positive trigger/output/evidence scenarios
 and a negative safety scenario, and every declared scenario must pass.
+The complete pull-request, reviewer-routing, CI feedback, and publication
+workflow is documented in `docs/contributing/skills.md`.
 
 Validation fails when:
 

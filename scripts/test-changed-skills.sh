@@ -5,14 +5,22 @@ BASE_REF="${BASE_REF:-origin/main}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
 if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
-  echo "Base ref '$BASE_REF' is unavailable. Skipping changed-skill harness feedback."
-  exit 0
+  echo "Base ref '$BASE_REF' is unavailable; changed Skill validation cannot run." >&2
+  exit 2
 fi
 
 CHANGED_PATHS=()
-while IFS= read -r path; do
-  CHANGED_PATHS+=("$path")
-done < <(git diff --name-only "$BASE_REF"...HEAD || true)
+DIFF_OUTPUT="$(git diff --name-only "$BASE_REF"...HEAD)"
+if [ -n "$DIFF_OUTPUT" ]; then
+  while IFS= read -r path; do
+    CHANGED_PATHS+=("$path")
+  done <<< "$DIFF_OUTPUT"
+fi
+
+if [ "${#CHANGED_PATHS[@]}" -eq 0 ]; then
+  echo "No changed built-in skills detected relative to $BASE_REF."
+  exit 0
+fi
 
 SKILLS=()
 for path in "${CHANGED_PATHS[@]}"; do
