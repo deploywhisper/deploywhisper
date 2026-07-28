@@ -472,8 +472,12 @@ def _run_skill_catalog_list() -> int:
             if item.test_results is not None and item.test_results.status != "missing"
             else "n/a"
         )
+        deprecated = item.trust_level == "deprecated"
         print(
-            f"{item.id} installs={item.install_count} "
+            f"{item.id} trust={item.trust_level} "
+            f"source={item.source} "
+            f"deprecated={str(deprecated).lower()} "
+            f"installs={item.install_count} "
             f"pass-rate={pass_rate} "
             f"active-issues={item.active_issue_count} "
             f"updated={item.updated_at[:10]} "

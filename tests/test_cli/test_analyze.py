@@ -1425,7 +1425,7 @@ class AnalyzeCliTests(unittest.TestCase):
             id="terraform",
             name="Terraform",
             version="1.0.0",
-            trust_level="core",
+            trust_level="deprecated",
             source="built-in",
             author="DeployWhisper",
             maintainer="DeployWhisper",
@@ -1477,6 +1477,9 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertIn("installs=1842", output.getvalue().lower())
         self.assertIn("pass-rate=100%", output.getvalue().lower())
         self.assertIn("active-issues=1", output.getvalue().lower())
+        self.assertIn("trust=deprecated", output.getvalue().lower())
+        self.assertIn("source=built-in", output.getvalue().lower())
+        self.assertIn("deprecated=true", output.getvalue().lower())
 
     def test_skill_list_catalog_command_fetches_all_registry_pages(self) -> None:
         output = io.StringIO()
@@ -1562,6 +1565,7 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("terraform", output.getvalue().lower())
         self.assertIn("kubernetes", output.getvalue().lower())
+        self.assertEqual(output.getvalue().lower().count("deprecated=false"), 2)
 
     def test_skill_update_command_reports_noop_when_latest_version_is_installed(
         self,
