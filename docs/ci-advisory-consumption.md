@@ -27,6 +27,16 @@ print(payload["data"]["share_summary"]["plain_text"])
 PY
 ```
 
+AI coding agents should use the stable agent contract:
+
+```bash
+deploywhisper analyze --agent-json --project payments plan.json > agent.json
+```
+
+The agent payload includes explicit non-approval guardrails, canonical evidence
+and findings, confidence and uncertainty, context TODOs, and deduplicated human
+verification steps. See [Agent JSON CLI Output](./ai-safety/agent-json-output.md).
+
 ## API Example
 
 ```bash
