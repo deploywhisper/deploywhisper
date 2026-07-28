@@ -94,6 +94,7 @@ function formatSkillDate(value: string) {
     month: "short",
     day: "2-digit",
     year: "numeric",
+    timeZone: "UTC",
   }).format(new Date(value));
 }
 

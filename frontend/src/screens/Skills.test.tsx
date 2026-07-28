@@ -86,6 +86,30 @@ describe("Skills browser labels", () => {
     expect(markup).toContain("Updated Jul 27, 2026");
   });
 
+  it("keeps date-only analytics labels stable west of UTC", () => {
+    const environment = (globalThis as unknown as {
+      process: { env: Record<string, string | undefined> };
+    }).process.env;
+    const originalTimezone = environment.TZ;
+    environment.TZ = "America/Los_Angeles";
+
+    try {
+      const markup = renderToStaticMarkup(
+        <MemoryRouter>
+          <SkillCard skill={skill} />
+        </MemoryRouter>,
+      );
+
+      expect(markup).toContain("Updated Jul 27, 2026");
+    } finally {
+      if (originalTimezone === undefined) {
+        delete environment.TZ;
+      } else {
+        environment.TZ = originalTimezone;
+      }
+    }
+  });
+
   it("clearly marks deprecated skills in catalog results", () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter>
