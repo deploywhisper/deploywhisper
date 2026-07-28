@@ -574,6 +574,10 @@ def _redact_report_file_names(report: dict[str, Any]) -> dict[str, Any]:
         "narrative_failure_notice": _redact_text_value(
             report.get("narrative_failure_notice"), pairs
         ),
+        "narrative_guidance": [
+            _redact_text_value(guidance, pairs)
+            for guidance in (report.get("narrative_guidance") or [])
+        ],
         "warnings": [
             _redact_text_value(warning, pairs)
             for warning in (report.get("warnings") or [])
@@ -4412,6 +4416,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "narrative_available": narrative_available,
         "narrative_degraded": narrative_degraded,
         "narrative_failure_notice": narrative_failure_notice,
+        "narrative_guidance": json.loads(report.narrative_guidance_json or "[]"),
         "assessment_source": report.assessment_source,
         "narrative_source": narrative_source,
         "narrative_provider": report.llm_provider,
@@ -4629,6 +4634,7 @@ def persist_analysis_report(
                     narrative_explanation=narrative.explanation or "",
                     narrative_degraded=narrative_degraded,
                     narrative_failure_notice=narrative.failure_notice,
+                    narrative_guidance_json=json.dumps(narrative.guidance),
                     warnings_json=json.dumps(combined_warnings),
                     contributors_json=json.dumps(
                         [

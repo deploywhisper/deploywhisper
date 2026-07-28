@@ -25,6 +25,7 @@ from api.errors import (
     http_error_envelope_handler,
     validation_error_handler,
 )
+from api.routes.agent import router as agent_router
 from api.routes.analyses import router as analyses_router
 from api.routes.deployments import router as deployments_router
 from api.routes.github_app import router as github_app_router
@@ -120,6 +121,7 @@ fastapi_app.add_exception_handler(ApiError, api_error_handler)
 fastapi_app.add_exception_handler(RequestValidationError, validation_error_handler)
 fastapi_app.add_exception_handler(StarletteHTTPException, http_error_envelope_handler)
 fastapi_app.include_router(health_router)
+fastapi_app.include_router(agent_router)
 fastapi_app.include_router(analyses_router)
 fastapi_app.include_router(deployments_router)
 fastapi_app.include_router(github_app_router)

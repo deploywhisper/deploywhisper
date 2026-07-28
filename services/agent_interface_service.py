@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from api.schemas import (
     AnalysisRunData,
@@ -19,6 +19,11 @@ from services.confidence_ledger import EvidenceLawStatus
 
 
 AGENT_OUTPUT_SCHEMA_VERSION = "v1"
+AGENT_INTERFACE_SCHEMA_VERSION = "v1"
+AGENT_MAX_STRING_CHARACTERS = 2048
+AGENT_MAX_COLLECTION_ITEMS = 50
+AGENT_MAX_FINDINGS = 50
+AGENT_MAX_EVIDENCE = 100
 AGENT_APPROVAL_STATEMENT = (
     "This output is advisory and is not deployment approval. "
     "A human must review the evidence before any deployment decision."
@@ -151,6 +156,27 @@ class AgentAnalysisData(_AgentContractModel):
     verification_guidance: list[str] = Field(default_factory=list)
 
 
+class AgentOutputLimitsData(_AgentContractModel):
+    max_string_characters: int = AGENT_MAX_STRING_CHARACTERS
+    max_collection_items: int = AGENT_MAX_COLLECTION_ITEMS
+    max_findings: int = AGENT_MAX_FINDINGS
+    max_evidence: int = AGENT_MAX_EVIDENCE
+
+
+class AgentInterfaceMeta(_AgentContractModel):
+    interface_schema_version: Literal["v1"] = AGENT_INTERFACE_SCHEMA_VERSION
+    operation: Literal["analysis.submit", "report.read"]
+    advisory_only: Literal[True] = True
+    output_limits: AgentOutputLimitsData = Field(default_factory=AgentOutputLimitsData)
+    truncated: bool = False
+    truncated_fields: list[str] = Field(default_factory=list)
+
+
+class AgentInterfaceResponse(_AgentContractModel):
+    data: AgentAnalysisData
+    meta: AgentInterfaceMeta
+
+
 def _append_unique(values: list[str], candidate: object) -> None:
     text = str(candidate).strip()
     normalized = " ".join(text.split()).casefold()
@@ -172,6 +198,37 @@ def collect_agent_verification_guidance(analysis: AnalysisRunData) -> list[str]:
     for conflict in analysis.share_summary.json_payload.scanner_conflicts:
         _append_unique(guidance, conflict.recommended_verification)
     for item in analysis.narrative.guidance:
+        _append_unique(guidance, item)
+    _append_unique(guidance, _HUMAN_REVIEW_GUIDANCE)
+    return guidance
+
+
+def _mapping_items(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [dict(item) for item in value if isinstance(item, dict)]
+
+
+def _string_items(value: object) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
+def collect_agent_report_verification_guidance(report: dict[str, Any]) -> list[str]:
+    """Collect human-review steps from one canonical persisted report."""
+    guidance: list[str] = []
+    for finding in _mapping_items(report.get("findings")):
+        for item in _string_items(finding.get("guidance")):
+            _append_unique(guidance, item)
+    for incident_match in _mapping_items(report.get("incident_matches")):
+        for item in _string_items(incident_match.get("verification_guidance")):
+            _append_unique(guidance, item)
+    share_summary = report.get("share_summary")
+    if share_summary is not None:
+        for conflict in share_summary.json_payload.scanner_conflicts:
+            _append_unique(guidance, conflict.recommended_verification)
+    for item in _string_items(report.get("narrative_guidance")):
         _append_unique(guidance, item)
     _append_unique(guidance, _HUMAN_REVIEW_GUIDANCE)
     return guidance
@@ -292,4 +349,140 @@ def build_agent_analysis_data(analysis: AnalysisRunData) -> AgentAnalysisData:
         ),
         context_todos=context.context_todos,
         verification_guidance=collect_agent_verification_guidance(analysis),
+    )
+
+
+def build_agent_report_data(report: dict[str, Any]) -> AgentAnalysisData:
+    """Adapt a canonical persisted report into the stable agent contract."""
+    from services.analysis_service import build_share_summary
+
+    share_summary = build_share_summary(report)
+    context = dict(report.get("context_completeness") or {})
+    project = dict(report.get("project") or {})
+    workspace = (
+        dict(report["workspace"]) if isinstance(report.get("workspace"), dict) else None
+    )
+    advisory = dict(report.get("advisory") or {})
+    ledger = AgentConfidenceLedgerData.model_validate(
+        report.get("confidence_ledger") or {}
+    )
+    report_with_summary = {**report, "share_summary": share_summary}
+    if project.get("id") is None or not str(project.get("project_key") or "").strip():
+        raise ValueError("Persisted agent report project scope is incomplete.")
+    if workspace is not None and (
+        workspace.get("id") is None
+        or not str(workspace.get("workspace_key") or "").strip()
+    ):
+        raise ValueError("Persisted agent report workspace scope is incomplete.")
+
+    return AgentAnalysisData(
+        report_schema_version=str(report.get("report_schema_version") or ""),
+        report_id=int(report["id"]),
+        scope=AgentScopeData(
+            project_id=int(project["id"]),
+            project_key=str(project["project_key"]),
+            workspace_id=int(workspace["id"]) if workspace is not None else None,
+            workspace_key=(
+                str(workspace["workspace_key"]) if workspace is not None else None
+            ),
+        ),
+        verdict=AgentVerdictData(
+            risk_score=int(report.get("risk_score") or 0),
+            severity=report.get("severity", "low"),
+            recommendation=report.get("recommendation", "caution"),
+            top_risk=str(report.get("top_risk") or ""),
+        ),
+        evidence_law=AgentEvidenceLawData(
+            status=share_summary.json_payload.evidence_law_status,
+            detail=share_summary.json_payload.evidence_law_detail,
+        ),
+        evidence=[
+            AgentEvidenceData.model_validate(item)
+            for item in _mapping_items(report.get("evidence_items"))
+        ],
+        findings=[
+            AgentFindingData.model_validate(item)
+            for item in _mapping_items(report.get("findings"))
+        ],
+        confidence=AgentConfidenceData(
+            overall=float(report.get("confidence") or 0.0),
+            ledger=ledger,
+        ),
+        uncertainty=AgentUncertaintyData(
+            flags=list(advisory.get("uncertainty_flags") or []),
+            summary=str(context["uncertainty"])
+            if context.get("uncertainty") is not None
+            else None,
+            partial_context=bool(context.get("partial_context")),
+            insufficient_context=bool(context.get("insufficient_context")),
+            warnings=[str(item) for item in report.get("warnings") or []],
+        ),
+        context_todos=[str(item) for item in context.get("context_todos") or []],
+        verification_guidance=collect_agent_report_verification_guidance(
+            report_with_summary
+        ),
+    )
+
+
+def _bounded_agent_value(
+    value: Any,
+    *,
+    path: str,
+    truncated_fields: list[str],
+) -> Any:
+    if isinstance(value, str):
+        if len(value) <= AGENT_MAX_STRING_CHARACTERS:
+            return value
+        truncated_fields.append(path)
+        return value[:AGENT_MAX_STRING_CHARACTERS]
+    if isinstance(value, list):
+        limit = (
+            AGENT_MAX_EVIDENCE
+            if path == "evidence"
+            else AGENT_MAX_FINDINGS
+            if path == "findings"
+            else AGENT_MAX_COLLECTION_ITEMS
+        )
+        if len(value) > limit:
+            truncated_fields.append(path)
+        return [
+            _bounded_agent_value(
+                item,
+                path=f"{path}.{index}",
+                truncated_fields=truncated_fields,
+            )
+            for index, item in enumerate(value[:limit])
+        ]
+    if isinstance(value, dict):
+        return {
+            key: _bounded_agent_value(
+                item,
+                path=f"{path}.{key}" if path else key,
+                truncated_fields=truncated_fields,
+            )
+            for key, item in value.items()
+        }
+    return value
+
+
+def build_agent_interface_response(
+    data: AgentAnalysisData,
+    *,
+    operation: Literal["analysis.submit", "report.read"],
+) -> AgentInterfaceResponse:
+    """Apply deterministic output bounds and wrap the agent API response."""
+    truncated_fields: list[str] = []
+    bounded_payload = _bounded_agent_value(
+        data.model_dump(mode="json"),
+        path="",
+        truncated_fields=truncated_fields,
+    )
+    bounded_data = AgentAnalysisData.model_validate(bounded_payload)
+    return AgentInterfaceResponse(
+        data=bounded_data,
+        meta=AgentInterfaceMeta(
+            operation=operation,
+            truncated=bool(truncated_fields),
+            truncated_fields=list(dict.fromkeys(truncated_fields)),
+        ),
     )

@@ -137,7 +137,7 @@ development_status:
 
   epic-10: in-progress
   10-1-agent-json-cli-mode: done
-  10-2-mcp-compatible-or-equivalent-agent-interface: ready-for-dev
+  10-2-mcp-compatible-or-equivalent-agent-interface: done
   10-3-ai-generated-iac-provenance-and-risk-patterns: ready-for-dev
   10-4-prompt-injection-test-suite: ready-for-dev
   10-5-ai-safety-documentation: ready-for-dev
