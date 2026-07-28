@@ -329,6 +329,134 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertIn("recommended_verification", conflicts[0])
         self.assertIn("Scanner conflict", share_summary["markdown"])
 
+    def test_analyze_agent_json_emits_stable_advisory_contract(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        output = io.StringIO()
+        persisted_report = self._persisted_report_with_scanner_conflict()
+        project = project_service_module.get_project_by_project_key("payments")
+        self.assertIsNotNone(project)
+        persisted_report["project"] = project.model_dump(mode="json")
+        persisted_report["confidence"] = 0.73
+        persisted_report["confidence_ledger"] = {
+            "contributors": ["Deterministic Terraform evidence."],
+            "confidence_factors": ["Parser coverage was complete."],
+            "why_not_lower": ["The scanner conflict remains unresolved."],
+            "why_not_higher": ["Deterministic evidence bounds the severity."],
+            "uncertainty_drivers": ["Scanner severity conflicts with local proof."],
+        }
+        persisted_report["context_completeness"].update(
+            {
+                "uncertainty": "Scanner conflict requires human verification.",
+                "context_todos": ["Confirm the intended ingress policy."],
+                "partial_context": True,
+                "insufficient_context": True,
+            }
+        )
+        result = self._analysis_result_with_persisted_report(persisted_report)
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                return_value=result,
+            ) as analyze_mock,
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--agent-json",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        analyze_mock.assert_called_once()
+        payload = json.loads(output.getvalue())
+        self.assertEqual(
+            set(payload),
+            {
+                "schema_version",
+                "report_schema_version",
+                "report_id",
+                "scope",
+                "verdict",
+                "advisory_only",
+                "deployment_approval",
+                "human_decision_required",
+                "approval_statement",
+                "evidence_law",
+                "evidence",
+                "findings",
+                "confidence",
+                "uncertainty",
+                "context_todos",
+                "verification_guidance",
+            },
+        )
+        self.assertEqual(payload["schema_version"], "v1")
+        self.assertEqual(payload["report_schema_version"], "v2")
+        self.assertEqual(payload["report_id"], persisted_report["id"])
+        self.assertEqual(payload["scope"]["project_key"], "payments")
+        self.assertIsNone(payload["scope"]["workspace_key"])
+        self.assertEqual(
+            payload["verdict"],
+            {
+                "risk_score": persisted_report["risk_score"],
+                "severity": persisted_report["severity"],
+                "recommendation": persisted_report["recommendation"],
+                "top_risk": persisted_report["top_risk"],
+            },
+        )
+        self.assertTrue(payload["advisory_only"])
+        self.assertFalse(payload["deployment_approval"])
+        self.assertTrue(payload["human_decision_required"])
+        self.assertIn("not deployment approval", payload["approval_statement"].lower())
+        self.assertIn(
+            payload["evidence_law"]["status"],
+            {"Satisfied", "Needs review", "Reconciled"},
+        )
+        self.assertTrue(payload["evidence_law"]["detail"])
+        self.assertEqual(payload["evidence"][0]["evidence_id"], "ev-det")
+        self.assertEqual(payload["findings"][0]["finding_id"], "finding-001")
+        self.assertEqual(payload["findings"][0]["confidence"], 0.62)
+        self.assertEqual(payload["confidence"]["overall"], 0.73)
+        self.assertEqual(
+            payload["confidence"]["ledger"]["uncertainty_drivers"],
+            ["Scanner severity conflicts with local proof."],
+        )
+        self.assertEqual(
+            payload["uncertainty"]["summary"],
+            "Scanner conflict requires human verification.",
+        )
+        self.assertTrue(payload["uncertainty"]["partial_context"])
+        self.assertTrue(payload["uncertainty"]["insufficient_context"])
+        self.assertIn("context_todos", payload["uncertainty"]["flags"])
+        self.assertEqual(
+            payload["context_todos"],
+            ["Confirm the intended ingress policy."],
+        )
+        self.assertIn(
+            "Review scanner evidence before acting.",
+            payload["verification_guidance"],
+        )
+        self.assertTrue(
+            any(
+                "human reviewer" in guidance.lower()
+                for guidance in payload["verification_guidance"]
+            )
+        )
+
     def test_load_artifacts_preserves_mixed_relative_codeowners_absolute_artifact(
         self,
     ) -> None:
@@ -2767,6 +2895,39 @@ class AnalyzeCliTests(unittest.TestCase):
                 [
                     "deploywhisper",
                     "analyze",
+                    "--project",
+                    "payments",
+                    str(missing_path),
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "artifact_read_failed")
+        self.assertEqual(payload["error"]["details"]["path"], str(missing_path))
+
+    def test_analyze_agent_json_preserves_structured_operational_errors(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        missing_path = Path(self.tempdir.name) / "missing-agent-plan.json"
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--agent-json",
                     "--project",
                     "payments",
                     str(missing_path),

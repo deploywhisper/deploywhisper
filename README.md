@@ -500,7 +500,7 @@ DeployWhisper includes a headless CLI entrypoint for local or CI usage.
 ### Analyze Artifacts
 
 ```bash
-python cli.py analyze path/to/plan.json path/to/deployment.yaml
+deploywhisper analyze --project payments path/to/plan.json path/to/deployment.yaml
 ```
 
 The CLI prints structured JSON containing:
@@ -510,6 +510,18 @@ The CLI prints structured JSON containing:
 - advisory summary
 - share summary
 - persisted report metadata
+
+AI coding agents can request the stable advisory contract:
+
+```bash
+deploywhisper analyze --agent-json --project payments path/to/plan.json
+```
+
+The agent contract is schema-versioned and includes explicit project scope,
+verdict, Evidence Law status, evidence, findings, confidence, uncertainty,
+context TODOs, verification guidance, and immutable fields stating that the
+result is advisory and is not deployment approval. See
+[Agent JSON CLI Output](docs/ai-safety/agent-json-output.md).
 
 ### Inspect Skill Status
 
