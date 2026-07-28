@@ -1565,6 +1565,7 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("terraform", output.getvalue().lower())
         self.assertIn("kubernetes", output.getvalue().lower())
+        self.assertEqual(output.getvalue().lower().count("deprecated=false"), 2)
 
     def test_skill_update_command_reports_noop_when_latest_version_is_installed(
         self,

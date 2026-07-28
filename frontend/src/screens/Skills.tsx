@@ -274,7 +274,10 @@ export function SkillDetailContent({ skillId }: { skillId: string }) {
                 <div className="dw-phase6-stat-grid">
                   <div className="dw-phase6-stat"><strong>{skill.author}</strong><span>Author</span></div>
                   <div className="dw-phase6-stat"><strong>{skill.maintainer}</strong><span>Maintainer</span></div>
-                  <div className="dw-phase6-stat"><strong>{skill.install_count}</strong><span>Installs</span></div>
+                  <div className="dw-phase6-stat">
+                    <strong>{skill.install_count}</strong>
+                    <span>{skill.install_count === 1 ? "Install" : "Installs"}</span>
+                  </div>
                   <div className="dw-phase6-stat"><strong>{passRate(skill)}</strong><span>Pass rate</span></div>
                 </div>
                 <section aria-labelledby="skill-contributors-title" className="dw-phase6-stack">

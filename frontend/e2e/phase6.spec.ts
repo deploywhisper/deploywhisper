@@ -267,6 +267,8 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
     await expect(
       page.getByText("This Skill is deprecated and may no longer be maintained.", { exact: true }),
     ).toBeVisible();
+    await expect(page.getByText("Install", { exact: true })).toBeVisible();
+    await expect(page.getByText("Installs", { exact: true })).toHaveCount(0);
     await expect(page.getByText("1 active issue", { exact: true })).toBeVisible();
     await expectNoSeriousA11y(page);
   });

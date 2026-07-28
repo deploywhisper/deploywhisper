@@ -175,7 +175,12 @@ describe("Skills browser labels", () => {
     const client = new QueryClient();
     client.setQueryData(
       ["skill", "terraform"],
-      { ...skill, trust_level: "deprecated", active_issue_count: 1 },
+      {
+        ...skill,
+        trust_level: "deprecated",
+        install_count: 1,
+        active_issue_count: 1,
+      },
     );
     client.setQueryData(["skill-versions", "terraform"], []);
 
@@ -188,6 +193,8 @@ describe("Skills browser labels", () => {
     expect(markup).toContain(
       "This Skill is deprecated and may no longer be maintained.",
     );
+    expect(markup).toContain("<strong>1</strong><span>Install</span>");
+    expect(markup).not.toContain("<strong>1</strong><span>Installs</span>");
     expect(markup).toContain("1 active issue");
     expect(markup).not.toContain("1 active issues");
   });
