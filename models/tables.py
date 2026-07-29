@@ -403,6 +403,7 @@ if "AnalysisReport" not in globals():
         narrative_failure_notice: Mapped[str | None] = mapped_column(
             Text, nullable=True
         )
+        narrative_guidance_json: Mapped[str] = mapped_column(Text, default="[]")
         warnings_json: Mapped[str] = mapped_column(Text, default="[]")
         contributors_json: Mapped[str] = mapped_column(Text, default="[]")
         analyzed_files_json: Mapped[str] = mapped_column(Text, default="[]")

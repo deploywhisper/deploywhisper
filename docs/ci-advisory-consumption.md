@@ -37,6 +37,12 @@ The agent payload includes explicit non-approval guardrails, canonical evidence
 and findings, confidence and uncertainty, context TODOs, and deduplicated human
 verification steps. See [Agent JSON CLI Output](./ai-safety/agent-json-output.md).
 
+Remote agent-tool integrations can call `POST /api/v1/agent/analyses` and
+retrieve prior scoped results from `GET /api/v1/agent/reports/{report_id}`.
+The HTTP interface adds explicit output limits and non-disclosing project-scope
+errors around the same v1 contract. See
+[Agent API Interface](./ai-safety/agent-api-interface.md).
+
 ## API Example
 
 ```bash

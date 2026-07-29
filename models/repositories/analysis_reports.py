@@ -20,6 +20,7 @@ from models.tables import (
     EvidenceItem as PersistedEvidenceItem,
     FeedbackEvent,
     Finding as PersistedFinding,
+    Project,
     RiskAssessment as PersistedRiskAssessment,
 )
 
@@ -618,6 +619,7 @@ def create_analysis_report(
     analysis_duration_seconds: int | None = None,
     narrative_degraded: bool | None = None,
     narrative_failure_notice: str | None = None,
+    narrative_guidance_json: str = "[]",
     top_risk_contributors_json: str = "[]",
     context_completeness_json: str = "{}",
     incident_matches_json: str = "[]",
@@ -642,6 +644,7 @@ def create_analysis_report(
         narrative_explanation=narrative_explanation,
         narrative_degraded=narrative_degraded,
         narrative_failure_notice=narrative_failure_notice,
+        narrative_guidance_json=narrative_guidance_json,
         warnings_json=warnings_json,
         contributors_json=contributors_json,
         analyzed_files_json=analyzed_files_json,
@@ -809,6 +812,33 @@ def get_analysis_report(
         stmt = stmt.where(AnalysisReport.project_id == project_id)
     if workspace_id is not None:
         stmt = stmt.where(AnalysisReport.workspace_id == workspace_id)
+    return session.execute(stmt).scalar_one_or_none()
+
+
+def get_analysis_report_for_project_keys(
+    session: Session,
+    report_id: int,
+    *,
+    project_keys: Sequence[str],
+    include_evidence: bool = True,
+) -> AnalysisReport | None:
+    """Fetch a report only when its project is in the caller's allowed scope."""
+    allowed_keys = {
+        str(project_key).strip()
+        for project_key in project_keys
+        if str(project_key).strip()
+    }
+    if not allowed_keys:
+        return None
+    stmt = (
+        select(AnalysisReport)
+        .join(Project, AnalysisReport.project_id == Project.id)
+        .options(*_report_load_options(include_evidence=include_evidence))
+        .where(
+            AnalysisReport.id == report_id,
+            Project.project_key.in_(allowed_keys),
+        )
+    )
     return session.execute(stmt).scalar_one_or_none()
 
 

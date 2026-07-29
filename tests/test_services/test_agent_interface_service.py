@@ -6,8 +6,14 @@ import unittest
 from types import SimpleNamespace
 
 from services.agent_interface_service import (
+    AGENT_MAX_COLLECTION_ITEMS,
+    AGENT_MAX_EVIDENCE,
+    AGENT_MAX_FINDINGS,
+    AGENT_MAX_STRING_CHARACTERS,
     AGENT_APPROVAL_STATEMENT,
     build_agent_analysis_data,
+    build_agent_interface_response,
+    collect_agent_report_verification_guidance,
     collect_agent_verification_guidance,
 )
 
@@ -160,6 +166,28 @@ class AgentInterfaceServiceTests(unittest.TestCase):
             ],
         )
 
+    def test_persisted_guidance_ignores_malformed_scalar_collections(self) -> None:
+        report = {
+            "findings": [{"guidance": "Do not split this into characters."}],
+            "incident_matches": [
+                {"verification_guidance": "Do not split this either."}
+            ],
+            "narrative_guidance": ["Verify the narrative with an operator."],
+            "share_summary": SimpleNamespace(
+                json_payload=SimpleNamespace(scanner_conflicts=[])
+            ),
+        }
+
+        guidance = collect_agent_report_verification_guidance(report)
+
+        self.assertEqual(
+            guidance,
+            [
+                "Verify the narrative with an operator.",
+                "Have a human reviewer inspect the evidence and findings before deployment.",
+            ],
+        )
+
     def test_builder_locks_nested_v1_contract_keys(self) -> None:
         payload = build_agent_analysis_data(
             self._analysis(include_items=True, include_workspace=True)
@@ -260,6 +288,98 @@ class AgentInterfaceServiceTests(unittest.TestCase):
         self.assertFalse(payload["deployment_approval"])
         self.assertTrue(payload["human_decision_required"])
         self.assertEqual(payload["approval_statement"], AGENT_APPROVAL_STATEMENT)
+
+    def test_interface_response_applies_explicit_collection_and_string_bounds(
+        self,
+    ) -> None:
+        data = build_agent_analysis_data(
+            self._analysis(include_items=True, include_workspace=True)
+        )
+        payload = data.model_dump(mode="json")
+        payload["findings"] = payload["findings"] * (AGENT_MAX_FINDINGS + 1)
+        payload["context_todos"] = [
+            f"todo-{index}" for index in range(AGENT_MAX_COLLECTION_ITEMS + 1)
+        ]
+        payload["verdict"]["top_risk"] = "x" * (AGENT_MAX_STRING_CHARACTERS + 1)
+
+        response = build_agent_interface_response(
+            type(data).model_validate(payload),
+            operation="analysis.submit",
+        )
+
+        self.assertEqual(len(response.data.findings), AGENT_MAX_FINDINGS)
+        self.assertEqual(
+            len(response.data.context_todos),
+            AGENT_MAX_COLLECTION_ITEMS,
+        )
+        self.assertEqual(
+            len(response.data.verdict.top_risk),
+            AGENT_MAX_STRING_CHARACTERS,
+        )
+        self.assertTrue(response.meta.truncated)
+        self.assertEqual(
+            set(response.meta.truncated_fields),
+            {"findings", "context_todos", "verdict.top_risk"},
+        )
+
+    def test_interface_bounds_preserve_finding_evidence_referential_integrity(
+        self,
+    ) -> None:
+        data = build_agent_analysis_data(
+            self._analysis(include_items=True, include_workspace=True)
+        )
+        payload = data.model_dump(mode="json")
+        base_finding = payload["findings"][0]
+        base_evidence = payload["evidence"][0]
+        findings = []
+        evidence = []
+        for finding_index in range(AGENT_MAX_FINDINGS + 1):
+            finding_id = f"finding-{finding_index}"
+            evidence_refs = [
+                f"evidence-{finding_index}-{evidence_index}"
+                for evidence_index in range(3)
+            ]
+            findings.append(
+                {
+                    **base_finding,
+                    "finding_id": finding_id,
+                    "evidence_refs": evidence_refs,
+                }
+            )
+            evidence.extend(
+                {
+                    **base_evidence,
+                    "evidence_id": evidence_id,
+                    "finding_id": finding_id,
+                }
+                for evidence_id in evidence_refs
+            )
+        payload["findings"] = findings
+        payload["evidence"] = evidence
+
+        response = build_agent_interface_response(
+            type(data).model_validate(payload),
+            operation="report.read",
+        )
+
+        returned_findings = response.data.findings
+        returned_evidence = response.data.evidence
+        finding_ids = {item.finding_id for item in returned_findings}
+        evidence_ids = {item.evidence_id for item in returned_evidence}
+        self.assertEqual(len(returned_findings), AGENT_MAX_FINDINGS)
+        self.assertEqual(len(returned_evidence), AGENT_MAX_EVIDENCE)
+        self.assertTrue(
+            all(item.finding_id in finding_ids for item in returned_evidence)
+        )
+        self.assertTrue(
+            all(
+                evidence_ref in evidence_ids
+                for finding in returned_findings
+                for evidence_ref in finding.evidence_refs
+            )
+        )
+        self.assertIn("findings", response.meta.truncated_fields)
+        self.assertIn("evidence", response.meta.truncated_fields)
 
 
 if __name__ == "__main__":

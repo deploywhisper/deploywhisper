@@ -75,3 +75,8 @@ standard error:
 ```
 
 Do not treat an operational error as a low-risk or approved result.
+
+Agent-tool integrations that need an HTTP transport can use the
+[Agent API Interface](./agent-api-interface.md). That interface applies
+explicit output limits and project-scoped authorization around this same v1
+advisory contract.

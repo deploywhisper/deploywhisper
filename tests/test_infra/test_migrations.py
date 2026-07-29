@@ -324,6 +324,9 @@ class MigrationTests(unittest.TestCase):
         self.assertIn(
             "narrative_failure_notice", self._table_columns("analysis_reports")
         )
+        self.assertIn(
+            "narrative_guidance_json", self._table_columns("analysis_reports")
+        )
         self.assertIn("share_password_hash", self._table_columns("analysis_reports"))
         self.assertIn("share_password_salt", self._table_columns("analysis_reports"))
         self.assertIn("share_redact_filenames", self._table_columns("analysis_reports"))
@@ -579,6 +582,9 @@ class MigrationTests(unittest.TestCase):
             analysis_duration_seconds = sqlite_conn.execute(
                 "SELECT analysis_duration_seconds FROM analysis_reports LIMIT 1"
             ).fetchone()[0]
+            narrative_guidance = sqlite_conn.execute(
+                "SELECT narrative_guidance_json FROM analysis_reports LIMIT 1"
+            ).fetchone()[0]
             project_key = sqlite_conn.execute(
                 """
                 SELECT projects.project_key
@@ -603,6 +609,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(submission_manifest, "{}")
         self.assertEqual(submission_manifest_fallback, "[]")
         self.assertIsNone(analysis_duration_seconds)
+        self.assertEqual(narrative_guidance, "[]")
         self.assertEqual(project_key, "unassigned")
         self.assertTrue(any(row[2] == "analysis_reports" for row in finding_fks))
         self.assertTrue(any(row[2] == "findings" for row in evidence_fks))
@@ -1134,7 +1141,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("topology_versions", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "027_add_scanner_imports")
+        self.assertEqual(revision, "028_add_narrative_guidance_payload")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1185,7 +1192,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("projects", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "027_add_scanner_imports")
+        self.assertEqual(revision, "028_add_narrative_guidance_payload")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1211,7 +1218,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "027_add_scanner_imports")
+        self.assertEqual(revision, "028_add_narrative_guidance_payload")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -1243,7 +1250,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "027_add_scanner_imports")
+        self.assertEqual(revision, "028_add_narrative_guidance_payload")
         self.assertEqual(
             self._index_columns("ix_deployment_outcomes_analysis_deployed_outcome"),
             ("analysis_id", "deployed_at", "outcome_label"),
@@ -1269,7 +1276,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "027_add_scanner_imports")
+        self.assertEqual(revision, "028_add_narrative_guidance_payload")
         self._assert_incident_ingestion_source_schema()
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
@@ -1289,6 +1296,26 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(
             RuntimeError, "partial analysis report workspace scope schema"
         ):
+            database_module.init_db()
+
+    def test_init_db_rejects_narrative_guidance_without_required_default(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "027_add_scanner_imports")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            "ALTER TABLE analysis_reports "
+            "ADD COLUMN narrative_guidance_json TEXT NOT NULL"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial narrative guidance schema"):
             database_module.init_db()
 
     def test_init_db_rejects_partial_submission_manifest_schema(self) -> None:
@@ -2004,7 +2031,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "027_add_scanner_imports")
+        self.assertEqual(revision, "028_add_narrative_guidance_payload")
         self._assert_incident_ingestion_source_schema()
 
 

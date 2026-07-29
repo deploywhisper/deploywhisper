@@ -390,6 +390,28 @@ def _analysis_report_narrative_state_complete(connection) -> bool:
     )
 
 
+def _analysis_report_narrative_guidance_complete(connection) -> bool:
+    column_map = {
+        column["name"]: column
+        for column in inspect(connection).get_columns("analysis_reports")
+    }
+    guidance_column = column_map.get("narrative_guidance_json")
+    server_default = (
+        str(guidance_column.get("default") or "").strip()
+        if guidance_column is not None
+        else ""
+    )
+    while server_default.startswith("(") and server_default.endswith(")"):
+        server_default = server_default[1:-1].strip()
+    server_default = server_default.strip("'\"")
+    return (
+        guidance_column is not None
+        and guidance_column["type"]._type_affinity is String
+        and guidance_column.get("nullable") is False
+        and server_default == "[]"
+    )
+
+
 def _analysis_report_incident_matches_complete(connection) -> bool:
     column_map = {
         column["name"]: column
@@ -1063,6 +1085,16 @@ def _bootstrap_brownfield_revision() -> None:
             {"scanner_imports", "external_scanner_evidence"} & tables
         )
         has_complete_scanner_imports = _scanner_imports_schema_complete(connection)
+        has_narrative_guidance = "narrative_guidance_json" in report_columns
+        has_complete_narrative_guidance = (
+            has_narrative_guidance
+            and _analysis_report_narrative_guidance_complete(connection)
+        )
+        if has_narrative_guidance and not has_complete_narrative_guidance:
+            raise RuntimeError(
+                "Detected a partial narrative guidance schema without a complete "
+                "migration history. Manual recovery is required."
+            )
         if has_incident_ingestion_sources and not (
             has_complete_learning_context_scope
             and has_complete_submission_manifest_payload
@@ -1122,7 +1154,12 @@ def _bootstrap_brownfield_revision() -> None:
             and has_complete_event_analysis_indexes
             and has_complete_scanner_imports
         ):
-            _write_alembic_revision(connection, "027_add_scanner_imports")
+            revision = (
+                "028_add_narrative_guidance_payload"
+                if has_complete_narrative_guidance
+                else "027_add_scanner_imports"
+            )
+            _write_alembic_revision(connection, revision)
             return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:
             raise RuntimeError(

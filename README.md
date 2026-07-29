@@ -493,6 +493,20 @@ storing partial findings.
 GET /api/v1/analyses/{report_id}
 ```
 
+### Agent-Callable Review
+
+```http
+POST /api/v1/agent/analyses
+GET /api/v1/agent/reports/{report_id}
+```
+
+The agent interface is the current MCP-equivalent HTTP surface. It reuses the
+shared analysis and persistence path, returns the stable advisory agent
+contract with explicit collection/string limits, and masks inaccessible and
+missing resources for project-scoped callers. It never echoes raw uploaded
+artifacts or grants approval, deployment, or remediation authority. See
+[Agent API Interface](docs/ai-safety/agent-api-interface.md).
+
 ## CLI Usage
 
 DeployWhisper includes a headless CLI entrypoint for local or CI usage.
@@ -522,6 +536,8 @@ verdict, Evidence Law status, evidence, findings, confidence, uncertainty,
 context TODOs, verification guidance, and immutable fields stating that the
 result is advisory and is not deployment approval. See
 [Agent JSON CLI Output](docs/ai-safety/agent-json-output.md).
+HTTP agent-tool integrations can use the same contract through the
+[Agent API Interface](docs/ai-safety/agent-api-interface.md).
 
 ### Inspect Skill Status
 

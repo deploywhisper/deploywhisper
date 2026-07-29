@@ -41,6 +41,7 @@ class ContainerContractTests(unittest.TestCase):
                 "025_add_event_analysis_indexes.py",
                 "026_add_evidence_context_source.py",
                 "027_add_scanner_imports.py",
+                "028_add_narrative_guidance_payload.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
@@ -67,6 +68,7 @@ class ContainerContractTests(unittest.TestCase):
         event_indexes_content = migrations[21].read_text(encoding="utf-8")
         evidence_context_source_content = migrations[22].read_text(encoding="utf-8")
         scanner_imports_content = migrations[23].read_text(encoding="utf-8")
+        narrative_guidance_content = migrations[24].read_text(encoding="utf-8")
         self.assertIn("down_revision = None", baseline_content)
         self.assertIn('"app_settings"', baseline_content)
         self.assertIn(
@@ -197,6 +199,11 @@ class ContainerContractTests(unittest.TestCase):
             "uq_external_scanner_evidence_project_source_ref",
             scanner_imports_content,
         )
+        self.assertIn(
+            'down_revision = "027_add_scanner_imports"',
+            narrative_guidance_content,
+        )
+        self.assertIn('"narrative_guidance_json"', narrative_guidance_content)
 
     def test_dockerfile_exists(self) -> None:
         self.assertTrue(Path("Dockerfile").exists())
