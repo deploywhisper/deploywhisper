@@ -21,6 +21,7 @@ from app import create_app
 from fastapi.testclient import TestClient
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParsedFileResult
+from sqlalchemy import text
 
 
 class AgentApiTests(unittest.TestCase):
@@ -208,6 +209,53 @@ class AgentApiTests(unittest.TestCase):
             "agent_scope_forbidden",
         )
         self.assertNotIn("platform", existing.text)
+
+    def test_restricted_report_lookup_does_not_materialize_unscoped_report(
+        self,
+    ) -> None:
+        with (
+            patch(
+                "api.routes.agent.fetch_analysis_report_for_project_keys",
+                return_value=None,
+            ) as scoped_fetch,
+            patch("api.routes.agent.fetch_analysis_report") as unscoped_fetch,
+        ):
+            response = self.client.get(
+                "/api/v1/agent/reports/42",
+                headers=self._headers(role="read-only"),
+            )
+
+        self.assertEqual(response.status_code, 403)
+        scoped_fetch.assert_called_once_with(42, project_keys=["payments"])
+        unscoped_fetch.assert_not_called()
+
+    def test_malformed_persisted_narrative_guidance_degrades_safely(self) -> None:
+        report = self._persist_report(
+            project_id=self.payments.id,
+            guidance=["Verify the generated rollback sequence with an operator."],
+        )
+        with database_module.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE analysis_reports "
+                    "SET narrative_guidance_json = :payload "
+                    "WHERE id = :report_id"
+                ),
+                {"payload": "{not-json", "report_id": report["id"]},
+            )
+
+        response = self.client.get(
+            f"/api/v1/agent/reports/{report['id']}",
+            headers=self._headers(role="read-only"),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["data"]["verification_guidance"],
+            [
+                "Have a human reviewer inspect the evidence and findings before deployment."
+            ],
+        )
 
     def test_project_scope_denial_does_not_reveal_resource_existence(self) -> None:
         files = {

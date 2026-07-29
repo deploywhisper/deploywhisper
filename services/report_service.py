@@ -46,6 +46,7 @@ from models.repositories.analysis_reports import (
     create_analysis_report,
     delete_analysis_report,
     get_analysis_report,
+    get_analysis_report_for_project_keys,
     latest_active_dashboard_report,
     list_analysis_reports,
     update_analysis_report_share_settings,
@@ -166,6 +167,17 @@ _LEGACY_CONTEXT_CORE_FIELDS = {
     "parser_success_by_tool",
     "context_score",
 }
+
+
+def _load_json_string_list(value: object) -> list[str]:
+    """Decode a persisted JSON string list without failing report reads."""
+    try:
+        payload = json.loads(str(value or "[]"))
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [str(item) for item in payload if str(item).strip()]
 
 
 class ReportSchemaVersionError(ValueError):
@@ -4416,7 +4428,7 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         "narrative_available": narrative_available,
         "narrative_degraded": narrative_degraded,
         "narrative_failure_notice": narrative_failure_notice,
-        "narrative_guidance": json.loads(report.narrative_guidance_json or "[]"),
+        "narrative_guidance": _load_json_string_list(report.narrative_guidance_json),
         "assessment_source": report.assessment_source,
         "narrative_source": narrative_source,
         "narrative_provider": report.llm_provider,
@@ -4725,6 +4737,28 @@ def fetch_analysis_report(
                 report_id,
                 project_id=scoped_project_id,
                 workspace_id=scoped_workspace_id,
+                include_evidence=True,
+            )
+            if report is None:
+                return None
+            return _serialize_report(report, include_evidence=True)
+
+    return _run_with_schema_retry(operation)
+
+
+def fetch_analysis_report_for_project_keys(
+    report_id: int,
+    *,
+    project_keys: list[str],
+) -> dict | None:
+    """Fetch and serialize a report only after project-scope filtering."""
+
+    def operation():
+        with SessionLocal() as session:
+            report = get_analysis_report_for_project_keys(
+                session,
+                report_id,
+                project_keys=project_keys,
                 include_evidence=True,
             )
             if report is None:

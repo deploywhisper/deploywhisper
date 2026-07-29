@@ -1298,6 +1298,26 @@ class MigrationTests(unittest.TestCase):
         ):
             database_module.init_db()
 
+    def test_init_db_rejects_narrative_guidance_without_required_default(
+        self,
+    ) -> None:
+        command.upgrade(self._config(), "027_add_scanner_imports")
+        sqlite_conn = sqlite3.connect(self.db_path)
+        sqlite_conn.execute(
+            "ALTER TABLE analysis_reports "
+            "ADD COLUMN narrative_guidance_json TEXT NOT NULL"
+        )
+        sqlite_conn.execute("DROP TABLE alembic_version")
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+
+        with self.assertRaisesRegex(RuntimeError, "partial narrative guidance schema"):
+            database_module.init_db()
+
     def test_init_db_rejects_partial_submission_manifest_schema(self) -> None:
         command.upgrade(self._config(), "016_scope_learning_context_records")
         sqlite_conn = sqlite3.connect(self.db_path)

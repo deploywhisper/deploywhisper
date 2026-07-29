@@ -20,7 +20,10 @@ from services.project_service import (
     has_restricted_project_scope,
     require_project_permission,
 )
-from services.report_service import fetch_analysis_report
+from services.report_service import (
+    fetch_analysis_report,
+    fetch_analysis_report_for_project_keys,
+)
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"], route_class=ApiRoute)
 
@@ -126,12 +129,19 @@ def get_agent_report(
     except PermissionError as exc:
         raise _agent_scope_forbidden_error() from exc
 
-    report = fetch_analysis_report(report_id)
+    restricted_scope = has_restricted_project_scope(
+        role=authorization["role"],
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+    if restricted_scope:
+        report = fetch_analysis_report_for_project_keys(
+            report_id,
+            project_keys=list(authorization["allowed_project_keys"] or []),
+        )
+    else:
+        report = fetch_analysis_report(report_id)
     if report is None:
-        if has_restricted_project_scope(
-            role=authorization["role"],
-            allowed_project_keys=authorization["allowed_project_keys"],
-        ):
+        if restricted_scope:
             raise _agent_scope_forbidden_error()
         raise ApiError(
             status_code=404,

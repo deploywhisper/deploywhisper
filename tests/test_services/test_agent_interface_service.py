@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from services.agent_interface_service import (
     AGENT_MAX_COLLECTION_ITEMS,
+    AGENT_MAX_EVIDENCE,
     AGENT_MAX_FINDINGS,
     AGENT_MAX_STRING_CHARACTERS,
     AGENT_APPROVAL_STATEMENT,
@@ -320,6 +321,65 @@ class AgentInterfaceServiceTests(unittest.TestCase):
             set(response.meta.truncated_fields),
             {"findings", "context_todos", "verdict.top_risk"},
         )
+
+    def test_interface_bounds_preserve_finding_evidence_referential_integrity(
+        self,
+    ) -> None:
+        data = build_agent_analysis_data(
+            self._analysis(include_items=True, include_workspace=True)
+        )
+        payload = data.model_dump(mode="json")
+        base_finding = payload["findings"][0]
+        base_evidence = payload["evidence"][0]
+        findings = []
+        evidence = []
+        for finding_index in range(AGENT_MAX_FINDINGS + 1):
+            finding_id = f"finding-{finding_index}"
+            evidence_refs = [
+                f"evidence-{finding_index}-{evidence_index}"
+                for evidence_index in range(3)
+            ]
+            findings.append(
+                {
+                    **base_finding,
+                    "finding_id": finding_id,
+                    "evidence_refs": evidence_refs,
+                }
+            )
+            evidence.extend(
+                {
+                    **base_evidence,
+                    "evidence_id": evidence_id,
+                    "finding_id": finding_id,
+                }
+                for evidence_id in evidence_refs
+            )
+        payload["findings"] = findings
+        payload["evidence"] = evidence
+
+        response = build_agent_interface_response(
+            type(data).model_validate(payload),
+            operation="report.read",
+        )
+
+        returned_findings = response.data.findings
+        returned_evidence = response.data.evidence
+        finding_ids = {item.finding_id for item in returned_findings}
+        evidence_ids = {item.evidence_id for item in returned_evidence}
+        self.assertEqual(len(returned_findings), AGENT_MAX_FINDINGS)
+        self.assertEqual(len(returned_evidence), AGENT_MAX_EVIDENCE)
+        self.assertTrue(
+            all(item.finding_id in finding_ids for item in returned_evidence)
+        )
+        self.assertTrue(
+            all(
+                evidence_ref in evidence_ids
+                for finding in returned_findings
+                for evidence_ref in finding.evidence_refs
+            )
+        )
+        self.assertIn("findings", response.meta.truncated_fields)
+        self.assertIn("evidence", response.meta.truncated_fields)
 
 
 if __name__ == "__main__":

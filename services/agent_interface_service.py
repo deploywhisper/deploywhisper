@@ -465,6 +465,73 @@ def _bounded_agent_value(
     return value
 
 
+def _bound_linked_agent_graph(
+    payload: dict[str, Any],
+    *,
+    truncated_fields: list[str],
+) -> None:
+    """Bound findings and evidence while preserving their references."""
+    findings = list(payload.get("findings") or [])
+    evidence = list(payload.get("evidence") or [])
+    selected_findings = findings[:AGENT_MAX_FINDINGS]
+    if len(findings) > len(selected_findings):
+        truncated_fields.append("findings")
+
+    finding_ids = {
+        str(finding.get("finding_id") or "")
+        for finding in selected_findings
+        if isinstance(finding, dict)
+    }
+    linked_evidence = [
+        item
+        for item in evidence
+        if isinstance(item, dict) and str(item.get("finding_id") or "") in finding_ids
+    ]
+    evidence_by_id = {
+        str(item.get("evidence_id") or ""): item
+        for item in linked_evidence
+        if str(item.get("evidence_id") or "")
+    }
+
+    ordered_evidence: list[dict[str, Any]] = []
+    selected_evidence_ids: set[str] = set()
+
+    def append_evidence(item: dict[str, Any]) -> None:
+        evidence_id = str(item.get("evidence_id") or "")
+        if evidence_id and evidence_id not in selected_evidence_ids:
+            selected_evidence_ids.add(evidence_id)
+            ordered_evidence.append(item)
+
+    for finding in selected_findings:
+        if not isinstance(finding, dict):
+            continue
+        finding_id = str(finding.get("finding_id") or "")
+        for evidence_ref in finding.get("evidence_refs") or []:
+            item = evidence_by_id.get(str(evidence_ref))
+            if item is not None and str(item.get("finding_id") or "") == finding_id:
+                append_evidence(item)
+    for item in linked_evidence:
+        append_evidence(item)
+
+    selected_evidence = ordered_evidence[:AGENT_MAX_EVIDENCE]
+    returned_evidence_ids = {
+        str(item.get("evidence_id") or "") for item in selected_evidence
+    }
+    if len(evidence) > len(selected_evidence):
+        truncated_fields.append("evidence")
+
+    for finding in selected_findings:
+        if isinstance(finding, dict):
+            finding["evidence_refs"] = [
+                str(evidence_ref)
+                for evidence_ref in finding.get("evidence_refs") or []
+                if str(evidence_ref) in returned_evidence_ids
+            ]
+
+    payload["findings"] = selected_findings
+    payload["evidence"] = selected_evidence
+
+
 def build_agent_interface_response(
     data: AgentAnalysisData,
     *,
@@ -472,8 +539,10 @@ def build_agent_interface_response(
 ) -> AgentInterfaceResponse:
     """Apply deterministic output bounds and wrap the agent API response."""
     truncated_fields: list[str] = []
+    payload = data.model_dump(mode="json")
+    _bound_linked_agent_graph(payload, truncated_fields=truncated_fields)
     bounded_payload = _bounded_agent_value(
-        data.model_dump(mode="json"),
+        payload,
         path="",
         truncated_fields=truncated_fields,
     )

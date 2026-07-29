@@ -396,10 +396,19 @@ def _analysis_report_narrative_guidance_complete(connection) -> bool:
         for column in inspect(connection).get_columns("analysis_reports")
     }
     guidance_column = column_map.get("narrative_guidance_json")
+    server_default = (
+        str(guidance_column.get("default") or "").strip()
+        if guidance_column is not None
+        else ""
+    )
+    while server_default.startswith("(") and server_default.endswith(")"):
+        server_default = server_default[1:-1].strip()
+    server_default = server_default.strip("'\"")
     return (
         guidance_column is not None
         and guidance_column["type"]._type_affinity is String
         and guidance_column.get("nullable") is False
+        and server_default == "[]"
     )
 
 
