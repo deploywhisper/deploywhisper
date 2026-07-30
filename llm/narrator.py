@@ -105,7 +105,10 @@ def _validate_narrative_safety(
     assessment: RiskAssessment,
 ) -> None:
     expected = assessment.recommendation.upper()
-    for text in [opening_sentence, explanation, *guidance]:
+    text_spans = [opening_sentence, explanation, *guidance]
+    if len(guidance) > 1:
+        text_spans.append(" ".join(guidance))
+    for text in text_spans:
         verdict_matches = [
             match
             for match in (

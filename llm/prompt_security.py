@@ -23,7 +23,8 @@ _UNSAFE_INSTRUCTION_PATTERNS = (
     ),
     re.compile(
         r"\b(?:set|change|override|replace)\b.{0,30}\brecommendation\b"
-        r".{0,12}\b(?:to|as)\s+(?:GO|NO[- ]?GO|CAUTION)\b",
+        r".{0,12}(?:(?:\b(?:to|as)\b)|[:=])\s*"
+        r"(?:GO|NO[- ]?GO|CAUTION)\b",
         flags=re.IGNORECASE,
     ),
     re.compile(
@@ -138,7 +139,10 @@ def redact_unsafe_instruction(value: str) -> str:
 
 def _normalize_security_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value)
+    non_visible_categories = {"Cf", "Mn", "Mc", "Me"}
     visible = "".join(
-        character for character in normalized if unicodedata.category(character) != "Cf"
+        character
+        for character in normalized
+        if unicodedata.category(character) not in non_visible_categories
     )
     return re.sub(r"\s+", " ", visible)
