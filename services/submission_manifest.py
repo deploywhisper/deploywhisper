@@ -210,7 +210,9 @@ def build_submission_manifest(
     sensitive_count = sum(1 for item in items if item.status == "sensitive")
     failed_count = sum(1 for item in items if item.status == "failed")
     partial_count = sum(1 for item in items if item.partial)
-    accepted_names = {item.name for item in items if item.status == "accepted"}
+    provenance_eligible_names = {
+        item.name for item in items if item.status in {"accepted", "failed"}
+    }
     raw_content_by_name = {
         intake_item.name: raw_content
         for intake_item, (_, raw_content) in zip(
@@ -219,19 +221,19 @@ def build_submission_manifest(
             strict=False,
         )
     }
-    accepted_raw_files = {
-        name: raw_content_by_name.get(name) for name in accepted_names
+    provenance_eligible_raw_files = {
+        name: raw_content_by_name.get(name) for name in provenance_eligible_names
     }
     provenance.update(
         assess_iac_provenance(
-            accepted_raw_files,
+            provenance_eligible_raw_files,
             audit_context=context,
         )
     )
     for item in items:
         item_raw_files = (
             {item.name: raw_content_by_name.get(item.name)}
-            if item.status == "accepted"
+            if item.status in {"accepted", "failed"}
             else {}
         )
         item.provenance.update(

@@ -38,6 +38,8 @@ So that plausible but unsafe generated code receives appropriate scrutiny.
 - [x] [Review][Patch] Avoid labeling derived or aggregate findings from only the first linked contributor [services/ai_iac_risk_service.py:137]
 - [x] [Review][Patch] Make AI-assisted finding labeling idempotent [services/ai_iac_risk_service.py:160]
 - [x] [Review][Patch] Map known security flags explicitly instead of broad substring matching [services/ai_iac_risk_service.py:119]
+- [x] [Review][Patch] Let an artifact content marker refine caller-declared unknown provenance into a qualified AI-assisted suggestion [services/ai_iac_risk_service.py:70]
+- [x] [Review][Patch] Preserve content-derived provenance for accepted artifacts whose parser result fails [services/submission_manifest.py:210]
 
 ## Dev Notes
 
@@ -112,6 +114,9 @@ GPT-5 (Codex)
 - Review red phase: focused regressions failed before the reviewer patches, confirming transport inference, batch-tainting, category overwrite, aggregate labeling, non-idempotence, and broad flag mapping were exposed.
 - Review green phase: 117 focused analysis, intake, and AI-IaC service tests passed after all seven reviewer patches.
 - Review validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, `./.venv/bin/python -m unittest discover -q`, and `bash scripts/ci-local.sh` all passed after the review fixes.
+- Second-review red phase: 27 focused provenance/intake tests failed on declared-unknown refinement and parser-failed artifact provenance before the patches.
+- Second-review green phase: 27 focused tests and 118 combined analysis/intake/provenance tests passed after both patches.
+- Second-review validation: repository-wide Ruff check/format passed, root `unittest discover` passed, and `bash scripts/ci-local.sh` passed with 870 tests plus dependency, skills, and Bandit checks.
 - UI validation not applicable: no React route, component, browser interaction, keyboard behavior, or accessibility semantics changed.
 
 ### Completion Notes List
@@ -123,6 +128,7 @@ GPT-5 (Codex)
 - Added regression coverage for provenance classification, deterministic-evidence gating, manifest persistence, audit-context propagation, and real shared-pipeline behavior.
 - Added the AI-generated/AI-assisted IaC review guide and linked it from the README and agent interface documentation.
 - Resolved all seven code-review findings: provenance is artifact-scoped, transport is not authorship, content signals survive conflicting declarations, finding categories remain intact, derived/ambiguous contributors are skipped, labeling is idempotent, and security flags use exact mappings.
+- Resolved both second-review findings: content markers now refine caller-declared unknown provenance, and accepted IaC retains provenance signals when parsing fails.
 
 ### File List
 
@@ -144,3 +150,4 @@ GPT-5 (Codex)
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-07-30: Implemented qualified AI-assisted IaC provenance, deterministic risk-pattern labels, regression coverage, and reviewer documentation; moved story to review.
 - 2026-07-30: Resolved all code-review findings, completed focused and full validation, and moved Story 10.3 to done.
+- 2026-07-30: Resolved both second-pass code-review findings and completed 870-test local CI validation.

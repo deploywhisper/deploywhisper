@@ -41,6 +41,27 @@ class AiIacRiskServiceTests(unittest.TestCase):
             ["declared:human-authored"],
         )
 
+    def test_assess_iac_provenance_refines_declared_unknown_with_content_marker(
+        self,
+    ) -> None:
+        provenance = assess_iac_provenance(
+            {
+                "main.tf": (
+                    b"# AI-generated draft; verify before apply\n"
+                    b'resource "aws_s3_bucket" "logs" {}\n'
+                )
+            },
+            audit_context={"iac_authorship": "unknown"},
+        )
+
+        self.assertEqual(provenance["authorship"], "ai-assisted")
+        self.assertEqual(provenance["authorship_certainty"], "suggested")
+        self.assertEqual(
+            provenance["authorship_signals"],
+            ["declared:unknown", "content-marker:main.tf"],
+        )
+        self.assertIn("does not establish authorship", provenance["authorship_note"])
+
     def test_assess_iac_provenance_does_not_treat_transport_as_authorship(
         self,
     ) -> None:

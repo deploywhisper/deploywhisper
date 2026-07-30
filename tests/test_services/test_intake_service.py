@@ -265,7 +265,10 @@ Outputs:
     def test_submission_manifest_records_final_artifact_outcomes(self) -> None:
         files = [
             ("plan.json", b'{"resource_changes": []}'),
-            ("broken.tf", b"resource {"),
+            (
+                "broken.tf",
+                b"# AI-generated draft; verify before apply\nresource {",
+            ),
             (".env", b"SECRET=1"),
             ("notes.txt", b"hello"),
         ]
@@ -341,6 +344,11 @@ Outputs:
             "Terraform artifact failed parser validation; analysis coverage is partial.",
         )
         self.assertNotIn("Unexpected token", by_name["broken.tf"].message)
+        self.assertEqual(
+            by_name["broken.tf"].provenance["authorship"],
+            "ai-assisted",
+        )
+        self.assertEqual(manifest.provenance["authorship"], "ai-assisted")
         self.assertEqual(by_name[".env"].status, "sensitive")
         self.assertTrue(by_name[".env"].partial)
         self.assertEqual(by_name[".env"].redaction_status, "sensitive_blocked")

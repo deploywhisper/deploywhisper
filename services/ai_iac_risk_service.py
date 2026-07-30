@@ -73,6 +73,13 @@ def assess_iac_provenance(
                 "authorship remains unknown."
             ),
         }
+    if declared == "unknown" and suggestion_signals:
+        return {
+            "authorship": "ai-assisted",
+            "authorship_certainty": "suggested",
+            "authorship_signals": signals,
+            "authorship_note": _AUTHORSHIP_NOTE,
+        }
     if declared:
         note = (
             "Authorship is preserved from caller-declared provenance and was not "
