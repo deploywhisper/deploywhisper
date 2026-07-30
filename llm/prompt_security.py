@@ -56,7 +56,7 @@ _UNSAFE_INSTRUCTION_PATTERNS = (
         flags=re.IGNORECASE,
     ),
     re.compile(
-        r"""["']?\bdeployment_approval\b["']?\s*[:=]\s*true\b""",
+        r"""["']?\bdeployment[\s_-]*approval\b["']?\s*[:=]\s*true\b""",
         flags=re.IGNORECASE,
     ),
     re.compile(r"\bdeploy\s+(?:immediately|now)\b", flags=re.IGNORECASE),
@@ -122,6 +122,8 @@ def contradicts_deployment_recommendation(value: str, recommendation: str) -> bo
         patterns = _DEPLOYMENT_GO_CLAIM_PATTERNS
     elif normalized_recommendation == "GO":
         patterns = _DEPLOYMENT_NO_GO_CLAIM_PATTERNS
+    elif normalized_recommendation == "CAUTION":
+        patterns = _DEPLOYMENT_GO_CLAIM_PATTERNS + _DEPLOYMENT_NO_GO_CLAIM_PATTERNS
     else:
         return False
     return any(pattern.search(normalized_value) for pattern in patterns)
@@ -136,6 +138,7 @@ def redact_unsafe_instruction(value: str) -> str:
 
 def _normalize_security_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value)
-    return "".join(
+    visible = "".join(
         character for character in normalized if unicodedata.category(character) != "Cf"
     )
+    return re.sub(r"\s+", " ", visible)

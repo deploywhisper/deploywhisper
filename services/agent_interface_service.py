@@ -17,7 +17,7 @@ from evidence.models import (
 from llm.prompt_security import (
     UNTRUSTED_INSTRUCTION_REDACTION,
     contains_unsafe_instruction,
-    redact_unsafe_instruction,
+    contradicts_deployment_recommendation,
 )
 from pydantic import BaseModel, ConfigDict, Field
 from services.confidence_ledger import EvidenceLawStatus
@@ -182,11 +182,19 @@ class AgentInterfaceResponse(_AgentContractModel):
     meta: AgentInterfaceMeta
 
 
-def _sanitize_agent_value(value: Any) -> Any:
+def _violates_agent_output_policy(value: str, recommendation: str) -> bool:
+    return contains_unsafe_instruction(value) or contradicts_deployment_recommendation(
+        value, recommendation
+    )
+
+
+def _sanitize_agent_value(value: Any, recommendation: str) -> Any:
     if isinstance(value, str):
-        return redact_unsafe_instruction(value)
+        if _violates_agent_output_policy(value, recommendation):
+            return UNTRUSTED_INSTRUCTION_REDACTION
+        return value
     if isinstance(value, list):
-        sanitized = [_sanitize_agent_value(item) for item in value]
+        sanitized = [_sanitize_agent_value(item, recommendation) for item in value]
         start = 0
         while start < len(value):
             if not isinstance(value[start], str):
@@ -197,16 +205,16 @@ def _sanitize_agent_value(value: Any) -> Any:
                 end += 1
             safe_start = start
             while safe_start < end:
-                if contains_unsafe_instruction(value[safe_start]):
+                if _violates_agent_output_policy(value[safe_start], recommendation):
                     safe_start += 1
                     continue
                 safe_end = safe_start + 1
-                while safe_end < end and not contains_unsafe_instruction(
-                    value[safe_end]
+                while safe_end < end and not _violates_agent_output_policy(
+                    value[safe_end], recommendation
                 ):
                     safe_end += 1
-                if safe_end - safe_start > 1 and contains_unsafe_instruction(
-                    " ".join(value[safe_start:safe_end])
+                if safe_end - safe_start > 1 and _violates_agent_output_policy(
+                    " ".join(value[safe_start:safe_end]), recommendation
                 ):
                     sanitized[safe_start:safe_end] = [
                         UNTRUSTED_INSTRUCTION_REDACTION
@@ -215,13 +223,19 @@ def _sanitize_agent_value(value: Any) -> Any:
             start = end
         return sanitized
     if isinstance(value, dict):
-        return {key: _sanitize_agent_value(item) for key, item in value.items()}
+        return {
+            key: _sanitize_agent_value(item, recommendation)
+            for key, item in value.items()
+        }
     return value
 
 
 def _sanitize_agent_data(data: AgentAnalysisData) -> AgentAnalysisData:
     return AgentAnalysisData.model_validate(
-        _sanitize_agent_value(data.model_dump(mode="json"))
+        _sanitize_agent_value(
+            data.model_dump(mode="json"),
+            data.verdict.recommendation,
+        )
     )
 
 
