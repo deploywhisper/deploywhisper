@@ -80,3 +80,7 @@ Agent-tool integrations that need an HTTP transport can use the
 [Agent API Interface](./agent-api-interface.md). That interface applies
 explicit output limits and project-scoped authorization around this same v1
 advisory contract.
+
+For provenance certainty, deterministic AI-assisted risk labels, and the
+required human review workflow, see
+[Reviewing AI-Generated and AI-Assisted IaC](./ai-generated-iac-review.md).
