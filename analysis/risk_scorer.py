@@ -12,6 +12,10 @@ from pydantic import BaseModel, Field
 
 from analysis.interaction_risk import InteractionRisk, detect_interaction_risks
 from evidence.models import ContextCompleteness
+from llm.prompt_security import (
+    UNTRUSTED_DATA_SYSTEM_INSTRUCTION,
+    build_untrusted_json_payload,
+)
 from llm.providers import generate_completion_with_settings
 from parsers.base import (
     NON_MUTATING_ACTIONS,
@@ -635,13 +639,14 @@ def _assessment_prompt_payload(
         "partial_context": partial_context,
         "changes": [contributor.model_dump() for contributor in contributors],
     }
-    return json.dumps(payload, indent=2)
+    return build_untrusted_json_payload(payload)
 
 
 def _assessment_system_prompt() -> str:
     return "\n".join(
         [
             "You are DeployWhisper's deployment-risk assessor.",
+            UNTRUSTED_DATA_SYSTEM_INSTRUCTION,
             "Score each normalized infrastructure change individually using the structured context provided.",
             "Treat create/modify/destroy differently: brand-new creates are usually lower risk than modifying or destroying an existing production resource.",
             "When a change action is 'apply', the input is a standalone manifest/template without verified previous state; do not assume modify or destroy.",

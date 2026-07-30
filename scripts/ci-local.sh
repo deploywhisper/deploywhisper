@@ -64,6 +64,7 @@ fi
   config.py \
   logging_config.py
 "$PYTHON_BIN" cli.py skill test
+"$PYTHON_BIN" -m pytest tests/test_llm/test_prompt_injection.py -q
 PYTHON_BIN="$PYTHON_BIN" bash scripts/run-test-targets.sh \
   tests/test_analysis \
   tests/test_api \

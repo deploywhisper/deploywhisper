@@ -9,6 +9,9 @@ DeployWhisper uses GitHub Actions at [`.github/workflows/ci.yml`](../.github/wor
 - `frontend`: installs the React SPA workspace, then runs typecheck, Vitest, and the production build.
 - `changed-tests`: on pull requests, runs only changed Python test modules for faster early feedback.
 - `test`: runs the Python suite with pytest in four logical shards with `fail-fast: false`.
+- The blocking `tests/test_llm` shard includes the prompt-injection regression
+  suite documented in
+  [`docs/ai-safety/prompt-injection-testing.md`](./ai-safety/prompt-injection-testing.md).
 - `report`: publishes a GitHub Actions summary and downloads any failure artifacts.
 - `notify-failure`: optional Slack notification when `SLACK_WEBHOOK_URL` is configured.
 
@@ -30,6 +33,8 @@ bash scripts/ci-local.sh
 The local script runs each `tests/test_*` directory explicitly. A root
 `python -m unittest discover` command is only a smoke check because unittest
 does not recurse into non-package directories such as `tests/test_cli`.
+It also runs the prompt-injection suite as an early safety gate before the
+broader targets.
 
 To append the SPA browser/a11y checks locally:
 
@@ -116,6 +121,8 @@ These logs are retained for 14 days.
 - Security scan must pass dependency audit, Bandit high/high gate, and secret-leak checks
 - Source tree must compile with `python -m compileall`
 - Every pytest shard must pass its assigned targets
+- Prompt-injection boundary tests must pass in local CI, the CI LLM shard, and
+  the explicit release gate
 - React SPA typecheck, Vitest, and build must pass in the `frontend` job
 - Pull requests get a changed-test fast-feedback run
 - UI-facing stories must record browser-side Playwright validation before moving to review. Use `docker compose up -d --build` plus `BASE_URL=http://localhost:8080 npm run test:ui-review` for the SPA e2e/a11y lane, or `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` for the full local lane. If no UI surface is touched, record `UI validation not applicable` in the story Dev Agent Record.

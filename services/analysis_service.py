@@ -32,6 +32,10 @@ from evidence.models import (
     OwnerSignal,
 )
 from llm.narrator import NarrativeResult, generate_narrative
+from llm.prompt_security import (
+    UNTRUSTED_DATA_SYSTEM_INSTRUCTION,
+    build_untrusted_json_payload,
+)
 from llm.providers import generate_completion_with_settings
 from parsers.base import ParseBatchResult, UnifiedChange, is_non_mutating_action
 from services.intake_service import build_parse_batch
@@ -1282,7 +1286,7 @@ def _interaction_confidence_prompt_payload(assessment: RiskAssessment) -> str:
             for contributor in assessment.contributors[:5]
         ],
     }
-    return json.dumps(payload, indent=2)
+    return build_untrusted_json_payload(payload)
 
 
 def _interaction_confidence_overrides(
@@ -1299,6 +1303,7 @@ def _interaction_confidence_overrides(
                     "role": "system",
                     "content": (
                         "You assign confidence scores to inferred deployment findings. "
+                        f"{UNTRUSTED_DATA_SYSTEM_INSTRUCTION} "
                         "Return only JSON with key 'confidences'."
                     ),
                 },

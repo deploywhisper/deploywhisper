@@ -14,6 +14,7 @@ from evidence.models import (
     ContextSourceType,
     FindingEvidenceClassification,
 )
+from llm.prompt_security import redact_unsafe_instruction
 from pydantic import BaseModel, ConfigDict, Field
 from services.confidence_ledger import EvidenceLawStatus
 
@@ -177,6 +178,22 @@ class AgentInterfaceResponse(_AgentContractModel):
     meta: AgentInterfaceMeta
 
 
+def _sanitize_agent_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return redact_unsafe_instruction(value)
+    if isinstance(value, list):
+        return [_sanitize_agent_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _sanitize_agent_value(item) for key, item in value.items()}
+    return value
+
+
+def _sanitize_agent_data(data: AgentAnalysisData) -> AgentAnalysisData:
+    return AgentAnalysisData.model_validate(
+        _sanitize_agent_value(data.model_dump(mode="json"))
+    )
+
+
 def _append_unique(values: list[str], candidate: object) -> None:
     text = str(candidate).strip()
     normalized = " ".join(text.split()).casefold()
@@ -244,111 +261,115 @@ def build_agent_analysis_data(analysis: AnalysisRunData) -> AgentAnalysisData:
     for item in [*analysis.assessment.warnings, *analysis.narrative.warnings]:
         _append_unique(warnings, item)
 
-    return AgentAnalysisData(
-        report_schema_version=report.report_schema_version,
-        report_id=report.id,
-        scope=AgentScopeData(
-            project_id=report.project.id,
-            project_key=report.project.project_key,
-            workspace_id=workspace.id if workspace is not None else None,
-            workspace_key=workspace.workspace_key if workspace is not None else None,
-        ),
-        verdict=AgentVerdictData(
-            risk_score=analysis.assessment.score,
-            severity=analysis.assessment.severity,
-            recommendation=analysis.assessment.recommendation,
-            top_risk=analysis.assessment.top_risk,
-        ),
-        evidence_law=AgentEvidenceLawData(
-            status=share_payload.evidence_law_status,
-            detail=share_payload.evidence_law_detail,
-        ),
-        evidence=[
-            AgentEvidenceData(
-                evidence_id=item.evidence_id,
-                analysis_id=item.analysis_id,
-                finding_id=item.finding_id,
-                source_type=item.source_type,
-                source_ref=item.source_ref,
-                artifact=item.artifact,
-                location=item.location,
-                resource=item.resource,
-                operation=item.operation,
-                project_id=item.project_id,
-                project_key=item.project_key,
-                workspace_id=item.workspace_id,
-                workspace_key=item.workspace_key,
-                source_kind=item.source_kind,
-                determinism_level=item.determinism_level,
-                redaction_status=item.redaction_status,
-                summary=item.summary,
-                severity_hint=item.severity_hint,
-                deterministic=item.deterministic,
-                confidence=item.confidence,
-                evidence_label=item.evidence_label,
-                related_change_ids=item.related_change_ids,
-                context_source=(
-                    AgentContextSourceData(
-                        source_id=item.context_source.source_id,
-                        source_type=item.context_source.source_type,
-                        source_ref=item.context_source.source_ref,
-                        scope=item.context_source.scope,
-                        freshness_status=item.context_source.freshness_status,
-                        last_observed_at=item.context_source.last_observed_at,
-                        age_days=item.context_source.age_days,
-                        confidence=item.context_source.confidence,
-                        conflicts=item.context_source.conflicts,
-                        limitations=item.context_source.limitations,
-                    )
-                    if item.context_source is not None
-                    else None
-                ),
-            )
-            for item in analysis.evidence_items
-        ],
-        findings=[
-            AgentFindingData(
-                finding_id=item.finding_id,
-                analysis_id=item.analysis_id,
-                title=item.title,
-                description=item.description,
-                explanation=item.explanation,
-                guidance=item.guidance,
-                severity=item.severity,
-                category=item.category,
-                deterministic=item.deterministic,
-                confidence=item.confidence,
-                uncertainty_note=item.uncertainty_note,
-                evidence_classification=item.evidence_classification,
-                evidence_refs=item.evidence_refs,
-                evidence_label=item.evidence_label,
-                skill_id=item.skill_id,
-            )
-            for item in analysis.findings
-        ],
-        confidence=AgentConfidenceData(
-            overall=analysis.assessment.confidence,
-            ledger=AgentConfidenceLedgerData(
-                contributors=analysis.assessment.confidence_ledger.contributors,
-                confidence_factors=(
-                    analysis.assessment.confidence_ledger.confidence_factors
-                ),
-                why_not_lower=analysis.assessment.confidence_ledger.why_not_lower,
-                why_not_higher=analysis.assessment.confidence_ledger.why_not_higher,
-                uncertainty_drivers=(
-                    analysis.assessment.confidence_ledger.uncertainty_drivers
+    return _sanitize_agent_data(
+        AgentAnalysisData(
+            report_schema_version=report.report_schema_version,
+            report_id=report.id,
+            scope=AgentScopeData(
+                project_id=report.project.id,
+                project_key=report.project.project_key,
+                workspace_id=workspace.id if workspace is not None else None,
+                workspace_key=workspace.workspace_key
+                if workspace is not None
+                else None,
+            ),
+            verdict=AgentVerdictData(
+                risk_score=analysis.assessment.score,
+                severity=analysis.assessment.severity,
+                recommendation=analysis.assessment.recommendation,
+                top_risk=analysis.assessment.top_risk,
+            ),
+            evidence_law=AgentEvidenceLawData(
+                status=share_payload.evidence_law_status,
+                detail=share_payload.evidence_law_detail,
+            ),
+            evidence=[
+                AgentEvidenceData(
+                    evidence_id=item.evidence_id,
+                    analysis_id=item.analysis_id,
+                    finding_id=item.finding_id,
+                    source_type=item.source_type,
+                    source_ref=item.source_ref,
+                    artifact=item.artifact,
+                    location=item.location,
+                    resource=item.resource,
+                    operation=item.operation,
+                    project_id=item.project_id,
+                    project_key=item.project_key,
+                    workspace_id=item.workspace_id,
+                    workspace_key=item.workspace_key,
+                    source_kind=item.source_kind,
+                    determinism_level=item.determinism_level,
+                    redaction_status=item.redaction_status,
+                    summary=item.summary,
+                    severity_hint=item.severity_hint,
+                    deterministic=item.deterministic,
+                    confidence=item.confidence,
+                    evidence_label=item.evidence_label,
+                    related_change_ids=item.related_change_ids,
+                    context_source=(
+                        AgentContextSourceData(
+                            source_id=item.context_source.source_id,
+                            source_type=item.context_source.source_type,
+                            source_ref=item.context_source.source_ref,
+                            scope=item.context_source.scope,
+                            freshness_status=item.context_source.freshness_status,
+                            last_observed_at=item.context_source.last_observed_at,
+                            age_days=item.context_source.age_days,
+                            confidence=item.context_source.confidence,
+                            conflicts=item.context_source.conflicts,
+                            limitations=item.context_source.limitations,
+                        )
+                        if item.context_source is not None
+                        else None
+                    ),
+                )
+                for item in analysis.evidence_items
+            ],
+            findings=[
+                AgentFindingData(
+                    finding_id=item.finding_id,
+                    analysis_id=item.analysis_id,
+                    title=item.title,
+                    description=item.description,
+                    explanation=item.explanation,
+                    guidance=item.guidance,
+                    severity=item.severity,
+                    category=item.category,
+                    deterministic=item.deterministic,
+                    confidence=item.confidence,
+                    uncertainty_note=item.uncertainty_note,
+                    evidence_classification=item.evidence_classification,
+                    evidence_refs=item.evidence_refs,
+                    evidence_label=item.evidence_label,
+                    skill_id=item.skill_id,
+                )
+                for item in analysis.findings
+            ],
+            confidence=AgentConfidenceData(
+                overall=analysis.assessment.confidence,
+                ledger=AgentConfidenceLedgerData(
+                    contributors=analysis.assessment.confidence_ledger.contributors,
+                    confidence_factors=(
+                        analysis.assessment.confidence_ledger.confidence_factors
+                    ),
+                    why_not_lower=analysis.assessment.confidence_ledger.why_not_lower,
+                    why_not_higher=analysis.assessment.confidence_ledger.why_not_higher,
+                    uncertainty_drivers=(
+                        analysis.assessment.confidence_ledger.uncertainty_drivers
+                    ),
                 ),
             ),
-        ),
-        uncertainty=AgentUncertaintyData(
-            flags=analysis.advisory.uncertainty_flags,
-            summary=context.uncertainty,
-            partial_context=context.partial_context,
-            insufficient_context=context.insufficient_context,
-            warnings=warnings,
-        ),
-        context_todos=context.context_todos,
-        verification_guidance=collect_agent_verification_guidance(analysis),
+            uncertainty=AgentUncertaintyData(
+                flags=analysis.advisory.uncertainty_flags,
+                summary=context.uncertainty,
+                partial_context=context.partial_context,
+                insufficient_context=context.insufficient_context,
+                warnings=warnings,
+            ),
+            context_todos=context.context_todos,
+            verification_guidance=collect_agent_verification_guidance(analysis),
+        )
     )
 
 
@@ -375,51 +396,53 @@ def build_agent_report_data(report: dict[str, Any]) -> AgentAnalysisData:
     ):
         raise ValueError("Persisted agent report workspace scope is incomplete.")
 
-    return AgentAnalysisData(
-        report_schema_version=str(report.get("report_schema_version") or ""),
-        report_id=int(report["id"]),
-        scope=AgentScopeData(
-            project_id=int(project["id"]),
-            project_key=str(project["project_key"]),
-            workspace_id=int(workspace["id"]) if workspace is not None else None,
-            workspace_key=(
-                str(workspace["workspace_key"]) if workspace is not None else None
+    return _sanitize_agent_data(
+        AgentAnalysisData(
+            report_schema_version=str(report.get("report_schema_version") or ""),
+            report_id=int(report["id"]),
+            scope=AgentScopeData(
+                project_id=int(project["id"]),
+                project_key=str(project["project_key"]),
+                workspace_id=int(workspace["id"]) if workspace is not None else None,
+                workspace_key=(
+                    str(workspace["workspace_key"]) if workspace is not None else None
+                ),
             ),
-        ),
-        verdict=AgentVerdictData(
-            risk_score=int(report.get("risk_score") or 0),
-            severity=report.get("severity", "low"),
-            recommendation=report.get("recommendation", "caution"),
-            top_risk=str(report.get("top_risk") or ""),
-        ),
-        evidence_law=AgentEvidenceLawData(
-            status=share_summary.json_payload.evidence_law_status,
-            detail=share_summary.json_payload.evidence_law_detail,
-        ),
-        evidence=[
-            AgentEvidenceData.model_validate(item)
-            for item in _mapping_items(report.get("evidence_items"))
-        ],
-        findings=[
-            AgentFindingData.model_validate(item)
-            for item in _mapping_items(report.get("findings"))
-        ],
-        confidence=AgentConfidenceData(
-            overall=float(report.get("confidence") or 0.0),
-            ledger=ledger,
-        ),
-        uncertainty=AgentUncertaintyData(
-            flags=list(advisory.get("uncertainty_flags") or []),
-            summary=str(context["uncertainty"])
-            if context.get("uncertainty") is not None
-            else None,
-            partial_context=bool(context.get("partial_context")),
-            insufficient_context=bool(context.get("insufficient_context")),
-            warnings=[str(item) for item in report.get("warnings") or []],
-        ),
-        context_todos=[str(item) for item in context.get("context_todos") or []],
-        verification_guidance=collect_agent_report_verification_guidance(
-            report_with_summary
+            verdict=AgentVerdictData(
+                risk_score=int(report.get("risk_score") or 0),
+                severity=report.get("severity", "low"),
+                recommendation=report.get("recommendation", "caution"),
+                top_risk=str(report.get("top_risk") or ""),
+            ),
+            evidence_law=AgentEvidenceLawData(
+                status=share_summary.json_payload.evidence_law_status,
+                detail=share_summary.json_payload.evidence_law_detail,
+            ),
+            evidence=[
+                AgentEvidenceData.model_validate(item)
+                for item in _mapping_items(report.get("evidence_items"))
+            ],
+            findings=[
+                AgentFindingData.model_validate(item)
+                for item in _mapping_items(report.get("findings"))
+            ],
+            confidence=AgentConfidenceData(
+                overall=float(report.get("confidence") or 0.0),
+                ledger=ledger,
+            ),
+            uncertainty=AgentUncertaintyData(
+                flags=list(advisory.get("uncertainty_flags") or []),
+                summary=str(context["uncertainty"])
+                if context.get("uncertainty") is not None
+                else None,
+                partial_context=bool(context.get("partial_context")),
+                insufficient_context=bool(context.get("insufficient_context")),
+                warnings=[str(item) for item in report.get("warnings") or []],
+            ),
+            context_todos=[str(item) for item in context.get("context_todos") or []],
+            verification_guidance=collect_agent_report_verification_guidance(
+                report_with_summary
+            ),
         ),
     )
 
