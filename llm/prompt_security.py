@@ -68,10 +68,15 @@ _DEPLOYMENT_GO_CLAIM_PATTERNS = (
         flags=re.IGNORECASE,
     ),
     re.compile(
-        r"\bapproved\s+(?:for\s+deployment|to\s+(?:deploy|ship|release))\b",
+        r"\b(?:deployment\s+(?:is\s+)?approved|"
+        r"approved\s+(?:for\s+deployment|to\s+(?:deploy|ship|release)))\b",
         flags=re.IGNORECASE,
     ),
-    re.compile(r"\bproceed\s+with\s+(?:the\s+)?deployment\b", flags=re.IGNORECASE),
+    re.compile(
+        r"\bproceed\s+with\s+(?:the\s+)?(?:deployment|release)\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(r"\bship\s+it\b", flags=re.IGNORECASE),
 )
 _DEPLOYMENT_NO_GO_CLAIM_PATTERNS = (
     re.compile(
@@ -89,6 +94,11 @@ _DEPLOYMENT_NO_GO_CLAIM_PATTERNS = (
         r"\bdeployment\s+should\s+be\s+blocked\b",
         flags=re.IGNORECASE,
     ),
+)
+_VERDICT_LABEL_PATTERN = re.compile(
+    r"\b(?:verdict|outcome|decision|recommendation)\s*[:=]\s*"
+    r"(?P<verdict>NO[- ]?GO|CAUTION|GO)\b",
+    flags=re.IGNORECASE,
 )
 
 
@@ -119,6 +129,11 @@ def contradicts_deployment_recommendation(value: str, recommendation: str) -> bo
     """Return whether text makes a categorical claim opposed to the verdict."""
     normalized_value = _normalize_security_text(value)
     normalized_recommendation = recommendation.strip().upper().replace(" ", "-")
+    if any(
+        match.group("verdict").upper().replace(" ", "-") != normalized_recommendation
+        for match in _VERDICT_LABEL_PATTERN.finditer(normalized_value)
+    ):
+        return True
     if normalized_recommendation == "NO-GO":
         patterns = _DEPLOYMENT_GO_CLAIM_PATTERNS
     elif normalized_recommendation == "GO":

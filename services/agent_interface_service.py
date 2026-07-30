@@ -188,6 +188,32 @@ def _violates_agent_output_policy(value: str, recommendation: str) -> bool:
     )
 
 
+def _fragmented_unsafe_indexes(
+    values: list[str],
+    recommendation: str,
+) -> set[int]:
+    unsafe_spans: list[tuple[int, int]] = []
+    for start in range(len(values) - 1):
+        if values[start] == UNTRUSTED_INSTRUCTION_REDACTION:
+            continue
+        for end in range(start + 2, len(values) + 1):
+            segment = values[start:end]
+            if UNTRUSTED_INSTRUCTION_REDACTION in segment:
+                break
+            if _violates_agent_output_policy(" ".join(segment), recommendation):
+                unsafe_spans.append((start, end))
+
+    if not unsafe_spans:
+        return set()
+    shortest_width = min(end - start for start, end in unsafe_spans)
+    return {
+        index
+        for start, end in unsafe_spans
+        if end - start == shortest_width
+        for index in range(start, end)
+    }
+
+
 def _sanitize_agent_value(value: Any, recommendation: str) -> Any:
     if isinstance(value, str):
         if _violates_agent_output_policy(value, recommendation):
@@ -223,10 +249,15 @@ def _sanitize_agent_value(value: Any, recommendation: str) -> Any:
             start = end
         return sanitized
     if isinstance(value, dict):
-        return {
+        sanitized = {
             key: _sanitize_agent_value(item, recommendation)
             for key, item in value.items()
         }
+        string_keys = [key for key, item in sanitized.items() if isinstance(item, str)]
+        string_values = [sanitized[key] for key in string_keys]
+        for index in _fragmented_unsafe_indexes(string_values, recommendation):
+            sanitized[string_keys[index]] = UNTRUSTED_INSTRUCTION_REDACTION
+        return sanitized
     return value
 
 
