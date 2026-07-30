@@ -13,7 +13,10 @@ from config import settings
 from analysis.risk_scorer import RiskAssessment
 from evidence.models import Finding
 from llm.prompts import build_system_prompt, build_user_payload
-from llm.prompt_security import contains_unsafe_instruction
+from llm.prompt_security import (
+    contains_unsafe_instruction,
+    contradicts_deployment_recommendation,
+)
 from llm.providers import generate_completion_with_settings
 from llm.skill_context import build_skill_context, resolve_skills
 from services.settings_service import resolve_provider_runtime
@@ -111,10 +114,14 @@ def _validate_narrative_safety(
             )
             if match is not None
         ]
-        if any(
-            match.group("verdict").upper().replace(" ", "-") != expected
-            for match in verdict_matches
-        ) or contains_unsafe_instruction(text):
+        if (
+            any(
+                match.group("verdict").upper().replace(" ", "-") != expected
+                for match in verdict_matches
+            )
+            or contains_unsafe_instruction(text)
+            or contradicts_deployment_recommendation(text, expected)
+        ):
             raise ValueError(
                 "Narrative provider returned unsafe or contradictory deployment "
                 "guidance."

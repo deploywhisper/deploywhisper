@@ -14,7 +14,11 @@ from evidence.models import (
     ContextSourceType,
     FindingEvidenceClassification,
 )
-from llm.prompt_security import redact_unsafe_instruction
+from llm.prompt_security import (
+    UNTRUSTED_INSTRUCTION_REDACTION,
+    contains_unsafe_instruction,
+    redact_unsafe_instruction,
+)
 from pydantic import BaseModel, ConfigDict, Field
 from services.confidence_ledger import EvidenceLawStatus
 
@@ -182,7 +186,34 @@ def _sanitize_agent_value(value: Any) -> Any:
     if isinstance(value, str):
         return redact_unsafe_instruction(value)
     if isinstance(value, list):
-        return [_sanitize_agent_value(item) for item in value]
+        sanitized = [_sanitize_agent_value(item) for item in value]
+        start = 0
+        while start < len(value):
+            if not isinstance(value[start], str):
+                start += 1
+                continue
+            end = start + 1
+            while end < len(value) and isinstance(value[end], str):
+                end += 1
+            safe_start = start
+            while safe_start < end:
+                if contains_unsafe_instruction(value[safe_start]):
+                    safe_start += 1
+                    continue
+                safe_end = safe_start + 1
+                while safe_end < end and not contains_unsafe_instruction(
+                    value[safe_end]
+                ):
+                    safe_end += 1
+                if safe_end - safe_start > 1 and contains_unsafe_instruction(
+                    " ".join(value[safe_start:safe_end])
+                ):
+                    sanitized[safe_start:safe_end] = [
+                        UNTRUSTED_INSTRUCTION_REDACTION
+                    ] * (safe_end - safe_start)
+                safe_start = safe_end
+            start = end
+        return sanitized
     if isinstance(value, dict):
         return {key: _sanitize_agent_value(item) for key, item in value.items()}
     return value

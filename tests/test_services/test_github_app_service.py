@@ -187,27 +187,23 @@ class GitHubAppServiceTests(unittest.TestCase):
         )
         self.assertIn("advisory-only", call["summary"])
         self.assertIn("Open the full DeployWhisper report", call["text"])
-        self.assertEqual(
-            analyze_uploaded_files.call_args.kwargs["project_key"],
-            "deploywhisper-deploywhisper",
-        )
-        self.assertEqual(
-            analyze_uploaded_files.call_args.kwargs["audit_context"]["actor"],
-            "github:octocat",
-        )
         analysis_kwargs = analyze_uploaded_files.call_args.kwargs
         self.assertEqual(
-            set(analysis_kwargs),
+            analysis_kwargs,
             {
-                "project_key",
-                "audit_context",
+                "project_key": "deploywhisper-deploywhisper",
+                "audit_context": {
+                    "source_interface": "github_app",
+                    "trigger_type": "github_app_pull_request",
+                    "trigger_id": "deploywhisper/deploywhisper#PR-3",
+                    "actor": "github:octocat",
+                },
             },
         )
         self.assertEqual(
             analyze_uploaded_files.call_args.args,
             ([("plan.tf", b'resource "x" "y" {}')],),
         )
-        self.assertNotIn("PR_INJECTION", analysis_kwargs)
 
     @patch("integrations.github.app_service.analyze_uploaded_files")
     @patch("integrations.github.app_service._load_pull_request_artifacts")
