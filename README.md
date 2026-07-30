@@ -505,7 +505,8 @@ shared analysis and persistence path, returns the stable advisory agent
 contract with explicit collection/string limits, and masks inaccessible and
 missing resources for project-scoped callers. It never echoes raw uploaded
 artifacts or grants approval, deployment, or remediation authority. See
-[Agent API Interface](docs/ai-safety/agent-api-interface.md).
+[Agent API Interface](docs/ai-safety/agent-api-interface.md) and
+[Reviewing AI-Generated and AI-Assisted IaC](docs/ai-safety/ai-generated-iac-review.md).
 
 ## CLI Usage
 

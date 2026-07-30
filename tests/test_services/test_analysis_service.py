@@ -102,7 +102,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.build_analysis_artifacts",
                 return_value=artifacts,
-            ),
+            ) as build_analysis_artifacts_mock,
             patch(
                 "services.analysis_service.persist_analysis_report",
                 return_value={"id": 99, "analysis_duration_seconds": 7},
@@ -123,6 +123,113 @@ class AnalysisServiceTests(unittest.TestCase):
             persist_analysis_report.call_args.kwargs["analysis_duration_seconds"],
             7,
         )
+        self.assertEqual(
+            build_analysis_artifacts_mock.call_args.kwargs["audit_context"],
+            {"source_interface": "api"},
+        )
+
+    def test_build_analysis_artifacts_labels_ai_assisted_public_ingress_risk(
+        self,
+    ) -> None:
+        artifacts = build_analysis_artifacts(
+            [
+                (
+                    "main.tf",
+                    b"""
+# AI-generated draft; verify before apply
+resource "aws_security_group" "web" {
+  ingress {
+    protocol    = "-1"
+    from_port   = 0
+    to_port     = 0
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+""",
+                )
+            ],
+            include_topology_context=False,
+            include_incident_context=False,
+            include_narrative=False,
+            allow_llm_assistance=False,
+            audit_context={"trigger_type": "agent_request"},
+        )
+
+        self.assertEqual(
+            artifacts.submission_manifest.provenance["authorship"],
+            "ai-assisted",
+        )
+        ai_risk_findings = [
+            finding
+            for finding in artifacts.findings
+            if finding.title.startswith("AI-assisted IaC risk:")
+        ]
+        self.assertEqual(len(ai_risk_findings), 1)
+        self.assertEqual(ai_risk_findings[0].severity, "high")
+        self.assertTrue(ai_risk_findings[0].deterministic)
+        self.assertTrue(ai_risk_findings[0].evidence_refs)
+        self.assertIn(
+            "public ingress",
+            ai_risk_findings[0].description.lower(),
+        )
+
+    def test_build_analysis_artifacts_scopes_ai_signals_to_matching_artifact(
+        self,
+    ) -> None:
+        artifacts = build_analysis_artifacts(
+            [
+                (
+                    "ai.tf",
+                    b"""
+# AI-generated draft; verify before apply
+resource "aws_security_group" "ai_web" {
+  ingress {
+    protocol    = "-1"
+    from_port   = 0
+    to_port     = 0
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+""",
+                ),
+                (
+                    "human.tf",
+                    b"""
+resource "aws_security_group" "human_web" {
+  ingress {
+    protocol    = "-1"
+    from_port   = 0
+    to_port     = 0
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+""",
+                ),
+            ],
+            include_topology_context=False,
+            include_incident_context=False,
+            include_narrative=False,
+            allow_llm_assistance=False,
+        )
+
+        manifest_by_name = {
+            item.name: item for item in artifacts.submission_manifest.items
+        }
+        self.assertEqual(
+            manifest_by_name["ai.tf"].provenance["authorship"],
+            "ai-assisted",
+        )
+        self.assertEqual(
+            manifest_by_name["human.tf"].provenance["authorship"],
+            "unknown",
+        )
+        labeled_titles = [
+            finding.title
+            for finding in artifacts.findings
+            if finding.title.startswith("AI-assisted IaC risk:")
+        ]
+        self.assertEqual(len(labeled_titles), 1)
+        self.assertIn("aws_security_group.ai_web", labeled_titles[0])
 
     def test_analyze_uploaded_files_requires_explicit_project_scope_before_parsing(
         self,

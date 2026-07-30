@@ -35,6 +35,7 @@ from llm.narrator import NarrativeResult, generate_narrative
 from llm.providers import generate_completion_with_settings
 from parsers.base import ParseBatchResult, UnifiedChange, is_non_mutating_action
 from services.intake_service import build_parse_batch
+from services.ai_iac_risk_service import label_ai_iac_risk_findings
 from services.project_service import (
     ProjectResolutionError,
     resolve_project_reference,
@@ -2443,10 +2444,15 @@ def build_analysis_artifacts(
     include_incident_context: bool = True,
     include_narrative: bool = True,
     allow_llm_assistance: bool = True,
+    audit_context: dict[str, Any] | None = None,
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
-    submission_manifest = build_submission_manifest(files, parse_batch=parse_batch)
+    submission_manifest = build_submission_manifest(
+        files,
+        parse_batch=parse_batch,
+        audit_context=audit_context,
+    )
     partial_context = parse_batch.has_partial_context or (
         submission_manifest.partial_analysis
     )
@@ -2501,6 +2507,14 @@ def build_analysis_artifacts(
         interaction_confidence_overrides=_interaction_confidence_overrides(
             assessment, completion_client=completion_client
         ),
+    )
+    findings = label_ai_iac_risk_findings(
+        findings,
+        assessment=assessment,
+        evidence_items=evidence_items,
+        provenance_by_artifact={
+            item.name: item.provenance for item in submission_manifest.items
+        },
     )
     blast_radius = compute_blast_radius(changes, topology, topology_warning)
     rollback_plan = generate_rollback_plan(changes, partial_context=partial_context)
@@ -2601,6 +2615,7 @@ def analyze_uploaded_files(
         workspace_id=workspace_id,
         workspace_key=workspace_key,
         completion_client=completion_client,
+        audit_context=audit_context,
     )
     analysis_duration_seconds = max(1, round(perf_counter() - started_at))
     try:

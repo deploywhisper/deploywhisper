@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from api.schemas import PendingAnalysis
 from parsers.base import ParseBatchResult, ParsedFileResult
+from services.ai_iac_risk_service import assess_iac_provenance
 from services.intake_service import build_pending_analysis
 
 ManifestStatus = Literal["accepted", "excluded", "failed", "sensitive"]
@@ -209,6 +210,38 @@ def build_submission_manifest(
     sensitive_count = sum(1 for item in items if item.status == "sensitive")
     failed_count = sum(1 for item in items if item.status == "failed")
     partial_count = sum(1 for item in items if item.partial)
+    provenance_eligible_names = {
+        item.name for item in items if item.status in {"accepted", "failed"}
+    }
+    raw_content_by_name = {
+        intake_item.name: raw_content
+        for intake_item, (_, raw_content) in zip(
+            pending.items,
+            files,
+            strict=False,
+        )
+    }
+    provenance_eligible_raw_files = {
+        name: raw_content_by_name.get(name) for name in provenance_eligible_names
+    }
+    provenance.update(
+        assess_iac_provenance(
+            provenance_eligible_raw_files,
+            audit_context=context,
+        )
+    )
+    for item in items:
+        item_raw_files = (
+            {item.name: raw_content_by_name.get(item.name)}
+            if item.status in {"accepted", "failed"}
+            else {}
+        )
+        item.provenance.update(
+            assess_iac_provenance(
+                item_raw_files,
+                audit_context=context,
+            )
+        )
     return SubmissionManifest(
         submitted_artifact_count=len(items),
         accepted_artifact_count=accepted_count,

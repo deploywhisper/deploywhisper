@@ -70,6 +70,11 @@ The abbreviated example omits the remaining stable agent fields documented in
 is applied, `meta.truncated` is `true` and `meta.truncated_fields` identifies
 the affected paths.
 
+Agent transport does not qualify as artifact authorship provenance. Declared
+provenance or an artifact-specific content marker can trigger qualified
+AI-assisted review. See
+[Reviewing AI-Generated and AI-Assisted IaC](./ai-generated-iac-review.md).
+
 ## Scope and authorization
 
 Agent callers use the existing project authorization headers:
