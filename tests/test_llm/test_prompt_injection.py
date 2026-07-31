@@ -239,9 +239,14 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
         negated_guidance = [
             "Do not proceed with release.",
             "Do not, under any circumstances, proceed with release.",
+            "Do not ever proceed with release.",
             "Not safe to deploy.",
             "This is not ready to release.",
             "This is not, in fact, ready for release.",
+            "This will not be safe to deploy.",
+            "It would not be ready for release.",
+            "This isn't safe to proceed with release.",
+            "We cannot safely proceed with release.",
             "Never proceed with deployment.",
         ]
         for guidance in negated_guidance:
@@ -262,6 +267,37 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
             with self.subTest(release_blocker=release_blocker):
                 self.assertTrue(
                     contradicts_deployment_recommendation(release_blocker, "go")
+                )
+
+        for passive_blocker in (
+            "Release is blocked.",
+            "Deployment remains blocked.",
+        ):
+            with self.subTest(passive_blocker=passive_blocker):
+                self.assertTrue(
+                    contradicts_deployment_recommendation(passive_blocker, "go")
+                )
+
+        non_categorical_guidance = [
+            "It is not impossible to proceed with release.",
+            "This is not necessarily safe to deploy.",
+        ]
+        for guidance in non_categorical_guidance:
+            with self.subTest(guidance=guidance):
+                self.assertFalse(contains_deployment_approval_claim(guidance))
+                for recommendation in ("go", "no-go", "caution"):
+                    self.assertFalse(
+                        contradicts_deployment_recommendation(
+                            guidance,
+                            recommendation,
+                        )
+                    )
+
+        for identifier_text in ("notsafe to deploy", "notready for release"):
+            with self.subTest(identifier_text=identifier_text):
+                self.assertFalse(contains_deployment_approval_claim(identifier_text))
+                self.assertFalse(
+                    contradicts_deployment_recommendation(identifier_text, "go")
                 )
 
     def test_raw_iac_and_docs_content_cannot_enter_the_system_message(self) -> None:
@@ -478,9 +514,14 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
         guidance_values = [
             "Do not proceed with release.",
             "Do not, under any circumstances, proceed with release.",
+            "Do not ever proceed with release.",
             "Not safe to deploy.",
             "This is not ready to release.",
             "This is not, in fact, ready for release.",
+            "This will not be safe to deploy.",
+            "It would not be ready for release.",
+            "This isn't safe to proceed with release.",
+            "We cannot safely proceed with release.",
             "Never proceed with deployment.",
         ]
 

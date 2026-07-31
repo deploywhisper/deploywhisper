@@ -634,6 +634,8 @@ class AgentInterfaceServiceTests(unittest.TestCase):
             ("go", "Do not proceed with release."),
             ("go", "Stop the release."),
             ("go", "Release should be blocked."),
+            ("go", "Release is blocked."),
+            ("go", "Deployment remains blocked."),
             ("go", "Decision: CAUTION"),
             ("caution", "This change is safe to deploy."),
             ("caution", "Do not deploy this change."),
@@ -728,9 +730,14 @@ class AgentInterfaceServiceTests(unittest.TestCase):
         guidance_values = [
             "Do not proceed with release.",
             "Do not, under any circumstances, proceed with release.",
+            "Do not ever proceed with release.",
             "Not safe to deploy.",
             "This is not ready to release.",
             "This is not, in fact, ready for release.",
+            "This will not be safe to deploy.",
+            "It would not be ready for release.",
+            "This isn't safe to proceed with release.",
+            "We cannot safely proceed with release.",
             "Never proceed with deployment.",
         ]
 
@@ -746,6 +753,33 @@ class AgentInterfaceServiceTests(unittest.TestCase):
                 payload = build_agent_analysis_data(analysis).model_dump(mode="json")
 
                 self.assertEqual(payload["verdict"]["top_risk"], guidance)
+
+    def test_non_categorical_deployment_hedges_are_preserved(self) -> None:
+        guidance_values = [
+            "It is not impossible to proceed with release.",
+            "This is not necessarily safe to deploy.",
+            "notsafe to deploy",
+            "notready for release",
+        ]
+
+        for recommendation in ("go", "no-go", "caution"):
+            for guidance in guidance_values:
+                with self.subTest(
+                    recommendation=recommendation,
+                    guidance=guidance,
+                ):
+                    analysis = self._analysis(
+                        include_items=True,
+                        include_workspace=True,
+                    )
+                    analysis.assessment.recommendation = recommendation
+                    analysis.assessment.top_risk = guidance
+
+                    payload = build_agent_analysis_data(analysis).model_dump(
+                        mode="json"
+                    )
+
+                    self.assertEqual(payload["verdict"]["top_risk"], guidance)
 
     def test_interface_response_applies_explicit_collection_and_string_bounds(
         self,

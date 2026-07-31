@@ -90,22 +90,32 @@ _DEPLOYMENT_NO_GO_CLAIM_PATTERNS = (
         flags=re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:unsafe|not\s*(?:,\s*)?"
-        r"(?:(?:in\s+fact|actually|currently|yet|necessarily)\s*(?:,\s*)?)?"
+        r"\b(?:unsafe|not(?:\s+|,\s*)"
+        r"(?:(?:in\s+fact|actually|currently|yet)\s*(?:,\s*)?)?"
         r"(?:safe|ready))(?:\s+to\s+(?:deploy|ship|release)|"
-        r"\s+for\s+(?:deployment|release))\b",
+        r"\s+for\s+(?:deployment|release)|"
+        r"\s+to\s+proceed\s+with\s+(?:the\s+)?(?:deployment|release))\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:is|are|was|were|will|would|can|could|should|must)\s+not|"
+        r"isn't|aren't|wasn't|weren't|cannot|can't)\s+"
+        r"(?:be\s+)?(?:safe|ready)(?:\s+to\s+(?:deploy|ship|release)|"
+        r"\s+for\s+(?:deployment|release)|"
+        r"\s+to\s+proceed\s+with\s+(?:the\s+)?(?:deployment|release))\b",
         flags=re.IGNORECASE,
     ),
     re.compile(
         r"\b(?:block|stop)\s+(?:the\s+)?(?:deployment|release)\b|"
-        r"\b(?:deployment|release)\s+should\s+be\s+blocked\b",
+        r"\b(?:deployment|release)\s+should\s+be\s+blocked\b|"
+        r"\b(?:deployment|release)\s+(?:is|remains)\s+blocked\b",
         flags=re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:do\s+not|don't|must\s+not|should\s+not|never)"
+        r"\b(?:(?:do\s+not|don't|must\s+not|should\s+not|never)"
         r"\s*(?:,\s*)?"
-        r"(?:(?:under\s+any\s+circumstances|actually|currently|yet|"
-        r"necessarily)\s*(?:,\s*)?)?"
+        r"(?:(?:under\s+any\s+circumstances|actually|currently|yet|ever)"
+        r"\s*(?:,\s*)?)?|(?:cannot|can't)\s+(?:safely\s+)?)"
         r"proceed\s+with\s+(?:the\s+)?(?:deployment|release)\b",
         flags=re.IGNORECASE,
     ),
@@ -139,7 +149,8 @@ _NEGATED_CLAIM_PREFIX_PATTERN = re.compile(
     r"cannot|can't|shouldn't|mustn't)"
     r"\s*(?:[,;:]\s*)?"
     r"(?:(?:in\s+fact|under\s+any\s+circumstances|actually|currently|yet|"
-    r"necessarily)\s*(?:[,;:]\s*)?)?$",
+    r"necessarily|ever|safely|be|(?:safe|ready|impossible|unlikely)\s+to)"
+    r"\s*(?:[,;:]\s*)?)?$",
     flags=re.IGNORECASE,
 )
 
