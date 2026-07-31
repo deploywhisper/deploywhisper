@@ -68,8 +68,10 @@ _DEPLOYMENT_GO_CLAIM_PATTERNS = (
         flags=re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:deployment\s+(?:is\s+)?approved|"
-        r"approved\s+(?:for\s+deployment|to\s+(?:deploy|ship|release)))\b",
+        r"\b(?:(?:deployment|release)\s+(?:is\s+)?approved|"
+        r"approved\s+(?:for\s+(?:deployment|release)|"
+        r"to\s+(?:deploy|ship|release))|"
+        r"ready\s+for\s+(?:deployment|release))\b",
         flags=re.IGNORECASE,
     ),
     re.compile(
@@ -97,6 +99,11 @@ _DEPLOYMENT_NO_GO_CLAIM_PATTERNS = (
         r"\bdeployment\s+should\s+be\s+blocked\b",
         flags=re.IGNORECASE,
     ),
+    re.compile(
+        r"\b(?:do\s+not|don't|must\s+not|should\s+not|never)\s+"
+        r"proceed\s+with\s+(?:the\s+)?(?:deployment|release)\b",
+        flags=re.IGNORECASE,
+    ),
 )
 _VERDICT_LABEL_PATTERN = re.compile(
     r"\b(?:verdict|outcome|decision|recommendation)\s*[:=]\s*"
@@ -118,6 +125,13 @@ _CONDITIONAL_CLAIM_SUFFIX_PATTERN = re.compile(
     r"^\s*[,;:]?\s*"
     r"(?:(?:only\s+)?(?:if|when|once|after|unless)|"
     r"provided(?:\s+that)?|subject\s+to|pending|following)\b",
+    flags=re.IGNORECASE,
+)
+_NEGATED_CLAIM_PREFIX_PATTERN = re.compile(
+    r"\b(?:(?:do|does|did)\s+not|don't|doesn't|didn't|"
+    r"not(?!\s+only\b)|never|isn't|aren't|wasn't|weren't|"
+    r"cannot|can't|shouldn't|mustn't)"
+    r"(?:\s+\w+){0,3}\s*$",
     flags=re.IGNORECASE,
 )
 
@@ -199,7 +213,9 @@ def _contains_categorical_claim(
 ) -> bool:
     for pattern in patterns:
         for match in pattern.finditer(value):
-            if not _claim_is_conditional(value, match):
+            if not (
+                _claim_is_conditional(value, match) or _claim_is_negated(value, match)
+            ):
                 return True
     return False
 
@@ -209,6 +225,10 @@ def _claim_is_conditional(value: str, match: re.Match[str]) -> bool:
         _CONDITIONAL_CLAIM_PREFIX_PATTERN.search(value[: match.start()])
         or _CONDITIONAL_CLAIM_SUFFIX_PATTERN.match(value[match.end() :])
     )
+
+
+def _claim_is_negated(value: str, match: re.Match[str]) -> bool:
+    return bool(_NEGATED_CLAIM_PREFIX_PATTERN.search(value[: match.start()]))
 
 
 def _normalize_security_text_variants(value: str) -> tuple[str, ...]:

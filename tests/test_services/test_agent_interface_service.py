@@ -626,7 +626,12 @@ class AgentInterfaceServiceTests(unittest.TestCase):
             ("no-go", "Ship it."),
             ("no-go", "Ship it,"),
             ("no-go", "Ship it)"),
+            ("no-go", "Release approved."),
+            ("no-go", "Release is approved."),
+            ("no-go", "Approved for release."),
+            ("no-go", "Ready for release."),
             ("go", "Do not deploy this change."),
+            ("go", "Do not proceed with release."),
             ("go", "Decision: CAUTION"),
             ("caution", "This change is safe to deploy."),
             ("caution", "Do not deploy this change."),
@@ -653,6 +658,10 @@ class AgentInterfaceServiceTests(unittest.TestCase):
             "Deployment approved.",
             "Proceed with release.",
             "Ship it.",
+            "Release approved.",
+            "Release is approved.",
+            "Approved for release.",
+            "Ready for release.",
         ]
 
         for claim in claims:
@@ -711,6 +720,27 @@ class AgentInterfaceServiceTests(unittest.TestCase):
                     )
 
                     self.assertEqual(payload["verdict"]["top_risk"], guidance)
+
+    def test_negated_deployment_guidance_is_preserved_for_no_go(self) -> None:
+        guidance_values = [
+            "Do not proceed with release.",
+            "Not safe to deploy.",
+            "This is not ready to release.",
+            "Never proceed with deployment.",
+        ]
+
+        for guidance in guidance_values:
+            with self.subTest(guidance=guidance):
+                analysis = self._analysis(
+                    include_items=True,
+                    include_workspace=True,
+                )
+                analysis.assessment.recommendation = "no-go"
+                analysis.assessment.top_risk = guidance
+
+                payload = build_agent_analysis_data(analysis).model_dump(mode="json")
+
+                self.assertEqual(payload["verdict"]["top_risk"], guidance)
 
     def test_interface_response_applies_explicit_collection_and_string_bounds(
         self,

@@ -209,6 +209,10 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
             ("Ship it]", "no-go"),
             ("Ship it - deploy today.", "no-go"),
             ("Ship it — deploy today.", "no-go"),
+            ("Release approved.", "no-go"),
+            ("Release is approved.", "no-go"),
+            ("Approved for release.", "no-go"),
+            ("Ready for release.", "no-go"),
         ]
         for claim, recommendation in contradictory_labels_and_claims:
             with self.subTest(claim=claim, recommendation=recommendation):
@@ -232,6 +236,19 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
                 self.assertFalse(
                     contradicts_deployment_recommendation(guidance, "no-go")
                 )
+        negated_guidance = [
+            "Do not proceed with release.",
+            "Not safe to deploy.",
+            "This is not ready to release.",
+            "Never proceed with deployment.",
+        ]
+        for guidance in negated_guidance:
+            with self.subTest(guidance=guidance):
+                self.assertFalse(contains_deployment_approval_claim(guidance))
+                self.assertFalse(
+                    contradicts_deployment_recommendation(guidance, "no-go")
+                )
+                self.assertTrue(contradicts_deployment_recommendation(guidance, "go"))
 
     def test_raw_iac_and_docs_content_cannot_enter_the_system_message(self) -> None:
         captured: dict[str, object] = {}
@@ -406,6 +423,10 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
             "Deployment approved.",
             "Proceed with release.",
             "Ship it.",
+            "Release approved.",
+            "Release is approved.",
+            "Approved for release.",
+            "Ready for release.",
         ]
 
         for claim in claims:
@@ -436,6 +457,47 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
 
                 self.assertTrue(narrative.degraded)
                 self.assertFalse(narrative.available)
+
+    def test_no_go_narrative_preserves_negated_deployment_guidance(self) -> None:
+        assessment = self._assessment()
+        guidance_values = [
+            "Do not proceed with release.",
+            "Not safe to deploy.",
+            "This is not ready to release.",
+            "Never proceed with deployment.",
+        ]
+
+        for guidance in guidance_values:
+            with self.subTest(guidance=guidance):
+
+                def completion(**_: object) -> SimpleNamespace:
+                    return SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                message=SimpleNamespace(
+                                    content=json.dumps(
+                                        {
+                                            "opening_sentence": (
+                                                "NO-GO: deployment review failed."
+                                            ),
+                                            "explanation": guidance,
+                                            "guidance": [],
+                                        }
+                                    )
+                                )
+                            )
+                        ]
+                    )
+
+                narrative = generate_narrative(
+                    assessment,
+                    self._findings(),
+                    completion_client=completion,
+                )
+
+                self.assertTrue(narrative.available)
+                self.assertFalse(narrative.degraded)
+                self.assertEqual(narrative.explanation, guidance)
 
 
 if __name__ == "__main__":
