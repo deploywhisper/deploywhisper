@@ -238,8 +238,10 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
                 )
         negated_guidance = [
             "Do not proceed with release.",
+            "Do not, under any circumstances, proceed with release.",
             "Not safe to deploy.",
             "This is not ready to release.",
+            "This is not, in fact, ready for release.",
             "Never proceed with deployment.",
         ]
         for guidance in negated_guidance:
@@ -249,6 +251,18 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
                     contradicts_deployment_recommendation(guidance, "no-go")
                 )
                 self.assertTrue(contradicts_deployment_recommendation(guidance, "go"))
+
+        qualified_approval = "It is not risky to proceed with release."
+        self.assertTrue(contains_deployment_approval_claim(qualified_approval))
+        self.assertTrue(
+            contradicts_deployment_recommendation(qualified_approval, "no-go")
+        )
+
+        for release_blocker in ("Stop the release.", "Release should be blocked."):
+            with self.subTest(release_blocker=release_blocker):
+                self.assertTrue(
+                    contradicts_deployment_recommendation(release_blocker, "go")
+                )
 
     def test_raw_iac_and_docs_content_cannot_enter_the_system_message(self) -> None:
         captured: dict[str, object] = {}
@@ -420,6 +434,7 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
         assessment.recommendation = "go"
         claims = [
             "This change is safe to deploy.",
+            "It is not risky to proceed with release.",
             "Deployment approved.",
             "Proceed with release.",
             "Ship it.",
@@ -462,8 +477,10 @@ class PromptInjectionBoundaryTests(unittest.TestCase):
         assessment = self._assessment()
         guidance_values = [
             "Do not proceed with release.",
+            "Do not, under any circumstances, proceed with release.",
             "Not safe to deploy.",
             "This is not ready to release.",
+            "This is not, in fact, ready for release.",
             "Never proceed with deployment.",
         ]
 

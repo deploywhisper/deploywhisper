@@ -62,3 +62,7 @@
 
 - Resolved 2026-07-27: The Skill detail page now renders the full deterministic harness summary together with harness-run and analytics-refresh timestamps [frontend/src/screens/Skills.tsx:224].
 - Resolved 2026-07-27: `SkillRegistryData` now requires visible contributors, the generated frontend contract includes them, and the Skill detail page renders them [api/schemas.py:2080].
+
+## Deferred from: code review of 10-4-prompt-injection-test-suite.md (2026-07-31)
+
+- Resolved 2026-07-31: Release-blocking claims such as `Stop the release` and `Release should be blocked` now contradict a GO recommendation [llm/prompt_security.py:97].

@@ -90,17 +90,22 @@ _DEPLOYMENT_NO_GO_CLAIM_PATTERNS = (
         flags=re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:unsafe|not\s+safe|not\s+ready)\s+to\s+"
-        r"(?:deploy|ship|release)\b",
+        r"\b(?:unsafe|not\s*(?:,\s*)?"
+        r"(?:(?:in\s+fact|actually|currently|yet|necessarily)\s*(?:,\s*)?)?"
+        r"(?:safe|ready))(?:\s+to\s+(?:deploy|ship|release)|"
+        r"\s+for\s+(?:deployment|release))\b",
         flags=re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:block|stop)\s+(?:the\s+)?deployment\b|"
-        r"\bdeployment\s+should\s+be\s+blocked\b",
+        r"\b(?:block|stop)\s+(?:the\s+)?(?:deployment|release)\b|"
+        r"\b(?:deployment|release)\s+should\s+be\s+blocked\b",
         flags=re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:do\s+not|don't|must\s+not|should\s+not|never)\s+"
+        r"\b(?:do\s+not|don't|must\s+not|should\s+not|never)"
+        r"\s*(?:,\s*)?"
+        r"(?:(?:under\s+any\s+circumstances|actually|currently|yet|"
+        r"necessarily)\s*(?:,\s*)?)?"
         r"proceed\s+with\s+(?:the\s+)?(?:deployment|release)\b",
         flags=re.IGNORECASE,
     ),
@@ -128,10 +133,13 @@ _CONDITIONAL_CLAIM_SUFFIX_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 _NEGATED_CLAIM_PREFIX_PATTERN = re.compile(
-    r"\b(?:(?:do|does|did)\s+not|don't|doesn't|didn't|"
+    r"\b(?:(?:do|does|did|must|should|can|could|will|would)\s+not|"
+    r"don't|doesn't|didn't|"
     r"not(?!\s+only\b)|never|isn't|aren't|wasn't|weren't|"
     r"cannot|can't|shouldn't|mustn't)"
-    r"(?:\s+\w+){0,3}\s*$",
+    r"\s*(?:[,;:]\s*)?"
+    r"(?:(?:in\s+fact|under\s+any\s+circumstances|actually|currently|yet|"
+    r"necessarily)\s*(?:[,;:]\s*)?)?$",
     flags=re.IGNORECASE,
 )
 

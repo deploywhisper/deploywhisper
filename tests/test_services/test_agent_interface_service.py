@@ -632,6 +632,8 @@ class AgentInterfaceServiceTests(unittest.TestCase):
             ("no-go", "Ready for release."),
             ("go", "Do not deploy this change."),
             ("go", "Do not proceed with release."),
+            ("go", "Stop the release."),
+            ("go", "Release should be blocked."),
             ("go", "Decision: CAUTION"),
             ("caution", "This change is safe to deploy."),
             ("caution", "Do not deploy this change."),
@@ -655,6 +657,7 @@ class AgentInterfaceServiceTests(unittest.TestCase):
     def test_categorical_go_approval_claims_are_redacted(self) -> None:
         claims = [
             "This change is safe to deploy.",
+            "It is not risky to proceed with release.",
             "Deployment approved.",
             "Proceed with release.",
             "Ship it.",
@@ -724,8 +727,10 @@ class AgentInterfaceServiceTests(unittest.TestCase):
     def test_negated_deployment_guidance_is_preserved_for_no_go(self) -> None:
         guidance_values = [
             "Do not proceed with release.",
+            "Do not, under any circumstances, proceed with release.",
             "Not safe to deploy.",
             "This is not ready to release.",
+            "This is not, in fact, ready for release.",
             "Never proceed with deployment.",
         ]
 
