@@ -120,6 +120,9 @@ jobs:
           pip install -r requirements.txt
           pip install pytest-cov
 
+      - name: Run prompt-injection release gate
+        run: python -m pytest tests/test_llm/test_prompt_injection.py -v --tb=short
+
       - name: Run full test suite
         run: |
           python -m pytest tests/ \

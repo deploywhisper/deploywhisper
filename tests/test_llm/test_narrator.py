@@ -155,7 +155,7 @@ class NarrativeTests(unittest.TestCase):
 
         def fake_completion(**_: object) -> Response:
             return Response(
-                '{"opening_sentence":"GO: affects 6 downstream services.",'
+                '{"opening_sentence":"CAUTION: affects 6 downstream services.",'
                 '"explanation":"This has high blast radius.",'
                 '"guidance":["Review 6 downstream services."]}'
             )

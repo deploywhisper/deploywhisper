@@ -13,11 +13,25 @@ from config import settings
 from analysis.risk_scorer import RiskAssessment
 from evidence.models import Finding
 from llm.prompts import build_system_prompt, build_user_payload
+from llm.prompt_security import (
+    contains_deployment_approval_claim,
+    contains_unsafe_instruction,
+    contradicts_deployment_recommendation,
+)
 from llm.providers import generate_completion_with_settings
 from llm.skill_context import build_skill_context, resolve_skills
 from services.settings_service import resolve_provider_runtime
 
 _NON_VISIBLE_TEXT_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
+_VERDICT_PREFIX_PATTERN = re.compile(
+    r"^\s*(?P<verdict>NO[- ]?GO|CAUTION|GO)\s*(?:[:=]|[-—–])",
+    flags=re.IGNORECASE,
+)
+_RECOMMENDATION_PATTERN = re.compile(
+    r"\brecommendation\s*(?:[:=]|[-—–])\s*"
+    r"(?P<verdict>NO[- ]?GO|CAUTION|GO)\b",
+    flags=re.IGNORECASE,
+)
 
 
 class NarrativeResult(BaseModel):
@@ -83,6 +97,41 @@ def _normalize_guidance_items(value: object) -> list[str]:
 
     text = str(value)
     return [text] if _has_visible_text(text) else []
+
+
+def _validate_narrative_safety(
+    opening_sentence: str,
+    explanation: str,
+    guidance: list[str],
+    assessment: RiskAssessment,
+) -> None:
+    expected = assessment.recommendation.upper()
+    text_spans = [opening_sentence, explanation, *guidance]
+    visible_spans = [text for text in text_spans if _has_visible_text(text)]
+    if len(visible_spans) > 1:
+        text_spans.append(" ".join(visible_spans))
+    for text in text_spans:
+        verdict_matches = [
+            match
+            for match in (
+                _VERDICT_PREFIX_PATTERN.match(text),
+                _RECOMMENDATION_PATTERN.search(text),
+            )
+            if match is not None
+        ]
+        if (
+            any(
+                match.group("verdict").upper().replace(" ", "-") != expected
+                for match in verdict_matches
+            )
+            or contains_unsafe_instruction(text)
+            or contains_deployment_approval_claim(text)
+            or contradicts_deployment_recommendation(text, expected)
+        ):
+            raise ValueError(
+                "Narrative provider returned unsafe or contradictory deployment "
+                "guidance."
+            )
 
 
 def _fallback_narrative(
@@ -165,8 +214,15 @@ def generate_narrative(
         ]
         skill_context = build_skill_context(assessment, raw_files=raw_files)
         messages = [
-            {"role": "system", "content": build_system_prompt(skill_context)},
-            {"role": "user", "content": build_user_payload(assessment, findings)},
+            {"role": "system", "content": build_system_prompt()},
+            {
+                "role": "user",
+                "content": build_user_payload(
+                    assessment,
+                    findings,
+                    skill_context=skill_context,
+                ),
+            },
         ]
     except Exception as exc:  # noqa: BLE001
         return _fallback_narrative(
@@ -225,9 +281,15 @@ def generate_narrative(
 
         opening_sentence = sanitize_scope_claims(payload["opening_sentence"])
         explanation = sanitize_scope_claims(payload["explanation"])
+        guidance_payload = _normalize_guidance_items(payload.get("guidance", []))
+        _validate_narrative_safety(
+            opening_sentence,
+            explanation,
+            guidance_payload,
+            assessment,
+        )
         if not (_has_visible_text(opening_sentence) or _has_visible_text(explanation)):
             raise ValueError("Narrative provider returned empty output.")
-        guidance_payload = _normalize_guidance_items(payload.get("guidance", []))
 
         return NarrativeResult(
             available=True,

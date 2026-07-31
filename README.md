@@ -85,6 +85,9 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 - Incident-history matching for operational memory
 - API, CLI, and web entrypoints over one shared analysis pipeline
 - Local-first security model that keeps raw IaC local and avoids persisting API keys
+- Prompt-injection trust boundaries and blocking regression gates for untrusted
+  artifact, incident, scanner, pull-request, and docs-like text; see
+  [`docs/ai-safety/prompt-injection-testing.md`](./docs/ai-safety/prompt-injection-testing.md)
 - Custom AI Skills for team-specific domain guidance
 - Public Skills Registry for published built-in skills: <https://deploywhisper.github.io/skills-registry/>
 - Analysis history and audit metadata for later review

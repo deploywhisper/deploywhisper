@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -139,7 +139,7 @@ development_status:
   10-1-agent-json-cli-mode: done
   10-2-mcp-compatible-or-equivalent-agent-interface: done
   10-3-ai-generated-iac-provenance-and-risk-patterns: done
-  10-4-prompt-injection-test-suite: ready-for-dev
+  10-4-prompt-injection-test-suite: done
   10-5-ai-safety-documentation: ready-for-dev
   epic-10-retrospective: optional
 
