@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from api.schemas import (
@@ -16,6 +17,7 @@ from evidence.models import (
 )
 from llm.prompt_security import (
     UNTRUSTED_INSTRUCTION_REDACTION,
+    contains_deployment_approval_claim,
     contains_unsafe_instruction,
     contradicts_deployment_recommendation,
 )
@@ -36,6 +38,122 @@ AGENT_APPROVAL_STATEMENT = (
 _HUMAN_REVIEW_GUIDANCE = (
     "Have a human reviewer inspect the evidence and findings before deployment."
 )
+_TRUSTED_AGENT_ENUM_FIELDS = frozenset(
+    {
+        "approval_statement",
+        "evidence_classification",
+        "freshness_status",
+        "recommendation",
+        "report_schema_version",
+        "schema_version",
+        "severity",
+        "severity_hint",
+        "source_type",
+        "status",
+    }
+)
+_AGENT_POLICY_FRAGMENT_TERMS = frozenset(
+    {
+        "act",
+        "admin",
+        "administrator",
+        "approval",
+        "approve",
+        "approved",
+        "assistant",
+        "behave",
+        "block",
+        "blocked",
+        "bypass",
+        "caution",
+        "change",
+        "decision",
+        "deploy",
+        "deployment",
+        "developer",
+        "disable",
+        "don",
+        "expose",
+        "go",
+        "hidden",
+        "human",
+        "ignore",
+        "immediately",
+        "instructions",
+        "message",
+        "must",
+        "no",
+        "no-go",
+        "okay",
+        "ok",
+        "outcome",
+        "override",
+        "policy",
+        "print",
+        "proceed",
+        "prompt",
+        "ready",
+        "recommendation",
+        "release",
+        "replace",
+        "return",
+        "reveal",
+        "review",
+        "safe",
+        "set",
+        "should",
+        "ship",
+        "show",
+        "skip",
+        "stop",
+        "system",
+        "treat",
+        "true",
+        "unsafe",
+        "verdict",
+        "without",
+        "you",
+    }
+)
+_AGENT_POLICY_FRAGMENT_GLUE = frozenset(
+    {
+        "=",
+        ":",
+        "are",
+        "as",
+        "be",
+        "do",
+        "for",
+        "is",
+        "it",
+        "not",
+        "now",
+        "the",
+        "to",
+        "with",
+    }
+)
+_AGENT_POLICY_JOIN_TERMS = frozenset(
+    term.replace("-", "")
+    for term in (_AGENT_POLICY_FRAGMENT_TERMS | _AGENT_POLICY_FRAGMENT_GLUE)
+    if len(term.replace("-", "")) > 1
+)
+_AGENT_POLICY_WEAK_FRAGMENT_TERMS = frozenset(
+    {
+        "go",
+        "human",
+        "must",
+        "no",
+        "policy",
+        "ready",
+        "review",
+        "safe",
+        "should",
+        "stop",
+        "you",
+    }
+)
+_MAX_AGENT_POLICY_FRAGMENT_CHARACTERS = 256
 
 
 class _AgentContractModel(BaseModel):
@@ -183,8 +301,10 @@ class AgentInterfaceResponse(_AgentContractModel):
 
 
 def _violates_agent_output_policy(value: str, recommendation: str) -> bool:
-    return contains_unsafe_instruction(value) or contradicts_deployment_recommendation(
-        value, recommendation
+    return (
+        contains_unsafe_instruction(value)
+        or contains_deployment_approval_claim(value)
+        or contradicts_deployment_recommendation(value, recommendation)
     )
 
 
@@ -192,7 +312,7 @@ def _fragmented_unsafe_indexes(
     values: list[str],
     recommendation: str,
 ) -> set[int]:
-    unsafe_spans: list[tuple[int, int]] = []
+    unsafe_groups: set[frozenset[int]] = set()
     for start in range(len(values) - 1):
         if values[start] == UNTRUSTED_INSTRUCTION_REDACTION:
             continue
@@ -200,65 +320,226 @@ def _fragmented_unsafe_indexes(
             segment = values[start:end]
             if UNTRUSTED_INSTRUCTION_REDACTION in segment:
                 break
-            if _violates_agent_output_policy(" ".join(segment), recommendation):
-                unsafe_spans.append((start, end))
+            if _fragment_values_violate_policy(
+                segment,
+                recommendation,
+                join_split_words=False,
+            ):
+                local_indexes = _minimal_unsafe_fragment_indexes(
+                    segment,
+                    recommendation,
+                    join_split_words=False,
+                )
+                unsafe_groups.add(frozenset(start + index for index in local_indexes))
 
-    if not unsafe_spans:
+    if not unsafe_groups:
         return set()
-    shortest_width = min(end - start for start, end in unsafe_spans)
-    return {
-        index
-        for start, end in unsafe_spans
-        if end - start == shortest_width
-        for index in range(start, end)
-    }
+    minimal_groups = [
+        group
+        for group in unsafe_groups
+        if not any(other < group for other in unsafe_groups)
+    ]
+    return {index for group in minimal_groups for index in group}
 
 
-def _sanitize_agent_value(value: Any, recommendation: str) -> Any:
+def _nested_list_string_leaves(
+    value: list[Any],
+    *,
+    path: tuple[str | int, ...],
+) -> list[tuple[tuple[str | int, ...], str]]:
+    leaves: list[tuple[tuple[str | int, ...], str]] = []
+    for index, item in enumerate(value):
+        item_path = (*path, index)
+        if isinstance(item, str):
+            leaves.append((item_path, item))
+        elif isinstance(item, list):
+            leaves.extend(_nested_list_string_leaves(item, path=item_path))
+        elif isinstance(item, dict):
+            leaves.extend(_container_string_leaves(item, path=item_path))
+    return leaves
+
+
+def _container_string_leaves(
+    value: dict[str, Any],
+    *,
+    path: tuple[str | int, ...] = (),
+) -> list[tuple[tuple[str | int, ...], str]]:
+    leaves: list[tuple[tuple[str | int, ...], str]] = []
+    for key, item in value.items():
+        item_path = (*path, key)
+        if isinstance(item, str):
+            if key not in _TRUSTED_AGENT_ENUM_FIELDS:
+                leaves.append((item_path, item))
+        elif isinstance(item, list):
+            leaves.extend(_nested_list_string_leaves(item, path=item_path))
+        elif isinstance(item, dict):
+            leaves.extend(_container_string_leaves(item, path=item_path))
+    return leaves
+
+
+def _redact_nested_path(value: dict[str, Any], path: tuple[str | int, ...]) -> None:
+    target: Any = value
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = UNTRUSTED_INSTRUCTION_REDACTION
+
+
+def _is_agent_policy_fragment(value: str) -> bool:
+    normalized = value.casefold().strip()
+    words = set(re.findall(r"[a-z]+(?:-[a-z]+)?", normalized))
+    single_word = normalized if normalized.isalpha() else ""
+    matched_terms = words & _AGENT_POLICY_FRAGMENT_TERMS
+    return (
+        bool(matched_terms)
+        and (len(words) <= 3 or bool(matched_terms - _AGENT_POLICY_WEAK_FRAGMENT_TERMS))
+        or normalized in _AGENT_POLICY_FRAGMENT_GLUE
+        or (
+            bool(single_word)
+            and any(
+                term.startswith(single_word) or term.endswith(single_word)
+                for term in _AGENT_POLICY_JOIN_TERMS
+            )
+        )
+    )
+
+
+def _join_agent_policy_fragments(values: list[str]) -> str:
+    assembled = values[0]
+    for value in values[1:]:
+        left_match = re.search(r"([a-z]+)$", assembled, flags=re.IGNORECASE)
+        right_match = re.match(r"([a-z]+)", value, flags=re.IGNORECASE)
+        separator = " "
+        if left_match is not None and right_match is not None:
+            combined = (left_match.group(1) + right_match.group(1)).casefold()
+            if any(term.startswith(combined) for term in _AGENT_POLICY_JOIN_TERMS):
+                separator = ""
+        assembled = f"{assembled}{separator}{value}"
+    return assembled
+
+
+def _fragment_values_violate_policy(
+    values: list[str],
+    recommendation: str,
+    *,
+    join_split_words: bool,
+) -> bool:
+    variants = {" ".join(values)}
+    if join_split_words:
+        variants.add(_join_agent_policy_fragments(values))
+    return any(
+        _violates_agent_output_policy(variant, recommendation) for variant in variants
+    )
+
+
+def _minimal_unsafe_fragment_indexes(
+    values: list[str],
+    recommendation: str,
+    *,
+    join_split_words: bool,
+) -> tuple[int, ...]:
+    remaining = list(range(len(values)))
+    while len(remaining) > 2:
+        for index in tuple(remaining):
+            candidate_indexes = [item for item in remaining if item != index]
+            candidate = [values[item] for item in candidate_indexes]
+            if _fragment_values_violate_policy(
+                candidate,
+                recommendation,
+                join_split_words=join_split_words,
+            ):
+                remaining = candidate_indexes
+                break
+        else:
+            break
+    return tuple(remaining)
+
+
+def _redact_mixed_container_fragments(
+    value: dict[str, Any],
+    recommendation: str,
+) -> None:
+    leaves = [
+        leaf
+        for leaf in _container_string_leaves(value)
+        if _is_agent_policy_fragment(leaf[1])
+    ]
+    unsafe_groups: set[frozenset[int]] = set()
+    for start in range(len(leaves) - 1):
+        values: list[str] = []
+        character_count = 0
+        for end in range(start, len(leaves)):
+            fragment = leaves[end][1]
+            if fragment == UNTRUSTED_INSTRUCTION_REDACTION:
+                break
+            character_count += len(fragment) + bool(values)
+            if character_count > _MAX_AGENT_POLICY_FRAGMENT_CHARACTERS:
+                break
+            values.append(fragment)
+            if len(values) < 2:
+                continue
+            if _fragment_values_violate_policy(
+                values,
+                recommendation,
+                join_split_words=True,
+            ):
+                local_indexes = _minimal_unsafe_fragment_indexes(
+                    values,
+                    recommendation,
+                    join_split_words=True,
+                )
+                unsafe_groups.add(frozenset(start + index for index in local_indexes))
+
+    minimal_groups = [
+        group
+        for group in unsafe_groups
+        if not any(other < group for other in unsafe_groups)
+    ]
+    for index in {item for group in minimal_groups for item in group}:
+        _redact_nested_path(value, leaves[index][0])
+
+
+def _sanitize_agent_scalars(value: Any, recommendation: str) -> Any:
     if isinstance(value, str):
         if _violates_agent_output_policy(value, recommendation):
             return UNTRUSTED_INSTRUCTION_REDACTION
         return value
     if isinstance(value, list):
-        sanitized = [_sanitize_agent_value(item, recommendation) for item in value]
+        sanitized = [_sanitize_agent_scalars(item, recommendation) for item in value]
         start = 0
-        while start < len(value):
-            if not isinstance(value[start], str):
+        while start < len(sanitized):
+            if not isinstance(sanitized[start], str):
                 start += 1
                 continue
             end = start + 1
-            while end < len(value) and isinstance(value[end], str):
+            while end < len(sanitized) and isinstance(sanitized[end], str):
                 end += 1
-            safe_start = start
-            while safe_start < end:
-                if _violates_agent_output_policy(value[safe_start], recommendation):
-                    safe_start += 1
-                    continue
-                safe_end = safe_start + 1
-                while safe_end < end and not _violates_agent_output_policy(
-                    value[safe_end], recommendation
-                ):
-                    safe_end += 1
-                if safe_end - safe_start > 1 and _violates_agent_output_policy(
-                    " ".join(value[safe_start:safe_end]), recommendation
-                ):
-                    sanitized[safe_start:safe_end] = [
-                        UNTRUSTED_INSTRUCTION_REDACTION
-                    ] * (safe_end - safe_start)
-                safe_start = safe_end
+            run = sanitized[start:end]
+            for index in _fragmented_unsafe_indexes(run, recommendation):
+                sanitized[start + index] = UNTRUSTED_INSTRUCTION_REDACTION
             start = end
         return sanitized
     if isinstance(value, dict):
         sanitized = {
-            key: _sanitize_agent_value(item, recommendation)
+            key: _sanitize_agent_scalars(item, recommendation)
             for key, item in value.items()
         }
-        string_keys = [key for key, item in sanitized.items() if isinstance(item, str)]
+        string_keys = [
+            key
+            for key, item in sanitized.items()
+            if isinstance(item, str) and key not in _TRUSTED_AGENT_ENUM_FIELDS
+        ]
         string_values = [sanitized[key] for key in string_keys]
         for index in _fragmented_unsafe_indexes(string_values, recommendation):
             sanitized[string_keys[index]] = UNTRUSTED_INSTRUCTION_REDACTION
         return sanitized
     return value
+
+
+def _sanitize_agent_value(value: Any, recommendation: str) -> Any:
+    sanitized = _sanitize_agent_scalars(value, recommendation)
+    if isinstance(sanitized, dict):
+        _redact_mixed_container_fragments(sanitized, recommendation)
+    return sanitized
 
 
 def _sanitize_agent_data(data: AgentAnalysisData) -> AgentAnalysisData:

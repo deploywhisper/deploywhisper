@@ -76,7 +76,10 @@ _DEPLOYMENT_GO_CLAIM_PATTERNS = (
         r"\bproceed\s+with\s+(?:the\s+)?(?:deployment|release)\b",
         flags=re.IGNORECASE,
     ),
-    re.compile(r"\bship\s+it\b", flags=re.IGNORECASE),
+    re.compile(
+        r"""\bship\s+it(?=\s*(?:$|[-\N{EN DASH}\N{EM DASH}.,:;!?'"()\[\]{}]))""",
+        flags=re.IGNORECASE,
+    ),
 )
 _DEPLOYMENT_NO_GO_CLAIM_PATTERNS = (
     re.compile(
@@ -100,6 +103,23 @@ _VERDICT_LABEL_PATTERN = re.compile(
     r"(?P<verdict>NO[- ]?GO|CAUTION|GO)\b",
     flags=re.IGNORECASE,
 )
+_LEADING_VERDICT_PATTERN = re.compile(
+    r"^\s*(?P<verdict>NO[- ]?GO|CAUTION|GO)\b"
+    r"(?=\s+\S|[:=.,;!?()\[\]{}]|[-\N{EN DASH}\N{EM DASH}])",
+    flags=re.IGNORECASE,
+)
+_CONDITIONAL_CLAIM_PREFIX_PATTERN = re.compile(
+    r"(?:^|[.!?]\s+)\s*"
+    r"(?:(?:only\s+)?(?:if|when|once|after|unless)|"
+    r"provided(?:\s+that)?|subject\s+to|pending)\b[^.!?]*$",
+    flags=re.IGNORECASE,
+)
+_CONDITIONAL_CLAIM_SUFFIX_PATTERN = re.compile(
+    r"^\s*[,;:]?\s*"
+    r"(?:(?:only\s+)?(?:if|when|once|after|unless)|"
+    r"provided(?:\s+that)?|subject\s+to|pending|following)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def build_untrusted_json_payload(data: dict[str, Any]) -> str:
@@ -121,19 +141,24 @@ def build_untrusted_json_payload(data: dict[str, Any]) -> str:
 
 def contains_unsafe_instruction(value: str) -> bool:
     """Return whether text attempts to bypass advisory or human-review policy."""
-    normalized = _normalize_security_text(value)
-    return any(pattern.search(normalized) for pattern in _UNSAFE_INSTRUCTION_PATTERNS)
+    return any(
+        pattern.search(normalized)
+        for normalized in _normalize_security_text_variants(value)
+        for pattern in _UNSAFE_INSTRUCTION_PATTERNS
+    )
+
+
+def contains_deployment_approval_claim(value: str) -> bool:
+    """Return whether text categorically approves deployment or release."""
+    return any(
+        _contains_categorical_claim(normalized, _DEPLOYMENT_GO_CLAIM_PATTERNS)
+        for normalized in _normalize_security_text_variants(value)
+    )
 
 
 def contradicts_deployment_recommendation(value: str, recommendation: str) -> bool:
     """Return whether text makes a categorical claim opposed to the verdict."""
-    normalized_value = _normalize_security_text(value)
     normalized_recommendation = recommendation.strip().upper().replace(" ", "-")
-    if any(
-        match.group("verdict").upper().replace(" ", "-") != normalized_recommendation
-        for match in _VERDICT_LABEL_PATTERN.finditer(normalized_value)
-    ):
-        return True
     if normalized_recommendation == "NO-GO":
         patterns = _DEPLOYMENT_GO_CLAIM_PATTERNS
     elif normalized_recommendation == "GO":
@@ -142,7 +167,23 @@ def contradicts_deployment_recommendation(value: str, recommendation: str) -> bo
         patterns = _DEPLOYMENT_GO_CLAIM_PATTERNS + _DEPLOYMENT_NO_GO_CLAIM_PATTERNS
     else:
         return False
-    return any(pattern.search(normalized_value) for pattern in patterns)
+    for normalized_value in _normalize_security_text_variants(value):
+        if any(
+            match.group("verdict").upper().replace(" ", "-")
+            != normalized_recommendation
+            for match in _VERDICT_LABEL_PATTERN.finditer(normalized_value)
+        ):
+            return True
+        leading_verdict = _LEADING_VERDICT_PATTERN.match(normalized_value)
+        if (
+            leading_verdict is not None
+            and leading_verdict.group("verdict").upper().replace(" ", "-")
+            != normalized_recommendation
+        ):
+            return True
+        if _contains_categorical_claim(normalized_value, patterns):
+            return True
+    return False
 
 
 def redact_unsafe_instruction(value: str) -> str:
@@ -152,12 +193,41 @@ def redact_unsafe_instruction(value: str) -> str:
     return value
 
 
-def _normalize_security_text(value: str) -> str:
+def _contains_categorical_claim(
+    value: str,
+    patterns: tuple[re.Pattern[str], ...],
+) -> bool:
+    for pattern in patterns:
+        for match in pattern.finditer(value):
+            if not _claim_is_conditional(value, match):
+                return True
+    return False
+
+
+def _claim_is_conditional(value: str, match: re.Match[str]) -> bool:
+    return bool(
+        _CONDITIONAL_CLAIM_PREFIX_PATTERN.search(value[: match.start()])
+        or _CONDITIONAL_CLAIM_SUFFIX_PATTERN.match(value[match.end() :])
+    )
+
+
+def _normalize_security_text_variants(value: str) -> tuple[str, ...]:
     normalized = unicodedata.normalize("NFKC", value)
     non_visible_categories = {"Cf", "Mn", "Mc", "Me"}
-    visible = "".join(
-        character
-        for character in normalized
-        if unicodedata.category(character) not in non_visible_categories
+    compact_characters: list[str] = []
+    boundary_characters: list[str] = []
+    for character in normalized:
+        category = unicodedata.category(character)
+        if category == "Cc":
+            if character.isspace():
+                compact_characters.append(" ")
+            boundary_characters.append(" ")
+            continue
+        if category not in non_visible_categories:
+            compact_characters.append(character)
+            boundary_characters.append(character)
+    variants = (
+        re.sub(r"\s+", " ", "".join(compact_characters)),
+        re.sub(r"\s+", " ", "".join(boundary_characters)),
     )
-    return re.sub(r"\s+", " ", visible)
+    return tuple(dict.fromkeys(variants))

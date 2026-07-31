@@ -14,6 +14,7 @@ from analysis.risk_scorer import RiskAssessment
 from evidence.models import Finding
 from llm.prompts import build_system_prompt, build_user_payload
 from llm.prompt_security import (
+    contains_deployment_approval_claim,
     contains_unsafe_instruction,
     contradicts_deployment_recommendation,
 )
@@ -124,6 +125,7 @@ def _validate_narrative_safety(
                 for match in verdict_matches
             )
             or contains_unsafe_instruction(text)
+            or contains_deployment_approval_claim(text)
             or contradicts_deployment_recommendation(text, expected)
         ):
             raise ValueError(
