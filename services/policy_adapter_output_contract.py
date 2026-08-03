@@ -46,10 +46,9 @@ class PolicyAdapterReason(BaseModel):
             raise ValueError(
                 "Policy adapter reasons must be valid UTF-8 text."
             ) from exc
-        if not any(
-            character.isprintable() and not character.isspace()
-            for character in normalized
-        ):
+        if not all(character.isprintable() for character in normalized):
+            raise ValueError("Policy adapter reasons must contain printable text only.")
+        if not any(not character.isspace() for character in normalized):
             raise ValueError("Policy adapter reasons must contain visible text.")
         return normalized
 

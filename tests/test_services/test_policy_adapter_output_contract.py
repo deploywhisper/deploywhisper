@@ -64,7 +64,7 @@ class PolicyAdapterOutputContractTests(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     scanner_conflicts[0].finding_id = "mutated"
 
-    def test_policy_output_requires_nonblank_reasons(self) -> None:
+    def test_policy_output_rejects_invalid_reason_text(self) -> None:
         adapter_output = _adapter_output()
 
         with self.assertRaises(ValidationError):
@@ -80,6 +80,9 @@ class PolicyAdapterOutputContractTests(unittest.TestCase):
             {"code": "\u200b", "message": "Review required."},
             {"code": "review_required", "message": "\u200b"},
             {"code": "review_required", "message": "Invalid surrogate: \ud800"},
+            {"code": "policy\x1b[31m", "message": "Review required."},
+            {"code": "review_required", "message": "Hidden NUL: \x00"},
+            {"code": "review_required", "message": "Unexpected\nline break"},
         ):
             with self.subTest(reason=reason):
                 with self.assertRaises(ValidationError):

@@ -41,6 +41,7 @@ So that report outputs can be translated into local workflow decisions.
 - [x] [Review][Patch] Require an actual boolean true for canonical_report_advisory input [services/policy_adapter_output_contract.py:58]
 - [x] [Review][Patch] Exercise advisory_only and should_block invariant failures independently [tests/test_services/test_policy_adapter_output_contract.py:95]
 - [x] [Review][Patch] Add the changed adapter contract regression file to the story File List [_bmad-output/implementation-artifacts/11-1-policy-adapter-output-contract.md:124]
+- [x] [Review][Patch] Reject control characters embedded in otherwise visible policy reason text [services/policy_adapter_output_contract.py:39]
 
 ## Dev Notes
 
@@ -120,6 +121,10 @@ Codex (GPT-5)
 - Second-review GREEN: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_output_contract.py tests/test_services/test_adapter_output_contract.py tests/test_docs/test_workflow_adapter_output_contract.py -q --tb=short` — 30 passed, 55 subtests passed.
 - Second-review affected shard: `./.venv/bin/python -m pytest tests/test_services tests/test_docs -q --tb=short` — 919 passed, 358 subtests passed.
 - Second-review closure validation: unittest smoke passed with 396 tests and 1 skip; Ruff, format check, targeted Bandit, diff checks, and `bash scripts/ci-local.sh` all passed; full local CI ran 896 tests.
+- Third-review RED: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_output_contract.py -q --tb=short` reproduced embedded control-character acceptance with 3 failures; 5 tests and 14 subtests otherwise passed.
+- Third-review GREEN: the combined policy, adapter, and documentation contract suite passed with 30 tests and 58 subtests after rejecting all non-printable reason characters.
+- Third-review affected shard: `./.venv/bin/python -m pytest tests/test_services tests/test_docs -q --tb=short` — 919 passed, 361 subtests passed.
+- Third-review closure validation: unittest smoke passed with 396 tests and 1 skip; Ruff, format check, targeted Bandit, diff checks, and `bash scripts/ci-local.sh` all passed; full local CI ran 896 tests.
 - Local mypy was unavailable in `.venv`; the configured GitHub mypy step is non-blocking. No dependency was added solely for local validation.
 - UI validation not applicable: Story 11.1 changes service contracts and documentation only; no React route, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed.
 
@@ -129,6 +134,7 @@ Codex (GPT-5)
 - Supported `advisory`, `warn`, `soft-block`, and `hard-block` interpretations with at least one nonblank structured reason.
 - Reused the Story 5.6 `AdapterOutputContract` and immutable canonical `ShareSummary` instead of duplicating analysis or severity logic.
 - Rejected policy output when the nested canonical summary is not advisory or claims DeployWhisper should block.
+- Rejected embedded control characters in policy reason codes and messages before they reach logs or rendered integration output.
 - Preserved canonical report values for every policy status and closed the remaining nested scanner-conflict immutability gap.
 - Documented construction, ownership boundaries, versioning, and the distinction between optional local policy decisions and canonical advisory semantics.
 
@@ -149,3 +155,4 @@ Codex (GPT-5)
 - 2026-08-03: Added the optional policy-adapter output contract, strengthened canonical immutability, documented the boundary, completed full validation, and moved the story to review.
 - 2026-08-03: Resolved all code-review findings, added scanner-conflict shadow and immutability regressions, reran full validation, and marked the story done.
 - 2026-08-03: Closed the second review with strict ordered inputs, UTF-8-visible structured reasons, literal advisory semantics, independent invariant regressions, and another full local CI pass.
+- 2026-08-03: Closed the third review by rejecting embedded control characters in policy reasons and rerunning focused, affected-shard, security, smoke, and full-CI validation.
