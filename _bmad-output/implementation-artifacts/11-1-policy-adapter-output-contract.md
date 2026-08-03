@@ -34,6 +34,13 @@ So that report outputs can be translated into local workflow decisions.
 - [x] [Review][Patch] Reserve scanner-conflict field names from adapter-owned payloads [services/adapter_output_contract.py:261]
 - [x] [Review][Patch] Exercise a non-empty frozen scanner-conflict object in the immutability regression [tests/test_services/test_policy_adapter_output_contract.py:55]
 - [x] [Review][Patch] Compare the emitted canonical summary with the source summary, not only the untouched source with itself [tests/test_services/test_policy_adapter_output_contract.py:53]
+- [x] [Review][Patch] Reject reason text that cannot be serialized as UTF-8 JSON [services/policy_adapter_output_contract.py:39]
+- [x] [Review][Patch] Reject reason codes and messages containing no visible characters [services/policy_adapter_output_contract.py:39]
+- [x] [Review][Patch] Reject bytes coercion for policy status input [services/policy_adapter_output_contract.py:54]
+- [x] [Review][Patch] Reject unordered set input for policy reasons [services/policy_adapter_output_contract.py:55]
+- [x] [Review][Patch] Require an actual boolean true for canonical_report_advisory input [services/policy_adapter_output_contract.py:58]
+- [x] [Review][Patch] Exercise advisory_only and should_block invariant failures independently [tests/test_services/test_policy_adapter_output_contract.py:95]
+- [x] [Review][Patch] Add the changed adapter contract regression file to the story File List [_bmad-output/implementation-artifacts/11-1-policy-adapter-output-contract.md:124]
 
 ## Dev Notes
 
@@ -109,6 +116,10 @@ Codex (GPT-5)
 - Review GREEN: reserved every scanner-conflict model field, added a real non-empty conflict fixture, verified nested field immutability and source-to-output equality, and reran the focused suite — 29 tests and 47 subtests passed.
 - Review affected shard: `./.venv/bin/python -m pytest tests/test_services tests/test_docs -q --tb=short` — 918 passed, 350 subtests passed.
 - Review closure validation: unittest smoke passed with 396 tests and 1 skip; Ruff, format check, targeted Bandit, diff checks, and `bash scripts/ci-local.sh` all passed; full local CI ran 895 tests.
+- Second-review RED: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_output_contract.py -q --tb=short` reproduced all coercion, visibility, and serialization gaps with 6 failures; 5 tests and 8 subtests otherwise passed.
+- Second-review GREEN: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_output_contract.py tests/test_services/test_adapter_output_contract.py tests/test_docs/test_workflow_adapter_output_contract.py -q --tb=short` — 30 passed, 55 subtests passed.
+- Second-review affected shard: `./.venv/bin/python -m pytest tests/test_services tests/test_docs -q --tb=short` — 919 passed, 358 subtests passed.
+- Second-review closure validation: unittest smoke passed with 396 tests and 1 skip; Ruff, format check, targeted Bandit, diff checks, and `bash scripts/ci-local.sh` all passed; full local CI ran 896 tests.
 - Local mypy was unavailable in `.venv`; the configured GitHub mypy step is non-blocking. No dependency was added solely for local validation.
 - UI validation not applicable: Story 11.1 changes service contracts and documentation only; no React route, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed.
 
@@ -129,6 +140,7 @@ Codex (GPT-5)
 - `services/adapter_output_contract.py`
 - `services/policy_adapter_output_contract.py`
 - `tests/test_docs/test_workflow_adapter_output_contract.py`
+- `tests/test_services/test_adapter_output_contract.py`
 - `tests/test_services/test_policy_adapter_output_contract.py`
 
 ## Change Log
@@ -136,3 +148,4 @@ Codex (GPT-5)
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-08-03: Added the optional policy-adapter output contract, strengthened canonical immutability, documented the boundary, completed full validation, and moved the story to review.
 - 2026-08-03: Resolved all code-review findings, added scanner-conflict shadow and immutability regressions, reran full validation, and marked the story done.
+- 2026-08-03: Closed the second review with strict ordered inputs, UTF-8-visible structured reasons, literal advisory semantics, independent invariant regressions, and another full local CI pass.

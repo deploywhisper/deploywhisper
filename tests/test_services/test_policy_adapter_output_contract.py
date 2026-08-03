@@ -77,6 +77,9 @@ class PolicyAdapterOutputContractTests(unittest.TestCase):
         for reason in (
             {"code": "", "message": "Review required."},
             {"code": "review_required", "message": "   "},
+            {"code": "\u200b", "message": "Review required."},
+            {"code": "review_required", "message": "\u200b"},
+            {"code": "review_required", "message": "Invalid surrogate: \ud800"},
         ):
             with self.subTest(reason=reason):
                 with self.assertRaises(ValidationError):
@@ -87,29 +90,58 @@ class PolicyAdapterOutputContractTests(unittest.TestCase):
                     )
 
     def test_policy_output_rejects_non_advisory_canonical_summary(self) -> None:
-        summary = build_share_summary(_report_payload()).model_copy(
-            update={"advisory_only": False, "should_block": True}
-        )
-        adapter_output = build_adapter_output_contract(
-            summary,
-            AdapterMetadata(
-                adapter="policy",
-                format="workflow_decision",
-                project_key="payments",
-            ),
-        )
-
-        with self.assertRaises(ValidationError):
-            build_policy_adapter_output_contract(
-                adapter_output,
-                status=PolicyAdapterStatus.HARD_BLOCK,
-                reasons=(
-                    PolicyAdapterReason(
-                        code="policy_match",
-                        message="Configured deterministic policy matched.",
+        for advisory_only, should_block in ((False, False), (True, True)):
+            with self.subTest(
+                advisory_only=advisory_only,
+                should_block=should_block,
+            ):
+                summary = build_share_summary(_report_payload()).model_copy(
+                    update={
+                        "advisory_only": advisory_only,
+                        "should_block": should_block,
+                    }
+                )
+                adapter_output = build_adapter_output_contract(
+                    summary,
+                    AdapterMetadata(
+                        adapter="policy",
+                        format="workflow_decision",
+                        project_key="payments",
                     ),
-                ),
-            )
+                )
+
+                with self.assertRaises(ValidationError):
+                    build_policy_adapter_output_contract(
+                        adapter_output,
+                        status=PolicyAdapterStatus.HARD_BLOCK,
+                        reasons=(
+                            PolicyAdapterReason(
+                                code="policy_match",
+                                message="Configured deterministic policy matched.",
+                            ),
+                        ),
+                    )
+
+    def test_policy_output_rejects_ambiguous_coerced_inputs(self) -> None:
+        adapter_output = _adapter_output()
+        reason = PolicyAdapterReason(code="policy_match", message="Policy matched.")
+
+        invalid_inputs = (
+            {"status": b"warn", "reasons": (reason,)},
+            {"status": PolicyAdapterStatus.WARN, "reasons": {reason}},
+            {
+                "status": PolicyAdapterStatus.WARN,
+                "reasons": (reason,),
+                "canonical_report_advisory": 1,
+            },
+        )
+        for invalid_input in invalid_inputs:
+            with self.subTest(invalid_input=invalid_input):
+                with self.assertRaises(ValidationError):
+                    PolicyAdapterOutputContract(
+                        adapter_output=adapter_output,
+                        **invalid_input,
+                    )
 
     def test_policy_output_contract_is_strict_versioned_and_immutable(self) -> None:
         output = build_policy_adapter_output_contract(

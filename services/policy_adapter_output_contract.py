@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -40,6 +40,17 @@ class PolicyAdapterReason(BaseModel):
         normalized = value.strip()
         if not normalized:
             raise ValueError("Policy adapter reasons must not be blank.")
+        try:
+            normalized.encode("utf-8", errors="strict")
+        except UnicodeEncodeError as exc:
+            raise ValueError(
+                "Policy adapter reasons must be valid UTF-8 text."
+            ) from exc
+        if not any(
+            character.isprintable() and not character.isspace()
+            for character in normalized
+        ):
+            raise ValueError("Policy adapter reasons must contain visible text.")
         return normalized
 
 
@@ -62,6 +73,27 @@ class PolicyAdapterOutputContract(BaseModel):
     adapter_output: AdapterOutputContract = Field(
         ..., description="Immutable canonical summary and adapter metadata"
     )
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _reject_coerced_status(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            raise ValueError("Policy adapter status must be a string.")
+        return value
+
+    @field_validator("reasons", mode="before")
+    @classmethod
+    def _reject_unordered_reasons(cls, value: Any) -> Any:
+        if isinstance(value, set | frozenset):
+            raise ValueError("Policy adapter reasons must be ordered.")
+        return value
+
+    @field_validator("canonical_report_advisory", mode="before")
+    @classmethod
+    def _require_literal_advisory_true(cls, value: Any) -> Any:
+        if type(value) is not bool or value is not True:
+            raise ValueError("canonical_report_advisory must be true.")
+        return value
 
     @field_validator("contract_version")
     @classmethod
