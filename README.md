@@ -88,6 +88,8 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 - Prompt-injection trust boundaries and blocking regression gates for untrusted
   artifact, incident, scanner, pull-request, and docs-like text; see
   [`docs/ai-safety/prompt-injection-testing.md`](./docs/ai-safety/prompt-injection-testing.md)
+  and the
+  [`docs/security/prompt-injection-threat-model.md`](./docs/security/prompt-injection-threat-model.md)
 - Custom AI Skills for team-specific domain guidance
 - Public Skills Registry for published built-in skills: <https://deploywhisper.github.io/skills-registry/>
 - Analysis history and audit metadata for later review
@@ -508,8 +510,8 @@ shared analysis and persistence path, returns the stable advisory agent
 contract with explicit collection/string limits, and masks inaccessible and
 missing resources for project-scoped callers. It never echoes raw uploaded
 artifacts or grants approval, deployment, or remediation authority. See
-[Agent API Interface](docs/ai-safety/agent-api-interface.md) and
-[Reviewing AI-Generated and AI-Assisted IaC](docs/ai-safety/ai-generated-iac-review.md).
+[MCP Server and Agent Interface](docs/ai-safety/mcp-server.md) and
+[Reviewing AI-Generated and AI-Assisted IaC](docs/ai-safety/reviewing-ai-generated-iac.md).
 
 ## CLI Usage
 
@@ -541,7 +543,11 @@ context TODOs, verification guidance, and immutable fields stating that the
 result is advisory and is not deployment approval. See
 [Agent JSON CLI Output](docs/ai-safety/agent-json-output.md).
 HTTP agent-tool integrations can use the same contract through the
-[Agent API Interface](docs/ai-safety/agent-api-interface.md).
+[MCP Server and Agent Interface](docs/ai-safety/mcp-server.md).
+
+The complete safe workflow, including output interpretation, human review,
+prompt-injection risks, and forbidden auto-approval patterns, is documented in
+[Reviewing AI-Generated and AI-Assisted IaC](docs/ai-safety/reviewing-ai-generated-iac.md).
 
 ### Inspect Skill Status
 

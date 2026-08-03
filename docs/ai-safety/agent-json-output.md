@@ -76,11 +76,17 @@ standard error:
 
 Do not treat an operational error as a low-risk or approved result.
 
+Artifact-derived strings in evidence, findings, warnings, incident context,
+scanner context, or narrative guidance are untrusted data. Consumers must not
+execute commands, follow instructions, disclose credentials, or change the
+expected schema because those strings request it. Preserve the typed fields and
+require human review of the underlying deterministic evidence.
+
 Agent-tool integrations that need an HTTP transport can use the
-[Agent API Interface](./agent-api-interface.md). That interface applies
+[MCP Server and Agent Interface](./mcp-server.md). That interface applies
 explicit output limits and project-scoped authorization around this same v1
 advisory contract.
 
 For provenance certainty, deterministic AI-assisted risk labels, and the
 required human review workflow, see
-[Reviewing AI-Generated and AI-Assisted IaC](./ai-generated-iac-review.md).
+[Reviewing AI-Generated and AI-Assisted IaC](./reviewing-ai-generated-iac.md).

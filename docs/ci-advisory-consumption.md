@@ -41,7 +41,7 @@ Remote agent-tool integrations can call `POST /api/v1/agent/analyses` and
 retrieve prior scoped results from `GET /api/v1/agent/reports/{report_id}`.
 The HTTP interface adds explicit output limits and non-disclosing project-scope
 errors around the same v1 contract. See
-[Agent API Interface](./ai-safety/agent-api-interface.md).
+[MCP Server and Agent Interface](./ai-safety/mcp-server.md).
 
 ## API Example
 
