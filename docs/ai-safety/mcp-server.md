@@ -49,7 +49,8 @@ that `meta.operation` matches the endpoint they invoked:
 - `GET /api/v1/agent/reports/{report_id}` returns
   `"operation": "report.read"`.
 
-The following complete example is for `report.read`:
+The following `report.read` example abbreviates `data` to its safety and
+identity fields while showing the complete `meta` object:
 
 ```json
 {

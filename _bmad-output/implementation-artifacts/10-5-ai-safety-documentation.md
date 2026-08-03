@@ -36,6 +36,9 @@ So that agents use DeployWhisper as an advisory reviewer, not an approver.
 - [x] [Review][Patch] Strengthen documentation regressions to verify operation values, bounded-response metadata, per-guide local-first guardrails, and internal relative link targets instead of relying on globally aggregated prose keywords. [tests/test_infra/test_ai_safety_documentation.py:34]
 - [x] [Review][Patch] Clarify that HTTP consumers must validate both `data.schema_version` and `meta.interface_schema_version`; the general review workflow currently names only `schema_version`. [docs/ai-safety/reviewing-ai-generated-iac.md:41]
 - [x] [Review][Patch] Warn that generated agent JSON may contain sensitive findings and context and must not be committed or broadly shared without review. [docs/ai-safety/reviewing-ai-generated-iac.md:14]
+- [x] [Review][Patch] Label the `report.read` JSON payload as an abbreviated data example rather than a complete response, because it intentionally omits stable `AgentAnalysisData` fields. [docs/ai-safety/mcp-server.md:52]
+- [x] [Review][Patch] Extend the MCP documentation regression to require truncation metadata and its human-review guidance, not only output-limit field names. [tests/test_infra/test_ai_safety_documentation.py:82]
+- [x] [Review][Patch] Verify README and CI navigation as actual Markdown links with existing targets so malformed canonical navigation cannot pass path-substring checks. [tests/test_infra/test_ai_safety_documentation.py:144]
 
 ## Dev Notes
 
@@ -110,6 +113,11 @@ Codex (GPT-5)
 - Review CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` — 376 passed, 76 subtests passed.
 - Review smoke: `./.venv/bin/python -m unittest discover -q` — 395 passed, 1 skipped.
 - Review full local CI: `bash scripts/ci-local.sh` — passed, including Ruff, repo-wide format check, dependency validation, Bandit, compile checks, skill harnesses, and 891 tests.
+- Second-review documentation regression: `./.venv/bin/python -m pytest tests/test_infra/test_ai_safety_documentation.py -q --tb=short` — 8 passed, 63 subtests passed.
+- Second-review CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -q --tb=short` — 375 passed, 82 subtests passed.
+- Second-review smoke: `./.venv/bin/python -m unittest discover -q` — 394 passed, 1 skipped.
+- Second-review static checks: `./.venv/bin/ruff check .` and `./.venv/bin/ruff format --check .` — passed; 267 files already formatted.
+- Second-review full local CI: `bash scripts/ci-local.sh` — passed, including Ruff, repo-wide format check, dependency validation, Bandit, compile checks, skill harnesses, and 891 tests.
 - UI validation not applicable: Story 10.5 changes documentation and its deterministic contract test only; no React route, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed.
 
 ### Completion Notes List
@@ -119,6 +127,7 @@ Codex (GPT-5)
 - Kept examples self-hosted at `localhost` and preserved the local-first raw-artifact boundary; no runtime service or public contract changed.
 - Replaced superseded guides with compatibility links, refreshed README/CI navigation, and added deterministic documentation coverage.
 - Resolved all five code-review findings by documenting operation-specific HTTP metadata, restoring bounded-response fields, clarifying dual schema validation, protecting generated JSON artifacts, and regression-locking per-guide safety and internal links.
+- Resolved all three findings from the second adversarial review by accurately labeling the abbreviated MCP payload, locking truncation and human-review guidance, and validating README/CI navigation as real links with existing targets.
 
 ### File List
 
@@ -140,3 +149,4 @@ Codex (GPT-5)
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-07-31: Added and regression-locked the canonical self-hosted AI-safety documentation set; moved the story to review.
 - 2026-08-03: Resolved all adversarial review findings, strengthened documentation-contract coverage, completed full validation, and moved the story to done.
+- 2026-08-03: Resolved all second-review findings, reran focused and full validation, and retained done status.

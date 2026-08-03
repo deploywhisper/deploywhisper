@@ -14,6 +14,12 @@ AI_SAFETY_DOCS = {
     "threat_model": ROOT / "docs/security/prompt-injection-threat-model.md",
 }
 INTERNAL_LINKS = {
+    ROOT / "README.md": (
+        "docs/ai-safety/agent-json-output.md",
+        "docs/ai-safety/mcp-server.md",
+        "docs/ai-safety/reviewing-ai-generated-iac.md",
+        "./docs/security/prompt-injection-threat-model.md",
+    ),
     ROOT / "docs/ai-safety/agent-api-interface.md": ("./mcp-server.md",),
     ROOT / "docs/ai-safety/agent-json-output.md": (
         "./mcp-server.md",
@@ -34,6 +40,7 @@ INTERNAL_LINKS = {
         "./agent-json-output.md",
         "./mcp-server.md",
     ),
+    ROOT / "docs/ci-advisory-consumption.md": ("./ai-safety/mcp-server.md",),
     ROOT / "docs/security/prompt-injection-threat-model.md": (
         "../ai-safety/prompt-injection-testing.md",
     ),
@@ -83,18 +90,25 @@ class AiSafetyDocumentationTests(unittest.TestCase):
         content = _normalized(AI_SAFETY_DOCS["mcp"])
 
         for required_text in (
+            "abbreviates `data`",
             '"operation": "analysis.submit"',
             '"operation": "report.read"',
             "data.schema_version",
             "meta.interface_schema_version",
             "meta.output_limits",
+            "meta.truncated",
             "max_string_characters",
             "max_collection_items",
             "max_findings",
             "max_evidence",
+            '"truncated": false',
+            '"truncated_fields": []',
+            "human reviewer must inspect the canonical report",
         ):
             with self.subTest(required_text=required_text):
                 self.assertIn(required_text, content)
+
+        self.assertNotIn("following complete example", content)
 
     def test_each_agent_guide_preserves_its_local_first_guardrail(self) -> None:
         requirements = {
@@ -140,13 +154,6 @@ class AiSafetyDocumentationTests(unittest.TestCase):
         ):
             with self.subTest(required_text=required_text):
                 self.assertIn(required_text, content)
-
-    def test_readme_links_all_canonical_guides(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-
-        for path in AI_SAFETY_DOCS.values():
-            with self.subTest(path=path):
-                self.assertIn(str(path.relative_to(ROOT)), readme)
 
     def test_internal_relative_links_have_expected_targets(self) -> None:
         for source, targets in INTERNAL_LINKS.items():
