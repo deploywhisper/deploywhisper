@@ -5,6 +5,9 @@ untrusted data, even when that material contains text that resembles model
 instructions. This applies to IaC comments, pull-request text, incident records,
 scanner findings, and docs-like AI Skill content.
 
+For assets, attacker goals, trust boundaries, controls, and incident response,
+read the [Prompt-Injection Threat Model](../security/prompt-injection-threat-model.md).
+
 ## Trust boundary
 
 Model-facing structured inputs use the shared helper in
