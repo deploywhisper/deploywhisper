@@ -7,11 +7,58 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SPRINT_STATUS = ROOT / "_bmad-output/implementation-artifacts/sprint-status.yaml"
 AI_SAFETY_DOCS = {
     "review": ROOT / "docs/ai-safety/reviewing-ai-generated-iac.md",
     "agent_json": ROOT / "docs/ai-safety/agent-json-output.md",
     "mcp": ROOT / "docs/ai-safety/mcp-server.md",
     "threat_model": ROOT / "docs/security/prompt-injection-threat-model.md",
+}
+LEGACY_SECTION_LINKS = {
+    ROOT / "docs/ai-safety/agent-api-interface.md": (
+        (
+            "## Submit artifacts",
+            "./mcp-server.md#safe-invocation",
+            "## Safe invocation",
+        ),
+        (
+            "## Retrieve a report",
+            "./mcp-server.md#safe-invocation",
+            "## Safe invocation",
+        ),
+        (
+            "## Scope and authorization",
+            "./mcp-server.md#scope-and-authorization",
+            "## Scope and authorization",
+        ),
+        (
+            "## Safety requirements for consumers",
+            "./mcp-server.md#errors-and-human-control",
+            "## Errors and human control",
+        ),
+    ),
+    ROOT / "docs/ai-safety/ai-generated-iac-review.md": (
+        (
+            "## Provenance classification",
+            "./reviewing-ai-generated-iac.md#provenance-and-ai-assisted-risk-labels",
+            "## Provenance and AI-assisted risk labels",
+        ),
+        (
+            "## Risk labels",
+            "./reviewing-ai-generated-iac.md#provenance-and-ai-assisted-risk-labels",
+            "## Provenance and AI-assisted risk labels",
+        ),
+        (
+            "## Review workflow",
+            "./reviewing-ai-generated-iac.md#human-review-expectations",
+            "## Human review expectations",
+        ),
+        (
+            "## Current limitations",
+            "./reviewing-ai-generated-iac.md#provenance-and-ai-assisted-risk-labels",
+            "## Provenance and AI-assisted risk labels",
+        ),
+    ),
 }
 INTERNAL_LINKS = {
     ROOT / "README.md": (
@@ -101,6 +148,7 @@ class AiSafetyDocumentationTests(unittest.TestCase):
             "max_collection_items",
             "max_findings",
             "max_evidence",
+            "`artifact_paths` must include exactly one safe repository-relative path for each uploaded file, in the same order as the `files` values",
             '"truncated": false',
             '"truncated_fields": []',
             "human reviewer must inspect the canonical report",
@@ -162,6 +210,34 @@ class AiSafetyDocumentationTests(unittest.TestCase):
                 with self.subTest(source=source.relative_to(ROOT), target=target):
                     self.assertIn(f"]({target})", content)
                     self.assertTrue((source.parent / target).resolve().is_file())
+
+    def test_compatibility_guides_preserve_legacy_section_links(self) -> None:
+        for source, section_links in LEGACY_SECTION_LINKS.items():
+            content = source.read_text(encoding="utf-8")
+            for legacy_heading, target, canonical_heading in section_links:
+                with self.subTest(source=source.name, heading=legacy_heading):
+                    self.assertIn(legacy_heading, content)
+                    self.assertIn(f"]({target})", content)
+                    target_path = target.partition("#")[0]
+                    canonical = (source.parent / target_path).read_text(
+                        encoding="utf-8"
+                    )
+                    self.assertIn(canonical_heading, canonical)
+
+    def test_sprint_status_update_dates_are_consistent(self) -> None:
+        lines = SPRINT_STATUS.read_text(encoding="utf-8").splitlines()
+        header_date = next(
+            line.removeprefix("# last_updated: ")
+            for line in lines
+            if line.startswith("# last_updated: ")
+        )
+        data_date = next(
+            line.removeprefix("last_updated: ")
+            for line in lines
+            if line.startswith("last_updated: ")
+        )
+
+        self.assertEqual(header_date, data_date)
 
 
 if __name__ == "__main__":

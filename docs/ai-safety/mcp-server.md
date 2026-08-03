@@ -36,9 +36,10 @@ sensitive artifacts stay local; responses do not echo uploaded content or the
 submission manifest.
 
 Optional `artifact_paths` values are repository-relative metadata paired with
-uploads. They never instruct the server to read filesystem paths. Absolute
-paths, traversal, filename mismatches, and ambiguous duplicate bindings are
-rejected.
+uploads. `artifact_paths` must include exactly one safe repository-relative
+path for each uploaded file, in the same order as the `files` values. They
+never instruct the server to read filesystem paths. Absolute paths, traversal,
+filename mismatches, and ambiguous duplicate bindings are rejected.
 
 ## Output contract
 
