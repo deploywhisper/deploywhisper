@@ -27,6 +27,11 @@ class WorkflowAdapterOutputContractDocumentationTests(unittest.TestCase):
             "`adapter_payload`",
             "Project scope is mandatory",
             "must not shadow canonical fields",
+            "PolicyAdapterOutputContract",
+            "PolicyAdapterStatus",
+            "advisory`, `warn`, `soft-block`, and `hard-block`",
+            "canonical_report_advisory",
+            "at least one structured reason",
         )
         for expected in expected_clauses:
             with self.subTest(expected=expected):

@@ -90,3 +90,40 @@ Adapters own:
 This keeps future workflow integrations independent without letting adapter
 formatting drift from the report object users inspect in API, CLI, UI, and
 shared report views.
+
+## Optional Policy Interpretation
+
+Policy adapters add a separate `PolicyAdapterOutputContract` around an existing
+`AdapterOutputContract`. The policy contract exposes a `PolicyAdapterStatus`
+with exactly four values: `advisory`, `warn`, `soft-block`, and `hard-block`.
+Every output requires at least one structured reason with a stable `code` and a
+human-readable `message`.
+
+```python
+from services.policy_adapter_output_contract import (
+    PolicyAdapterReason,
+    PolicyAdapterStatus,
+    build_policy_adapter_output_contract,
+)
+
+policy_output = build_policy_adapter_output_contract(
+    contract,
+    status=PolicyAdapterStatus.WARN,
+    reasons=(
+        PolicyAdapterReason(
+            code="review_required",
+            message="A human must review the deterministic evidence.",
+        ),
+    ),
+)
+```
+
+`canonical_report_advisory` is fixed to `true`. The nested canonical summary
+must keep `advisory_only=true` and `should_block=false`, even when the optional
+policy status is `soft-block` or `hard-block`. The adapter interpretation is a
+local workflow decision; it cannot rewrite the canonical severity,
+recommendation, Evidence Law status, evidence, or advisory posture.
+
+This contract does not choose thresholds or integration modes. Those are
+separate, explicitly configured policy concerns. The core remains useful when
+no policy adapter is enabled.
