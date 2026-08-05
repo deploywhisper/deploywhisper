@@ -61,6 +61,7 @@ class AdapterOutputContractTests(unittest.TestCase):
             {"headline": "Adapter rewrite"},
             {"evidence_law_status": "Needs review"},
             {"evidence_law_detail": "Adapter-specific rewrite"},
+            {"finding_id": "adapter-owned-shadow"},
         ):
             with self.subTest(forbidden_payload=forbidden_payload):
                 with self.assertRaises(AdapterOutputContractError):

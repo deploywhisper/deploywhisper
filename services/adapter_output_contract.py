@@ -20,6 +20,7 @@ from services.analysis_service import (
     ShareSummaryContext,
     ShareSummaryFinding,
     ShareSummaryJsonPayload,
+    ShareSummaryScannerConflict,
 )
 
 AdapterMetadataValue = str | int | float | bool | None
@@ -168,6 +169,12 @@ class FrozenShareSummaryContext(ShareSummaryContext):
     model_config = ConfigDict(frozen=True)
 
 
+class FrozenShareSummaryScannerConflict(ShareSummaryScannerConflict):
+    """Immutable scanner-conflict summary for adapter contracts."""
+
+    model_config = ConfigDict(frozen=True)
+
+
 class FrozenShareSummaryJsonPayload(ShareSummaryJsonPayload):
     """Immutable machine-friendly share-summary payload for adapter contracts."""
 
@@ -178,6 +185,10 @@ class FrozenShareSummaryJsonPayload(ShareSummaryJsonPayload):
     )
     context_completeness: FrozenShareSummaryContext = Field(
         ..., description="Context completeness summary"
+    )
+    scanner_conflicts: tuple[FrozenShareSummaryScannerConflict, ...] = Field(
+        default_factory=tuple,
+        description="Scanner-vs-deterministic/context conflicts requiring review",
     )
 
 
@@ -254,6 +265,7 @@ def _reserved_adapter_fields() -> frozenset[str]:
             *FrozenShareSummaryJsonPayload.model_fields,
             *FrozenShareSummaryFinding.model_fields,
             *FrozenShareSummaryContext.model_fields,
+            *FrozenShareSummaryScannerConflict.model_fields,
             "adapter_metadata",
             "adapter_payload",
             "canonical_summary",

@@ -144,7 +144,7 @@ development_status:
   epic-10-retrospective: optional
 
   epic-11: in-progress
-  11-1-policy-adapter-output-contract: ready-for-dev
+  11-1-policy-adapter-output-contract: done
   11-2-threshold-and-reporting-defaults-management: ready-for-dev
   11-3-integration-level-enforcement-settings: ready-for-dev
   11-4-enforcement-guardrail-documentation: ready-for-dev
