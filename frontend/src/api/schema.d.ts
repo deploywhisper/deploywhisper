@@ -21,6 +21,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/analyses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Agent Analysis
+         * @description Run the canonical analysis path and return the bounded agent contract.
+         */
+        post: operations["create_agent_analysis_api_v1_agent_analyses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Report
+         * @description Return one scoped persisted report through the bounded agent contract.
+         */
+        get: operations["get_agent_report_api_v1_agent_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analyses": {
         parameters: {
             query?: never;
@@ -266,6 +306,34 @@ export interface paths {
         put: operations["update_provider_settings_api_v1_settings_provider_put"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/policy-adapter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Policy Adapter Defaults
+         * @description Return effective project or integration policy-adapter defaults.
+         */
+        get: operations["get_policy_adapter_defaults_api_v1_settings_policy_adapter_get"];
+        /**
+         * Update Policy Adapter Defaults
+         * @description Persist project or integration policy-adapter defaults.
+         */
+        put: operations["update_policy_adapter_defaults_api_v1_settings_policy_adapter_put"];
+        post?: never;
+        /**
+         * Reset Policy Adapter Defaults
+         * @description Remove one override and return the newly inherited defaults.
+         */
+        delete: operations["reset_policy_adapter_defaults_api_v1_settings_policy_adapter_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -607,6 +675,330 @@ export interface components {
              * @description Machine-readable uncertainty indicators
              */
             uncertainty_flags?: string[];
+        };
+        /** AgentAnalysisData */
+        AgentAnalysisData: {
+            /**
+             * Schema Version
+             * @default v1
+             * @constant
+             */
+            schema_version: "v1";
+            /** Report Schema Version */
+            report_schema_version: string;
+            /** Report Id */
+            report_id: number;
+            scope: components["schemas"]["AgentScopeData"];
+            verdict: components["schemas"]["AgentVerdictData"];
+            /**
+             * Advisory Only
+             * @default true
+             * @constant
+             */
+            advisory_only: true;
+            /**
+             * Deployment Approval
+             * @default false
+             * @constant
+             */
+            deployment_approval: false;
+            /**
+             * Human Decision Required
+             * @default true
+             * @constant
+             */
+            human_decision_required: true;
+            /**
+             * Approval Statement
+             * @default This output is advisory and is not deployment approval. A human must review the evidence before any deployment decision.
+             * @constant
+             */
+            approval_statement: "This output is advisory and is not deployment approval. A human must review the evidence before any deployment decision.";
+            evidence_law: components["schemas"]["AgentEvidenceLawData"];
+            /** Evidence */
+            evidence?: components["schemas"]["AgentEvidenceData"][];
+            /** Findings */
+            findings?: components["schemas"]["AgentFindingData"][];
+            confidence: components["schemas"]["AgentConfidenceData"];
+            uncertainty: components["schemas"]["AgentUncertaintyData"];
+            /** Context Todos */
+            context_todos?: string[];
+            /** Verification Guidance */
+            verification_guidance?: string[];
+        };
+        /** AgentConfidenceData */
+        AgentConfidenceData: {
+            /** Overall */
+            overall: number;
+            ledger: components["schemas"]["AgentConfidenceLedgerData"];
+        };
+        /** AgentConfidenceLedgerData */
+        AgentConfidenceLedgerData: {
+            /** Contributors */
+            contributors?: string[];
+            /** Confidence Factors */
+            confidence_factors?: string[];
+            /** Why Not Lower */
+            why_not_lower?: string[];
+            /** Why Not Higher */
+            why_not_higher?: string[];
+            /** Uncertainty Drivers */
+            uncertainty_drivers?: string[];
+        };
+        /** AgentContextSourceData */
+        AgentContextSourceData: {
+            /** Source Id */
+            source_id: string;
+            /**
+             * Source Type
+             * @enum {string}
+             */
+            source_type: "artifact" | "topology" | "incident" | "parser" | "evidence" | "ownership" | "external_scanner" | "user_context";
+            /** Source Ref */
+            source_ref?: string | null;
+            /** Scope */
+            scope: string;
+            /**
+             * Freshness Status
+             * @default unknown
+             * @enum {string}
+             */
+            freshness_status: "current" | "stale" | "missing" | "incomplete" | "conflicting" | "unknown" | "empty" | "not_applicable";
+            /** Last Observed At */
+            last_observed_at?: string | null;
+            /** Age Days */
+            age_days?: number | null;
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /** Conflicts */
+            conflicts?: string[];
+            /** Limitations */
+            limitations?: string[];
+        };
+        /** AgentEvidenceData */
+        AgentEvidenceData: {
+            /** Evidence Id */
+            evidence_id: string;
+            /** Analysis Id */
+            analysis_id: number;
+            /** Finding Id */
+            finding_id: string;
+            /** Source Type */
+            source_type: string;
+            /** Source Ref */
+            source_ref: string;
+            /**
+             * Artifact
+             * @default
+             */
+            artifact: string;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
+            /**
+             * Resource
+             * @default
+             */
+            resource: string;
+            /**
+             * Operation
+             * @default
+             */
+            operation: string;
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+            /**
+             * Source Kind
+             * @default artifact
+             */
+            source_kind: string;
+            /**
+             * Determinism Level
+             * @default deterministic
+             */
+            determinism_level: string;
+            /**
+             * Redaction Status
+             * @default none
+             */
+            redaction_status: string;
+            /** Summary */
+            summary: string;
+            /**
+             * Severity Hint
+             * @enum {string}
+             */
+            severity_hint: "low" | "medium" | "high" | "critical";
+            /** Deterministic */
+            deterministic: boolean;
+            /** Confidence */
+            confidence: number;
+            /** Evidence Label */
+            evidence_label?: string | null;
+            /** Related Change Ids */
+            related_change_ids?: string[];
+            context_source?: components["schemas"]["AgentContextSourceData"] | null;
+        };
+        /** AgentEvidenceLawData */
+        AgentEvidenceLawData: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Satisfied" | "Needs review" | "Reconciled" | "Detail omitted";
+            /** Detail */
+            detail: string;
+        };
+        /** AgentFindingData */
+        AgentFindingData: {
+            /** Finding Id */
+            finding_id: string;
+            /** Analysis Id */
+            analysis_id: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Explanation
+             * @default
+             */
+            explanation: string;
+            /** Guidance */
+            guidance?: string[];
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "low" | "medium" | "high" | "critical";
+            /** Category */
+            category: string;
+            /** Deterministic */
+            deterministic: boolean;
+            /** Confidence */
+            confidence: number;
+            /** Uncertainty Note */
+            uncertainty_note?: string | null;
+            /**
+             * Evidence Classification
+             * @default deterministic
+             * @enum {string}
+             */
+            evidence_classification: "deterministic" | "derived" | "external" | "model_inferred" | "user_provided";
+            /** Evidence Refs */
+            evidence_refs?: string[];
+            /** Evidence Label */
+            evidence_label?: string | null;
+            /** Skill Id */
+            skill_id?: string | null;
+        };
+        /** AgentInterfaceMeta */
+        AgentInterfaceMeta: {
+            /**
+             * Interface Schema Version
+             * @default v1
+             * @constant
+             */
+            interface_schema_version: "v1";
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "analysis.submit" | "report.read";
+            /**
+             * Advisory Only
+             * @default true
+             * @constant
+             */
+            advisory_only: true;
+            output_limits?: components["schemas"]["AgentOutputLimitsData"];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /** Truncated Fields */
+            truncated_fields?: string[];
+        };
+        /** AgentInterfaceResponse */
+        AgentInterfaceResponse: {
+            data: components["schemas"]["AgentAnalysisData"];
+            meta: components["schemas"]["AgentInterfaceMeta"];
+        };
+        /** AgentOutputLimitsData */
+        AgentOutputLimitsData: {
+            /**
+             * Max String Characters
+             * @default 2048
+             */
+            max_string_characters: number;
+            /**
+             * Max Collection Items
+             * @default 50
+             */
+            max_collection_items: number;
+            /**
+             * Max Findings
+             * @default 50
+             */
+            max_findings: number;
+            /**
+             * Max Evidence
+             * @default 100
+             */
+            max_evidence: number;
+        };
+        /** AgentScopeData */
+        AgentScopeData: {
+            /** Project Id */
+            project_id: number;
+            /** Project Key */
+            project_key: string;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+        };
+        /** AgentUncertaintyData */
+        AgentUncertaintyData: {
+            /** Flags */
+            flags?: string[];
+            /** Summary */
+            summary?: string | null;
+            /** Partial Context */
+            partial_context: boolean;
+            /** Insufficient Context */
+            insufficient_context: boolean;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** AgentVerdictData */
+        AgentVerdictData: {
+            /** Risk Score */
+            risk_score: number;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "low" | "medium" | "high" | "critical";
+            /**
+             * Recommendation
+             * @enum {string}
+             */
+            recommendation: "go" | "caution" | "no-go";
+            /** Top Risk */
+            top_risk: string;
         };
         /** AnalysisBulkDeleteData */
         AnalysisBulkDeleteData: {
@@ -1233,6 +1625,24 @@ export interface components {
              * @description Machine-readable topology context limitation labels
              */
             context_limitations?: string[];
+        };
+        /** Body_create_agent_analysis_api_v1_agent_analyses_post */
+        Body_create_agent_analysis_api_v1_agent_analyses_post: {
+            /**
+             * Files
+             * @description Supported deployment artifacts to analyze.
+             */
+            files?: string[] | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+            /** Artifact Paths */
+            artifact_paths?: string[] | null;
         };
         /** Body_create_analysis_api_v1_analyses_post */
         Body_create_analysis_api_v1_analyses_post: {
@@ -2816,6 +3226,64 @@ export interface components {
              * @description Pull-request reference when the trigger metadata identifies one.
              */
             readonly pr_ref: string | null;
+        };
+        /** PolicyAdapterSettingsData */
+        PolicyAdapterSettingsData: {
+            /** Project Key */
+            project_key: string;
+            /** Integration */
+            integration?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "built-in" | "project" | "integration";
+            /** Warn At */
+            warn_at?: ("low" | "medium" | "high" | "critical") | null;
+            /** Soft Block At */
+            soft_block_at?: ("low" | "medium" | "high" | "critical") | null;
+            /** Hard Block At */
+            hard_block_at?: ("low" | "medium" | "high" | "critical") | null;
+            /**
+             * Reporting Default
+             * @enum {string}
+             */
+            reporting_default: "advisory" | "warn";
+        };
+        /** PolicyAdapterSettingsRequest */
+        PolicyAdapterSettingsRequest: {
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Integration */
+            integration?: string | null;
+            /**
+             * Warn At
+             * @default medium
+             */
+            warn_at: ("low" | "medium" | "high" | "critical") | null;
+            /**
+             * Soft Block At
+             * @default high
+             */
+            soft_block_at: ("low" | "medium" | "high" | "critical") | null;
+            /**
+             * Hard Block At
+             * @default critical
+             */
+            hard_block_at: ("low" | "medium" | "high" | "critical") | null;
+            /**
+             * Reporting Default
+             * @default advisory
+             * @enum {string}
+             */
+            reporting_default: "advisory" | "warn";
+        };
+        /** PolicyAdapterSettingsResponse */
+        PolicyAdapterSettingsResponse: {
+            data: components["schemas"]["PolicyAdapterSettingsData"];
+            meta: components["schemas"]["MetaPayload"];
         };
         /** PreviousScanDiffData */
         PreviousScanDiffData: {
@@ -4880,6 +5348,151 @@ export interface operations {
             };
         };
     };
+    create_agent_analysis_api_v1_agent_analyses_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Trigger-Type"?: string | null;
+                "X-DeployWhisper-Trigger-Id"?: string | null;
+                "X-DeployWhisper-Actor"?: string | null;
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_agent_analysis_api_v1_agent_analyses_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentInterfaceResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_agent_report_api_v1_agent_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentInterfaceResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_analyses_api_v1_analyses_get: {
         parameters: {
             query?: {
@@ -4946,7 +5559,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5030,7 +5643,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request Entity Too Large */
+            /** @description Content Too Large */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5039,7 +5652,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5111,7 +5724,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5195,7 +5808,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5255,7 +5868,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5319,7 +5932,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5394,7 +6007,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5469,7 +6082,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5536,7 +6149,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5600,7 +6213,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5945,6 +6558,114 @@ export interface operations {
             };
         };
     };
+    get_policy_adapter_defaults_api_v1_settings_policy_adapter_get: {
+        parameters: {
+            query?: {
+                project_id?: number | null;
+                project_key?: string | null;
+                integration?: string | null;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyAdapterSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_policy_adapter_defaults_api_v1_settings_policy_adapter_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyAdapterSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyAdapterSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_policy_adapter_defaults_api_v1_settings_policy_adapter_delete: {
+        parameters: {
+            query?: {
+                project_id?: number | null;
+                project_key?: string | null;
+                integration?: string | null;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyAdapterSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     preview_settings_topology_api_v1_settings_topology_preview_post: {
         parameters: {
             query?: never;
@@ -6136,7 +6857,7 @@ export interface operations {
                     "application/json": components["schemas"]["SkillRegistryListResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6185,7 +6906,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6234,7 +6955,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6286,7 +7007,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6335,7 +7056,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;

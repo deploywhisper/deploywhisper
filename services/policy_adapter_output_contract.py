@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Any, Literal
 
 from pydantic import (
@@ -15,15 +14,13 @@ from pydantic import (
 )
 
 from services.adapter_output_contract import AdapterOutputContract
-
-
-class PolicyAdapterStatus(str, Enum):
-    """Supported downstream policy interpretations."""
-
-    ADVISORY = "advisory"
-    WARN = "warn"
-    SOFT_BLOCK = "soft-block"
-    HARD_BLOCK = "hard-block"
+from services.policy_adapter_settings import (
+    SEVERITY_RANK,
+    PolicyAdapterSettings,
+    PolicyAdapterStatus,
+    PolicySeverity,
+)
+from services.project_service import normalize_project_key
 
 
 class PolicyAdapterReason(BaseModel):
@@ -72,6 +69,10 @@ class PolicyAdapterOutputContract(BaseModel):
     adapter_output: AdapterOutputContract = Field(
         ..., description="Immutable canonical summary and adapter metadata"
     )
+    applied_settings: PolicyAdapterSettings | None = Field(
+        default=None,
+        description="Resolved threshold and reporting defaults used for interpretation",
+    )
 
     @field_validator("status", mode="before")
     @classmethod
@@ -116,10 +117,98 @@ def build_policy_adapter_output_contract(
     *,
     status: PolicyAdapterStatus | str,
     reasons: tuple[PolicyAdapterReason | dict[str, str], ...],
+    applied_settings: PolicyAdapterSettings | None = None,
 ) -> PolicyAdapterOutputContract:
     """Wrap canonical adapter output with a separate local policy interpretation."""
     return PolicyAdapterOutputContract(
         status=status,
         reasons=reasons,
         adapter_output=adapter_output,
+        applied_settings=applied_settings,
+    )
+
+
+def build_policy_adapter_output_from_settings(
+    adapter_output: AdapterOutputContract,
+    settings: PolicyAdapterSettings,
+    *,
+    resolved_project_key: str | None = None,
+) -> PolicyAdapterOutputContract:
+    """Interpret canonical severity with resolved defaults without mutating it."""
+    metadata = adapter_output.adapter_metadata
+    metadata_project_key = (
+        normalize_project_key(metadata.project_key)
+        if metadata.project_key is not None
+        else None
+    )
+    normalized_resolved_key = (
+        normalize_project_key(resolved_project_key)
+        if resolved_project_key is not None
+        else None
+    )
+    if (
+        metadata_project_key is not None
+        and normalized_resolved_key is not None
+        and metadata_project_key != normalized_resolved_key
+    ):
+        raise ValueError("Resolved project does not match adapter metadata.")
+    effective_project_key = metadata_project_key or normalized_resolved_key
+    if effective_project_key is None:
+        raise ValueError("Project ID adapter metadata requires a resolved project key.")
+    if effective_project_key != normalize_project_key(settings.project_key):
+        raise ValueError("Policy adapter settings do not match the adapter project.")
+    if (
+        settings.integration is not None
+        and metadata.adapter.lower() != settings.integration
+    ):
+        raise ValueError(
+            "Policy adapter settings do not match the adapter integration."
+        )
+
+    canonical_severity = str(adapter_output.canonical_summary.severity).strip().lower()
+    try:
+        severity = PolicySeverity(canonical_severity)
+    except ValueError:
+        severity = None
+
+    matched_status: PolicyAdapterStatus | None = None
+    matched_threshold: PolicySeverity | None = None
+    for status, threshold in (
+        (PolicyAdapterStatus.HARD_BLOCK, settings.hard_block_at),
+        (PolicyAdapterStatus.SOFT_BLOCK, settings.soft_block_at),
+        (PolicyAdapterStatus.WARN, settings.warn_at),
+    ):
+        if (
+            severity is not None
+            and threshold is not None
+            and SEVERITY_RANK[severity] >= SEVERITY_RANK[threshold]
+        ):
+            matched_status = status
+            matched_threshold = threshold
+            break
+
+    if matched_status is None:
+        status = settings.reporting_default
+        reason = PolicyAdapterReason(
+            code="reporting_default_applied",
+            message=(
+                f"Canonical severity {canonical_severity or 'unknown'} did not meet a "
+                f"configured threshold; reporting default {status.value} applied."
+            ),
+        )
+    else:
+        status = matched_status
+        reason = PolicyAdapterReason(
+            code="severity_threshold_matched",
+            message=(
+                f"Canonical severity {canonical_severity} met configured "
+                f"{status.value} threshold {matched_threshold.value}."
+            ),
+        )
+
+    return build_policy_adapter_output_contract(
+        adapter_output,
+        status=status,
+        reasons=(reason,),
+        applied_settings=settings,
     )

@@ -88,6 +88,155 @@ class SettingsApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["settings"]["request_timeout_seconds"], 120)
         self.assertIn("valid", payload["data"]["validation"])
 
+    def test_policy_adapter_defaults_can_be_managed_per_project_and_integration(
+        self,
+    ) -> None:
+        project_payload = {
+            "project_key": self.project.project_key,
+            "warn_at": "medium",
+            "soft_block_at": "high",
+            "hard_block_at": "critical",
+            "reporting_default": "advisory",
+        }
+        saved_project = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json=project_payload,
+        )
+        saved_integration = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                **project_payload,
+                "integration": "jenkins",
+                "warn_at": "high",
+                "soft_block_at": "critical",
+                "hard_block_at": None,
+                "reporting_default": "warn",
+            },
+        )
+        loaded = self.client.get(
+            "/api/v1/settings/policy-adapter",
+            params={
+                "project_key": self.project.project_key,
+                "integration": "jenkins",
+            },
+        )
+
+        self.assertEqual(saved_project.status_code, 200)
+        self.assertEqual(saved_project.json()["data"]["source"], "project")
+        self.assertEqual(saved_integration.status_code, 200)
+        self.assertEqual(loaded.status_code, 200)
+        self.assertEqual(loaded.json()["data"]["source"], "integration")
+        self.assertEqual(loaded.json()["data"]["reporting_default"], "warn")
+        self.assertIsNone(loaded.json()["data"]["hard_block_at"])
+
+    def test_policy_adapter_defaults_require_admin_settings_permission(self) -> None:
+        response = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            headers={
+                "X-DeployWhisper-Project-Role": "maintainer",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+            json={
+                "project_key": self.project.project_key,
+                "warn_at": "medium",
+                "soft_block_at": "high",
+                "hard_block_at": "critical",
+                "reporting_default": "advisory",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_permission_denied")
+
+    def test_policy_adapter_defaults_can_be_reset_to_inherited_scope(self) -> None:
+        project_payload = {
+            "project_key": self.project.project_key,
+            "warn_at": "medium",
+            "soft_block_at": "high",
+            "hard_block_at": "critical",
+            "reporting_default": "advisory",
+        }
+        self.client.put("/api/v1/settings/policy-adapter", json=project_payload)
+        self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                **project_payload,
+                "integration": "jenkins",
+                "warn_at": "high",
+                "soft_block_at": "critical",
+                "hard_block_at": None,
+                "reporting_default": "warn",
+            },
+        )
+
+        reset_integration = self.client.delete(
+            "/api/v1/settings/policy-adapter",
+            params={
+                "project_key": self.project.project_key,
+                "integration": "jenkins",
+            },
+        )
+        reset_project = self.client.delete(
+            "/api/v1/settings/policy-adapter",
+            params={"project_key": self.project.project_key},
+        )
+
+        self.assertEqual(reset_integration.status_code, 200)
+        self.assertEqual(reset_integration.json()["data"]["source"], "project")
+        self.assertEqual(reset_project.status_code, 200)
+        self.assertEqual(reset_project.json()["data"]["source"], "built-in")
+
+    def test_policy_adapter_defaults_require_explicit_project_scope(self) -> None:
+        requests = (
+            self.client.get("/api/v1/settings/policy-adapter"),
+            self.client.put(
+                "/api/v1/settings/policy-adapter",
+                json={
+                    "warn_at": "medium",
+                    "soft_block_at": "high",
+                    "hard_block_at": "critical",
+                    "reporting_default": "advisory",
+                },
+            ),
+            self.client.delete("/api/v1/settings/policy-adapter"),
+        )
+
+        for response in requests:
+            with self.subTest(method=response.request.method):
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["error"]["code"],
+                    "missing_project_scope",
+                )
+
+    def test_policy_adapter_query_integration_validation_matches_write_contract(
+        self,
+    ) -> None:
+        for method in (self.client.get, self.client.delete):
+            with self.subTest(method=method.__name__, integration="empty"):
+                response = method(
+                    "/api/v1/settings/policy-adapter",
+                    params={
+                        "project_key": self.project.project_key,
+                        "integration": "",
+                    },
+                )
+                self.assertEqual(response.status_code, 422)
+
+            with self.subTest(method=method.__name__, integration="whitespace"):
+                response = method(
+                    "/api/v1/settings/policy-adapter",
+                    params={
+                        "project_key": self.project.project_key,
+                        "integration": "   ",
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["error"]["code"],
+                    "invalid_policy_adapter_settings",
+                )
+
     def test_preview_and_save_topology_return_validation_payloads(self) -> None:
         topology = {
             "services": [

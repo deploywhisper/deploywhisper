@@ -14,6 +14,7 @@ import models.database as database_module
 import models.repositories.settings as settings_repository_module
 import models.tables as tables_module
 import services.settings_service as settings_service_module
+from services.policy_adapter_settings import PolicyAdapterStatus
 
 
 class SettingsServiceTests(unittest.TestCase):
@@ -55,6 +56,86 @@ class SettingsServiceTests(unittest.TestCase):
             }
         self.assertNotIn("llm_api_key", keys)
         self.assertNotIn("llm_provider_config::openai::api_key", keys)
+
+    def test_policy_adapter_settings_resolve_integration_then_project_defaults(
+        self,
+    ) -> None:
+        project_settings = settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            warn_at="medium",
+            soft_block_at="high",
+            hard_block_at="critical",
+            reporting_default="advisory",
+        )
+        integration_settings = settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+            reporting_default="warn",
+        )
+
+        resolved_project = settings_service_module.get_policy_adapter_settings(
+            project_key="payments"
+        )
+        resolved_integration = settings_service_module.get_policy_adapter_settings(
+            project_key="payments", integration="jenkins"
+        )
+        unresolved_integration = settings_service_module.get_policy_adapter_settings(
+            project_key="payments", integration="gitlab"
+        )
+
+        self.assertEqual(project_settings.source, "project")
+        self.assertEqual(integration_settings.source, "integration")
+        self.assertEqual(resolved_project.source, "project")
+        self.assertEqual(resolved_integration.source, "integration")
+        self.assertEqual(
+            resolved_integration.reporting_default, PolicyAdapterStatus.WARN
+        )
+        self.assertEqual(unresolved_integration.source, "project")
+        self.assertIsNone(unresolved_integration.integration)
+
+    def test_policy_adapter_settings_use_safe_built_in_defaults(self) -> None:
+        settings = settings_service_module.get_policy_adapter_settings(
+            project_key="payments", integration="jenkins"
+        )
+
+        self.assertEqual(settings.source, "built-in")
+        self.assertEqual(settings.reporting_default, PolicyAdapterStatus.ADVISORY)
+        self.assertEqual(settings.warn_at.value, "medium")
+        self.assertEqual(settings.soft_block_at.value, "high")
+        self.assertEqual(settings.hard_block_at.value, "critical")
+
+    def test_policy_adapter_settings_can_reset_to_inherited_defaults(self) -> None:
+        settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            warn_at="medium",
+            soft_block_at="high",
+            hard_block_at="critical",
+            reporting_default="advisory",
+        )
+        settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+            reporting_default="warn",
+        )
+
+        inherited_project = settings_service_module.delete_policy_adapter_settings(
+            project_key="payments", integration="jenkins"
+        )
+        inherited_builtin = settings_service_module.delete_policy_adapter_settings(
+            project_key="payments"
+        )
+
+        self.assertEqual(inherited_project.source, "project")
+        self.assertEqual(
+            inherited_project.reporting_default, PolicyAdapterStatus.ADVISORY
+        )
+        self.assertEqual(inherited_builtin.source, "built-in")
 
     def test_provider_profiles_can_be_saved_per_provider_and_switched(self) -> None:
         settings_service_module.save_provider_settings(

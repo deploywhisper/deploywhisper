@@ -124,6 +124,25 @@ policy status is `soft-block` or `hard-block`. The adapter interpretation is a
 local workflow decision; it cannot rewrite the canonical severity,
 recommendation, Evidence Law status, evidence, or advisory posture.
 
-This contract does not choose thresholds or integration modes. Those are
-separate, explicitly configured policy concerns. The core remains useful when
-no policy adapter is enabled.
+`PolicyAdapterSettings` manages severity thresholds and the below-threshold
+`reporting_default` without changing core scoring. Built-in defaults interpret
+medium as `warn`, high as `soft-block`, and critical as `hard-block`; reports
+below those thresholds remain `advisory`. Admins can inspect, save, or reset
+project defaults and integration-specific defaults through `GET`, `PUT`, and
+`DELETE`
+`/api/v1/settings/policy-adapter`. Integration-specific defaults take
+precedence over project defaults, which take precedence over the built-in safe
+defaults. Deleting an integration override restores its project defaults;
+deleting a project override restores the built-in defaults.
+
+Threshold evaluation reads only `canonical_summary.severity`. The emitted
+policy envelope records the resolved settings in `applied_settings`, while the
+original canonical severity, findings, evidence, recommendation, Evidence Law
+status, and advisory flags remain unchanged and auditable. Enforcement mode is
+a separate integration concern; the core remains useful when no policy adapter
+is enabled.
+
+Runtime integrations call `build_configured_policy_adapter_output`, which
+resolves either adapter `project_key` or `project_id`, selects the integration
+override before the project and built-in defaults, validates that the settings
+scope matches the adapter metadata, and then emits the policy envelope.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 
 from pydantic import BaseModel, Field
@@ -15,6 +16,11 @@ from llm.providers import (
 )
 from models.database import SessionLocal
 from models.repositories.settings import delete_setting, get_setting, upsert_setting
+from services.policy_adapter_settings import (
+    PolicyAdapterSettings,
+    PolicyAdapterStatus,
+    PolicySeverity,
+)
 
 
 class ProviderCapabilitySummary(BaseModel):
@@ -154,6 +160,123 @@ PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
     "xai": ("XAI_API_KEY",),
     "ollama": (),
 }
+
+POLICY_ADAPTER_SETTINGS_PREFIX = "policy_adapter_defaults"
+
+
+def _policy_adapter_settings_key(
+    *, project_key: str, integration: str | None = None
+) -> str:
+    scope = f"integration::{integration}" if integration else "project"
+    return f"{POLICY_ADAPTER_SETTINGS_PREFIX}::{project_key}::{scope}"
+
+
+def _policy_scope_label(value: str, *, field: str) -> str:
+    normalized = value.strip().lower()
+    if not normalized:
+        raise ValueError(f"{field} must not be blank.")
+    if not all(
+        character.isalnum() or character in {"-", "_", "."} for character in normalized
+    ):
+        raise ValueError(f"{field} may contain letters, numbers, '.', '_', and '-'.")
+    return normalized
+
+
+def save_policy_adapter_settings(
+    *,
+    project_key: str,
+    integration: str | None = None,
+    warn_at: PolicySeverity | str | None = PolicySeverity.MEDIUM,
+    soft_block_at: PolicySeverity | str | None = PolicySeverity.HIGH,
+    hard_block_at: PolicySeverity | str | None = PolicySeverity.CRITICAL,
+    reporting_default: PolicyAdapterStatus | str = PolicyAdapterStatus.ADVISORY,
+) -> PolicyAdapterSettings:
+    """Persist project defaults or an integration-specific override."""
+    normalized_project_key = _policy_scope_label(project_key, field="project_key")
+    normalized_integration = (
+        _policy_scope_label(integration, field="integration")
+        if integration is not None
+        else None
+    )
+    resolved = PolicyAdapterSettings(
+        project_key=normalized_project_key,
+        integration=normalized_integration,
+        source="integration" if normalized_integration else "project",
+        warn_at=warn_at,
+        soft_block_at=soft_block_at,
+        hard_block_at=hard_block_at,
+        reporting_default=reporting_default,
+    )
+    with SessionLocal() as session:
+        upsert_setting(
+            session,
+            key=_policy_adapter_settings_key(
+                project_key=normalized_project_key,
+                integration=normalized_integration,
+            ),
+            value=json.dumps(resolved.model_dump(mode="json"), sort_keys=True),
+        )
+    return resolved
+
+
+def get_policy_adapter_settings(
+    *, project_key: str, integration: str | None = None
+) -> PolicyAdapterSettings:
+    """Resolve integration overrides before project and safe built-in defaults."""
+    normalized_project_key = _policy_scope_label(project_key, field="project_key")
+    normalized_integration = (
+        _policy_scope_label(integration, field="integration")
+        if integration is not None
+        else None
+    )
+    with SessionLocal() as session:
+        if normalized_integration is not None:
+            integration_record = get_setting(
+                session,
+                _policy_adapter_settings_key(
+                    project_key=normalized_project_key,
+                    integration=normalized_integration,
+                ),
+            )
+            if integration_record is not None:
+                return PolicyAdapterSettings.model_validate_json(
+                    integration_record.value
+                )
+        project_record = get_setting(
+            session,
+            _policy_adapter_settings_key(project_key=normalized_project_key),
+        )
+        if project_record is not None:
+            return PolicyAdapterSettings.model_validate_json(project_record.value)
+
+    return PolicyAdapterSettings(
+        project_key=normalized_project_key,
+        source="built-in",
+    )
+
+
+def delete_policy_adapter_settings(
+    *, project_key: str, integration: str | None = None
+) -> PolicyAdapterSettings:
+    """Delete one override and return the newly inherited effective defaults."""
+    normalized_project_key = _policy_scope_label(project_key, field="project_key")
+    normalized_integration = (
+        _policy_scope_label(integration, field="integration")
+        if integration is not None
+        else None
+    )
+    with SessionLocal() as session:
+        delete_setting(
+            session,
+            _policy_adapter_settings_key(
+                project_key=normalized_project_key,
+                integration=normalized_integration,
+            ),
+        )
+    return get_policy_adapter_settings(
+        project_key=normalized_project_key,
+        integration=normalized_integration,
+    )
 
 
 def provider_select_options() -> dict[str, str]:

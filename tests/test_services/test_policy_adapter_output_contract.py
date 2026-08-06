@@ -12,14 +12,154 @@ from services.adapter_output_contract import (
 )
 from services.analysis_service import build_share_summary
 from services.policy_adapter_output_contract import (
+    PolicyAdapterSettings,
     PolicyAdapterOutputContract,
     PolicyAdapterReason,
     PolicyAdapterStatus,
+    PolicySeverity,
+    build_policy_adapter_output_from_settings,
     build_policy_adapter_output_contract,
 )
 
 
 class PolicyAdapterOutputContractTests(unittest.TestCase):
+    def test_configured_thresholds_change_only_adapter_interpretation(self) -> None:
+        adapter_output = _adapter_output()
+        canonical_before = adapter_output.canonical_summary.model_dump(mode="json")
+        settings = PolicyAdapterSettings(
+            project_key="payments",
+            source="project",
+            warn_at=PolicySeverity.HIGH,
+            soft_block_at=PolicySeverity.CRITICAL,
+            hard_block_at=None,
+            reporting_default=PolicyAdapterStatus.ADVISORY,
+        )
+
+        output = build_policy_adapter_output_from_settings(adapter_output, settings)
+
+        self.assertEqual(output.status, PolicyAdapterStatus.WARN)
+        self.assertEqual(output.applied_settings, settings)
+        self.assertEqual(output.reasons[0].code, "severity_threshold_matched")
+        self.assertEqual(
+            output.adapter_output.canonical_summary.model_dump(mode="json"),
+            canonical_before,
+        )
+        self.assertEqual(output.adapter_output.canonical_summary.severity, "high")
+        self.assertEqual(
+            len(output.adapter_output.canonical_summary.json_payload.top_findings),
+            1,
+        )
+        self.assertEqual(
+            output.adapter_output.canonical_summary.json_payload.top_findings[
+                0
+            ].severity,
+            "high",
+        )
+
+    def test_reporting_default_applies_below_configured_thresholds(self) -> None:
+        adapter_output = _adapter_output(severity="low", adapter="jenkins")
+        settings = PolicyAdapterSettings(
+            project_key="payments",
+            integration="jenkins",
+            source="integration",
+            warn_at=PolicySeverity.HIGH,
+            soft_block_at=PolicySeverity.CRITICAL,
+            hard_block_at=None,
+            reporting_default=PolicyAdapterStatus.WARN,
+        )
+
+        output = build_policy_adapter_output_from_settings(adapter_output, settings)
+
+        self.assertEqual(output.status, PolicyAdapterStatus.WARN)
+        self.assertEqual(output.reasons[0].code, "reporting_default_applied")
+        self.assertEqual(output.applied_settings.integration, "jenkins")
+        self.assertEqual(output.adapter_output.canonical_summary.severity, "low")
+
+    def test_threshold_settings_reject_ambiguous_or_non_monotonic_values(self) -> None:
+        invalid_settings = (
+            {
+                "project_key": "payments",
+                "source": "project",
+                "warn_at": "critical",
+                "soft_block_at": "high",
+            },
+            {
+                "project_key": "payments",
+                "source": "project",
+                "reporting_default": "soft-block",
+            },
+            {
+                "project_key": "payments",
+                "source": "project",
+                "integration": "   ",
+            },
+        )
+
+        for values in invalid_settings:
+            with self.subTest(values=values):
+                with self.assertRaises(ValidationError):
+                    PolicyAdapterSettings(**values)
+
+    def test_settings_cannot_be_applied_across_project_or_integration_scope(
+        self,
+    ) -> None:
+        project_mismatch = PolicyAdapterSettings(
+            project_key="identity",
+            source="project",
+        )
+        integration_mismatch = PolicyAdapterSettings(
+            project_key="payments",
+            integration="gitlab",
+            source="integration",
+        )
+
+        for settings in (project_mismatch, integration_mismatch):
+            with self.subTest(settings=settings):
+                with self.assertRaises(ValueError):
+                    build_policy_adapter_output_from_settings(
+                        _adapter_output(), settings
+                    )
+
+        id_scoped_adapter = build_adapter_output_contract(
+            build_share_summary(_report_payload()),
+            AdapterMetadata(
+                adapter="policy",
+                format="workflow_decision",
+                project_id=42,
+            ),
+        )
+        with self.assertRaises(ValueError):
+            build_policy_adapter_output_from_settings(
+                id_scoped_adapter,
+                PolicyAdapterSettings(project_key="payments", source="project"),
+            )
+
+    def test_project_scope_comparison_uses_canonical_project_keys(self) -> None:
+        adapter_output = build_adapter_output_contract(
+            build_share_summary(_report_payload()),
+            AdapterMetadata(
+                adapter="policy",
+                format="workflow_decision",
+                project_key="Payments_Core",
+            ),
+        )
+        settings = PolicyAdapterSettings(
+            project_key="payments-core",
+            source="project",
+        )
+
+        output = build_policy_adapter_output_from_settings(
+            adapter_output,
+            settings,
+            resolved_project_key="payments-core",
+        )
+
+        self.assertEqual(output.applied_settings.project_key, "payments-core")
+        self.assertEqual(
+            output.adapter_output.adapter_metadata.project_key,
+            "Payments_Core",
+        )
+
     def test_all_policy_statuses_preserve_the_advisory_canonical_report(self) -> None:
         summary = build_share_summary(_report_payload())
         summary_before = summary.model_dump(mode="json")
@@ -179,22 +319,22 @@ class PolicyAdapterOutputContractTests(unittest.TestCase):
             output.reasons[0].message = "Changed"
 
 
-def _adapter_output():
+def _adapter_output(*, severity: str = "high", adapter: str = "policy"):
     return build_adapter_output_contract(
-        build_share_summary(_report_payload()),
+        build_share_summary(_report_payload(severity=severity)),
         AdapterMetadata(
-            adapter="policy",
+            adapter=adapter,
             format="workflow_decision",
             project_key="payments",
         ),
     )
 
 
-def _report_payload() -> dict:
+def _report_payload(*, severity: str = "high") -> dict:
     return {
         "id": 17,
         "report_schema_version": "v2",
-        "severity": "high",
+        "severity": severity,
         "recommendation": "caution",
         "top_risk": "Terraform opened database ingress.",
         "narrative_opening": "CAUTION: review database ingress.",
