@@ -75,6 +75,16 @@ class PolicyAdapterOutputContractTests(unittest.TestCase):
         self.assertEqual(output.applied_settings.integration, "jenkins")
         self.assertEqual(output.adapter_output.canonical_summary.severity, "low")
 
+    def test_unknown_canonical_severity_is_rejected(self) -> None:
+        adapter_output = _adapter_output(severity="unexpected")
+        settings = PolicyAdapterSettings(
+            project_key="payments",
+            source="project",
+        )
+
+        with self.assertRaisesRegex(ValueError, "Unsupported canonical severity"):
+            build_policy_adapter_output_from_settings(adapter_output, settings)
+
     def test_threshold_settings_reject_ambiguous_or_non_monotonic_values(self) -> None:
         invalid_settings = (
             {

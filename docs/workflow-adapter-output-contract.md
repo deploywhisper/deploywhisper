@@ -142,7 +142,10 @@ status, and advisory flags remain unchanged and auditable. Enforcement mode is
 a separate integration concern; the core remains useful when no policy adapter
 is enabled.
 
-Runtime integrations call `build_configured_policy_adapter_output`, which
+Policy-adapter consumers generate configured decisions through
+`build_configured_policy_adapter_output`. This reusable service boundary
 resolves either adapter `project_key` or `project_id`, selects the integration
 override before the project and built-in defaults, validates that the settings
 scope matches the adapter metadata, and then emits the policy envelope.
+Activating that interpretation in a specific CI or workflow integration remains
+a separate integration concern.

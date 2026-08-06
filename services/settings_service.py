@@ -182,6 +182,25 @@ def _policy_scope_label(value: str, *, field: str) -> str:
     return normalized
 
 
+def _load_policy_adapter_settings(
+    value: str,
+    *,
+    project_key: str,
+    integration: str | None,
+) -> PolicyAdapterSettings:
+    loaded = PolicyAdapterSettings.model_validate_json(value)
+    expected_source = "integration" if integration is not None else "project"
+    if (
+        loaded.project_key != project_key
+        or loaded.integration != integration
+        or loaded.source != expected_source
+    ):
+        raise ValueError(
+            "Stored policy adapter settings scope does not match requested scope."
+        )
+    return loaded
+
+
 def save_policy_adapter_settings(
     *,
     project_key: str,
@@ -239,15 +258,21 @@ def get_policy_adapter_settings(
                 ),
             )
             if integration_record is not None:
-                return PolicyAdapterSettings.model_validate_json(
-                    integration_record.value
+                return _load_policy_adapter_settings(
+                    integration_record.value,
+                    project_key=normalized_project_key,
+                    integration=normalized_integration,
                 )
         project_record = get_setting(
             session,
             _policy_adapter_settings_key(project_key=normalized_project_key),
         )
         if project_record is not None:
-            return PolicyAdapterSettings.model_validate_json(project_record.value)
+            return _load_policy_adapter_settings(
+                project_record.value,
+                project_key=normalized_project_key,
+                integration=None,
+            )
 
     return PolicyAdapterSettings(
         project_key=normalized_project_key,

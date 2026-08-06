@@ -168,8 +168,10 @@ def build_policy_adapter_output_from_settings(
     canonical_severity = str(adapter_output.canonical_summary.severity).strip().lower()
     try:
         severity = PolicySeverity(canonical_severity)
-    except ValueError:
-        severity = None
+    except ValueError as exc:
+        raise ValueError(
+            f"Unsupported canonical severity: {canonical_severity or 'blank'}."
+        ) from exc
 
     matched_status: PolicyAdapterStatus | None = None
     matched_threshold: PolicySeverity | None = None
@@ -179,8 +181,7 @@ def build_policy_adapter_output_from_settings(
         (PolicyAdapterStatus.WARN, settings.warn_at),
     ):
         if (
-            severity is not None
-            and threshold is not None
+            threshold is not None
             and SEVERITY_RANK[severity] >= SEVERITY_RANK[threshold]
         ):
             matched_status = status

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -136,6 +137,39 @@ class SettingsServiceTests(unittest.TestCase):
             inherited_project.reporting_default, PolicyAdapterStatus.ADVISORY
         )
         self.assertEqual(inherited_builtin.source, "built-in")
+
+    def test_policy_adapter_settings_reject_stored_scope_mismatches(self) -> None:
+        mismatches = (
+            (
+                "policy_adapter_defaults::payments::project",
+                {
+                    "project_key": "identity",
+                    "source": "project",
+                },
+                {"project_key": "payments"},
+            ),
+            (
+                "policy_adapter_defaults::payments::integration::jenkins",
+                {
+                    "project_key": "payments",
+                    "integration": "gitlab",
+                    "source": "integration",
+                },
+                {"project_key": "payments", "integration": "jenkins"},
+            ),
+        )
+
+        for key, stored, requested in mismatches:
+            with self.subTest(key=key):
+                with database_module.SessionLocal() as session:
+                    settings_repository_module.upsert_setting(
+                        session,
+                        key=key,
+                        value=json.dumps(stored),
+                    )
+
+                with self.assertRaisesRegex(ValueError, "scope does not match"):
+                    settings_service_module.get_policy_adapter_settings(**requested)
 
     def test_provider_profiles_can_be_saved_per_provider_and_switched(self) -> None:
         settings_service_module.save_provider_settings(
