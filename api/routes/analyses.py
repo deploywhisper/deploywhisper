@@ -19,7 +19,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from api.errors import ApiError, ApiRoute
 from api.schemas import (
@@ -36,6 +36,7 @@ from api.schemas import (
     ErrorResponse,
     FindingFeedbackRequest,
     FindingFeedbackResponse,
+    ResourceMetaPayload,
     SharedReportAccessResponse,
     SharedReportUnlockRequest,
     build_analysis_run_data,
@@ -48,6 +49,10 @@ from services.analysis_service import (
     analyze_uploaded_files,
     build_share_summary,
     resolve_analysis_project_scope,
+)
+from services.adapter_output_contract import (
+    AdapterMetadata,
+    build_adapter_output_contract,
 )
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
@@ -78,11 +83,20 @@ from services.project_service import (
     require_project_permission,
 )
 from services.project_service import resolve_project_reference
+from services.policy_adapter_output_contract import PolicyAdapterOutputContract
+from services.policy_adapter_service import build_configured_policy_adapter_output
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
 _HISTORY_ANALYSIS_STATUSES = {"complete", "degraded", "fallback"}
 AnalysisOutcomeFilter = Literal["success", "failure", "rolled_back", "rollback"]
+
+
+class PolicyAdapterOutputResponse(BaseModel):
+    """API envelope for configured policy interpretation of one report."""
+
+    data: PolicyAdapterOutputContract
+    meta: ResourceMetaPayload
 
 
 def _share_cookie_name(report_id: int) -> str:
@@ -886,6 +900,72 @@ async def create_analysis(
             advisory_only=True,
             submitted_artifact_count=len(raw_files),
             accepted_artifact_count=pending_analysis.ready_count,
+        ),
+    )
+
+
+@router.get(
+    "/{report_id}/policy-adapter",
+    response_model=PolicyAdapterOutputResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def get_policy_adapter_output(
+    report_id: int,
+    integration: str = Query(..., min_length=1),
+    authorization: dict[str, object] = Depends(_authorization_context),
+) -> PolicyAdapterOutputResponse:
+    """Generate a configured policy interpretation for one persisted report."""
+    report = fetch_analysis_report(report_id)
+    if report is None:
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    project = report.get("project") or {}
+    project_id = project.get("id")
+    if not isinstance(project_id, int):
+        raise ApiError(
+            status_code=500,
+            code="analysis_project_scope_invalid",
+            message="Analysis report project scope is invalid.",
+        )
+    try:
+        _require_api_project_permission(
+            authorization=authorization,
+            capability="report.read",
+            project_id=project_id,
+        )
+        adapter_output = build_adapter_output_contract(
+            build_share_summary(report),
+            AdapterMetadata(
+                adapter=integration,
+                format="workflow_decision",
+                project_id=project_id,
+            ),
+        )
+        policy_output = build_configured_policy_adapter_output(adapter_output)
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
+    except ValueError as exc:
+        raise ApiError(
+            status_code=400,
+            code="invalid_policy_adapter_output",
+            message=str(exc),
+        ) from exc
+    return PolicyAdapterOutputResponse(
+        data=policy_output,
+        meta=build_report_meta(
+            id=report_id,
+            report_schema_version=normalize_report_schema_version(
+                report.get("report_schema_version")
+            ),
         ),
     )
 

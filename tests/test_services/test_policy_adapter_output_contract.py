@@ -110,6 +110,30 @@ class PolicyAdapterOutputContractTests(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     PolicyAdapterSettings(**values)
 
+    def test_built_in_settings_cannot_claim_custom_or_integration_scope(self) -> None:
+        invalid_settings = (
+            {
+                "project_key": "payments",
+                "integration": "jenkins",
+                "source": "built-in",
+            },
+            {
+                "project_key": "payments",
+                "source": "built-in",
+                "hard_block_at": None,
+            },
+            {
+                "project_key": "payments",
+                "source": "built-in",
+                "reporting_default": "warn",
+            },
+        )
+
+        for values in invalid_settings:
+            with self.subTest(values=values):
+                with self.assertRaises(ValidationError):
+                    PolicyAdapterSettings(**values)
+
     def test_settings_cannot_be_applied_across_project_or_integration_scope(
         self,
     ) -> None:

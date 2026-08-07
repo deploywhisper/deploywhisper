@@ -147,5 +147,10 @@ Policy-adapter consumers generate configured decisions through
 resolves either adapter `project_key` or `project_id`, selects the integration
 override before the project and built-in defaults, validates that the settings
 scope matches the adapter metadata, and then emits the policy envelope.
-Activating that interpretation in a specific CI or workflow integration remains
-a separate integration concern.
+Authenticated consumers can exercise that production path for a persisted
+report through
+`GET /api/v1/analyses/{report_id}/policy-adapter?integration={integration}`.
+The response applies the saved integration, project, or built-in defaults and
+embeds the unchanged canonical summary beside the policy decision. Activating
+that interpretation as an enforcement mode inside a specific CI or workflow
+integration remains a separate integration concern.

@@ -21,6 +21,7 @@ from services.policy_adapter_settings import (
     PolicyAdapterStatus,
     PolicySeverity,
 )
+from services.project_service import normalize_project_key
 
 
 class ProviderCapabilitySummary(BaseModel):
@@ -171,14 +172,14 @@ def _policy_adapter_settings_key(
     return f"{POLICY_ADAPTER_SETTINGS_PREFIX}::{project_key}::{scope}"
 
 
-def _policy_scope_label(value: str, *, field: str) -> str:
+def _policy_integration_label(value: str) -> str:
     normalized = value.strip().lower()
     if not normalized:
-        raise ValueError(f"{field} must not be blank.")
+        raise ValueError("integration must not be blank.")
     if not all(
         character.isalnum() or character in {"-", "_", "."} for character in normalized
     ):
-        raise ValueError(f"{field} may contain letters, numbers, '.', '_', and '-'.")
+        raise ValueError("integration may contain letters, numbers, '.', '_', and '-'.")
     return normalized
 
 
@@ -211,11 +212,9 @@ def save_policy_adapter_settings(
     reporting_default: PolicyAdapterStatus | str = PolicyAdapterStatus.ADVISORY,
 ) -> PolicyAdapterSettings:
     """Persist project defaults or an integration-specific override."""
-    normalized_project_key = _policy_scope_label(project_key, field="project_key")
+    normalized_project_key = normalize_project_key(project_key)
     normalized_integration = (
-        _policy_scope_label(integration, field="integration")
-        if integration is not None
-        else None
+        _policy_integration_label(integration) if integration is not None else None
     )
     resolved = PolicyAdapterSettings(
         project_key=normalized_project_key,
@@ -242,11 +241,9 @@ def get_policy_adapter_settings(
     *, project_key: str, integration: str | None = None
 ) -> PolicyAdapterSettings:
     """Resolve integration overrides before project and safe built-in defaults."""
-    normalized_project_key = _policy_scope_label(project_key, field="project_key")
+    normalized_project_key = normalize_project_key(project_key)
     normalized_integration = (
-        _policy_scope_label(integration, field="integration")
-        if integration is not None
-        else None
+        _policy_integration_label(integration) if integration is not None else None
     )
     with SessionLocal() as session:
         if normalized_integration is not None:
@@ -284,11 +281,9 @@ def delete_policy_adapter_settings(
     *, project_key: str, integration: str | None = None
 ) -> PolicyAdapterSettings:
     """Delete one override and return the newly inherited effective defaults."""
-    normalized_project_key = _policy_scope_label(project_key, field="project_key")
+    normalized_project_key = normalize_project_key(project_key)
     normalized_integration = (
-        _policy_scope_label(integration, field="integration")
-        if integration is not None
-        else None
+        _policy_integration_label(integration) if integration is not None else None
     )
     with SessionLocal() as session:
         delete_setting(

@@ -36,6 +36,9 @@ So that teams can tune adapter behavior without changing core code.
 - [x] [Review][Decision] Clarify the Story 11.2 runtime boundary before claiming production integration — Resolved by retaining the reusable configured-generation service boundary, correcting overstated runtime wording, and leaving integration activation to Story 11.3.
 - [x] [Review][Patch] Reject unknown canonical severities instead of silently applying the reporting default [services/policy_adapter_output_contract.py:163]
 - [x] [Review][Patch] Validate persisted policy-setting payload scope against its storage key before returning it [services/settings_service.py:233]
+- [x] [Review][Decision] Decide whether configured generation must be activated in a production integration in Story 11.2 — Resolved by adding an authenticated persisted-report policy-output endpoint that exercises the configured generation service; Story 11.3 still owns enforcement-mode activation inside specific CI/workflow integrations.
+- [x] [Review][Patch] Canonicalize project keys consistently before policy-settings persistence and lookup [services/settings_service.py:174]
+- [x] [Review][Patch] Prevent built-in settings from claiming integration-specific or customized threshold provenance [services/policy_adapter_settings.py:92]
 
 ## Dev Notes
 
@@ -117,6 +120,10 @@ Codex (GPT-5)
 - BMad re-review fixes: clarified that the configured-generation service is the Story 11.2 boundary rather than an already activated integration, rejected unknown canonical severities, and rejected persisted settings whose payload scope disagrees with their storage key.
 - Review regression suite: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_service.py tests/test_services/test_policy_adapter_output_contract.py tests/test_services/test_settings_service.py tests/test_api/test_settings.py tests/test_docs/test_workflow_adapter_output_contract.py -q --tb=short` — 50 passed, 57 subtests passed.
 - Post-review full local CI: `bash scripts/ci-local.sh` — passed, including Ruff, repo-wide formatting, dependency validation, Bandit, compile checks, skill harnesses, and 908 tests.
+- Second re-review RED: the new regressions failed on non-canonical persisted project keys, permissive built-in provenance, and the missing production policy-output route.
+- Second re-review GREEN: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_service.py tests/test_services/test_policy_adapter_output_contract.py tests/test_services/test_settings_service.py tests/test_api/test_settings.py tests/test_api/test_analyses.py tests/test_docs/test_workflow_adapter_output_contract.py -q --tb=short` — 152 passed, 76 subtests passed.
+- Second re-review affected CI shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` — 384 passed, 98 subtests passed.
+- Second re-review full local CI: `bash scripts/ci-local.sh` — passed, including Ruff, formatting, dependency validation, Bandit, compile checks, skill harnesses, and 910 tests.
 - UI validation not applicable: no React route, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed; only generated API type declarations were refreshed.
 
 ### Completion Notes List
@@ -124,6 +131,7 @@ Codex (GPT-5)
 - Added strict frozen policy settings for medium/high/critical defaults, optional disabled thresholds, and advisory/warn below-threshold reporting behavior.
 - Persisted project defaults and integration-specific overrides through the existing application settings repository, with integration -> project -> built-in resolution and DELETE-based reset to inheritance.
 - Added one reusable configured-generation service that resolves adapter project key or ID, applies the correct integration settings, and rejects cross-project or cross-integration use.
+- Added an authenticated persisted-report policy-adapter endpoint that applies saved integration/project defaults through the configured-generation service while preserving the canonical report payload.
 - Kept policy decisions separate from the canonical advisory report and attached the resolved settings snapshot to the policy envelope for auditability.
 - Added admin-only GET/PUT/DELETE API management with explicit project scope and refreshed generated OpenAPI TypeScript declarations.
 - Documented built-in defaults, precedence, reset semantics, runtime usage, and the unchanged canonical evidence/findings/severity boundary.
@@ -133,6 +141,7 @@ Codex (GPT-5)
 - `_bmad-output/implementation-artifacts/11-2-threshold-and-reporting-defaults-management.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `api/routes/settings.py`
+- `api/routes/analyses.py`
 - `api/schemas.py`
 - `docs/workflow-adapter-output-contract.md`
 - `frontend/src/api/schema.d.ts`
@@ -141,6 +150,7 @@ Codex (GPT-5)
 - `services/policy_adapter_settings.py`
 - `services/settings_service.py`
 - `tests/test_api/test_settings.py`
+- `tests/test_api/test_analyses.py`
 - `tests/test_docs/test_workflow_adapter_output_contract.py`
 - `tests/test_services/test_policy_adapter_output_contract.py`
 - `tests/test_services/test_policy_adapter_service.py`
@@ -152,3 +162,4 @@ Codex (GPT-5)
 - 2026-08-06: Added project/integration threshold and reporting-default management, configured adapter interpretation, reset/inheritance behavior, explicit scope/RBAC safeguards, docs, generated API types, and full regression coverage; moved story to review.
 - 2026-08-06: Resolved all BMad review findings, added canonical project-key and integration-query regressions, passed full local CI, and marked the story done.
 - 2026-08-06: Resolved re-review findings for runtime-boundary wording, unknown canonical severities, and persisted scope integrity; retained Story 11.3 as the integration-activation boundary.
+- 2026-08-07: Resolved the second re-review by adding authenticated production policy-output generation, canonical project-key persistence, strict built-in provenance, generated API types, and regression coverage.

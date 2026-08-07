@@ -39,6 +39,7 @@ class WorkflowAdapterOutputContractDocumentationTests(unittest.TestCase):
             "/api/v1/settings/policy-adapter",
             "DELETE",
             "build_configured_policy_adapter_output",
+            "/api/v1/analyses/{report_id}/policy-adapter",
         )
         for expected in expected_clauses:
             with self.subTest(expected=expected):

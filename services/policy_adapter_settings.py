@@ -101,6 +101,16 @@ class PolicyAdapterSettings(BaseModel):
             raise ValueError(
                 "Project settings cannot include an integration identifier."
             )
+        if self.source == "built-in" and (
+            self.integration is not None
+            or self.warn_at != PolicySeverity.MEDIUM
+            or self.soft_block_at != PolicySeverity.HIGH
+            or self.hard_block_at != PolicySeverity.CRITICAL
+            or self.reporting_default != PolicyAdapterStatus.ADVISORY
+        ):
+            raise ValueError(
+                "Built-in settings must use the fixed advisory-first defaults."
+            )
 
         configured = [
             threshold

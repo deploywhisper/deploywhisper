@@ -597,6 +597,51 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["audit"]["llm_provider"], "ollama")
         self.assertEqual(payload["data"]["blast_radius"]["direct_count"], 0)
 
+    def test_policy_adapter_output_applies_saved_integration_defaults(self) -> None:
+        project_key = self.persisted["project"]["project_key"]
+        saved = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                "project_key": project_key,
+                "integration": "jenkins",
+                "warn_at": "high",
+                "soft_block_at": "critical",
+                "hard_block_at": None,
+                "reporting_default": "advisory",
+            },
+        )
+
+        response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}/policy-adapter",
+            params={"integration": "jenkins"},
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["status"], "advisory")
+        self.assertEqual(payload["data"]["applied_settings"]["source"], "integration")
+        self.assertEqual(payload["data"]["applied_settings"]["integration"], "jenkins")
+        self.assertEqual(
+            payload["data"]["adapter_output"]["canonical_summary"]["severity"],
+            "medium",
+        )
+        self.assertTrue(payload["data"]["canonical_report_advisory"])
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+
+    def test_policy_adapter_output_enforces_report_scope_access(self) -> None:
+        response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}/policy-adapter",
+            params={"integration": "jenkins"},
+            headers={
+                "X-DeployWhisper-Project-Role": "read-only",
+                "X-DeployWhisper-Project-Keys": "payments",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+
     def test_blast_radius_api_schema_preserves_topology_context_fields(self) -> None:
         blast_radius = BlastRadiusData.model_validate(
             BlastRadiusResult(

@@ -80,6 +80,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analyses/{report_id}/policy-adapter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Policy Adapter Output
+         * @description Generate a configured policy interpretation for one persisted report.
+         */
+        get: operations["get_policy_adapter_output_api_v1_analyses__report_id__policy_adapter_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analyses/{report_id}": {
         parameters: {
             query?: never;
@@ -626,6 +646,145 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AdapterCanonicalSummary
+         * @description Immutable canonical report summary consumed by all workflow adapters.
+         */
+        AdapterCanonicalSummary: {
+            /**
+             * Advisory Only
+             * @description Whether the shared summary is advisory rather than blocking
+             */
+            advisory_only: boolean;
+            /**
+             * Should Block
+             * @description Whether DeployWhisper itself should block deployment
+             */
+            should_block: boolean;
+            /**
+             * Severity
+             * @description Risk severity for the shared summary
+             */
+            severity: string;
+            /**
+             * Recommendation
+             * @description Deploy recommendation for the shared summary
+             */
+            recommendation: string;
+            /**
+             * Headline
+             * @description Top narrative line for PR or approval-thread use
+             */
+            headline: string;
+            /**
+             * Blast Radius Summary
+             * @description Concise blast-radius summary
+             */
+            blast_radius_summary: string;
+            /**
+             * Rollback Summary
+             * @description Concise rollback summary
+             */
+            rollback_summary: string;
+            /**
+             * Uncertainty Summary
+             * @description Concise uncertainty and review note
+             */
+            uncertainty_summary: string;
+            /**
+             * Markdown
+             * @description Markdown-ready advisory summary
+             */
+            markdown: string;
+            /**
+             * Plain Text
+             * @description Plain-text advisory summary
+             */
+            plain_text: string;
+            /** @description Machine-friendly share-summary payload */
+            json_payload: components["schemas"]["FrozenShareSummaryJsonPayload"];
+        };
+        /**
+         * AdapterMetadata
+         * @description Workflow adapter identity and delivery context.
+         */
+        AdapterMetadata: {
+            /**
+             * Adapter
+             * @description Adapter family, such as gitlab or jenkins
+             */
+            adapter: string;
+            /**
+             * Format
+             * @description Adapter output format or destination type
+             */
+            format: string;
+            /**
+             * Version
+             * @description Adapter contract version
+             */
+            version?: string | null;
+            /**
+             * Project Key
+             * @description Project key in scope
+             */
+            project_key?: string | null;
+            /**
+             * Project Id
+             * @description Project ID in scope
+             */
+            project_id?: number | null;
+            /**
+             * Workspace Key
+             * @description Workspace key in scope
+             */
+            workspace_key?: string | null;
+            /**
+             * Workspace Id
+             * @description Workspace ID in scope
+             */
+            workspace_id?: number | null;
+            /**
+             * Invocation Id
+             * @description Adapter invocation or workflow run identifier
+             */
+            invocation_id?: string | null;
+            /**
+             * Delivery Target
+             * @description Adapter-specific delivery target
+             */
+            delivery_target?: string | null;
+            /**
+             * Extra
+             * @description Adapter-specific metadata that does not shadow canonical fields
+             */
+            extra?: {
+                [key: string]: string | number | boolean | null;
+            };
+        };
+        /**
+         * AdapterOutputContract
+         * @description One report-output envelope for future delivery adapters.
+         */
+        AdapterOutputContract: {
+            /**
+             * Contract Version
+             * @description Adapter contract version
+             * @default v1
+             */
+            contract_version: string;
+            /** @description Adapter metadata */
+            adapter_metadata: components["schemas"]["AdapterMetadata"];
+            /** @description Immutable canonical summary */
+            canonical_summary: components["schemas"]["AdapterCanonicalSummary"];
+            /**
+             * Adapter Payload
+             * @description Adapter-specific formatting and delivery fields
+             */
+            adapter_payload?: {
+                [key: string]: unknown;
+            };
+        };
         /** AdvisorySummaryData */
         AdvisorySummaryData: {
             /**
@@ -2601,6 +2760,206 @@ export interface components {
             data: components["schemas"]["FeedbackEventData"];
             meta: components["schemas"]["ResourceMetaPayload"];
         };
+        /**
+         * FrozenShareSummaryContext
+         * @description Immutable context summary for adapter contracts.
+         */
+        FrozenShareSummaryContext: {
+            /**
+             * Score
+             * @description Context completeness score
+             */
+            score: number;
+            /**
+             * Label
+             * @description Context completeness badge label
+             */
+            label: string;
+            /**
+             * Summary
+             * @description Short context completeness summary
+             */
+            summary: string;
+        };
+        /**
+         * FrozenShareSummaryFinding
+         * @description Immutable share-summary finding for adapter contracts.
+         */
+        FrozenShareSummaryFinding: {
+            /**
+             * Title
+             * @description Short finding title for sharing
+             */
+            title: string;
+            /**
+             * Severity
+             * @description Finding severity
+             */
+            severity: string;
+            /**
+             * Evidence Count
+             * @description Evidence items linked to the finding
+             */
+            evidence_count: number;
+            /**
+             * Confidence
+             * @description Finding confidence score
+             */
+            confidence: number;
+            /**
+             * Evidence Label
+             * @description Reviewer-facing label for external or non-DeployWhisper evidence
+             */
+            evidence_label?: string | null;
+        };
+        /**
+         * FrozenShareSummaryJsonPayload
+         * @description Immutable machine-friendly share-summary payload for adapter contracts.
+         */
+        FrozenShareSummaryJsonPayload: {
+            /**
+             * Version
+             * @description Share-summary payload version
+             * @default v1
+             */
+            version: string;
+            /**
+             * Report Schema Version
+             * @description Report schema version used by the source persisted report
+             * @default v2
+             */
+            report_schema_version: string;
+            /**
+             * Report Id
+             * @description Persisted report ID
+             */
+            report_id?: number | null;
+            /**
+             * Report Link
+             * @description Deep link to the report
+             */
+            report_link?: string | null;
+            /**
+             * Rollback Link
+             * @description Deep link to the report rollback view
+             */
+            rollback_link?: string | null;
+            /**
+             * Verdict Banner
+             * @description Verdict banner for PR comments
+             */
+            verdict_banner: string;
+            /**
+             * Evidence Law Status
+             * @description Evidence Law verification status for severe claims
+             * @enum {string}
+             */
+            evidence_law_status: "Satisfied" | "Needs review" | "Reconciled" | "Detail omitted";
+            /**
+             * Evidence Law Detail
+             * @description Human-readable Evidence Law verification detail
+             */
+            evidence_law_detail: string;
+            /**
+             * Headline
+             * @description Top summary line
+             */
+            headline: string;
+            /**
+             * Top Findings
+             * @description Top findings to surface
+             */
+            top_findings?: components["schemas"]["FrozenShareSummaryFinding"][];
+            /**
+             * Evidence Count
+             * @description Total evidence-item count
+             */
+            evidence_count: number;
+            /**
+             * External Evidence Count
+             * @description External scanner evidence items included as review context
+             * @default 0
+             */
+            external_evidence_count: number;
+            /**
+             * External Evidence Summary
+             * @description How external scanner context should be interpreted
+             */
+            external_evidence_summary?: string | null;
+            /**
+             * Scanner Conflicts
+             * @description Scanner-vs-deterministic/context conflicts requiring review
+             */
+            scanner_conflicts?: components["schemas"]["FrozenShareSummaryScannerConflict"][];
+            /**
+             * Blast Radius Summary
+             * @description Concise blast-radius summary
+             */
+            blast_radius_summary: string;
+            /**
+             * Rollback Summary
+             * @description Concise rollback summary
+             */
+            rollback_summary: string;
+            /** @description Context completeness summary */
+            context_completeness: components["schemas"]["FrozenShareSummaryContext"];
+            /**
+             * Advisory Summary
+             * @description Advisory-only review summary
+             */
+            advisory_summary: string;
+        };
+        /**
+         * FrozenShareSummaryScannerConflict
+         * @description Immutable scanner-conflict summary for adapter contracts.
+         */
+        FrozenShareSummaryScannerConflict: {
+            /**
+             * Finding Id
+             * @description Finding with conflicting scanner context
+             */
+            finding_id: string;
+            /**
+             * Finding Title
+             * @description Reviewer-facing finding title
+             */
+            finding_title: string;
+            /**
+             * Scanner Source
+             * @description Scanner evidence source reference
+             */
+            scanner_source: string;
+            /**
+             * Scanner Freshness
+             * @description Scanner source freshness status
+             */
+            scanner_freshness: string;
+            /**
+             * Deterministic Source
+             * @description DeployWhisper deterministic evidence source
+             */
+            deterministic_source: string;
+            /**
+             * Deterministic Freshness
+             * @description DeployWhisper deterministic source freshness status
+             */
+            deterministic_freshness: string;
+            /**
+             * Conflict Summary
+             * @description Short conflict explanation
+             */
+            conflict_summary: string;
+            /**
+             * Confidence Impact
+             * @description How the conflict affects confidence interpretation
+             */
+            confidence_impact: string;
+            /**
+             * Recommended Verification
+             * @description Reviewer action for resolving the conflict
+             */
+            recommended_verification: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3227,6 +3586,102 @@ export interface components {
              */
             readonly pr_ref: string | null;
         };
+        /**
+         * PolicyAdapterOutputContract
+         * @description Versioned policy interpretation that leaves canonical output advisory.
+         */
+        PolicyAdapterOutputContract: {
+            /**
+             * Contract Version
+             * @description Policy adapter contract version
+             * @default v1
+             */
+            contract_version: string;
+            /** @description Local workflow decision */
+            status: components["schemas"]["PolicyAdapterStatus"];
+            /**
+             * Reasons
+             * @description Reasons for the policy status
+             */
+            reasons: components["schemas"]["PolicyAdapterReason"][];
+            /**
+             * Canonical Report Advisory
+             * @description Confirms policy status does not alter canonical report semantics
+             * @default true
+             * @constant
+             */
+            canonical_report_advisory: true;
+            /** @description Immutable canonical summary and adapter metadata */
+            adapter_output: components["schemas"]["AdapterOutputContract"];
+            /** @description Resolved threshold and reporting defaults used for interpretation */
+            applied_settings?: components["schemas"]["PolicyAdapterSettings"] | null;
+        };
+        /**
+         * PolicyAdapterOutputResponse
+         * @description API envelope for configured policy interpretation of one report.
+         */
+        PolicyAdapterOutputResponse: {
+            data: components["schemas"]["PolicyAdapterOutputContract"];
+            meta: components["schemas"]["ResourceMetaPayload"];
+        };
+        /**
+         * PolicyAdapterReason
+         * @description Structured explanation for a downstream policy interpretation.
+         */
+        PolicyAdapterReason: {
+            /**
+             * Code
+             * @description Stable adapter-owned reason code
+             */
+            code: string;
+            /**
+             * Message
+             * @description Human-readable policy explanation
+             */
+            message: string;
+        };
+        /**
+         * PolicyAdapterSettings
+         * @description Resolved project or integration defaults for policy interpretation.
+         */
+        PolicyAdapterSettings: {
+            /**
+             * Project Key
+             * @description Project owning these defaults
+             */
+            project_key: string;
+            /**
+             * Integration
+             * @description Optional integration identifier for an overriding default
+             */
+            integration?: string | null;
+            /**
+             * Source
+             * @description Scope from which the effective defaults were resolved
+             * @enum {string}
+             */
+            source: "built-in" | "project" | "integration";
+            /**
+             * @description Minimum canonical severity interpreted as warn
+             * @default medium
+             */
+            warn_at: components["schemas"]["PolicySeverity"] | null;
+            /**
+             * @description Minimum canonical severity interpreted as soft-block
+             * @default high
+             */
+            soft_block_at: components["schemas"]["PolicySeverity"] | null;
+            /**
+             * @description Minimum canonical severity interpreted as hard-block
+             * @default critical
+             */
+            hard_block_at: components["schemas"]["PolicySeverity"] | null;
+            /**
+             * @description Adapter status reported when no severity threshold is met
+             * @default advisory
+             */
+            reporting_default: components["schemas"]["PolicyAdapterStatus"];
+        };
         /** PolicyAdapterSettingsData */
         PolicyAdapterSettingsData: {
             /** Project Key */
@@ -3285,6 +3740,18 @@ export interface components {
             data: components["schemas"]["PolicyAdapterSettingsData"];
             meta: components["schemas"]["MetaPayload"];
         };
+        /**
+         * PolicyAdapterStatus
+         * @description Supported downstream policy interpretations.
+         * @enum {string}
+         */
+        PolicyAdapterStatus: "advisory" | "warn" | "soft-block" | "hard-block";
+        /**
+         * PolicySeverity
+         * @description Canonical severities policy thresholds may interpret.
+         * @enum {string}
+         */
+        PolicySeverity: "low" | "medium" | "high" | "critical";
         /** PreviousScanDiffData */
         PreviousScanDiffData: {
             /**
@@ -5695,6 +6162,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalysisBulkDeleteResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_policy_adapter_output_api_v1_analyses__report_id__policy_adapter_get: {
+        parameters: {
+            query: {
+                integration: string;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyAdapterOutputResponse"];
                 };
             };
             /** @description Bad Request */
