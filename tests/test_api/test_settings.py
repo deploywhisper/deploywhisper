@@ -148,6 +148,23 @@ class SettingsApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["error"]["code"], "project_permission_denied")
 
+    def test_policy_adapter_update_preserves_project_resolution_error_contract(
+        self,
+    ) -> None:
+        response = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                "project_id": 999_999,
+                "warn_at": "medium",
+                "soft_block_at": "high",
+                "hard_block_at": "critical",
+                "reporting_default": "advisory",
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "project_not_found")
+
     def test_policy_adapter_defaults_can_be_reset_to_inherited_scope(self) -> None:
         project_payload = {
             "project_key": self.project.project_key,
@@ -236,6 +253,17 @@ class SettingsApiTests(unittest.TestCase):
                     response.json()["error"]["code"],
                     "invalid_policy_adapter_settings",
                 )
+
+    def test_openapi_documents_policy_adapter_settings_error_contracts(self) -> None:
+        response = self.client.get("/openapi.json")
+
+        self.assertEqual(response.status_code, 200)
+        operations = response.json()["paths"]["/api/v1/settings/policy-adapter"]
+        for method in ("get", "put", "delete"):
+            with self.subTest(method=method):
+                responses = operations[method]["responses"]
+                for status_code in ("400", "403", "404", "422", "500"):
+                    self.assertIn("ErrorResponse", str(responses[status_code]))
 
     def test_preview_and_save_topology_return_validation_payloads(self) -> None:
         topology = {

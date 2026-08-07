@@ -163,13 +163,17 @@ PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
 }
 
 POLICY_ADAPTER_SETTINGS_PREFIX = "policy_adapter_defaults"
+POLICY_ADAPTER_SETTINGS_KEY_MAX_LENGTH = 100
 
 
 def _policy_adapter_settings_key(
     *, project_key: str, integration: str | None = None
 ) -> str:
     scope = f"integration::{integration}" if integration else "project"
-    return f"{POLICY_ADAPTER_SETTINGS_PREFIX}::{project_key}::{scope}"
+    key = f"{POLICY_ADAPTER_SETTINGS_PREFIX}::{project_key}::{scope}"
+    if len(key) > POLICY_ADAPTER_SETTINGS_KEY_MAX_LENGTH:
+        raise ValueError("Policy adapter settings scope exceeds the storage key limit.")
+    return key
 
 
 def _policy_integration_label(value: str) -> str:

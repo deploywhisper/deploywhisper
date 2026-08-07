@@ -442,6 +442,38 @@ def _require_report_delete_permission(
     )
 
 
+def _fetch_report_for_authorized_read(
+    *,
+    authorization: dict[str, object],
+    report_id: int,
+) -> dict:
+    require_project_permission(
+        role=authorization["role"],
+        capability="report.read",
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+    report = fetch_analysis_report(report_id)
+    if report is None:
+        if has_restricted_project_scope(
+            role=authorization["role"],
+            allowed_project_keys=authorization["allowed_project_keys"],
+        ):
+            raise _project_scope_forbidden_error()
+        raise ApiError(
+            status_code=404,
+            code="analysis_not_found",
+            message="Analysis report not found.",
+        )
+    project = report.get("project") or {}
+    require_project_permission(
+        role=authorization["role"],
+        capability="report.read",
+        project_key=project.get("project_key"),
+        allowed_project_keys=authorization["allowed_project_keys"],
+    )
+    return report
+
+
 def _reject_unscoped_workspace_id(
     *,
     project_id: int | None,
@@ -921,27 +953,19 @@ def get_policy_adapter_output(
     authorization: dict[str, object] = Depends(_authorization_context),
 ) -> PolicyAdapterOutputResponse:
     """Generate a configured policy interpretation for one persisted report."""
-    report = fetch_analysis_report(report_id)
-    if report is None:
-        raise ApiError(
-            status_code=404,
-            code="analysis_not_found",
-            message="Analysis report not found.",
-        )
-    project = report.get("project") or {}
-    project_id = project.get("id")
-    if not isinstance(project_id, int):
-        raise ApiError(
-            status_code=500,
-            code="analysis_project_scope_invalid",
-            message="Analysis report project scope is invalid.",
-        )
     try:
-        _require_api_project_permission(
+        report = _fetch_report_for_authorized_read(
             authorization=authorization,
-            capability="report.read",
-            project_id=project_id,
+            report_id=report_id,
         )
+        project = report.get("project") or {}
+        project_id = project.get("id")
+        if not isinstance(project_id, int):
+            raise ApiError(
+                status_code=500,
+                code="analysis_project_scope_invalid",
+                message="Analysis report project scope is invalid.",
+            )
         adapter_output = build_adapter_output_contract(
             build_share_summary(report),
             AdapterMetadata(

@@ -189,6 +189,20 @@ class SettingsServiceTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "scope does not match"):
                     settings_service_module.get_policy_adapter_settings(**requested)
 
+    def test_policy_adapter_settings_reject_scopes_exceeding_storage_key_limit(
+        self,
+    ) -> None:
+        oversized_scope = {"project_key": "p" * 80, "integration": "jenkins"}
+
+        for operation in (
+            settings_service_module.save_policy_adapter_settings,
+            settings_service_module.get_policy_adapter_settings,
+            settings_service_module.delete_policy_adapter_settings,
+        ):
+            with self.subTest(operation=operation.__name__):
+                with self.assertRaisesRegex(ValueError, "storage key limit"):
+                    operation(**oversized_scope)
+
     def test_provider_profiles_can_be_saved_per_provider_and_switched(self) -> None:
         settings_service_module.save_provider_settings(
             provider="openai",

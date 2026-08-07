@@ -14,6 +14,7 @@ from api.schemas import (
     CustomSkillUploadData,
     CustomSkillUploadRequest,
     CustomSkillUploadResponse,
+    ErrorResponse,
     FeedbackSummaryData,
     PolicyAdapterSettingsData,
     PolicyAdapterSettingsRequest,
@@ -43,7 +44,6 @@ from api.schemas import (
 from llm.skill_context import get_custom_skill_statuses, save_custom_skill
 from services.feedback_service import fetch_feedback_summary
 from services.project_service import (
-    ProjectResolutionError,
     has_restricted_project_scope,
     require_project_permission,
     resolve_project_reference,
@@ -80,6 +80,16 @@ def _project_api_error(exc: ValueError) -> ApiError:
     return ApiError(
         status_code=status_code,
         code=code,
+        message=str(exc),
+    )
+
+
+def _policy_adapter_api_error(exc: ValueError) -> ApiError:
+    if getattr(exc, "code", None) is not None:
+        return _project_api_error(exc)
+    return ApiError(
+        status_code=400,
+        code="invalid_policy_adapter_settings",
         message=str(exc),
     )
 
@@ -435,7 +445,17 @@ def update_provider_settings(
     )
 
 
-@settings_router.get("/policy-adapter", response_model=PolicyAdapterSettingsResponse)
+@settings_router.get(
+    "/policy-adapter",
+    response_model=PolicyAdapterSettingsResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
 def get_policy_adapter_defaults(
     project_id: int | None = Query(default=None),
     project_key: str | None = Query(default=None),
@@ -460,21 +480,25 @@ def get_policy_adapter_defaults(
         )
     except PermissionError as exc:
         _raise_authorization_error(exc)
-    except ProjectResolutionError as exc:
-        raise _project_api_error(exc) from exc
     except ValueError as exc:
-        raise ApiError(
-            status_code=400,
-            code="invalid_policy_adapter_settings",
-            message=str(exc),
-        ) from exc
+        raise _policy_adapter_api_error(exc) from exc
     return PolicyAdapterSettingsResponse(
         data=_policy_adapter_settings_data(resolved),
         meta=build_meta(),
     )
 
 
-@settings_router.put("/policy-adapter", response_model=PolicyAdapterSettingsResponse)
+@settings_router.put(
+    "/policy-adapter",
+    response_model=PolicyAdapterSettingsResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
 def update_policy_adapter_defaults(
     payload: PolicyAdapterSettingsRequest,
     authorization: dict[str, object] = Depends(_authorization_context),
@@ -502,18 +526,24 @@ def update_policy_adapter_defaults(
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
-        raise ApiError(
-            status_code=400,
-            code="invalid_policy_adapter_settings",
-            message=str(exc),
-        ) from exc
+        raise _policy_adapter_api_error(exc) from exc
     return PolicyAdapterSettingsResponse(
         data=_policy_adapter_settings_data(saved),
         meta=build_meta(),
     )
 
 
-@settings_router.delete("/policy-adapter", response_model=PolicyAdapterSettingsResponse)
+@settings_router.delete(
+    "/policy-adapter",
+    response_model=PolicyAdapterSettingsResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
 def reset_policy_adapter_defaults(
     project_id: int | None = Query(default=None),
     project_key: str | None = Query(default=None),
@@ -538,14 +568,8 @@ def reset_policy_adapter_defaults(
         )
     except PermissionError as exc:
         _raise_authorization_error(exc)
-    except ProjectResolutionError as exc:
-        raise _project_api_error(exc) from exc
     except ValueError as exc:
-        raise ApiError(
-            status_code=400,
-            code="invalid_policy_adapter_settings",
-            message=str(exc),
-        ) from exc
+        raise _policy_adapter_api_error(exc) from exc
     return PolicyAdapterSettingsResponse(
         data=_policy_adapter_settings_data(inherited),
         meta=build_meta(),

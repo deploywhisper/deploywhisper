@@ -630,17 +630,21 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["report_schema_version"], "v2")
 
     def test_policy_adapter_output_enforces_report_scope_access(self) -> None:
-        response = self.client.get(
-            f"/api/v1/analyses/{self.persisted['id']}/policy-adapter",
-            params={"integration": "jenkins"},
-            headers={
-                "X-DeployWhisper-Project-Role": "read-only",
-                "X-DeployWhisper-Project-Keys": "payments",
-            },
-        )
+        for report_id in (self.persisted["id"], 999_999):
+            with self.subTest(report_id=report_id):
+                response = self.client.get(
+                    f"/api/v1/analyses/{report_id}/policy-adapter",
+                    params={"integration": "jenkins"},
+                    headers={
+                        "X-DeployWhisper-Project-Role": "read-only",
+                        "X-DeployWhisper-Project-Keys": "payments",
+                    },
+                )
 
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["error"]["code"], "project_scope_forbidden")
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(
+                    response.json()["error"]["code"], "project_scope_forbidden"
+                )
 
     def test_blast_radius_api_schema_preserves_topology_context_fields(self) -> None:
         blast_radius = BlastRadiusData.model_validate(

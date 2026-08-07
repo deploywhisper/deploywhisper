@@ -39,6 +39,10 @@ So that teams can tune adapter behavior without changing core code.
 - [x] [Review][Decision] Decide whether configured generation must be activated in a production integration in Story 11.2 — Resolved by adding an authenticated persisted-report policy-output endpoint that exercises the configured generation service; Story 11.3 still owns enforcement-mode activation inside specific CI/workflow integrations.
 - [x] [Review][Patch] Canonicalize project keys consistently before policy-settings persistence and lookup [services/settings_service.py:174]
 - [x] [Review][Patch] Prevent built-in settings from claiming integration-specific or customized threshold provenance [services/policy_adapter_settings.py:92]
+- [x] [Review][Patch] Map policy-adapter PUT project-resolution failures through the standard project API error contract [api/routes/settings.py:487]
+- [x] [Review][Patch] Publish policy-adapter settings 400/403/404 error envelopes in OpenAPI and generated client types [api/routes/settings.py:438]
+- [x] [Review][Patch] Mask persisted-report existence from restricted policy-output callers [api/routes/analyses.py:924]
+- [x] [Review][Patch] Keep dynamic policy-setting keys within the AppSetting storage limit [services/settings_service.py:167]
 
 ## Dev Notes
 
@@ -124,6 +128,11 @@ Codex (GPT-5)
 - Second re-review GREEN: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_service.py tests/test_services/test_policy_adapter_output_contract.py tests/test_services/test_settings_service.py tests/test_api/test_settings.py tests/test_api/test_analyses.py tests/test_docs/test_workflow_adapter_output_contract.py -q --tb=short` — 152 passed, 76 subtests passed.
 - Second re-review affected CI shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` — 384 passed, 98 subtests passed.
 - Second re-review full local CI: `bash scripts/ci-local.sh` — passed, including Ruff, formatting, dependency validation, Bandit, compile checks, skill harnesses, and 910 tests.
+- Third re-review RED: new regressions reproduced the inconsistent PUT project error, undocumented settings error responses, restricted missing-report existence leak, and unchecked oversized settings key.
+- Third re-review GREEN: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_service.py tests/test_services/test_policy_adapter_output_contract.py tests/test_services/test_settings_service.py tests/test_api/test_settings.py tests/test_api/test_analyses.py tests/test_docs/test_workflow_adapter_output_contract.py -q --tb=short` — 155 passed, 84 subtests passed.
+- Third re-review affected CI shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` — 386 passed, 103 subtests passed.
+- Third re-review full local CI: `bash scripts/ci-local.sh` — passed, including Ruff, formatting, dependency validation, Bandit, compile checks, skill harnesses, and 911 tests.
+- Independent verification: PASS; all four review findings were confirmed fixed with direct regression coverage and no introduced correctness or security regression identified.
 - UI validation not applicable: no React route, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed; only generated API type declarations were refreshed.
 
 ### Completion Notes List
@@ -163,3 +172,4 @@ Codex (GPT-5)
 - 2026-08-06: Resolved all BMad review findings, added canonical project-key and integration-query regressions, passed full local CI, and marked the story done.
 - 2026-08-06: Resolved re-review findings for runtime-boundary wording, unknown canonical severities, and persisted scope integrity; retained Story 11.3 as the integration-activation boundary.
 - 2026-08-07: Resolved the second re-review by adding authenticated production policy-output generation, canonical project-key persistence, strict built-in provenance, generated API types, and regression coverage.
+- 2026-08-07: Resolved the third re-review by aligning project error contracts, documenting API errors, masking restricted report existence, enforcing settings-key limits, and passing full local CI.
