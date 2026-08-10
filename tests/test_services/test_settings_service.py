@@ -16,6 +16,7 @@ import models.repositories.settings as settings_repository_module
 import models.tables as tables_module
 import services.settings_service as settings_service_module
 from services.policy_adapter_settings import PolicyAdapterStatus
+from services.policy_adapter_settings import PolicyAdapterSettingsIntegrityError
 
 
 class SettingsServiceTests(unittest.TestCase):
@@ -186,22 +187,55 @@ class SettingsServiceTests(unittest.TestCase):
                         value=json.dumps(stored),
                     )
 
-                with self.assertRaisesRegex(ValueError, "scope does not match"):
+                with self.assertRaisesRegex(
+                    PolicyAdapterSettingsIntegrityError, "scope does not match"
+                ):
                     settings_service_module.get_policy_adapter_settings(**requested)
 
-    def test_policy_adapter_settings_reject_scopes_exceeding_storage_key_limit(
+    def test_policy_adapter_settings_support_scopes_exceeding_plain_key_limit(
         self,
     ) -> None:
-        oversized_scope = {"project_key": "p" * 80, "integration": "jenkins"}
+        long_scope = {"project_key": "p" * 80, "integration": "jenkins"}
 
-        for operation in (
-            settings_service_module.save_policy_adapter_settings,
-            settings_service_module.get_policy_adapter_settings,
-            settings_service_module.delete_policy_adapter_settings,
+        inherited = settings_service_module.get_policy_adapter_settings(**long_scope)
+        saved = settings_service_module.save_policy_adapter_settings(
+            **long_scope,
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+        )
+        loaded = settings_service_module.get_policy_adapter_settings(**long_scope)
+        with database_module.SessionLocal() as session:
+            keys = [
+                record.key
+                for record in settings_repository_module.list_settings(session)
+                if record.key.startswith("policy_adapter_defaults::")
+            ]
+        reset = settings_service_module.delete_policy_adapter_settings(**long_scope)
+
+        self.assertEqual(inherited.source, "built-in")
+        self.assertEqual(saved.source, "integration")
+        self.assertEqual(loaded.source, "integration")
+        self.assertEqual(len(keys), 1)
+        self.assertIn("::sha256::", keys[0])
+        self.assertLessEqual(len(keys[0]), 100)
+        self.assertEqual(reset.source, "built-in")
+
+    def test_policy_adapter_settings_classify_malformed_storage_as_integrity_error(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key="policy_adapter_defaults::payments::project",
+                value="not-json",
+            )
+
+        with self.assertRaisesRegex(
+            PolicyAdapterSettingsIntegrityError,
+            "could not be validated",
         ):
-            with self.subTest(operation=operation.__name__):
-                with self.assertRaisesRegex(ValueError, "storage key limit"):
-                    operation(**oversized_scope)
+            settings_service_module.get_policy_adapter_settings(project_key="payments")
 
     def test_provider_profiles_can_be_saved_per_provider_and_switched(self) -> None:
         settings_service_module.save_provider_settings(

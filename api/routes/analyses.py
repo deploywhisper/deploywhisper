@@ -84,6 +84,7 @@ from services.project_service import (
 )
 from services.project_service import resolve_project_reference
 from services.policy_adapter_output_contract import PolicyAdapterOutputContract
+from services.policy_adapter_settings import PolicyAdapterSettingsIntegrityError
 from services.policy_adapter_service import build_configured_policy_adapter_output
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
@@ -977,6 +978,12 @@ def get_policy_adapter_output(
         policy_output = build_configured_policy_adapter_output(adapter_output)
     except PermissionError as exc:
         _raise_authorization_error(exc)
+    except PolicyAdapterSettingsIntegrityError as exc:
+        raise ApiError(
+            status_code=500,
+            code="policy_adapter_settings_integrity_error",
+            message="Stored policy adapter settings failed integrity validation.",
+        ) from exc
     except ValueError as exc:
         raise ApiError(
             status_code=400,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 
@@ -18,6 +19,7 @@ from models.database import SessionLocal
 from models.repositories.settings import delete_setting, get_setting, upsert_setting
 from services.policy_adapter_settings import (
     PolicyAdapterSettings,
+    PolicyAdapterSettingsIntegrityError,
     PolicyAdapterStatus,
     PolicySeverity,
 )
@@ -171,9 +173,10 @@ def _policy_adapter_settings_key(
 ) -> str:
     scope = f"integration::{integration}" if integration else "project"
     key = f"{POLICY_ADAPTER_SETTINGS_PREFIX}::{project_key}::{scope}"
-    if len(key) > POLICY_ADAPTER_SETTINGS_KEY_MAX_LENGTH:
-        raise ValueError("Policy adapter settings scope exceeds the storage key limit.")
-    return key
+    if len(key) <= POLICY_ADAPTER_SETTINGS_KEY_MAX_LENGTH:
+        return key
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return f"{POLICY_ADAPTER_SETTINGS_PREFIX}::sha256::{digest}"
 
 
 def _policy_integration_label(value: str) -> str:
@@ -193,14 +196,19 @@ def _load_policy_adapter_settings(
     project_key: str,
     integration: str | None,
 ) -> PolicyAdapterSettings:
-    loaded = PolicyAdapterSettings.model_validate_json(value)
+    try:
+        loaded = PolicyAdapterSettings.model_validate_json(value)
+    except ValueError as exc:
+        raise PolicyAdapterSettingsIntegrityError(
+            "Stored policy adapter settings could not be validated."
+        ) from exc
     expected_source = "integration" if integration is not None else "project"
     if (
         loaded.project_key != project_key
         or loaded.integration != integration
         or loaded.source != expected_source
     ):
-        raise ValueError(
+        raise PolicyAdapterSettingsIntegrityError(
             "Stored policy adapter settings scope does not match requested scope."
         )
     return loaded

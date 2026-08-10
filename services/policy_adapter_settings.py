@@ -41,6 +41,10 @@ SEVERITY_RANK = {
 }
 
 
+class PolicyAdapterSettingsIntegrityError(RuntimeError):
+    """Raised when persisted policy settings fail their storage contract."""
+
+
 class PolicyAdapterSettings(BaseModel):
     """Resolved project or integration defaults for policy interpretation."""
 

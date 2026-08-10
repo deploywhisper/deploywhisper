@@ -43,6 +43,8 @@ So that teams can tune adapter behavior without changing core code.
 - [x] [Review][Patch] Publish policy-adapter settings 400/403/404 error envelopes in OpenAPI and generated client types [api/routes/settings.py:438]
 - [x] [Review][Patch] Mask persisted-report existence from restricted policy-output callers [api/routes/analyses.py:924]
 - [x] [Review][Patch] Keep dynamic policy-setting keys within the AppSetting storage limit [services/settings_service.py:167]
+- [x] [Review][Patch] Preserve policy defaults for every valid project and integration scope instead of rejecting composed keys longer than AppSetting.key [services/settings_service.py:165]
+- [x] [Review][Patch] Classify malformed persisted policy settings as server-side integrity failures instead of client-invalid policy output [services/settings_service.py:196]
 
 ## Dev Notes
 
@@ -133,6 +135,10 @@ Codex (GPT-5)
 - Third re-review affected CI shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` — 386 passed, 103 subtests passed.
 - Third re-review full local CI: `bash scripts/ci-local.sh` — passed, including Ruff, formatting, dependency validation, Bandit, compile checks, skill harnesses, and 911 tests.
 - Independent verification: PASS; all four review findings were confirmed fixed with direct regression coverage and no introduced correctness or security regression identified.
+- Fourth re-review RED: regressions reproduced valid long project/integration scopes failing before built-in resolution and malformed persisted settings being reported as client-invalid output.
+- Fourth re-review GREEN: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_service.py tests/test_services/test_policy_adapter_output_contract.py tests/test_services/test_settings_service.py tests/test_api/test_settings.py tests/test_api/test_analyses.py tests/test_docs/test_workflow_adapter_output_contract.py -q --tb=short` — 158 passed, 81 subtests passed.
+- Fourth re-review affected CI shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` — 388 passed, 103 subtests passed.
+- Fourth re-review full local CI: `bash scripts/ci-local.sh` — passed, including repo-wide Ruff formatting, dependency validation, Bandit, compile checks, skill harnesses, and 912 tests.
 - UI validation not applicable: no React route, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed; only generated API type declarations were refreshed.
 
 ### Completion Notes List
@@ -144,6 +150,8 @@ Codex (GPT-5)
 - Kept policy decisions separate from the canonical advisory report and attached the resolved settings snapshot to the policy envelope for auditability.
 - Added admin-only GET/PUT/DELETE API management with explicit project scope and refreshed generated OpenAPI TypeScript declarations.
 - Documented built-in defaults, precedence, reset semantics, runtime usage, and the unchanged canonical evidence/findings/severity boundary.
+- Preserved short human-readable settings keys while using deterministic bounded keys for valid long project/integration scopes.
+- Classified malformed persisted policy settings as server integrity failures with a dedicated non-leaking API error contract.
 
 ### File List
 
@@ -173,3 +181,4 @@ Codex (GPT-5)
 - 2026-08-06: Resolved re-review findings for runtime-boundary wording, unknown canonical severities, and persisted scope integrity; retained Story 11.3 as the integration-activation boundary.
 - 2026-08-07: Resolved the second re-review by adding authenticated production policy-output generation, canonical project-key persistence, strict built-in provenance, generated API types, and regression coverage.
 - 2026-08-07: Resolved the third re-review by aligning project error contracts, documenting API errors, masking restricted report existence, enforcing settings-key limits, and passing full local CI.
+- 2026-08-10: Resolved the fourth re-review by supporting valid long policy scopes with bounded deterministic keys, classifying corrupt persisted settings as server integrity failures, and passing focused, CI-shard, and full local validation.

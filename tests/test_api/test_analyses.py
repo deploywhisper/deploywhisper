@@ -14,6 +14,7 @@ from unittest.mock import patch
 import config as config_module
 import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
+import models.repositories.settings as settings_repository_module
 import models.tables as tables_module
 import services.deployment_outcome_service as deployment_outcome_service_module
 import services.project_service as project_service_module
@@ -645,6 +646,28 @@ class AnalysesApiTests(unittest.TestCase):
                 self.assertEqual(
                     response.json()["error"]["code"], "project_scope_forbidden"
                 )
+
+    def test_policy_adapter_output_reports_corrupt_settings_as_server_error(
+        self,
+    ) -> None:
+        project_key = self.persisted["project"]["project_key"]
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key=f"policy_adapter_defaults::{project_key}::project",
+                value="not-json",
+            )
+
+        response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}/policy-adapter",
+            params={"integration": "jenkins"},
+        )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.json()["error"]["code"],
+            "policy_adapter_settings_integrity_error",
+        )
 
     def test_blast_radius_api_schema_preserves_topology_context_fields(self) -> None:
         blast_radius = BlastRadiusData.model_validate(

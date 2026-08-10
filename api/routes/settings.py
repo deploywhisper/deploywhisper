@@ -62,6 +62,7 @@ from services.settings_service import (
     save_topology_drift_check_interval_hours,
     validate_provider_settings,
 )
+from services.policy_adapter_settings import PolicyAdapterSettingsIntegrityError
 from services.topology_service import (
     get_topology_status,
     save_topology_definition,
@@ -91,6 +92,14 @@ def _policy_adapter_api_error(exc: ValueError) -> ApiError:
         status_code=400,
         code="invalid_policy_adapter_settings",
         message=str(exc),
+    )
+
+
+def _policy_adapter_integrity_api_error() -> ApiError:
+    return ApiError(
+        status_code=500,
+        code="policy_adapter_settings_integrity_error",
+        message="Stored policy adapter settings failed integrity validation.",
     )
 
 
@@ -480,6 +489,8 @@ def get_policy_adapter_defaults(
         )
     except PermissionError as exc:
         _raise_authorization_error(exc)
+    except PolicyAdapterSettingsIntegrityError as exc:
+        raise _policy_adapter_integrity_api_error() from exc
     except ValueError as exc:
         raise _policy_adapter_api_error(exc) from exc
     return PolicyAdapterSettingsResponse(
@@ -525,6 +536,8 @@ def update_policy_adapter_defaults(
         )
     except PermissionError as exc:
         _raise_authorization_error(exc)
+    except PolicyAdapterSettingsIntegrityError as exc:
+        raise _policy_adapter_integrity_api_error() from exc
     except ValueError as exc:
         raise _policy_adapter_api_error(exc) from exc
     return PolicyAdapterSettingsResponse(
@@ -568,6 +581,8 @@ def reset_policy_adapter_defaults(
         )
     except PermissionError as exc:
         _raise_authorization_error(exc)
+    except PolicyAdapterSettingsIntegrityError as exc:
+        raise _policy_adapter_integrity_api_error() from exc
     except ValueError as exc:
         raise _policy_adapter_api_error(exc) from exc
     return PolicyAdapterSettingsResponse(

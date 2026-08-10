@@ -12,6 +12,7 @@ from unittest.mock import patch
 import config as config_module
 import llm.skill_context as skill_context_module
 import models.database as database_module
+import models.repositories.settings as settings_repository_module
 import models.tables as tables_module
 import services.project_service as project_service_module
 import services.settings_service as settings_service_module
@@ -253,6 +254,27 @@ class SettingsApiTests(unittest.TestCase):
                     response.json()["error"]["code"],
                     "invalid_policy_adapter_settings",
                 )
+
+    def test_policy_adapter_defaults_report_corrupt_storage_as_server_error(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key=(f"policy_adapter_defaults::{self.project.project_key}::project"),
+                value="not-json",
+            )
+
+        response = self.client.get(
+            "/api/v1/settings/policy-adapter",
+            params={"project_key": self.project.project_key},
+        )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.json()["error"]["code"],
+            "policy_adapter_settings_integrity_error",
+        )
 
     def test_openapi_documents_policy_adapter_settings_error_contracts(self) -> None:
         response = self.client.get("/openapi.json")
