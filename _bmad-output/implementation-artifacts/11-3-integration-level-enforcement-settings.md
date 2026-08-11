@@ -109,6 +109,7 @@ OpenAI Codex (GPT-5)
 - Review required smoke: `./.venv/bin/python -m unittest discover -q` - `411 tests` passed, `1 skipped`.
 - Review CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` - `392 passed, 109 subtests passed`.
 - Review generated-client verification: OpenAPI schema regenerated from the local app; frontend production build passed; Vitest reported `55 passed`.
+- Remote CI correction: the first PR API/CLI/infra run found a stale mirrored sprint-status header date; after aligning it with `last_updated`, the focused metadata regression and full shard were rerun.
 
 ### Completion Notes List
 
