@@ -18,8 +18,16 @@ from typing import Any
 from urllib import error, parse, request
 
 from config import settings
+from services.adapter_output_contract import (
+    AdapterMetadata,
+    build_adapter_output_contract,
+)
 from services.project_service import ProjectResolutionError, resolve_project_reference
-from services.analysis_service import AnalysisPersistenceError, analyze_uploaded_files
+from services.analysis_service import (
+    AnalysisPersistenceError,
+    analyze_uploaded_files,
+    build_share_summary,
+)
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     build_pending_analysis,
@@ -27,6 +35,14 @@ from services.intake_service import (
     uniquify_artifact_names,
 )
 from services.report_service import build_share_report_link
+from services.policy_adapter_service import (
+    IntegrationEnforcementDecision,
+    build_integration_enforcement_decision,
+)
+from services.policy_adapter_settings import (
+    PolicyAdapterSettingsIntegrityError,
+    PolicyAdapterStatus,
+)
 
 DEFAULT_GITHUB_API_BASE_URL = "https://api.github.com"
 DEFAULT_GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
@@ -412,7 +428,13 @@ def handle_github_app_webhook(
                 title=DEFAULT_CHECK_RUN_NAME,
                 summary=note,
                 details_url=None,
-                text=_check_run_text(details_url=None),
+                text=_check_run_text(
+                    details_url=None,
+                    fallback_guidance=(
+                        "No supported changed artifacts were available, so no "
+                        "policy decision was evaluated."
+                    ),
+                ),
                 api_base_url=config.api_base_url,
             )
             if config.checks_enabled
@@ -539,16 +561,67 @@ def handle_github_app_webhook(
     check_run_id = None
     if config.checks_enabled:
         report_url = _check_run_details_url(report_id, config=config)
+        try:
+            enforcement = build_integration_enforcement_decision(
+                build_adapter_output_contract(
+                    build_share_summary(result.persisted_report),
+                    AdapterMetadata(
+                        adapter="github",
+                        format="github_check_run",
+                        project_key=project.project_key,
+                    ),
+                )
+            )
+        except (PolicyAdapterSettingsIntegrityError, ValueError) as exc:
+            code = (
+                "policy_adapter_settings_integrity_error"
+                if isinstance(exc, PolicyAdapterSettingsIntegrityError)
+                else "invalid_policy_adapter_output"
+            )
+            note = (
+                "DeployWhisper analysis completed, but the integration enforcement "
+                "decision could not be validated."
+            )
+            try:
+                check_run_id = _create_check_run(
+                    owner=owner,
+                    repo_name=repo_name,
+                    head_sha=head_sha,
+                    installation_token=installation_token,
+                    conclusion="failure",
+                    title=DEFAULT_CHECK_RUN_NAME,
+                    summary=note,
+                    details_url=report_url,
+                    text=_check_run_text(details_url=report_url),
+                    api_base_url=config.api_base_url,
+                )
+            except GitHubAppRequestError:
+                note = f"{note} Failure check run could not be created."
+            return GitHubWebhookResult(
+                event=event_name,
+                action=action,
+                handled=True,
+                automatic_analysis_triggered=True,
+                check_run_id=check_run_id,
+                report_id=report_id,
+                report_url=report_url,
+                note=note,
+                status="failed",
+                code=code,
+            )
         check_run_id = _create_check_run(
             owner=owner,
             repo_name=repo_name,
             head_sha=head_sha,
             installation_token=installation_token,
-            conclusion=_check_run_conclusion(result.assessment.recommendation),
+            conclusion=_check_run_conclusion(
+                result.assessment.recommendation,
+                enforcement.effective_status,
+            ),
             title=DEFAULT_CHECK_RUN_NAME,
-            summary=_check_run_summary(result.persisted_report),
+            summary=_check_run_summary(result.persisted_report, enforcement),
             details_url=report_url,
-            text=_check_run_text(details_url=report_url),
+            text=_check_run_text(details_url=report_url, enforcement=enforcement),
             api_base_url=config.api_base_url,
         )
     return GitHubWebhookResult(
@@ -682,16 +755,24 @@ def _download_repo_file(
     return None
 
 
-def _check_run_conclusion(recommendation: str) -> str:
+def _check_run_conclusion(
+    recommendation: str,
+    enforcement_status: PolicyAdapterStatus | str,
+) -> str:
+    status = PolicyAdapterStatus(enforcement_status)
+    if status == PolicyAdapterStatus.SOFT_BLOCK:
+        return "action_required"
+    if status == PolicyAdapterStatus.HARD_BLOCK:
+        return "failure"
     recommendation_value = str(recommendation).strip().lower()
-    if recommendation_value == "go":
+    if status == PolicyAdapterStatus.ADVISORY and recommendation_value == "go":
         return "success"
-    if recommendation_value == "caution":
-        return "neutral"
-    return "failure"
+    return "neutral"
 
 
-def _check_run_summary(report: dict[str, Any]) -> str:
+def _check_run_summary(
+    report: dict[str, Any], enforcement: IntegrationEnforcementDecision
+) -> str:
     headline = str(
         report.get("narrative_opening") or report.get("top_risk") or ""
     ).strip()
@@ -700,21 +781,42 @@ def _check_run_summary(report: dict[str, Any]) -> str:
     recommendation = str(report.get("recommendation") or "unknown").upper()
     severity = str(report.get("severity") or "unknown").upper()
     score = int(report.get("risk_score") or 0)
+    raw_status = enforcement.policy_output.status.value
+    configured_mode = enforcement.configured_mode.value
+    effective_status = enforcement.effective_status.value
     return (
         f"{headline}\n\n"
         f"Severity: {severity}\n"
         f"Recommendation: {recommendation}\n"
         f"Risk score: {score}\n"
-        "DeployWhisper remains advisory-only and never blocks merge on its own.\n"
-        "Do not configure this check as a required status check."
+        f"Policy status: {raw_status}\n"
+        f"Configured enforcement mode: {configured_mode}\n"
+        f"Effective integration status: {effective_status}\n"
+        "The canonical DeployWhisper report remains advisory-only."
     )
 
 
 def _check_run_text(
     *,
     details_url: str | None,
+    enforcement: IntegrationEnforcementDecision | None = None,
+    fallback_guidance: str | None = None,
 ) -> str:
-    lines = ["DeployWhisper is advisory-only. Do not mark this check as required."]
+    if fallback_guidance is not None:
+        guidance = fallback_guidance
+    elif enforcement is None:
+        guidance = "DeployWhisper analysis could not complete; inspect this check before proceeding."
+    elif enforcement.should_block:
+        guidance = (
+            "This integration is explicitly configured to enforce the effective "
+            f"{enforcement.effective_status.value} policy status."
+        )
+    else:
+        guidance = (
+            "This integration is non-blocking at its configured "
+            f"{enforcement.configured_mode.value} enforcement mode."
+        )
+    lines = [guidance, "The canonical DeployWhisper report remains advisory-only."]
     if details_url:
         lines.insert(0, f"[Open the full DeployWhisper report]({details_url})")
     return "\n\n".join(lines)

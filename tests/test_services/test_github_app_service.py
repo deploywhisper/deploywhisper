@@ -18,6 +18,10 @@ import models.tables as tables_module
 import services.project_service as project_service_module
 from integrations.github import app_service
 from llm.narrator import NarrativeResult
+from services.policy_adapter_settings import (
+    PolicyAdapterSettingsIntegrityError,
+    PolicyAdapterStatus,
+)
 
 
 class GitHubAppServiceTests(unittest.TestCase):
@@ -122,10 +126,19 @@ class GitHubAppServiceTests(unittest.TestCase):
         )
         self.assertEqual(result.state_return_to, "/settings")
 
-    def test_check_run_conclusion_matches_story_contract(self) -> None:
-        self.assertEqual(app_service._check_run_conclusion("go"), "success")
-        self.assertEqual(app_service._check_run_conclusion("caution"), "neutral")
-        self.assertEqual(app_service._check_run_conclusion("no-go"), "failure")
+    def test_check_run_conclusion_respects_explicit_enforcement_mode(self) -> None:
+        self.assertEqual(app_service._check_run_conclusion("go", "advisory"), "success")
+        self.assertEqual(
+            app_service._check_run_conclusion("no-go", "advisory"), "neutral"
+        )
+        self.assertEqual(app_service._check_run_conclusion("no-go", "warn"), "neutral")
+        self.assertEqual(
+            app_service._check_run_conclusion("no-go", "soft-block"),
+            "action_required",
+        )
+        self.assertEqual(
+            app_service._check_run_conclusion("no-go", "hard-block"), "failure"
+        )
 
     @patch("integrations.github.app_service._create_check_run")
     @patch("integrations.github.app_service.analyze_uploaded_files")
@@ -204,6 +217,254 @@ class GitHubAppServiceTests(unittest.TestCase):
             analyze_uploaded_files.call_args.args,
             ([("plan.tf", b'resource "x" "y" {}')],),
         )
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.build_integration_enforcement_decision")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_handle_github_app_webhook_enforces_explicit_blocking_decision(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        build_enforcement_decision,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.return_value = type(
+            "Result",
+            (),
+            {
+                "assessment": type("Assessment", (), {"recommendation": "no-go"})(),
+                "persisted_report": {
+                    "id": 19,
+                    "severity": "critical",
+                    "recommendation": "no-go",
+                },
+            },
+        )()
+        build_enforcement_decision.return_value = type(
+            "Decision",
+            (),
+            {
+                "configured_mode": PolicyAdapterStatus.HARD_BLOCK,
+                "effective_status": PolicyAdapterStatus.HARD_BLOCK,
+                "should_block": True,
+                "policy_output": type(
+                    "PolicyOutput",
+                    (),
+                    {"status": PolicyAdapterStatus.HARD_BLOCK},
+                )(),
+            },
+        )()
+        create_check_run.return_value = 993
+
+        app_service.handle_github_app_webhook(
+            event_name="pull_request",
+            payload={
+                "action": "opened",
+                "number": 4,
+                "installation": {"id": 42},
+                "repository": {
+                    "name": "deploywhisper",
+                    "owner": {"login": "deploywhisper"},
+                },
+                "pull_request": {
+                    "number": 4,
+                    "head": {"sha": "def456"},
+                },
+            },
+        )
+
+        self.assertEqual(create_check_run.call_args.kwargs["conclusion"], "failure")
+        self.assertIn(
+            "Configured enforcement mode: hard-block",
+            create_check_run.call_args.kwargs["summary"],
+        )
+        adapter_output = build_enforcement_decision.call_args.args[0]
+        self.assertEqual(adapter_output.adapter_metadata.adapter, "github")
+        self.assertEqual(
+            adapter_output.adapter_metadata.project_key,
+            "deploywhisper-deploywhisper",
+        )
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.build_integration_enforcement_decision")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_github_webhook_maps_every_effective_enforcement_mode(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        build_enforcement_decision,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.return_value = type(
+            "Result",
+            (),
+            {
+                "assessment": type("Assessment", (), {"recommendation": "no-go"})(),
+                "persisted_report": {
+                    "id": 20,
+                    "severity": "critical",
+                    "recommendation": "no-go",
+                },
+            },
+        )()
+        expected = {
+            PolicyAdapterStatus.ADVISORY: "neutral",
+            PolicyAdapterStatus.WARN: "neutral",
+            PolicyAdapterStatus.SOFT_BLOCK: "action_required",
+            PolicyAdapterStatus.HARD_BLOCK: "failure",
+        }
+
+        for mode, conclusion in expected.items():
+            with self.subTest(mode=mode):
+                build_enforcement_decision.return_value = type(
+                    "Decision",
+                    (),
+                    {
+                        "configured_mode": mode,
+                        "effective_status": mode,
+                        "should_block": mode
+                        in {
+                            PolicyAdapterStatus.SOFT_BLOCK,
+                            PolicyAdapterStatus.HARD_BLOCK,
+                        },
+                        "policy_output": type(
+                            "PolicyOutput",
+                            (),
+                            {"status": PolicyAdapterStatus.HARD_BLOCK},
+                        )(),
+                    },
+                )()
+
+                app_service.handle_github_app_webhook(
+                    event_name="pull_request",
+                    payload={
+                        "action": "opened",
+                        "number": 5,
+                        "installation": {"id": 42},
+                        "repository": {
+                            "name": "deploywhisper",
+                            "owner": {"login": "deploywhisper"},
+                        },
+                        "pull_request": {
+                            "number": 5,
+                            "head": {"sha": "fed654"},
+                        },
+                    },
+                )
+
+                call = create_check_run.call_args.kwargs
+                self.assertEqual(call["conclusion"], conclusion)
+                self.assertIn("Policy status: hard-block", call["summary"])
+                self.assertIn(
+                    f"Configured enforcement mode: {mode.value}", call["summary"]
+                )
+                self.assertIn(
+                    f"Effective integration status: {mode.value}", call["summary"]
+                )
+                self.assertIn(
+                    "canonical DeployWhisper report remains advisory-only", call["text"]
+                )
+                create_check_run.reset_mock()
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.build_integration_enforcement_decision")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_github_webhook_reports_invalid_enforcement_configuration(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        build_enforcement_decision,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.return_value = type(
+            "Result",
+            (),
+            {
+                "assessment": type("Assessment", (), {"recommendation": "caution"})(),
+                "persisted_report": {"id": 21},
+            },
+        )()
+        create_check_run.return_value = 994
+        cases = (
+            (
+                PolicyAdapterSettingsIntegrityError("corrupt stored mode"),
+                "policy_adapter_settings_integrity_error",
+            ),
+            (ValueError("invalid adapter contract"), "invalid_policy_adapter_output"),
+        )
+
+        for error, expected_code in cases:
+            with self.subTest(expected_code=expected_code):
+                build_enforcement_decision.side_effect = error
+                result = app_service.handle_github_app_webhook(
+                    event_name="pull_request",
+                    payload={
+                        "action": "opened",
+                        "number": 6,
+                        "installation": {"id": 42},
+                        "repository": {
+                            "name": "deploywhisper",
+                            "owner": {"login": "deploywhisper"},
+                        },
+                        "pull_request": {"number": 6, "head": {"sha": "bad123"}},
+                    },
+                )
+
+                self.assertEqual(result.status, "failed")
+                self.assertEqual(result.code, expected_code)
+                self.assertEqual(result.report_id, 21)
+                self.assertEqual(
+                    create_check_run.call_args.kwargs["conclusion"], "failure"
+                )
+                self.assertNotIn(str(error), result.note)
+                create_check_run.reset_mock()
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_github_webhook_describes_skipped_analysis_without_failure_copy(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = []
+        create_check_run.return_value = 995
+
+        result = app_service.handle_github_app_webhook(
+            event_name="pull_request",
+            payload={
+                "action": "opened",
+                "number": 7,
+                "installation": {"id": 42},
+                "repository": {
+                    "name": "deploywhisper",
+                    "owner": {"login": "deploywhisper"},
+                },
+                "pull_request": {"number": 7, "head": {"sha": "empty1"}},
+            },
+        )
+
+        text = create_check_run.call_args.kwargs["text"]
+        self.assertFalse(result.automatic_analysis_triggered)
+        self.assertIn("No supported changed artifacts", text)
+        self.assertNotIn("analysis could not complete", text)
 
     @patch("integrations.github.app_service.analyze_uploaded_files")
     @patch("integrations.github.app_service._load_pull_request_artifacts")
@@ -846,3 +1107,10 @@ class GitHubAppServiceTests(unittest.TestCase):
             "`DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET`\n",
             main_settings,
         )
+
+    def test_github_app_docs_lock_enforcement_configuration_contract(self) -> None:
+        docs = Path("docs/github-app.md").read_text(encoding="utf-8")
+
+        self.assertIn('"integration": "github"', docs)
+        self.assertIn('"enforcement_mode": "advisory"', docs)
+        self.assertIn("Do not make `DeployWhisper / Risk Analysis` required", docs)

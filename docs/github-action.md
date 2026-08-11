@@ -57,11 +57,17 @@ inputs that satisfy it. If an installed action tag does not expose project-scope
 inputs, update the action tag or route through a scope-deriving integration
 endpoint before using it with a project-scoped DeployWhisper server.
 
-DeployWhisper remains advisory in CI. Successful analysis should not fail a
+DeployWhisper's canonical result remains advisory in CI. Successful analysis should not fail a
 workflow based only on risk score or recommendation. Consumers should use
 `data.advisory.requires_attention` to decide whether to notify reviewers or add
 manual checks. Advisory-first boundary: the action surfaces evidence and
 recommendations for review, but does not enforce deployment blocking by itself.
+An action runtime that supports opt-in enforcement must consume the configured
+policy decision, default to `advisory`, and keep raw policy and effective
+integration statuses distinct. The external `deploywhisper/analyze-action`
+repository owns that runtime behavior; this repository owns the shared API and
+contract at
+`GET /api/v1/analyses/{report_id}/enforcement-decision?integration=github-action`.
 
 ## Canonical Report Output Mapping
 

@@ -36,10 +36,14 @@ class WorkflowAdapterOutputContractDocumentationTests(unittest.TestCase):
             "project defaults",
             "integration-specific defaults",
             "reporting_default",
+            "enforcement_mode",
             "/api/v1/settings/policy-adapter",
             "DELETE",
             "build_configured_policy_adapter_output",
+            "build_integration_enforcement_decision",
             "/api/v1/analyses/{report_id}/policy-adapter",
+            "/api/v1/analyses/{report_id}/enforcement-decision",
+            "`configured_mode`, `effective_status`, `should_block`",
         )
         for expected in expected_clauses:
             with self.subTest(expected=expected):

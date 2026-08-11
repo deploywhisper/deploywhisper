@@ -105,6 +105,41 @@ class PolicyAdapterServiceTests(unittest.TestCase):
             output.adapter_output.adapter_metadata.project_id, self.project.id
         )
 
+    def test_enforcement_mode_caps_raw_policy_status_without_mutating_it(self) -> None:
+        adapter_output = _adapter_output(project_key="payments", adapter="jenkins")
+
+        expected = {
+            PolicyAdapterStatus.ADVISORY: (PolicyAdapterStatus.ADVISORY, False),
+            PolicyAdapterStatus.WARN: (PolicyAdapterStatus.WARN, False),
+            PolicyAdapterStatus.SOFT_BLOCK: (PolicyAdapterStatus.SOFT_BLOCK, True),
+            PolicyAdapterStatus.HARD_BLOCK: (PolicyAdapterStatus.HARD_BLOCK, True),
+        }
+        for mode, (effective_status, should_block) in expected.items():
+            with self.subTest(mode=mode):
+                settings_service_module.save_policy_adapter_settings(
+                    project_key="payments",
+                    integration="jenkins",
+                    warn_at="low",
+                    soft_block_at="medium",
+                    hard_block_at="high",
+                    enforcement_mode=mode,
+                )
+
+                decision = policy_adapter_service_module.build_integration_enforcement_decision(
+                    adapter_output
+                )
+
+                self.assertEqual(
+                    decision.policy_output.status, PolicyAdapterStatus.HARD_BLOCK
+                )
+                self.assertEqual(decision.configured_mode, mode)
+                self.assertEqual(decision.effective_status, effective_status)
+                self.assertEqual(decision.should_block, should_block)
+                self.assertTrue(decision.policy_output.canonical_report_advisory)
+                self.assertFalse(
+                    decision.policy_output.adapter_output.canonical_summary.should_block
+                )
+
 
 def _adapter_output(
     *,

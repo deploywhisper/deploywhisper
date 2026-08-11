@@ -526,6 +526,15 @@ def update_policy_adapter_defaults(
             project_id=payload.project_id,
             project_key=payload.project_key,
         )
+        enforcement_mode = payload.enforcement_mode
+        if "enforcement_mode" not in payload.model_fields_set:
+            current = get_policy_adapter_settings(
+                project_key=project.project_key,
+                integration=payload.integration,
+            )
+            expected_source = "integration" if payload.integration else "project"
+            if current.source == expected_source:
+                enforcement_mode = current.enforcement_mode
         saved = save_policy_adapter_settings(
             project_key=project.project_key,
             integration=payload.integration,
@@ -533,6 +542,7 @@ def update_policy_adapter_defaults(
             soft_block_at=payload.soft_block_at,
             hard_block_at=payload.hard_block_at,
             reporting_default=payload.reporting_default,
+            enforcement_mode=enforcement_mode,
         )
     except PermissionError as exc:
         _raise_authorization_error(exc)

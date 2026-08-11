@@ -85,7 +85,11 @@ from services.project_service import (
 from services.project_service import resolve_project_reference
 from services.policy_adapter_output_contract import PolicyAdapterOutputContract
 from services.policy_adapter_settings import PolicyAdapterSettingsIntegrityError
-from services.policy_adapter_service import build_configured_policy_adapter_output
+from services.policy_adapter_service import (
+    IntegrationEnforcementDecision,
+    build_configured_policy_adapter_output,
+    build_integration_enforcement_decision,
+)
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
@@ -97,6 +101,13 @@ class PolicyAdapterOutputResponse(BaseModel):
     """API envelope for configured policy interpretation of one report."""
 
     data: PolicyAdapterOutputContract
+    meta: ResourceMetaPayload
+
+
+class IntegrationEnforcementDecisionResponse(BaseModel):
+    """API envelope for an integration's capped enforcement decision."""
+
+    data: IntegrationEnforcementDecision
     meta: ResourceMetaPayload
 
 
@@ -992,6 +1003,71 @@ def get_policy_adapter_output(
         ) from exc
     return PolicyAdapterOutputResponse(
         data=policy_output,
+        meta=build_report_meta(
+            id=report_id,
+            report_schema_version=normalize_report_schema_version(
+                report.get("report_schema_version")
+            ),
+        ),
+    )
+
+
+@router.get(
+    "/{report_id}/enforcement-decision",
+    response_model=IntegrationEnforcementDecisionResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def get_integration_enforcement_decision(
+    report_id: int,
+    integration: str = Query(..., min_length=1),
+    authorization: dict[str, object] = Depends(_authorization_context),
+) -> IntegrationEnforcementDecisionResponse:
+    """Return the auditable, integration-capped decision for one report."""
+    try:
+        report = _fetch_report_for_authorized_read(
+            authorization=authorization,
+            report_id=report_id,
+        )
+        project = report.get("project") or {}
+        project_id = project.get("id")
+        if not isinstance(project_id, int):
+            raise ApiError(
+                status_code=500,
+                code="analysis_project_scope_invalid",
+                message="Analysis report project scope is invalid.",
+            )
+        decision = build_integration_enforcement_decision(
+            build_adapter_output_contract(
+                build_share_summary(report),
+                AdapterMetadata(
+                    adapter=integration,
+                    format="workflow_decision",
+                    project_id=project_id,
+                ),
+            )
+        )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
+    except PolicyAdapterSettingsIntegrityError as exc:
+        raise ApiError(
+            status_code=500,
+            code="policy_adapter_settings_integrity_error",
+            message="Stored policy adapter settings failed integrity validation.",
+        ) from exc
+    except ValueError as exc:
+        raise ApiError(
+            status_code=400,
+            code="invalid_policy_adapter_output",
+            message=str(exc),
+        ) from exc
+    return IntegrationEnforcementDecisionResponse(
+        data=decision,
         meta=build_report_meta(
             id=report_id,
             report_schema_version=normalize_report_schema_version(

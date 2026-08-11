@@ -100,6 +100,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analyses/{report_id}/enforcement-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Integration Enforcement Decision
+         * @description Return the auditable, integration-capped decision for one report.
+         */
+        get: operations["get_integration_enforcement_decision_api_v1_analyses__report_id__enforcement_decision_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analyses/{report_id}": {
         parameters: {
             query?: never;
@@ -3160,6 +3180,31 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * IntegrationEnforcementDecision
+         * @description Auditable integration decision kept separate from canonical analysis.
+         */
+        IntegrationEnforcementDecision: {
+            /**
+             * Contract Version
+             * @default v1
+             * @constant
+             */
+            contract_version: "v1";
+            configured_mode: components["schemas"]["PolicyAdapterStatus"];
+            effective_status: components["schemas"]["PolicyAdapterStatus"];
+            /** Should Block */
+            should_block: boolean;
+            policy_output: components["schemas"]["PolicyAdapterOutputContract"];
+        };
+        /**
+         * IntegrationEnforcementDecisionResponse
+         * @description API envelope for an integration's capped enforcement decision.
+         */
+        IntegrationEnforcementDecisionResponse: {
+            data: components["schemas"]["IntegrationEnforcementDecision"];
+            meta: components["schemas"]["ResourceMetaPayload"];
+        };
         /** InteractionRiskData */
         InteractionRiskData: {
             /**
@@ -3681,6 +3726,11 @@ export interface components {
              * @default advisory
              */
             reporting_default: components["schemas"]["PolicyAdapterStatus"];
+            /**
+             * @description Maximum integration enforcement level explicitly enabled
+             * @default advisory
+             */
+            enforcement_mode: components["schemas"]["PolicyAdapterStatus"];
         };
         /** PolicyAdapterSettingsData */
         PolicyAdapterSettingsData: {
@@ -3704,6 +3754,11 @@ export interface components {
              * @enum {string}
              */
             reporting_default: "advisory" | "warn";
+            /**
+             * Enforcement Mode
+             * @enum {string}
+             */
+            enforcement_mode: "advisory" | "warn" | "soft-block" | "hard-block";
         };
         /** PolicyAdapterSettingsRequest */
         PolicyAdapterSettingsRequest: {
@@ -3734,6 +3789,12 @@ export interface components {
              * @enum {string}
              */
             reporting_default: "advisory" | "warn";
+            /**
+             * Enforcement Mode
+             * @default advisory
+             * @enum {string}
+             */
+            enforcement_mode: "advisory" | "warn" | "soft-block" | "hard-block";
         };
         /** PolicyAdapterSettingsResponse */
         PolicyAdapterSettingsResponse: {
@@ -6234,6 +6295,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyAdapterOutputResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_integration_enforcement_decision_api_v1_analyses__report_id__enforcement_decision_get: {
+        parameters: {
+            query: {
+                integration: string;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationEnforcementDecisionResponse"];
                 };
             };
             /** @description Bad Request */
