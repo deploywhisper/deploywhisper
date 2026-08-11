@@ -45,6 +45,7 @@ So that teams can tune adapter behavior without changing core code.
 - [x] [Review][Patch] Keep dynamic policy-setting keys within the AppSetting storage limit [services/settings_service.py:167]
 - [x] [Review][Patch] Preserve policy defaults for every valid project and integration scope instead of rejecting composed keys longer than AppSetting.key [services/settings_service.py:165]
 - [x] [Review][Patch] Classify malformed persisted policy settings as server-side integrity failures instead of client-invalid policy output [services/settings_service.py:196]
+- [x] [Review][Patch] Correct the completion note to say the persisted-report endpoint preserves and embeds the canonical summary, not the full canonical report payload [_bmad-output/implementation-artifacts/11-2-threshold-and-reporting-defaults-management.md:149]
 
 ## Dev Notes
 
@@ -139,6 +140,8 @@ Codex (GPT-5)
 - Fourth re-review GREEN: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_service.py tests/test_services/test_policy_adapter_output_contract.py tests/test_services/test_settings_service.py tests/test_api/test_settings.py tests/test_api/test_analyses.py tests/test_docs/test_workflow_adapter_output_contract.py -q --tb=short` — 158 passed, 81 subtests passed.
 - Fourth re-review affected CI shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` — 388 passed, 103 subtests passed.
 - Fourth re-review full local CI: `bash scripts/ci-local.sh` — passed, including repo-wide Ruff formatting, dependency validation, Bandit, compile checks, skill harnesses, and 912 tests.
+- Fifth re-review focused regression: `./.venv/bin/python -m pytest tests/test_services/test_policy_adapter_service.py tests/test_services/test_policy_adapter_output_contract.py tests/test_services/test_settings_service.py tests/test_api/test_settings.py tests/test_api/test_analyses.py tests/test_docs/test_workflow_adapter_output_contract.py -q --tb=short` — 158 passed, 81 subtests passed.
+- Fifth re-review full local CI: `bash scripts/ci-local.sh` — passed, including repo-wide Ruff formatting, dependency validation, Bandit, compile checks, skill harnesses, and 912 tests.
 - UI validation not applicable: no React route, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed; only generated API type declarations were refreshed.
 
 ### Completion Notes List
@@ -146,7 +149,7 @@ Codex (GPT-5)
 - Added strict frozen policy settings for medium/high/critical defaults, optional disabled thresholds, and advisory/warn below-threshold reporting behavior.
 - Persisted project defaults and integration-specific overrides through the existing application settings repository, with integration -> project -> built-in resolution and DELETE-based reset to inheritance.
 - Added one reusable configured-generation service that resolves adapter project key or ID, applies the correct integration settings, and rejects cross-project or cross-integration use.
-- Added an authenticated persisted-report policy-adapter endpoint that applies saved integration/project defaults through the configured-generation service while preserving the canonical report payload.
+- Added an authenticated persisted-report policy-adapter endpoint that applies saved integration/project defaults through the configured-generation service while preserving and embedding the canonical summary; the full report remains separately auditable.
 - Kept policy decisions separate from the canonical advisory report and attached the resolved settings snapshot to the policy envelope for auditability.
 - Added admin-only GET/PUT/DELETE API management with explicit project scope and refreshed generated OpenAPI TypeScript declarations.
 - Documented built-in defaults, precedence, reset semantics, runtime usage, and the unchanged canonical evidence/findings/severity boundary.
