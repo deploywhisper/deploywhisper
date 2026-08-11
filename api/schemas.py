@@ -167,6 +167,37 @@ class ProviderSettingsResponse(BaseModel):
     meta: MetaPayload
 
 
+class PolicyAdapterSettingsRequest(BaseModel):
+    project_id: int | None = Field(default=None, gt=0)
+    project_key: str | None = Field(default=None, min_length=1)
+    integration: str | None = Field(default=None, min_length=1)
+    warn_at: Literal["low", "medium", "high", "critical"] | None = Field(
+        default="medium"
+    )
+    soft_block_at: Literal["low", "medium", "high", "critical"] | None = Field(
+        default="high"
+    )
+    hard_block_at: Literal["low", "medium", "high", "critical"] | None = Field(
+        default="critical"
+    )
+    reporting_default: Literal["advisory", "warn"] = Field(default="advisory")
+
+
+class PolicyAdapterSettingsData(BaseModel):
+    project_key: str
+    integration: str | None = None
+    source: Literal["built-in", "project", "integration"]
+    warn_at: Literal["low", "medium", "high", "critical"] | None = None
+    soft_block_at: Literal["low", "medium", "high", "critical"] | None = None
+    hard_block_at: Literal["low", "medium", "high", "critical"] | None = None
+    reporting_default: Literal["advisory", "warn"]
+
+
+class PolicyAdapterSettingsResponse(BaseModel):
+    data: PolicyAdapterSettingsData
+    meta: MetaPayload
+
+
 ToolType = Literal[
     "terraform", "kubernetes", "ansible", "jenkins", "cloudformation", "unsupported"
 ]

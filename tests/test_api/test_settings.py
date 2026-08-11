@@ -12,6 +12,7 @@ from unittest.mock import patch
 import config as config_module
 import llm.skill_context as skill_context_module
 import models.database as database_module
+import models.repositories.settings as settings_repository_module
 import models.tables as tables_module
 import services.project_service as project_service_module
 import services.settings_service as settings_service_module
@@ -87,6 +88,204 @@ class SettingsApiTests(unittest.TestCase):
         self.assertTrue(payload["data"]["settings"]["local_mode"])
         self.assertEqual(payload["data"]["settings"]["request_timeout_seconds"], 120)
         self.assertIn("valid", payload["data"]["validation"])
+
+    def test_policy_adapter_defaults_can_be_managed_per_project_and_integration(
+        self,
+    ) -> None:
+        project_payload = {
+            "project_key": self.project.project_key,
+            "warn_at": "medium",
+            "soft_block_at": "high",
+            "hard_block_at": "critical",
+            "reporting_default": "advisory",
+        }
+        saved_project = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json=project_payload,
+        )
+        saved_integration = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                **project_payload,
+                "integration": "jenkins",
+                "warn_at": "high",
+                "soft_block_at": "critical",
+                "hard_block_at": None,
+                "reporting_default": "warn",
+            },
+        )
+        loaded = self.client.get(
+            "/api/v1/settings/policy-adapter",
+            params={
+                "project_key": self.project.project_key,
+                "integration": "jenkins",
+            },
+        )
+
+        self.assertEqual(saved_project.status_code, 200)
+        self.assertEqual(saved_project.json()["data"]["source"], "project")
+        self.assertEqual(saved_integration.status_code, 200)
+        self.assertEqual(loaded.status_code, 200)
+        self.assertEqual(loaded.json()["data"]["source"], "integration")
+        self.assertEqual(loaded.json()["data"]["reporting_default"], "warn")
+        self.assertIsNone(loaded.json()["data"]["hard_block_at"])
+
+    def test_policy_adapter_defaults_require_admin_settings_permission(self) -> None:
+        response = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            headers={
+                "X-DeployWhisper-Project-Role": "maintainer",
+                "X-DeployWhisper-Project-Keys": self.project.project_key,
+            },
+            json={
+                "project_key": self.project.project_key,
+                "warn_at": "medium",
+                "soft_block_at": "high",
+                "hard_block_at": "critical",
+                "reporting_default": "advisory",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "project_permission_denied")
+
+    def test_policy_adapter_update_preserves_project_resolution_error_contract(
+        self,
+    ) -> None:
+        response = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                "project_id": 999_999,
+                "warn_at": "medium",
+                "soft_block_at": "high",
+                "hard_block_at": "critical",
+                "reporting_default": "advisory",
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "project_not_found")
+
+    def test_policy_adapter_defaults_can_be_reset_to_inherited_scope(self) -> None:
+        project_payload = {
+            "project_key": self.project.project_key,
+            "warn_at": "medium",
+            "soft_block_at": "high",
+            "hard_block_at": "critical",
+            "reporting_default": "advisory",
+        }
+        self.client.put("/api/v1/settings/policy-adapter", json=project_payload)
+        self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                **project_payload,
+                "integration": "jenkins",
+                "warn_at": "high",
+                "soft_block_at": "critical",
+                "hard_block_at": None,
+                "reporting_default": "warn",
+            },
+        )
+
+        reset_integration = self.client.delete(
+            "/api/v1/settings/policy-adapter",
+            params={
+                "project_key": self.project.project_key,
+                "integration": "jenkins",
+            },
+        )
+        reset_project = self.client.delete(
+            "/api/v1/settings/policy-adapter",
+            params={"project_key": self.project.project_key},
+        )
+
+        self.assertEqual(reset_integration.status_code, 200)
+        self.assertEqual(reset_integration.json()["data"]["source"], "project")
+        self.assertEqual(reset_project.status_code, 200)
+        self.assertEqual(reset_project.json()["data"]["source"], "built-in")
+
+    def test_policy_adapter_defaults_require_explicit_project_scope(self) -> None:
+        requests = (
+            self.client.get("/api/v1/settings/policy-adapter"),
+            self.client.put(
+                "/api/v1/settings/policy-adapter",
+                json={
+                    "warn_at": "medium",
+                    "soft_block_at": "high",
+                    "hard_block_at": "critical",
+                    "reporting_default": "advisory",
+                },
+            ),
+            self.client.delete("/api/v1/settings/policy-adapter"),
+        )
+
+        for response in requests:
+            with self.subTest(method=response.request.method):
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["error"]["code"],
+                    "missing_project_scope",
+                )
+
+    def test_policy_adapter_query_integration_validation_matches_write_contract(
+        self,
+    ) -> None:
+        for method in (self.client.get, self.client.delete):
+            with self.subTest(method=method.__name__, integration="empty"):
+                response = method(
+                    "/api/v1/settings/policy-adapter",
+                    params={
+                        "project_key": self.project.project_key,
+                        "integration": "",
+                    },
+                )
+                self.assertEqual(response.status_code, 422)
+
+            with self.subTest(method=method.__name__, integration="whitespace"):
+                response = method(
+                    "/api/v1/settings/policy-adapter",
+                    params={
+                        "project_key": self.project.project_key,
+                        "integration": "   ",
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["error"]["code"],
+                    "invalid_policy_adapter_settings",
+                )
+
+    def test_policy_adapter_defaults_report_corrupt_storage_as_server_error(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key=(f"policy_adapter_defaults::{self.project.project_key}::project"),
+                value="not-json",
+            )
+
+        response = self.client.get(
+            "/api/v1/settings/policy-adapter",
+            params={"project_key": self.project.project_key},
+        )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.json()["error"]["code"],
+            "policy_adapter_settings_integrity_error",
+        )
+
+    def test_openapi_documents_policy_adapter_settings_error_contracts(self) -> None:
+        response = self.client.get("/openapi.json")
+
+        self.assertEqual(response.status_code, 200)
+        operations = response.json()["paths"]["/api/v1/settings/policy-adapter"]
+        for method in ("get", "put", "delete"):
+            with self.subTest(method=method):
+                responses = operations[method]["responses"]
+                for status_code in ("400", "403", "404", "422", "500"):
+                    self.assertIn("ErrorResponse", str(responses[status_code]))
 
     def test_preview_and_save_topology_return_validation_payloads(self) -> None:
         topology = {

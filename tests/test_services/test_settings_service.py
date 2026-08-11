@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -14,6 +15,8 @@ import models.database as database_module
 import models.repositories.settings as settings_repository_module
 import models.tables as tables_module
 import services.settings_service as settings_service_module
+from services.policy_adapter_settings import PolicyAdapterStatus
+from services.policy_adapter_settings import PolicyAdapterSettingsIntegrityError
 
 
 class SettingsServiceTests(unittest.TestCase):
@@ -55,6 +58,184 @@ class SettingsServiceTests(unittest.TestCase):
             }
         self.assertNotIn("llm_api_key", keys)
         self.assertNotIn("llm_provider_config::openai::api_key", keys)
+
+    def test_policy_adapter_settings_resolve_integration_then_project_defaults(
+        self,
+    ) -> None:
+        project_settings = settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            warn_at="medium",
+            soft_block_at="high",
+            hard_block_at="critical",
+            reporting_default="advisory",
+        )
+        integration_settings = settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+            reporting_default="warn",
+        )
+
+        resolved_project = settings_service_module.get_policy_adapter_settings(
+            project_key="payments"
+        )
+        resolved_integration = settings_service_module.get_policy_adapter_settings(
+            project_key="payments", integration="jenkins"
+        )
+        unresolved_integration = settings_service_module.get_policy_adapter_settings(
+            project_key="payments", integration="gitlab"
+        )
+
+        self.assertEqual(project_settings.source, "project")
+        self.assertEqual(integration_settings.source, "integration")
+        self.assertEqual(resolved_project.source, "project")
+        self.assertEqual(resolved_integration.source, "integration")
+        self.assertEqual(
+            resolved_integration.reporting_default, PolicyAdapterStatus.WARN
+        )
+        self.assertEqual(unresolved_integration.source, "project")
+        self.assertIsNone(unresolved_integration.integration)
+
+    def test_policy_adapter_settings_use_safe_built_in_defaults(self) -> None:
+        settings = settings_service_module.get_policy_adapter_settings(
+            project_key="payments", integration="jenkins"
+        )
+
+        self.assertEqual(settings.source, "built-in")
+        self.assertEqual(settings.reporting_default, PolicyAdapterStatus.ADVISORY)
+        self.assertEqual(settings.warn_at.value, "medium")
+        self.assertEqual(settings.soft_block_at.value, "high")
+        self.assertEqual(settings.hard_block_at.value, "critical")
+
+    def test_policy_adapter_settings_use_canonical_project_keys_for_storage(
+        self,
+    ) -> None:
+        saved = settings_service_module.save_policy_adapter_settings(
+            project_key="Payments_Core",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+        )
+
+        loaded = settings_service_module.get_policy_adapter_settings(
+            project_key="payments-core"
+        )
+
+        self.assertEqual(saved.project_key, "payments-core")
+        self.assertEqual(loaded.source, "project")
+        self.assertEqual(loaded.warn_at.value, "high")
+
+    def test_policy_adapter_settings_can_reset_to_inherited_defaults(self) -> None:
+        settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            warn_at="medium",
+            soft_block_at="high",
+            hard_block_at="critical",
+            reporting_default="advisory",
+        )
+        settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+            reporting_default="warn",
+        )
+
+        inherited_project = settings_service_module.delete_policy_adapter_settings(
+            project_key="payments", integration="jenkins"
+        )
+        inherited_builtin = settings_service_module.delete_policy_adapter_settings(
+            project_key="payments"
+        )
+
+        self.assertEqual(inherited_project.source, "project")
+        self.assertEqual(
+            inherited_project.reporting_default, PolicyAdapterStatus.ADVISORY
+        )
+        self.assertEqual(inherited_builtin.source, "built-in")
+
+    def test_policy_adapter_settings_reject_stored_scope_mismatches(self) -> None:
+        mismatches = (
+            (
+                "policy_adapter_defaults::payments::project",
+                {
+                    "project_key": "identity",
+                    "source": "project",
+                },
+                {"project_key": "payments"},
+            ),
+            (
+                "policy_adapter_defaults::payments::integration::jenkins",
+                {
+                    "project_key": "payments",
+                    "integration": "gitlab",
+                    "source": "integration",
+                },
+                {"project_key": "payments", "integration": "jenkins"},
+            ),
+        )
+
+        for key, stored, requested in mismatches:
+            with self.subTest(key=key):
+                with database_module.SessionLocal() as session:
+                    settings_repository_module.upsert_setting(
+                        session,
+                        key=key,
+                        value=json.dumps(stored),
+                    )
+
+                with self.assertRaisesRegex(
+                    PolicyAdapterSettingsIntegrityError, "scope does not match"
+                ):
+                    settings_service_module.get_policy_adapter_settings(**requested)
+
+    def test_policy_adapter_settings_support_scopes_exceeding_plain_key_limit(
+        self,
+    ) -> None:
+        long_scope = {"project_key": "p" * 80, "integration": "jenkins"}
+
+        inherited = settings_service_module.get_policy_adapter_settings(**long_scope)
+        saved = settings_service_module.save_policy_adapter_settings(
+            **long_scope,
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+        )
+        loaded = settings_service_module.get_policy_adapter_settings(**long_scope)
+        with database_module.SessionLocal() as session:
+            keys = [
+                record.key
+                for record in settings_repository_module.list_settings(session)
+                if record.key.startswith("policy_adapter_defaults::")
+            ]
+        reset = settings_service_module.delete_policy_adapter_settings(**long_scope)
+
+        self.assertEqual(inherited.source, "built-in")
+        self.assertEqual(saved.source, "integration")
+        self.assertEqual(loaded.source, "integration")
+        self.assertEqual(len(keys), 1)
+        self.assertIn("::sha256::", keys[0])
+        self.assertLessEqual(len(keys[0]), 100)
+        self.assertEqual(reset.source, "built-in")
+
+    def test_policy_adapter_settings_classify_malformed_storage_as_integrity_error(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key="policy_adapter_defaults::payments::project",
+                value="not-json",
+            )
+
+        with self.assertRaisesRegex(
+            PolicyAdapterSettingsIntegrityError,
+            "could not be validated",
+        ):
+            settings_service_module.get_policy_adapter_settings(project_key="payments")
 
     def test_provider_profiles_can_be_saved_per_provider_and_switched(self) -> None:
         settings_service_module.save_provider_settings(

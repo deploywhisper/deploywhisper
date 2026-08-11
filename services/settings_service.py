@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 
 from pydantic import BaseModel, Field
@@ -15,6 +17,13 @@ from llm.providers import (
 )
 from models.database import SessionLocal
 from models.repositories.settings import delete_setting, get_setting, upsert_setting
+from services.policy_adapter_settings import (
+    PolicyAdapterSettings,
+    PolicyAdapterSettingsIntegrityError,
+    PolicyAdapterStatus,
+    PolicySeverity,
+)
+from services.project_service import normalize_project_key
 
 
 class ProviderCapabilitySummary(BaseModel):
@@ -154,6 +163,152 @@ PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
     "xai": ("XAI_API_KEY",),
     "ollama": (),
 }
+
+POLICY_ADAPTER_SETTINGS_PREFIX = "policy_adapter_defaults"
+POLICY_ADAPTER_SETTINGS_KEY_MAX_LENGTH = 100
+
+
+def _policy_adapter_settings_key(
+    *, project_key: str, integration: str | None = None
+) -> str:
+    scope = f"integration::{integration}" if integration else "project"
+    key = f"{POLICY_ADAPTER_SETTINGS_PREFIX}::{project_key}::{scope}"
+    if len(key) <= POLICY_ADAPTER_SETTINGS_KEY_MAX_LENGTH:
+        return key
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return f"{POLICY_ADAPTER_SETTINGS_PREFIX}::sha256::{digest}"
+
+
+def _policy_integration_label(value: str) -> str:
+    normalized = value.strip().lower()
+    if not normalized:
+        raise ValueError("integration must not be blank.")
+    if not all(
+        character.isalnum() or character in {"-", "_", "."} for character in normalized
+    ):
+        raise ValueError("integration may contain letters, numbers, '.', '_', and '-'.")
+    return normalized
+
+
+def _load_policy_adapter_settings(
+    value: str,
+    *,
+    project_key: str,
+    integration: str | None,
+) -> PolicyAdapterSettings:
+    try:
+        loaded = PolicyAdapterSettings.model_validate_json(value)
+    except ValueError as exc:
+        raise PolicyAdapterSettingsIntegrityError(
+            "Stored policy adapter settings could not be validated."
+        ) from exc
+    expected_source = "integration" if integration is not None else "project"
+    if (
+        loaded.project_key != project_key
+        or loaded.integration != integration
+        or loaded.source != expected_source
+    ):
+        raise PolicyAdapterSettingsIntegrityError(
+            "Stored policy adapter settings scope does not match requested scope."
+        )
+    return loaded
+
+
+def save_policy_adapter_settings(
+    *,
+    project_key: str,
+    integration: str | None = None,
+    warn_at: PolicySeverity | str | None = PolicySeverity.MEDIUM,
+    soft_block_at: PolicySeverity | str | None = PolicySeverity.HIGH,
+    hard_block_at: PolicySeverity | str | None = PolicySeverity.CRITICAL,
+    reporting_default: PolicyAdapterStatus | str = PolicyAdapterStatus.ADVISORY,
+) -> PolicyAdapterSettings:
+    """Persist project defaults or an integration-specific override."""
+    normalized_project_key = normalize_project_key(project_key)
+    normalized_integration = (
+        _policy_integration_label(integration) if integration is not None else None
+    )
+    resolved = PolicyAdapterSettings(
+        project_key=normalized_project_key,
+        integration=normalized_integration,
+        source="integration" if normalized_integration else "project",
+        warn_at=warn_at,
+        soft_block_at=soft_block_at,
+        hard_block_at=hard_block_at,
+        reporting_default=reporting_default,
+    )
+    with SessionLocal() as session:
+        upsert_setting(
+            session,
+            key=_policy_adapter_settings_key(
+                project_key=normalized_project_key,
+                integration=normalized_integration,
+            ),
+            value=json.dumps(resolved.model_dump(mode="json"), sort_keys=True),
+        )
+    return resolved
+
+
+def get_policy_adapter_settings(
+    *, project_key: str, integration: str | None = None
+) -> PolicyAdapterSettings:
+    """Resolve integration overrides before project and safe built-in defaults."""
+    normalized_project_key = normalize_project_key(project_key)
+    normalized_integration = (
+        _policy_integration_label(integration) if integration is not None else None
+    )
+    with SessionLocal() as session:
+        if normalized_integration is not None:
+            integration_record = get_setting(
+                session,
+                _policy_adapter_settings_key(
+                    project_key=normalized_project_key,
+                    integration=normalized_integration,
+                ),
+            )
+            if integration_record is not None:
+                return _load_policy_adapter_settings(
+                    integration_record.value,
+                    project_key=normalized_project_key,
+                    integration=normalized_integration,
+                )
+        project_record = get_setting(
+            session,
+            _policy_adapter_settings_key(project_key=normalized_project_key),
+        )
+        if project_record is not None:
+            return _load_policy_adapter_settings(
+                project_record.value,
+                project_key=normalized_project_key,
+                integration=None,
+            )
+
+    return PolicyAdapterSettings(
+        project_key=normalized_project_key,
+        source="built-in",
+    )
+
+
+def delete_policy_adapter_settings(
+    *, project_key: str, integration: str | None = None
+) -> PolicyAdapterSettings:
+    """Delete one override and return the newly inherited effective defaults."""
+    normalized_project_key = normalize_project_key(project_key)
+    normalized_integration = (
+        _policy_integration_label(integration) if integration is not None else None
+    )
+    with SessionLocal() as session:
+        delete_setting(
+            session,
+            _policy_adapter_settings_key(
+                project_key=normalized_project_key,
+                integration=normalized_integration,
+            ),
+        )
+    return get_policy_adapter_settings(
+        project_key=normalized_project_key,
+        integration=normalized_integration,
+    )
 
 
 def provider_select_options() -> dict[str, str]:

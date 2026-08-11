@@ -32,6 +32,14 @@ class WorkflowAdapterOutputContractDocumentationTests(unittest.TestCase):
             "advisory`, `warn`, `soft-block`, and `hard-block`",
             "canonical_report_advisory",
             "at least one structured reason",
+            "PolicyAdapterSettings",
+            "project defaults",
+            "integration-specific defaults",
+            "reporting_default",
+            "/api/v1/settings/policy-adapter",
+            "DELETE",
+            "build_configured_policy_adapter_output",
+            "/api/v1/analyses/{report_id}/policy-adapter",
         )
         for expected in expected_clauses:
             with self.subTest(expected=expected):
