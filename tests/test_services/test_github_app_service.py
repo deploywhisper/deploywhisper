@@ -431,6 +431,10 @@ class GitHubAppServiceTests(unittest.TestCase):
                 self.assertEqual(
                     create_check_run.call_args.kwargs["conclusion"], "failure"
                 )
+                check_text = create_check_run.call_args.kwargs["text"]
+                self.assertIn("analysis completed", check_text)
+                self.assertIn("enforcement decision could not be validated", check_text)
+                self.assertNotIn("analysis could not complete", check_text)
                 self.assertNotIn(str(error), result.note)
                 create_check_run.reset_mock()
 

@@ -31,6 +31,8 @@ So that teams can adopt warnings before blocking.
 
 ### Review Findings
 
+- [x] [Review][Patch] [MEDIUM] Use enforcement-specific fallback guidance when analysis succeeds but enforcement validation fails; the check summary says the analysis completed, while `_check_run_text()` currently says it could not complete. [integrations/github/app_service.py:585]
+- [x] [Review][Patch] [MEDIUM] Expand enforcement-decision regression coverage across raw policy statuses, including raw statuses below the configured ceiling, so the no-upward-escalation invariant and advisory-first built-in decision path cannot drift. [tests/test_services/test_policy_adapter_service.py:108]
 - [x] [Review][Patch] [HIGH] Expose the capped enforcement decision through a shared external API contract so CI and future adapters can consume `configured_mode`, `effective_status`, and `should_block` without reimplementing policy logic. [api/routes/analyses.py:96]
 - [x] [Review][Patch] [HIGH] Handle policy-setting integrity and enforcement-contract failures after successful GitHub analysis instead of crashing before a check run is posted. [integrations/github/app_service.py:553]
 - [x] [Review][Patch] [MEDIUM] Preserve an existing enforcement mode when backward-compatible clients omit the newly added field during a settings update. [api/routes/settings.py:529]
@@ -110,6 +112,11 @@ OpenAI Codex (GPT-5)
 - Review CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` - `392 passed, 109 subtests passed`.
 - Review generated-client verification: OpenAPI schema regenerated from the local app; frontend production build passed; Vitest reported `55 passed`.
 - Remote CI correction: the first PR API/CLI/infra run found a stale mirrored sprint-status header date; after aligning it with `last_updated`, the focused metadata regression and full shard were rerun.
+- Review rerun RED: `./.venv/bin/python -m pytest tests/test_services/test_github_app_service.py tests/test_services/test_policy_adapter_service.py -q --tb=short` reproduced the inaccurate enforcement fallback guidance (`2 failed, 30 passed, 22 subtests passed`).
+- Review rerun GREEN: the same focused command passed after the fix (`30 passed, 22 subtests passed`).
+- Review rerun quality gates: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `git diff --check` passed; Ruff reported all 272 files formatted.
+- Review rerun CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` - `392 passed, 109 subtests passed`.
+- Review rerun full local CI: `bash scripts/ci-local.sh` - passed Ruff check/format, dependency integrity, Bandit high-confidence gate (0 high findings), compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `920 tests` passing.
 
 ### Completion Notes List
 
@@ -119,6 +126,7 @@ OpenAI Codex (GPT-5)
 - Updated integration/operator documentation and the generated TypeScript API schema. The external `deploywhisper/analyze-action` repository remains the owner of its runtime implementation and can consume this shared contract without changing the canonical analysis response.
 - Implementation is stacked on the unmerged Story 11.2 branch because Story 11.3 directly extends its policy settings/output services.
 - Resolved all seven code-review findings: added the external capped-decision endpoint, safe GitHub failure results, legacy PUT preservation, accurate skipped-analysis guidance, full mode/default/reset regressions, and executable operator-documentation coverage.
+- Resolved both findings from the Story 11.3 review rerun: enforcement-validation failures now describe the completed analysis accurately, and the decision suite locks every raw-status/configured-mode pairing against upward escalation plus the built-in advisory path.
 
 ### File List
 
@@ -150,3 +158,4 @@ OpenAI Codex (GPT-5)
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-08-11: Added advisory-first integration enforcement settings, shared capped decisions, GitHub check enforcement, deterministic regression coverage, API schema generation, and operator documentation; moved story to review.
 - 2026-08-12: Resolved all seven code-review findings, regenerated the API client contract, completed full validation, and moved the story to done.
+- 2026-08-13: Resolved both findings from the code-review rerun and expanded enforcement-decision regression coverage across the complete status matrix.

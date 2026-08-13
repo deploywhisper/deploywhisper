@@ -592,7 +592,10 @@ def handle_github_app_webhook(
                     title=DEFAULT_CHECK_RUN_NAME,
                     summary=note,
                     details_url=report_url,
-                    text=_check_run_text(details_url=report_url),
+                    text=_check_run_text(
+                        details_url=report_url,
+                        fallback_guidance=note,
+                    ),
                     api_base_url=config.api_base_url,
                 )
             except GitHubAppRequestError:
