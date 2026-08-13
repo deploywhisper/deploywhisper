@@ -179,7 +179,8 @@ def _policy_adapter_settings_key(
     return f"{POLICY_ADAPTER_SETTINGS_PREFIX}::sha256::{digest}"
 
 
-def _policy_integration_label(value: str) -> str:
+def normalize_policy_integration_label(value: str) -> str:
+    """Normalize and validate a policy-adapter integration identifier."""
     normalized = value.strip().lower()
     if not normalized:
         raise ValueError("integration must not be blank.")
@@ -227,7 +228,9 @@ def save_policy_adapter_settings(
     """Persist project defaults or an integration-specific override."""
     normalized_project_key = normalize_project_key(project_key)
     normalized_integration = (
-        _policy_integration_label(integration) if integration is not None else None
+        normalize_policy_integration_label(integration)
+        if integration is not None
+        else None
     )
     resolved = PolicyAdapterSettings(
         project_key=normalized_project_key,
@@ -257,7 +260,9 @@ def get_policy_adapter_settings(
     """Resolve integration overrides before project and safe built-in defaults."""
     normalized_project_key = normalize_project_key(project_key)
     normalized_integration = (
-        _policy_integration_label(integration) if integration is not None else None
+        normalize_policy_integration_label(integration)
+        if integration is not None
+        else None
     )
     with SessionLocal() as session:
         if normalized_integration is not None:
@@ -297,7 +302,9 @@ def delete_policy_adapter_settings(
     """Delete one override and return the newly inherited effective defaults."""
     normalized_project_key = normalize_project_key(project_key)
     normalized_integration = (
-        _policy_integration_label(integration) if integration is not None else None
+        normalize_policy_integration_label(integration)
+        if integration is not None
+        else None
     )
     with SessionLocal() as session:
         delete_setting(

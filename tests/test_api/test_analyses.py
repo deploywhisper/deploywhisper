@@ -722,6 +722,21 @@ class AnalysesApiTests(unittest.TestCase):
         )
         self.assertNotIn("internal invariant detail", response.text)
 
+    def test_enforcement_decision_rejects_invalid_integration_as_client_error(
+        self,
+    ) -> None:
+        for integration in ("   ", "github/action"):
+            with self.subTest(integration=integration):
+                response = self.client.get(
+                    f"/api/v1/analyses/{self.persisted['id']}/enforcement-decision",
+                    params={"integration": integration},
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["error"]["code"], "invalid_policy_adapter_output"
+                )
+
     def test_blast_radius_api_schema_preserves_topology_context_fields(self) -> None:
         blast_radius = BlastRadiusData.model_validate(
             BlastRadiusResult(

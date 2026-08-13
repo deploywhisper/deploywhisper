@@ -90,6 +90,7 @@ from services.policy_adapter_service import (
     build_configured_policy_adapter_output,
     build_integration_enforcement_decision,
 )
+from services.settings_service import normalize_policy_integration_label
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"], route_class=ApiRoute)
 READ_CHUNK_BYTES = 1024 * 1024
@@ -1030,6 +1031,14 @@ def get_integration_enforcement_decision(
 ) -> IntegrationEnforcementDecisionResponse:
     """Return the auditable, integration-capped decision for one report."""
     try:
+        normalized_integration = normalize_policy_integration_label(integration)
+    except ValueError as exc:
+        raise ApiError(
+            status_code=400,
+            code="invalid_policy_adapter_output",
+            message="Integration identifier is invalid.",
+        ) from exc
+    try:
         report = _fetch_report_for_authorized_read(
             authorization=authorization,
             report_id=report_id,
@@ -1046,7 +1055,7 @@ def get_integration_enforcement_decision(
             build_adapter_output_contract(
                 build_share_summary(report),
                 AdapterMetadata(
-                    adapter=integration,
+                    adapter=normalized_integration,
                     format="workflow_decision",
                     project_id=project_id,
                 ),

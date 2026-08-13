@@ -271,6 +271,34 @@ class SettingsServiceTests(unittest.TestCase):
 
         self.assertEqual(loaded.enforcement_mode, PolicyAdapterStatus.ADVISORY)
 
+    def test_integration_policy_settings_default_legacy_storage_to_advisory_enforcement(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key="policy_adapter_defaults::payments::integration::jenkins",
+                value=json.dumps(
+                    {
+                        "project_key": "payments",
+                        "integration": "jenkins",
+                        "source": "integration",
+                        "warn_at": "medium",
+                        "soft_block_at": "high",
+                        "hard_block_at": "critical",
+                        "reporting_default": "advisory",
+                    }
+                ),
+            )
+
+        loaded = settings_service_module.get_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+        )
+
+        self.assertEqual(loaded.source, "integration")
+        self.assertEqual(loaded.enforcement_mode, PolicyAdapterStatus.ADVISORY)
+
     def test_provider_profiles_can_be_saved_per_provider_and_switched(self) -> None:
         settings_service_module.save_provider_settings(
             provider="openai",
