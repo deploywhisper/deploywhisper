@@ -704,6 +704,24 @@ class AnalysesApiTests(unittest.TestCase):
                     "policy_adapter_settings_integrity_error",
                 )
 
+    def test_enforcement_decision_reports_internal_invariant_failure_as_server_error(
+        self,
+    ) -> None:
+        with patch(
+            "api.routes.analyses.build_integration_enforcement_decision",
+            side_effect=ValueError("internal invariant detail"),
+        ):
+            response = self.client.get(
+                f"/api/v1/analyses/{self.persisted['id']}/enforcement-decision",
+                params={"integration": "jenkins"},
+            )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.json()["error"]["code"], "invalid_policy_adapter_output"
+        )
+        self.assertNotIn("internal invariant detail", response.text)
+
     def test_blast_radius_api_schema_preserves_topology_context_fields(self) -> None:
         blast_radius = BlastRadiusData.model_validate(
             BlastRadiusResult(

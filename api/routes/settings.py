@@ -532,9 +532,7 @@ def update_policy_adapter_defaults(
                 project_key=project.project_key,
                 integration=payload.integration,
             )
-            expected_source = "integration" if payload.integration else "project"
-            if current.source == expected_source:
-                enforcement_mode = current.enforcement_mode
+            enforcement_mode = current.enforcement_mode
         saved = save_policy_adapter_settings(
             project_key=project.project_key,
             integration=payload.integration,

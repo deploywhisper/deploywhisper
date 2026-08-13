@@ -184,6 +184,35 @@ class SettingsApiTests(unittest.TestCase):
                     response.json()["data"]["enforcement_mode"], "hard-block"
                 )
 
+    def test_legacy_integration_put_preserves_inherited_project_enforcement_mode(
+        self,
+    ) -> None:
+        project_payload = {
+            "project_key": self.project.project_key,
+            "warn_at": "medium",
+            "soft_block_at": "high",
+            "hard_block_at": "critical",
+            "reporting_default": "advisory",
+            "enforcement_mode": "hard-block",
+        }
+        self.client.put("/api/v1/settings/policy-adapter", json=project_payload)
+
+        response = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                "project_key": self.project.project_key,
+                "integration": "jenkins",
+                "warn_at": "high",
+                "soft_block_at": "critical",
+                "hard_block_at": None,
+                "reporting_default": "warn",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["source"], "integration")
+        self.assertEqual(response.json()["data"]["enforcement_mode"], "hard-block")
+
     def test_policy_adapter_defaults_require_admin_settings_permission(self) -> None:
         response = self.client.put(
             "/api/v1/settings/policy-adapter",

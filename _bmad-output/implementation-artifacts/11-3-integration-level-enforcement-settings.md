@@ -31,6 +31,8 @@ So that teams can adopt warnings before blocking.
 
 ### Review Findings
 
+- [x] [Review][Patch] [MEDIUM] Preserve the resolved inherited project enforcement mode when a backward-compatible client creates its first integration override without `enforcement_mode`; the current source check falls back to the request model's `advisory` default and silently downgrades enforcement. [api/routes/settings.py:529]
+- [x] [Review][Patch] [MEDIUM] Return a server-error contract when the enforcement-decision endpoint encounters internally generated adapter or decision invariant failures; the new route currently reports every `ValueError` as client-side `400 invalid_policy_adapter_output`. [api/routes/analyses.py:1063]
 - [x] [Review][Patch] [MEDIUM] Use enforcement-specific fallback guidance when analysis succeeds but enforcement validation fails; the check summary says the analysis completed, while `_check_run_text()` currently says it could not complete. [integrations/github/app_service.py:585]
 - [x] [Review][Patch] [MEDIUM] Expand enforcement-decision regression coverage across raw policy statuses, including raw statuses below the configured ceiling, so the no-upward-escalation invariant and advisory-first built-in decision path cannot drift. [tests/test_services/test_policy_adapter_service.py:108]
 - [x] [Review][Patch] [HIGH] Expose the capped enforcement decision through a shared external API contract so CI and future adapters can consume `configured_mode`, `effective_status`, and `should_block` without reimplementing policy logic. [api/routes/analyses.py:96]
@@ -117,6 +119,11 @@ OpenAI Codex (GPT-5)
 - Review rerun quality gates: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `git diff --check` passed; Ruff reported all 272 files formatted.
 - Review rerun CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` - `392 passed, 109 subtests passed`.
 - Review rerun full local CI: `bash scripts/ci-local.sh` - passed Ruff check/format, dependency integrity, Bandit high-confidence gate (0 high findings), compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `920 tests` passing.
+- Second review rerun RED: focused settings/analyses API regressions reproduced the inherited-mode downgrade and client-error misclassification (`2 failed, 118 passed, 33 subtests passed`).
+- Second review rerun GREEN: `./.venv/bin/python -m pytest tests/test_api/test_settings.py tests/test_api/test_analyses.py -q --tb=short` - `120 passed, 33 subtests passed`.
+- Second review required smoke: `./.venv/bin/python -m unittest discover -q` - `413 tests` passed, `1 skipped`.
+- Second review CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` - `394 passed, 109 subtests passed`.
+- Second review full local CI: `bash scripts/ci-local.sh` - passed Ruff check/format, dependency integrity, Bandit high-confidence gate, compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `920 tests` passing.
 
 ### Completion Notes List
 
@@ -127,6 +134,7 @@ OpenAI Codex (GPT-5)
 - Implementation is stacked on the unmerged Story 11.2 branch because Story 11.3 directly extends its policy settings/output services.
 - Resolved all seven code-review findings: added the external capped-decision endpoint, safe GitHub failure results, legacy PUT preservation, accurate skipped-analysis guidance, full mode/default/reset regressions, and executable operator-documentation coverage.
 - Resolved both findings from the Story 11.3 review rerun: enforcement-validation failures now describe the completed analysis accurately, and the decision suite locks every raw-status/configured-mode pairing against upward escalation plus the built-in advisory path.
+- Resolved both findings from the second review rerun: legacy integration overrides retain inherited project enforcement when the field is omitted, and internal enforcement-decision validation failures return a sanitized server-error response.
 
 ### File List
 
@@ -159,3 +167,4 @@ OpenAI Codex (GPT-5)
 - 2026-08-11: Added advisory-first integration enforcement settings, shared capped decisions, GitHub check enforcement, deterministic regression coverage, API schema generation, and operator documentation; moved story to review.
 - 2026-08-12: Resolved all seven code-review findings, regenerated the API client contract, completed full validation, and moved the story to done.
 - 2026-08-13: Resolved both findings from the code-review rerun and expanded enforcement-decision regression coverage across the complete status matrix.
+- 2026-08-13: Resolved the second review rerun findings for inherited enforcement preservation and internal error classification, with focused and full-CI regression evidence.
