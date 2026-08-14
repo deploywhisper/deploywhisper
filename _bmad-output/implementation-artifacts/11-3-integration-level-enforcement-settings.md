@@ -1,6 +1,6 @@
 # Story 11.3: Integration-Level Enforcement Settings
 
-Status: done
+Status: review
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -28,6 +28,11 @@ So that teams can adopt warnings before blocking.
 - [x] Add or update deterministic regression coverage for the changed behavior. (AC: all)
 - [x] Update relevant docs or examples if the story changes user-visible, operator, API, CLI, integration, or contribution behavior. (AC: all)
 - [x] Run required validation and record commands/results in the Dev Agent Record. (AC: all)
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] Make GitHub check-run delivery best-effort on neutral-skip and successful-analysis paths while preserving handled webhook results and persisted report references.
+- [x] [AI-Review][LOW] Emit explicit skipped-analysis guidance for sensitive-only, unsupported-only, and mixed rejected artifact sets.
 
 ### Review Findings
 
@@ -102,6 +107,12 @@ So that teams can adopt warnings before blocking.
 
 OpenAI Codex (GPT-5)
 
+### Implementation Plan
+
+- Preserve successful analysis and handled-webhook results when GitHub check delivery fails, while returning a bounded `partial` status and `github_check_run_failed` code without exposing upstream details.
+- Derive skipped-analysis guidance only from aggregate intake statuses so sensitive, unsupported, mixed, and empty artifact sets are explicit without disclosing filenames or contents.
+- Lock both paths with focused regressions before running the required repository validation gates.
+
 ### Debug Log References
 
 - RED: `./.venv/bin/python -m pytest tests/test_services/test_settings_service.py tests/test_services/test_policy_adapter_service.py tests/test_api/test_settings.py tests/test_services/test_github_app_service.py -q --tb=short` - expected failure (`9 failed, 61 passed, 17 subtests passed`) before enforcement settings and decisions existed.
@@ -140,6 +151,13 @@ OpenAI Codex (GPT-5)
 - Fourth review required smoke: `./.venv/bin/python -m unittest discover -q` - `414 tests` passed, `1 skipped`.
 - Fourth review CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` - `395 passed, 111 subtests passed`.
 - Fourth review full local CI: `bash scripts/ci-local.sh` - passed Ruff check/format, dependency integrity, Bandit high-confidence gate, compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `921 tests` passing.
+- Deferred-finding RED: `./.venv/bin/python -m pytest tests/test_services/test_github_app_service.py -q --tb=short` reproduced generic skipped-analysis copy and uncaught check-run delivery failures (`6 failed, 26 passed, 6 subtests passed`).
+- Deferred-finding GREEN: the same focused command passed after the fixes (`29 passed, 9 subtests passed`).
+- Deferred-finding quality gates: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `git diff --check` passed; Ruff reported all 272 files formatted.
+- Deferred-finding required smoke: `./.venv/bin/python -m unittest discover -q` - `414 tests` passed, `1 skipped`.
+- Deferred-finding CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` - `395 passed, 111 subtests passed`.
+- Deferred-finding full local CI: `bash scripts/ci-local.sh` - passed Ruff check/format, dependency integrity, Bandit high-confidence gate with zero high findings, compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `924 tests` passing.
+- UI validation not applicable for the deferred findings: no React route, component, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed.
 
 ### Completion Notes List
 
@@ -154,6 +172,7 @@ OpenAI Codex (GPT-5)
 - Resolved both findings from the third review rerun: policy integration identifiers now use shared boundary normalization before decision construction, and legacy integration-scoped storage has explicit advisory-default coverage.
 - Resolved both findings from the fourth review rerun: GitHub checks only mention a canonical report when one exists, and the external enforcement-decision API now distinguishes malformed integration input from internal decision-validation failures with stable error codes.
 - The fifth review rerun found no Story 11.3 patch or decision gap; two pre-existing GitHub App reliability/copy issues were recorded in deferred work without expanding this story's scope.
+- Resolved both fifth-review deferrals at user request: skipped and successful analyses now survive GitHub check-run delivery failures with bounded partial results, and rejected artifact sets receive explicit sensitive/unsupported/mixed guidance without exposing artifact details.
 
 ### File List
 
@@ -191,3 +210,4 @@ OpenAI Codex (GPT-5)
 - 2026-08-13: Resolved the third review rerun findings for invalid integration input classification and legacy integration-storage coverage.
 - 2026-08-14: Resolved the fourth review rerun findings for no-report GitHub guidance and distinct enforcement-decision error codes.
 - 2026-08-14: Fifth review rerun passed Story 11.3 acceptance and recorded two pre-existing GitHub App issues as deferred work.
+- 2026-08-14: Addressed both deferred fifth-review findings with red-green regressions and full local CI; moved Story 11.3 back to review.

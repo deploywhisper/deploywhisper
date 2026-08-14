@@ -48,6 +48,7 @@ DEFAULT_GITHUB_API_BASE_URL = "https://api.github.com"
 DEFAULT_GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 DEFAULT_GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
 DEFAULT_CHECK_RUN_NAME = "DeployWhisper / Risk Analysis"
+CHECK_RUN_DELIVERY_ERROR_CODE = "github_check_run_failed"
 PULL_REQUEST_TRIGGER_ACTIONS = {"opened", "reopened", "synchronize"}
 _STATE_MAX_AGE_SECONDS = 600
 _UPLOAD_LIMIT_MESSAGE = (
@@ -417,29 +418,31 @@ def handle_github_app_webhook(
         if item.status == "ready"
     ]
     if not accepted_files:
-        note = "No supported changed artifacts were available from this pull request."
-        check_run_id = (
-            _create_check_run(
-                owner=owner,
-                repo_name=repo_name,
-                head_sha=head_sha,
-                installation_token=installation_token,
-                conclusion="neutral",
-                title=DEFAULT_CHECK_RUN_NAME,
-                summary=note,
-                details_url=None,
-                text=_check_run_text(
+        note = _skipped_analysis_guidance({item.status for item in pending.items})
+        check_run_id = None
+        status = "ok"
+        code = None
+        if config.checks_enabled:
+            try:
+                check_run_id = _create_check_run(
+                    owner=owner,
+                    repo_name=repo_name,
+                    head_sha=head_sha,
+                    installation_token=installation_token,
+                    conclusion="neutral",
+                    title=DEFAULT_CHECK_RUN_NAME,
+                    summary=note,
                     details_url=None,
-                    fallback_guidance=(
-                        "No supported changed artifacts were available, so no "
-                        "policy decision was evaluated."
+                    text=_check_run_text(
+                        details_url=None,
+                        fallback_guidance=note,
                     ),
-                ),
-                api_base_url=config.api_base_url,
-            )
-            if config.checks_enabled
-            else None
-        )
+                    api_base_url=config.api_base_url,
+                )
+            except GitHubAppRequestError:
+                note = f"{note} Neutral check run could not be created."
+                status = "partial"
+                code = CHECK_RUN_DELIVERY_ERROR_CODE
         return GitHubWebhookResult(
             event=event_name,
             action=action,
@@ -449,6 +452,8 @@ def handle_github_app_webhook(
             report_id=None,
             report_url=None,
             note=note,
+            status=status,
+            code=code,
         )
 
     if config.checks_enabled:
@@ -559,6 +564,9 @@ def handle_github_app_webhook(
     report_id = int(result.persisted_report["id"])
     report_url = build_share_report_link(report_id)
     check_run_id = None
+    note = "GitHub App webhook processed and advisory analysis completed."
+    status = "ok"
+    code = None
     if config.checks_enabled:
         report_url = _check_run_details_url(report_id, config=config)
         try:
@@ -612,21 +620,26 @@ def handle_github_app_webhook(
                 status="failed",
                 code=code,
             )
-        check_run_id = _create_check_run(
-            owner=owner,
-            repo_name=repo_name,
-            head_sha=head_sha,
-            installation_token=installation_token,
-            conclusion=_check_run_conclusion(
-                result.assessment.recommendation,
-                enforcement.effective_status,
-            ),
-            title=DEFAULT_CHECK_RUN_NAME,
-            summary=_check_run_summary(result.persisted_report, enforcement),
-            details_url=report_url,
-            text=_check_run_text(details_url=report_url, enforcement=enforcement),
-            api_base_url=config.api_base_url,
-        )
+        try:
+            check_run_id = _create_check_run(
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
+                installation_token=installation_token,
+                conclusion=_check_run_conclusion(
+                    result.assessment.recommendation,
+                    enforcement.effective_status,
+                ),
+                title=DEFAULT_CHECK_RUN_NAME,
+                summary=_check_run_summary(result.persisted_report, enforcement),
+                details_url=report_url,
+                text=_check_run_text(details_url=report_url, enforcement=enforcement),
+                api_base_url=config.api_base_url,
+            )
+        except GitHubAppRequestError:
+            note = f"{note} Check run could not be created."
+            status = "partial"
+            code = CHECK_RUN_DELIVERY_ERROR_CODE
     return GitHubWebhookResult(
         event=event_name,
         action=action,
@@ -635,7 +648,9 @@ def handle_github_app_webhook(
         check_run_id=check_run_id,
         report_id=report_id,
         report_url=report_url,
-        note="GitHub App webhook processed and advisory analysis completed.",
+        note=note,
+        status=status,
+        code=code,
     )
 
 
@@ -825,6 +840,25 @@ def _check_run_text(
     if details_url:
         lines.insert(0, f"[Open the full DeployWhisper report]({details_url})")
     return "\n\n".join(lines)
+
+
+def _skipped_analysis_guidance(statuses: set[str]) -> str:
+    if statuses == {"sensitive"}:
+        return (
+            "Changed artifacts were excluded because they may contain sensitive "
+            "data, so no policy decision was evaluated."
+        )
+    if statuses == {"unsupported"}:
+        return (
+            "Changed artifacts use unsupported formats, so no policy decision "
+            "was evaluated."
+        )
+    if statuses == {"sensitive", "unsupported"}:
+        return (
+            "Changed artifacts were excluded because they may contain sensitive "
+            "data or use unsupported formats, so no policy decision was evaluated."
+        )
+    return "No changed artifacts were available, so no policy decision was evaluated."
 
 
 def _check_run_details_url(

@@ -219,6 +219,57 @@ class GitHubAppServiceTests(unittest.TestCase):
         )
 
     @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_successful_analysis_survives_check_run_delivery_failure(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.return_value = type(
+            "Result",
+            (),
+            {
+                "assessment": type("Assessment", (), {"recommendation": "caution"})(),
+                "persisted_report": {"id": 17},
+            },
+        )()
+        create_check_run.side_effect = app_service.GitHubAppRequestError(
+            "github upstream detail"
+        )
+
+        result = app_service.handle_github_app_webhook(
+            event_name="pull_request",
+            payload={
+                "action": "opened",
+                "number": 3,
+                "installation": {"id": 42},
+                "repository": {
+                    "name": "deploywhisper",
+                    "owner": {"login": "deploywhisper"},
+                },
+                "pull_request": {"number": 3, "head": {"sha": "abc123"}},
+            },
+        )
+
+        self.assertTrue(result.handled)
+        self.assertTrue(result.automatic_analysis_triggered)
+        self.assertIsNone(result.check_run_id)
+        self.assertEqual(result.report_id, 17)
+        self.assertEqual(
+            result.report_url, "https://deploywhisper.example.com/reports/17"
+        )
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(result.code, "github_check_run_failed")
+        self.assertIn("Check run could not be created", result.note)
+        self.assertNotIn("github upstream detail", result.note)
+
+    @patch("integrations.github.app_service._create_check_run")
     @patch("integrations.github.app_service.build_integration_enforcement_decision")
     @patch("integrations.github.app_service.analyze_uploaded_files")
     @patch("integrations.github.app_service._load_pull_request_artifacts")
@@ -467,9 +518,99 @@ class GitHubAppServiceTests(unittest.TestCase):
 
         text = create_check_run.call_args.kwargs["text"]
         self.assertFalse(result.automatic_analysis_triggered)
-        self.assertIn("No supported changed artifacts", text)
+        self.assertIn("No changed artifacts were available", text)
         self.assertNotIn("analysis could not complete", text)
         self.assertNotIn("canonical DeployWhisper report", text)
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_github_webhook_explains_sensitive_and_unsupported_skips(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        create_check_run.return_value = 995
+        cases = (
+            ([(".env", b"SECRET=value")], ("sensitive",), ("unsupported",)),
+            (
+                [("notes.txt", b"plain text")],
+                ("unsupported",),
+                ("sensitive",),
+            ),
+            (
+                [(".env", b"SECRET=value"), ("notes.txt", b"plain text")],
+                ("sensitive", "unsupported"),
+                (),
+            ),
+        )
+
+        for raw_files, expected_terms, absent_terms in cases:
+            with self.subTest(raw_files=[name for name, _ in raw_files]):
+                load_pull_request_artifacts.return_value = raw_files
+
+                result = app_service.handle_github_app_webhook(
+                    event_name="pull_request",
+                    payload={
+                        "action": "opened",
+                        "number": 7,
+                        "installation": {"id": 42},
+                        "repository": {
+                            "name": "deploywhisper",
+                            "owner": {"login": "deploywhisper"},
+                        },
+                        "pull_request": {"number": 7, "head": {"sha": "empty1"}},
+                    },
+                )
+
+                text = create_check_run.call_args.kwargs["text"].lower()
+                self.assertFalse(result.automatic_analysis_triggered)
+                for term in expected_terms:
+                    self.assertIn(term, text)
+                    self.assertIn(term, result.note.lower())
+                for term in absent_terms:
+                    self.assertNotIn(term, text)
+                create_check_run.reset_mock()
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_skipped_analysis_survives_check_run_delivery_failure(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = []
+        create_check_run.side_effect = app_service.GitHubAppRequestError(
+            "github upstream detail"
+        )
+
+        result = app_service.handle_github_app_webhook(
+            event_name="pull_request",
+            payload={
+                "action": "opened",
+                "number": 7,
+                "installation": {"id": 42},
+                "repository": {
+                    "name": "deploywhisper",
+                    "owner": {"login": "deploywhisper"},
+                },
+                "pull_request": {"number": 7, "head": {"sha": "empty1"}},
+            },
+        )
+
+        self.assertTrue(result.handled)
+        self.assertFalse(result.automatic_analysis_triggered)
+        self.assertIsNone(result.check_run_id)
+        self.assertIsNone(result.report_id)
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(result.code, "github_check_run_failed")
+        self.assertIn("Neutral check run could not be created", result.note)
+        self.assertNotIn("github upstream detail", result.note)
 
     @patch("integrations.github.app_service.analyze_uploaded_files")
     @patch("integrations.github.app_service._load_pull_request_artifacts")
