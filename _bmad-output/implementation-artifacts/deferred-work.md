@@ -66,3 +66,8 @@
 ## Deferred from: code review of 10-4-prompt-injection-test-suite.md (2026-07-31)
 
 - Resolved 2026-07-31: Release-blocking claims such as `Stop the release` and `Release should be blocked` now contradict a GO recommendation [llm/prompt_security.py:97].
+
+## Deferred from: code review of 11-3-integration-level-enforcement-settings.md (2026-08-14)
+
+- GitHub check-run creation failures on neutral-skip and successful-analysis paths are not handled as best-effort delivery failures [integrations/github/app_service.py:421]. Deferred as pre-existing GitHub App reliability hardening because both direct `_create_check_run()` calls and their exception behavior existed before Story 11.3.
+- GitHub skipped-analysis guidance does not distinguish sensitive-only, unsupported-only, and mixed rejected artifact sets [integrations/github/app_service.py:414]. Deferred as pre-existing intake-copy hardening because the shared empty-accepted-files message existed before Story 11.3 and does not affect enforcement-mode resolution.

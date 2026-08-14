@@ -31,6 +31,8 @@ So that teams can adopt warnings before blocking.
 
 ### Review Findings
 
+- [x] [Review][Defer] Best-effort handle GitHub check-run creation failures on neutral-skip and successful-analysis paths [integrations/github/app_service.py:421] — deferred, pre-existing
+- [x] [Review][Defer] Distinguish sensitive-only and unsupported-only skipped PR artifacts in GitHub guidance [integrations/github/app_service.py:414] — deferred, pre-existing
 - [x] [Review][Patch] [MEDIUM] Do not claim that a canonical advisory report exists in GitHub check text when analysis was skipped or failed before report persistence; `_check_run_text()` currently appends that sentence even when both `details_url` and `enforcement` are absent. [integrations/github/app_service.py:822]
 - [x] [Review][Patch] [MEDIUM] Give malformed integration identifiers and internal enforcement-decision invariant failures distinct machine-readable API error codes; both paths currently emit `invalid_policy_adapter_output` despite representing caller input versus server-contract failures. [api/routes/analyses.py:1038]
 - [x] [Review][Patch] [MEDIUM] Reject blank or otherwise invalid `integration` query values as client errors before enforcement-decision construction; whitespace currently reaches `AdapterMetadata`, is caught with internal invariant failures, and returns HTTP 500 instead of a bounded 4xx response. [api/routes/analyses.py:1028]
@@ -151,10 +153,12 @@ OpenAI Codex (GPT-5)
 - Resolved both findings from the second review rerun: legacy integration overrides retain inherited project enforcement when the field is omitted, and internal enforcement-decision validation failures return a sanitized server-error response.
 - Resolved both findings from the third review rerun: policy integration identifiers now use shared boundary normalization before decision construction, and legacy integration-scoped storage has explicit advisory-default coverage.
 - Resolved both findings from the fourth review rerun: GitHub checks only mention a canonical report when one exists, and the external enforcement-decision API now distinguishes malformed integration input from internal decision-validation failures with stable error codes.
+- The fifth review rerun found no Story 11.3 patch or decision gap; two pre-existing GitHub App reliability/copy issues were recorded in deferred work without expanding this story's scope.
 
 ### File List
 
 - README.md
+- _bmad-output/implementation-artifacts/deferred-work.md
 - _bmad-output/implementation-artifacts/11-3-integration-level-enforcement-settings.md
 - _bmad-output/implementation-artifacts/sprint-status.yaml
 - api/routes/settings.py
@@ -186,3 +190,4 @@ OpenAI Codex (GPT-5)
 - 2026-08-13: Resolved the second review rerun findings for inherited enforcement preservation and internal error classification, with focused and full-CI regression evidence.
 - 2026-08-13: Resolved the third review rerun findings for invalid integration input classification and legacy integration-storage coverage.
 - 2026-08-14: Resolved the fourth review rerun findings for no-report GitHub guidance and distinct enforcement-decision error codes.
+- 2026-08-14: Fifth review rerun passed Story 11.3 acceptance and recorded two pre-existing GitHub App issues as deferred work.
