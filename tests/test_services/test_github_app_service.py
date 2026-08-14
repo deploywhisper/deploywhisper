@@ -469,6 +469,7 @@ class GitHubAppServiceTests(unittest.TestCase):
         self.assertFalse(result.automatic_analysis_triggered)
         self.assertIn("No supported changed artifacts", text)
         self.assertNotIn("analysis could not complete", text)
+        self.assertNotIn("canonical DeployWhisper report", text)
 
     @patch("integrations.github.app_service.analyze_uploaded_files")
     @patch("integrations.github.app_service._load_pull_request_artifacts")
@@ -803,6 +804,10 @@ class GitHubAppServiceTests(unittest.TestCase):
         self.assertNotIn(
             "database is read-only",
             create_check_run.call_args.kwargs["summary"],
+        )
+        self.assertNotIn(
+            "canonical DeployWhisper report",
+            create_check_run.call_args.kwargs["text"],
         )
 
     @patch("integrations.github.app_service._create_check_run")

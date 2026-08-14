@@ -819,7 +819,9 @@ def _check_run_text(
             "This integration is non-blocking at its configured "
             f"{enforcement.configured_mode.value} enforcement mode."
         )
-    lines = [guidance, "The canonical DeployWhisper report remains advisory-only."]
+    lines = [guidance]
+    if details_url is not None or enforcement is not None:
+        lines.append("The canonical DeployWhisper report remains advisory-only.")
     if details_url:
         lines.insert(0, f"[Open the full DeployWhisper report]({details_url})")
     return "\n\n".join(lines)

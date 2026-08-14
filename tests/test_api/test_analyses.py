@@ -718,7 +718,8 @@ class AnalysesApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(
-            response.json()["error"]["code"], "invalid_policy_adapter_output"
+            response.json()["error"]["code"],
+            "integration_enforcement_decision_invalid",
         )
         self.assertNotIn("internal invariant detail", response.text)
 
@@ -734,7 +735,8 @@ class AnalysesApiTests(unittest.TestCase):
 
                 self.assertEqual(response.status_code, 400)
                 self.assertEqual(
-                    response.json()["error"]["code"], "invalid_policy_adapter_output"
+                    response.json()["error"]["code"],
+                    "invalid_integration_identifier",
                 )
 
     def test_blast_radius_api_schema_preserves_topology_context_fields(self) -> None:

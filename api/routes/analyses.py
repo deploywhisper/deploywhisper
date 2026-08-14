@@ -1035,7 +1035,7 @@ def get_integration_enforcement_decision(
     except ValueError as exc:
         raise ApiError(
             status_code=400,
-            code="invalid_policy_adapter_output",
+            code="invalid_integration_identifier",
             message="Integration identifier is invalid.",
         ) from exc
     try:
@@ -1072,7 +1072,7 @@ def get_integration_enforcement_decision(
     except ValueError as exc:
         raise ApiError(
             status_code=500,
-            code="invalid_policy_adapter_output",
+            code="integration_enforcement_decision_invalid",
             message="Integration enforcement decision could not be validated.",
         ) from exc
     return IntegrationEnforcementDecisionResponse(

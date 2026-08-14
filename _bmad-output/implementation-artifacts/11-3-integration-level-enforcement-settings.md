@@ -31,6 +31,8 @@ So that teams can adopt warnings before blocking.
 
 ### Review Findings
 
+- [x] [Review][Patch] [MEDIUM] Do not claim that a canonical advisory report exists in GitHub check text when analysis was skipped or failed before report persistence; `_check_run_text()` currently appends that sentence even when both `details_url` and `enforcement` are absent. [integrations/github/app_service.py:822]
+- [x] [Review][Patch] [MEDIUM] Give malformed integration identifiers and internal enforcement-decision invariant failures distinct machine-readable API error codes; both paths currently emit `invalid_policy_adapter_output` despite representing caller input versus server-contract failures. [api/routes/analyses.py:1038]
 - [x] [Review][Patch] [MEDIUM] Reject blank or otherwise invalid `integration` query values as client errors before enforcement-decision construction; whitespace currently reaches `AdapterMetadata`, is caught with internal invariant failures, and returns HTTP 500 instead of a bounded 4xx response. [api/routes/analyses.py:1028]
 - [x] [Review][Patch] [LOW] Add a legacy integration-scoped storage regression proving persisted settings without `enforcement_mode` load as advisory, matching the documented backward-compatibility guarantee already covered only for project-scoped storage. [tests/test_services/test_settings_service.py:246]
 - [x] [Review][Patch] [MEDIUM] Preserve the resolved inherited project enforcement mode when a backward-compatible client creates its first integration override without `enforcement_mode`; the current source check falls back to the request model's `advisory` default and silently downgrades enforcement. [api/routes/settings.py:529]
@@ -131,6 +133,11 @@ OpenAI Codex (GPT-5)
 - Third review required smoke: `./.venv/bin/python -m unittest discover -q` - `414 tests` passed, `1 skipped`.
 - Third review CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` - `395 passed, 111 subtests passed`.
 - Third review full local CI: `bash scripts/ci-local.sh` - passed Ruff check/format, dependency integrity, Bandit high-confidence gate, compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `921 tests` passing.
+- Fourth review RED: focused GitHub App and analyses API regressions reproduced misleading no-report guidance and the shared client/server error code (`5 failed, 127 passed, 27 subtests passed`).
+- Fourth review GREEN: `./.venv/bin/python -m pytest tests/test_services/test_github_app_service.py tests/test_api/test_analyses.py -q --tb=short` - `130 passed, 29 subtests passed`.
+- Fourth review required smoke: `./.venv/bin/python -m unittest discover -q` - `414 tests` passed, `1 skipped`.
+- Fourth review CI-parity shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` - `395 passed, 111 subtests passed`.
+- Fourth review full local CI: `bash scripts/ci-local.sh` - passed Ruff check/format, dependency integrity, Bandit high-confidence gate, compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `921 tests` passing.
 
 ### Completion Notes List
 
@@ -143,6 +150,7 @@ OpenAI Codex (GPT-5)
 - Resolved both findings from the Story 11.3 review rerun: enforcement-validation failures now describe the completed analysis accurately, and the decision suite locks every raw-status/configured-mode pairing against upward escalation plus the built-in advisory path.
 - Resolved both findings from the second review rerun: legacy integration overrides retain inherited project enforcement when the field is omitted, and internal enforcement-decision validation failures return a sanitized server-error response.
 - Resolved both findings from the third review rerun: policy integration identifiers now use shared boundary normalization before decision construction, and legacy integration-scoped storage has explicit advisory-default coverage.
+- Resolved both findings from the fourth review rerun: GitHub checks only mention a canonical report when one exists, and the external enforcement-decision API now distinguishes malformed integration input from internal decision-validation failures with stable error codes.
 
 ### File List
 
@@ -177,3 +185,4 @@ OpenAI Codex (GPT-5)
 - 2026-08-13: Resolved both findings from the code-review rerun and expanded enforcement-decision regression coverage across the complete status matrix.
 - 2026-08-13: Resolved the second review rerun findings for inherited enforcement preservation and internal error classification, with focused and full-CI regression evidence.
 - 2026-08-13: Resolved the third review rerun findings for invalid integration input classification and legacy integration-storage coverage.
+- 2026-08-14: Resolved the fourth review rerun findings for no-report GitHub guidance and distinct enforcement-decision error codes.
