@@ -737,6 +737,54 @@ class GitHubAppServiceTests(unittest.TestCase):
     @patch("integrations.github.app_service.analyze_uploaded_files")
     @patch("integrations.github.app_service._load_pull_request_artifacts")
     @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_project_scope_failure_survives_check_run_delivery_failure(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        os.environ["DEPLOYWHISPER_GITHUB_PROJECT_KEY"] = "wrong-project"
+        generate_installation_access_token.return_value = "installation-token"
+        create_check_run.side_effect = app_service.GitHubAppRequestError(
+            "github upstream detail"
+        )
+
+        try:
+            result = app_service.handle_github_app_webhook(
+                event_name="pull_request",
+                payload={
+                    "action": "opened",
+                    "number": 3,
+                    "installation": {"id": 42},
+                    "repository": {
+                        "name": "deploywhisper",
+                        "owner": {"login": "deploywhisper"},
+                    },
+                    "pull_request": {
+                        "number": 3,
+                        "head": {"sha": "abc123"},
+                    },
+                },
+            )
+        finally:
+            os.environ.pop("DEPLOYWHISPER_GITHUB_PROJECT_KEY", None)
+
+        load_pull_request_artifacts.assert_not_called()
+        analyze_uploaded_files.assert_not_called()
+        self.assertTrue(result.handled)
+        self.assertFalse(result.automatic_analysis_triggered)
+        self.assertIsNone(result.check_run_id)
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(result.code, "github_check_run_failed")
+        self.assertIn("project_not_found", result.note)
+        self.assertIn("Check run could not be created", result.note)
+        self.assertNotIn("github upstream detail", result.note)
+
+    @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
     def test_handle_github_app_webhook_handles_malformed_project_override(
         self,
         generate_installation_access_token,

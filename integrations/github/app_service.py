@@ -678,22 +678,27 @@ def _project_scope_failure_result(
     config: GitHubAppConfig,
 ) -> GitHubWebhookResult:
     note = f"{code}: {message}"
-    check_run_id = (
-        _create_check_run(
-            owner=owner,
-            repo_name=repo_name,
-            head_sha=head_sha,
-            installation_token=installation_token,
-            conclusion="neutral",
-            title=DEFAULT_CHECK_RUN_NAME,
-            summary=note,
-            details_url=None,
-            text=_check_run_text(details_url=None),
-            api_base_url=config.api_base_url,
-        )
-        if config.checks_enabled
-        else None
-    )
+    check_run_id = None
+    status = "ok"
+    result_code = None
+    if config.checks_enabled:
+        try:
+            check_run_id = _create_check_run(
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
+                installation_token=installation_token,
+                conclusion="neutral",
+                title=DEFAULT_CHECK_RUN_NAME,
+                summary=note,
+                details_url=None,
+                text=_check_run_text(details_url=None, fallback_guidance=note),
+                api_base_url=config.api_base_url,
+            )
+        except GitHubAppRequestError:
+            note = f"{note} Check run could not be created."
+            status = "partial"
+            result_code = CHECK_RUN_DELIVERY_ERROR_CODE
     return GitHubWebhookResult(
         event=event_name,
         action=action,
@@ -703,6 +708,8 @@ def _project_scope_failure_result(
         report_id=None,
         report_url=None,
         note=note,
+        status=status,
+        code=result_code,
     )
 
 
