@@ -490,6 +490,69 @@ class GitHubAppServiceTests(unittest.TestCase):
                 create_check_run.reset_mock()
 
     @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.build_integration_enforcement_decision")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_enforcement_failure_survives_failure_check_delivery_failure(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        build_enforcement_decision,
+        create_check_run,
+    ) -> None:
+        generate_installation_access_token.return_value = "installation-token"
+        load_pull_request_artifacts.return_value = [("plan.tf", b'resource "x" "y" {}')]
+        analyze_uploaded_files.return_value = type(
+            "Result",
+            (),
+            {
+                "assessment": type("Assessment", (), {"recommendation": "caution"})(),
+                "persisted_report": {"id": 21},
+            },
+        )()
+        create_check_run.side_effect = app_service.GitHubAppRequestError(
+            "github upstream detail"
+        )
+        cases = (
+            (
+                PolicyAdapterSettingsIntegrityError("corrupt stored mode"),
+                "policy_adapter_settings_integrity_error",
+            ),
+            (ValueError("invalid adapter contract"), "invalid_policy_adapter_output"),
+        )
+
+        for error, expected_code in cases:
+            with self.subTest(expected_code=expected_code):
+                build_enforcement_decision.side_effect = error
+
+                result = app_service.handle_github_app_webhook(
+                    event_name="pull_request",
+                    payload={
+                        "action": "opened",
+                        "number": 6,
+                        "installation": {"id": 42},
+                        "repository": {
+                            "name": "deploywhisper",
+                            "owner": {"login": "deploywhisper"},
+                        },
+                        "pull_request": {"number": 6, "head": {"sha": "bad123"}},
+                    },
+                )
+
+                self.assertTrue(result.handled)
+                self.assertTrue(result.automatic_analysis_triggered)
+                self.assertIsNone(result.check_run_id)
+                self.assertEqual(result.report_id, 21)
+                self.assertEqual(result.status, "failed")
+                self.assertEqual(result.code, expected_code)
+                self.assertIn("analysis completed", result.note)
+                self.assertIn("Failure check run could not be created", result.note)
+                self.assertNotIn(str(error), result.note)
+                self.assertNotIn("github upstream detail", result.note)
+
+    @patch("integrations.github.app_service._create_check_run")
     @patch("integrations.github.app_service._load_pull_request_artifacts")
     @patch("integrations.github.app_service._generate_installation_access_token")
     def test_github_webhook_describes_skipped_analysis_without_failure_copy(
