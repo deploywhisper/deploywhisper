@@ -526,13 +526,11 @@ def update_policy_adapter_defaults(
             project_id=payload.project_id,
             project_key=payload.project_key,
         )
-        enforcement_mode = payload.enforcement_mode
-        if "enforcement_mode" not in payload.model_fields_set:
-            current = get_policy_adapter_settings(
-                project_key=project.project_key,
-                integration=payload.integration,
-            )
-            enforcement_mode = current.enforcement_mode
+        enforcement_mode = (
+            payload.enforcement_mode
+            if "enforcement_mode" in payload.model_fields_set
+            else None
+        )
         saved = save_policy_adapter_settings(
             project_key=project.project_key,
             integration=payload.integration,

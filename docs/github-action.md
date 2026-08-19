@@ -60,13 +60,15 @@ endpoint before using it with a project-scoped DeployWhisper server.
 DeployWhisper's canonical result remains advisory in CI. Successful analysis should not fail a
 workflow based only on risk score or recommendation. Consumers should use
 `data.advisory.requires_attention` to decide whether to notify reviewers or add
-manual checks. Advisory-first boundary: the action surfaces evidence and
-recommendations for review, but does not enforce deployment blocking by itself.
-An action runtime that supports opt-in enforcement must consume the configured
-policy decision, default to `advisory`, and keep raw policy and effective
-integration statuses distinct. The external `deploywhisper/analyze-action`
-repository owns that runtime behavior; this repository owns the shared API and
-contract at
+manual checks. Advisory-first boundary: the action does not block unless the
+`github-action` integration is explicitly configured for an effective
+`soft-block` or `hard-block` decision. After persisting a report, the action
+consumes the configured policy decision, defaults to `advisory`, and keeps raw
+policy and effective integration statuses distinct. It fails the action only
+when the server's validated `should_block` decision is true; it does not derive
+blocking from severity, risk score, or recommendation. The external
+`deploywhisper/analyze-action` repository owns that runtime behavior; this
+repository owns the shared API and contract at
 `GET /api/v1/analyses/{report_id}/enforcement-decision?integration=github-action`.
 
 ## Canonical Report Output Mapping
@@ -83,6 +85,10 @@ action should not invent a separate report contract.
 | `recommendation` | `data.advisory.recommendation`, falling back to `data.share_summary.recommendation` when advisory is blank |
 | `share-summary-json` | JSON-encoded `data.share_summary.json_payload` |
 | `share-summary-markdown` | `data.share_summary.markdown` |
+| `policy-status` | `data.policy_output.status` from the enforcement decision |
+| `configured-mode` | `data.configured_mode` from the enforcement decision |
+| `effective-status` | `data.effective_status` from the enforcement decision |
+| `should-block` | `data.should_block` from the enforcement decision |
 
 GitHub Action outputs are strings. The `share-summary-json` output is a
 JSON-encoded string of `data.share_summary.json_payload`; consumers should parse

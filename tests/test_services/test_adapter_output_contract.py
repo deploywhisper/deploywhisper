@@ -344,7 +344,7 @@ class AdapterOutputContractTests(unittest.TestCase):
         contract = build_adapter_output_contract(
             summary,
             AdapterMetadata(
-                adapter="github-actions",
+                adapter="github-action",
                 format="pr_comment",
                 project_key="payments",
             ),

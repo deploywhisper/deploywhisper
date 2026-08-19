@@ -118,6 +118,26 @@ class SettingsServiceTests(unittest.TestCase):
         self.assertEqual(settings.soft_block_at.value, "high")
         self.assertEqual(settings.hard_block_at.value, "critical")
 
+    def test_policy_adapter_service_update_preserves_existing_enforcement_mode(
+        self,
+    ) -> None:
+        settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            enforcement_mode="hard-block",
+        )
+
+        updated = settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+            reporting_default="warn",
+        )
+
+        self.assertEqual(updated.enforcement_mode, PolicyAdapterStatus.HARD_BLOCK)
+
     def test_policy_adapter_settings_use_canonical_project_keys_for_storage(
         self,
     ) -> None:

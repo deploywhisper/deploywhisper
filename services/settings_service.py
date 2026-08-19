@@ -223,7 +223,7 @@ def save_policy_adapter_settings(
     soft_block_at: PolicySeverity | str | None = PolicySeverity.HIGH,
     hard_block_at: PolicySeverity | str | None = PolicySeverity.CRITICAL,
     reporting_default: PolicyAdapterStatus | str = PolicyAdapterStatus.ADVISORY,
-    enforcement_mode: PolicyAdapterStatus | str = PolicyAdapterStatus.ADVISORY,
+    enforcement_mode: PolicyAdapterStatus | str | None = None,
 ) -> PolicyAdapterSettings:
     """Persist project defaults or an integration-specific override."""
     normalized_project_key = normalize_project_key(project_key)
@@ -232,6 +232,11 @@ def save_policy_adapter_settings(
         if integration is not None
         else None
     )
+    if enforcement_mode is None:
+        enforcement_mode = get_policy_adapter_settings(
+            project_key=normalized_project_key,
+            integration=normalized_integration,
+        ).enforcement_mode
     resolved = PolicyAdapterSettings(
         project_key=normalized_project_key,
         integration=normalized_integration,

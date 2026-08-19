@@ -125,6 +125,7 @@ class GitHubWebhookResult:
     note: str
     status: str = "ok"
     code: str | None = None
+    delivery_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -679,8 +680,9 @@ def _project_scope_failure_result(
 ) -> GitHubWebhookResult:
     note = f"{code}: {message}"
     check_run_id = None
-    status = "ok"
-    result_code = None
+    status = "failed"
+    result_code = code
+    delivery_code = None
     if config.checks_enabled:
         try:
             check_run_id = _create_check_run(
@@ -697,8 +699,7 @@ def _project_scope_failure_result(
             )
         except GitHubAppRequestError:
             note = f"{note} Check run could not be created."
-            status = "partial"
-            result_code = CHECK_RUN_DELIVERY_ERROR_CODE
+            delivery_code = CHECK_RUN_DELIVERY_ERROR_CODE
     return GitHubWebhookResult(
         event=event_name,
         action=action,
@@ -710,6 +711,7 @@ def _project_scope_failure_result(
         note=note,
         status=status,
         code=result_code,
+        delivery_code=delivery_code,
     )
 
 
@@ -865,6 +867,11 @@ def _skipped_analysis_guidance(statuses: set[str]) -> str:
             "Changed artifacts were excluded because they may contain sensitive "
             "data or use unsupported formats, so no policy decision was evaluated."
         )
+    if statuses:
+        return (
+            "Changed artifacts were excluded for an unrecognized intake reason, "
+            "so no policy decision was evaluated."
+        )
     return "No changed artifacts were available, so no policy decision was evaluated."
 
 
@@ -897,7 +904,7 @@ def _create_check_run(
     details_url: str | None,
     text: str | None,
     api_base_url: str,
-) -> int | None:
+) -> int:
     payload: dict[str, Any] = {
         "name": title,
         "head_sha": head_sha,
@@ -923,7 +930,9 @@ def _create_check_run(
         check_run_id = response.get("id")
         if isinstance(check_run_id, int):
             return check_run_id
-    return None
+    raise GitHubAppRequestError(
+        "GitHub check-runs API did not return a valid check run id."
+    )
 
 
 def _generate_installation_access_token(

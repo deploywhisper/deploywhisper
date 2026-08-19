@@ -270,6 +270,47 @@ class GitHubAppServiceTests(unittest.TestCase):
         self.assertNotIn("github upstream detail", result.note)
 
     @patch("integrations.github.app_service._create_check_run")
+    @patch("integrations.github.app_service.analyze_uploaded_files")
+    @patch("integrations.github.app_service._load_pull_request_artifacts")
+    @patch("integrations.github.app_service._generate_installation_access_token")
+    def test_project_scope_failure_preserves_machine_readable_root_cause(
+        self,
+        generate_installation_access_token,
+        load_pull_request_artifacts,
+        analyze_uploaded_files,
+        create_check_run,
+    ) -> None:
+        os.environ["DEPLOYWHISPER_GITHUB_PROJECT_KEY"] = "wrong-project"
+        generate_installation_access_token.return_value = "installation-token"
+        create_check_run.return_value = 994
+
+        try:
+            result = app_service.handle_github_app_webhook(
+                event_name="pull_request",
+                payload={
+                    "action": "opened",
+                    "number": 3,
+                    "installation": {"id": 42},
+                    "repository": {
+                        "name": "deploywhisper",
+                        "owner": {"login": "deploywhisper"},
+                    },
+                    "pull_request": {
+                        "number": 3,
+                        "head": {"sha": "abc123"},
+                    },
+                },
+            )
+        finally:
+            os.environ.pop("DEPLOYWHISPER_GITHUB_PROJECT_KEY", None)
+
+        load_pull_request_artifacts.assert_not_called()
+        analyze_uploaded_files.assert_not_called()
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.code, "project_not_found")
+        self.assertIsNone(result.delivery_code)
+
+    @patch("integrations.github.app_service._create_check_run")
     @patch("integrations.github.app_service.build_integration_enforcement_decision")
     @patch("integrations.github.app_service.analyze_uploaded_files")
     @patch("integrations.github.app_service._load_pull_request_artifacts")
@@ -637,6 +678,14 @@ class GitHubAppServiceTests(unittest.TestCase):
                     self.assertNotIn(term, text)
                 create_check_run.reset_mock()
 
+    def test_skipped_analysis_guidance_does_not_mislabel_unknown_rejections(
+        self,
+    ) -> None:
+        guidance = app_service._skipped_analysis_guidance({"quarantined"})
+
+        self.assertIn("unrecognized intake reason", guidance)
+        self.assertNotIn("No changed artifacts were available", guidance)
+
     @patch("integrations.github.app_service._create_check_run")
     @patch("integrations.github.app_service._load_pull_request_artifacts")
     @patch("integrations.github.app_service._generate_installation_access_token")
@@ -838,8 +887,9 @@ class GitHubAppServiceTests(unittest.TestCase):
         self.assertTrue(result.handled)
         self.assertFalse(result.automatic_analysis_triggered)
         self.assertIsNone(result.check_run_id)
-        self.assertEqual(result.status, "partial")
-        self.assertEqual(result.code, "github_check_run_failed")
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.code, "project_not_found")
+        self.assertEqual(result.delivery_code, "github_check_run_failed")
         self.assertIn("project_not_found", result.note)
         self.assertIn("Check run could not be created", result.note)
         self.assertNotIn("github upstream detail", result.note)
@@ -1347,6 +1397,29 @@ class GitHubAppServiceTests(unittest.TestCase):
             body["output"]["text"],
             "[Open the full DeployWhisper report](https://deploywhisper.example.com/reports/17)",
         )
+
+    @patch("integrations.github.app_service._github_api_json")
+    def test_create_check_run_rejects_missing_response_id(
+        self, github_api_json
+    ) -> None:
+        github_api_json.return_value = {}
+
+        with self.assertRaisesRegex(
+            app_service.GitHubAppRequestError,
+            "did not return a valid check run id",
+        ):
+            app_service._create_check_run(
+                owner="deploywhisper",
+                repo_name="deploywhisper",
+                head_sha="abc123",
+                installation_token="installation-token",
+                conclusion="failure",
+                title=app_service.DEFAULT_CHECK_RUN_NAME,
+                summary="Enforcement result",
+                details_url="https://deploywhisper.example.com/reports/17",
+                text="Review required.",
+                api_base_url="https://api.github.com",
+            )
 
     def test_self_hosted_setup_docs_keep_oauth_optional(self) -> None:
         docs = Path("docs/github-app-self-hosted-setup.md").read_text(encoding="utf-8")
