@@ -181,6 +181,9 @@ class PolicyAdapterSettingsRequest(BaseModel):
         default="critical"
     )
     reporting_default: Literal["advisory", "warn"] = Field(default="advisory")
+    enforcement_mode: Literal["advisory", "warn", "soft-block", "hard-block"] = Field(
+        default="advisory"
+    )
 
 
 class PolicyAdapterSettingsData(BaseModel):
@@ -191,6 +194,7 @@ class PolicyAdapterSettingsData(BaseModel):
     soft_block_at: Literal["low", "medium", "high", "critical"] | None = None
     hard_block_at: Literal["low", "medium", "high", "critical"] | None = None
     reporting_default: Literal["advisory", "warn"]
+    enforcement_mode: Literal["advisory", "warn", "soft-block", "hard-block"]
 
 
 class PolicyAdapterSettingsResponse(BaseModel):
