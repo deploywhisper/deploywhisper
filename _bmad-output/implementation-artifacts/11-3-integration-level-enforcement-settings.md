@@ -36,6 +36,9 @@ So that teams can adopt warnings before blocking.
 
 ### Review Findings
 
+- [x] [Review][Patch] [HIGH] Validate that the standalone Action's `effective_status` is the minimum of `policy_output.status` and `configured_mode`; the current consumer accepts a contradictory `hard-block`/`hard-block`/`advisory` payload with `should_block=false` and exits successfully, violating its documented fail-closed enforcement contract. [external deploywhisper/analyze-action:action_runtime.py:636]
+- [x] [Review][Patch] [MEDIUM] Stop the policy-adapter service test from reloading the enforcement decision model behind the already-imported API response schema; running that service suite before the new enforcement endpoint regression leaves two Pydantic class identities and makes the valid endpoint request return HTTP 500. [tests/test_services/test_policy_adapter_service.py:35]
+- [x] [Review][Patch] [MEDIUM] Validate the pushed `deploywhisper/analyze-action` feature branch through `deploywhisper/action-smoke-consumer` and record the GitHub Actions run URL/result; the story records only local unit checks even though project context makes remote consumer validation mandatory for action changes. [_bmad-output/implementation-artifacts/11-3-integration-level-enforcement-settings.md:187]
 - [x] [Review][Patch] Add a combined GitHub webhook regression proving an enforcement-decision failure remains bounded when the fallback failure check cannot be delivered. [tests/test_services/test_github_app_service.py:435]
 - [x] [Review][Patch] Implement and verify the GitHub Action/CI enforcement consumer in `deploywhisper/analyze-action` using the canonical `github-action` integration key, validated v1 decision contract, auditable outputs, and configured blocking exit behavior.
 - [x] [Review][Patch] Treat a missing integer check-run ID as a delivery failure so a malformed GitHub success response cannot silently discard a soft/hard enforcement signal. [integrations/github/app_service.py:888]
@@ -185,7 +188,13 @@ OpenAI Codex (GPT-5)
 - Eighth review required smoke: `./.venv/bin/python -m unittest discover -q` - `414 tests` passed, `1 skipped`.
 - Eighth review full local CI: `bash scripts/ci-local.sh` passed Ruff check/format, dependency integrity, Bandit with zero high-severity findings, compileall, skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `930 tests` passing.
 - External action validation in `/tmp/analyze-action`: `python3 -m unittest discover -s tests -q` passed `62 tests`; compileall, non-repository `run_action.py --help`, and `git diff --check` passed.
+- Ninth review RED: the standalone Action accepted a contradictory `hard-block` policy status, `hard-block` configured mode, and `advisory` effective status with `should_block=false`; the combined policy-service/API sequence also reproduced an order-dependent HTTP 500 (`1 failed, 4 passed, 16 subtests passed`).
+- Ninth review GREEN: the Action now validates the effective-status ceiling before trusting `should_block`; its `62 tests`, compileall, and `git diff --check` passed. The app's focused order-dependent regression passed (`5 passed, 16 subtests passed`).
+- Ninth review app validation: the combined Story 11.3 suite passed (`228 passed, 149 subtests passed`), required smoke passed (`414 tests`, `1 skipped`), CI-parity API/CLI/infra shard passed (`395 passed, 111 subtests passed`), and `bash scripts/ci-local.sh` passed all gates with `930 tests`.
+- Ninth review quality gates: `./.venv/bin/ruff check .`, repo-wide `./.venv/bin/ruff format --check .`, and `git diff --check` passed; Ruff reported all 272 files formatted.
+- External Action closeout: commit `63de84f` was pushed to `feature/11-3-integration-enforcement-settings`; temporary consumer PR `deploywhisper/action-smoke-consumer#14` passed against the feature branch in [GitHub Actions run 34099865597](https://github.com/deploywhisper/action-smoke-consumer/actions/runs/34099865597) and was closed without merge.
 - UI validation not applicable for the eighth review: no React route, component, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed.
+- UI validation not applicable for the ninth review: no React route, component, rendered surface, browser interaction, keyboard behavior, or accessibility semantics changed.
 
 ### Completion Notes List
 
@@ -204,6 +213,7 @@ OpenAI Codex (GPT-5)
 - Resolved both sixth-review findings: story guidance now points only to the current React SPA conventions, and project-scope failures preserve handled webhook results when GitHub check-run delivery also fails.
 - Resolved both seventh-review findings: compounded enforcement/check-delivery failures now have explicit regression coverage, and sprint completion timestamps are internally consistent.
 - Resolved every eighth-review finding: the standalone action now enforces the validated `github-action` decision, malformed check-run responses fail explicitly, project and delivery failures remain separately machine-readable, shared service updates preserve enforcement, and all integration keys/guidance are consistent.
+- Resolved every ninth-review finding: the Action rejects contradictory effective statuses before deciding its exit code, the app regression suite no longer corrupts the API response model through module reloads, and the pushed Action branch passed the required external consumer smoke.
 
 ### File List
 
@@ -250,3 +260,4 @@ OpenAI Codex (GPT-5)
 - 2026-08-17: Addressed all sixth-review findings with a focused red-green regression and full local CI; moved Story 11.3 to done.
 - 2026-08-18: Addressed all seventh-review findings with compounded-failure regressions, synchronized sprint metadata, and full local CI; retained done status.
 - 2026-08-18: Addressed all eighth-review findings across the app and standalone action repositories, completed CI enforcement consumption, and retained done status after full validation.
+- 2026-09-07: Addressed all ninth-review findings, passed focused and full local validation, and verified the pushed standalone Action through the external smoke consumer; retained done status.

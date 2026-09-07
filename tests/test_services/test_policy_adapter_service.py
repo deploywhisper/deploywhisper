@@ -32,7 +32,6 @@ class PolicyAdapterServiceTests(unittest.TestCase):
         reload(database_module)
         reload(project_service_module)
         reload(settings_service_module)
-        reload(policy_adapter_service_module)
         database_module.init_db()
         self.project = project_service_module.create_project(
             project_key="payments",
