@@ -18,7 +18,7 @@ Use this guide if you want:
 - You create the GitHub App in your own GitHub account or organization
 - GitHub sends webhooks to your own DeployWhisper server
 - Your own DeployWhisper server fetches changed PR artifacts
-- Your own DeployWhisper server creates advisory check runs and report links
+- Your own DeployWhisper server creates policy-aware check runs and advisory report links
 - The app does not need to be public or listed on GitHub Marketplace
 - App creation, account or organization selection, and repository selection happen in GitHub's own Developer Settings and Install App UI
 
@@ -147,9 +147,9 @@ optional OAuth helper route. They are not required for the manual setup path.
 4. Confirm DeployWhisper downloads the changed files within the shared 50 MB limit
 5. Confirm DeployWhisper persists a report
 6. Confirm a check run named `DeployWhisper / Risk Analysis` appears on the PR
-7. Confirm the check remains advisory-only and does not block merge on its own
+7. Confirm the check summary reports policy status, configured mode, and effective status
 8. Confirm the report link opens your own DeployWhisper server
-9. Confirm branch protection does not list `DeployWhisper / Risk Analysis` as a required status check
+9. For the default `advisory` mode, confirm branch protection does not list `DeployWhisper / Risk Analysis` as a required status check
 
 ## Troubleshooting
 
@@ -189,10 +189,12 @@ optional OAuth helper route. They are not required for the manual setup path.
 
 ### Branch protection blocks merge on DeployWhisper
 
-DeployWhisper is advisory-only. Remove `DeployWhisper / Risk Analysis` from
-required status checks in GitHub branch protection. Teams can still read the
-check result, but DeployWhisper should not be configured as the component that
-blocks merges.
+The canonical DeployWhisper report is advisory-only, but the GitHub integration
+can explicitly enforce policy. Inspect the check summary's configured mode. If
+it is `advisory` or `warn`, remove `DeployWhisper / Risk Analysis` from required
+status checks. If it is `soft-block` or `hard-block`, a required check is an
+intentional operator control; change the integration setting before removing
+that protection.
 
 ## Action-first recommendation
 

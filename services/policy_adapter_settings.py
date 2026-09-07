@@ -74,6 +74,10 @@ class PolicyAdapterSettings(BaseModel):
         default=PolicyAdapterStatus.ADVISORY,
         description="Adapter status reported when no severity threshold is met",
     )
+    enforcement_mode: PolicyAdapterStatus = Field(
+        default=PolicyAdapterStatus.ADVISORY,
+        description="Maximum integration enforcement level explicitly enabled",
+    )
 
     @field_validator("project_key", "integration")
     @classmethod
@@ -111,6 +115,7 @@ class PolicyAdapterSettings(BaseModel):
             or self.soft_block_at != PolicySeverity.HIGH
             or self.hard_block_at != PolicySeverity.CRITICAL
             or self.reporting_default != PolicyAdapterStatus.ADVISORY
+            or self.enforcement_mode != PolicyAdapterStatus.ADVISORY
         ):
             raise ValueError(
                 "Built-in settings must use the fixed advisory-first defaults."

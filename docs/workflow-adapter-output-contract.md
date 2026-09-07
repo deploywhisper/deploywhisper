@@ -125,7 +125,9 @@ local workflow decision; it cannot rewrite the canonical severity,
 recommendation, Evidence Law status, evidence, or advisory posture.
 
 `PolicyAdapterSettings` manages severity thresholds and the below-threshold
-`reporting_default` without changing core scoring. Built-in defaults interpret
+`reporting_default` without changing core scoring. Its `enforcement_mode` is an
+explicit integration-level ceiling with the same four statuses. Built-in and
+legacy stored settings default that mode to `advisory`. Built-in thresholds interpret
 medium as `warn`, high as `soft-block`, and critical as `hard-block`; reports
 below those thresholds remain `advisory`. Admins can inspect, save, or reset
 project defaults and integration-specific defaults through `GET`, `PUT`, and
@@ -138,9 +140,16 @@ deleting a project override restores the built-in defaults.
 Threshold evaluation reads only `canonical_summary.severity`. The emitted
 policy envelope records the resolved settings in `applied_settings`, while the
 original canonical severity, findings, evidence, recommendation, Evidence Law
-status, and advisory flags remain unchanged and auditable. Enforcement mode is
-a separate integration concern; the core remains useful when no policy adapter
-is enabled.
+status, and advisory flags remain unchanged and auditable.
+
+Integrations apply settings through
+`build_integration_enforcement_decision`. The decision records the raw
+`policy_output.status`, configured `enforcement_mode`, capped
+`effective_status`, and `should_block` separately. The configured mode is a
+ceiling: `advisory` always stays non-blocking, `warn` can surface warnings but
+cannot block, `soft-block` can enforce raw soft/hard outcomes as soft blocks,
+and `hard-block` preserves the raw policy status. This supports gradual rollout
+without allowing an integration to enforce beyond its explicit opt-in.
 
 Policy-adapter consumers generate configured decisions through
 `build_configured_policy_adapter_output`. This reusable service boundary
@@ -151,6 +160,10 @@ Authenticated consumers can exercise that production path for a persisted
 report through
 `GET /api/v1/analyses/{report_id}/policy-adapter?integration={integration}`.
 The response applies the saved integration, project, or built-in defaults and
-embeds the unchanged canonical summary beside the policy decision. Activating
-that interpretation as an enforcement mode inside a specific CI or workflow
-integration remains a separate integration concern.
+embeds the unchanged canonical summary beside the raw policy decision. Consumers
+that need the capped integration result use
+`GET /api/v1/analyses/{report_id}/enforcement-decision?integration={integration}`.
+That response exposes `configured_mode`, `effective_status`, `should_block`, and
+the nested raw `policy_output` from the same service used by GitHub App checks.
+CI and future adapters should consume this endpoint rather than deriving
+blocking behavior from canonical severity or recommendation.
