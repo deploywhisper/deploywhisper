@@ -14,10 +14,10 @@ Use this guide before changing an integration from `advisory` or `warn` to
 
 | Mode | Workflow effect | Appropriate use |
 | --- | --- | --- |
-| `advisory` | Reports the analysis without blocking. | Default, initial rollout, incomplete context, or an uncalibrated project. |
-| `warn` | Makes the policy warning visible without blocking. | Teams have reviewed signal quality and want consistent reviewer attention. |
-| `soft-block` | When the effective status reaches `soft-block`, the GitHub Action exits nonzero and the GitHub App check conclusion is `action_required`. | Every blocking prerequisite below is satisfied, and a human-owned exception or approval path has been exercised. |
-| `hard-block` | When the effective status reaches `hard-block`, the GitHub Action exits nonzero and the GitHub App check conclusion is `failure`. | Every blocking prerequisite below is satisfied, and the organization has approved strict enforcement for this scope. |
+| `advisory` | Reports analysis without blocking. GitHub Action exits `0`; GitHub App reports `success` for `GO` and `neutral` otherwise. | Default, initial rollout, incomplete context, or an uncalibrated project. |
+| `warn` | Reports a warning without blocking. GitHub Action exits `0`; GitHub App reports `neutral`. | Teams have reviewed signal quality and want consistent reviewer attention. |
+| `soft-block` | When the effective status is `soft-block`, GitHub Action exits nonzero; GitHub App reports `action_required`. | Every blocking prerequisite below is satisfied, and a human-owned exception or approval path has been exercised. |
+| `hard-block` | When the effective status is `hard-block`, GitHub Action exits nonzero; GitHub App reports `failure`. | Every blocking prerequisite below is satisfied, and the organization has approved strict enforcement for this scope. |
 
 A mode-table row describes runtime behavior, not sufficient readiness criteria.
 Both blocking modes require the complete prerequisites and rollout checklist in
@@ -28,6 +28,24 @@ The configured mode is a ceiling, not a severity override. Integrations must
 consume the shared enforcement decision and must not infer blocking from risk
 score, severity, recommendation, or narrative text. If any prerequisite below
 is missing, keep the integration in `advisory` or `warn`.
+
+An installed Action ref must expose the `policy-status`, `configured-mode`,
+`effective-status`, and `should-block` outputs and must consume
+`/enforcement-decision` before it can enforce these modes. Older Action refs
+remain advisory-only even if the server has blocking settings.
+
+## Wire blocking into the protected workflow
+
+A blocking adapter result only controls delivery when its GitHub check or
+workflow job must succeed. The selected check must be a required status check
+or required job in the repository or deployment protection rules. The Action
+step and its containing job must not use `continue-on-error: true`, and later
+jobs must not ignore or replace its failed result.
+
+Test the protected branch or environment with a synthetic blocking result and
+an authorized exception before rollout. If the change can still merge or
+deploy, the integration is not operating as a block regardless of its reported
+mode.
 
 ## Review inherited settings before changing scope
 
@@ -42,12 +60,20 @@ which may be more restrictive and may begin blocking that integration. Inspect
 the effective project mode and complete the same review before deleting an
 override. Do not assume that reset means `advisory`.
 
+The same risk applies when a new integration is added after a project default
+has become blocking. Create an integration-specific `advisory` override before
+onboarding a new consumer, then complete this guide for that consumer before
+raising its mode. If an override is intentionally omitted, record that the
+project default and its completed guardrail review apply to the new integration.
+
 ## Treat an unavailable decision as an operational failure
 
-An enforcement decision that is unavailable, timed out, stale or mismatched to
-the report, or malformed must never be reported as a pass. Do not fabricate an
-`advisory` result, reuse a prior decision, or derive a replacement from score,
-severity, recommendation, or narrative text.
+An enforcement decision must be rejected for an HTTP or transport failure,
+non-JSON or missing data, unsupported contract or status values, report or
+integration mismatch, and any decision-invariant failure. These conditions
+must never be reported as a pass. Do not fabricate an `advisory` result, reuse
+a prior decision, or derive a replacement from score, severity,
+recommendation, or narrative text.
 
 The current GitHub Action exits nonzero when it cannot retrieve and validate
 the shared decision. The GitHub App reports a failed enforcement result when
@@ -56,6 +82,13 @@ Future consumers must surface a distinct operational error, stop the
 enforcement-dependent automation, and require documented human disposition
 under the organization's outage or break-glass procedure. Failure handling
 must not become autonomous approval or remediation.
+
+An exception does not mutate the failed result. After an authorized mode
+change or exception, rerun the same report decision and workflow so GitHub
+receives a new result under the approved setting. The audit record must retain
+the report ID, raw policy status, configured and effective modes, approver,
+reason, expiry, and replacement workflow run. Restore the prior mode when the
+exception expires and review repeated exceptions as a calibration signal.
 
 ## Evidence Law is a prerequisite, not an approval
 
@@ -77,6 +110,12 @@ Before enabling a blocking mode:
 `Satisfied` means the report met the evidence contract. It does not mean the
 change is correct, complete, authorized, or safe to deploy.
 
+The built-in Evidence Law specifically governs high and critical findings.
+Blocking thresholds below `high` do not receive an additional Evidence Law
+guarantee. Keep those lower thresholds non-blocking unless an organization-owned
+policy independently requires deterministic evidence for every finding or
+signal that can produce a blocking decision.
+
 ## Set benchmark thresholds before blocking
 
 DeployWhisper does not define a universal numeric threshold for enabling
@@ -92,7 +131,7 @@ change classes, supported and unsupported counts, and every exclusion. If the
 organization calculates rates from those results or from deployment outcomes,
 document the formulas and denominators so the decision can be reproduced.
 
-The decision record should identify the corpus and release evaluated, plus the
+The decision record must identify the corpus and release evaluated, plus the
 minimum acceptable precision and recall, maximum acceptable false-reassurance
 and false-positive rates, minimum evidence coverage, zero Evidence Law
 violations, an unsupported-scenario limit, and a regression-stability
@@ -100,6 +139,12 @@ tolerance. A nonzero Evidence Law violation count fails the blocking
 prerequisite; it is not an organization-configurable tolerance. The record
 should also identify who approved the thresholds and when they must be reviewed
 again.
+
+Rerun the benchmark gate after behavior-affecting changes to parsers, evidence
+extraction, scoring, policy interpretation, the benchmark corpus, or relevant
+context connectors. Reapproval is required when the new result falls outside
+any recorded threshold or introduces a new miss, unsupported scenario,
+regression, or Evidence Law violation.
 
 Do not hide misses behind one aggregate pass rate. Review the honest-failure
 report, including scenarios missed, false reassurance, false positives,

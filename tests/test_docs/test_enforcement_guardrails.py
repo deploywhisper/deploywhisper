@@ -20,6 +20,19 @@ ENTRY_POINTS = (
 
 
 class EnforcementGuardrailDocumentationTests(unittest.TestCase):
+    def test_mode_table_locks_observable_github_behavior(self) -> None:
+        content = GUARDRAIL_GUIDE.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            {
+                "advisory": "Reports analysis without blocking. GitHub Action exits 0; GitHub App reports success for GO and neutral otherwise.",
+                "warn": "Reports a warning without blocking. GitHub Action exits 0; GitHub App reports neutral.",
+                "soft-block": "When the effective status is soft-block, GitHub Action exits nonzero; GitHub App reports action_required.",
+                "hard-block": "When the effective status is hard-block, GitHub Action exits nonzero; GitHub App reports failure.",
+            },
+            self._mode_effects(content),
+        )
+
     def test_guardrail_guide_covers_required_safety_decisions(self) -> None:
         self.assertTrue(GUARDRAIL_GUIDE.exists(), "Enforcement guide is missing.")
         content = self._normalized(GUARDRAIL_GUIDE.read_text(encoding="utf-8"))
@@ -40,11 +53,18 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "Project-level settings are inherited by every integration that has no integration-specific override.",
             "Deleting an integration override immediately exposes the project default",
             "A mode-table row describes runtime behavior, not sufficient readiness criteria.",
-            "GitHub Action exits nonzero",
-            "GitHub App check conclusion is `action_required`",
-            "GitHub App check conclusion is `failure`",
             "must never be reported as a pass",
             "require documented human disposition",
+            "An installed Action ref must expose the `policy-status`, `configured-mode`, `effective-status`, and `should-block` outputs",
+            "Blocking thresholds below `high` do not receive an additional Evidence Law guarantee",
+            "Create an integration-specific `advisory` override before onboarding a new consumer",
+            "must be a required status check or required job",
+            "must not use `continue-on-error: true`",
+            "must identify the corpus and release evaluated",
+            "Rerun the benchmark gate after behavior-affecting changes",
+            "HTTP or transport failure, non-JSON or missing data, unsupported contract or status values, report or integration mismatch, and any decision-invariant failure",
+            "rerun the same report decision and workflow",
+            "retain the report ID, raw policy status, configured and effective modes, approver, reason, expiry, and replacement workflow run",
             "## Blocking does not prove a change is safe",
             "A passing check can still be false reassurance.",
             "## Human review remains mandatory",
@@ -73,6 +93,57 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 self.assertIn(expected_target, links)
                 self.assertTrue((source.parent / expected_target).resolve().exists())
 
+    def test_guardrail_guide_outbound_links_resolve(self) -> None:
+        content = GUARDRAIL_GUIDE.read_text(encoding="utf-8")
+        links = self._markdown_links(content)
+
+        for expected_target in (
+            "./workflow-adapter-output-contract.md",
+            "./benchmarks/corpus.md",
+            "./outcome-linking.md",
+        ):
+            with self.subTest(expected_target=expected_target):
+                self.assertIn(expected_target, links)
+                self.assertTrue(
+                    (GUARDRAIL_GUIDE.parent / expected_target).resolve().exists()
+                )
+
+    def test_readme_describes_enforcement_capability_without_exit_contradiction(
+        self,
+    ) -> None:
+        content = self._normalized(
+            (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        )
+
+        self.assertIn(
+            "An enforcement-capable Action ref exits `0` in `advisory` or `warn` mode and exits nonzero only when the validated `should-block` output is `true`.",
+            content,
+        )
+        self.assertIn(
+            "Older Action refs that do not expose enforcement outputs remain advisory-only",
+            content,
+        )
+        self.assertNotIn(
+            "exits `0` when analysis succeeds, regardless of risk verdict",
+            content,
+        )
+
+    def test_github_action_guide_conditions_blocking_on_runtime_capability(
+        self,
+    ) -> None:
+        content = self._normalized(
+            (REPO_ROOT / "docs" / "github-action.md").read_text(encoding="utf-8")
+        )
+
+        self.assertIn(
+            "These enforcement semantics require an Action release that exposes `policy-status`, `configured-mode`, `effective-status`, and `should-block` and consumes the enforcement-decision endpoint.",
+            content,
+        )
+        self.assertIn(
+            "Older Action refs that do not expose enforcement outputs remain advisory-only",
+            content,
+        )
+
     @staticmethod
     def _normalized(value: str) -> str:
         return re.sub(r"\s+", " ", value).strip()
@@ -80,3 +151,16 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
     @staticmethod
     def _markdown_links(value: str) -> set[str]:
         return {target for _, target in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", value)}
+
+    @staticmethod
+    def _mode_effects(value: str) -> dict[str, str]:
+        rows: dict[str, str] = {}
+        for line in value.splitlines():
+            if not line.startswith("| `"):
+                continue
+            cells = [
+                cell.strip().replace("`", "") for cell in line.strip("|").split("|")
+            ]
+            if len(cells) == 3:
+                rows[cells[0]] = cells[1]
+        return rows

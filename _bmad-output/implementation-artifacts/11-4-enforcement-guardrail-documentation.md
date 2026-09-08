@@ -31,6 +31,14 @@ So that teams understand when not to block automatically.
 
 ### Review Findings
 
+- [x] [Review][Patch] [HIGH] Reconcile the README's unconditional successful-analysis exit `0` promise with configured blocking exits, and condition enforcement claims on an installed Action release that actually supports the decision endpoint and outputs. [README.md:769]
+- [x] [Review][Patch] [HIGH] Explain that the built-in Evidence Law guarantee covers high and critical findings only; blocking thresholds below high require a separate deterministic-evidence gate or must remain non-blocking. [docs/enforcement-guardrails.md:62]
+- [x] [Review][Patch] [HIGH] Require an advisory override or full guardrail review when onboarding a new integration under a blocking project default, not only when changing the project default or deleting an existing override. [docs/enforcement-guardrails.md:34]
+- [x] [Review][Patch] [HIGH] Require blocking integrations to be wired as required checks/jobs without `continue-on-error`; otherwise nonzero Action exits or failing check conclusions do not actually prevent merge or deployment. [docs/enforcement-guardrails.md:19]
+- [x] [Review][Patch] [MEDIUM] Make the benchmark decision record normative and require rebenchmarking after behavior-affecting parser, evidence, scoring, policy, corpus, or context changes. [docs/enforcement-guardrails.md:95]
+- [x] [Review][Patch] [MEDIUM] Define invalid-decision validation conditions plus the operational recovery path: authorized mode change or exception, rerun, and retained audit evidence. [docs/enforcement-guardrails.md:45]
+- [x] [Review][Patch] [MEDIUM] Parse and assert the mode table's exact Action/App effects so a generic outage-section phrase cannot satisfy blocking-mode regression coverage. [tests/test_docs/test_enforcement_guardrails.py:43]
+- [x] [Review][Patch] [LOW] Validate the new guide's outbound workflow-contract, benchmark, and outcome links in addition to its inbound entry-point links. [tests/test_docs/test_enforcement_guardrails.py:63]
 - [x] [Review][Patch] [HIGH] Document that a project-level enforcement mode is inherited by every integration without an override and that deleting an override can expose a blocking project default; the current guide incorrectly implies each integration is always configured directly. [docs/enforcement-guardrails.md:3]
 - [x] [Review][Patch] [HIGH] Define fail-safe behavior for unavailable, timed-out, stale, or malformed enforcement decisions so current and future consumers cannot silently convert an operational failure into a passing check. [docs/enforcement-guardrails.md:21]
 - [x] [Review][Patch] [MEDIUM] Make benchmark readiness verifiable using the metrics the current runner actually emits, document the calculation and sampling record needed for organization-owned thresholds, and require zero Evidence Law violations rather than treating violations as a configurable tolerance. [docs/enforcement-guardrails.md:53]
@@ -114,6 +122,12 @@ OpenAI Codex (GPT-5)
 - Review required smoke: `./.venv/bin/python -m unittest discover -q` - `416 tests` passed, `1 skipped`.
 - Review full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `930 tests` passing.
 - Review quality gates: `./.venv/bin/ruff check .`, repo-wide `./.venv/bin/ruff format --check .`, `git diff --check`, and `git diff --cached --check` passed; Ruff reported all 273 files formatted.
+- Final review RED: expanded contract coverage reproduced the README/action-release contradiction, missing low-threshold Evidence Law warning, incomplete onboarding and required-check controls, non-normative benchmark/reapproval language, undefined recovery audit path, weak mode-table assertions, and unvalidated outbound links (`12 failed, 3 passed, 39 subtests passed`).
+- Final review GREEN: `./.venv/bin/python -m pytest tests/test_docs/test_enforcement_guardrails.py -q --tb=short` - `6 passed, 46 subtests passed`.
+- Final review documentation and metadata suite: `./.venv/bin/python -m pytest tests/test_docs tests/test_infra/test_ai_safety_documentation.py tests/test_infra/test_requirements_traceability_matrix.py -q --tb=short` - `43 passed, 236 subtests passed`.
+- Final review required smoke: `./.venv/bin/python -m unittest discover -q` - `420 tests` passed, `1 skipped`.
+- Final review full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `930 tests` passing.
+- Final review quality gates: Ruff initially identified the expanded test for formatting; `./.venv/bin/ruff format tests/test_docs/test_enforcement_guardrails.py` corrected it, after which `./.venv/bin/ruff check .`, repo-wide `./.venv/bin/ruff format --check .`, and `git diff --check` passed with all 273 files formatted.
 
 ### Completion Notes List
 
@@ -123,6 +137,7 @@ OpenAI Codex (GPT-5)
 - Added deterministic documentation regressions for every acceptance-criterion topic and every enforcement entry-point link.
 - No runtime, API, persistence, UI, or dependency behavior changed. Implementation is stacked on the verified but unmerged Story 11.3 branch because this story documents that enforcement contract.
 - Resolved all six review findings: project-default inheritance and override deletion are explicit; invalid or unavailable decisions cannot become passes; benchmark inputs, calculations, and strict zero Evidence Law violations are documented; mode prerequisites and observable GitHub effects are unambiguous; and stale UI guidance now points to the React SPA conventions.
+- Resolved all eight final-review findings: README and Action-guide semantics are capability-gated; low blocking thresholds cannot borrow the high/critical Evidence Law guarantee; new inherited integrations start advisory; required-job wiring is explicit; benchmark reapproval and failure recovery are auditable; and structured tests lock mode effects plus inbound and outbound links.
 
 ### File List
 
@@ -142,3 +157,4 @@ OpenAI Codex (GPT-5)
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-09-07: Added canonical optional-enforcement guardrails, linked all enforcement entry points, added deterministic documentation coverage, completed full validation, and moved the story to review.
 - 2026-09-08: Addressed all six code-review findings, strengthened the documentation contract, completed full validation, and moved the story to done.
+- 2026-09-08: Addressed all eight findings from the final review rerun, reconciled published Action capability guidance, strengthened operational guardrails and structured tests, and retained done status after full validation.

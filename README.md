@@ -766,7 +766,8 @@ What the action does:
 - submits those artifacts to the existing `POST /api/v1/analyses` endpoint
 - posts a single markdown PR comment and updates that same comment on re-runs
 - compares the latest report with the previous PR scan so reruns show score and severity deltas in the refreshed comment
-- exits `0` when analysis succeeds, regardless of risk verdict
+- An enforcement-capable Action ref exits `0` in `advisory` or `warn` mode and exits nonzero only when the validated `should-block` output is `true`.
+- Older Action refs that do not expose enforcement outputs remain advisory-only and exit `0` after successful analysis; upgrade before configuring a blocking mode.
 - exposes outputs for follow-on GitHub steps:
   - `report-id`
   - `report-link` (optional `/reports/{id}` URL; publicly shareable only
@@ -779,6 +780,12 @@ What the action does:
   - `comment-id`
   - `comment-url`
   - `comment-updated`
+  - `policy-status`, `configured-mode`, `effective-status`, and `should-block`
+
+The moving `@v1` reference follows published Action releases. Before relying
+on it for enforcement, verify that the resolved release exposes all four
+policy outputs above and consumes the server's enforcement-decision endpoint.
+The app-side setting alone cannot make an older Action release block.
 
 Optional inputs:
 

@@ -73,6 +73,13 @@ repository owns the shared API and contract at
 Operators considering a required blocking check must first complete the
 [Enforcement Guardrails](./enforcement-guardrails.md).
 
+These enforcement semantics require an Action release that exposes
+`policy-status`, `configured-mode`, `effective-status`, and `should-block` and
+consumes the enforcement-decision endpoint. Because the moving `@v1` tag
+follows published releases, verify the resolved Action capabilities before
+making its job required. Older Action refs that do not expose enforcement
+outputs remain advisory-only even when the server stores a blocking mode.
+
 ## Canonical Report Output Mapping
 
 Report-related action outputs are derived from the canonical API response and
