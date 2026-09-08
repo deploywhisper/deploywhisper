@@ -195,6 +195,9 @@ it is `advisory` or `warn`, remove `DeployWhisper / Risk Analysis` from required
 status checks. If it is `soft-block` or `hard-block`, a required check is an
 intentional operator control; change the integration setting before removing
 that protection.
+Before making the check required, complete the
+[Enforcement Guardrails](./enforcement-guardrails.md), including benchmark,
+human-review, rollback, and break-glass ownership.
 
 ## Action-first recommendation
 

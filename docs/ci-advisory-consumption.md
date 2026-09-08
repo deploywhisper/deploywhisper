@@ -25,6 +25,9 @@ mode, and effective status remain auditable. Do not infer a blocking decision
 directly from `data.advisory`, risk score, severity, or recommendation. For a
 persisted report, request the shared decision from
 `GET /api/v1/analyses/{report_id}/enforcement-decision?integration={integration}`.
+Use the [Enforcement Guardrails](./enforcement-guardrails.md) before enabling a
+blocking mode; they define the required Evidence Law, benchmark, human-review,
+false-reassurance, and rollback checks.
 
 ## CLI Example
 

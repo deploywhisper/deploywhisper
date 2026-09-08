@@ -816,6 +816,10 @@ Keep the `DeployWhisper / Risk Analysis` check non-required while its configured
 integration mode is `advisory` or `warn`. Making the check required is an
 explicit operator opt-in for `soft-block` or `hard-block`; the canonical report
 remains advisory-only in every mode.
+Before enabling a required blocking check, complete the
+[Enforcement Guardrails](./docs/enforcement-guardrails.md) covering Evidence
+Law, benchmark readiness, false reassurance, human review, and rollback
+ownership.
 
 To scaffold this setup into another repository with a workflow file, README
 update, and optional self-hosted GitHub App notes, run:

@@ -70,6 +70,8 @@ blocking from severity, risk score, or recommendation. The external
 `deploywhisper/analyze-action` repository owns that runtime behavior; this
 repository owns the shared API and contract at
 `GET /api/v1/analyses/{report_id}/enforcement-decision?integration=github-action`.
+Operators considering a required blocking check must first complete the
+[Enforcement Guardrails](./enforcement-guardrails.md).
 
 ## Canonical Report Output Mapping
 

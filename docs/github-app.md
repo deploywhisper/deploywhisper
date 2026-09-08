@@ -90,6 +90,9 @@ Send this payload with `PUT /api/v1/settings/policy-adapter`. Supported
 enforcement modes are `advisory`, `warn`, `soft-block`, and `hard-block`.
 Do not make `DeployWhisper / Risk Analysis` required until the integration has
 been deliberately configured for a blocking mode.
+Complete the [Enforcement Guardrails](./enforcement-guardrails.md) before that
+change so benchmark readiness, human ownership, false reassurance, and
+rollback responsibilities are explicit.
 
 ## Manual installation flow
 

@@ -167,3 +167,8 @@ That response exposes `configured_mode`, `effective_status`, `should_block`, and
 the nested raw `policy_output` from the same service used by GitHub App checks.
 CI and future adapters should consume this endpoint rather than deriving
 blocking behavior from canonical severity or recommendation.
+
+Before enabling `soft-block` or `hard-block`, follow the
+[Enforcement Guardrails](./enforcement-guardrails.md) for Evidence Law review,
+benchmark readiness, false-reassurance monitoring, mandatory human ownership,
+and rollback responsibilities.

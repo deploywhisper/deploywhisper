@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-09-07
+# last_updated: 2026-09-08
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-09-07
+last_updated: 2026-09-08
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -147,7 +147,7 @@ development_status:
   11-1-policy-adapter-output-contract: done
   11-2-threshold-and-reporting-defaults-management: done
   11-3-integration-level-enforcement-settings: done
-  11-4-enforcement-guardrail-documentation: ready-for-dev
+  11-4-enforcement-guardrail-documentation: done
   epic-11-retrospective: optional
 
   epic-12: in-progress
