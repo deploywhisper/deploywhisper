@@ -78,7 +78,7 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
 
         expected_clauses = (
             "Consumers should use `data.advisory.requires_attention` to decide whether to notify reviewers or add manual checks.",
-            "Advisory-first boundary: the action does not block unless the `github-action` integration is explicitly configured for an effective `soft-block` or `hard-block` decision.",
+            "Advisory-first boundary: the action does not block unless the resolved setting, selected from the integration override before the inherited project default, permits an effective `soft-block` or `hard-block` decision.",
             "Local-first boundary: raw IaC, scanner artifacts, incident exports, and sensitive context stay in the user's infrastructure by default.",
             "External model calls should receive structured summaries, not raw uploads.",
             "Secret-storage prohibition: the action contract must not persist API tokens, provider credentials, raw infrastructure state, or deployment secrets.",

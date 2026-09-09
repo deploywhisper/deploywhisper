@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 DEFAULT_WORKFLOW_PATH = ".github/workflows/deploywhisper.yml"
 DEFAULT_APP_NOTES_PATH = ".github/deploywhisper-self-hosted-github-app.md"
 DEFAULT_BRANCH_NAME = "feature/deploywhisper-github-init"
+ANALYZE_ACTION_PINNED_SHA = "3b37ed72bfb2d201030bef873268f2170794b160"
 README_SECTION_START = "<!-- deploywhisper:start -->"
 README_SECTION_END = "<!-- deploywhisper:end -->"
 OPERATOR_DOCS_URL = (
@@ -297,7 +298,7 @@ def _render_workflow(options: GitHubInitOptions) -> str:
               - uses: actions/checkout@v4
                 with:
                   fetch-depth: 0
-              - uses: deploywhisper/analyze-action@v1
+              - uses: deploywhisper/analyze-action@{ANALYZE_ACTION_PINNED_SHA}
                 with:
                   api-url: ${{{{ env.DEPLOYWHISPER_API_URL }}}}
                   api-token: ${{{{ secrets.DEPLOYWHISPER_API_TOKEN }}}}
@@ -323,7 +324,7 @@ def _render_readme_section(
         f"- Configured API endpoint: `{options.api_endpoint}`",
         "- Optional secret: `DEPLOYWHISPER_API_TOKEN` for protected DeployWhisper APIs",
         *_scope_readme_lines(options),
-        "- The `DeployWhisper / Risk Analysis` check is advisory-only and should not be configured as a required status check",
+        "- The scaffold pins the reviewed Action revision but does not configure server enforcement; inspect the resolved `github-action` setting and keep the check non-required until the guardrail review is complete",
         "",
         "### Configuration example",
         "",

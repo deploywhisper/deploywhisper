@@ -141,7 +141,8 @@ access. Keep that override through installation and validation; remove or raise
 it only after this integration and repository scope complete the enforcement
 guardrail review. If existing repositories share the key, do not downgrade them:
 use a separate project for advisory onboarding or complete the new repository's
-guardrail review before granting access.
+[Enforcement Guardrails](./enforcement-guardrails.md) review before granting
+access.
 
 ## Installation steps
 

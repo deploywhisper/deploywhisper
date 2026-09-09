@@ -64,6 +64,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "must fail when the enforcement step is skipped",
                 "bound to the protected commit",
                 "checkout ref, artifact selection, `changed-files`, project and workspace scope, and working directory",
+                "path and event filters, job-level `if` conditions, dependency skips, and cancellation",
             ),
             "## Review inherited settings before changing scope": (
                 "new repository, environment, change class, or other scope",
@@ -73,6 +74,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "Limit policy-setting write access to named operators",
                 "approval from a different authorized reviewer",
                 "durable before/after audit record",
+                "freeze delivery before changing enforcement settings",
             ),
             "## Treat an unavailable decision as an operational failure": (
                 "partial intake coverage",
@@ -80,7 +82,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "protected commit SHA",
                 "PR-head workflow must verify that its tested commit SHA equals the current PR head SHA",
                 "merge-ref or merge-queue workflow must bind the report to the current generated merge commit",
-                "non-PR consumer must bind the decision to its actual protected deployment ref",
+                "non-PR consumer must resolve a moving deployment ref to an immutable commit or artifact digest",
                 "no atomic settings revision",
                 "authenticated transport",
                 "trusted server identity",
@@ -88,8 +90,6 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "exact retained authenticated response bytes",
                 "retention period",
                 "separation of duties",
-                "external watchdog",
-                "cannot make compare-and-restore atomic",
                 "exact persisted report `submission_manifest`",
                 "submitted_artifact_count",
                 "accepted_artifact_count",
@@ -99,6 +99,19 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "project-scope resolution failure",
                 "payload digest proves only the integrity of the retained bytes",
                 "append-only audit receipt",
+                "automatically revoke the bypass",
+                "Do not use policy settings as break glass",
+                "deleted or renamed artifact",
+                "clean checkout",
+                "content hash",
+                "current base SHA",
+                "bounded timeout",
+                "idempotency key",
+                "do not provide native idempotent create or check-update semantics",
+                "durable external coordinator",
+                "trusted identity layer",
+                "strips caller-supplied project actor headers",
+                "serialize the frozen decision once",
             ),
             "## Set benchmark thresholds before blocking": (
                 "actual enforcement consumer revision",
@@ -112,6 +125,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "benchmark false negative",
                 "workflow and protection configuration snapshot",
                 "Every allowed evidence form requires a digest",
+                "materially changes benchmark inputs or enforcement behavior",
+                "attribution method",
+                "severity boundary",
+                "independent adjudicator",
             ),
             "## Human review remains mandatory": (
                 "protected commit SHA",
@@ -126,6 +143,9 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "`continue-on-error`",
                 "valid-pass, valid-block, and decision-error smoke cases",
                 "complete and partial intake coverage",
+                "required project-scope control",
+                "`warn_at`, `soft_block_at`, and `hard_block_at`",
+                "resolved setting source",
             ),
         }
         for heading, expected_clauses in expected_by_section.items():
@@ -203,11 +223,14 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "./workflow-adapter-output-contract.md",
             "./benchmarks/corpus.md",
             "./outcome-linking.md",
+            "./project-workspaces.md#guardrails",
         ):
             with self.subTest(expected_target=expected_target):
                 self.assertIn(expected_target, links)
                 self.assertTrue(
-                    (GUARDRAIL_GUIDE.parent / expected_target).resolve().exists()
+                    (GUARDRAIL_GUIDE.parent / expected_target.split("#", 1)[0])
+                    .resolve()
+                    .exists()
                 )
 
     def test_readme_describes_enforcement_capability_without_exit_contradiction(
@@ -226,10 +249,6 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             content,
         )
         self.assertIn(
-            "Pin a required enforcement workflow to an immutable reviewed commit SHA",
-            content,
-        )
-        self.assertIn(
             "no protected scope shares that project/integration key",
             content,
         )
@@ -238,13 +257,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
         self.assertIn("without downgrading existing consumers", content)
         self.assertIn(
-            "the published `@v1` ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose them",
+            "Pin the Action to an immutable reviewed commit SHA even for advisory workflows",
             content,
         )
-        self.assertNotIn(
-            "exits `0` when analysis succeeds, regardless of risk verdict",
-            content,
-        )
+        self.assertIn("persistent integration-specific `advisory` override", content)
 
     def test_github_app_guide_explains_project_default_inheritance(self) -> None:
         content = self._normalized(
@@ -267,6 +283,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "Effective `soft-block` and `hard-block` statuses produce `action_required` and `failure` conclusions respectively, regardless of which configured ceiling permitted that effective status",
             content,
         )
+        self.assertIn("does not subscribe to `merge_group`", content)
+        self.assertIn("do not require its check in a merge queue", content)
 
     def test_github_action_guide_conditions_blocking_on_runtime_capability(
         self,
@@ -288,17 +306,13 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             content,
         )
         self.assertIn(
-            "Pin a required enforcement workflow to an immutable reviewed commit SHA",
-            content,
-        )
-        self.assertIn(
             "synthetic valid-pass, valid-block, unavailable-decision, and malformed-decision cases",
             content,
         )
         self.assertIn(
-            "The published `@v1` ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose enforcement outputs",
-            content,
+            "Pin Action revisions for advisory and blocking workflows", content
         )
+        self.assertIn("persistent integration-specific `advisory` override", content)
         self.assertIn(
             "steps.deploywhisper.outputs.should-block == 'true'",
             content,
@@ -307,8 +321,21 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "fromJSON(steps.deploywhisper.outputs.should-block)",
             content,
         )
-        self.assertNotIn("defaults to `advisory`", content)
-        self.assertNotIn("The current GitHub Action exits nonzero", content)
+
+    def test_policy_entry_points_explain_inherited_project_defaults(self) -> None:
+        for relative_path in (
+            "docs/ci-advisory-consumption.md",
+            "docs/workflow-adapter-output-contract.md",
+            "docs/github-action.md",
+        ):
+            with self.subTest(relative_path=relative_path):
+                content = self._normalized(
+                    (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+                )
+                self.assertIn(
+                    "integration override before the inherited project default",
+                    content,
+                )
 
     def test_self_hosted_runbook_preserves_narrow_setting_scope(self) -> None:
         content = (REPO_ROOT / "docs" / "github-app-self-hosted-setup.md").read_text(
@@ -327,6 +354,9 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             onboarding,
         )
         self.assertIn("use a separate project", onboarding)
+        self.assertIn(
+            "[Enforcement Guardrails](./enforcement-guardrails.md)", onboarding
+        )
         self.assertLess(
             content.index("### 7. Establish advisory onboarding state"),
             content.index("## Installation steps"),
@@ -346,7 +376,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             / "implementation-artifacts"
             / "sprint-status.yaml"
         ).read_text(encoding="utf-8")
-        self.assertIn("  epic-11: done", content)
+        self.assertRegex(content, r"(?m)^  epic-11: done$")
         for story_key in (
             "11-1-policy-adapter-output-contract",
             "11-2-threshold-and-reporting-defaults-management",
@@ -377,15 +407,33 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
 
     @staticmethod
     def _effective_status_rows(value: str) -> dict[str, tuple[str, str]]:
+        lines = value.splitlines()
+        header = "| Effective status | Workflow effect | Appropriate use |"
+        try:
+            header_index = lines.index(header)
+        except ValueError as exc:
+            raise AssertionError("Effective-status table header is missing") from exc
+        expected_separator = "| --- | --- | --- |"
+        if lines[header_index + 1] != expected_separator:
+            raise AssertionError("Effective-status table separator is malformed")
+
         rows: dict[str, tuple[str, str]] = {}
-        for line in value.splitlines():
-            if not line.startswith("| `"):
-                continue
-            cells = [
-                cell.strip().replace("`", "") for cell in line.strip("|").split("|")
-            ]
-            if len(cells) == 3:
-                if cells[0] in rows:
-                    raise AssertionError(f"Duplicate effective-status row: {cells[0]}")
-                rows[cells[0]] = (cells[1], cells[2])
+        for line in lines[header_index + 2 :]:
+            if not line.startswith("|"):
+                break
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if len(cells) != 3:
+                raise AssertionError(f"Malformed effective-status row: {line}")
+            if (
+                re.fullmatch(r"`(advisory|warn|soft-block|hard-block)`", cells[0])
+                is None
+            ):
+                raise AssertionError(f"Unexpected effective-status row: {line}")
+            status = cells[0].strip("`")
+            if status in rows:
+                raise AssertionError(f"Duplicate effective-status row: {status}")
+            rows[status] = (
+                cells[1].replace("`", ""),
+                cells[2].replace("`", ""),
+            )
         return rows

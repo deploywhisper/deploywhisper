@@ -3,7 +3,9 @@
 DeployWhisper's GitHub Marketplace action runtime lives outside this
 application repository in
 [`deploywhisper/analyze-action`](https://github.com/deploywhisper/analyze-action).
-Use the published action from workflow files as `deploywhisper/analyze-action@v1`.
+Use the published action from workflow files pinned to a reviewed full commit
+SHA. Treat `deploywhisper/analyze-action@v1` as a compatibility pointer, not an
+immutable workflow reference.
 
 This repository documents and integrates with the action contract. It must not
 host local Marketplace action manifests such as `action.yml` or `action.yaml`,
@@ -30,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: deploywhisper/analyze-action@v1
+      - uses: deploywhisper/analyze-action@<full-reviewed-commit-sha>
         with:
           api-url: ${{ secrets.DEPLOYWHISPER_API_URL }}
           project-key: payments
@@ -61,8 +63,9 @@ DeployWhisper's canonical result remains advisory in CI. Successful analysis sho
 workflow based only on risk score or recommendation. Consumers should use
 `data.advisory.requires_attention` to decide whether to notify reviewers or add
 manual checks. Advisory-first boundary: the action does not block unless the
-`github-action` integration is explicitly configured for an effective
-`soft-block` or `hard-block` decision. An enforcement-capable Action revision
+resolved setting, selected from the integration override before the inherited
+project default, permits an effective `soft-block` or `hard-block` decision. An
+enforcement-capable Action revision
 consumes the configured policy decision after persisting a report, resolves the
 integration override before the inherited project and built-in defaults, and
 keeps raw policy and effective integration statuses distinct.
@@ -79,10 +82,12 @@ Operators considering a required blocking check must first complete the
 These enforcement semantics require an Action release that exposes
 `policy-status`, `configured-mode`, `effective-status`, and `should-block` and
 consumes the enforcement-decision endpoint. The moving `@v1` tag follows
-published releases and is appropriate for advisory use. The published `@v1`
-ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose enforcement
-outputs; do not configure it as a blocking job. Pin a required
-enforcement workflow to an immutable reviewed commit SHA and run synthetic
+published releases and must not be treated as permanently advisory. The
+published `@v1` ref validated on 2026-09-09 (tag object `f2e36ce`) did not expose
+enforcement outputs, but a later tag move may. Pin Action revisions for advisory
+and blocking workflows. If a moving tag is unavoidable, retain a persistent
+integration-specific `advisory` override. Before making a pinned enforcement
+revision required, run synthetic
 valid-pass, valid-block, unavailable-decision, and malformed-decision cases
 against that exact revision before making its job required. Older Action refs
 that do not expose enforcement outputs remain advisory-only even when the

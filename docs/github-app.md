@@ -12,7 +12,7 @@ DeployWhisper now supports an advanced self-hosted GitHub App adapter alongside 
 
 ### Action-only
 
-- Use `deploywhisper/analyze-action@v1`
+- Use `deploywhisper/analyze-action` pinned to a reviewed full commit SHA
 - Best when teams want only workflow-file driven execution
 - No GitHub App registration required
 
@@ -61,6 +61,7 @@ Optional:
 
 - Webhook verification uses `X-Hub-Signature-256`
 - Pull request webhook actions `opened`, `reopened`, and `synchronize` can trigger automatic advisory analyses when PR automation is enabled
+- The current App does not subscribe to `merge_group`; do not require its check in a merge queue until that event and generated-merge analysis path are implemented. Use a merge-queue-capable pinned Action workflow or keep the App check non-required there.
 - Supported changed artifacts are downloaded from GitHub, filtered through the shared intake rules, and sent through the existing parse/assess/persist pipeline
 - Check runs resolve the `github` integration policy settings and expose raw policy status, configured enforcement mode, and effective status in the summary
 - An effective `advisory` status reports `success` for `GO` and `neutral` for other recommendations; effective `warn` reports `neutral`

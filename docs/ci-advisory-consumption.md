@@ -19,7 +19,9 @@ DeployWhisper's canonical analysis remains advisory in automation contexts.
 Optional integration enforcement is separate from this canonical response.
 Admins configure project or integration settings through
 `/api/v1/settings/policy-adapter`; modes are `advisory`, `warn`, `soft-block`,
-and `hard-block`, and the default is `advisory`. Integration consumers must use
+and `hard-block`. Resolution selects the integration override before the
+inherited project default and then the built-in `advisory` default, so a new
+consumer can inherit blocking. Integration consumers must use
 the shared policy/enforcement service so the raw policy status, configured
 mode, and effective status remain auditable. Do not infer a blocking decision
 directly from `data.advisory`, risk score, severity, or recommendation. For a

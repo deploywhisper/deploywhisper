@@ -125,9 +125,11 @@ local workflow decision; it cannot rewrite the canonical severity,
 recommendation, Evidence Law status, evidence, or advisory posture.
 
 `PolicyAdapterSettings` manages severity thresholds and the below-threshold
-`reporting_default` without changing core scoring. Its `enforcement_mode` is an
-explicit integration-level ceiling with the same four statuses. Built-in and
-legacy stored settings default that mode to `advisory`. Built-in thresholds interpret
+`reporting_default` without changing core scoring. Its `enforcement_mode` is the
+resolved integration ceiling with the same four statuses. Resolution selects
+the integration override before the inherited project default and built-in safe
+default; an integration without an override can therefore inherit blocking.
+Built-in and legacy stored settings default that mode to `advisory`. Built-in thresholds interpret
 medium as `warn`, high as `soft-block`, and critical as `hard-block`; reports
 below those thresholds remain `advisory`. Admins can inspect, save, or reset
 project defaults and integration-specific defaults through `GET`, `PUT`, and
@@ -149,15 +151,17 @@ Integrations apply settings through
 ceiling: `advisory` always stays non-blocking, `warn` can surface warnings but
 cannot block, `soft-block` can enforce raw soft/hard outcomes as soft blocks,
 and `hard-block` preserves the raw policy status. This supports gradual rollout
-without allowing an integration to enforce beyond its explicit opt-in.
+without allowing an integration to exceed the resolved project/integration
+ceiling.
 
 Policy-adapter consumers generate configured decisions through
 `build_configured_policy_adapter_output`. This reusable service boundary
 resolves either adapter `project_key` or `project_id`, selects the integration
 override before the project and built-in defaults, validates that the settings
 scope matches the adapter metadata, and then emits the policy envelope.
-Authenticated consumers can exercise that production path for a persisted
-report through
+Consumers behind the trusted identity boundary described in
+[Project Workspaces](./project-workspaces.md#guardrails) can exercise that
+production path for a persisted report through
 `GET /api/v1/analyses/{report_id}/policy-adapter?integration={integration}`.
 The response applies the saved integration, project, or built-in defaults and
 embeds the unchanged canonical summary beside the raw policy decision. Consumers

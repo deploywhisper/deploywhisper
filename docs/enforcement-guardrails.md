@@ -47,10 +47,12 @@ An installed Action ref must expose the `policy-status`, `configured-mode`,
 `/enforcement-decision` before it can enforce these modes. Older Action refs
 remain advisory-only even if the server has blocking settings.
 
-For a required enforcement workflow, pin the Action to an immutable reviewed
-commit SHA rather than a moving major tag. Before making it required, run a
-synthetic fail-closed smoke test against that exact SHA: prove a valid
-non-blocking decision passes, a valid blocking decision fails, and an
+Pin every Action use—advisory or blocking—to an immutable reviewed commit SHA
+rather than a moving major tag. If an organization deliberately follows a
+moving tag, retain a persistent integration-specific `advisory` override and do
+not treat the tag as enforcement-capable. Before making a pinned revision
+required, run a synthetic fail-closed smoke test against that exact SHA: prove a
+valid non-blocking decision passes, a valid blocking decision fails, and an
 unavailable or malformed decision fails as an operational error.
 
 ## Wire blocking into the protected workflow
@@ -70,6 +72,11 @@ endpoint and integration identity—in protected configuration rather than
 pull-request-controlled data. The required job must fail when the enforcement
 step is skipped. The job result must be bound to the protected commit, not
 merely to a reusable check name.
+
+Audit path and event filters, job-level `if` conditions, dependency skips, and
+cancellation. Configure a required terminal check that always starts and reports
+failure when the analysis/enforcement job is filtered, skipped, cancelled, or
+times out; do not leave the required context absent or pending indefinitely.
 
 Test the protected branch or environment with a synthetic blocking result and
 an authorized exception before rollout. If the change can still merge or
@@ -111,10 +118,12 @@ and retain a durable before/after audit record with actor, approver, timestamp,
 scope, reason, and resolved setting source. If those ordinary settings-change
 controls are unavailable, do not enable blocking.
 
-After any mode, threshold, override, or protection-rule change, invalidate or
-rerun the protected result for every open pull-request head and pending
-deployment in scope. A result produced under earlier settings is not evidence
-that the current enforcement configuration evaluated that commit.
+For any mode, threshold, override, or protection-rule change, freeze delivery
+before changing enforcement settings. Commit the approved settings, invalidate
+prior results, rerun every open pull-request head and pending deployment in
+scope, and lift the freeze only after current results are published. A result
+produced under earlier settings is not evidence that the new configuration
+evaluated that commit.
 
 ## Treat an unavailable decision as an operational failure
 
@@ -128,6 +137,14 @@ boundary. These conditions must never be reported as a pass. Do not fabricate
 an `advisory` result, reuse a prior decision, or derive a replacement from
 score, severity, recommendation, or narrative text.
 
+The current application does not authenticate caller-supplied project role and
+scope headers itself, and omitted actor headers retain local all-project admin
+behavior. Before using enforcement on a shared installation, place DeployWhisper
+behind a [trusted identity layer](./project-workspaces.md#guardrails) that strips
+caller-supplied project actor headers and injects verified role/scope values.
+The Action bearer token alone does not establish this boundary. Keep every
+integration non-blocking when that trusted proxy or middleware is absent.
+
 A decision is current only when it comes from the decision path used by the
 actual consumer: the enforcement endpoint for HTTP adapters or the shared
 in-process enforcement service for the GitHub App. Bind the returned report ID
@@ -136,12 +153,14 @@ invocation to the protected commit SHA and submitted artifact manifest. Record
 the integration/project scope and verify the complete nested `applied_settings`
 snapshot. Immediately before publishing the result, verify that the protected
 target identity is still current for that consumer. A PR-head workflow must
-verify that its tested commit SHA equals the current PR head SHA. A merge-ref or
+verify that its tested commit SHA equals the current PR head SHA and record the
+current base SHA; it must rerun when either head or base changes. A merge-ref or
 merge-queue workflow must bind the report to the current generated merge commit
 and record its base and PR-head parents; it must not compare the synthetic commit
-directly with the head. A non-PR consumer must bind the decision to its actual
-protected deployment ref, commit, or immutable artifact digest. Never accept a
-report ID, endpoint, target identity, or manifest from untrusted change content.
+directly with the head. A non-PR consumer must resolve a moving deployment ref
+to an immutable commit or artifact digest, bind the decision to that digest, and
+deploy the same digest. Never accept a report ID, endpoint, target identity, or
+manifest from untrusted change content.
 
 The v1 contract has no atomic settings revision or evaluate-and-publish
 operation. Retrieval immediately before publication cannot eliminate a
@@ -152,6 +171,11 @@ enforce that change-control boundary, keep the integration non-blocking until a
 revision token or atomic contract exists. Treat a decision as stale after the
 report ID, manifest, protected commit, integration scope, settings, consumer
 revision, or workflow changes; rerun instead of reusing a passing check.
+
+Define a material report-context invalidation policy for topology, ownership,
+incident, scanner, and other decision inputs. When a material input changes
+after publication, invalidate the protected result and generate a fresh report;
+do not attach a newly queried decision to the older context snapshot.
 
 Sensitive, unsupported, rejected, or otherwise excluded artifacts do not
 produce findings. A blocking workflow must validate complete and partial intake
@@ -175,6 +199,22 @@ requires `analyzed_artifact_count == submitted_artifact_count`, every item to be
 infer completeness from the enforcement-decision envelope alone; it does not
 repeat the manifest.
 
+Generate the trusted path set and content hashes from a clean checkout of the
+protected target. Hash each submitted byte sequence and verify it matches the
+corresponding checkout artifact before accepting the report binding. A deleted
+or renamed artifact also requires diff coverage: record the prior path and a
+deletion tombstone, and for a rename validate both the tombstone and new-path
+bytes. The current submission manifest cannot represent an analyzed deletion
+tombstone. Until a separate deterministic diff-coverage control validates those
+operations, treat deletion/rename coverage as incomplete and keep that scope
+non-blocking.
+
+`accepted_artifact_count` is an intake counter: it includes items with status
+`accepted` and parser-`failed`. It does not mean every item was analyzed.
+`analyzed_artifact_count` alone counts successfully parsed `accepted` items;
+this distinction is why complete coverage requires equality with the submitted
+count and no failed item.
+
 The current GitHub App reports `neutral` when intake has no analyzable artifact,
 and GitHub may treat `neutral` as satisfying a required check. Do not use that
 App check as the sole blocking control for a scope where exclusions can occur;
@@ -195,6 +235,16 @@ enforcement-dependent automation, and require documented human disposition
 under the organization's outage or break-glass procedure. Failure handling
 must not become autonomous approval or remediation.
 
+Set a bounded timeout for analysis, decision retrieval, and check publication.
+Retry only transient failures with capped attempts and exponential backoff, and
+use one protected-workflow idempotency key for submission and check coordination.
+The current analysis API and GitHub App do not provide native idempotent create
+or check-update semantics. A blocking consumer therefore needs a durable
+external coordinator that owns that key, suppresses duplicate submissions, and
+updates one authoritative conclusion. Without that coordinator, keep the
+consumer non-blocking. Exhausted retries must publish the terminal operational
+failure.
+
 A protection-layer bypass does not change the DeployWhisper decision and does
 not require an unchanged analysis rerun to pretend that the result changed.
 Prefer a report- and integration-scoped protection bypass approved by a human
@@ -203,37 +253,38 @@ settings writer from self-approving a downgrade. Record the failed decision and
 the separate bypass event in a durable operator-owned audit system because the
 v1 settings API does not provide a complete bypass audit log.
 
-For GitHub, use a scoped repository-ruleset bypass actor or a protected
-environment approval rather than changing DeployWhisper policy when those
-controls can express the required scope. Record the ruleset/environment ID,
-protected target, provider audit-event identifier or URL, approver, reason, and
-expiry; verify afterward that the bypass applied only to the intended delivery.
+For a failed required GitHub check, use an authorized repository-ruleset bypass
+that actually permits the intended merge without changing or ignoring the
+failed result. A normal protected-environment approval does not turn a failed
+prerequisite job or required status check into a pass. For an emergency
+deployment, use a separately protected emergency workflow only when its rules
+explicitly allow deployment independent of that failed job.
 
-If the organization instead authorizes a temporary settings change, use the
-narrowest integration-specific override, freeze other deliveries in the
-affected scope, record the original and temporary settings, apply the approved
-mode, retrieve a new decision, and rerun the workflow. The API has no enforced
-expiry or compare-and-swap field, so a separate read followed by write cannot
-make compare-and-restore atomic. Use this temporary-settings path only while an
-enforced exclusive settings lock prevents every other writer from the initial
-read through restoration. An external watchdog must restore the setting before
-releasing that lock. Without such a lock, do not change settings for break glass;
-use the protection-layer bypass. If restoration fails, keep delivery frozen for
-human recovery. Require fresh protected results for every open commit before
-lifting the freeze.
+Record the ruleset or emergency-workflow ID, protected target, provider
+audit-event identifier or URL, approver, reason, and expiry. Automation outside
+DeployWhisper must automatically revoke the bypass capability at expiry and
+verify its removal; if revocation fails, freeze delivery and escalate. Verify
+that the bypass applied only to the intended delivery.
+
+Do not use policy settings as break glass in v1. The API has no atomic
+compare-and-swap or enforced expiry, and restoring the blocking setting before a
+rerun can block the excepted commit again. Keep the failed DeployWhisper result
+unchanged and use the scoped protection-layer path above.
 
 The audit record must retain the invocation timestamp, report ID, original
 decision payload, integration and project scope, complete `applied_settings`
 snapshot, raw policy status, configured and effective modes, approver, reason,
 expiry, and bypass mechanism. For HTTP consumers, hash the exact retained
 authenticated response bytes with SHA-256; do not reserialize the response and
-call it canonical. In-process consumers must persist the exact decision bytes
-they emitted to the audit system and hash that retained byte sequence. Record a
+call it canonical. In-process consumers must freeze the validated decision
+object, serialize the frozen decision once using a recorded serializer and
+version, and use that same object for both the check conclusion and persisted
+audit bytes. Hash that retained byte sequence. Record a
 retention period, restrict access to authorized reviewers, encrypt stored audit
 evidence, and redact secrets or sensitive artifact metadata not required to
 reconstruct the decision. For a protection-layer bypass, record the
-protected-delivery or bypass event; for a temporary settings change, record the
-replacement workflow run. Review repeated exceptions as a calibration signal.
+protected-delivery or bypass event and automatic-revocation evidence. Review
+repeated exceptions as a calibration signal.
 
 The payload digest proves only the integrity of the retained bytes; it does not
 prove server provenance, freshness, or which payload controlled delivery. Also
@@ -326,13 +377,19 @@ unsupported scenario, regression, or Evidence Law violation. Every listed
 consumer, dependency, schema, workflow, or protection identity change also
 requires a fresh approval tied to the new immutable revisions even when all
 metrics still pass. Every application, corpus, configuration, feature-flag, and
-context change likewise requires fresh approval of the new benchmark record,
-even when the resulting metrics still pass.
+context change that materially changes benchmark inputs or enforcement behavior
+likewise requires fresh approval of the new benchmark record, even when the
+resulting metrics still pass. Routine report-specific topology, ownership, or
+incident updates require a fresh report under the context invalidation policy;
+they do not revoke benchmark approval unless they change the approved benchmark
+scope or consumer behavior.
 
 Before labeling production outcomes, define an organization-owned
 outcome-observation window and incident-attribution horizon for each covered
-change class. Do not label a deployment a true negative before that horizon has
-elapsed; update prior labels when a later attributable incident is discovered.
+change class. Define the attribution method, adverse-outcome severity boundary,
+required evidence, independent adjudicator, and dispute/relabeling process. Do
+not label a deployment a true negative before that horizon has elapsed; update
+prior labels when a later attributable incident is discovered.
 
 Do not hide misses behind one aggregate pass rate. Review the honest-failure
 report, including scenarios missed, false reassurance, false positives,
@@ -417,17 +474,21 @@ integration:
    consumer revision and protected workflow.
 5. Verify complete and partial intake coverage against the submitted artifact
    manifest.
-6. Evidence Law, decision and context freshness, and audit-retention expectations.
-7. Named human owners for review, exceptions, incident response, and rollback.
-8. A tested rollback or forward-fix path and a time-bounded break-glass
+6. A required project-scope control that fails closed for the GitHub App's known
+   `neutral` scope-resolution path.
+7. The resolved setting source, `warn_at`, `soft_block_at`, and `hard_block_at`
+   thresholds, reporting default, and configured enforcement mode.
+8. Evidence Law, decision and context freshness, and audit-retention expectations.
+9. Named human owners for review, exceptions, incident response, and rollback.
+10. A tested rollback or forward-fix path and a time-bounded break-glass
    procedure.
-9. Monitoring for false reassurance, false positives, regressions, and
+11. Monitoring for false reassurance, false positives, regressions, and
    excessive overrides.
-10. Immutable application and actual consumer revisions plus proof that deployed
+12. Immutable application and actual consumer revisions plus proof that deployed
     artifacts match the benchmarked build.
-11. Repository review or protected-environment rules that require human approval
+13. Repository review or protected-environment rules that require human approval
     for the protected commit SHA and dismiss stale approvals after changes.
-12. A review date and a trigger for returning to `warn` or `advisory`.
+14. A review date and a trigger for returning to `warn` or `advisory`.
 
 Enable one integration and scope at a time. Observe real outcomes before
 expanding enforcement. Changing a mode does not change the canonical report;

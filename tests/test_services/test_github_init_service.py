@@ -182,7 +182,10 @@ class GitHubInitServiceTests(unittest.TestCase):
         self.assertEqual(result.branch_name, "feature/deploywhisper-github-init")
         self.assertEqual(result.commit_sha, "abc123")
         self.assertEqual(result.pr_url, "https://github.com/acme/example-repo/pull/7")
-        self.assertIn("deploywhisper/analyze-action@v1", workflow_text)
+        self.assertIn(
+            f"deploywhisper/analyze-action@{init_service.ANALYZE_ACTION_PINNED_SHA}",
+            workflow_text,
+        )
         self.assertIn(
             "DEPLOYWHISPER_API_URL: https://deploywhisper.example.com/api/v1/analyses",
             workflow_text,

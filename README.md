@@ -136,7 +136,7 @@ What users can use today:
 - **REST API and CLI access**: run the same analysis pipeline from `/api/v1` endpoints or the headless CLI for local automation and CI workflows.
 - **Shareable reports**: create read-only report links, optionally protect sensitive shared reports with a password, redact filenames, and compare shared reruns when previous scans exist.
 - **Published Skills Registry**: browse published built-in skills at <https://deploywhisper.github.io/skills-registry/> and extend guidance with custom skills.
-- **Published GitHub Action path**: use the dedicated `deploywhisper/analyze-action@v1` action to analyze PR artifact changes, post/update an advisory PR comment, and expose report outputs for follow-on workflow steps.
+- **Published GitHub Action path**: use the dedicated `deploywhisper/analyze-action` pinned to a reviewed full commit SHA to analyze PR artifact changes, post/update an advisory PR comment, and expose report outputs for follow-on workflow steps.
 - **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.3.0` with SQLite-backed persistence for a self-hosted single-container setup.
 - **Project quality baseline**: GitHub Actions CI, Python quality checks, sharded tests, local CI scripts, and optional UI accessibility smoke checks are in place.
 
@@ -752,7 +752,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: deploywhisper/analyze-action@v1
+      - uses: deploywhisper/analyze-action@<full-reviewed-commit-sha>
         with:
           api-url: ${{ secrets.DEPLOYWHISPER_API_URL }}
           project-key: payments
@@ -793,13 +793,13 @@ Enforcement-capable revisions additionally expose `policy-status`,
 `configured-mode`, `effective-status`, and `should-block`; the published `@v1`
 ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose them.
 
-The moving `@v1` reference follows published Action releases. At the validation
-point above it is advisory-only. Pin a required enforcement workflow to an
-immutable reviewed commit SHA. Against that exact revision, verify all four
-policy outputs above, consumption of the server's enforcement-decision
-endpoint, and pass, block, and decision-error behavior with synthetic smoke
-cases. The app-side setting alone cannot make an older or incompatible Action
-release block.
+The moving `@v1` reference follows published Action releases and must not be
+treated as permanently advisory. Pin the Action to an immutable reviewed commit
+SHA even for advisory workflows. If a moving tag is unavoidable, retain a
+persistent integration-specific `advisory` override. Before enabling blocking
+against a pinned revision, verify all four policy outputs above, consumption of
+the server's enforcement-decision endpoint, and pass, block, and decision-error
+behavior with synthetic smoke cases.
 
 Optional inputs:
 

@@ -99,6 +99,31 @@ So that teams understand when not to block automatically.
 - [x] [Review][Patch] [MEDIUM] Strengthen onboarding and Epic lifecycle regressions to verify ordering before repository access and all four Story 11 statuses, not only phrase presence and the epic marker. [tests/test_docs/test_enforcement_guardrails.py:269]
 - [x] [Review][Patch] [LOW] Reject duplicate normative section headings so a later contradictory section cannot escape section-scoped assertions. [tests/test_docs/test_enforcement_guardrails.py:297]
 - [x] [Review][Patch] [MEDIUM] Require fresh approval after application, corpus, configuration, feature-flag, or context changes even when metrics still pass—not only consumer/wiring identity changes. [docs/enforcement-guardrails.md:268]
+- [x] [Review][Patch] [HIGH] Do not call moving `@v1` safe for advisory use; pin every Action revision or retain a persistent advisory override because a future tag move can activate inherited blocking. [docs/github-action.md:81]
+- [x] [Review][Patch] [HIGH] Define deleted and renamed artifact handling; when current contracts cannot submit/hash tombstones or prior paths, blocking requires a separate diff-coverage control or must remain disabled. [docs/enforcement-guardrails.md:166]
+- [x] [Review][Patch] [MEDIUM] Explain that `accepted_artifact_count` includes parser-failed items while `analyzed_artifact_count` counts only successfully parsed items, preventing consumers from treating “accepted” as analyzed. [docs/enforcement-guardrails.md:166]
+- [x] [Review][Patch] [HIGH] Remove the circular temporary-settings exception path; restoring blocking before rerun can block the excepted commit again, and v1 lacks atomic CAS, so use a protection-layer bypass instead. [docs/enforcement-guardrails.md:215]
+- [x] [Review][Patch] [HIGH] Require automatic expiry/revocation of repository-ruleset bypass access and verify removal; recording an expiry alone does not time-bound the capability. [docs/enforcement-guardrails.md:206]
+- [x] [Review][Patch] [HIGH] Add the known GitHub App project-scope `neutral` path and its separate fail-closed control to the normative rollout checklist. [docs/enforcement-guardrails.md:405]
+- [x] [Review][Patch] [MEDIUM] Record the resolved setting source, `warn_at`, `soft_block_at`, `hard_block_at`, reporting default, and configured enforcement mode in the rollout approval. [docs/enforcement-guardrails.md:405]
+- [x] [Review][Patch] [MEDIUM] Define bounded decision timeouts, capped retries/backoff, and idempotent submission/check keys so failures terminate closed without duplicate reports or hanging checks. [docs/enforcement-guardrails.md:137]
+- [x] [Review][Patch] [MEDIUM] Cover event/path filters, job-level conditions, dependency skips, and cancellations; required enforcement must emit a terminal failure instead of remaining missing or pending. [docs/enforcement-guardrails.md:69]
+- [x] [Review][Patch] [MEDIUM] Limit context-triggered benchmark reapproval to material changes to benchmark inputs or consumer behavior; ordinary per-report topology/ownership updates require a fresh report, not continuous policy reapproval. [docs/enforcement-guardrails.md:328]
+- [x] [Review][Patch] [MEDIUM] Define outcome attribution method, severity boundary, adjudicator, evidence, and dispute/relabeling process for false-reassurance metrics. [docs/enforcement-guardrails.md:296]
+- [x] [Review][Patch] [MEDIUM] Define one serialize-once audit boundary for in-process decisions and record serializer/version; “exact decision bytes” is otherwise undefined. [docs/enforcement-guardrails.md:226]
+- [x] [Review][Patch] [MEDIUM] Stop hard-coding the moving Action tag observation into regression assertions and remove broad negative substring bans that resist future accurate documentation; retain capability-gated contract checks. [tests/test_docs/test_enforcement_guardrails.py:240]
+- [x] [Review][Patch] [LOW] Anchor the Epic 11 done assertion to the exact YAML line, matching the story-status checks. [tests/test_docs/test_enforcement_guardrails.py:349]
+- [x] [Review][Patch] [LOW] Link the pre-install GitHub App onboarding step directly to the enforcement guardrail guide. [docs/github-app-self-hosted-setup.md:134]
+- [x] [Review][Patch] [HIGH] Bind PR analysis to both current head and base SHAs and rerun when either changes; a stable head with an advanced base can invalidate the analyzed merge result. [docs/enforcement-guardrails.md:131]
+- [x] [Review][Patch] [HIGH] Bind submitted artifact bytes to a clean checkout of the protected target using content hashes; path-only manifest equality can approve mutated or substituted bytes. [docs/enforcement-guardrails.md:165]
+- [x] [Review][Patch] [HIGH] Freeze delivery before changing enforcement settings, then invalidate/rerun existing results; committing settings first leaves a stale-pass window. [docs/enforcement-guardrails.md:114]
+- [x] [Review][Patch] [MEDIUM] Define material report-context invalidation after publication and require a fresh report when topology, ownership, incidents, or other decision inputs change materially. [docs/enforcement-guardrails.md:146]
+- [x] [Review][Patch] [HIGH] Resolve non-PR refs to immutable commit/artifact digests, bind the decision to that digest, and deploy the same digest rather than a later-moving ref. [docs/enforcement-guardrails.md:137]
+- [x] [Review][Patch] [HIGH] Warn that the current GitHub App does not handle `merge_group`; do not require its check in merge queues without another consumer that analyzes generated merge commits. [docs/github-app.md:62]
+- [x] [Review][Patch] [LOW] Make mode-table parsing reject malformed/extra-cell status rows and contradictory rows without backticks, not silently ignore them. [tests/test_docs/test_enforcement_guardrails.py:379]
+- [x] [Review][Patch] [HIGH] Disclose that current enforcement routes rely on a trusted proxy/middleware to strip and inject identity headers and otherwise default missing identity to admin; direct exposure must remain non-blocking. [docs/enforcement-guardrails.md:108]
+- [x] [Review][Patch] [MEDIUM] Reconcile inherited project blocking across policy-adapter, CI, and Action entry points; “explicit integration opt-in” and unconditional advisory-default claims are false without an override. [docs/workflow-adapter-output-contract.md:127]
+- [x] [Review][Patch] [HIGH] Remove protected-environment approval as a claimed bypass for a failed required check; it only gates pending environment jobs and cannot convert an upstream failure into success. [docs/enforcement-guardrails.md:206]
 
 ## Dev Notes
 
@@ -203,6 +228,13 @@ OpenAI Codex (GPT-5)
 - Latest review full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `930 tests` passing.
 - Latest review quality gates: `./.venv/bin/ruff check .`, repo-wide `./.venv/bin/ruff format --check .`, and `git diff --check` passed; Ruff reported all 273 files formatted.
 - Latest review independent verification: a read-only checklist pass confirmed all 19 findings and follow-up residuals were resolved with no remaining substantive defects.
+- Current review RED: expanded contracts reproduced moving-tag, deletion/rename, counter-semantics, break-glass, scope-control, timeout/idempotency, filter/cancellation, context/attribution, audit-serialization, target/content-binding, proxy-auth, merge-queue, inherited-default, and table-parser gaps (`27 failed, 8 passed, 89 subtests passed`).
+- Current review GREEN: `./.venv/bin/python -m pytest tests/test_docs/test_enforcement_guardrails.py tests/test_docs/test_github_action_integration_contract.py tests/test_services/test_github_init_service.py -q --tb=short` - `28 passed, 140 subtests passed`.
+- Current review documentation, metadata, and scaffold suite: `./.venv/bin/python -m pytest tests/test_docs tests/test_infra/test_ai_safety_documentation.py tests/test_infra/test_requirements_traceability_matrix.py tests/test_services/test_github_init_service.py -q --tb=short` - `57 passed, 303 subtests passed`.
+- Current review required smoke: `./.venv/bin/python -m unittest discover -q` - `426 tests` passed, `1 skipped`.
+- Current review full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `930 tests` passing.
+- Current review quality gates: `./.venv/bin/ruff check .`, repo-wide `./.venv/bin/ruff format --check .`, and `git diff --check` passed; Ruff reported all 273 files formatted.
+- Current review independent verification: a read-only checklist pass confirmed all 25 findings and three follow-up residuals were resolved with no remaining substantive defects.
 
 ### Completion Notes List
 
@@ -216,6 +248,7 @@ OpenAI Codex (GPT-5)
 - Resolved all 17 review-rerun findings: effective-status behavior is distinct from configured ceilings; Action errors fail closed; blocking Action refs are immutable and smoke-tested; inherited GitHub App settings are explicit; stale, missing, and excluded decisions cannot pass; exception handling is scoped, time-bound, concurrency-safe, and reconstructible; lower-than-high blocking remains disabled under the current decision contract; benchmark evidence is reproducible and tied to deployed artifacts; and automated checks no longer substitute for mandatory human approval.
 - Resolved all 18 subsequent-review findings: published Action behavior is accurately capability-gated; missing and partial intake cannot silently pass; decisions bind to the actual protected PR-head, merge-queue, or non-PR target and manifest; v1 settings-race limitations are explicit; transport, authorization, separation-of-duties, expiry, audit integrity, and retention controls are complete; benchmark identity and production labels are reproducible; reapproval covers every consumer/wiring change; onboarding begins advisory under inherited blocking; tests enforce section placement and duplicate-row rejection; and Epic 11 is now done.
 - Resolved all 19 latest-review findings: scope onboarding cannot downgrade existing consumers; protection removal keys off configured mode; Action inheritance and string outputs are explicit; every enforcement input is protected; guide entry conditions cover inherited and expanding scope; break glass uses scoped provider controls or a genuinely exclusive settings lock; audit digests no longer overclaim provenance; manifest completeness matches runtime counters exactly; project-scope `neutral` is treated as fail-open; benchmark labels and mutable configuration are reproducible; baseline and elevated review are distinct; and regressions enforce section uniqueness, ordering, and complete Epic 11 status.
+- Resolved all 25 current-review findings: Action usage and the GitHub scaffold pin immutable commits; deletion/rename and byte-level coverage limitations are explicit; accepted-versus-analyzed counters are unambiguous; temporary settings are no longer a break-glass path; ruleset bypasses revoke automatically; project scope and resolved thresholds are checklist gates; timeouts, retries, idempotency gaps, skipped jobs, base/head changes, moving deployment refs, material context, and merge queues fail safely; proxy-auth prerequisites and inherited defaults are consistent across entry points; and tests reject malformed tables without freezing moving external state.
 
 ### File List
 
@@ -228,7 +261,10 @@ OpenAI Codex (GPT-5)
 - docs/github-app-self-hosted-setup.md
 - docs/github-app.md
 - docs/workflow-adapter-output-contract.md
+- integrations/github/init_service.py
 - tests/test_docs/test_enforcement_guardrails.py
+- tests/test_docs/test_github_action_integration_contract.py
+- tests/test_services/test_github_init_service.py
 
 ## Change Log
 
@@ -239,3 +275,4 @@ OpenAI Codex (GPT-5)
 - 2026-09-09: Addressed all 17 findings from the subsequent review rerun, expanded fail-closed enforcement and benchmark guardrails, completed full validation, and retained done status.
 - 2026-09-09: Addressed all 18 findings from the next review rerun, aligned guidance with the unreleased Action capability and integration-neutral enforcement limits, completed full validation, closed Epic 11, and retained done status.
 - 2026-09-09: Addressed all 19 findings from the latest review rerun, closed remaining scope, manifest, audit, and GitHub integration guardrail gaps, completed full validation, and retained Story 11.4 and Epic 11 as done.
+- 2026-09-09: Addressed all 25 findings from the current review rerun, pinned generated Action workflows, documented the remaining enforcement capability boundaries, completed full validation, and retained Story 11.4 and Epic 11 as done.
