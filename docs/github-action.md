@@ -29,10 +29,11 @@ jobs:
   deploywhisper:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
-      - uses: deploywhisper/analyze-action@<full-reviewed-commit-sha>
+      - id: deploywhisper
+        uses: deploywhisper/analyze-action@3b37ed72bfb2d201030bef873268f2170794b160
         with:
           api-url: ${{ secrets.DEPLOYWHISPER_API_URL }}
           project-key: payments
@@ -83,15 +84,21 @@ These enforcement semantics require an Action release that exposes
 `policy-status`, `configured-mode`, `effective-status`, and `should-block` and
 consumes the enforcement-decision endpoint. The moving `@v1` tag follows
 published releases and must not be treated as permanently advisory. The
-published `@v1` ref validated on 2026-09-09 (tag object `f2e36ce`) did not expose
-enforcement outputs, but a later tag move may. Pin Action revisions for advisory
-and blocking workflows. If a moving tag is unavoidable, retain a persistent
-integration-specific `advisory` override. Before making a pinned enforcement
-revision required, run synthetic
+published `@v1` ref validated on 2026-09-09 (tag object
+`f2e36cef443129e85c55882b9dafc1f20d409284`, dereferenced commit
+`3b37ed72bfb2d201030bef873268f2170794b160`) did not expose enforcement outputs,
+but a later tag move may. Pin Action revisions for advisory and blocking
+workflows; a server-side advisory override does not make mutable Action code
+trustworthy. Before making a pinned enforcement revision required, run synthetic
 valid-pass, valid-block, unavailable-decision, and malformed-decision cases
 against that exact revision before making its job required. Older Action refs
 that do not expose enforcement outputs remain advisory-only even when the
 server stores a blocking mode.
+
+To update a pin, resolve the candidate ref and dereference annotated tags, review
+the full diff from the existing pin, run the Action repository tests and smoke
+consumer against the exact candidate commit, then replace the full SHA in the
+workflow. Never copy a moving tag into a protected workflow.
 
 ## Canonical Report Output Mapping
 

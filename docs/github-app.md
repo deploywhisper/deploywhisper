@@ -61,7 +61,7 @@ Optional:
 
 - Webhook verification uses `X-Hub-Signature-256`
 - Pull request webhook actions `opened`, `reopened`, and `synchronize` can trigger automatic advisory analyses when PR automation is enabled
-- The current App does not subscribe to `merge_group`; do not require its check in a merge queue until that event and generated-merge analysis path are implemented. Use a merge-queue-capable pinned Action workflow or keep the App check non-required there.
+- The current App does not subscribe to `merge_group`, and the published Action has no verified generated-merge analysis path. Do not require either check in a merge queue until that capability is implemented and tested against generated merge commits.
 - Supported changed artifacts are downloaded from GitHub, filtered through the shared intake rules, and sent through the existing parse/assess/persist pipeline
 - Check runs resolve the `github` integration policy settings and expose raw policy status, configured enforcement mode, and effective status in the summary
 - An effective `advisory` status reports `success` for `GO` and `neutral` for other recommendations; effective `warn` reports `neutral`
@@ -91,8 +91,10 @@ complete and record the full guardrail review for that integration:
 
 Send this payload with `PUT /api/v1/settings/policy-adapter`. Supported
 enforcement modes are `advisory`, `warn`, `soft-block`, and `hard-block`.
-Do not make `DeployWhisper / Risk Analysis` required until the integration has
-been deliberately configured for a blocking mode.
+Making `DeployWhisper / Risk Analysis` required is a separate operator action.
+Do it only after verifying that the resolved configured mode is blocking and
+all guardrails are complete; that blocking mode may be inherited from the
+project default without an integration-specific opt-in.
 Complete the [Enforcement Guardrails](./enforcement-guardrails.md) before that
 change so benchmark readiness, human ownership, false reassurance, and
 rollback responsibilities are explicit.

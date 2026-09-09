@@ -187,6 +187,21 @@ class GitHubInitServiceTests(unittest.TestCase):
             workflow_text,
         )
         self.assertIn(
+            f"actions/checkout@{init_service.CHECKOUT_ACTION_PINNED_SHA}",
+            workflow_text,
+        )
+        self.assertIn("- id: deploywhisper", workflow_text)
+        self.assertRegex(init_service.ANALYZE_ACTION_PINNED_SHA, r"^[0-9a-f]{40}$")
+        self.assertRegex(init_service.CHECKOUT_ACTION_PINNED_SHA, r"^[0-9a-f]{40}$")
+        self.assertEqual(
+            "3b37ed72bfb2d201030bef873268f2170794b160",
+            init_service.ANALYZE_ACTION_PINNED_SHA,
+        )
+        self.assertEqual(
+            "11d5960a326750d5838078e36cf38b85af677262",
+            init_service.CHECKOUT_ACTION_PINNED_SHA,
+        )
+        self.assertIn(
             "DEPLOYWHISPER_API_URL: https://deploywhisper.example.com/api/v1/analyses",
             workflow_text,
         )
@@ -194,6 +209,15 @@ class GitHubInitServiceTests(unittest.TestCase):
         self.assertIn('workspace-key: "prod"', workflow_text)
         self.assertIn('allow-derived-project-scope: "false"', workflow_text)
         self.assertIn(init_service.README_SECTION_START, readme_text)
+        self.assertIn("currently pinned Action revision is advisory-only", readme_text)
+        self.assertIn(
+            "a later reviewed enforcement-capable revision must follow the resolved server settings",
+            readme_text,
+        )
+        self.assertNotIn(
+            "workflow enforcement follows the resolved server settings", readme_text
+        )
+        self.assertIn(init_service.ENFORCEMENT_GUARDRAILS_URL, readme_text)
         self.assertIn("Project scope: `project-key=payments`", readme_text)
         self.assertIn("Workspace scope: `workspace-key=prod`", readme_text)
         self.assertIn("Advanced self-hosted GitHub App", readme_text)

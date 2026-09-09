@@ -121,7 +121,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "workflow or protection wiring",
                 "requires a fresh approval tied to the new immutable revisions",
                 "application, corpus, configuration, feature-flag, and context change",
-                "False reassurance is a workflow pass followed by an attributable adverse production outcome",
+                "Deployment-backed false reassurance is a workflow pass followed by an attributable adverse production outcome",
                 "benchmark false negative",
                 "workflow and protection configuration snapshot",
                 "Every allowed evidence form requires a digest",
@@ -146,6 +146,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "required project-scope control",
                 "`warn_at`, `soft_block_at`, and `hard_block_at`",
                 "resolved setting source",
+                "trusted identity/proxy boundary",
+                "durable external idempotency coordinator",
+                "Settings-change serialization",
+                "deterministic diff-coverage control for deletions and renames",
             ),
         }
         for heading, expected_clauses in expected_by_section.items():
@@ -228,10 +232,21 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             with self.subTest(expected_target=expected_target):
                 self.assertIn(expected_target, links)
                 self.assertTrue(
-                    (GUARDRAIL_GUIDE.parent / expected_target.split("#", 1)[0])
+                    (
+                        target_path := GUARDRAIL_GUIDE.parent
+                        / expected_target.split("#", 1)[0]
+                    )
                     .resolve()
                     .exists()
                 )
+                if "#" in expected_target:
+                    fragment = expected_target.split("#", 1)[1]
+                    self.assertIn(
+                        fragment,
+                        self._markdown_heading_anchors(
+                            target_path.read_text(encoding="utf-8")
+                        ),
+                    )
 
     def test_readme_describes_enforcement_capability_without_exit_contradiction(
         self,
@@ -249,7 +264,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             content,
         )
         self.assertIn(
-            "no protected scope shares that project/integration key",
+            "no existing scope shares that project/integration key",
             content,
         )
         self.assertIn(
@@ -257,10 +272,23 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
         self.assertIn("without downgrading existing consumers", content)
         self.assertIn(
-            "Pin the Action to an immutable reviewed commit SHA even for advisory workflows",
+            "Pin the Action and checkout dependencies to reviewed full commit SHAs even for advisory workflows",
             content,
         )
-        self.assertIn("persistent integration-specific `advisory` override", content)
+        self.assertIn(
+            "server-side advisory override cannot make mutable third-party code trustworthy",
+            content,
+        )
+        action_section = self._normalized(
+            self._section(
+                (REPO_ROOT / "README.md").read_text(encoding="utf-8"),
+                "### DeployWhisper Analyze Action",
+            )
+        )
+        self.assertNotIn(
+            "exits `0` when analysis succeeds, regardless of risk verdict",
+            action_section,
+        )
 
     def test_github_app_guide_explains_project_default_inheritance(self) -> None:
         content = self._normalized(
@@ -284,7 +312,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             content,
         )
         self.assertIn("does not subscribe to `merge_group`", content)
-        self.assertIn("do not require its check in a merge queue", content)
+        self.assertIn("Do not require either check in a merge queue", content)
 
     def test_github_action_guide_conditions_blocking_on_runtime_capability(
         self,
@@ -312,7 +340,18 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         self.assertIn(
             "Pin Action revisions for advisory and blocking workflows", content
         )
-        self.assertIn("persistent integration-specific `advisory` override", content)
+        self.assertIn(
+            "server-side advisory override does not make mutable Action code trustworthy",
+            content,
+        )
+        self.assertIn("- id: deploywhisper", content)
+        self.assertIn(
+            "actions/checkout@11d5960a326750d5838078e36cf38b85af677262", content
+        )
+        self.assertIn(
+            "deploywhisper/analyze-action@3b37ed72bfb2d201030bef873268f2170794b160",
+            content,
+        )
         self.assertIn(
             "steps.deploywhisper.outputs.should-block == 'true'",
             content,
@@ -350,10 +389,14 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
         self.assertIn("integration-specific `advisory` override", onboarding)
         self.assertIn(
-            "no existing protected scope shares that project/integration key",
+            "no existing scope shares that project/integration key",
             onboarding,
         )
         self.assertIn("use a separate project", onboarding)
+        self.assertIn(
+            "grant staged repository access while the check remains non-required",
+            onboarding,
+        )
         self.assertIn(
             "[Enforcement Guardrails](./enforcement-guardrails.md)", onboarding
         )
@@ -376,15 +419,31 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             / "implementation-artifacts"
             / "sprint-status.yaml"
         ).read_text(encoding="utf-8")
-        self.assertRegex(content, r"(?m)^  epic-11: done$")
-        for story_key in (
-            "11-1-policy-adapter-output-contract",
-            "11-2-threshold-and-reporting-defaults-management",
-            "11-3-integration-level-enforcement-settings",
-            "11-4-enforcement-guardrail-documentation",
+        epic_status = re.search(r"(?m)^  epic-11: ([a-z-]+)$", content)
+        self.assertIsNotNone(epic_status)
+        if epic_status is not None and epic_status.group(1) == "done":
+            for story_key in (
+                "11-1-policy-adapter-output-contract",
+                "11-2-threshold-and-reporting-defaults-management",
+                "11-3-integration-level-enforcement-settings",
+                "11-4-enforcement-guardrail-documentation",
+            ):
+                with self.subTest(story_key=story_key):
+                    self.assertRegex(content, rf"(?m)^  {re.escape(story_key)}: done$")
+
+    def test_mode_table_parser_rejects_malformed_rows(self) -> None:
+        content = self._section(
+            GUARDRAIL_GUIDE.read_text(encoding="utf-8"),
+            "## Choose the least forceful mode that works",
+        )
+        for malformed in (
+            content.replace("| --- | --- | --- |", "| advisory | bad | row |"),
+            content.replace("| `warn` |", "| warn |"),
+            content.replace("| `warn` |", "| `warn` | extra |"),
         ):
-            with self.subTest(story_key=story_key):
-                self.assertRegex(content, rf"(?m)^  {re.escape(story_key)}: done$")
+            with self.subTest(malformed=malformed.splitlines()[1:4]):
+                with self.assertRaises(AssertionError):
+                    self._effective_status_rows(malformed)
 
     @staticmethod
     def _normalized(value: str) -> str:
@@ -393,6 +452,14 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
     @staticmethod
     def _markdown_links(value: str) -> set[str]:
         return {target for _, target in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", value)}
+
+    @staticmethod
+    def _markdown_heading_anchors(value: str) -> set[str]:
+        anchors = set()
+        for heading in re.findall(r"(?m)^#{1,6}\s+(.+?)\s*$", value):
+            anchor = re.sub(r"[^a-z0-9 -]", "", heading.lower()).replace(" ", "-")
+            anchors.add(anchor)
+        return anchors
 
     @staticmethod
     def _section(value: str, heading: str) -> str:

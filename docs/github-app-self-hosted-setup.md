@@ -135,14 +135,15 @@ optional OAuth helper route. They are not required for the manual setup path.
 
 Before installation, inspect the setting source and resolved configured
 enforcement mode for the `github` integration. If the project default is
-blocking and no existing protected scope shares that project/integration key,
+blocking and no existing scope shares that project/integration key,
 create an integration-specific `advisory` override before granting repository
 access. Keep that override through installation and validation; remove or raise
 it only after this integration and repository scope complete the enforcement
 guardrail review. If existing repositories share the key, do not downgrade them:
-use a separate project for advisory onboarding or complete the new repository's
-[Enforcement Guardrails](./enforcement-guardrails.md) review before granting
-access.
+use a separate project for advisory onboarding, or grant staged repository
+access while the check remains non-required, complete the new repository's
+[Enforcement Guardrails](./enforcement-guardrails.md) smoke tests, and enable
+source-bound protection only after approval.
 
 ## Installation steps
 

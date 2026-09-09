@@ -749,10 +749,11 @@ jobs:
   deploywhisper:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
-      - uses: deploywhisper/analyze-action@<full-reviewed-commit-sha>
+      - id: deploywhisper
+        uses: deploywhisper/analyze-action@3b37ed72bfb2d201030bef873268f2170794b160
         with:
           api-url: ${{ secrets.DEPLOYWHISPER_API_URL }}
           project-key: payments
@@ -770,10 +771,10 @@ What the action does:
 - Older Action refs that do not expose enforcement outputs remain advisory-only
   and exit `0` after successful analysis. Inspect the resolved setting source
   and configured enforcement mode before installation. If the project default
-  is already blocking and no protected scope shares that project/integration
+  is already blocking and no existing scope shares that project/integration
   key, create a `github-action` integration-specific `advisory` override before
   installing or upgrading, then test the pinned enforcement-capable revision
-  before removing that override. If protected scopes share the key, use a
+  before removing that override. If other scopes share the key, use a
   separate project for advisory testing or complete the new scope's guardrail
   review without downgrading existing consumers.
 - exposes outputs for follow-on GitHub steps:
@@ -794,12 +795,13 @@ Enforcement-capable revisions additionally expose `policy-status`,
 ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose them.
 
 The moving `@v1` reference follows published Action releases and must not be
-treated as permanently advisory. Pin the Action to an immutable reviewed commit
-SHA even for advisory workflows. If a moving tag is unavoidable, retain a
-persistent integration-specific `advisory` override. Before enabling blocking
-against a pinned revision, verify all four policy outputs above, consumption of
-the server's enforcement-decision endpoint, and pass, block, and decision-error
-behavior with synthetic smoke cases.
+used in a protected workflow. Pin the Action and checkout dependencies to
+reviewed full commit SHAs even for advisory workflows; a server-side advisory
+override cannot make mutable third-party code trustworthy. Before enabling
+blocking against a pinned revision, verify all four policy outputs above,
+consumption of the server's enforcement-decision endpoint, and pass, block, and
+decision-error behavior with synthetic smoke cases. Follow the pin-resolution,
+diff-review, and smoke procedure in the Action integration guide.
 
 Optional inputs:
 
@@ -833,10 +835,11 @@ The recommended open-source posture is Action-first. If you want GitHub App
 capabilities, create a private/self-hosted GitHub App in your own account or
 organization and point it at your own DeployWhisper instance. See
 [`docs/github-app-self-hosted-setup.md`](./docs/github-app-self-hosted-setup.md).
-Keep the `DeployWhisper / Risk Analysis` check non-required while its configured
-integration mode is `advisory` or `warn`. Making the check required is an
-explicit operator opt-in for `soft-block` or `hard-block`; the canonical report
-remains advisory-only in every mode.
+Keep the `DeployWhisper / Risk Analysis` check non-required while its resolved
+configured mode is `advisory` or `warn`. Making the check required is a separate
+operator action for `soft-block` or `hard-block`, but that configured blocking
+mode may be inherited from the project default without an integration-specific
+opt-in. The canonical report remains advisory-only in every mode.
 Before enabling a required blocking check, complete the
 [Enforcement Guardrails](./docs/enforcement-guardrails.md) covering Evidence
 Law, benchmark readiness, false reassurance, human review, and rollback

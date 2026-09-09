@@ -15,9 +15,11 @@ a new scope.
 GitHub Action effects in this guide apply only to an enforcement-capable
 revision whose manifest exposes the four policy outputs and whose runtime has
 passed the required smoke cases. The published `@v1` ref validated on
-2026-09-09 does not expose those outputs and remains advisory-only; enforcement
-is not a released `@v1` capability yet. Recheck the installed immutable
-revision rather than relying on this dated observation.
+2026-09-09 (tag object `f2e36cef443129e85c55882b9dafc1f20d409284`,
+dereferenced commit `3b37ed72bfb2d201030bef873268f2170794b160`)
+does not expose those outputs; enforcement is not a released `@v1` capability
+at that snapshot. Recheck the installed immutable revision rather than relying
+on this dated observation.
 
 ## Choose the least forceful mode that works
 
@@ -47,11 +49,11 @@ An installed Action ref must expose the `policy-status`, `configured-mode`,
 `/enforcement-decision` before it can enforce these modes. Older Action refs
 remain advisory-only even if the server has blocking settings.
 
-Pin every Action use—advisory or blocking—to an immutable reviewed commit SHA
-rather than a moving major tag. If an organization deliberately follows a
-moving tag, retain a persistent integration-specific `advisory` override and do
-not treat the tag as enforcement-capable. Before making a pinned revision
-required, run a synthetic fail-closed smoke test against that exact SHA: prove a
+Pin every Action and workflow dependency use—advisory or blocking—to an
+immutable reviewed commit SHA rather than a moving major tag. A server-side
+advisory override does not mitigate mutable-code execution, token exfiltration,
+or falsified results. Before making a pinned revision required, run a synthetic
+fail-closed smoke test against that exact SHA: prove a
 valid non-blocking decision passes, a valid blocking decision fails, and an
 unavailable or malformed decision fails as an operational error.
 
@@ -74,9 +76,12 @@ step is skipped. The job result must be bound to the protected commit, not
 merely to a reusable check name.
 
 Audit path and event filters, job-level `if` conditions, dependency skips, and
-cancellation. Configure a required terminal check that always starts and reports
-failure when the analysis/enforcement job is filtered, skipped, cancelled, or
-times out; do not leave the required context absent or pending indefinitely.
+cancellation. Top-level event or path filters can prevent a workflow from
+starting, so the required context must come from a separate always-triggered
+terminal workflow for every protected event. Within that workflow, use
+job-level `if: always()` handling to report failure when analysis/enforcement is
+skipped, cancelled, or times out; do not leave the required context absent or
+pending indefinitely.
 
 Test the protected branch or environment with a synthetic blocking result and
 an authorized exception before rollout. If the change can still merge or
@@ -343,12 +348,16 @@ positive and negative sample sizes for every covered change class and a stated
 statistical confidence method; a tiny or undefined sample cannot authorize
 blocking merely because its observed rate is perfect.
 
-A benchmark false negative is an expected benchmark finding or risk that the
-analysis misses in the controlled corpus. False reassurance is a workflow pass
+A benchmark false negative is an expected finding the analysis does not detect.
+Benchmark false reassurance is a controlled scenario whose expected
+recommendation is `warn` or `stop` but whose actual verdict is less severe.
+Reviewer-feedback false reassurance is a reviewer-reported missed finding on a
+completed report. Deployment-backed false reassurance is a workflow pass
 followed by an attributable adverse production outcome within the recorded
-incident-attribution horizon. Keep those numerators and denominators separate;
-do not count a benchmark miss as a production outcome or label a recent pass
-before its observation window closes.
+incident-attribution horizon. Record and report these three signal families with
+separate numerators and denominators; do not count a benchmark miss or reviewer
+report as a production outcome, and do not label a recent deployment pass before
+its observation window closes.
 
 The decision record must identify the corpus, immutable application revision,
 and actual enforcement consumer revision evaluated: for example an Action
@@ -478,17 +487,25 @@ integration:
    `neutral` scope-resolution path.
 7. The resolved setting source, `warn_at`, `soft_block_at`, and `hard_block_at`
    thresholds, reporting default, and configured enforcement mode.
-8. Evidence Law, decision and context freshness, and audit-retention expectations.
-9. Named human owners for review, exceptions, incident response, and rollback.
-10. A tested rollback or forward-fix path and a time-bounded break-glass
-   procedure.
-11. Monitoring for false reassurance, false positives, regressions, and
+8. The trusted identity/proxy boundary that strips caller-supplied actor headers
+   and injects verified role and project scope.
+9. A durable external idempotency coordinator for blocking consumers, or an
+   explicit non-blocking disposition while native idempotency is unavailable.
+10. Settings-change serialization: freeze delivery before the write, then
+    invalidate and rerun affected results before lifting the freeze.
+11. A deterministic diff-coverage control for deletions and renames, or an
+    explicit non-blocking disposition for scopes where tombstones are possible.
+12. Evidence Law, decision and context freshness, and audit-retention expectations.
+13. Named human owners for review, exceptions, incident response, and rollback.
+14. A tested rollback or forward-fix path with automatic bypass revocation and
+    retained revocation evidence.
+15. Monitoring for false reassurance, false positives, regressions, and
    excessive overrides.
-12. Immutable application and actual consumer revisions plus proof that deployed
+16. Immutable application and actual consumer revisions plus proof that deployed
     artifacts match the benchmarked build.
-13. Repository review or protected-environment rules that require human approval
+17. Repository review or protected-environment rules that require human approval
     for the protected commit SHA and dismiss stale approvals after changes.
-14. A review date and a trigger for returning to `warn` or `advisory`.
+18. A review date and a trigger for returning to `warn` or `advisory`.
 
 Enable one integration and scope at a time. Observe real outcomes before
 expanding enforcement. Changing a mode does not change the canonical report;

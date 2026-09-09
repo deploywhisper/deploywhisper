@@ -30,6 +30,9 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
             "docs/schemas/report-v2.md",
             "JSON-encoded string",
             "integration=github-action",
+            "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+            "deploywhisper/analyze-action@3b37ed72bfb2d201030bef873268f2170794b160",
+            "id: deploywhisper",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, content)
