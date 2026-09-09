@@ -497,8 +497,10 @@ integration:
     explicit non-blocking disposition for scopes where tombstones are possible.
 12. Evidence Law, decision and context freshness, and audit-retention expectations.
 13. Named human owners for review, exceptions, incident response, and rollback.
-14. A tested rollback or forward-fix path with automatic bypass revocation and
-    retained revocation evidence.
+14. A tested rollback or forward-fix path with a documented maximum expiry
+    timestamp, automatic bypass revocation before or at that deadline, and
+    retained revocation evidence. Delivery fails closed if timely revocation
+    cannot be verified.
 15. Monitoring for false reassurance, false positives, regressions, and
    excessive overrides.
 16. Immutable application and actual consumer revisions plus proof that deployed

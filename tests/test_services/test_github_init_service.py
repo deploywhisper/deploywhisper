@@ -209,9 +209,16 @@ class GitHubInitServiceTests(unittest.TestCase):
         self.assertIn('workspace-key: "prod"', workflow_text)
         self.assertIn('allow-derived-project-scope: "false"', workflow_text)
         self.assertIn(init_service.README_SECTION_START, readme_text)
-        self.assertIn("currently pinned Action revision is advisory-only", readme_text)
+        self.assertIn(
+            f"Action revision `{init_service.ANALYZE_ACTION_PINNED_SHA}` is advisory-only",
+            readme_text,
+        )
         self.assertIn(
             "a later reviewed enforcement-capable revision must follow the resolved server settings",
+            readme_text,
+        )
+        self.assertIn(
+            "update this generated capability note in the same change",
             readme_text,
         )
         self.assertNotIn(

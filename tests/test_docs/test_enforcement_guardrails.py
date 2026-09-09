@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import unittest
 
+from integrations.github import init_service
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GUARDRAIL_GUIDE = REPO_ROOT / "docs" / "enforcement-guardrails.md"
@@ -150,6 +152,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "durable external idempotency coordinator",
                 "Settings-change serialization",
                 "deterministic diff-coverage control for deletions and renames",
+                "maximum expiry timestamp",
+                "fails closed",
             ),
         }
         for heading, expected_clauses in expected_by_section.items():
@@ -344,6 +348,14 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "server-side advisory override does not make mutable Action code trustworthy",
             content,
         )
+        self.assertIn(
+            "actions/checkout `v4` is a lightweight tag that resolved to commit `11d5960a326750d5838078e36cf38b85af677262`",
+            content,
+        )
+        self.assertIn(
+            "resolve and review the checkout candidate independently",
+            content,
+        )
         self.assertIn("- id: deploywhisper", content)
         self.assertIn(
             "actions/checkout@11d5960a326750d5838078e36cf38b85af677262", content
@@ -360,6 +372,19 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "fromJSON(steps.deploywhisper.outputs.should-block)",
             content,
         )
+
+    def test_documented_workflow_pins_match_scaffold_constants(self) -> None:
+        expected_refs = (
+            f"actions/checkout@{init_service.CHECKOUT_ACTION_PINNED_SHA}",
+            f"deploywhisper/analyze-action@{init_service.ANALYZE_ACTION_PINNED_SHA}",
+        )
+        for relative_path in ("README.md", "docs/github-action.md"):
+            content = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+            for expected_ref in expected_refs:
+                with self.subTest(
+                    relative_path=relative_path, expected_ref=expected_ref
+                ):
+                    self.assertIn(expected_ref, content)
 
     def test_policy_entry_points_explain_inherited_project_defaults(self) -> None:
         for relative_path in (
@@ -422,14 +447,11 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         epic_status = re.search(r"(?m)^  epic-11: ([a-z-]+)$", content)
         self.assertIsNotNone(epic_status)
         if epic_status is not None and epic_status.group(1) == "done":
-            for story_key in (
-                "11-1-policy-adapter-output-contract",
-                "11-2-threshold-and-reporting-defaults-management",
-                "11-3-integration-level-enforcement-settings",
-                "11-4-enforcement-guardrail-documentation",
-            ):
+            story_statuses = re.findall(r"(?m)^  (11-\d+-[^:]+): ([a-z-]+)$", content)
+            self.assertTrue(story_statuses, "Epic 11 has no tracked stories")
+            for story_key, story_status in story_statuses:
                 with self.subTest(story_key=story_key):
-                    self.assertRegex(content, rf"(?m)^  {re.escape(story_key)}: done$")
+                    self.assertEqual("done", story_status)
 
     def test_mode_table_parser_rejects_malformed_rows(self) -> None:
         content = self._section(
@@ -445,6 +467,22 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     self._effective_status_rows(malformed)
 
+    def test_markdown_heading_anchors_ignore_fences_and_suffix_duplicates(
+        self,
+    ) -> None:
+        content = """\
+```markdown
+```not-a-close
+### Fake
+```
+### Guardrails
+### Guardrails
+"""
+        self.assertEqual(
+            {"guardrails", "guardrails-1"},
+            self._markdown_heading_anchors(content),
+        )
+
     @staticmethod
     def _normalized(value: str) -> str:
         return re.sub(r"\s+", " ", value).strip()
@@ -455,9 +493,41 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
 
     @staticmethod
     def _markdown_heading_anchors(value: str) -> set[str]:
-        anchors = set()
-        for heading in re.findall(r"(?m)^#{1,6}\s+(.+?)\s*$", value):
-            anchor = re.sub(r"[^a-z0-9 -]", "", heading.lower()).replace(" ", "-")
+        anchors: set[str] = set()
+        duplicate_counts: dict[str, int] = {}
+        fence_character: str | None = None
+        fence_length = 0
+
+        for line in value.splitlines():
+            if fence_character is None:
+                opening_fence = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+                if opening_fence is not None:
+                    marker = opening_fence.group(1)
+                    fence_character = marker[0]
+                    fence_length = len(marker)
+                    continue
+            else:
+                closing_fence = re.fullmatch(r" {0,3}(`{3,}|~{3,})[ \t]*", line)
+                if closing_fence is not None:
+                    marker = closing_fence.group(1)
+                    if marker[0] == fence_character and len(marker) >= fence_length:
+                        fence_character = None
+                        fence_length = 0
+                continue
+
+            heading_match = re.match(r"^ {0,3}#{1,6}\s+(.+?)\s*$", line)
+            if heading_match is None:
+                continue
+            heading = re.sub(r"\s+#+\s*$", "", heading_match.group(1))
+            base_anchor = re.sub(r"[^\w\- ]", "", heading.lower())
+            base_anchor = re.sub(r"\s", "-", base_anchor)
+            duplicate_number = duplicate_counts.get(base_anchor, 0)
+            duplicate_counts[base_anchor] = duplicate_number + 1
+            anchor = (
+                base_anchor
+                if duplicate_number == 0
+                else f"{base_anchor}-{duplicate_number}"
+            )
             anchors.add(anchor)
         return anchors
 

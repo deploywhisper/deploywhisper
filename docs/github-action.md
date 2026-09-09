@@ -95,10 +95,24 @@ against that exact revision before making its job required. Older Action refs
 that do not expose enforcement outputs remain advisory-only even when the
 server stores a blocking mode.
 
-To update a pin, resolve the candidate ref and dereference annotated tags, review
-the full diff from the existing pin, run the Action repository tests and smoke
-consumer against the exact candidate commit, then replace the full SHA in the
-workflow. Never copy a moving tag into a protected workflow.
+The example also pins checkout independently. On 2026-09-09,
+actions/checkout `v4` is a lightweight tag that resolved to commit
+`11d5960a326750d5838078e36cf38b85af677262`; no separate annotated-tag object
+was present. Re-resolve that upstream ref instead of assuming this dated
+mapping remains current.
+
+Update the two dependencies independently:
+
+1. For `deploywhisper/analyze-action`, resolve the candidate ref, dereference
+   annotated tags, review the full diff from the existing pin, run the Action
+   repository tests and smoke consumer against the exact candidate commit, and
+   then replace the full SHA.
+2. For `actions/checkout`, resolve and review the checkout candidate
+   independently, inspect its release provenance and full diff from the existing
+   pin, and run the protected workflow's checkout and artifact-selection smoke
+   cases before replacing its full SHA.
+3. Update the scaffold constants, README, this guide, and their contract tests in
+   the same change. Never copy a moving tag into a protected workflow.
 
 ## Canonical Report Output Mapping
 

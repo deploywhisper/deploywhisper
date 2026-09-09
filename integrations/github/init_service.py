@@ -324,7 +324,7 @@ def _render_readme_section(
     lines = [
         "## DeployWhisper",
         "",
-        "This repository uses DeployWhisper canonical advisory reports. The currently pinned Action revision is advisory-only; a later reviewed enforcement-capable revision must follow the resolved server settings.",
+        f"This repository uses DeployWhisper canonical advisory reports. Action revision `{ANALYZE_ACTION_PINNED_SHA}` is advisory-only; a later reviewed enforcement-capable revision must follow the resolved server settings.",
         "",
         "### GitHub workflow",
         "",
@@ -333,6 +333,7 @@ def _render_readme_section(
         "- Optional secret: `DEPLOYWHISPER_API_TOKEN` for protected DeployWhisper APIs",
         *_scope_readme_lines(options),
         "- The scaffold pins the reviewed Action revision but does not configure server enforcement; inspect the resolved `github-action` setting and keep the check non-required until the guardrail review is complete",
+        "- If the workflow Action pin changes, update this generated capability note in the same change",
         f"- Enforcement guardrails: {ENFORCEMENT_GUARDRAILS_URL}",
         "",
         "### Configuration example",
