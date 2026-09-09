@@ -767,7 +767,12 @@ What the action does:
 - posts a single markdown PR comment and updates that same comment on re-runs
 - compares the latest report with the previous PR scan so reruns show score and severity deltas in the refreshed comment
 - An enforcement-capable Action ref exits `0` after a valid non-blocking decision, exits nonzero when validated `should-block` is `true`, and also exits nonzero when the enforcement decision cannot be retrieved or validated.
-- Older Action refs that do not expose enforcement outputs remain advisory-only and exit `0` after successful analysis; upgrade before configuring a blocking mode.
+- Older Action refs that do not expose enforcement outputs remain advisory-only
+  and exit `0` after successful analysis. Inspect the resolved setting source
+  and effective mode before installation. If the project default is already
+  blocking, create a `github-action` integration-specific `advisory` override
+  before installing or upgrading, then test the pinned enforcement-capable
+  revision before removing that override.
 - exposes outputs for follow-on GitHub steps:
   - `report-id`
   - `report-link` (optional `/reports/{id}` URL; publicly shareable only
@@ -780,14 +785,18 @@ What the action does:
   - `comment-id`
   - `comment-url`
   - `comment-updated`
-  - `policy-status`, `configured-mode`, `effective-status`, and `should-block`
 
-The moving `@v1` reference follows published Action releases and is suitable
-for advisory use. Pin a required enforcement workflow to an immutable reviewed
-commit SHA. Against that exact revision, verify all four policy outputs above,
-consumption of the server's enforcement-decision endpoint, and pass, block, and
-decision-error behavior with synthetic smoke cases. The app-side setting alone
-cannot make an older or incompatible Action release block.
+Enforcement-capable revisions additionally expose `policy-status`,
+`configured-mode`, `effective-status`, and `should-block`; the published `@v1`
+ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose them.
+
+The moving `@v1` reference follows published Action releases. At the validation
+point above it is advisory-only. Pin a required enforcement workflow to an
+immutable reviewed commit SHA. Against that exact revision, verify all four
+policy outputs above, consumption of the server's enforcement-decision
+endpoint, and pass, block, and decision-error behavior with synthetic smoke
+cases. The app-side setting alone cannot make an older or incompatible Action
+release block.
 
 Optional inputs:
 

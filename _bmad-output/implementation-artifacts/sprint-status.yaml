@@ -143,7 +143,7 @@ development_status:
   10-5-ai-safety-documentation: done
   epic-10-retrospective: optional
 
-  epic-11: in-progress
+  epic-11: done
   11-1-policy-adapter-output-contract: done
   11-2-threshold-and-reporting-defaults-management: done
   11-3-integration-level-enforcement-settings: done

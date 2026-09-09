@@ -70,7 +70,7 @@ Recommended values:
 - GitHub App name:
   `DeployWhisper`
 - Description:
-  `Advisory-only deployment risk analysis for pull requests using your own DeployWhisper server.`
+  `Policy-aware deployment risk analysis for pull requests using your own DeployWhisper server.`
 - Homepage URL:
   `https://<your-deploywhisper-base-url>`
 - Callback URL:
@@ -131,6 +131,15 @@ Only set `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID` and
 `DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET` when you intentionally enable the
 optional OAuth helper route. They are not required for the manual setup path.
 
+### 7. Establish advisory onboarding state
+
+Before installation, inspect the setting source and effective mode for the
+`github` integration. If the project default is blocking, create an
+integration-specific `advisory` override before granting repository access.
+Keep that override through installation and validation; remove or raise it only
+after this integration and repository scope complete the enforcement guardrail
+review.
+
 ## Installation steps
 
 1. Open the GitHub App settings page
@@ -190,11 +199,13 @@ optional OAuth helper route. They are not required for the manual setup path.
 ### Branch protection blocks merge on DeployWhisper
 
 The canonical DeployWhisper report is advisory-only, but the GitHub integration
-can explicitly enforce policy. Inspect the check summary's configured mode. If
-it is `advisory` or `warn`, remove `DeployWhisper / Risk Analysis` from required
+can explicitly enforce policy. First inspect the setting source and effective
+mode; an integration without an override may inherit the project default. If it
+is `advisory` or `warn`, remove `DeployWhisper / Risk Analysis` from required
 status checks. If it is `soft-block` or `hard-block`, a required check is an
-intentional operator control; change the integration setting before removing
-that protection.
+intentional operator control. Prefer a protection-layer exception. If a mode
+change is authorized, create a narrow integration-specific override rather than
+changing the project default before removing that protection.
 Before making the check required, complete the
 [Enforcement Guardrails](./enforcement-guardrails.md), including benchmark,
 human-review, rollback, and break-glass ownership.

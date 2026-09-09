@@ -62,12 +62,13 @@ workflow based only on risk score or recommendation. Consumers should use
 `data.advisory.requires_attention` to decide whether to notify reviewers or add
 manual checks. Advisory-first boundary: the action does not block unless the
 `github-action` integration is explicitly configured for an effective
-`soft-block` or `hard-block` decision. After persisting a report, the action
-consumes the configured policy decision, defaults to `advisory`, and keeps raw
-policy and effective integration statuses distinct. It fails the action when
-the server's validated `should_block` decision is true and also fails with an
-operational error when that decision cannot be retrieved or validated; it does
-not derive blocking from severity, risk score, or recommendation. The external
+`soft-block` or `hard-block` decision. An enforcement-capable Action revision
+consumes the configured policy decision after persisting a report, defaults to
+`advisory`, and keeps raw policy and effective integration statuses distinct.
+Such a revision fails when the server's validated `should_block` decision is
+true and also fails with an operational error when that decision cannot be
+retrieved or validated; it does not derive blocking from severity, risk score,
+or recommendation. The external
 `deploywhisper/analyze-action` repository owns that runtime behavior; this
 repository owns the shared API and contract at
 `GET /api/v1/analyses/{report_id}/enforcement-decision?integration=github-action`.
@@ -77,7 +78,9 @@ Operators considering a required blocking check must first complete the
 These enforcement semantics require an Action release that exposes
 `policy-status`, `configured-mode`, `effective-status`, and `should-block` and
 consumes the enforcement-decision endpoint. The moving `@v1` tag follows
-published releases and is appropriate for advisory use. Pin a required
+published releases and is appropriate for advisory use. The published `@v1`
+ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose enforcement
+outputs; do not configure it as a blocking job. Pin a required
 enforcement workflow to an immutable reviewed commit SHA and run synthetic
 valid-pass, valid-block, unavailable-decision, and malformed-decision cases
 against that exact revision before making its job required. Older Action refs
@@ -102,6 +105,10 @@ action should not invent a separate report contract.
 | `configured-mode` | `data.configured_mode` from the enforcement decision |
 | `effective-status` | `data.effective_status` from the enforcement decision |
 | `should-block` | `data.should_block` from the enforcement decision |
+
+The four policy rows describe the enforcement-capable contract, not the
+currently published `@v1` manifest. Verify the installed immutable revision
+before relying on them.
 
 GitHub Action outputs are strings. The `share-summary-json` output is a
 JSON-encoded string of `data.share_summary.json_payload`; consumers should parse

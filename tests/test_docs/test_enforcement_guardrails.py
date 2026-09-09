@@ -22,9 +22,12 @@ ENTRY_POINTS = (
 class EnforcementGuardrailDocumentationTests(unittest.TestCase):
     def test_effective_status_table_locks_behavior_and_prerequisites(self) -> None:
         content = GUARDRAIL_GUIDE.read_text(encoding="utf-8")
+        mode_section = self._section(
+            content, "## Choose the least forceful mode that works"
+        )
 
         self.assertIn(
-            "| Effective status | Workflow effect | Appropriate use |", content
+            "| Effective status | Workflow effect | Appropriate use |", mode_section
         )
         self.assertEqual(
             {
@@ -45,79 +48,108 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                     "Every blocking prerequisite below is satisfied, and the organization has approved strict enforcement for this scope.",
                 ),
             },
-            self._effective_status_rows(content),
+            self._effective_status_rows(mode_section),
         )
         self.assertIn(
             "`warn` permits effective `advisory` or `warn`; `soft-block` permits effective `advisory`, `warn`, or `soft-block`; and `hard-block` preserves any raw status.",
-            self._normalized(content),
+            self._normalized(mode_section),
         )
 
-    def test_guardrail_guide_covers_required_safety_decisions(self) -> None:
+    def test_operational_guardrails_are_locked_to_their_sections(self) -> None:
+        content = GUARDRAIL_GUIDE.read_text(encoding="utf-8")
+        expected_by_section = {
+            "## Wire blocking into the protected workflow": (
+                "immutable protected workflow",
+                "review ownership for workflow changes",
+                "must fail when the enforcement step is skipped",
+                "bound to the protected commit",
+            ),
+            "## Review inherited settings before changing scope": (
+                "new repository, environment, change class, or other scope",
+                "integration-specific `advisory` override",
+                "setting source and effective mode",
+                "Limit policy-setting write access to named operators",
+                "approval from a different authorized reviewer",
+                "durable before/after audit record",
+            ),
+            "## Treat an unavailable decision as an operational failure": (
+                "partial intake coverage",
+                "submitted artifact manifest",
+                "protected commit SHA",
+                "PR-head workflow must verify that its tested commit SHA equals the current PR head SHA",
+                "merge-ref or merge-queue workflow must bind the report to the current generated merge commit",
+                "non-PR consumer must bind the decision to its actual protected deployment ref",
+                "no atomic settings revision",
+                "authenticated transport",
+                "trusted server identity",
+                "least-privilege credential",
+                "exact retained authenticated response bytes",
+                "retention period",
+                "separation of duties",
+                "external watchdog",
+                "compare the current settings",
+            ),
+            "## Set benchmark thresholds before blocking": (
+                "actual enforcement consumer revision",
+                "outcome-observation window",
+                "incident-attribution horizon",
+                "endpoint schema",
+                "workflow or protection wiring",
+                "requires a fresh approval tied to the new immutable revisions",
+            ),
+            "## Human review remains mandatory": (
+                "protected commit SHA",
+                "dismiss stale approvals",
+            ),
+            "## Rollout checklist": (
+                "source-bound required check or job",
+                "`continue-on-error`",
+                "valid-pass, valid-block, and decision-error smoke cases",
+                "complete and partial intake coverage",
+            ),
+        }
+        for heading, expected_clauses in expected_by_section.items():
+            section = self._normalized(self._section(content, heading))
+            for expected in expected_clauses:
+                with self.subTest(heading=heading, expected=expected):
+                    self.assertIn(expected, section)
+
+    def test_acceptance_topics_are_locked_to_their_sections(self) -> None:
         self.assertTrue(GUARDRAIL_GUIDE.exists(), "Enforcement guide is missing.")
-        content = self._normalized(GUARDRAIL_GUIDE.read_text(encoding="utf-8"))
-
-        expected_clauses = (
-            "## Evidence Law is a prerequisite, not an approval",
-            "No high or critical finding may drive enforcement without deterministic evidence.",
-            "## Set benchmark thresholds before blocking",
-            "DeployWhisper does not define a universal numeric threshold for enabling blocking modes.",
-            "The current benchmark runner emits scenario-level results and honest-failure categories; it does not emit a universal enforcement-readiness score or precomputed precision, recall, false-reassurance, or false-positive rates.",
-            "document the formulas and denominators",
-            "minimum acceptable precision and recall",
-            "maximum acceptable false-reassurance and false-positive rates",
-            "minimum evidence coverage",
-            "zero Evidence Law violations",
-            "unsupported-scenario limit",
-            "regression-stability tolerance",
-            "Project-level settings are inherited by every integration that has no integration-specific override.",
-            "Deleting an integration override immediately exposes the project default",
-            "A mode-table row describes runtime behavior, not sufficient readiness criteria.",
-            "must never be reported as a pass",
-            "require documented human disposition",
-            "An installed Action ref must expose the `policy-status`, `configured-mode`, `effective-status`, and `should-block` outputs",
-            "Blocking thresholds below `high` do not receive an additional Evidence Law guarantee",
-            "Create an integration-specific `advisory` override before onboarding a new consumer",
-            "must be a required status check or required job",
-            "bound to the expected GitHub App or workflow source",
-            "must not use `continue-on-error: true`",
-            "pin the Action to an immutable reviewed commit SHA",
-            "synthetic fail-closed smoke test",
-            "must identify the corpus and immutable application and Action revisions evaluated",
-            "Rerun the benchmark gate after behavior-affecting changes",
-            "HTTP or transport failure, non-JSON or missing data, unsupported contract or status values, report or integration mismatch, and any decision-invariant failure",
-            "The current contract exposes no report or settings revision token",
-            "complete nested `applied_settings` snapshot",
-            "SHA-256 digest of its canonical serialization",
-            "Sensitive, unsupported, or otherwise excluded artifacts do not produce a policy decision.",
-            "must not be accepted as an enforcement pass",
-            "The current GitHub App reports `neutral` when intake has no analyzable artifact",
-            "add a separate required intake-coverage control that fails on a missing decision",
-            "A protection-layer bypass does not change the DeployWhisper decision",
-            "Prefer a report- and integration-scoped protection bypass",
-            "freeze other deliveries in the affected scope",
-            "require fresh protected results for every open commit",
-            "For a protection-layer bypass, record the protected-delivery or bypass event; for a temporary settings change, record the replacement workflow run.",
-            "## Blocking does not prove a change is safe",
-            "A passing check can still be false reassurance.",
-            "## Human review remains mandatory",
-            "No adapter output authorizes autonomous approval, deployment, or remediation.",
-            "Configure repository review rules or protected-environment approvals",
-            "## Rollback remains an operator responsibility",
-            "DeployWhisper does not execute, validate, or own the rollback.",
-            "The current shared decision contract cannot apply an additional deterministic-evidence gate below `high`.",
-            "minimum positive and negative sample sizes for every covered change class",
-            "statistical confidence method",
-            "ground-truth labels",
-            "zero-denominator handling",
-            "Verify that the deployed application and Action revisions match those evaluated artifacts",
-            "keep the integration in `advisory` or `warn`",
-            "soft-block",
-            "hard-block",
-            "break-glass",
-        )
-        for expected in expected_clauses:
-            with self.subTest(expected=expected):
-                self.assertIn(expected, content)
+        content = GUARDRAIL_GUIDE.read_text(encoding="utf-8")
+        expected_by_section = {
+            "## Evidence Law is a prerequisite, not an approval": (
+                "No high or critical finding may drive enforcement without deterministic evidence.",
+                "Blocking thresholds below `high` do not receive an additional Evidence Law guarantee",
+                "cannot apply an additional deterministic-evidence gate below `high`",
+            ),
+            "## Set benchmark thresholds before blocking": (
+                "does not define a universal numeric threshold",
+                "minimum acceptable precision and recall",
+                "maximum acceptable false-reassurance and false-positive rates",
+                "zero Evidence Law violations",
+                "ground-truth labels",
+                "zero-denominator handling",
+                "minimum positive and negative sample sizes",
+            ),
+            "## Blocking does not prove a change is safe": (
+                "A passing check can still be false reassurance.",
+                "return the integration to `warn` or `advisory`",
+            ),
+            "## Human review remains mandatory": (
+                "No adapter output authorizes autonomous approval, deployment, or remediation.",
+                "Configure repository review rules or protected-environment approvals",
+            ),
+            "## Rollback remains an operator responsibility": (
+                "DeployWhisper does not execute, validate, or own the rollback.",
+                "Never auto-execute it from an adapter decision.",
+            ),
+        }
+        for heading, expected_clauses in expected_by_section.items():
+            section = self._normalized(self._section(content, heading))
+            for expected in expected_clauses:
+                with self.subTest(heading=heading, expected=expected):
+                    self.assertIn(expected, section)
 
     def test_enforcement_entry_points_link_to_guardrail_guide(self) -> None:
         for source in ENTRY_POINTS:
@@ -164,6 +196,14 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
         self.assertIn(
             "Pin a required enforcement workflow to an immutable reviewed commit SHA",
+            content,
+        )
+        self.assertIn(
+            "create a `github-action` integration-specific `advisory` override before installing or upgrading",
+            content,
+        )
+        self.assertIn(
+            "the published `@v1` ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose them",
             content,
         )
         self.assertNotIn(
@@ -220,6 +260,30 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "synthetic valid-pass, valid-block, unavailable-decision, and malformed-decision cases",
             content,
         )
+        self.assertIn(
+            "The published `@v1` ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose enforcement outputs",
+            content,
+        )
+        self.assertNotIn("The current GitHub Action exits nonzero", content)
+
+    def test_self_hosted_runbook_preserves_narrow_setting_scope(self) -> None:
+        content = (REPO_ROOT / "docs" / "github-app-self-hosted-setup.md").read_text(
+            encoding="utf-8"
+        )
+        onboarding = self._normalized(
+            self._section(content, "### 7. Establish advisory onboarding state")
+        )
+        self.assertIn("inspect the setting source and effective mode", onboarding)
+        self.assertIn("integration-specific `advisory` override", onboarding)
+
+    def test_epic_11_closes_when_all_stories_are_done(self) -> None:
+        content = (
+            REPO_ROOT
+            / "_bmad-output"
+            / "implementation-artifacts"
+            / "sprint-status.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("  epic-11: done", content)
 
     @staticmethod
     def _normalized(value: str) -> str:
@@ -228,6 +292,15 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
     @staticmethod
     def _markdown_links(value: str) -> set[str]:
         return {target for _, target in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", value)}
+
+    @staticmethod
+    def _section(value: str, heading: str) -> str:
+        marker = f"{heading}\n"
+        if marker not in value:
+            raise AssertionError(f"Missing section: {heading}")
+        section = value.split(marker, 1)[1]
+        level = len(heading) - len(heading.lstrip("#"))
+        return re.split(rf"\n#{{1,{level}}} ", section, maxsplit=1)[0]
 
     @staticmethod
     def _effective_status_rows(value: str) -> dict[str, tuple[str, str]]:
@@ -239,5 +312,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 cell.strip().replace("`", "") for cell in line.strip("|").split("|")
             ]
             if len(cells) == 3:
+                if cells[0] in rows:
+                    raise AssertionError(f"Duplicate effective-status row: {cells[0]}")
                 rows[cells[0]] = (cells[1], cells[2])
         return rows
