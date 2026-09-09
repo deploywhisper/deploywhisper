@@ -8,7 +8,9 @@ adapter decision is a review control; it is not a safety certificate,
 deployment approval, or remediation instruction.
 
 Use this guide before changing an integration from `advisory` or `warn` to
-`soft-block` or `hard-block`.
+`soft-block` or `hard-block`, onboarding an integration under an inherited
+blocking default, deleting an override, or expanding an existing integration to
+a new scope.
 
 GitHub Action effects in this guide apply only to an enforcement-capable
 revision whose manifest exposes the four policy outputs and whose runtime has
@@ -62,10 +64,12 @@ and its containing job must not use `continue-on-error: true`, and later jobs
 must not ignore or replace its failed result.
 
 Run enforcement from an immutable protected workflow. Require review ownership
-for workflow changes, keep endpoint and integration inputs in protected
-configuration rather than pull-request-controlled data. The required job must
-fail when the enforcement step is skipped. The job result must be bound to
-the protected commit, not merely to a reusable check name.
+for workflow changes. Keep the checkout ref, artifact selection,
+`changed-files`, project and workspace scope, and working directory—along with
+endpoint and integration identity—in protected configuration rather than
+pull-request-controlled data. The required job must fail when the enforcement
+step is skipped. The job result must be bound to the protected commit, not
+merely to a reusable check name.
 
 Test the protected branch or environment with a synthetic blocking result and
 an authorized exception before rollout. If the change can still merge or
@@ -82,20 +86,24 @@ before saving the new mode.
 
 Deleting an integration override immediately exposes the project default,
 which may be more restrictive and may begin blocking that integration. Inspect
-the effective project mode and complete the same review before deleting an
-override. Do not assume that reset means `advisory`.
+the resolved setting source and configured enforcement mode and complete the
+same review before deleting an override. Do not assume that reset means
+`advisory`.
 
 The same risk applies when a new integration is added after a project default
 has become blocking. Create an integration-specific `advisory` override before
 onboarding a new consumer, then complete this guide for that consumer before
-raising its mode. If an override is intentionally omitted, record that the
-project default and its completed guardrail review apply to the new integration.
+raising its mode. The new consumer must complete its own benchmark and
+guardrail review; recording that an older project review exists is not a
+substitute for evidence about the new consumer revision and scope.
 
 Treat a new repository, environment, change class, or other scope added to an
 existing integration the same way as a new consumer. Inspect the resolved
-setting source and effective mode first, stage the new scope behind an
-integration-specific `advisory` override, and benchmark it before inheriting a
-blocking project default.
+setting source and configured enforcement mode first. An integration-wide
+override would also downgrade every existing scope using that integration key,
+so do not use it to stage one new repository. Complete the new-scope review
+before attachment, or isolate the scope behind a separate project or integration
+identity that can remain `advisory` without weakening existing protections.
 
 Limit policy-setting write access to named operators, require approval from a
 different authorized reviewer for every move into or out of a blocking mode,
@@ -154,11 +162,29 @@ accepted as an enforcement pass. Surface the excluded scope, stop
 enforcement-dependent automation, and require documented human disposition or
 a protection-layer bypass.
 
+Use the exact persisted report `submission_manifest` returned by the analysis
+response. Require `submitted_artifact_count` to equal the trusted in-scope
+changed-file count and `len(items)`, with one item for every trusted path.
+Require `accepted_artifact_count` to equal the count of items with status
+`accepted` or `failed`, `analyzed_artifact_count` to equal the count with status
+`accepted`, and each excluded, sensitive, failed, and partial counter to equal
+its corresponding item count. `partial_analysis` must equal whether
+`partial_artifact_count` is nonzero. Complete enforcement coverage additionally
+requires `analyzed_artifact_count == submitted_artifact_count`, every item to be
+`accepted`, and `partial_analysis=false`; any other result is incomplete. Do not
+infer completeness from the enforcement-decision envelope alone; it does not
+repeat the manifest.
+
 The current GitHub App reports `neutral` when intake has no analyzable artifact,
 and GitHub may treat `neutral` as satisfying a required check. Do not use that
 App check as the sole blocking control for a scope where exclusions can occur;
 add a separate required intake-coverage control that fails on missing or partial
 coverage, or keep the integration non-blocking.
+
+The GitHub App also reports `neutral` for a project-scope resolution failure,
+before any report or decision exists. A blocking deployment must add a separate
+required project-scope control that fails closed, or keep the App check
+non-blocking until that runtime path produces a failing conclusion.
 
 An enforcement-capable Action revision must exit nonzero when it cannot retrieve
 and validate the shared decision; the published `@v1` ref does not implement
@@ -177,15 +203,24 @@ settings writer from self-approving a downgrade. Record the failed decision and
 the separate bypass event in a durable operator-owned audit system because the
 v1 settings API does not provide a complete bypass audit log.
 
+For GitHub, use a scoped repository-ruleset bypass actor or a protected
+environment approval rather than changing DeployWhisper policy when those
+controls can express the required scope. Record the ruleset/environment ID,
+protected target, provider audit-event identifier or URL, approver, reason, and
+expiry; verify afterward that the bypass applied only to the intended delivery.
+
 If the organization instead authorizes a temporary settings change, use the
 narrowest integration-specific override, freeze other deliveries in the
 affected scope, record the original and temporary settings, apply the approved
 mode, retrieve a new decision, and rerun the workflow. The API has no enforced
-expiry field: an external watchdog must restore the setting at expiry. Before
-restoring, compare the current settings with the recorded temporary value so a
-concurrent legitimate change is not overwritten. If the comparison or restore
-fails, keep delivery frozen for human recovery. Require fresh protected results
-for every open commit before lifting the freeze.
+expiry or compare-and-swap field, so a separate read followed by write cannot
+make compare-and-restore atomic. Use this temporary-settings path only while an
+enforced exclusive settings lock prevents every other writer from the initial
+read through restoration. An external watchdog must restore the setting before
+releasing that lock. Without such a lock, do not change settings for break glass;
+use the protection-layer bypass. If restoration fails, keep delivery frozen for
+human recovery. Require fresh protected results for every open commit before
+lifting the freeze.
 
 The audit record must retain the invocation timestamp, report ID, original
 decision payload, integration and project scope, complete `applied_settings`
@@ -199,6 +234,12 @@ evidence, and redact secrets or sensitive artifact metadata not required to
 reconstruct the decision. For a protection-layer bypass, record the
 protected-delivery or bypass event; for a temporary settings change, record the
 replacement workflow run. Review repeated exceptions as a calibration signal.
+
+The payload digest proves only the integrity of the retained bytes; it does not
+prove server provenance, freshness, or which payload controlled delivery. Also
+retain the authenticated server/principal identity, a trusted timestamp, the
+protected workflow-run identifier, and an append-only audit receipt from a sink
+the settings writer cannot rewrite.
 
 ## Evidence Law is a prerequisite, not an approval
 
@@ -251,11 +292,22 @@ positive and negative sample sizes for every covered change class and a stated
 statistical confidence method; a tiny or undefined sample cannot authorize
 blocking merely because its observed rate is perfect.
 
+A benchmark false negative is an expected benchmark finding or risk that the
+analysis misses in the controlled corpus. False reassurance is a workflow pass
+followed by an attributable adverse production outcome within the recorded
+incident-attribution horizon. Keep those numerators and denominators separate;
+do not count a benchmark miss as a production outcome or label a recent pass
+before its observation window closes.
+
 The decision record must identify the corpus, immutable application revision,
 and actual enforcement consumer revision evaluated: for example an Action
 commit SHA, GitHub App server commit or image digest, or another adapter's
 immutable build identity. Include dependency-lock identity, endpoint contract
-version, configuration, and feature flags.
+version, configuration, and feature flags. Export the workflow and protection
+configuration snapshot used by the evaluation and retain a digest of its exact
+bytes. When the provider offers a canonical export, retain that export and its
+digest. Every allowed evidence form requires a digest so later approval can
+identify mutable rules precisely.
 It must also record the minimum acceptable precision and recall, maximum
 acceptable false-reassurance and false-positive rates, minimum evidence
 coverage, zero Evidence Law violations, an unsupported-scenario limit, and a
@@ -273,7 +325,9 @@ result falls outside any recorded threshold or introduces a new miss,
 unsupported scenario, regression, or Evidence Law violation. Every listed
 consumer, dependency, schema, workflow, or protection identity change also
 requires a fresh approval tied to the new immutable revisions even when all
-metrics still pass.
+metrics still pass. Every application, corpus, configuration, feature-flag, and
+context change likewise requires fresh approval of the new benchmark record,
+even when the resulting metrics still pass.
 
 Before labeling production outcomes, define an organization-owned
 outcome-observation window and incident-attribution horizon for each covered
@@ -302,11 +356,13 @@ to `warn` or `advisory` while the gap is investigated.
 ## Human review remains mandatory
 
 No adapter output authorizes autonomous approval, deployment, or remediation.
-An authorized human remains responsible for the deployment decision and must
-review the underlying change, deterministic evidence, uncertainty, context
-gaps, policy reasons, and operational impact.
+Baseline human approval is required for every run whose resolved configured
+enforcement mode is `soft-block` or `hard-block`, including runs whose effective
+status is only `advisory` or `warn`. An authorized human remains responsible for
+the deployment decision and must review the underlying change, deterministic
+evidence, uncertainty, context gaps, policy reasons, and operational impact.
 
-Require explicit human review when:
+Elevated specialist review beyond that baseline approval is required when:
 
 - the effective status is `soft-block` or `hard-block`;
 - a high or critical finding is present;

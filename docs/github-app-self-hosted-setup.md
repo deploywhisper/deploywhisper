@@ -133,12 +133,15 @@ optional OAuth helper route. They are not required for the manual setup path.
 
 ### 7. Establish advisory onboarding state
 
-Before installation, inspect the setting source and effective mode for the
-`github` integration. If the project default is blocking, create an
-integration-specific `advisory` override before granting repository access.
-Keep that override through installation and validation; remove or raise it only
-after this integration and repository scope complete the enforcement guardrail
-review.
+Before installation, inspect the setting source and resolved configured
+enforcement mode for the `github` integration. If the project default is
+blocking and no existing protected scope shares that project/integration key,
+create an integration-specific `advisory` override before granting repository
+access. Keep that override through installation and validation; remove or raise
+it only after this integration and repository scope complete the enforcement
+guardrail review. If existing repositories share the key, do not downgrade them:
+use a separate project for advisory onboarding or complete the new repository's
+guardrail review before granting access.
 
 ## Installation steps
 
@@ -199,11 +202,14 @@ review.
 ### Branch protection blocks merge on DeployWhisper
 
 The canonical DeployWhisper report is advisory-only, but the GitHub integration
-can explicitly enforce policy. First inspect the setting source and effective
-mode; an integration without an override may inherit the project default. If it
-is `advisory` or `warn`, remove `DeployWhisper / Risk Analysis` from required
-status checks. If it is `soft-block` or `hard-block`, a required check is an
-intentional operator control. Prefer a protection-layer exception. If a mode
+can explicitly enforce policy. First inspect the setting source and resolved
+configured enforcement mode; an integration without an override may inherit the
+project default. Inspect the effective status for the current report separately;
+it must not decide whether protection remains installed. Remove
+`DeployWhisper / Risk Analysis` from required checks only when the resolved
+configured mode is `advisory` or `warn`. If it is `soft-block` or `hard-block`,
+the required check is an intentional operator control even when one report's
+effective status is non-blocking. Prefer a protection-layer exception. If a mode
 change is authorized, create a narrow integration-specific override rather than
 changing the project default before removing that protection.
 Before making the check required, complete the

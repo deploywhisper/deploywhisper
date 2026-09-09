@@ -63,8 +63,9 @@ workflow based only on risk score or recommendation. Consumers should use
 manual checks. Advisory-first boundary: the action does not block unless the
 `github-action` integration is explicitly configured for an effective
 `soft-block` or `hard-block` decision. An enforcement-capable Action revision
-consumes the configured policy decision after persisting a report, defaults to
-`advisory`, and keeps raw policy and effective integration statuses distinct.
+consumes the configured policy decision after persisting a report, resolves the
+integration override before the inherited project and built-in defaults, and
+keeps raw policy and effective integration statuses distinct.
 Such a revision fails when the server's validated `should_block` decision is
 true and also fails with an operational error when that decision cannot be
 retrieved or validated; it does not derive blocking from severity, risk score,
@@ -114,6 +115,12 @@ GitHub Action outputs are strings. The `share-summary-json` output is a
 JSON-encoded string of `data.share_summary.json_payload`; consumers should parse
 it with `fromJSON(steps.deploywhisper.outputs.share-summary-json)` in workflow
 expressions or `JSON.parse(...)` in scripts.
+
+`should-block` is also a string. In GitHub expressions, branch with an exact
+comparison such as
+`steps.deploywhisper.outputs.should-block == 'true'` or parse it with
+`fromJSON(steps.deploywhisper.outputs.should-block)`. Do not use the nonempty
+string directly as a boolean because both `"true"` and `"false"` are strings.
 
 The `report-link` output is publicly shareable only when the DeployWhisper
 server is configured with a public base URL such as `APP_BASE_URL` or

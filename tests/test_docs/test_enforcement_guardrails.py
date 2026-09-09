@@ -63,11 +63,13 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "review ownership for workflow changes",
                 "must fail when the enforcement step is skipped",
                 "bound to the protected commit",
+                "checkout ref, artifact selection, `changed-files`, project and workspace scope, and working directory",
             ),
             "## Review inherited settings before changing scope": (
                 "new repository, environment, change class, or other scope",
-                "integration-specific `advisory` override",
-                "setting source and effective mode",
+                "resolved setting source and configured enforcement mode",
+                "separate project or integration identity",
+                "must complete its own benchmark and guardrail review",
                 "Limit policy-setting write access to named operators",
                 "approval from a different authorized reviewer",
                 "durable before/after audit record",
@@ -87,7 +89,16 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "retention period",
                 "separation of duties",
                 "external watchdog",
-                "compare the current settings",
+                "cannot make compare-and-restore atomic",
+                "exact persisted report `submission_manifest`",
+                "submitted_artifact_count",
+                "accepted_artifact_count",
+                "analyzed_artifact_count",
+                "analyzed_artifact_count == submitted_artifact_count",
+                "every item to be `accepted`",
+                "project-scope resolution failure",
+                "payload digest proves only the integrity of the retained bytes",
+                "append-only audit receipt",
             ),
             "## Set benchmark thresholds before blocking": (
                 "actual enforcement consumer revision",
@@ -96,10 +107,19 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "endpoint schema",
                 "workflow or protection wiring",
                 "requires a fresh approval tied to the new immutable revisions",
+                "application, corpus, configuration, feature-flag, and context change",
+                "False reassurance is a workflow pass followed by an attributable adverse production outcome",
+                "benchmark false negative",
+                "workflow and protection configuration snapshot",
+                "Every allowed evidence form requires a digest",
             ),
             "## Human review remains mandatory": (
                 "protected commit SHA",
                 "dismiss stale approvals",
+                "Baseline human approval",
+                "resolved configured enforcement mode is `soft-block` or `hard-block`",
+                "including runs whose effective status is only `advisory` or `warn`",
+                "Elevated specialist review",
             ),
             "## Rollout checklist": (
                 "source-bound required check or job",
@@ -113,6 +133,17 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             for expected in expected_clauses:
                 with self.subTest(heading=heading, expected=expected):
                     self.assertIn(expected, section)
+
+    def test_guide_entry_conditions_cover_inherited_and_expanding_scope(self) -> None:
+        preamble = GUARDRAIL_GUIDE.read_text(encoding="utf-8").split("\n## ", 1)[0]
+        normalized = self._normalized(preamble)
+        for expected in (
+            "onboarding an integration under an inherited blocking default",
+            "deleting an override",
+            "expanding an existing integration to a new scope",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, normalized)
 
     def test_acceptance_topics_are_locked_to_their_sections(self) -> None:
         self.assertTrue(GUARDRAIL_GUIDE.exists(), "Enforcement guide is missing.")
@@ -199,9 +230,13 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             content,
         )
         self.assertIn(
-            "create a `github-action` integration-specific `advisory` override before installing or upgrading",
+            "no protected scope shares that project/integration key",
             content,
         )
+        self.assertIn(
+            "create a `github-action` integration-specific `advisory` override", content
+        )
+        self.assertIn("without downgrading existing consumers", content)
         self.assertIn(
             "the published `@v1` ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose them",
             content,
@@ -264,6 +299,15 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "The published `@v1` ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose enforcement outputs",
             content,
         )
+        self.assertIn(
+            "steps.deploywhisper.outputs.should-block == 'true'",
+            content,
+        )
+        self.assertIn(
+            "fromJSON(steps.deploywhisper.outputs.should-block)",
+            content,
+        )
+        self.assertNotIn("defaults to `advisory`", content)
         self.assertNotIn("The current GitHub Action exits nonzero", content)
 
     def test_self_hosted_runbook_preserves_narrow_setting_scope(self) -> None:
@@ -273,8 +317,27 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         onboarding = self._normalized(
             self._section(content, "### 7. Establish advisory onboarding state")
         )
-        self.assertIn("inspect the setting source and effective mode", onboarding)
+        self.assertIn(
+            "inspect the setting source and resolved configured enforcement mode",
+            onboarding,
+        )
         self.assertIn("integration-specific `advisory` override", onboarding)
+        self.assertIn(
+            "no existing protected scope shares that project/integration key",
+            onboarding,
+        )
+        self.assertIn("use a separate project", onboarding)
+        self.assertLess(
+            content.index("### 7. Establish advisory onboarding state"),
+            content.index("## Installation steps"),
+        )
+        troubleshooting = self._normalized(
+            self._section(
+                content, "### Branch protection blocks merge on DeployWhisper"
+            )
+        )
+        self.assertIn("resolved configured enforcement mode", troubleshooting)
+        self.assertIn("effective status for the current report", troubleshooting)
 
     def test_epic_11_closes_when_all_stories_are_done(self) -> None:
         content = (
@@ -284,6 +347,14 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             / "sprint-status.yaml"
         ).read_text(encoding="utf-8")
         self.assertIn("  epic-11: done", content)
+        for story_key in (
+            "11-1-policy-adapter-output-contract",
+            "11-2-threshold-and-reporting-defaults-management",
+            "11-3-integration-level-enforcement-settings",
+            "11-4-enforcement-guardrail-documentation",
+        ):
+            with self.subTest(story_key=story_key):
+                self.assertRegex(content, rf"(?m)^  {re.escape(story_key)}: done$")
 
     @staticmethod
     def _normalized(value: str) -> str:
@@ -296,8 +367,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
     @staticmethod
     def _section(value: str, heading: str) -> str:
         marker = f"{heading}\n"
-        if marker not in value:
-            raise AssertionError(f"Missing section: {heading}")
+        if value.count(marker) != 1:
+            if marker not in value:
+                raise AssertionError(f"Missing section: {heading}")
+            raise AssertionError(f"Duplicate section: {heading}")
         section = value.split(marker, 1)[1]
         level = len(heading) - len(heading.lstrip("#"))
         return re.split(rf"\n#{{1,{level}}} ", section, maxsplit=1)[0]

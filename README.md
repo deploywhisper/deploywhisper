@@ -769,10 +769,13 @@ What the action does:
 - An enforcement-capable Action ref exits `0` after a valid non-blocking decision, exits nonzero when validated `should-block` is `true`, and also exits nonzero when the enforcement decision cannot be retrieved or validated.
 - Older Action refs that do not expose enforcement outputs remain advisory-only
   and exit `0` after successful analysis. Inspect the resolved setting source
-  and effective mode before installation. If the project default is already
-  blocking, create a `github-action` integration-specific `advisory` override
-  before installing or upgrading, then test the pinned enforcement-capable
-  revision before removing that override.
+  and configured enforcement mode before installation. If the project default
+  is already blocking and no protected scope shares that project/integration
+  key, create a `github-action` integration-specific `advisory` override before
+  installing or upgrading, then test the pinned enforcement-capable revision
+  before removing that override. If protected scopes share the key, use a
+  separate project for advisory testing or complete the new scope's guardrail
+  review without downgrading existing consumers.
 - exposes outputs for follow-on GitHub steps:
   - `report-id`
   - `report-link` (optional `/reports/{id}` URL; publicly shareable only
