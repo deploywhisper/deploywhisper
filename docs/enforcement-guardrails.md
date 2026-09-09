@@ -12,35 +12,47 @@ Use this guide before changing an integration from `advisory` or `warn` to
 
 ## Choose the least forceful mode that works
 
-| Mode | Workflow effect | Appropriate use |
+| Effective status | Workflow effect | Appropriate use |
 | --- | --- | --- |
-| `advisory` | Reports analysis without blocking. GitHub Action exits `0`; GitHub App reports `success` for `GO` and `neutral` otherwise. | Default, initial rollout, incomplete context, or an uncalibrated project. |
-| `warn` | Reports a warning without blocking. GitHub Action exits `0`; GitHub App reports `neutral`. | Teams have reviewed signal quality and want consistent reviewer attention. |
-| `soft-block` | When the effective status is `soft-block`, GitHub Action exits nonzero; GitHub App reports `action_required`. | Every blocking prerequisite below is satisfied, and a human-owned exception or approval path has been exercised. |
-| `hard-block` | When the effective status is `hard-block`, GitHub Action exits nonzero; GitHub App reports `failure`. | Every blocking prerequisite below is satisfied, and the organization has approved strict enforcement for this scope. |
+| `advisory` | GitHub Action exits `0` after a valid decision; GitHub App reports `success` for `GO` and `neutral` otherwise. | Default, initial rollout, incomplete context, or an uncalibrated project. |
+| `warn` | GitHub Action exits `0` after a valid decision; GitHub App reports `neutral`. | Teams have reviewed signal quality and want consistent reviewer attention. |
+| `soft-block` | GitHub Action exits nonzero; GitHub App reports `action_required`. | Every blocking prerequisite below is satisfied, and a human-owned exception path has been exercised. |
+| `hard-block` | GitHub Action exits nonzero; GitHub App reports `failure`. | Every blocking prerequisite below is satisfied, and the organization has approved strict enforcement for this scope. |
 
 A mode-table row describes runtime behavior, not sufficient readiness criteria.
 Both blocking modes require the complete prerequisites and rollout checklist in
 this guide. A required workflow remains blocked until the policy conditions
 change or an authorized human follows the documented exception procedure.
 
-The configured mode is a ceiling, not a severity override. Integrations must
-consume the shared enforcement decision and must not infer blocking from risk
-score, severity, recommendation, or narrative text. If any prerequisite below
-is missing, keep the integration in `advisory` or `warn`.
+The table is keyed by the decision's effective status, not its configured mode.
+The configured mode is a ceiling, not a severity override: `advisory` always
+produces effective `advisory`; `warn` permits effective `advisory` or `warn`;
+`soft-block` permits effective `advisory`, `warn`, or `soft-block`; and
+`hard-block` preserves any raw status. Integrations must consume the shared
+enforcement decision and must not infer blocking from risk score, severity,
+recommendation, or narrative text. If any prerequisite below is missing, keep
+the integration in `advisory` or `warn`.
 
 An installed Action ref must expose the `policy-status`, `configured-mode`,
 `effective-status`, and `should-block` outputs and must consume
 `/enforcement-decision` before it can enforce these modes. Older Action refs
 remain advisory-only even if the server has blocking settings.
 
+For a required enforcement workflow, pin the Action to an immutable reviewed
+commit SHA rather than a moving major tag. Before making it required, run a
+synthetic fail-closed smoke test against that exact SHA: prove a valid
+non-blocking decision passes, a valid blocking decision fails, and an
+unavailable or malformed decision fails as an operational error.
+
 ## Wire blocking into the protected workflow
 
 A blocking adapter result only controls delivery when its GitHub check or
 workflow job must succeed. The selected check must be a required status check
-or required job in the repository or deployment protection rules. The Action
-step and its containing job must not use `continue-on-error: true`, and later
-jobs must not ignore or replace its failed result.
+or required job in the repository or deployment protection rules and must be
+bound to the expected GitHub App or workflow source. Do not rely on the check
+name alone when protection settings can restrict its source. The Action step
+and its containing job must not use `continue-on-error: true`, and later jobs
+must not ignore or replace its failed result.
 
 Test the protected branch or environment with a synthetic blocking result and
 an authorized exception before rollout. If the change can still merge or
@@ -66,6 +78,11 @@ onboarding a new consumer, then complete this guide for that consumer before
 raising its mode. If an override is intentionally omitted, record that the
 project default and its completed guardrail review apply to the new integration.
 
+After any mode, threshold, override, or protection-rule change, invalidate or
+rerun the protected result for every open pull-request head and pending
+deployment in scope. A result produced under earlier settings is not evidence
+that the current enforcement configuration evaluated that commit.
+
 ## Treat an unavailable decision as an operational failure
 
 An enforcement decision must be rejected for an HTTP or transport failure,
@@ -75,6 +92,27 @@ must never be reported as a pass. Do not fabricate an `advisory` result, reuse
 a prior decision, or derive a replacement from score, severity,
 recommendation, or narrative text.
 
+A decision is current only when the consumer retrieves
+`/enforcement-decision` for the report ID immediately before publishing the
+protected result and verifies the response's integration/project scope and
+complete nested `applied_settings` snapshot. The current contract exposes no
+report or settings revision token, so consumers must not cache decisions or
+invent one. For reproducible audit identity, retain the original JSON response
+and a SHA-256 digest of its canonical serialization. Treat a decision as stale
+after the report ID, integration scope, project or integration settings,
+enforcement consumer, or protected commit changes. Retrieve a new decision and
+rerun the protected workflow; do not reuse a previously passing check.
+
+Sensitive, unsupported, or otherwise excluded artifacts do not produce a policy
+decision. In a blocking workflow, a missing decision must not be accepted as an
+enforcement pass. Surface the excluded scope, stop enforcement-dependent
+automation, and require documented human disposition or a protection-layer
+bypass. The current GitHub App reports `neutral` when intake has no analyzable
+artifact, and GitHub may treat `neutral` as satisfying a required check. Do not
+use that App check as the sole blocking control for a scope where exclusions can
+occur; add a separate required intake-coverage control that fails on a missing
+decision, or keep the integration non-blocking.
+
 The current GitHub Action exits nonzero when it cannot retrieve and validate
 the shared decision. The GitHub App reports a failed enforcement result when
 its configured decision cannot be validated and check delivery succeeds.
@@ -83,12 +121,23 @@ enforcement-dependent automation, and require documented human disposition
 under the organization's outage or break-glass procedure. Failure handling
 must not become autonomous approval or remediation.
 
-An exception does not mutate the failed result. After an authorized mode
-change or exception, rerun the same report decision and workflow so GitHub
-receives a new result under the approved setting. The audit record must retain
-the report ID, raw policy status, configured and effective modes, approver,
-reason, expiry, and replacement workflow run. Restore the prior mode when the
-exception expires and review repeated exceptions as a calibration signal.
+A protection-layer bypass does not change the DeployWhisper decision and does
+not require an unchanged analysis rerun to pretend that the result changed.
+Prefer a report- and integration-scoped protection bypass approved by a human;
+record the failed decision and the separate bypass event. If the organization
+instead authorizes a temporary settings change, use the narrowest
+integration-specific override, freeze other deliveries in the affected scope,
+record the original settings, apply the approved mode, retrieve a new decision,
+and rerun the workflow. Restore the original settings at expiry and require
+fresh protected results for every open commit before lifting the freeze.
+
+The audit record must retain the invocation timestamp, report ID, original
+decision payload and its canonical SHA-256 digest, integration and project
+scope, complete `applied_settings` snapshot, raw policy status, configured and
+effective modes, approver, reason, expiry, and bypass mechanism. For a
+protection-layer bypass, record the protected-delivery or bypass event; for a
+temporary settings change, record the replacement workflow run. Review
+repeated exceptions as a calibration signal.
 
 ## Evidence Law is a prerequisite, not an approval
 
@@ -112,9 +161,11 @@ change is correct, complete, authorized, or safe to deploy.
 
 The built-in Evidence Law specifically governs high and critical findings.
 Blocking thresholds below `high` do not receive an additional Evidence Law
-guarantee. Keep those lower thresholds non-blocking unless an organization-owned
-policy independently requires deterministic evidence for every finding or
-signal that can produce a blocking decision.
+guarantee. The current shared decision contract cannot apply an additional
+deterministic-evidence gate below `high`. Keep lower thresholds non-blocking.
+A future consumer may block below `high` only after a separate, documented,
+tested gate is implemented in the shared decision path and requires
+deterministic evidence for every signal that can produce `should_block=true`.
 
 ## Set benchmark thresholds before blocking
 
@@ -131,14 +182,25 @@ change classes, supported and unsupported counts, and every exclusion. If the
 organization calculates rates from those results or from deployment outcomes,
 document the formulas and denominators so the decision can be reproduced.
 
-The decision record must identify the corpus and release evaluated, plus the
-minimum acceptable precision and recall, maximum acceptable false-reassurance
-and false-positive rates, minimum evidence coverage, zero Evidence Law
-violations, an unsupported-scenario limit, and a regression-stability
-tolerance. A nonzero Evidence Law violation count fails the blocking
-prerequisite; it is not an organization-configurable tolerance. The record
-should also identify who approved the thresholds and when they must be reviewed
-again.
+Define ground-truth labels and the mapping from scenario or production outcomes
+to true positives, false positives, true negatives, false negatives, false
+reassurance, and unsupported results before calculating rates. Record exclusion
+rules and zero-denominator handling. The organization must approve minimum
+positive and negative sample sizes for every covered change class and a stated
+statistical confidence method; a tiny or undefined sample cannot authorize
+blocking merely because its observed rate is perfect.
+
+The decision record must identify the corpus and immutable application and
+Action revisions evaluated, including the application commit or image digest,
+Action commit SHA, dependency-lock identity, and configuration or feature flags.
+It must also record the minimum acceptable precision and recall, maximum
+acceptable false-reassurance and false-positive rates, minimum evidence
+coverage, zero Evidence Law violations, an unsupported-scenario limit, and a
+regression-stability tolerance. A nonzero Evidence Law violation count fails
+the blocking prerequisite; it is not an organization-configurable tolerance.
+The record should also identify who approved the thresholds and when they must
+be reviewed again. Verify that the deployed application and Action revisions
+match those evaluated artifacts before enabling or retaining enforcement.
 
 Rerun the benchmark gate after behavior-affecting changes to parsers, evidence
 extraction, scoring, policy interpretation, the benchmark corpus, or relevant
@@ -186,6 +248,11 @@ Automation may route the report, request reviewers, or enforce an approved
 check. It must not approve the change, apply a fix, deploy infrastructure, or
 close the review on a person's behalf.
 
+Configure repository review rules or protected-environment approvals so an
+authorized human decision is an observable prerequisite for merge or
+deployment. An automated required check by itself does not satisfy the human
+review requirement.
+
 ## Rollback remains an operator responsibility
 
 DeployWhisper may describe rollback steps and complexity, but DeployWhisper
@@ -215,13 +282,16 @@ integration:
    classes covered.
 2. The approved benchmark report and thresholds, including known misses and
    unsupported scenarios.
-3. Evidence Law, context freshness, and audit-retention expectations.
+3. Evidence Law, decision and context freshness, and audit-retention expectations.
 4. Named human owners for review, exceptions, incident response, and rollback.
 5. A tested rollback or forward-fix path and a time-bounded break-glass
    procedure.
 6. Monitoring for false reassurance, false positives, regressions, and
    excessive overrides.
-7. A review date and a trigger for returning to `warn` or `advisory`.
+7. Immutable application and Action revisions plus proof that deployed artifacts
+   match the benchmarked build.
+8. Repository review or protected-environment rules that require human approval.
+9. A review date and a trigger for returning to `warn` or `advisory`.
 
 Enable one integration and scope at a time. Observe real outcomes before
 expanding enforcement. Changing a mode does not change the canonical report;

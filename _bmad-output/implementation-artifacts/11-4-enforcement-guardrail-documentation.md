@@ -45,6 +45,23 @@ So that teams understand when not to block automatically.
 - [x] [Review][Patch] [MEDIUM] Clarify that the mode table's per-mode examples do not replace the complete blocking prerequisites; the soft-block row currently appears to authorize blocking once only an exception path exists. [docs/enforcement-guardrails.md:16]
 - [x] [Review][Patch] [MEDIUM] Describe observable soft-block and hard-block workflow behavior instead of defining each mode circularly in terms of itself. [docs/enforcement-guardrails.md:18]
 - [x] [Review][Patch] [LOW] Remove the contradictory instruction to follow the retired Python UI composition style; project context establishes the React SPA as the only current UI framework. [_bmad-output/implementation-artifacts/11-4-enforcement-guardrail-documentation.md:53]
+- [x] [Review][Patch] [HIGH] Reconcile the Action exit contract: retrieval or validation failures exit nonzero too, so README and Action docs must not say nonzero occurs only when validated `should-block` is true. [README.md:769]
+- [x] [Review][Patch] [HIGH] Correct the GitHub App onboarding guidance: integrations without overrides inherit a blocking project default and therefore do not necessarily remain advisory until individually opted in. [docs/github-app.md:73]
+- [x] [Review][Patch] [HIGH] Make the mode table distinguish configured ceilings from effective statuses and cover non-blocking effective outcomes; a configured `warn` mode with an effective `advisory`/`GO` result is `success`, not always `neutral`. [docs/enforcement-guardrails.md:15]
+- [x] [Review][Patch] [HIGH] Define a functional exception flow: identify what control changes or bypasses the required result, when a rerun is needed, and how the replacement result unblocks delivery without implying that an unchanged rerun can change the decision. [docs/enforcement-guardrails.md:24]
+- [x] [Review][Patch] [HIGH] Prefer report/integration-scoped break glass and require concurrency controls plus re-evaluation of open heads so a temporary project mode change cannot let unrelated deployments pass. [docs/enforcement-guardrails.md:86]
+- [x] [Review][Patch] [HIGH] Keep thresholds below `high` non-blocking with the current shared decision contract; document a future separate deterministic-evidence gate rather than implying an organization policy can alter `should_block` today. [docs/enforcement-guardrails.md:113]
+- [x] [Review][Patch] [MEDIUM] Turn mandatory human review into an observable workflow prerequisite by requiring branch-review rules or protected-environment approval for blocking integrations. [docs/enforcement-guardrails.md:168]
+- [x] [Review][Patch] [MEDIUM] Define decision freshness using concrete report/settings identity, integration scope, and re-evaluation triggers; do not rely only on a general prohibition against reusing prior decisions or invent revision tokens the API does not expose. [docs/enforcement-guardrails.md:69]
+- [x] [Review][Patch] [MEDIUM] Require blocking Action workflows to pin an immutable reviewed revision and run a synthetic fail-closed capability check instead of relying on a one-time inspection of the moving `@v1` tag. [README.md:785]
+- [x] [Review][Patch] [MEDIUM] Require the protected check to be bound to the expected GitHub App/source so an unrelated workflow publishing the same check name cannot satisfy protection. [docs/enforcement-guardrails.md:39]
+- [x] [Review][Patch] [MEDIUM] Define blocking behavior when no policy decision exists because all changed artifacts are sensitive, unsupported, or otherwise excluded; a neutral result must not silently satisfy enforcement. [docs/enforcement-guardrails.md:69]
+- [x] [Review][Patch] [MEDIUM] Require a fresh protected result after an exception expires so a previously passing replacement check cannot remain valid indefinitely. [docs/enforcement-guardrails.md:86]
+- [x] [Review][Patch] [MEDIUM] Require organization-owned minimum positive/negative sample sizes by covered change class and a stated statistical confidence method before benchmark readiness can be approved. [docs/enforcement-guardrails.md:126]
+- [x] [Review][Patch] [MEDIUM] Define benchmark ground-truth labels, outcome mapping, exclusions, and zero-denominator handling so precision, recall, false-reassurance, and false-positive calculations are reproducible. [docs/enforcement-guardrails.md:126]
+- [x] [Review][Patch] [MEDIUM] Tie benchmark approval to an immutable application/action revision and dependency identity, and verify the deployed artifact matches the evaluated build. [docs/enforcement-guardrails.md:134]
+- [x] [Review][Patch] [MEDIUM] Expand exception audit evidence to include invocation timestamp, integration/project scope, the full applied-settings snapshot, a canonical decision digest, original decision payload, and the applicable bypass event or replacement run. [docs/enforcement-guardrails.md:86]
+- [x] [Review][Patch] [MEDIUM] Strengthen documentation regressions to validate complete structured requirements—including the mode table's prerequisites—and remove the test assertion that currently locks the contradictory Action exit wording. [tests/test_docs/test_enforcement_guardrails.py:23]
 
 ## Dev Notes
 
@@ -128,6 +145,12 @@ OpenAI Codex (GPT-5)
 - Final review required smoke: `./.venv/bin/python -m unittest discover -q` - `420 tests` passed, `1 skipped`.
 - Final review full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, all skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `930 tests` passing.
 - Final review quality gates: Ruff initially identified the expanded test for formatting; `./.venv/bin/ruff format tests/test_docs/test_enforcement_guardrails.py` corrected it, after which `./.venv/bin/ruff check .`, repo-wide `./.venv/bin/ruff format --check .`, and `git diff --check` passed with all 273 files formatted.
+- Review rerun RED: strengthened documentation contracts reproduced the remaining mode-matrix, inherited-setting, failure-path, exception-audit, benchmark-reproducibility, Action-revision, and human-approval gaps (`22 failed, 4 passed, 43 subtests passed`).
+- Review rerun GREEN and metadata suite: `./.venv/bin/python -m pytest tests/test_docs/test_enforcement_guardrails.py tests/test_docs tests/test_infra/test_ai_safety_documentation.py tests/test_infra/test_requirements_traceability_matrix.py -q --tb=short` - `44 passed, 256 subtests passed`; the focused guardrail file reported `7 passed, 66 subtests passed`.
+- Review rerun required smoke: `./.venv/bin/python -m unittest discover -q` - `421 tests` passed, `1 skipped`.
+- Review rerun full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, skill and prompt-injection gates, and every backend/docs test directory; final services directory reported `930 tests` passing.
+- Review rerun quality gates: `./.venv/bin/ruff check .`, repo-wide `./.venv/bin/ruff format --check .`, and `git diff --check` passed; Ruff reported all 273 files formatted.
+- Review rerun independent verification: a read-only checklist pass confirmed all 17 findings and four follow-up residuals were resolved with no remaining concrete defects.
 
 ### Completion Notes List
 
@@ -138,6 +161,7 @@ OpenAI Codex (GPT-5)
 - No runtime, API, persistence, UI, or dependency behavior changed. Implementation is stacked on the verified but unmerged Story 11.3 branch because this story documents that enforcement contract.
 - Resolved all six review findings: project-default inheritance and override deletion are explicit; invalid or unavailable decisions cannot become passes; benchmark inputs, calculations, and strict zero Evidence Law violations are documented; mode prerequisites and observable GitHub effects are unambiguous; and stale UI guidance now points to the React SPA conventions.
 - Resolved all eight final-review findings: README and Action-guide semantics are capability-gated; low blocking thresholds cannot borrow the high/critical Evidence Law guarantee; new inherited integrations start advisory; required-job wiring is explicit; benchmark reapproval and failure recovery are auditable; and structured tests lock mode effects plus inbound and outbound links.
+- Resolved all 17 review-rerun findings: effective-status behavior is distinct from configured ceilings; Action errors fail closed; blocking Action refs are immutable and smoke-tested; inherited GitHub App settings are explicit; stale, missing, and excluded decisions cannot pass; exception handling is scoped, time-bound, concurrency-safe, and reconstructible; lower-than-high blocking remains disabled under the current decision contract; benchmark evidence is reproducible and tied to deployed artifacts; and automated checks no longer substitute for mandatory human approval.
 
 ### File List
 
@@ -158,3 +182,4 @@ OpenAI Codex (GPT-5)
 - 2026-09-07: Added canonical optional-enforcement guardrails, linked all enforcement entry points, added deterministic documentation coverage, completed full validation, and moved the story to review.
 - 2026-09-08: Addressed all six code-review findings, strengthened the documentation contract, completed full validation, and moved the story to done.
 - 2026-09-08: Addressed all eight findings from the final review rerun, reconciled published Action capability guidance, strengthened operational guardrails and structured tests, and retained done status after full validation.
+- 2026-09-09: Addressed all 17 findings from the subsequent review rerun, expanded fail-closed enforcement and benchmark guardrails, completed full validation, and retained done status.

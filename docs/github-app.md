@@ -63,16 +63,18 @@ Optional:
 - Pull request webhook actions `opened`, `reopened`, and `synchronize` can trigger automatic advisory analyses when PR automation is enabled
 - Supported changed artifacts are downloaded from GitHub, filtered through the shared intake rules, and sent through the existing parse/assess/persist pipeline
 - Check runs resolve the `github` integration policy settings and expose raw policy status, configured enforcement mode, and effective status in the summary
-- The default `advisory` mode reports `success` for `GO` and `neutral` for other recommendations; `warn` also remains neutral
-- Explicit `soft-block` and `hard-block` modes produce `action_required` and `failure` conclusions respectively when the effective policy status is blocking
+- An effective `advisory` status reports `success` for `GO` and `neutral` for other recommendations; effective `warn` reports `neutral`
+- Effective `soft-block` and `hard-block` statuses produce `action_required` and `failure` conclusions respectively, regardless of which configured ceiling permitted that effective status
 - When checks are enabled, `APP_BASE_URL` or `PUBLIC_APP_URL` must point at a reachable DeployWhisper server so the GitHub PR Details link opens the full report
 - Do not make `DeployWhisper / Risk Analysis` required while the integration uses `advisory` or `warn`; requiring it is an explicit operator choice for a blocking mode
 - Shared report URLs remain the deep-link target for richer investigation
 - `/reports/{id}` opens the React read-only Report screen, hides mutable internal actions, respects password-protected shares, and preserves `?compare=previous` comparison links
 
-Configure GitHub enforcement through the policy-adapter settings API. New and
-existing integrations remain advisory unless an operator explicitly opts into a
-blocking mode:
+Configure GitHub enforcement through the policy-adapter settings API. An
+integration without an override inherits its project-level enforcement mode,
+which may already be blocking. Before onboarding a new integration under a
+blocking project default, create an integration-specific `advisory` override or
+complete and record the full guardrail review for that integration:
 
 ```json
 {

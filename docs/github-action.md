@@ -64,9 +64,10 @@ manual checks. Advisory-first boundary: the action does not block unless the
 `github-action` integration is explicitly configured for an effective
 `soft-block` or `hard-block` decision. After persisting a report, the action
 consumes the configured policy decision, defaults to `advisory`, and keeps raw
-policy and effective integration statuses distinct. It fails the action only
-when the server's validated `should_block` decision is true; it does not derive
-blocking from severity, risk score, or recommendation. The external
+policy and effective integration statuses distinct. It fails the action when
+the server's validated `should_block` decision is true and also fails with an
+operational error when that decision cannot be retrieved or validated; it does
+not derive blocking from severity, risk score, or recommendation. The external
 `deploywhisper/analyze-action` repository owns that runtime behavior; this
 repository owns the shared API and contract at
 `GET /api/v1/analyses/{report_id}/enforcement-decision?integration=github-action`.
@@ -75,10 +76,13 @@ Operators considering a required blocking check must first complete the
 
 These enforcement semantics require an Action release that exposes
 `policy-status`, `configured-mode`, `effective-status`, and `should-block` and
-consumes the enforcement-decision endpoint. Because the moving `@v1` tag
-follows published releases, verify the resolved Action capabilities before
-making its job required. Older Action refs that do not expose enforcement
-outputs remain advisory-only even when the server stores a blocking mode.
+consumes the enforcement-decision endpoint. The moving `@v1` tag follows
+published releases and is appropriate for advisory use. Pin a required
+enforcement workflow to an immutable reviewed commit SHA and run synthetic
+valid-pass, valid-block, unavailable-decision, and malformed-decision cases
+against that exact revision before making its job required. Older Action refs
+that do not expose enforcement outputs remain advisory-only even when the
+server stores a blocking mode.
 
 ## Canonical Report Output Mapping
 

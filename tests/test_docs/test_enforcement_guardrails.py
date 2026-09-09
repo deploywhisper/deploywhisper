@@ -20,17 +20,36 @@ ENTRY_POINTS = (
 
 
 class EnforcementGuardrailDocumentationTests(unittest.TestCase):
-    def test_mode_table_locks_observable_github_behavior(self) -> None:
+    def test_effective_status_table_locks_behavior_and_prerequisites(self) -> None:
         content = GUARDRAIL_GUIDE.read_text(encoding="utf-8")
 
+        self.assertIn(
+            "| Effective status | Workflow effect | Appropriate use |", content
+        )
         self.assertEqual(
             {
-                "advisory": "Reports analysis without blocking. GitHub Action exits 0; GitHub App reports success for GO and neutral otherwise.",
-                "warn": "Reports a warning without blocking. GitHub Action exits 0; GitHub App reports neutral.",
-                "soft-block": "When the effective status is soft-block, GitHub Action exits nonzero; GitHub App reports action_required.",
-                "hard-block": "When the effective status is hard-block, GitHub Action exits nonzero; GitHub App reports failure.",
+                "advisory": (
+                    "GitHub Action exits 0 after a valid decision; GitHub App reports success for GO and neutral otherwise.",
+                    "Default, initial rollout, incomplete context, or an uncalibrated project.",
+                ),
+                "warn": (
+                    "GitHub Action exits 0 after a valid decision; GitHub App reports neutral.",
+                    "Teams have reviewed signal quality and want consistent reviewer attention.",
+                ),
+                "soft-block": (
+                    "GitHub Action exits nonzero; GitHub App reports action_required.",
+                    "Every blocking prerequisite below is satisfied, and a human-owned exception path has been exercised.",
+                ),
+                "hard-block": (
+                    "GitHub Action exits nonzero; GitHub App reports failure.",
+                    "Every blocking prerequisite below is satisfied, and the organization has approved strict enforcement for this scope.",
+                ),
             },
-            self._mode_effects(content),
+            self._effective_status_rows(content),
+        )
+        self.assertIn(
+            "`warn` permits effective `advisory` or `warn`; `soft-block` permits effective `advisory`, `warn`, or `soft-block`; and `hard-block` preserves any raw status.",
+            self._normalized(content),
         )
 
     def test_guardrail_guide_covers_required_safety_decisions(self) -> None:
@@ -59,18 +78,38 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "Blocking thresholds below `high` do not receive an additional Evidence Law guarantee",
             "Create an integration-specific `advisory` override before onboarding a new consumer",
             "must be a required status check or required job",
+            "bound to the expected GitHub App or workflow source",
             "must not use `continue-on-error: true`",
-            "must identify the corpus and release evaluated",
+            "pin the Action to an immutable reviewed commit SHA",
+            "synthetic fail-closed smoke test",
+            "must identify the corpus and immutable application and Action revisions evaluated",
             "Rerun the benchmark gate after behavior-affecting changes",
             "HTTP or transport failure, non-JSON or missing data, unsupported contract or status values, report or integration mismatch, and any decision-invariant failure",
-            "rerun the same report decision and workflow",
-            "retain the report ID, raw policy status, configured and effective modes, approver, reason, expiry, and replacement workflow run",
+            "The current contract exposes no report or settings revision token",
+            "complete nested `applied_settings` snapshot",
+            "SHA-256 digest of its canonical serialization",
+            "Sensitive, unsupported, or otherwise excluded artifacts do not produce a policy decision.",
+            "must not be accepted as an enforcement pass",
+            "The current GitHub App reports `neutral` when intake has no analyzable artifact",
+            "add a separate required intake-coverage control that fails on a missing decision",
+            "A protection-layer bypass does not change the DeployWhisper decision",
+            "Prefer a report- and integration-scoped protection bypass",
+            "freeze other deliveries in the affected scope",
+            "require fresh protected results for every open commit",
+            "For a protection-layer bypass, record the protected-delivery or bypass event; for a temporary settings change, record the replacement workflow run.",
             "## Blocking does not prove a change is safe",
             "A passing check can still be false reassurance.",
             "## Human review remains mandatory",
             "No adapter output authorizes autonomous approval, deployment, or remediation.",
+            "Configure repository review rules or protected-environment approvals",
             "## Rollback remains an operator responsibility",
             "DeployWhisper does not execute, validate, or own the rollback.",
+            "The current shared decision contract cannot apply an additional deterministic-evidence gate below `high`.",
+            "minimum positive and negative sample sizes for every covered change class",
+            "statistical confidence method",
+            "ground-truth labels",
+            "zero-denominator handling",
+            "Verify that the deployed application and Action revisions match those evaluated artifacts",
             "keep the integration in `advisory` or `warn`",
             "soft-block",
             "hard-block",
@@ -116,15 +155,41 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "An enforcement-capable Action ref exits `0` in `advisory` or `warn` mode and exits nonzero only when the validated `should-block` output is `true`.",
+            "An enforcement-capable Action ref exits `0` after a valid non-blocking decision, exits nonzero when validated `should-block` is `true`, and also exits nonzero when the enforcement decision cannot be retrieved or validated.",
             content,
         )
         self.assertIn(
             "Older Action refs that do not expose enforcement outputs remain advisory-only",
             content,
         )
+        self.assertIn(
+            "Pin a required enforcement workflow to an immutable reviewed commit SHA",
+            content,
+        )
         self.assertNotIn(
             "exits `0` when analysis succeeds, regardless of risk verdict",
+            content,
+        )
+
+    def test_github_app_guide_explains_project_default_inheritance(self) -> None:
+        content = self._normalized(
+            (REPO_ROOT / "docs" / "github-app.md").read_text(encoding="utf-8")
+        )
+
+        self.assertIn(
+            "An integration without an override inherits its project-level enforcement mode",
+            content,
+        )
+        self.assertNotIn(
+            "New and existing integrations remain advisory unless an operator explicitly opts into a blocking mode",
+            content,
+        )
+        self.assertIn(
+            "An effective `advisory` status reports `success` for `GO` and `neutral` for other recommendations; effective `warn` reports `neutral`",
+            content,
+        )
+        self.assertIn(
+            "Effective `soft-block` and `hard-block` statuses produce `action_required` and `failure` conclusions respectively, regardless of which configured ceiling permitted that effective status",
             content,
         )
 
@@ -143,6 +208,18 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "Older Action refs that do not expose enforcement outputs remain advisory-only",
             content,
         )
+        self.assertIn(
+            "also fails with an operational error when that decision cannot be retrieved or validated",
+            content,
+        )
+        self.assertIn(
+            "Pin a required enforcement workflow to an immutable reviewed commit SHA",
+            content,
+        )
+        self.assertIn(
+            "synthetic valid-pass, valid-block, unavailable-decision, and malformed-decision cases",
+            content,
+        )
 
     @staticmethod
     def _normalized(value: str) -> str:
@@ -153,8 +230,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         return {target for _, target in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", value)}
 
     @staticmethod
-    def _mode_effects(value: str) -> dict[str, str]:
-        rows: dict[str, str] = {}
+    def _effective_status_rows(value: str) -> dict[str, tuple[str, str]]:
+        rows: dict[str, tuple[str, str]] = {}
         for line in value.splitlines():
             if not line.startswith("| `"):
                 continue
@@ -162,5 +239,5 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 cell.strip().replace("`", "") for cell in line.strip("|").split("|")
             ]
             if len(cells) == 3:
-                rows[cells[0]] = cells[1]
+                rows[cells[0]] = (cells[1], cells[2])
         return rows
