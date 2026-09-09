@@ -29,6 +29,10 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
             "share_summary.json_payload",
             "docs/schemas/report-v2.md",
             "JSON-encoded string",
+            "integration=github-action",
+            "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+            "deploywhisper/analyze-action@3b37ed72bfb2d201030bef873268f2170794b160",
+            "id: deploywhisper",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, content)
@@ -48,6 +52,10 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
                 "recommendation": "data.advisory.recommendation, falling back to data.share_summary.recommendation when advisory is blank",
                 "share-summary-json": "JSON-encoded data.share_summary.json_payload",
                 "share-summary-markdown": "data.share_summary.markdown",
+                "policy-status": "data.policy_output.status from the enforcement decision",
+                "configured-mode": "data.configured_mode from the enforcement decision",
+                "effective-status": "data.effective_status from the enforcement decision",
+                "should-block": "data.should_block from the enforcement decision",
             },
             mapping,
         )
@@ -73,7 +81,7 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
 
         expected_clauses = (
             "Consumers should use `data.advisory.requires_attention` to decide whether to notify reviewers or add manual checks.",
-            "Advisory-first boundary: the action surfaces evidence and recommendations for review, but does not enforce deployment blocking by itself.",
+            "Advisory-first boundary: the action does not block unless the resolved setting, selected from the integration override before the inherited project default, permits an effective `soft-block` or `hard-block` decision.",
             "Local-first boundary: raw IaC, scanner artifacts, incident exports, and sensitive context stay in the user's infrastructure by default.",
             "External model calls should receive structured summaries, not raw uploads.",
             "Secret-storage prohibition: the action contract must not persist API tokens, provider credentials, raw infrastructure state, or deployment secrets.",

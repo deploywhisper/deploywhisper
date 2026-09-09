@@ -1,6 +1,6 @@
 # CI Advisory Consumption
 
-DeployWhisper remains advisory in automation contexts.
+DeployWhisper's canonical analysis remains advisory in automation contexts.
 
 - `data.advisory.should_block` is always `false`
 - `data.advisory.requires_attention` tells the pipeline or PR bot whether humans should take a closer look
@@ -14,7 +14,22 @@ DeployWhisper remains advisory in automation contexts.
 - The share-configuration API is disabled unless `DEPLOYWHISPER_SHARE_TOKEN` is set; callers must send that value in `X-DeployWhisper-Share-Token`
 - CLI and API responses preserve `severity`, `recommendation`, `partial_context`, and `narrative_degraded` for machine-readable uncertainty handling
 - High-risk or degraded analyses still return success payloads; non-zero CLI exit codes are reserved for operational failures such as unreadable files, missing project scope, or shared-analysis crashes
-- Future workflow adapters should wrap `data.share_summary` with adapter identity through the shared [workflow adapter output contract](./workflow-adapter-output-contract.md) instead of redefining severity, recommendation, or Evidence Law fields.
+- Workflow adapters should wrap `data.share_summary` with adapter identity through the shared [workflow adapter output contract](./workflow-adapter-output-contract.md) instead of redefining severity, recommendation, or Evidence Law fields.
+
+Optional integration enforcement is separate from this canonical response.
+Admins configure project or integration settings through
+`/api/v1/settings/policy-adapter`; modes are `advisory`, `warn`, `soft-block`,
+and `hard-block`. Resolution selects the integration override before the
+inherited project default and then the built-in `advisory` default, so a new
+consumer can inherit blocking. Integration consumers must use
+the shared policy/enforcement service so the raw policy status, configured
+mode, and effective status remain auditable. Do not infer a blocking decision
+directly from `data.advisory`, risk score, severity, or recommendation. For a
+persisted report, request the shared decision from
+`GET /api/v1/analyses/{report_id}/enforcement-decision?integration={integration}`.
+Use the [Enforcement Guardrails](./enforcement-guardrails.md) before enabling a
+blocking mode; they define the required Evidence Law, benchmark, human-review,
+false-reassurance, and rollback checks.
 
 ## CLI Example
 
@@ -67,6 +82,7 @@ PY
 
 ## CI Guidance
 
-- Do not use DeployWhisper to fail a pipeline based only on risk score or recommendation in v1
+- Do not fail a pipeline based only on risk score or recommendation
+- Keep the integration in `advisory` or `warn` mode until the team explicitly opts into `soft-block` or `hard-block`
 - Use `requires_attention` and `uncertainty_flags` to decide when to notify reviewers, enrich PR comments, or request additional manual checks
 - Treat non-zero CLI exit codes as operational failures, not advisory outcomes

@@ -106,6 +106,7 @@ class GitHubAppRouteTests(unittest.TestCase):
                 "note": "ok",
                 "status": "ok",
                 "code": None,
+                "delivery_code": None,
             },
         )()
 
@@ -126,6 +127,7 @@ class GitHubAppRouteTests(unittest.TestCase):
         self.assertEqual(body["data"]["report_id"], 17)
         self.assertEqual(body["data"]["status"], "ok")
         self.assertIsNone(body["data"]["code"])
+        self.assertIsNone(body["data"]["delivery_code"])
 
     @patch("api.routes.github_app.handle_github_app_webhook")
     def test_webhook_returns_persistence_failure_without_report_identifier(

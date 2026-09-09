@@ -14,8 +14,16 @@ from urllib.parse import urlparse
 DEFAULT_WORKFLOW_PATH = ".github/workflows/deploywhisper.yml"
 DEFAULT_APP_NOTES_PATH = ".github/deploywhisper-self-hosted-github-app.md"
 DEFAULT_BRANCH_NAME = "feature/deploywhisper-github-init"
+# Immutable commit behind deploywhisper/analyze-action v1, reviewed 2026-09-09.
+ANALYZE_ACTION_PINNED_SHA = "3b37ed72bfb2d201030bef873268f2170794b160"
+# Immutable commit resolved from actions/checkout v4, reviewed 2026-09-09.
+CHECKOUT_ACTION_PINNED_SHA = "11d5960a326750d5838078e36cf38b85af677262"
 README_SECTION_START = "<!-- deploywhisper:start -->"
 README_SECTION_END = "<!-- deploywhisper:end -->"
+ENFORCEMENT_GUARDRAILS_URL = (
+    "https://github.com/deploywhisper/deploywhisper/blob/develop/"
+    "docs/enforcement-guardrails.md"
+)
 OPERATOR_DOCS_URL = (
     "https://github.com/deploywhisper/deploywhisper/blob/develop/"
     "docs/github-app-self-hosted-setup.md"
@@ -294,10 +302,11 @@ def _render_workflow(options: GitHubInitOptions) -> str:
             env:
               DEPLOYWHISPER_API_URL: {api_endpoint}
             steps:
-              - uses: actions/checkout@v4
+              - uses: actions/checkout@{CHECKOUT_ACTION_PINNED_SHA}
                 with:
                   fetch-depth: 0
-              - uses: deploywhisper/analyze-action@v1
+              - id: deploywhisper
+                uses: deploywhisper/analyze-action@{ANALYZE_ACTION_PINNED_SHA}
                 with:
                   api-url: ${{{{ env.DEPLOYWHISPER_API_URL }}}}
                   api-token: ${{{{ secrets.DEPLOYWHISPER_API_TOKEN }}}}
@@ -315,7 +324,7 @@ def _render_readme_section(
     lines = [
         "## DeployWhisper",
         "",
-        "This repository uses DeployWhisper for advisory-only deployment risk review in pull requests.",
+        f"This repository uses DeployWhisper canonical advisory reports. Action revision `{ANALYZE_ACTION_PINNED_SHA}` is advisory-only; a later reviewed enforcement-capable revision must follow the resolved server settings.",
         "",
         "### GitHub workflow",
         "",
@@ -323,7 +332,9 @@ def _render_readme_section(
         f"- Configured API endpoint: `{options.api_endpoint}`",
         "- Optional secret: `DEPLOYWHISPER_API_TOKEN` for protected DeployWhisper APIs",
         *_scope_readme_lines(options),
-        "- The `DeployWhisper / Risk Analysis` check is advisory-only and should not be configured as a required status check",
+        "- The scaffold pins the reviewed Action revision but does not configure server enforcement; inspect the resolved `github-action` setting and keep the check non-required until the guardrail review is complete",
+        "- If the workflow Action pin changes, update this generated capability note in the same change",
+        f"- Enforcement guardrails: {ENFORCEMENT_GUARDRAILS_URL}",
         "",
         "### Configuration example",
         "",
@@ -373,7 +384,7 @@ def _render_github_app_notes(options: GitHubInitOptions) -> str:
         2. Create the self-hosted GitHub App in your own GitHub account or organization.
         3. Point the webhook and callback URLs at `{options.public_base_url}`.
         4. Follow the operator guide: {OPERATOR_DOCS_URL}
-        5. Keep `DeployWhisper / Risk Analysis` advisory-only in branch protection.
+        5. Keep `DeployWhisper / Risk Analysis` non-required in branch protection until the guardrail review is complete.
         """
     )
 
