@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import unittest
 
+import yaml
+
 from integrations.github import init_service
 
 
@@ -111,9 +113,16 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "idempotency key",
                 "do not provide native idempotent create or check-update semantics",
                 "durable external coordinator",
+                "out-of-band alert",
+                "independent delivery freeze",
                 "trusted identity layer",
                 "strips caller-supplied project actor headers",
                 "serialize the frozen decision once",
+                "immutable exception identifier",
+                "organization-approved maximum TTL",
+                "new independent approval",
+                "encrypted immutable raw response",
+                "separate redacted reviewer view",
             ),
             "## Set benchmark thresholds before blocking": (
                 "actual enforcement consumer revision",
@@ -139,6 +148,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "resolved configured enforcement mode is `soft-block` or `hard-block`",
                 "including runs whose effective status is only `advisory` or `warn`",
                 "Elevated specialist review",
+                "report ID, manifest, settings snapshot, material context, consumer revision, or workflow changes",
             ),
             "## Rollout checklist": (
                 "source-bound required check or job",
@@ -152,6 +162,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "durable external idempotency coordinator",
                 "Settings-change serialization",
                 "deterministic diff-coverage control for deletions and renames",
+                "A non-blocking disposition does not satisfy blocking readiness",
                 "maximum expiry timestamp",
                 "fails closed",
             ),
@@ -283,6 +294,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "server-side advisory override cannot make mutable third-party code trustworthy",
             content,
         )
+        self.assertIn(
+            "tag object `f2e36cef443129e85c55882b9dafc1f20d409284`",
+            content,
+        )
         action_section = self._normalized(
             self._section(
                 (REPO_ROOT / "README.md").read_text(encoding="utf-8"),
@@ -356,6 +371,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "resolve and review the checkout candidate independently",
             content,
         )
+        self.assertIn(
+            "peel an annotated tag to the executed commit",
+            content,
+        )
         self.assertIn("- id: deploywhisper", content)
         self.assertIn(
             "actions/checkout@11d5960a326750d5838078e36cf38b85af677262", content
@@ -374,17 +393,32 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
 
     def test_documented_workflow_pins_match_scaffold_constants(self) -> None:
-        expected_refs = (
-            f"actions/checkout@{init_service.CHECKOUT_ACTION_PINNED_SHA}",
-            f"deploywhisper/analyze-action@{init_service.ANALYZE_ACTION_PINNED_SHA}",
-        )
         for relative_path in ("README.md", "docs/github-action.md"):
             content = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-            for expected_ref in expected_refs:
-                with self.subTest(
-                    relative_path=relative_path, expected_ref=expected_ref
-                ):
-                    self.assertIn(expected_ref, content)
+            workflow = self._documented_workflow(content)
+            steps = workflow["jobs"]["deploywhisper"]["steps"]
+            checkout_steps = [
+                step
+                for step in steps
+                if str(step.get("uses", "")).startswith("actions/checkout@")
+            ]
+            action_steps = [
+                step
+                for step in steps
+                if str(step.get("uses", "")).startswith("deploywhisper/analyze-action@")
+            ]
+            with self.subTest(relative_path=relative_path):
+                self.assertEqual(1, len(checkout_steps))
+                self.assertEqual(1, len(action_steps))
+                self.assertEqual(
+                    f"actions/checkout@{init_service.CHECKOUT_ACTION_PINNED_SHA}",
+                    checkout_steps[0]["uses"],
+                )
+                self.assertEqual(
+                    f"deploywhisper/analyze-action@{init_service.ANALYZE_ACTION_PINNED_SHA}",
+                    action_steps[0]["uses"],
+                )
+                self.assertEqual("deploywhisper", action_steps[0].get("id"))
 
     def test_policy_entry_points_explain_inherited_project_defaults(self) -> None:
         for relative_path in (
@@ -438,20 +472,36 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         self.assertIn("effective status for the current report", troubleshooting)
 
     def test_epic_11_closes_when_all_stories_are_done(self) -> None:
-        content = (
-            REPO_ROOT
-            / "_bmad-output"
-            / "implementation-artifacts"
-            / "sprint-status.yaml"
-        ).read_text(encoding="utf-8")
-        epic_status = re.search(r"(?m)^  epic-11: ([a-z-]+)$", content)
-        self.assertIsNotNone(epic_status)
-        if epic_status is not None and epic_status.group(1) == "done":
-            story_statuses = re.findall(r"(?m)^  (11-\d+-[^:]+): ([a-z-]+)$", content)
-            self.assertTrue(story_statuses, "Epic 11 has no tracked stories")
-            for story_key, story_status in story_statuses:
-                with self.subTest(story_key=story_key):
-                    self.assertEqual("done", story_status)
+        payload = yaml.safe_load(
+            (
+                REPO_ROOT
+                / "_bmad-output"
+                / "implementation-artifacts"
+                / "sprint-status.yaml"
+            ).read_text(encoding="utf-8")
+        )
+        statuses = payload["development_status"]
+        story_statuses = {
+            key: value
+            for key, value in statuses.items()
+            if re.fullmatch(r"11-\d+-.+", str(key))
+        }
+        required_story_keys = {
+            "11-1-policy-adapter-output-contract",
+            "11-2-threshold-and-reporting-defaults-management",
+            "11-3-integration-level-enforcement-settings",
+            "11-4-enforcement-guardrail-documentation",
+        }
+        self.assertTrue(
+            required_story_keys.issubset(story_statuses),
+            f"Epic 11 is missing required stories: {sorted(required_story_keys - story_statuses.keys())}",
+        )
+        all_stories_done = all(status == "done" for status in story_statuses.values())
+        self.assertEqual(
+            all_stories_done,
+            statuses.get("epic-11") == "done",
+            "Epic 11 and its complete discovered story set must reach done together",
+        )
 
     def test_mode_table_parser_rejects_malformed_rows(self) -> None:
         content = self._section(
@@ -483,6 +533,44 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             self._markdown_heading_anchors(content),
         )
 
+        collision_content = """\
+### Guardrails
+### Guardrails-1
+### Guardrails
+```invalid`info
+### Not hidden by an invalid fence
+"""
+        collision_anchors = self._markdown_heading_anchors(collision_content)
+        self.assertEqual(4, len(collision_anchors))
+        self.assertIn("guardrails-2", collision_anchors)
+        self.assertIn("not-hidden-by-an-invalid-fence", collision_anchors)
+
+    def test_section_extraction_ignores_fenced_pseudo_headings(self) -> None:
+        content = """\
+## Target
+required clause
+```markdown
+## Fake next section
+```
+still required
+## Real next section
+outside target
+"""
+        self.assertEqual(
+            "required clause\n```markdown\n## Fake next section\n```\nstill required\n",
+            self._section(content, "## Target"),
+        )
+
+    def test_effective_status_parser_rejects_duplicate_tables(self) -> None:
+        section = self._section(
+            GUARDRAIL_GUIDE.read_text(encoding="utf-8"),
+            "## Choose the least forceful mode that works",
+        )
+        table_start = "| Effective status | Workflow effect | Appropriate use |"
+        duplicate = f"{section}\n{section[section.index(table_start) :]}"
+        with self.assertRaisesRegex(AssertionError, "exactly once"):
+            self._effective_status_rows(duplicate)
+
     @staticmethod
     def _normalized(value: str) -> str:
         return re.sub(r"\s+", " ", value).strip()
@@ -500,19 +588,20 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
 
         for line in value.splitlines():
             if fence_character is None:
-                opening_fence = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+                opening_fence = EnforcementGuardrailDocumentationTests._opening_fence(
+                    line
+                )
                 if opening_fence is not None:
-                    marker = opening_fence.group(1)
+                    marker = opening_fence
                     fence_character = marker[0]
                     fence_length = len(marker)
                     continue
             else:
-                closing_fence = re.fullmatch(r" {0,3}(`{3,}|~{3,})[ \t]*", line)
-                if closing_fence is not None:
-                    marker = closing_fence.group(1)
-                    if marker[0] == fence_character and len(marker) >= fence_length:
-                        fence_character = None
-                        fence_length = 0
+                if EnforcementGuardrailDocumentationTests._is_closing_fence(
+                    line, fence_character, fence_length
+                ):
+                    fence_character = None
+                    fence_length = 0
                 continue
 
             heading_match = re.match(r"^ {0,3}#{1,6}\s+(.+?)\s*$", line)
@@ -522,30 +611,110 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             base_anchor = re.sub(r"[^\w\- ]", "", heading.lower())
             base_anchor = re.sub(r"\s", "-", base_anchor)
             duplicate_number = duplicate_counts.get(base_anchor, 0)
-            duplicate_counts[base_anchor] = duplicate_number + 1
-            anchor = (
-                base_anchor
-                if duplicate_number == 0
-                else f"{base_anchor}-{duplicate_number}"
-            )
+            anchor = base_anchor
+            while anchor in anchors:
+                duplicate_number += 1
+                anchor = f"{base_anchor}-{duplicate_number}"
+            duplicate_counts[base_anchor] = duplicate_number
             anchors.add(anchor)
         return anchors
 
     @staticmethod
     def _section(value: str, heading: str) -> str:
-        marker = f"{heading}\n"
-        if value.count(marker) != 1:
-            if marker not in value:
-                raise AssertionError(f"Missing section: {heading}")
-            raise AssertionError(f"Duplicate section: {heading}")
-        section = value.split(marker, 1)[1]
         level = len(heading) - len(heading.lstrip("#"))
-        return re.split(rf"\n#{{1,{level}}} ", section, maxsplit=1)[0]
+        lines = value.splitlines(keepends=True)
+        matches: list[int] = []
+        fence_character: str | None = None
+        fence_length = 0
+        for index, line_with_ending in enumerate(lines):
+            line = line_with_ending.rstrip("\r\n")
+            if fence_character is None:
+                opening_fence = EnforcementGuardrailDocumentationTests._opening_fence(
+                    line
+                )
+                if opening_fence is not None:
+                    fence_character = opening_fence[0]
+                    fence_length = len(opening_fence)
+                    continue
+            else:
+                if EnforcementGuardrailDocumentationTests._is_closing_fence(
+                    line, fence_character, fence_length
+                ):
+                    fence_character = None
+                    fence_length = 0
+                continue
+            if line == heading:
+                matches.append(index)
+
+        if not matches:
+            raise AssertionError(f"Missing section: {heading}")
+        if len(matches) > 1:
+            raise AssertionError(f"Duplicate section: {heading}")
+
+        start = matches[0] + 1
+        fence_character = None
+        fence_length = 0
+        end = len(lines)
+        for index in range(start, len(lines)):
+            line = lines[index].rstrip("\r\n")
+            if fence_character is None:
+                opening_fence = EnforcementGuardrailDocumentationTests._opening_fence(
+                    line
+                )
+                if opening_fence is not None:
+                    fence_character = opening_fence[0]
+                    fence_length = len(opening_fence)
+                    continue
+            else:
+                if EnforcementGuardrailDocumentationTests._is_closing_fence(
+                    line, fence_character, fence_length
+                ):
+                    fence_character = None
+                    fence_length = 0
+                continue
+            heading_match = re.match(r"^(#{1,6})\s+", line)
+            if heading_match is not None and len(heading_match.group(1)) <= level:
+                end = index
+                break
+        return "".join(lines[start:end])
+
+    @staticmethod
+    def _opening_fence(line: str) -> str | None:
+        match = re.match(r"^ {0,3}(?P<marker>`{3,}|~{3,})(?P<info>.*)$", line)
+        if match is None:
+            return None
+        marker = match.group("marker")
+        if marker.startswith("`") and "`" in match.group("info"):
+            return None
+        return marker
+
+    @staticmethod
+    def _is_closing_fence(line: str, character: str, length: int) -> bool:
+        match = re.fullmatch(r" {0,3}(`{3,}|~{3,})[ \t]*", line)
+        if match is None:
+            return False
+        marker = match.group(1)
+        return marker[0] == character and len(marker) >= length
+
+    @staticmethod
+    def _documented_workflow(value: str) -> dict[str, object]:
+        workflows: list[dict[str, object]] = []
+        for match in re.finditer(r"(?ms)^```ya?ml[ \t]*\n(.*?)^```[ \t]*$", value):
+            payload = yaml.safe_load(match.group(1))
+            if isinstance(payload, dict) and "jobs" in payload:
+                workflows.append(payload)
+        if len(workflows) != 1:
+            raise AssertionError(
+                f"Expected exactly one documented workflow, found {len(workflows)}"
+            )
+        return workflows[0]
 
     @staticmethod
     def _effective_status_rows(value: str) -> dict[str, tuple[str, str]]:
         lines = value.splitlines()
         header = "| Effective status | Workflow effect | Appropriate use |"
+        if lines.count(header) != 1:
+            raise AssertionError("Effective-status table must appear exactly once")
         try:
             header_index = lines.index(header)
         except ValueError as exc:

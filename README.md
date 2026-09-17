@@ -792,7 +792,8 @@ What the action does:
 
 Enforcement-capable revisions additionally expose `policy-status`,
 `configured-mode`, `effective-status`, and `should-block`; the published `@v1`
-ref validated on 2026-09-09 (tag object `f2e36ce`) does not expose them.
+ref validated on 2026-09-09 (tag object
+`f2e36cef443129e85c55882b9dafc1f20d409284`) does not expose them.
 
 The moving `@v1` reference follows published Action releases and must not be
 used in a protected workflow. Pin the Action and checkout dependencies to

@@ -107,10 +107,10 @@ Update the two dependencies independently:
    annotated tags, review the full diff from the existing pin, run the Action
    repository tests and smoke consumer against the exact candidate commit, and
    then replace the full SHA.
-2. For `actions/checkout`, resolve and review the checkout candidate
-   independently, inspect its release provenance and full diff from the existing
-   pin, and run the protected workflow's checkout and artifact-selection smoke
-   cases before replacing its full SHA.
+2. For `actions/checkout`, resolve and review the checkout candidate independently,
+   peel an annotated tag to the executed commit, inspect its release provenance
+   and full diff from the existing pin, and run the protected workflow's checkout
+   and artifact-selection smoke cases before replacing its full SHA.
 3. Update the scaffold constants, README, this guide, and their contract tests in
    the same change. Never copy a moving tag into a protected workflow.
 

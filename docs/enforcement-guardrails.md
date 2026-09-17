@@ -247,8 +247,12 @@ The current analysis API and GitHub App do not provide native idempotent create
 or check-update semantics. A blocking consumer therefore needs a durable
 external coordinator that owns that key, suppresses duplicate submissions, and
 updates one authoritative conclusion. Without that coordinator, keep the
-consumer non-blocking. Exhausted retries must publish the terminal operational
-failure.
+consumer non-blocking. When check-publication retries are exhausted, the failed
+publication channel cannot report its own terminal state. The external
+coordinator must send an out-of-band alert through an independently monitored
+channel and engage an independent delivery freeze that prevents merge or
+deployment until an operator verifies a valid protected result or approves the
+break-glass path.
 
 A protection-layer bypass does not change the DeployWhisper decision and does
 not require an unchanged analysis rerun to pretend that the result changed.
@@ -269,7 +273,17 @@ Record the ruleset or emergency-workflow ID, protected target, provider
 audit-event identifier or URL, approver, reason, and expiry. Automation outside
 DeployWhisper must automatically revoke the bypass capability at expiry and
 verify its removal; if revocation fails, freeze delivery and escalate. Verify
-that the bypass applied only to the intended delivery.
+that the bypass applied only to the intended delivery. Keep the independent
+delivery freeze active for unrelated deliveries throughout approval, bypass,
+and verified revocation so a repository-wide provider capability cannot expose
+other changes.
+
+Bind each exception to one immutable exception identifier and one immutable
+expiry no later than the organization-approved maximum TTL. An extension is a
+new exception request with a new independent approval; editing the existing
+expiry or repeatedly reusing the same approval is prohibited. The independent
+approver must be unable to write the applicable DeployWhisper settings or
+unilaterally disable the delivery freeze.
 
 Do not use policy settings as break glass in v1. The API has no atomic
 compare-and-swap or enforced expiry, and restoring the blocking setting before a
@@ -285,9 +299,13 @@ call it canonical. In-process consumers must freeze the validated decision
 object, serialize the frozen decision once using a recorded serializer and
 version, and use that same object for both the check conclusion and persisted
 audit bytes. Hash that retained byte sequence. Record a
-retention period, restrict access to authorized reviewers, encrypt stored audit
-evidence, and redact secrets or sensitive artifact metadata not required to
-reconstruct the decision. For a protection-layer bypass, record the
+retention period and preserve it as an encrypted immutable raw response; state
+that its SHA-256 digest covers those exact raw bytes. Provide a separate redacted
+reviewer view for ordinary inspection. Redaction must never mutate or replace
+the retained bytes covered by the digest. Restrict both representations to
+authorized reviewers, and redact secrets or sensitive artifact metadata from
+the reviewer view when they are not required to reconstruct the decision. For a
+protection-layer bypass, record the
 protected-delivery or bypass event and automatic-revocation evidence. Review
 repeated exceptions as a calibration signal.
 
@@ -447,6 +465,10 @@ authorized human decision is an observable prerequisite for merge or
 deployment. An automated required check by itself does not satisfy the human
 review requirement. Bind approval to the protected commit SHA, dismiss stale
 approvals when that commit changes, and require a new review for the new head.
+Also dismiss and reacquire approval when the report ID, manifest, settings
+snapshot, material context, consumer revision, or workflow changes without a
+commit change; those inputs can materially change the reviewed decision while
+leaving the protected SHA unchanged.
 
 ## Rollback remains an operator responsibility
 
@@ -489,18 +511,23 @@ integration:
    thresholds, reporting default, and configured enforcement mode.
 8. The trusted identity/proxy boundary that strips caller-supplied actor headers
    and injects verified role and project scope.
-9. A durable external idempotency coordinator for blocking consumers, or an
-   explicit non-blocking disposition while native idempotency is unavailable.
+9. A durable external idempotency coordinator for blocking consumers. If it is
+   unavailable, record a non-blocking disposition and do not enable blocking.
+   A non-blocking disposition does not satisfy blocking readiness.
 10. Settings-change serialization: freeze delivery before the write, then
     invalidate and rerun affected results before lifting the freeze.
-11. A deterministic diff-coverage control for deletions and renames, or an
-    explicit non-blocking disposition for scopes where tombstones are possible.
+11. A deterministic diff-coverage control for deletions and renames. If it is
+    unavailable for a scope where tombstones are possible, record a non-blocking
+    disposition and do not enable blocking. A non-blocking disposition does not
+    satisfy blocking readiness.
 12. Evidence Law, decision and context freshness, and audit-retention expectations.
 13. Named human owners for review, exceptions, incident response, and rollback.
-14. A tested rollback or forward-fix path with a documented maximum expiry
-    timestamp, automatic bypass revocation before or at that deadline, and
-    retained revocation evidence. Delivery fails closed if timely revocation
-    cannot be verified.
+14. A tested rollback or forward-fix path, immutable exception identifier and
+    immutable maximum expiry timestamp within the organization-approved maximum
+    TTL, automatic bypass revocation before or at that deadline, and retained
+    revocation evidence. Extensions require a new request and independent
+    approval. The independent delivery freeze remains active until timely
+    revocation is verified; delivery fails closed when it cannot be verified.
 15. Monitoring for false reassurance, false positives, regressions, and
    excessive overrides.
 16. Immutable application and actual consumer revisions plus proof that deployed

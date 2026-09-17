@@ -244,6 +244,31 @@ class GitHubInitServiceTests(unittest.TestCase):
             any(command[:3] == ("gh", "pr", "create") for command in command_log)
         )
 
+    def test_readme_generation_rejects_unclassified_action_pin(self) -> None:
+        options = init_service.GitHubInitOptions(
+            repo_path=".",
+            workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+            api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+            enable_github_app=False,
+            base_branch="develop",
+            project_key="payments",
+        )
+
+        with patch.object(
+            init_service,
+            "ANALYZE_ACTION_PINNED_SHA",
+            "a" * 40,
+        ):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "Unclassified DeployWhisper Analyze Action revision",
+            ):
+                init_service._render_readme_section(
+                    options,
+                    workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+                    notes_path=None,
+                )
+
     @patch("integrations.github.init_service._require_binary")
     @patch("integrations.github.init_service._run_command")
     def test_run_github_init_quotes_yaml_scope_inputs(
