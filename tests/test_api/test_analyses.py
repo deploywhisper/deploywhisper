@@ -630,22 +630,55 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertTrue(payload["data"]["canonical_report_advisory"])
         self.assertEqual(payload["meta"]["report_schema_version"], "v2")
 
-    def test_policy_adapter_output_enforces_report_scope_access(self) -> None:
-        for report_id in (self.persisted["id"], 999_999):
-            with self.subTest(report_id=report_id):
-                response = self.client.get(
-                    f"/api/v1/analyses/{report_id}/policy-adapter",
-                    params={"integration": "jenkins"},
-                    headers={
-                        "X-DeployWhisper-Project-Role": "read-only",
-                        "X-DeployWhisper-Project-Keys": "payments",
-                    },
-                )
+    def test_enforcement_decision_exposes_capped_status_for_external_adapters(
+        self,
+    ) -> None:
+        project_key = self.persisted["project"]["project_key"]
+        saved = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                "project_key": project_key,
+                "integration": "jenkins",
+                "warn_at": "low",
+                "soft_block_at": None,
+                "hard_block_at": "medium",
+                "reporting_default": "advisory",
+                "enforcement_mode": "warn",
+            },
+        )
 
-                self.assertEqual(response.status_code, 403)
-                self.assertEqual(
-                    response.json()["error"]["code"], "project_scope_forbidden"
-                )
+        response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}/enforcement-decision",
+            params={"integration": "jenkins"},
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["configured_mode"], "warn")
+        self.assertEqual(payload["data"]["effective_status"], "warn")
+        self.assertFalse(payload["data"]["should_block"])
+        self.assertEqual(payload["data"]["policy_output"]["status"], "hard-block")
+        self.assertTrue(payload["data"]["policy_output"]["canonical_report_advisory"])
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+
+    def test_policy_adapter_output_enforces_report_scope_access(self) -> None:
+        for endpoint in ("policy-adapter", "enforcement-decision"):
+            for report_id in (self.persisted["id"], 999_999):
+                with self.subTest(endpoint=endpoint, report_id=report_id):
+                    response = self.client.get(
+                        f"/api/v1/analyses/{report_id}/{endpoint}",
+                        params={"integration": "jenkins"},
+                        headers={
+                            "X-DeployWhisper-Project-Role": "read-only",
+                            "X-DeployWhisper-Project-Keys": "payments",
+                        },
+                    )
+
+                    self.assertEqual(response.status_code, 403)
+                    self.assertEqual(
+                        response.json()["error"]["code"], "project_scope_forbidden"
+                    )
 
     def test_policy_adapter_output_reports_corrupt_settings_as_server_error(
         self,
@@ -658,16 +691,53 @@ class AnalysesApiTests(unittest.TestCase):
                 value="not-json",
             )
 
-        response = self.client.get(
-            f"/api/v1/analyses/{self.persisted['id']}/policy-adapter",
-            params={"integration": "jenkins"},
-        )
+        for endpoint in ("policy-adapter", "enforcement-decision"):
+            with self.subTest(endpoint=endpoint):
+                response = self.client.get(
+                    f"/api/v1/analyses/{self.persisted['id']}/{endpoint}",
+                    params={"integration": "jenkins"},
+                )
+
+                self.assertEqual(response.status_code, 500)
+                self.assertEqual(
+                    response.json()["error"]["code"],
+                    "policy_adapter_settings_integrity_error",
+                )
+
+    def test_enforcement_decision_reports_internal_invariant_failure_as_server_error(
+        self,
+    ) -> None:
+        with patch(
+            "api.routes.analyses.build_integration_enforcement_decision",
+            side_effect=ValueError("internal invariant detail"),
+        ):
+            response = self.client.get(
+                f"/api/v1/analyses/{self.persisted['id']}/enforcement-decision",
+                params={"integration": "jenkins"},
+            )
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(
             response.json()["error"]["code"],
-            "policy_adapter_settings_integrity_error",
+            "integration_enforcement_decision_invalid",
         )
+        self.assertNotIn("internal invariant detail", response.text)
+
+    def test_enforcement_decision_rejects_invalid_integration_as_client_error(
+        self,
+    ) -> None:
+        for integration in ("   ", "github/action"):
+            with self.subTest(integration=integration):
+                response = self.client.get(
+                    f"/api/v1/analyses/{self.persisted['id']}/enforcement-decision",
+                    params={"integration": integration},
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["error"]["code"],
+                    "invalid_integration_identifier",
+                )
 
     def test_blast_radius_api_schema_preserves_topology_context_fields(self) -> None:
         blast_radius = BlastRadiusData.model_validate(

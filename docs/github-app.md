@@ -62,11 +62,34 @@ Optional:
 - Webhook verification uses `X-Hub-Signature-256`
 - Pull request webhook actions `opened`, `reopened`, and `synchronize` can trigger automatic advisory analyses when PR automation is enabled
 - Supported changed artifacts are downloaded from GitHub, filtered through the shared intake rules, and sent through the existing parse/assess/persist pipeline
-- Check runs are advisory-only: `success` for `GO`, `neutral` for `CAUTION`, `failure` for `NO-GO`
+- Check runs resolve the `github` integration policy settings and expose raw policy status, configured enforcement mode, and effective status in the summary
+- The default `advisory` mode reports `success` for `GO` and `neutral` for other recommendations; `warn` also remains neutral
+- Explicit `soft-block` and `hard-block` modes produce `action_required` and `failure` conclusions respectively when the effective policy status is blocking
 - When checks are enabled, `APP_BASE_URL` or `PUBLIC_APP_URL` must point at a reachable DeployWhisper server so the GitHub PR Details link opens the full report
-- Do not configure `DeployWhisper / Risk Analysis` as a required status check in branch protection
+- Do not make `DeployWhisper / Risk Analysis` required while the integration uses `advisory` or `warn`; requiring it is an explicit operator choice for a blocking mode
 - Shared report URLs remain the deep-link target for richer investigation
 - `/reports/{id}` opens the React read-only Report screen, hides mutable internal actions, respects password-protected shares, and preserves `?compare=previous` comparison links
+
+Configure GitHub enforcement through the policy-adapter settings API. New and
+existing integrations remain advisory unless an operator explicitly opts into a
+blocking mode:
+
+```json
+{
+  "project_key": "your-project-key",
+  "integration": "github",
+  "warn_at": "medium",
+  "soft_block_at": "high",
+  "hard_block_at": "critical",
+  "reporting_default": "advisory",
+  "enforcement_mode": "advisory"
+}
+```
+
+Send this payload with `PUT /api/v1/settings/policy-adapter`. Supported
+enforcement modes are `advisory`, `warn`, `soft-block`, and `hard-block`.
+Do not make `DeployWhisper / Risk Analysis` required until the integration has
+been deliberately configured for a blocking mode.
 
 ## Manual installation flow
 

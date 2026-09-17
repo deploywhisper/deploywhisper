@@ -68,6 +68,7 @@ class SettingsServiceTests(unittest.TestCase):
             soft_block_at="high",
             hard_block_at="critical",
             reporting_default="advisory",
+            enforcement_mode="warn",
         )
         integration_settings = settings_service_module.save_policy_adapter_settings(
             project_key="payments",
@@ -76,6 +77,7 @@ class SettingsServiceTests(unittest.TestCase):
             soft_block_at="critical",
             hard_block_at=None,
             reporting_default="warn",
+            enforcement_mode="soft-block",
         )
 
         resolved_project = settings_service_module.get_policy_adapter_settings(
@@ -95,8 +97,14 @@ class SettingsServiceTests(unittest.TestCase):
         self.assertEqual(
             resolved_integration.reporting_default, PolicyAdapterStatus.WARN
         )
+        self.assertEqual(
+            resolved_integration.enforcement_mode, PolicyAdapterStatus.SOFT_BLOCK
+        )
         self.assertEqual(unresolved_integration.source, "project")
         self.assertIsNone(unresolved_integration.integration)
+        self.assertEqual(
+            unresolved_integration.enforcement_mode, PolicyAdapterStatus.WARN
+        )
 
     def test_policy_adapter_settings_use_safe_built_in_defaults(self) -> None:
         settings = settings_service_module.get_policy_adapter_settings(
@@ -105,9 +113,30 @@ class SettingsServiceTests(unittest.TestCase):
 
         self.assertEqual(settings.source, "built-in")
         self.assertEqual(settings.reporting_default, PolicyAdapterStatus.ADVISORY)
+        self.assertEqual(settings.enforcement_mode, PolicyAdapterStatus.ADVISORY)
         self.assertEqual(settings.warn_at.value, "medium")
         self.assertEqual(settings.soft_block_at.value, "high")
         self.assertEqual(settings.hard_block_at.value, "critical")
+
+    def test_policy_adapter_service_update_preserves_existing_enforcement_mode(
+        self,
+    ) -> None:
+        settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            enforcement_mode="hard-block",
+        )
+
+        updated = settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+            reporting_default="warn",
+        )
+
+        self.assertEqual(updated.enforcement_mode, PolicyAdapterStatus.HARD_BLOCK)
 
     def test_policy_adapter_settings_use_canonical_project_keys_for_storage(
         self,
@@ -236,6 +265,59 @@ class SettingsServiceTests(unittest.TestCase):
             "could not be validated",
         ):
             settings_service_module.get_policy_adapter_settings(project_key="payments")
+
+    def test_policy_adapter_settings_default_legacy_storage_to_advisory_enforcement(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key="policy_adapter_defaults::payments::project",
+                value=json.dumps(
+                    {
+                        "project_key": "payments",
+                        "source": "project",
+                        "warn_at": "medium",
+                        "soft_block_at": "high",
+                        "hard_block_at": "critical",
+                        "reporting_default": "advisory",
+                    }
+                ),
+            )
+
+        loaded = settings_service_module.get_policy_adapter_settings(
+            project_key="payments"
+        )
+
+        self.assertEqual(loaded.enforcement_mode, PolicyAdapterStatus.ADVISORY)
+
+    def test_integration_policy_settings_default_legacy_storage_to_advisory_enforcement(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key="policy_adapter_defaults::payments::integration::jenkins",
+                value=json.dumps(
+                    {
+                        "project_key": "payments",
+                        "integration": "jenkins",
+                        "source": "integration",
+                        "warn_at": "medium",
+                        "soft_block_at": "high",
+                        "hard_block_at": "critical",
+                        "reporting_default": "advisory",
+                    }
+                ),
+            )
+
+        loaded = settings_service_module.get_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+        )
+
+        self.assertEqual(loaded.source, "integration")
+        self.assertEqual(loaded.enforcement_mode, PolicyAdapterStatus.ADVISORY)
 
     def test_provider_profiles_can_be_saved_per_provider_and_switched(self) -> None:
         settings_service_module.save_provider_settings(

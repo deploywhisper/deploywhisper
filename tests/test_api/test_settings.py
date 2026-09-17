@@ -98,6 +98,7 @@ class SettingsApiTests(unittest.TestCase):
             "soft_block_at": "high",
             "hard_block_at": "critical",
             "reporting_default": "advisory",
+            "enforcement_mode": "warn",
         }
         saved_project = self.client.put(
             "/api/v1/settings/policy-adapter",
@@ -112,6 +113,7 @@ class SettingsApiTests(unittest.TestCase):
                 "soft_block_at": "critical",
                 "hard_block_at": None,
                 "reporting_default": "warn",
+                "enforcement_mode": "soft-block",
             },
         )
         loaded = self.client.get(
@@ -128,7 +130,88 @@ class SettingsApiTests(unittest.TestCase):
         self.assertEqual(loaded.status_code, 200)
         self.assertEqual(loaded.json()["data"]["source"], "integration")
         self.assertEqual(loaded.json()["data"]["reporting_default"], "warn")
+        self.assertEqual(loaded.json()["data"]["enforcement_mode"], "soft-block")
         self.assertIsNone(loaded.json()["data"]["hard_block_at"])
+
+    def test_policy_adapter_defaults_reject_unknown_enforcement_mode(self) -> None:
+        response = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                "project_key": self.project.project_key,
+                "enforcement_mode": "block-everything",
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_policy_adapter_defaults_expose_advisory_built_in_mode(self) -> None:
+        response = self.client.get(
+            "/api/v1/settings/policy-adapter",
+            params={"project_key": self.project.project_key},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["source"], "built-in")
+        self.assertEqual(response.json()["data"]["enforcement_mode"], "advisory")
+
+    def test_legacy_policy_adapter_put_preserves_existing_enforcement_mode(
+        self,
+    ) -> None:
+        for integration in (None, "jenkins"):
+            with self.subTest(integration=integration):
+                initial = {
+                    "project_key": self.project.project_key,
+                    "integration": integration,
+                    "warn_at": "medium",
+                    "soft_block_at": "high",
+                    "hard_block_at": "critical",
+                    "reporting_default": "advisory",
+                    "enforcement_mode": "hard-block",
+                }
+                self.client.put("/api/v1/settings/policy-adapter", json=initial)
+
+                response = self.client.put(
+                    "/api/v1/settings/policy-adapter",
+                    json={
+                        key: value
+                        for key, value in initial.items()
+                        if key != "enforcement_mode"
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    response.json()["data"]["enforcement_mode"], "hard-block"
+                )
+
+    def test_legacy_integration_put_preserves_inherited_project_enforcement_mode(
+        self,
+    ) -> None:
+        project_payload = {
+            "project_key": self.project.project_key,
+            "warn_at": "medium",
+            "soft_block_at": "high",
+            "hard_block_at": "critical",
+            "reporting_default": "advisory",
+            "enforcement_mode": "hard-block",
+        }
+        self.client.put("/api/v1/settings/policy-adapter", json=project_payload)
+
+        response = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                "project_key": self.project.project_key,
+                "integration": "jenkins",
+                "warn_at": "high",
+                "soft_block_at": "critical",
+                "hard_block_at": None,
+                "reporting_default": "warn",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["source"], "integration")
+        self.assertEqual(response.json()["data"]["enforcement_mode"], "hard-block")
 
     def test_policy_adapter_defaults_require_admin_settings_permission(self) -> None:
         response = self.client.put(
@@ -173,6 +256,7 @@ class SettingsApiTests(unittest.TestCase):
             "soft_block_at": "high",
             "hard_block_at": "critical",
             "reporting_default": "advisory",
+            "enforcement_mode": "warn",
         }
         self.client.put("/api/v1/settings/policy-adapter", json=project_payload)
         self.client.put(
@@ -184,6 +268,7 @@ class SettingsApiTests(unittest.TestCase):
                 "soft_block_at": "critical",
                 "hard_block_at": None,
                 "reporting_default": "warn",
+                "enforcement_mode": "hard-block",
             },
         )
 
@@ -201,8 +286,10 @@ class SettingsApiTests(unittest.TestCase):
 
         self.assertEqual(reset_integration.status_code, 200)
         self.assertEqual(reset_integration.json()["data"]["source"], "project")
+        self.assertEqual(reset_integration.json()["data"]["enforcement_mode"], "warn")
         self.assertEqual(reset_project.status_code, 200)
         self.assertEqual(reset_project.json()["data"]["source"], "built-in")
+        self.assertEqual(reset_project.json()["data"]["enforcement_mode"], "advisory")
 
     def test_policy_adapter_defaults_require_explicit_project_scope(self) -> None:
         requests = (

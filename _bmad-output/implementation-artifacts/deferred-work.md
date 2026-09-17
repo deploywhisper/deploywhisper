@@ -66,3 +66,16 @@
 ## Deferred from: code review of 10-4-prompt-injection-test-suite.md (2026-07-31)
 
 - Resolved 2026-07-31: Release-blocking claims such as `Stop the release` and `Release should be blocked` now contradict a GO recommendation [llm/prompt_security.py:97].
+
+## Deferred from: code review of 11-3-integration-level-enforcement-settings.md (2026-08-14)
+
+- Resolved 2026-08-14: GitHub check-run creation failures on neutral-skip and successful-analysis paths now return bounded partial results while preserving handled webhook state and persisted report references [integrations/github/app_service.py:421].
+- Resolved 2026-08-14: GitHub skipped-analysis guidance now distinguishes sensitive-only, unsupported-only, mixed rejected, and empty artifact sets without exposing filenames or contents [integrations/github/app_service.py:414].
+
+## Deferred from: code review of 11-3-integration-level-enforcement-settings.md (2026-08-17)
+
+- Resolved 2026-08-17: GitHub project-scope failures now return a bounded partial webhook result when check-run delivery also fails, while retaining the original project error in sanitized operator guidance [integrations/github/app_service.py:681].
+
+## Deferred from: code review of 11-3-integration-level-enforcement-settings.md (2026-08-18)
+
+- Resolved 2026-08-18: Project-scope failures now return failed results with their original machine-readable root-cause code; compounded GitHub check delivery failures are exposed separately through `delivery_code` [integrations/github/app_service.py:668].
