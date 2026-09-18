@@ -83,6 +83,10 @@ PY
 ## CI Guidance
 
 - Do not fail a pipeline based only on risk score or recommendation
-- Keep the integration in `advisory` or `warn` mode until the team explicitly opts into `soft-block` or `hard-block`
+- Before onboarding or expanding a consumer, inspect the resolved setting source
+  and configured mode. An integration without an override may inherit
+  `soft-block` or `hard-block` from the project default; create a scoped
+  `advisory` override or complete the blocking guardrail review before enabling
+  the consumer.
 - Use `requires_attention` and `uncertainty_flags` to decide when to notify reviewers, enrich PR comments, or request additional manual checks
 - Treat non-zero CLI exit codes as operational failures, not advisory outcomes

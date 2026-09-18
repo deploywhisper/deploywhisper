@@ -29,7 +29,7 @@ class AnalyzeActionCapability(str, Enum):
 
 
 ANALYZE_ACTION_CAPABILITIES = {
-    ANALYZE_ACTION_PINNED_SHA: AnalyzeActionCapability.ADVISORY_ONLY,
+    "3b37ed72bfb2d201030bef873268f2170794b160": (AnalyzeActionCapability.ADVISORY_ONLY),
 }
 README_SECTION_START = "<!-- deploywhisper:start -->"
 README_SECTION_END = "<!-- deploywhisper:end -->"
@@ -428,11 +428,17 @@ def _render_github_app_notes(options: GitHubInitOptions) -> str:
 
 
 def _render_pr_body(options: GitHubInitOptions, *, workflow_path: str) -> str:
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    behavior = (
+        "advisory-only"
+        if capability is AnalyzeActionCapability.ADVISORY_ONLY
+        else "enforcement-capable"
+    )
     lines = [
         "## Summary",
         "",
         "- add the DeployWhisper GitHub workflow",
-        "- document the API endpoint and advisory-only check behavior",
+        f"- document the API endpoint and {behavior} check behavior",
     ]
     if options.enable_github_app:
         lines.append("- add advanced self-hosted GitHub App setup notes")

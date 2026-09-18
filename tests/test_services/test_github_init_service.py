@@ -269,6 +269,47 @@ class GitHubInitServiceTests(unittest.TestCase):
                     notes_path=None,
                 )
 
+    def test_capability_registry_is_independent_of_selected_pin(self) -> None:
+        self.assertEqual(
+            {
+                "3b37ed72bfb2d201030bef873268f2170794b160": (
+                    init_service.AnalyzeActionCapability.ADVISORY_ONLY
+                )
+            },
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+        )
+
+    def test_enforcement_capable_pin_updates_all_generated_guidance(self) -> None:
+        revision = "b" * 40
+        options = init_service.GitHubInitOptions(
+            repo_path=".",
+            workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+            api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+            enable_github_app=False,
+            base_branch="develop",
+            project_key="payments",
+        )
+
+        with patch.dict(
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+            {revision: init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE},
+        ):
+            with patch.object(init_service, "ANALYZE_ACTION_PINNED_SHA", revision):
+                readme = init_service._render_readme_section(
+                    options,
+                    workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+                    notes_path=None,
+                )
+                pr_body = init_service._render_pr_body(
+                    options,
+                    workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+                )
+
+        self.assertIn(f"Action revision `{revision}` is enforcement-capable", readme)
+        self.assertNotIn(f"Action revision `{revision}` is advisory-only", readme)
+        self.assertIn("enforcement-capable check behavior", pr_body)
+        self.assertNotIn("advisory-only check behavior", pr_body)
+
     @patch("integrations.github.init_service._require_binary")
     @patch("integrations.github.init_service._run_command")
     def test_run_github_init_quotes_yaml_scope_inputs(

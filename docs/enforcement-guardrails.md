@@ -78,10 +78,12 @@ merely to a reusable check name.
 Audit path and event filters, job-level `if` conditions, dependency skips, and
 cancellation. Top-level event or path filters can prevent a workflow from
 starting, so the required context must come from a separate always-triggered
-terminal workflow for every protected event. Within that workflow, use
-job-level `if: always()` handling to report failure when analysis/enforcement is
-skipped, cancelled, or times out; do not leave the required context absent or
-pending indefinitely.
+terminal workflow for every protected event. An independent watchdog outside
+the cancellable analysis workflow must own or fail the required context when a
+run is cancelled or times out. In-workflow cleanup cannot rely on `if: always()`
+after cancellation; use it only to report skips and failures while that workflow
+is still executing. Do not leave the required context absent or pending
+indefinitely.
 
 Test the protected branch or environment with a synthetic blocking result and
 an authorized exception before rollout. If the change can still merge or
@@ -254,6 +256,14 @@ channel and engage an independent delivery freeze that prevents merge or
 deployment until an operator verifies a valid protected result or approves the
 break-glass path.
 
+An analysis-submission timeout creates an unknown submission outcome because the
+server may have committed a report before the client lost the response. Freeze
+delivery and have the external coordinator reconcile the original request
+before retrying, using operator-owned request identity, report provenance, and
+audit records. Never issue a blind retry that can create competing reports. If
+the original outcome cannot be reconciled, do not retry as a blocking consumer;
+keep the integration non-blocking and require operator disposition.
+
 A protection-layer bypass does not change the DeployWhisper decision and does
 not require an unchanged analysis rerun to pretend that the result changed.
 Prefer a report- and integration-scoped protection bypass approved by a human
@@ -284,6 +294,13 @@ new exception request with a new independent approval; editing the existing
 expiry or repeatedly reusing the same approval is prohibited. The independent
 approver must be unable to write the applicable DeployWhisper settings or
 unilaterally disable the delivery freeze.
+
+Prefer a per-exception bypass capability whose provider identity is bound to the
+exception identifier and intended delivery. If only one repository-wide bypass
+capability exists, allow one active exception at a time and serialize approval,
+use, revocation, and revocation verification. Do not activate a second exception
+until the first capability is verifiably revoked; otherwise one revocation can
+terminate a valid exception or one approval can extend an expired exception.
 
 Do not use policy settings as break glass in v1. The API has no atomic
 compare-and-swap or enforced expiry, and restoring the blocking setting before a
@@ -469,6 +486,13 @@ Also dismiss and reacquire approval when the report ID, manifest, settings
 snapshot, material context, consumer revision, or workflow changes without a
 commit change; those inputs can materially change the reviewed decision while
 leaving the protected SHA unchanged.
+
+Repository commit approval alone cannot enforce those non-commit invalidations.
+Use an external approval record or independently enforced approval check keyed
+to the complete decision identity: protected commit, report ID, manifest digest,
+settings snapshot digest, material-context digest, consumer revision, and
+workflow revision. The delivery control must reject a missing or stale approval
+record and require a new authorized human decision for the new identity.
 
 ## Rollback remains an operator responsibility
 

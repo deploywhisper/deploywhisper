@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 import unittest
+from urllib.parse import unquote, urlparse
 
 import yaml
 
@@ -69,6 +70,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "bound to the protected commit",
                 "checkout ref, artifact selection, `changed-files`, project and workspace scope, and working directory",
                 "path and event filters, job-level `if` conditions, dependency skips, and cancellation",
+                "independent watchdog",
+                "cannot rely on `if: always()`",
             ),
             "## Review inherited settings before changing scope": (
                 "new repository, environment, change class, or other scope",
@@ -113,6 +116,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "idempotency key",
                 "do not provide native idempotent create or check-update semantics",
                 "durable external coordinator",
+                "unknown submission outcome",
+                "reconcile the original request before retrying",
                 "out-of-band alert",
                 "independent delivery freeze",
                 "trusted identity layer",
@@ -121,6 +126,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "immutable exception identifier",
                 "organization-approved maximum TTL",
                 "new independent approval",
+                "one active exception at a time",
+                "per-exception bypass capability",
                 "encrypted immutable raw response",
                 "separate redacted reviewer view",
             ),
@@ -149,6 +156,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "including runs whose effective status is only `advisory` or `warn`",
                 "Elevated specialist review",
                 "report ID, manifest, settings snapshot, material context, consumer revision, or workflow changes",
+                "external approval record",
+                "complete decision identity",
             ),
             "## Rollout checklist": (
                 "source-bound required check or job",
@@ -232,7 +241,11 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                     else "./enforcement-guardrails.md"
                 )
                 self.assertIn(expected_target, links)
-                self.assertTrue((source.parent / expected_target).resolve().exists())
+                self.assertTrue(
+                    self._resolved_local_doc_target(source.parent, expected_target)
+                    .resolve()
+                    .is_file()
+                )
 
     def test_guardrail_guide_outbound_links_resolve(self) -> None:
         content = GUARDRAIL_GUIDE.read_text(encoding="utf-8")
@@ -246,14 +259,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         ):
             with self.subTest(expected_target=expected_target):
                 self.assertIn(expected_target, links)
-                self.assertTrue(
-                    (
-                        target_path := GUARDRAIL_GUIDE.parent
-                        / expected_target.split("#", 1)[0]
-                    )
-                    .resolve()
-                    .exists()
+                target_path = self._resolved_local_doc_target(
+                    GUARDRAIL_GUIDE.parent, expected_target
                 )
+                self.assertTrue(target_path.is_file())
                 if "#" in expected_target:
                     fragment = expected_target.split("#", 1)[1]
                     self.assertIn(
@@ -391,6 +400,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "fromJSON(steps.deploywhisper.outputs.should-block)",
             content,
         )
+        self.assertIn(
+            'reject any `should-block` value other than the exact strings `"true"` and `"false"`',
+            content,
+        )
 
     def test_documented_workflow_pins_match_scaffold_constants(self) -> None:
         for relative_path in ("README.md", "docs/github-action.md"):
@@ -434,6 +447,14 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                     "integration override before the inherited project default",
                     content,
                 )
+
+        ci_guidance = self._normalized(
+            (REPO_ROOT / "docs" / "ci-advisory-consumption.md").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertNotIn("until the team explicitly opts into", ci_guidance)
+        self.assertIn("inspect the resolved setting source", ci_guidance)
 
     def test_self_hosted_runbook_preserves_narrow_setting_scope(self) -> None:
         content = (REPO_ROOT / "docs" / "github-app-self-hosted-setup.md").read_text(
@@ -545,6 +566,23 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         self.assertIn("guardrails-2", collision_anchors)
         self.assertIn("not-hidden-by-an-invalid-fence", collision_anchors)
 
+        hidden_content = """\
+<!--
+## Hidden comment heading
+-->
+````markdown
+```yaml
+## Hidden nested fence heading
+```
+````
+Visible Setext Heading
+----------------------
+"""
+        self.assertEqual(
+            {"visible-setext-heading"},
+            self._markdown_heading_anchors(hidden_content),
+        )
+
     def test_section_extraction_ignores_fenced_pseudo_headings(self) -> None:
         content = """\
 ## Target
@@ -557,8 +595,24 @@ still required
 outside target
 """
         self.assertEqual(
-            "required clause\n```markdown\n## Fake next section\n```\nstill required\n",
+            "required clause\nstill required\n",
             self._section(content, "## Target"),
+        )
+
+        commented_and_setext = """\
+  ## Target
+visible requirement
+<!-- hidden requirement -->
+```text
+hidden fenced requirement
+```
+Next Section
+------------
+later requirement
+"""
+        self.assertEqual(
+            "visible requirement",
+            self._normalized(self._section(commented_and_setext, "## Target")),
         )
 
     def test_effective_status_parser_rejects_duplicate_tables(self) -> None:
@@ -571,43 +625,119 @@ outside target
         with self.assertRaisesRegex(AssertionError, "exactly once"):
             self._effective_status_rows(duplicate)
 
+        with self.assertRaisesRegex(AssertionError, "separator is missing"):
+            self._effective_status_rows(table_start)
+
+    def test_markdown_links_ignore_non_rendered_content_and_resolve_safely(
+        self,
+    ) -> None:
+        content = r"""
+<!-- [Hidden](./hidden.md) -->
+```markdown
+[Fenced](./fenced.md)
+```
+[Parentheses](./guide_(v2).md)
+[Angle](<./guide with spaces.md>)
+[Escaped](./guide_\(v3\).md)
+"""
+        self.assertEqual(
+            {
+                "./guide_(v2).md",
+                "./guide with spaces.md",
+                "./guide_(v3).md",
+            },
+            self._markdown_links(content),
+        )
+
+    def test_documented_workflow_ignores_nested_and_commented_fences(self) -> None:
+        real_workflow = """\
+```yaml
+jobs:
+  deploywhisper:
+    steps: []
+```
+"""
+        hidden_workflows = """\
+<!--
+```yaml
+jobs:
+  hidden-comment: {}
+```
+-->
+````markdown
+```yaml
+jobs:
+  hidden-nested: {}
+```
+````
+"""
+        self.assertEqual(
+            {"jobs": {"deploywhisper": {"steps": []}}},
+            self._documented_workflow(f"{hidden_workflows}{real_workflow}"),
+        )
+
     @staticmethod
     def _normalized(value: str) -> str:
         return re.sub(r"\s+", " ", value).strip()
 
     @staticmethod
     def _markdown_links(value: str) -> set[str]:
-        return {target for _, target in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", value)}
+        visible = "".join(
+            EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
+                value, keepends=True
+            )
+        )
+        targets: set[str] = set()
+        cursor = 0
+        while cursor < len(visible):
+            label_start = visible.find("[", cursor)
+            if label_start < 0:
+                break
+            if label_start > 0 and visible[label_start - 1] in {"!", "\\"}:
+                cursor = label_start + 1
+                continue
+            label_end = EnforcementGuardrailDocumentationTests._find_unescaped(
+                visible, "]", label_start + 1
+            )
+            if label_end < 0 or label_end + 1 >= len(visible):
+                break
+            if visible[label_end + 1] != "(":
+                cursor = label_end + 1
+                continue
+
+            target_start = label_end + 2
+            while target_start < len(visible) and visible[target_start] in " \t":
+                target_start += 1
+            target, link_end = (
+                EnforcementGuardrailDocumentationTests._parse_link_destination(
+                    visible, target_start
+                )
+            )
+            if target is not None:
+                targets.add(target)
+                cursor = link_end
+            else:
+                cursor = label_end + 1
+        return targets
 
     @staticmethod
     def _markdown_heading_anchors(value: str) -> set[str]:
         anchors: set[str] = set()
         duplicate_counts: dict[str, int] = {}
-        fence_character: str | None = None
-        fence_length = 0
 
-        for line in value.splitlines():
-            if fence_character is None:
-                opening_fence = EnforcementGuardrailDocumentationTests._opening_fence(
-                    line
-                )
-                if opening_fence is not None:
-                    marker = opening_fence
-                    fence_character = marker[0]
-                    fence_length = len(marker)
-                    continue
-            else:
-                if EnforcementGuardrailDocumentationTests._is_closing_fence(
-                    line, fence_character, fence_length
-                ):
-                    fence_character = None
-                    fence_length = 0
-                continue
-
+        lines = EnforcementGuardrailDocumentationTests._rendered_markdown_lines(value)
+        for index, line in enumerate(lines):
             heading_match = re.match(r"^ {0,3}#{1,6}\s+(.+?)\s*$", line)
-            if heading_match is None:
+            if heading_match is not None:
+                heading = re.sub(r"\s+#+\s*$", "", heading_match.group(1))
+            elif (
+                index + 1 < len(lines)
+                and line.strip()
+                and re.fullmatch(r" {0,3}(=+|-+)[ \t]*", lines[index + 1])
+            ):
+                heading = line.strip()
+            else:
                 continue
-            heading = re.sub(r"\s+#+\s*$", "", heading_match.group(1))
             base_anchor = re.sub(r"[^\w\- ]", "", heading.lower())
             base_anchor = re.sub(r"\s", "-", base_anchor)
             duplicate_number = duplicate_counts.get(base_anchor, 0)
@@ -622,28 +752,13 @@ outside target
     @staticmethod
     def _section(value: str, heading: str) -> str:
         level = len(heading) - len(heading.lstrip("#"))
-        lines = value.splitlines(keepends=True)
+        lines = EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
+            value, keepends=True
+        )
         matches: list[int] = []
-        fence_character: str | None = None
-        fence_length = 0
         for index, line_with_ending in enumerate(lines):
             line = line_with_ending.rstrip("\r\n")
-            if fence_character is None:
-                opening_fence = EnforcementGuardrailDocumentationTests._opening_fence(
-                    line
-                )
-                if opening_fence is not None:
-                    fence_character = opening_fence[0]
-                    fence_length = len(opening_fence)
-                    continue
-            else:
-                if EnforcementGuardrailDocumentationTests._is_closing_fence(
-                    line, fence_character, fence_length
-                ):
-                    fence_character = None
-                    fence_length = 0
-                continue
-            if line == heading:
+            if line.lstrip(" ") == heading and len(line) - len(line.lstrip(" ")) <= 3:
                 matches.append(index)
 
         if not matches:
@@ -652,41 +767,44 @@ outside target
             raise AssertionError(f"Duplicate section: {heading}")
 
         start = matches[0] + 1
-        fence_character = None
-        fence_length = 0
         end = len(lines)
         for index in range(start, len(lines)):
             line = lines[index].rstrip("\r\n")
-            if fence_character is None:
-                opening_fence = EnforcementGuardrailDocumentationTests._opening_fence(
-                    line
-                )
-                if opening_fence is not None:
-                    fence_character = opening_fence[0]
-                    fence_length = len(opening_fence)
-                    continue
-            else:
-                if EnforcementGuardrailDocumentationTests._is_closing_fence(
-                    line, fence_character, fence_length
-                ):
-                    fence_character = None
-                    fence_length = 0
-                continue
-            heading_match = re.match(r"^(#{1,6})\s+", line)
+            heading_match = re.match(r"^ {0,3}(#{1,6})\s+", line)
             if heading_match is not None and len(heading_match.group(1)) <= level:
                 end = index
                 break
+            if (
+                index + 1 < len(lines)
+                and line.strip()
+                and (
+                    setext_match := re.fullmatch(
+                        r" {0,3}(=+|-+)[ \t]*",
+                        lines[index + 1].rstrip("\r\n"),
+                    )
+                )
+                is not None
+            ):
+                setext_level = 1 if setext_match.group(1).startswith("=") else 2
+                if setext_level <= level:
+                    end = index
+                    break
         return "".join(lines[start:end])
 
     @staticmethod
     def _opening_fence(line: str) -> str | None:
+        result = EnforcementGuardrailDocumentationTests._opening_fence_info(line)
+        return result[0] if result is not None else None
+
+    @staticmethod
+    def _opening_fence_info(line: str) -> tuple[str, str] | None:
         match = re.match(r"^ {0,3}(?P<marker>`{3,}|~{3,})(?P<info>.*)$", line)
         if match is None:
             return None
         marker = match.group("marker")
         if marker.startswith("`") and "`" in match.group("info"):
             return None
-        return marker
+        return marker, match.group("info").strip()
 
     @staticmethod
     def _is_closing_fence(line: str, character: str, length: int) -> bool:
@@ -699,10 +817,33 @@ outside target
     @staticmethod
     def _documented_workflow(value: str) -> dict[str, object]:
         workflows: list[dict[str, object]] = []
-        for match in re.finditer(r"(?ms)^```ya?ml[ \t]*\n(.*?)^```[ \t]*$", value):
-            payload = yaml.safe_load(match.group(1))
-            if isinstance(payload, dict) and "jobs" in payload:
-                workflows.append(payload)
+        comment_free = re.sub(r"<!--.*?-->", "", value, flags=re.DOTALL)
+        lines = comment_free.splitlines()
+        index = 0
+        while index < len(lines):
+            opening = EnforcementGuardrailDocumentationTests._opening_fence_info(
+                lines[index]
+            )
+            if opening is None:
+                index += 1
+                continue
+            marker, info = opening
+            fence_character = marker[0]
+            fence_length = len(marker)
+            body: list[str] = []
+            index += 1
+            while index < len(lines) and not (
+                EnforcementGuardrailDocumentationTests._is_closing_fence(
+                    lines[index], fence_character, fence_length
+                )
+            ):
+                body.append(lines[index])
+                index += 1
+            if info.lower() in {"yaml", "yml"}:
+                payload = yaml.safe_load("\n".join(body))
+                if isinstance(payload, dict) and "jobs" in payload:
+                    workflows.append(payload)
+            index += 1
         if len(workflows) != 1:
             raise AssertionError(
                 f"Expected exactly one documented workflow, found {len(workflows)}"
@@ -720,6 +861,8 @@ outside target
         except ValueError as exc:
             raise AssertionError("Effective-status table header is missing") from exc
         expected_separator = "| --- | --- | --- |"
+        if header_index + 1 >= len(lines):
+            raise AssertionError("Effective-status table separator is missing")
         if lines[header_index + 1] != expected_separator:
             raise AssertionError("Effective-status table separator is malformed")
 
@@ -743,3 +886,96 @@ outside target
                 cells[2].replace("`", ""),
             )
         return rows
+
+    @staticmethod
+    def _rendered_markdown_lines(value: str, *, keepends: bool = False) -> list[str]:
+        comment_free = re.sub(r"<!--.*?-->", "", value, flags=re.DOTALL)
+        rendered: list[str] = []
+        fence_character: str | None = None
+        fence_length = 0
+        for line_with_ending in comment_free.splitlines(keepends=keepends):
+            line = line_with_ending.rstrip("\r\n")
+            if fence_character is None:
+                opening = EnforcementGuardrailDocumentationTests._opening_fence(line)
+                if opening is not None:
+                    fence_character = opening[0]
+                    fence_length = len(opening)
+                    continue
+                rendered.append(line_with_ending)
+            elif EnforcementGuardrailDocumentationTests._is_closing_fence(
+                line, fence_character, fence_length
+            ):
+                fence_character = None
+                fence_length = 0
+        return rendered
+
+    @staticmethod
+    def _find_unescaped(value: str, character: str, start: int) -> int:
+        escaped = False
+        for index in range(start, len(value)):
+            if escaped:
+                escaped = False
+                continue
+            if value[index] == "\\":
+                escaped = True
+                continue
+            if value[index] == character:
+                return index
+        return -1
+
+    @staticmethod
+    def _parse_link_destination(value: str, start: int) -> tuple[str | None, int]:
+        if start >= len(value):
+            return None, start
+        if value[start] == "<":
+            end = EnforcementGuardrailDocumentationTests._find_unescaped(
+                value, ">", start + 1
+            )
+            if end < 0:
+                return None, start
+            closing = value.find(")", end + 1)
+            if closing < 0:
+                return None, start
+            return value[start + 1 : end], closing + 1
+
+        target: list[str] = []
+        depth = 1
+        index = start
+        while index < len(value):
+            character = value[index]
+            if character == "\\" and index + 1 < len(value):
+                target.append(value[index + 1])
+                index += 2
+                continue
+            if character == "(":
+                depth += 1
+                target.append(character)
+            elif character == ")":
+                depth -= 1
+                if depth == 0:
+                    return "".join(target).strip(), index + 1
+                target.append(character)
+            elif character in " \t\r\n" and depth == 1:
+                closing = value.find(")", index)
+                if closing < 0:
+                    return None, start
+                return "".join(target).strip(), closing + 1
+            else:
+                target.append(character)
+            index += 1
+        return None, start
+
+    @staticmethod
+    def _resolved_local_doc_target(base: Path, target: str) -> Path:
+        parsed = urlparse(target)
+        if parsed.scheme or parsed.netloc or parsed.path.startswith("/"):
+            raise AssertionError(
+                f"Expected a repository-local documentation link: {target}"
+            )
+        candidate = (base / unquote(parsed.path)).resolve()
+        repository_root = REPO_ROOT.resolve()
+        if not candidate.is_relative_to(repository_root):
+            raise AssertionError(f"Documentation link escapes repository: {target}")
+        if not candidate.is_file():
+            raise AssertionError(f"Documentation link is not a file: {target}")
+        return candidate

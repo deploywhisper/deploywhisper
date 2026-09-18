@@ -147,6 +147,9 @@ comparison such as
 `steps.deploywhisper.outputs.should-block == 'true'` or parse it with
 `fromJSON(steps.deploywhisper.outputs.should-block)`. Do not use the nonempty
 string directly as a boolean because both `"true"` and `"false"` are strings.
+Before either operation, reject a missing output and reject any `should-block`
+value other than the exact strings `"true"` and `"false"`; treat malformed
+values and `fromJSON` failures as operational errors that fail the workflow.
 
 The `report-link` output is publicly shareable only when the DeployWhisper
 server is configured with a public base URL such as `APP_BASE_URL` or
