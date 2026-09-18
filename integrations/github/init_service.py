@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import json
 import os
 from pathlib import Path
@@ -14,8 +15,28 @@ from urllib.parse import urlparse
 DEFAULT_WORKFLOW_PATH = ".github/workflows/deploywhisper.yml"
 DEFAULT_APP_NOTES_PATH = ".github/deploywhisper-self-hosted-github-app.md"
 DEFAULT_BRANCH_NAME = "feature/deploywhisper-github-init"
+# Immutable commit behind deploywhisper/analyze-action v1, reviewed 2026-09-09.
+ANALYZE_ACTION_PINNED_SHA = "3b37ed72bfb2d201030bef873268f2170794b160"
+# Immutable commit resolved from actions/checkout v4, reviewed 2026-09-09.
+CHECKOUT_ACTION_PINNED_SHA = "11d5960a326750d5838078e36cf38b85af677262"
+
+
+class AnalyzeActionCapability(str, Enum):
+    """Runtime capabilities that generated guidance may safely promise."""
+
+    ADVISORY_ONLY = "advisory-only"
+    ENFORCEMENT_CAPABLE = "enforcement-capable"
+
+
+ANALYZE_ACTION_CAPABILITIES = {
+    "3b37ed72bfb2d201030bef873268f2170794b160": (AnalyzeActionCapability.ADVISORY_ONLY),
+}
 README_SECTION_START = "<!-- deploywhisper:start -->"
 README_SECTION_END = "<!-- deploywhisper:end -->"
+ENFORCEMENT_GUARDRAILS_URL = (
+    "https://github.com/deploywhisper/deploywhisper/blob/develop/"
+    "docs/enforcement-guardrails.md"
+)
 OPERATOR_DOCS_URL = (
     "https://github.com/deploywhisper/deploywhisper/blob/develop/"
     "docs/github-app-self-hosted-setup.md"
@@ -24,6 +45,16 @@ OPERATOR_DOCS_URL = (
 
 class GitHubInitError(RuntimeError):
     """Raised when the GitHub init wizard cannot complete."""
+
+
+def _analyze_action_capability(revision: str) -> AnalyzeActionCapability:
+    try:
+        return ANALYZE_ACTION_CAPABILITIES[revision]
+    except KeyError as exc:
+        raise GitHubInitError(
+            "Unclassified DeployWhisper Analyze Action revision: "
+            f"{revision}. Classify the immutable revision before generating files."
+        ) from exc
 
 
 @dataclass(frozen=True)
@@ -274,6 +305,7 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
 
 
 def _render_workflow(options: GitHubInitOptions) -> str:
+    _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
     api_endpoint = options.api_endpoint.strip()
     scope_lines = _render_action_scope_inputs(options)
     workflow = dedent(
@@ -294,10 +326,11 @@ def _render_workflow(options: GitHubInitOptions) -> str:
             env:
               DEPLOYWHISPER_API_URL: {api_endpoint}
             steps:
-              - uses: actions/checkout@v4
+              - uses: actions/checkout@{CHECKOUT_ACTION_PINNED_SHA}
                 with:
                   fetch-depth: 0
-              - uses: deploywhisper/analyze-action@v1
+              - id: deploywhisper
+                uses: deploywhisper/analyze-action@{ANALYZE_ACTION_PINNED_SHA}
                 with:
                   api-url: ${{{{ env.DEPLOYWHISPER_API_URL }}}}
                   api-token: ${{{{ secrets.DEPLOYWHISPER_API_TOKEN }}}}
@@ -312,10 +345,24 @@ def _render_readme_section(
     workflow_path: str,
     notes_path: str | None,
 ) -> str:
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    if capability is AnalyzeActionCapability.ADVISORY_ONLY:
+        capability_summary = (
+            f"Action revision `{ANALYZE_ACTION_PINNED_SHA}` is advisory-only; "
+            "a later reviewed enforcement-capable revision must follow the resolved "
+            "server settings."
+        )
+    else:
+        capability_summary = (
+            f"Action revision `{ANALYZE_ACTION_PINNED_SHA}` is enforcement-capable; "
+            "keep its check non-required until resolved server settings, synthetic "
+            "failure cases, and the enforcement guardrail review are verified."
+        )
     lines = [
         "## DeployWhisper",
         "",
-        "This repository uses DeployWhisper for advisory-only deployment risk review in pull requests.",
+        "This repository uses DeployWhisper canonical advisory reports. "
+        f"{capability_summary}",
         "",
         "### GitHub workflow",
         "",
@@ -323,7 +370,9 @@ def _render_readme_section(
         f"- Configured API endpoint: `{options.api_endpoint}`",
         "- Optional secret: `DEPLOYWHISPER_API_TOKEN` for protected DeployWhisper APIs",
         *_scope_readme_lines(options),
-        "- The `DeployWhisper / Risk Analysis` check is advisory-only and should not be configured as a required status check",
+        "- The scaffold pins the reviewed Action revision but does not configure server enforcement; inspect the resolved `github-action` setting and keep the check non-required until the guardrail review is complete",
+        "- If the workflow Action pin changes, update this generated capability note in the same change",
+        f"- Enforcement guardrails: {ENFORCEMENT_GUARDRAILS_URL}",
         "",
         "### Configuration example",
         "",
@@ -373,17 +422,23 @@ def _render_github_app_notes(options: GitHubInitOptions) -> str:
         2. Create the self-hosted GitHub App in your own GitHub account or organization.
         3. Point the webhook and callback URLs at `{options.public_base_url}`.
         4. Follow the operator guide: {OPERATOR_DOCS_URL}
-        5. Keep `DeployWhisper / Risk Analysis` advisory-only in branch protection.
+        5. Keep `DeployWhisper / Risk Analysis` non-required in branch protection until the guardrail review is complete.
         """
     )
 
 
 def _render_pr_body(options: GitHubInitOptions, *, workflow_path: str) -> str:
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    behavior = (
+        "advisory-only"
+        if capability is AnalyzeActionCapability.ADVISORY_ONLY
+        else "enforcement-capable"
+    )
     lines = [
         "## Summary",
         "",
         "- add the DeployWhisper GitHub workflow",
-        "- document the API endpoint and advisory-only check behavior",
+        f"- document the API endpoint and {behavior} check behavior",
     ]
     if options.enable_github_app:
         lines.append("- add advanced self-hosted GitHub App setup notes")

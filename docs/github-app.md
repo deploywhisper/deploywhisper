@@ -12,7 +12,7 @@ DeployWhisper now supports an advanced self-hosted GitHub App adapter alongside 
 
 ### Action-only
 
-- Use `deploywhisper/analyze-action@v1`
+- Use `deploywhisper/analyze-action` pinned to a reviewed full commit SHA
 - Best when teams want only workflow-file driven execution
 - No GitHub App registration required
 
@@ -61,18 +61,21 @@ Optional:
 
 - Webhook verification uses `X-Hub-Signature-256`
 - Pull request webhook actions `opened`, `reopened`, and `synchronize` can trigger automatic advisory analyses when PR automation is enabled
+- The current App does not subscribe to `merge_group`, and the published Action has no verified generated-merge analysis path. Do not require either check in a merge queue until that capability is implemented and tested against generated merge commits.
 - Supported changed artifacts are downloaded from GitHub, filtered through the shared intake rules, and sent through the existing parse/assess/persist pipeline
 - Check runs resolve the `github` integration policy settings and expose raw policy status, configured enforcement mode, and effective status in the summary
-- The default `advisory` mode reports `success` for `GO` and `neutral` for other recommendations; `warn` also remains neutral
-- Explicit `soft-block` and `hard-block` modes produce `action_required` and `failure` conclusions respectively when the effective policy status is blocking
+- An effective `advisory` status reports `success` for `GO` and `neutral` for other recommendations; effective `warn` reports `neutral`
+- Effective `soft-block` and `hard-block` statuses produce `action_required` and `failure` conclusions respectively, regardless of which configured ceiling permitted that effective status
 - When checks are enabled, `APP_BASE_URL` or `PUBLIC_APP_URL` must point at a reachable DeployWhisper server so the GitHub PR Details link opens the full report
 - Do not make `DeployWhisper / Risk Analysis` required while the integration uses `advisory` or `warn`; requiring it is an explicit operator choice for a blocking mode
 - Shared report URLs remain the deep-link target for richer investigation
 - `/reports/{id}` opens the React read-only Report screen, hides mutable internal actions, respects password-protected shares, and preserves `?compare=previous` comparison links
 
-Configure GitHub enforcement through the policy-adapter settings API. New and
-existing integrations remain advisory unless an operator explicitly opts into a
-blocking mode:
+Configure GitHub enforcement through the policy-adapter settings API. An
+integration without an override inherits its project-level enforcement mode,
+which may already be blocking. Before onboarding a new integration under a
+blocking project default, create an integration-specific `advisory` override or
+complete and record the full guardrail review for that integration:
 
 ```json
 {
@@ -88,8 +91,13 @@ blocking mode:
 
 Send this payload with `PUT /api/v1/settings/policy-adapter`. Supported
 enforcement modes are `advisory`, `warn`, `soft-block`, and `hard-block`.
-Do not make `DeployWhisper / Risk Analysis` required until the integration has
-been deliberately configured for a blocking mode.
+Making `DeployWhisper / Risk Analysis` required is a separate operator action.
+Do it only after verifying that the resolved configured mode is blocking and
+all guardrails are complete; that blocking mode may be inherited from the
+project default without an integration-specific opt-in.
+Complete the [Enforcement Guardrails](./enforcement-guardrails.md) before that
+change so benchmark readiness, human ownership, false reassurance, and
+rollback responsibilities are explicit.
 
 ## Manual installation flow
 

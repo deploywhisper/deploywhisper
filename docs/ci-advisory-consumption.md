@@ -19,12 +19,17 @@ DeployWhisper's canonical analysis remains advisory in automation contexts.
 Optional integration enforcement is separate from this canonical response.
 Admins configure project or integration settings through
 `/api/v1/settings/policy-adapter`; modes are `advisory`, `warn`, `soft-block`,
-and `hard-block`, and the default is `advisory`. Integration consumers must use
+and `hard-block`. Resolution selects the integration override before the
+inherited project default and then the built-in `advisory` default, so a new
+consumer can inherit blocking. Integration consumers must use
 the shared policy/enforcement service so the raw policy status, configured
 mode, and effective status remain auditable. Do not infer a blocking decision
 directly from `data.advisory`, risk score, severity, or recommendation. For a
 persisted report, request the shared decision from
 `GET /api/v1/analyses/{report_id}/enforcement-decision?integration={integration}`.
+Use the [Enforcement Guardrails](./enforcement-guardrails.md) before enabling a
+blocking mode; they define the required Evidence Law, benchmark, human-review,
+false-reassurance, and rollback checks.
 
 ## CLI Example
 
@@ -78,6 +83,10 @@ PY
 ## CI Guidance
 
 - Do not fail a pipeline based only on risk score or recommendation
-- Keep the integration in `advisory` or `warn` mode until the team explicitly opts into `soft-block` or `hard-block`
+- Before onboarding or expanding a consumer, inspect the resolved setting source
+  and configured mode. An integration without an override may inherit
+  `soft-block` or `hard-block` from the project default; create a scoped
+  `advisory` override or complete the blocking guardrail review before enabling
+  the consumer.
 - Use `requires_attention` and `uncertainty_flags` to decide when to notify reviewers, enrich PR comments, or request additional manual checks
 - Treat non-zero CLI exit codes as operational failures, not advisory outcomes
