@@ -49,12 +49,18 @@ class GitHubInitError(RuntimeError):
 
 def _analyze_action_capability(revision: str) -> AnalyzeActionCapability:
     try:
-        return ANALYZE_ACTION_CAPABILITIES[revision]
+        capability = ANALYZE_ACTION_CAPABILITIES[revision]
     except KeyError as exc:
         raise GitHubInitError(
             "Unclassified DeployWhisper Analyze Action revision: "
             f"{revision}. Classify the immutable revision before generating files."
         ) from exc
+    if not isinstance(capability, AnalyzeActionCapability):
+        raise GitHubInitError(
+            "Invalid capability classification for DeployWhisper Analyze Action "
+            f"revision {revision}: {capability!r}."
+        )
+    return capability
 
 
 @dataclass(frozen=True)
@@ -305,7 +311,12 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
 
 
 def _render_workflow(options: GitHubInitOptions) -> str:
-    _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    advisory_safeguard = (
+        "                continue-on-error: true\n"
+        if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+        else ""
+    )
     api_endpoint = options.api_endpoint.strip()
     scope_lines = _render_action_scope_inputs(options)
     workflow = dedent(
@@ -330,6 +341,7 @@ def _render_workflow(options: GitHubInitOptions) -> str:
                 with:
                   fetch-depth: 0
               - id: deploywhisper
+{advisory_safeguard}\
                 uses: deploywhisper/analyze-action@{ANALYZE_ACTION_PINNED_SHA}
                 with:
                   api-url: ${{{{ env.DEPLOYWHISPER_API_URL }}}}
@@ -355,8 +367,9 @@ def _render_readme_section(
     else:
         capability_summary = (
             f"Action revision `{ANALYZE_ACTION_PINNED_SHA}` is enforcement-capable; "
-            "keep its check non-required until resolved server settings, synthetic "
-            "failure cases, and the enforcement guardrail review are verified."
+            "the generated step uses `continue-on-error: true` as an advisory "
+            "onboarding safeguard until resolved server settings, synthetic failure "
+            "cases, and the enforcement guardrail review are verified."
         )
     lines = [
         "## DeployWhisper",
@@ -382,6 +395,13 @@ def _render_readme_section(
         "- `DEPLOYWHISPER_API_TOKEN=<optional bearer token>`",
         *_scope_configuration_lines(options),
     ]
+    if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE:
+        lines.extend(
+            [
+                "",
+                "Before the first workflow run under an inherited blocking project default, create a narrow `github-action` integration-specific `advisory` override. After the guardrail review and blocking smoke cases pass, remove `continue-on-error: true` and make the source-bound check required in one reviewed change.",
+            ]
+        )
     if options.enable_github_app:
         lines.extend(
             [
@@ -440,6 +460,10 @@ def _render_pr_body(options: GitHubInitOptions, *, workflow_path: str) -> str:
         "- add the DeployWhisper GitHub workflow",
         f"- document the API endpoint and {behavior} check behavior",
     ]
+    if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE:
+        lines.append(
+            "- retain the advisory onboarding safeguard until the narrow override and guardrail review are complete"
+        )
     if options.enable_github_app:
         lines.append("- add advanced self-hosted GitHub App setup notes")
     lines.extend(

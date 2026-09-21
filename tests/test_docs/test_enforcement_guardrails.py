@@ -89,7 +89,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "protected commit SHA",
                 "PR-head workflow must verify that its tested commit SHA equals the current PR head SHA",
                 "merge-ref or merge-queue workflow must bind the report to the current generated merge commit",
-                "non-PR consumer must resolve a moving deployment ref to an immutable commit or artifact digest",
+                "non-PR consumer must resolve a moving deployment ref to an immutable commit or an algorithm-qualified SHA-256 digest",
+                "algorithm-qualified SHA-256 digest over the exact deployed artifact bytes",
                 "no atomic settings revision",
                 "authenticated transport",
                 "trusted server identity",
@@ -130,6 +131,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "per-exception bypass capability",
                 "encrypted immutable raw response",
                 "separate redacted reviewer view",
+                "longest exception, compliance-audit, and incident-attribution horizon",
+                "versioned material-context record",
+                "deterministic UTF-8 JSON",
+                "material-context SHA-256 digest",
             ),
             "## Set benchmark thresholds before blocking": (
                 "actual enforcement consumer revision",
@@ -174,6 +179,9 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "A non-blocking disposition does not satisfy blocking readiness",
                 "maximum expiry timestamp",
                 "fails closed",
+                "always-triggered terminal context",
+                "independent cancellation and timeout watchdog",
+                "complete decision identity",
             ),
         }
         for heading, expected_clauses in expected_by_section.items():
@@ -250,6 +258,29 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
     def test_guardrail_guide_outbound_links_resolve(self) -> None:
         content = GUARDRAIL_GUIDE.read_text(encoding="utf-8")
         links = self._markdown_links(content)
+
+        local_links = {
+            target
+            for target in links
+            if not (
+                (parsed := urlparse(target)).scheme
+                or parsed.netloc
+                or parsed.path.startswith("/")
+            )
+        }
+        for target in local_links:
+            with self.subTest(local_target=target):
+                target_path = self._resolved_local_doc_target(
+                    GUARDRAIL_GUIDE.parent, target
+                )
+                if "#" in target:
+                    fragment = target.split("#", 1)[1]
+                    self.assertIn(
+                        fragment,
+                        self._markdown_heading_anchors(
+                            target_path.read_text(encoding="utf-8")
+                        ),
+                    )
 
         for expected_target in (
             "./workflow-adapter-output-contract.md",
@@ -615,6 +646,15 @@ later requirement
             self._normalized(self._section(commented_and_setext, "## Target")),
         )
 
+        duplicate_with_closing_hashes = """\
+## Target
+required clause
+## Target ##
+contradiction
+"""
+        with self.assertRaisesRegex(AssertionError, "Duplicate section"):
+            self._section(duplicate_with_closing_hashes, "## Target")
+
     def test_effective_status_parser_rejects_duplicate_tables(self) -> None:
         section = self._section(
             GUARDRAIL_GUIDE.read_text(encoding="utf-8"),
@@ -628,6 +668,14 @@ later requirement
         with self.assertRaisesRegex(AssertionError, "separator is missing"):
             self._effective_status_rows(table_start)
 
+        competing_header = duplicate.replace(
+            "| Effective status | Workflow effect | Appropriate use |",
+            "| Status | Effect | Use |",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "exactly one Markdown table"):
+            self._effective_status_rows(competing_header)
+
     def test_markdown_links_ignore_non_rendered_content_and_resolve_safely(
         self,
     ) -> None:
@@ -636,9 +684,14 @@ later requirement
 ```markdown
 [Fenced](./fenced.md)
 ```
+    [Indented](./indented.md)
+`[Inline](./inline.md)`
 [Parentheses](./guide_(v2).md)
 [Angle](<./guide with spaces.md>)
 [Escaped](./guide_\(v3\).md)
+[Bad angle](<./bad.md>junk)
+[Bad title](./bad-title.md invalid)
+<!-- [Unclosed](./unclosed.md)
 """
         self.assertEqual(
             {
@@ -648,6 +701,25 @@ later requirement
             },
             self._markdown_links(content),
         )
+
+    def test_rendered_markdown_hides_unclosed_comments_and_code_only_prose(
+        self,
+    ) -> None:
+        content = """\
+## Target
+visible requirement with `an identifier`
+`hidden normative requirement`
+    hidden indented requirement
+<!-- hidden through EOF
+hidden comment requirement
+"""
+
+        section = self._normalized(self._section(content, "## Target"))
+
+        self.assertIn("visible requirement with `an identifier`", section)
+        self.assertNotIn("hidden normative requirement", section)
+        self.assertNotIn("hidden indented requirement", section)
+        self.assertNotIn("hidden comment requirement", section)
 
     def test_documented_workflow_ignores_nested_and_commented_fences(self) -> None:
         real_workflow = """\
@@ -686,6 +758,9 @@ jobs:
             EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
                 value, keepends=True
             )
+        )
+        visible = EnforcementGuardrailDocumentationTests._strip_inline_code_spans(
+            visible
         )
         targets: set[str] = set()
         cursor = 0
@@ -751,14 +826,18 @@ jobs:
 
     @staticmethod
     def _section(value: str, heading: str) -> str:
-        level = len(heading) - len(heading.lstrip("#"))
+        target = EnforcementGuardrailDocumentationTests._atx_heading(heading)
+        if target is None:
+            raise AssertionError(f"Invalid ATX section heading: {heading}")
+        level, target_text = target
         lines = EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
             value, keepends=True
         )
         matches: list[int] = []
         for index, line_with_ending in enumerate(lines):
             line = line_with_ending.rstrip("\r\n")
-            if line.lstrip(" ") == heading and len(line) - len(line.lstrip(" ")) <= 3:
+            parsed_heading = EnforcementGuardrailDocumentationTests._atx_heading(line)
+            if parsed_heading == (level, target_text):
                 matches.append(index)
 
         if not matches:
@@ -770,8 +849,8 @@ jobs:
         end = len(lines)
         for index in range(start, len(lines)):
             line = lines[index].rstrip("\r\n")
-            heading_match = re.match(r"^ {0,3}(#{1,6})\s+", line)
-            if heading_match is not None and len(heading_match.group(1)) <= level:
+            parsed_heading = EnforcementGuardrailDocumentationTests._atx_heading(line)
+            if parsed_heading is not None and parsed_heading[0] <= level:
                 end = index
                 break
             if (
@@ -790,6 +869,15 @@ jobs:
                     end = index
                     break
         return "".join(lines[start:end])
+
+    @staticmethod
+    def _atx_heading(line: str) -> tuple[int, str] | None:
+        match = re.fullmatch(r" {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*", line)
+        if match is None:
+            return None
+        heading = (match.group(2) or "").strip()
+        heading = re.sub(r"[ \t]+#+[ \t]*$", "", heading).strip()
+        return len(match.group(1)), heading
 
     @staticmethod
     def _opening_fence(line: str) -> str | None:
@@ -817,7 +905,9 @@ jobs:
     @staticmethod
     def _documented_workflow(value: str) -> dict[str, object]:
         workflows: list[dict[str, object]] = []
-        comment_free = re.sub(r"<!--.*?-->", "", value, flags=re.DOTALL)
+        comment_free = EnforcementGuardrailDocumentationTests._strip_html_comments(
+            value
+        )
         lines = comment_free.splitlines()
         index = 0
         while index < len(lines):
@@ -852,7 +942,7 @@ jobs:
 
     @staticmethod
     def _effective_status_rows(value: str) -> dict[str, tuple[str, str]]:
-        lines = value.splitlines()
+        lines = EnforcementGuardrailDocumentationTests._rendered_markdown_lines(value)
         header = "| Effective status | Workflow effect | Appropriate use |"
         if lines.count(header) != 1:
             raise AssertionError("Effective-status table must appear exactly once")
@@ -865,6 +955,21 @@ jobs:
             raise AssertionError("Effective-status table separator is missing")
         if lines[header_index + 1] != expected_separator:
             raise AssertionError("Effective-status table separator is malformed")
+
+        table_starts = [
+            index
+            for index in range(len(lines) - 1)
+            if lines[index].lstrip().startswith("|")
+            and re.fullmatch(
+                r"\s*\|\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*",
+                lines[index + 1],
+            )
+            is not None
+        ]
+        if len(table_starts) != 1:
+            raise AssertionError(
+                "Effective-status section must contain exactly one Markdown table"
+            )
 
         rows: dict[str, tuple[str, str]] = {}
         for line in lines[header_index + 2 :]:
@@ -889,10 +994,13 @@ jobs:
 
     @staticmethod
     def _rendered_markdown_lines(value: str, *, keepends: bool = False) -> list[str]:
-        comment_free = re.sub(r"<!--.*?-->", "", value, flags=re.DOTALL)
+        comment_free = EnforcementGuardrailDocumentationTests._strip_html_comments(
+            value
+        )
         rendered: list[str] = []
         fence_character: str | None = None
         fence_length = 0
+        list_content_indent: int | None = None
         for line_with_ending in comment_free.splitlines(keepends=keepends):
             line = line_with_ending.rstrip("\r\n")
             if fence_character is None:
@@ -901,6 +1009,20 @@ jobs:
                     fence_character = opening[0]
                     fence_length = len(opening)
                     continue
+                list_item = re.match(r"^ {0,3}(?:[-+*]|\d+[.)])[ \t]+", line)
+                if list_item is not None:
+                    list_content_indent = list_item.end()
+                elif re.match(r"^(?: {4,}|\t)", line):
+                    leading_spaces = len(line) - len(line.lstrip(" "))
+                    if (
+                        list_content_indent is None
+                        or leading_spaces < list_content_indent
+                    ):
+                        continue
+                elif line.strip():
+                    list_content_indent = None
+                if re.fullmatch(r"\s*(`+).*?\1\s*", line):
+                    continue
                 rendered.append(line_with_ending)
             elif EnforcementGuardrailDocumentationTests._is_closing_fence(
                 line, fence_character, fence_length
@@ -908,6 +1030,37 @@ jobs:
                 fence_character = None
                 fence_length = 0
         return rendered
+
+    @staticmethod
+    def _strip_html_comments(value: str) -> str:
+        return re.sub(
+            r"<!--.*?(?:-->|\Z)",
+            lambda match: "\n" * match.group(0).count("\n"),
+            value,
+            flags=re.DOTALL,
+        )
+
+    @staticmethod
+    def _strip_inline_code_spans(value: str) -> str:
+        characters = list(value)
+        index = 0
+        while index < len(value):
+            if value[index] != "`":
+                index += 1
+                continue
+            run_end = index
+            while run_end < len(value) and value[run_end] == "`":
+                run_end += 1
+            marker = value[index:run_end]
+            closing = value.find(marker, run_end)
+            if closing < 0:
+                index = run_end
+                continue
+            for offset in range(index, closing + len(marker)):
+                if characters[offset] not in "\r\n":
+                    characters[offset] = " "
+            index = closing + len(marker)
+        return "".join(characters)
 
     @staticmethod
     def _find_unescaped(value: str, character: str, start: int) -> int:
@@ -933,10 +1086,12 @@ jobs:
             )
             if end < 0:
                 return None, start
-            closing = value.find(")", end + 1)
-            if closing < 0:
+            link_end = EnforcementGuardrailDocumentationTests._parse_link_suffix(
+                value, end + 1
+            )
+            if link_end is None:
                 return None, start
-            return value[start + 1 : end], closing + 1
+            return value[start + 1 : end], link_end
 
         target: list[str] = []
         depth = 1
@@ -956,14 +1111,41 @@ jobs:
                     return "".join(target).strip(), index + 1
                 target.append(character)
             elif character in " \t\r\n" and depth == 1:
-                closing = value.find(")", index)
-                if closing < 0:
+                link_end = EnforcementGuardrailDocumentationTests._parse_link_suffix(
+                    value, index
+                )
+                if link_end is None:
                     return None, start
-                return "".join(target).strip(), closing + 1
+                return "".join(target).strip(), link_end
             else:
                 target.append(character)
             index += 1
         return None, start
+
+    @staticmethod
+    def _parse_link_suffix(value: str, start: int) -> int | None:
+        index = start
+        while index < len(value) and value[index] in " \t\r\n":
+            index += 1
+        if index >= len(value):
+            return None
+        if value[index] == ")":
+            return index + 1
+        if value[index] not in {'"', "'", "("}:
+            return None
+        opening = value[index]
+        closing_character = ")" if opening == "(" else opening
+        closing = EnforcementGuardrailDocumentationTests._find_unescaped(
+            value, closing_character, index + 1
+        )
+        if closing < 0:
+            return None
+        index = closing + 1
+        while index < len(value) and value[index] in " \t\r\n":
+            index += 1
+        if index >= len(value) or value[index] != ")":
+            return None
+        return index + 1
 
     @staticmethod
     def _resolved_local_doc_target(base: Path, target: str) -> Path:

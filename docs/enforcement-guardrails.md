@@ -165,9 +165,11 @@ current base SHA; it must rerun when either head or base changes. A merge-ref or
 merge-queue workflow must bind the report to the current generated merge commit
 and record its base and PR-head parents; it must not compare the synthetic commit
 directly with the head. A non-PR consumer must resolve a moving deployment ref
-to an immutable commit or artifact digest, bind the decision to that digest, and
-deploy the same digest. Never accept a report ID, endpoint, target identity, or
-manifest from untrusted change content.
+to an immutable commit or an algorithm-qualified SHA-256 digest over the exact
+deployed artifact bytes, bind the decision to that digest, and deploy those same
+bytes. Record the digest algorithm and byte-source identity with the decision.
+Never accept a report ID, endpoint, target identity, or manifest from untrusted
+change content.
 
 The v1 contract has no atomic settings revision or evaluate-and-publish
 operation. Retrieval immediately before publication cannot eliminate a
@@ -183,6 +185,16 @@ Define a material report-context invalidation policy for topology, ownership,
 incident, scanner, and other decision inputs. When a material input changes
 after publication, invalidate the protected result and generate a fresh report;
 do not attach a newly queried decision to the older context snapshot.
+
+Make that policy reproducible with a versioned material-context record. Define
+the exact included fields for every approved context source: source identity,
+schema/version, immutable snapshot or content digest, retrieval time, freshness
+boundary, and the topology, ownership, incident, scanner, or other values that
+affected the decision. Represent missing and null values distinctly. Serialize
+the record as deterministic UTF-8 JSON with lexicographically sorted object keys,
+no insignificant whitespace, and arrays in their policy-defined order; record
+the serialization version. Hash those exact bytes with SHA-256 and use the
+resulting material-context SHA-256 digest in the complete decision identity.
 
 Sensitive, unsupported, rejected, or otherwise excluded artifacts do not
 produce findings. A blocking workflow must validate complete and partial intake
@@ -315,14 +327,16 @@ authenticated response bytes with SHA-256; do not reserialize the response and
 call it canonical. In-process consumers must freeze the validated decision
 object, serialize the frozen decision once using a recorded serializer and
 version, and use that same object for both the check conclusion and persisted
-audit bytes. Hash that retained byte sequence. Record a
-retention period and preserve it as an encrypted immutable raw response; state
-that its SHA-256 digest covers those exact raw bytes. Provide a separate redacted
-reviewer view for ordinary inspection. Redaction must never mutate or replace
-the retained bytes covered by the digest. Restrict both representations to
-authorized reviewers, and redact secrets or sensitive artifact metadata from
-the reviewer view when they are not required to reconstruct the decision. For a
-protection-layer bypass, record the
+audit bytes. Hash that retained byte sequence. Record a retention period that
+extends through the longest exception, compliance-audit, and
+incident-attribution horizon, and preserve the evidence as an encrypted
+immutable raw response for at least that period; state that its SHA-256 digest
+covers those exact raw bytes. Provide a separate redacted reviewer view for
+ordinary inspection. Redaction must never mutate or replace the retained bytes
+covered by the digest. Restrict both representations to authorized reviewers,
+and redact secrets or sensitive artifact metadata from the reviewer view when
+they are not required to reconstruct the decision. For a protection-layer
+bypass, record the
 protected-delivery or bypass event and automatic-revocation evidence. Review
 repeated exceptions as a calibration signal.
 
@@ -525,40 +539,46 @@ integration:
    unsupported scenarios.
 3. A source-bound required check or job in an immutable protected workflow,
    with no `continue-on-error`, ignored failure, or skippable enforcement step.
-4. Run valid-pass, valid-block, and decision-error smoke cases against the exact
+4. An always-triggered terminal context for every protected event plus an
+   independent cancellation and timeout watchdog that fails the required context
+   when the analysis workflow cannot publish its own terminal state.
+5. Run valid-pass, valid-block, and decision-error smoke cases against the exact
    consumer revision and protected workflow.
-5. Verify complete and partial intake coverage against the submitted artifact
+6. Verify complete and partial intake coverage against the submitted artifact
    manifest.
-6. A required project-scope control that fails closed for the GitHub App's known
+7. A required project-scope control that fails closed for the GitHub App's known
    `neutral` scope-resolution path.
-7. The resolved setting source, `warn_at`, `soft_block_at`, and `hard_block_at`
+8. The resolved setting source, `warn_at`, `soft_block_at`, and `hard_block_at`
    thresholds, reporting default, and configured enforcement mode.
-8. The trusted identity/proxy boundary that strips caller-supplied actor headers
+9. The trusted identity/proxy boundary that strips caller-supplied actor headers
    and injects verified role and project scope.
-9. A durable external idempotency coordinator for blocking consumers. If it is
+10. A durable external idempotency coordinator for blocking consumers. If it is
    unavailable, record a non-blocking disposition and do not enable blocking.
    A non-blocking disposition does not satisfy blocking readiness.
-10. Settings-change serialization: freeze delivery before the write, then
+11. Settings-change serialization: freeze delivery before the write, then
     invalidate and rerun affected results before lifting the freeze.
-11. A deterministic diff-coverage control for deletions and renames. If it is
+12. A deterministic diff-coverage control for deletions and renames. If it is
     unavailable for a scope where tombstones are possible, record a non-blocking
     disposition and do not enable blocking. A non-blocking disposition does not
     satisfy blocking readiness.
-12. Evidence Law, decision and context freshness, and audit-retention expectations.
-13. Named human owners for review, exceptions, incident response, and rollback.
-14. A tested rollback or forward-fix path, immutable exception identifier and
+13. Evidence Law, decision and context freshness, and audit-retention expectations.
+14. Named human owners for review, exceptions, incident response, and rollback.
+15. A tested rollback or forward-fix path, immutable exception identifier and
     immutable maximum expiry timestamp within the organization-approved maximum
     TTL, automatic bypass revocation before or at that deadline, and retained
     revocation evidence. Extensions require a new request and independent
     approval. The independent delivery freeze remains active until timely
     revocation is verified; delivery fails closed when it cannot be verified.
-15. Monitoring for false reassurance, false positives, regressions, and
+16. Monitoring for false reassurance, false positives, regressions, and
    excessive overrides.
-16. Immutable application and actual consumer revisions plus proof that deployed
+17. Immutable application and actual consumer revisions plus proof that deployed
     artifacts match the benchmarked build.
-17. Repository review or protected-environment rules that require human approval
-    for the protected commit SHA and dismiss stale approvals after changes.
-18. A review date and a trigger for returning to `warn` or `advisory`.
+18. Repository review or protected-environment rules that require human approval
+    for the complete decision identity: protected commit, report ID, manifest
+    digest, settings snapshot digest, material-context digest, consumer revision,
+    and workflow revision. Dismiss stale approvals and require a new authorized
+    approval when any identity component changes.
+19. A review date and a trigger for returning to `warn` or `advisory`.
 
 Enable one integration and scope at a time. Observe real outcomes before
 expanding enforcement. Changing a mode does not change the canonical report;

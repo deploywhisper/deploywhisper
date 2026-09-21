@@ -191,6 +191,7 @@ class GitHubInitServiceTests(unittest.TestCase):
             workflow_text,
         )
         self.assertIn("- id: deploywhisper", workflow_text)
+        self.assertNotIn("continue-on-error: true", workflow_text)
         self.assertRegex(init_service.ANALYZE_ACTION_PINNED_SHA, r"^[0-9a-f]{40}$")
         self.assertRegex(init_service.CHECKOUT_ACTION_PINNED_SHA, r"^[0-9a-f]{40}$")
         self.assertEqual(
@@ -279,6 +280,19 @@ class GitHubInitServiceTests(unittest.TestCase):
             init_service.ANALYZE_ACTION_CAPABILITIES,
         )
 
+    def test_action_capability_rejects_invalid_registry_value(self) -> None:
+        revision = "b" * 40
+
+        with patch.dict(
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+            {revision: "enforcement-capable"},
+        ):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "Invalid capability classification",
+            ):
+                init_service._analyze_action_capability(revision)
+
     def test_enforcement_capable_pin_updates_all_generated_guidance(self) -> None:
         revision = "b" * 40
         options = init_service.GitHubInitOptions(
@@ -304,11 +318,16 @@ class GitHubInitServiceTests(unittest.TestCase):
                     options,
                     workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
                 )
+                workflow = init_service._render_workflow(options)
 
         self.assertIn(f"Action revision `{revision}` is enforcement-capable", readme)
         self.assertNotIn(f"Action revision `{revision}` is advisory-only", readme)
+        self.assertIn("continue-on-error: true", workflow)
+        self.assertIn("integration-specific `advisory` override", readme)
+        self.assertIn("remove `continue-on-error: true`", readme)
         self.assertIn("enforcement-capable check behavior", pr_body)
         self.assertNotIn("advisory-only check behavior", pr_body)
+        self.assertIn("advisory onboarding safeguard", pr_body)
 
     @patch("integrations.github.init_service._require_binary")
     @patch("integrations.github.init_service._run_command")
