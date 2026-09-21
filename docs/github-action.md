@@ -106,7 +106,11 @@ Update the two dependencies independently:
 1. For `deploywhisper/analyze-action`, resolve the candidate ref, dereference
    annotated tags, review the full diff from the existing pin, run the Action
    repository tests and smoke consumer against the exact candidate commit, and
-   then replace the full SHA.
+   then replace the full SHA. Before changing the scaffold pin, classify the
+   candidate SHA in the capability registry. Record the reviewed manifest and
+   enforcement-decision endpoint evidence that proves whether the revision is
+   `advisory-only` or `enforcement-capable`; an unclassified candidate must keep
+   scaffold generation fail-closed.
 2. For `actions/checkout`, resolve and review the checkout candidate independently,
    peel an annotated tag to the executed commit, inspect its release provenance
    and full diff from the existing pin, and run the protected workflow's checkout
@@ -150,6 +154,13 @@ string directly as a boolean because both `"true"` and `"false"` are strings.
 Before either operation, reject a missing output and reject any `should-block`
 value other than the exact strings `"true"` and `"false"`; treat malformed
 values and `fromJSON` failures as operational errors that fail the workflow.
+Validate the allowed values for `policy-status`, `configured-mode`, and
+`effective-status` too: each must be exactly `advisory`, `warn`, `soft-block`,
+or `hard-block`. Apply the configured-mode ceiling to `policy-status` using that
+order and require the result to equal `effective-status`. Finally, require that
+`should-block` is `true` if and only if `effective-status` is `soft-block` or
+`hard-block`. A missing, unknown, or cross-field-inconsistent output is an
+operational error, not a non-blocking decision.
 
 The `report-link` output is publicly shareable only when the DeployWhisper
 server is configured with a public base URL such as `APP_BASE_URL` or

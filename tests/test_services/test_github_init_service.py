@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import yaml
+
 from integrations.github import init_service
 
 
@@ -324,10 +326,36 @@ class GitHubInitServiceTests(unittest.TestCase):
         self.assertNotIn(f"Action revision `{revision}` is advisory-only", readme)
         self.assertIn("continue-on-error: true", workflow)
         self.assertIn("integration-specific `advisory` override", readme)
+        self.assertIn("no existing scope shares", readme)
+        self.assertIn("separate project or integration identity", readme)
         self.assertIn("remove `continue-on-error: true`", readme)
         self.assertIn("enforcement-capable check behavior", pr_body)
         self.assertNotIn("advisory-only check behavior", pr_body)
         self.assertIn("advisory onboarding safeguard", pr_body)
+
+        workflow_payload = yaml.safe_load(workflow)
+        steps = workflow_payload["jobs"]["deploywhisper"]["steps"]
+        action_index = next(
+            index
+            for index, step in enumerate(steps)
+            if str(step.get("uses", "")).startswith("deploywhisper/analyze-action@")
+        )
+        action_step = steps[action_index]
+        self.assertEqual("deploywhisper", action_step["id"])
+        self.assertEqual(
+            f"deploywhisper/analyze-action@{revision}", action_step["uses"]
+        )
+        self.assertIs(True, action_step["continue-on-error"])
+        self.assertEqual(
+            "${{ always() && steps.deploywhisper.outcome == 'failure' && steps.deploywhisper.outputs.should-block != 'true' }}",
+            steps[action_index + 1]["if"],
+        )
+        self.assertIn("exit 1", steps[action_index + 1]["run"])
+        self.assertEqual(
+            "${{ always() && steps.deploywhisper.outcome == 'failure' && steps.deploywhisper.outputs.should-block == 'true' }}",
+            steps[action_index + 2]["if"],
+        )
+        self.assertIn("::warning::", steps[action_index + 2]["run"])
 
     @patch("integrations.github.init_service._require_binary")
     @patch("integrations.github.init_service._run_command")

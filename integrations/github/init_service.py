@@ -317,6 +317,19 @@ def _render_workflow(options: GitHubInitOptions) -> str:
         if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
         else ""
     )
+    onboarding_terminal_steps = (
+        "      - name: Fail DeployWhisper onboarding operational errors\n"
+        "        if: ${{ always() && steps.deploywhisper.outcome == 'failure' && steps.deploywhisper.outputs.should-block != 'true' }}\n"
+        "        run: |\n"
+        '          echo "::error::DeployWhisper failed without a validated blocking decision"\n'
+        "          exit 1\n"
+        "      - name: Surface advisory onboarding policy block\n"
+        "        if: ${{ always() && steps.deploywhisper.outcome == 'failure' && steps.deploywhisper.outputs.should-block == 'true' }}\n"
+        "        run: |\n"
+        '          echo "::warning::DeployWhisper reported a policy block while the onboarding safeguard is active"\n'
+        if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+        else ""
+    )
     api_endpoint = options.api_endpoint.strip()
     scope_lines = _render_action_scope_inputs(options)
     workflow = dedent(
@@ -348,7 +361,7 @@ def _render_workflow(options: GitHubInitOptions) -> str:
                   api-token: ${{{{ secrets.DEPLOYWHISPER_API_TOKEN }}}}
         """
     )
-    return f"{workflow.rstrip()}\n{scope_lines}\n"
+    return f"{workflow.rstrip()}\n{scope_lines}\n{onboarding_terminal_steps}"
 
 
 def _render_readme_section(
@@ -399,7 +412,7 @@ def _render_readme_section(
         lines.extend(
             [
                 "",
-                "Before the first workflow run under an inherited blocking project default, create a narrow `github-action` integration-specific `advisory` override. After the guardrail review and blocking smoke cases pass, remove `continue-on-error: true` and make the source-bound check required in one reviewed change.",
+                "Before the first workflow run under an inherited blocking project default, create a narrow `github-action` integration-specific `advisory` override only when no existing scope shares that project/integration key. If another repository or environment already uses the identity, use a separate project or integration identity for advisory onboarding, or complete the new-scope guardrail review before attachment. After the guardrail review and blocking smoke cases pass, remove `continue-on-error: true` and the advisory policy-block warning together, then make the source-bound check required in one reviewed change.",
             ]
         )
     if options.enable_github_app:

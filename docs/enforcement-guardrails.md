@@ -25,8 +25,8 @@ on this dated observation.
 
 | Effective status | Workflow effect | Appropriate use |
 | --- | --- | --- |
-| `advisory` | GitHub Action exits `0` after a valid decision; GitHub App reports `success` for `GO` and `neutral` otherwise. | Default, initial rollout, incomplete context, or an uncalibrated project. |
-| `warn` | GitHub Action exits `0` after a valid decision; GitHub App reports `neutral`. | Teams have reviewed signal quality and want consistent reviewer attention. |
+| `advisory` | The policy decision does not request Action failure; after all runtime work succeeds, the Action exits `0`. The GitHub App reports `success` for `GO` and `neutral` otherwise. | Default, initial rollout, incomplete context, or an uncalibrated project. |
+| `warn` | The policy decision does not request Action failure; after all runtime work succeeds, the Action exits `0`. The GitHub App reports `neutral`. | Teams have reviewed signal quality and want consistent reviewer attention. |
 | `soft-block` | GitHub Action exits nonzero; GitHub App reports `action_required`. | Every blocking prerequisite below is satisfied, and a human-owned exception path has been exercised. |
 | `hard-block` | GitHub Action exits nonzero; GitHub App reports `failure`. | Every blocking prerequisite below is satisfied, and the organization has approved strict enforcement for this scope. |
 
@@ -34,6 +34,10 @@ A mode-table row describes runtime behavior, not sufficient readiness criteria.
 Both blocking modes require the complete prerequisites and rollout checklist in
 this guide. A required workflow remains blocked until the policy conditions
 change or an authorized human follows the documented exception procedure.
+The table describes policy effects only. Output publication, comment delivery,
+authentication, timeouts, and other operational work may still fail after a
+valid non-blocking decision and produce a nonzero Action exit or failed App
+conclusion.
 
 The table is keyed by the decision's effective status, not its configured mode.
 The configured mode is a ceiling, not a severity override: `advisory` always
@@ -195,6 +199,12 @@ the record as deterministic UTF-8 JSON with lexicographically sorted object keys
 no insignificant whitespace, and arrays in their policy-defined order; record
 the serialization version. Hash those exact bytes with SHA-256 and use the
 resulting material-context SHA-256 digest in the complete decision identity.
+Create the manifest snapshot digest and settings snapshot digest with the same
+versioned deterministic UTF-8 JSON rules: record each snapshot schema/version,
+sort object keys lexicographically, preserve policy-defined array order, encode
+missing and null distinctly, omit insignificant whitespace, and hash the exact
+UTF-8 bytes with SHA-256. Consumers must retain those exact snapshot bytes so
+independent approval controls can reproduce every digest.
 
 Sensitive, unsupported, rejected, or otherwise excluded artifacts do not
 produce findings. A blocking workflow must validate complete and partial intake
@@ -253,6 +263,15 @@ Future consumers must surface a distinct operational error, stop the
 enforcement-dependent automation, and require documented human disposition
 under the organization's outage or break-glass procedure. Failure handling
 must not become autonomous approval or remediation.
+
+Label that state with an explicit `operational-error` classification in the
+check summary and structured logs. Include the failing stage and stable error
+code, but do not manufacture an effective policy status. A validated hard-block
+must instead identify the validated report and decision, effective
+`hard-block` status, and policy reasons. The Action may exit nonzero and the App
+may report `failure` for either case, so operators and automation must use this
+classification and evidence—not the conclusion alone—to distinguish an
+operational failure from a policy block.
 
 Set a bounded timeout for analysis, decision retrieval, and check publication.
 Retry only transient failures with capped attempts and exponential backoff, and
@@ -319,10 +338,13 @@ compare-and-swap or enforced expiry, and restoring the blocking setting before a
 rerun can block the excepted commit again. Keep the failed DeployWhisper result
 unchanged and use the scoped protection-layer path above.
 
-The audit record must retain the invocation timestamp, report ID, original
-decision payload, integration and project scope, complete `applied_settings`
-snapshot, raw policy status, configured and effective modes, approver, reason,
-expiry, and bypass mechanism. For HTTP consumers, hash the exact retained
+The audit record must retain the complete decision identity, invocation
+timestamp, report ID, original decision payload, integration and project scope,
+complete `applied_settings` snapshot, retained manifest snapshot, retained
+material-context snapshot, raw policy status, configured and effective modes,
+approver, reason, expiry, and bypass mechanism. Preserve those identity and
+snapshot records for the same audit-retention horizon even when primary report
+storage expires earlier. For HTTP consumers, hash the exact retained
 authenticated response bytes with SHA-256; do not reserialize the response and
 call it canonical. In-process consumers must freeze the validated decision
 object, serialize the frozen decision once using a recorded serializer and
@@ -503,10 +525,12 @@ leaving the protected SHA unchanged.
 
 Repository commit approval alone cannot enforce those non-commit invalidations.
 Use an external approval record or independently enforced approval check keyed
-to the complete decision identity: protected commit, report ID, manifest digest,
-settings snapshot digest, material-context digest, consumer revision, and
-workflow revision. The delivery control must reject a missing or stale approval
-record and require a new authorized human decision for the new identity.
+to the complete decision identity: repository and environment, integration and
+project scope, protected-target identity, protected commit, report ID, manifest
+snapshot digest, settings snapshot digest, material-context digest, consumer
+revision, and workflow revision. The delivery control must reject a missing or
+stale approval record and require a new authorized human decision for the new
+identity.
 
 ## Rollback remains an operator responsibility
 
@@ -574,10 +598,11 @@ integration:
 17. Immutable application and actual consumer revisions plus proof that deployed
     artifacts match the benchmarked build.
 18. Repository review or protected-environment rules that require human approval
-    for the complete decision identity: protected commit, report ID, manifest
-    digest, settings snapshot digest, material-context digest, consumer revision,
-    and workflow revision. Dismiss stale approvals and require a new authorized
-    approval when any identity component changes.
+    for the complete decision identity: repository and environment, integration
+    and project scope, protected-target identity, protected commit, report ID,
+    manifest snapshot digest, settings snapshot digest, material-context digest,
+    consumer revision, and workflow revision. Dismiss stale approvals and
+    require a new authorized approval when any identity component changes.
 19. A review date and a trigger for returning to `warn` or `advisory`.
 
 Enable one integration and scope at a time. Observe real outcomes before

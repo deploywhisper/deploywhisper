@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from pathlib import Path
 import re
 import unittest
@@ -37,11 +38,11 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         self.assertEqual(
             {
                 "advisory": (
-                    "GitHub Action exits 0 after a valid decision; GitHub App reports success for GO and neutral otherwise.",
+                    "The policy decision does not request Action failure; after all runtime work succeeds, the Action exits 0. The GitHub App reports success for GO and neutral otherwise.",
                     "Default, initial rollout, incomplete context, or an uncalibrated project.",
                 ),
                 "warn": (
-                    "GitHub Action exits 0 after a valid decision; GitHub App reports neutral.",
+                    "The policy decision does not request Action failure; after all runtime work succeeds, the Action exits 0. The GitHub App reports neutral.",
                     "Teams have reviewed signal quality and want consistent reviewer attention.",
                 ),
                 "soft-block": (
@@ -132,9 +133,17 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "encrypted immutable raw response",
                 "separate redacted reviewer view",
                 "longest exception, compliance-audit, and incident-attribution horizon",
+                "complete decision identity",
+                "retained manifest snapshot",
+                "retained material-context snapshot",
                 "versioned material-context record",
                 "deterministic UTF-8 JSON",
                 "material-context SHA-256 digest",
+                "manifest snapshot digest",
+                "settings snapshot digest",
+                "`operational-error` classification",
+                "validated hard-block",
+                "check summary",
             ),
             "## Set benchmark thresholds before blocking": (
                 "actual enforcement consumer revision",
@@ -182,6 +191,9 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "always-triggered terminal context",
                 "independent cancellation and timeout watchdog",
                 "complete decision identity",
+                "repository and environment",
+                "integration and project scope",
+                "protected-target identity",
             ),
         }
         for heading, expected_clauses in expected_by_section.items():
@@ -435,6 +447,17 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             'reject any `should-block` value other than the exact strings `"true"` and `"false"`',
             content,
         )
+        self.assertIn("classify the candidate SHA in the capability registry", content)
+        self.assertIn("manifest and enforcement-decision endpoint evidence", content)
+        self.assertIn(
+            "allowed values for `policy-status`, `configured-mode`, and `effective-status`",
+            content,
+        )
+        self.assertIn("configured-mode ceiling", content)
+        self.assertIn(
+            "`should-block` is `true` if and only if `effective-status` is `soft-block` or `hard-block`",
+            content,
+        )
 
     def test_documented_workflow_pins_match_scaffold_constants(self) -> None:
         for relative_path in ("README.md", "docs/github-action.md"):
@@ -564,6 +587,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             content.replace("| --- | --- | --- |", "| advisory | bad | row |"),
             content.replace("| `warn` |", "| warn |"),
             content.replace("| `warn` |", "| `warn` | extra |"),
+            content.replace(
+                "| `warn` |",
+                "   `warn` | Contradictory effect | Contradictory use |",
+            ),
         ):
             with self.subTest(malformed=malformed.splitlines()[1:4]):
                 with self.assertRaises(AssertionError):
@@ -612,6 +639,15 @@ Visible Setext Heading
         self.assertEqual(
             {"visible-setext-heading"},
             self._markdown_heading_anchors(hidden_content),
+        )
+
+        formatted_content = """\
+### [Guardrails](./wrong-target.md) &amp; `Safety`
+### <span>Scoped</span> *Review*
+"""
+        self.assertEqual(
+            {"guardrails--safety", "scoped-review"},
+            self._markdown_heading_anchors(formatted_content),
         )
 
     def test_section_extraction_ignores_fenced_pseudo_headings(self) -> None:
@@ -689,8 +725,6 @@ contradiction
 [Parentheses](./guide_(v2).md)
 [Angle](<./guide with spaces.md>)
 [Escaped](./guide_\(v3\).md)
-[Bad angle](<./bad.md>junk)
-[Bad title](./bad-title.md invalid)
 <!-- [Unclosed](./unclosed.md)
 """
         self.assertEqual(
@@ -701,6 +735,16 @@ contradiction
             },
             self._markdown_links(content),
         )
+
+    def test_markdown_links_reject_malformed_and_reference_style_forms(self) -> None:
+        for malformed in (
+            "[Bad angle](<./bad.md>junk)",
+            "[Bad title](./bad-title.md invalid)",
+            "[Guide][guardrail]\n\n[guardrail]: ./enforcement-guardrails.md",
+        ):
+            with self.subTest(malformed=malformed):
+                with self.assertRaises(AssertionError):
+                    self._markdown_links(malformed)
 
     def test_rendered_markdown_hides_unclosed_comments_and_code_only_prose(
         self,
@@ -748,6 +792,9 @@ jobs:
             self._documented_workflow(f"{hidden_workflows}{real_workflow}"),
         )
 
+        with self.assertRaisesRegex(AssertionError, "Unclosed YAML workflow fence"):
+            self._documented_workflow(real_workflow.removesuffix("```\n"))
+
     @staticmethod
     def _normalized(value: str) -> str:
         return re.sub(r"\s+", " ", value).strip()
@@ -762,6 +809,12 @@ jobs:
         visible = EnforcementGuardrailDocumentationTests._strip_inline_code_spans(
             visible
         )
+        if re.search(r"(?<![!\\])\[[^\]\n]+\]\[[^\]\n]*\]", visible) or re.search(
+            r"(?m)^ {0,3}\[[^\]\n]+\]:", visible
+        ):
+            raise AssertionError(
+                "Reference-style Markdown links are unsupported by this contract parser"
+            )
         targets: set[str] = set()
         cursor = 0
         while cursor < len(visible):
@@ -792,7 +845,9 @@ jobs:
                 targets.add(target)
                 cursor = link_end
             else:
-                cursor = label_end + 1
+                raise AssertionError(
+                    f"Malformed inline Markdown link near: {visible[label_start : label_end + 1]}"
+                )
         return targets
 
     @staticmethod
@@ -813,6 +868,9 @@ jobs:
                 heading = line.strip()
             else:
                 continue
+            heading = EnforcementGuardrailDocumentationTests._rendered_heading_text(
+                heading
+            )
             base_anchor = re.sub(r"[^\w\- ]", "", heading.lower())
             base_anchor = re.sub(r"\s", "-", base_anchor)
             duplicate_number = duplicate_counts.get(base_anchor, 0)
@@ -823,6 +881,15 @@ jobs:
             duplicate_counts[base_anchor] = duplicate_number
             anchors.add(anchor)
         return anchors
+
+    @staticmethod
+    def _rendered_heading_text(value: str) -> str:
+        rendered = html.unescape(value)
+        rendered = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", rendered)
+        rendered = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", rendered)
+        rendered = re.sub(r"`+([^`]*)`+", r"\1", rendered)
+        rendered = re.sub(r"<[^>]+>", "", rendered)
+        return re.sub(r"[*_~]", "", rendered)
 
     @staticmethod
     def _section(value: str, heading: str) -> str:
@@ -930,6 +997,8 @@ jobs:
                 body.append(lines[index])
                 index += 1
             if info.lower() in {"yaml", "yml"}:
+                if index >= len(lines):
+                    raise AssertionError("Unclosed YAML workflow fence")
                 payload = yaml.safe_load("\n".join(body))
                 if isinstance(payload, dict) and "jobs" in payload:
                     workflows.append(payload)
@@ -943,28 +1012,42 @@ jobs:
     @staticmethod
     def _effective_status_rows(value: str) -> dict[str, tuple[str, str]]:
         lines = EnforcementGuardrailDocumentationTests._rendered_markdown_lines(value)
-        header = "| Effective status | Workflow effect | Appropriate use |"
-        if lines.count(header) != 1:
+        expected_header = ["Effective status", "Workflow effect", "Appropriate use"]
+        header_indices = [
+            index
+            for index, line in enumerate(lines)
+            if EnforcementGuardrailDocumentationTests._markdown_table_cells(line)
+            == expected_header
+        ]
+        if len(header_indices) != 1:
             raise AssertionError("Effective-status table must appear exactly once")
-        try:
-            header_index = lines.index(header)
-        except ValueError as exc:
-            raise AssertionError("Effective-status table header is missing") from exc
-        expected_separator = "| --- | --- | --- |"
+        header_index = header_indices[0]
         if header_index + 1 >= len(lines):
             raise AssertionError("Effective-status table separator is missing")
-        if lines[header_index + 1] != expected_separator:
+        separator_cells = EnforcementGuardrailDocumentationTests._markdown_table_cells(
+            lines[header_index + 1]
+        )
+        if len(separator_cells) != 3 or not all(
+            re.fullmatch(r":?-{3,}:?", cell) for cell in separator_cells
+        ):
             raise AssertionError("Effective-status table separator is malformed")
 
         table_starts = [
             index
             for index in range(len(lines) - 1)
-            if lines[index].lstrip().startswith("|")
-            and re.fullmatch(
-                r"\s*\|\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*",
-                lines[index + 1],
+            if len(
+                EnforcementGuardrailDocumentationTests._markdown_table_cells(
+                    lines[index]
+                )
             )
-            is not None
+            >= 2
+            and (
+                candidate_separator
+                := EnforcementGuardrailDocumentationTests._markdown_table_cells(
+                    lines[index + 1]
+                )
+            )
+            and all(re.fullmatch(r":?-{3,}:?", cell) for cell in candidate_separator)
         ]
         if len(table_starts) != 1:
             raise AssertionError(
@@ -973,9 +1056,9 @@ jobs:
 
         rows: dict[str, tuple[str, str]] = {}
         for line in lines[header_index + 2 :]:
-            if not line.startswith("|"):
+            if "|" not in line:
                 break
-            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            cells = EnforcementGuardrailDocumentationTests._markdown_table_cells(line)
             if len(cells) != 3:
                 raise AssertionError(f"Malformed effective-status row: {line}")
             if (
@@ -991,6 +1074,15 @@ jobs:
                 cells[2].replace("`", ""),
             )
         return rows
+
+    @staticmethod
+    def _markdown_table_cells(line: str) -> list[str]:
+        value = line.strip()
+        if value.startswith("|"):
+            value = value[1:]
+        if value.endswith("|"):
+            value = value[:-1]
+        return [cell.strip() for cell in value.split("|")]
 
     @staticmethod
     def _rendered_markdown_lines(value: str, *, keepends: bool = False) -> list[str]:
