@@ -137,7 +137,7 @@ action should not invent a separate report contract.
 | `effective-status` | `data.effective_status` from the enforcement decision |
 | `should-block` | `data.should_block` from the enforcement decision |
 
-The four policy rows describe the enforcement-capable contract, not the
+The four policy rows describe the server-owned enforcement contract, not the
 currently published `@v1` manifest. Verify the installed immutable revision
 before relying on them.
 
@@ -161,6 +161,15 @@ order and require the result to equal `effective-status`. Finally, require that
 `should-block` is `true` if and only if `effective-status` is `soft-block` or
 `hard-block`. A missing, unknown, or cross-field-inconsistent output is an
 operational error, not a non-blocking decision.
+
+An enforcement-capable Action must also expose the Action-owned `failure-kind`
+output. Its only allowed values are `none`, `validated-policy-block`, and
+`operational-error`. `validated-policy-block` is valid only after all four
+server-owned policy outputs pass the allowed-value and cross-field checks above,
+`should-block` is exactly `true`, and the Action exits nonzero because of that
+decision. Any failure after decision validation—including comment or output
+publication—must emit `operational-error`; consumers must never infer failure
+kind from `should-block` alone.
 
 The `report-link` output is publicly shareable only when the DeployWhisper
 server is configured with a public base URL such as `APP_BASE_URL` or
@@ -194,6 +203,7 @@ fields:
 | `comment-id` | GitHub PR comment identifier returned by the external action |
 | `comment-url` | GitHub PR comment URL returned by the external action |
 | `comment-updated` | GitHub PR comment create/update state returned by the external action |
+| `failure-kind` | Action execution classification: `none`, `validated-policy-block`, or `operational-error` |
 
 ## Input Boundary
 

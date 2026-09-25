@@ -116,6 +116,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "current base SHA",
                 "bounded timeout",
                 "idempotency key",
+                "complete decision identity plus a logical run identifier",
+                "every retry of one unknown outcome reuses the same key",
                 "do not provide native idempotent create or check-update semantics",
                 "durable external coordinator",
                 "unknown submission outcome",
@@ -141,12 +143,18 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "material-context SHA-256 digest",
                 "manifest snapshot digest",
                 "settings snapshot digest",
+                "canonical unique normalized path-to-content-hash mapping",
+                "exact set equality",
+                "case-folding behavior",
+                "symlink/alias handling",
                 "`operational-error` classification",
                 "validated hard-block",
                 "check summary",
             ),
             "## Set benchmark thresholds before blocking": (
                 "actual enforcement consumer revision",
+                "decision-level enforcement false negative",
+                "expected and actual `effective-status` and `should-block`",
                 "outcome-observation window",
                 "incident-attribution horizon",
                 "endpoint schema",
@@ -172,6 +180,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "report ID, manifest, settings snapshot, material context, consumer revision, or workflow changes",
                 "external approval record",
                 "complete decision identity",
+                "immutable application/server revision",
+                "dependency-lock identity",
+                "endpoint-contract version",
+                "validated decision digest",
             ),
             "## Rollout checklist": (
                 "source-bound required check or job",
@@ -194,10 +206,14 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "repository and environment",
                 "integration and project scope",
                 "protected-target identity",
+                "external approval record or independently enforced approval check",
+                "Lower-than-`high` blocking remains prohibited",
             ),
         }
         for heading, expected_clauses in expected_by_section.items():
-            section = self._normalized(self._section(content, heading))
+            section = self._normalized(
+                self._visible_prose(self._section(content, heading))
+            )
             for expected in expected_clauses:
                 with self.subTest(heading=heading, expected=expected):
                     self.assertIn(expected, section)
@@ -245,7 +261,9 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             ),
         }
         for heading, expected_clauses in expected_by_section.items():
-            section = self._normalized(self._section(content, heading))
+            section = self._normalized(
+                self._visible_prose(self._section(content, heading))
+            )
             for expected in expected_clauses:
                 with self.subTest(heading=heading, expected=expected):
                     self.assertIn(expected, section)
@@ -323,7 +341,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "An enforcement-capable Action ref exits `0` after a valid non-blocking decision, exits nonzero when validated `should-block` is `true`, and also exits nonzero when the enforcement decision cannot be retrieved or validated.",
+            "A valid non-blocking policy decision does not itself request failure; the enforcement-capable Action exits `0` only when all remaining runtime work also succeeds.",
             content,
         )
         self.assertIn(
@@ -746,6 +764,37 @@ contradiction
                 with self.assertRaises(AssertionError):
                     self._markdown_links(malformed)
 
+    def test_markdown_contract_rejects_unsupported_rendering_constructs(self) -> None:
+        for unsupported in (
+            "> ```markdown\n> [Hidden](./missing.md)\n> ```",
+            "```text\n<!-- literal comment marker -->\n```\n[Visible](./missing.md)",
+        ):
+            with self.subTest(unsupported=unsupported):
+                with self.assertRaises(AssertionError):
+                    self._rendered_markdown_lines(unsupported)
+
+        for unsupported_link in (
+            "[guardrail [details]](./missing.md)",
+            '<a href="./missing.md">Missing</a>',
+        ):
+            with self.subTest(unsupported_link=unsupported_link):
+                with self.assertRaises(AssertionError):
+                    self._markdown_links(unsupported_link)
+
+        section = """\
+## Target
+[short label](./required-hidden-phrase.md)
+- list item
+
+      hidden list code requirement
+"""
+        visible = self._normalized(
+            self._visible_prose(self._section(section, "## Target"))
+        )
+        self.assertEqual("short label - list item", visible)
+        self.assertNotIn("required-hidden-phrase", visible)
+        self.assertNotIn("hidden list code requirement", visible)
+
     def test_rendered_markdown_hides_unclosed_comments_and_code_only_prose(
         self,
     ) -> None:
@@ -800,6 +849,27 @@ jobs:
         return re.sub(r"\s+", " ", value).strip()
 
     @staticmethod
+    def _visible_prose(value: str) -> str:
+        visible = "".join(
+            EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
+                value, keepends=True
+            )
+        )
+        EnforcementGuardrailDocumentationTests._markdown_links(visible)
+        visible = re.sub(
+            r"!\[([^\]]*)\]\((?:<[^>]*>|(?:\\.|[^)])*)\)",
+            r"\1",
+            visible,
+        )
+        visible = re.sub(
+            r"\[([^\]]+)\]\((?:<[^>]*>|(?:\\.|[^)])*)\)",
+            r"\1",
+            visible,
+        )
+        visible = re.sub(r"<[^>]+>", "", visible)
+        return html.unescape(visible)
+
+    @staticmethod
     def _markdown_links(value: str) -> set[str]:
         visible = "".join(
             EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
@@ -809,6 +879,13 @@ jobs:
         visible = EnforcementGuardrailDocumentationTests._strip_inline_code_spans(
             visible
         )
+        if re.search(r"(?<![!\\])\[[^\]\n]*\[[^\n]*\]\]\(", visible):
+            raise AssertionError("Nested Markdown link labels are unsupported")
+        if re.search(
+            r"(?is)<a\b[^>]*\bhref\s*=\s*['\"](?:\./|\.\./)[^'\"]*['\"][^>]*>",
+            visible,
+        ):
+            raise AssertionError("Repository-local raw HTML links are unsupported")
         if re.search(r"(?<![!\\])\[[^\]\n]+\]\[[^\]\n]*\]", visible) or re.search(
             r"(?m)^ {0,3}\[[^\]\n]+\]:", visible
         ):
@@ -1086,6 +1163,7 @@ jobs:
 
     @staticmethod
     def _rendered_markdown_lines(value: str, *, keepends: bool = False) -> list[str]:
+        EnforcementGuardrailDocumentationTests._validate_supported_markdown(value)
         comment_free = EnforcementGuardrailDocumentationTests._strip_html_comments(
             value
         )
@@ -1109,6 +1187,7 @@ jobs:
                     if (
                         list_content_indent is None
                         or leading_spaces < list_content_indent
+                        or leading_spaces >= list_content_indent + 4
                     ):
                         continue
                 elif line.strip():
@@ -1122,6 +1201,31 @@ jobs:
                 fence_character = None
                 fence_length = 0
         return rendered
+
+    @staticmethod
+    def _validate_supported_markdown(value: str) -> None:
+        fence_character: str | None = None
+        fence_length = 0
+        for line in value.splitlines():
+            if fence_character is None:
+                if re.match(r"^ {0,3}>[ \t]?(?:`{3,}|~{3,})", line):
+                    raise AssertionError("Blockquoted fenced code is unsupported")
+                opening = EnforcementGuardrailDocumentationTests._opening_fence_info(
+                    line
+                )
+                if opening is not None:
+                    fence_character = opening[0][0]
+                    fence_length = len(opening[0])
+            else:
+                if "<!--" in line or "-->" in line:
+                    raise AssertionError(
+                        "HTML comment markers inside fenced code are unsupported"
+                    )
+                if EnforcementGuardrailDocumentationTests._is_closing_fence(
+                    line, fence_character, fence_length
+                ):
+                    fence_character = None
+                    fence_length = 0
 
     @staticmethod
     def _strip_html_comments(value: str) -> str:

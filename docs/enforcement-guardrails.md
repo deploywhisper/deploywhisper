@@ -183,7 +183,10 @@ snapshot against the approved expected values. If the organization cannot
 enforce that change-control boundary, keep the integration non-blocking until a
 revision token or atomic contract exists. Treat a decision as stale after the
 report ID, manifest, protected commit, integration scope, settings, consumer
-revision, or workflow changes; rerun instead of reusing a passing check.
+revision, workflow, immutable application/server revision, dependency-lock
+identity, or endpoint-contract version changes; rerun instead of reusing a
+passing check. Hash the exact validated decision bytes with SHA-256 and retain
+that validated decision digest as part of the complete identity.
 
 Define a material report-context invalidation policy for topology, ownership,
 incident, scanner, and other decision inputs. When a material input changes
@@ -218,6 +221,12 @@ a protection-layer bypass.
 Use the exact persisted report `submission_manifest` returned by the analysis
 response. Require `submitted_artifact_count` to equal the trusted in-scope
 changed-file count and `len(items)`, with one item for every trusted path.
+Define one canonical path normalization policy for the protected platform,
+including separator normalization, `.`/`..` rejection, symlink/alias handling,
+Unicode normalization, and case-folding behavior. Reject duplicate canonical
+paths. Compare the canonical unique normalized path-to-content-hash mapping with
+the independently derived trusted changed-file mapping using exact set equality;
+counts alone are insufficient.
 Require `accepted_artifact_count` to equal the count of items with status
 `accepted` or `failed`, `analyzed_artifact_count` to equal the count with status
 `accepted`, and each excluded, sensitive, failed, and partial counter to equal
@@ -274,8 +283,11 @@ classification and evidence—not the conclusion alone—to distinguish an
 operational failure from a policy block.
 
 Set a bounded timeout for analysis, decision retrieval, and check publication.
-Retry only transient failures with capped attempts and exponential backoff, and
-use one protected-workflow idempotency key for submission and check coordination.
+Retry only transient failures with capped attempts and exponential backoff. Build
+one protected-workflow idempotency key from the complete decision identity plus
+a logical run identifier; exclude the retry-attempt number so every retry of one
+unknown outcome reuses the same key, while an intentional fresh rerun uses a new
+logical run identifier. Use that key for submission and check coordination.
 The current analysis API and GitHub App do not provide native idempotent create
 or check-update semantics. A blocking consumer therefore needs a durable
 external coordinator that owns that key, suppresses duplicate submissions, and
@@ -422,6 +434,12 @@ blocking merely because its observed rate is perfect.
 A benchmark false negative is an expected finding the analysis does not detect.
 Benchmark false reassurance is a controlled scenario whose expected
 recommendation is `warn` or `stop` but whose actual verdict is less severe.
+Track decision-level enforcement false negatives separately: for every
+blocking-labeled scenario, record the expected and actual `effective-status` and
+`should-block`, and count a false negative whenever the expected blocking result
+becomes non-blocking. Report its numerator over all blocking-labeled decision
+scenarios as its own denominator; do not merge it with recommendation-level
+benchmark false reassurance.
 Reviewer-feedback false reassurance is a reviewer-reported missed finding on a
 completed report. Deployment-backed false reassurance is a workflow pass
 followed by an attributable adverse production outcome within the recorded
@@ -528,9 +546,10 @@ Use an external approval record or independently enforced approval check keyed
 to the complete decision identity: repository and environment, integration and
 project scope, protected-target identity, protected commit, report ID, manifest
 snapshot digest, settings snapshot digest, material-context digest, consumer
-revision, and workflow revision. The delivery control must reject a missing or
-stale approval record and require a new authorized human decision for the new
-identity.
+revision, workflow revision, immutable application/server revision,
+dependency-lock identity, endpoint-contract version, and validated decision
+digest. The delivery control must reject a missing or stale approval record and
+require a new authorized human decision for the new identity.
 
 ## Rollback remains an operator responsibility
 
@@ -574,6 +593,9 @@ integration:
    `neutral` scope-resolution path.
 8. The resolved setting source, `warn_at`, `soft_block_at`, and `hard_block_at`
    thresholds, reporting default, and configured enforcement mode.
+   Lower-than-`high` blocking remains prohibited unless the shared decision path
+   implements and the benchmark approves the separate deterministic-evidence
+   gate described above.
 9. The trusted identity/proxy boundary that strips caller-supplied actor headers
    and injects verified role and project scope.
 10. A durable external idempotency coordinator for blocking consumers. If it is
@@ -597,12 +619,16 @@ integration:
    excessive overrides.
 17. Immutable application and actual consumer revisions plus proof that deployed
     artifacts match the benchmarked build.
-18. Repository review or protected-environment rules that require human approval
-    for the complete decision identity: repository and environment, integration
-    and project scope, protected-target identity, protected commit, report ID,
-    manifest snapshot digest, settings snapshot digest, material-context digest,
-    consumer revision, and workflow revision. Dismiss stale approvals and
-    require a new authorized approval when any identity component changes.
+18. An external approval record or independently enforced approval check that
+    requires human approval for the complete decision identity: repository and
+    environment, integration and project scope, protected-target identity,
+    protected commit, report ID, manifest snapshot digest, settings snapshot
+    digest, material-context digest, consumer revision, workflow revision,
+    immutable application/server revision, dependency-lock identity,
+    endpoint-contract version, and validated decision digest. Native repository
+    review or protected-environment approval may remain an additional control,
+    but cannot replace this non-commit identity binding. Dismiss stale approvals
+    and require a new authorized approval when any identity component changes.
 19. A review date and a trigger for returning to `warn` or `advisory`.
 
 Enable one integration and scope at a time. Observe real outcomes before

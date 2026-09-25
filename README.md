@@ -767,7 +767,7 @@ What the action does:
 - submits those artifacts to the existing `POST /api/v1/analyses` endpoint
 - posts a single markdown PR comment and updates that same comment on re-runs
 - compares the latest report with the previous PR scan so reruns show score and severity deltas in the refreshed comment
-- An enforcement-capable Action ref exits `0` after a valid non-blocking decision, exits nonzero when validated `should-block` is `true`, and also exits nonzero when the enforcement decision cannot be retrieved or validated.
+- A valid non-blocking policy decision does not itself request failure; the enforcement-capable Action exits `0` only when all remaining runtime work also succeeds. A validated policy block and every decision-retrieval, validation, or later operational failure exit nonzero.
 - Older Action refs that do not expose enforcement outputs remain advisory-only
   and exit `0` after successful analysis. Inspect the resolved setting source
   and configured enforcement mode before installation. If the project default
@@ -791,7 +791,8 @@ What the action does:
   - `comment-updated`
 
 Enforcement-capable revisions additionally expose `policy-status`,
-`configured-mode`, `effective-status`, and `should-block`; the published `@v1`
+`configured-mode`, `effective-status`, `should-block`, and the Action-owned
+`failure-kind` discriminator; the published `@v1`
 ref validated on 2026-09-09 (tag object
 `f2e36cef443129e85c55882b9dafc1f20d409284`) does not expose them.
 

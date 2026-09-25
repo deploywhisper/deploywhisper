@@ -72,6 +72,7 @@ class GitHubActionIntegrationContractTests(unittest.TestCase):
                 "comment-id": "GitHub PR comment identifier returned by the external action",
                 "comment-url": "GitHub PR comment URL returned by the external action",
                 "comment-updated": "GitHub PR comment create/update state returned by the external action",
+                "failure-kind": "Action execution classification: none, validated-policy-block, or operational-error",
             },
             metadata_mapping,
         )

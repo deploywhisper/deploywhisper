@@ -79,3 +79,7 @@
 ## Deferred from: code review of 11-3-integration-level-enforcement-settings.md (2026-08-18)
 
 - Resolved 2026-08-18: Project-scope failures now return failed results with their original machine-readable root-cause code; compounded GitHub check delivery failures are exposed separately through `delivery_code` [integrations/github/app_service.py:668].
+
+## Deferred from: code review of 11-4-enforcement-guardrail-documentation.md (2026-09-22)
+
+- GitHub init reruns can overwrite an existing operator-hardened workflow and reintroduce the advisory safeguard, silently downgrading enforcement wiring [integrations/github/init_service.py:248]. Deferred as pre-existing init-wizard overwrite/idempotency behavior: Story 11.4 changes rendered guardrail guidance and future capability handling but did not introduce unconditional workflow replacement.

@@ -264,7 +264,7 @@ class GitHubInitServiceTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 init_service.GitHubInitError,
-                "Unclassified DeployWhisper Analyze Action revision",
+                "Unreviewed DeployWhisper Analyze Action revision",
             ):
                 init_service._render_readme_section(
                     options,
@@ -294,6 +294,47 @@ class GitHubInitServiceTests(unittest.TestCase):
                 "Invalid capability classification",
             ):
                 init_service._analyze_action_capability(revision)
+
+    def test_action_capability_and_checkout_reject_mutable_or_unreviewed_refs(
+        self,
+    ) -> None:
+        options = init_service.GitHubInitOptions(
+            repo_path=".",
+            workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+            api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+            enable_github_app=False,
+            base_branch="develop",
+            project_key="payments",
+        )
+
+        with patch.dict(
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+            {"v1": init_service.AnalyzeActionCapability.ADVISORY_ONLY},
+        ):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "reviewed immutable 40-character commit SHA",
+            ):
+                init_service._analyze_action_capability("v1")
+
+        with patch.object(init_service, "CHECKOUT_ACTION_PINNED_SHA", "v4"):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "reviewed immutable 40-character commit SHA",
+            ):
+                init_service._render_workflow(options)
+
+        unreviewed_sha = "c" * 40
+        with patch.object(
+            init_service,
+            "CHECKOUT_ACTION_PINNED_SHA",
+            unreviewed_sha,
+        ):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "Unreviewed actions/checkout revision",
+            ):
+                init_service._render_workflow(options)
 
     def test_enforcement_capable_pin_updates_all_generated_guidance(self) -> None:
         revision = "b" * 40
@@ -347,15 +388,103 @@ class GitHubInitServiceTests(unittest.TestCase):
         )
         self.assertIs(True, action_step["continue-on-error"])
         self.assertEqual(
-            "${{ always() && steps.deploywhisper.outcome == 'failure' && steps.deploywhisper.outputs.should-block != 'true' }}",
+            "${{ always() }}",
             steps[action_index + 1]["if"],
         )
-        self.assertIn("exit 1", steps[action_index + 1]["run"])
         self.assertEqual(
-            "${{ always() && steps.deploywhisper.outcome == 'failure' && steps.deploywhisper.outputs.should-block == 'true' }}",
-            steps[action_index + 2]["if"],
+            {
+                "ACTION_OUTCOME": "${{ steps.deploywhisper.outcome }}",
+                "FAILURE_KIND": "${{ steps.deploywhisper.outputs.failure-kind }}",
+                "POLICY_STATUS": "${{ steps.deploywhisper.outputs.policy-status }}",
+                "CONFIGURED_MODE": "${{ steps.deploywhisper.outputs.configured-mode }}",
+                "EFFECTIVE_STATUS": "${{ steps.deploywhisper.outputs.effective-status }}",
+                "SHOULD_BLOCK": "${{ steps.deploywhisper.outputs.should-block }}",
+            },
+            steps[action_index + 1]["env"],
         )
-        self.assertIn("::warning::", steps[action_index + 2]["run"])
+        self.assertIn("validated-policy-block", steps[action_index + 1]["run"])
+        self.assertIn("expected_effective", steps[action_index + 1]["run"])
+        self.assertIn("exit 1", steps[action_index + 1]["run"])
+
+    def test_enforcement_onboarding_validator_distinguishes_policy_and_errors(
+        self,
+    ) -> None:
+        revision = "b" * 40
+        options = init_service.GitHubInitOptions(
+            repo_path=".",
+            workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+            api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+            enable_github_app=False,
+            base_branch="develop",
+            project_key="payments",
+        )
+        with patch.dict(
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+            {revision: init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE},
+        ):
+            with patch.object(init_service, "ANALYZE_ACTION_PINNED_SHA", revision):
+                workflow = yaml.safe_load(init_service._render_workflow(options))
+        validator = workflow["jobs"]["deploywhisper"]["steps"][-1]
+
+        def run_validator(**values: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["bash", "-c", validator["run"]],
+                check=False,
+                capture_output=True,
+                text=True,
+                env={**os.environ, **values},
+            )
+
+        valid_pass = run_validator(
+            ACTION_OUTCOME="success",
+            FAILURE_KIND="none",
+            POLICY_STATUS="advisory",
+            CONFIGURED_MODE="hard-block",
+            EFFECTIVE_STATUS="advisory",
+            SHOULD_BLOCK="false",
+        )
+        self.assertEqual(0, valid_pass.returncode, valid_pass.stderr)
+
+        valid_policy_block = run_validator(
+            ACTION_OUTCOME="failure",
+            FAILURE_KIND="validated-policy-block",
+            POLICY_STATUS="hard-block",
+            CONFIGURED_MODE="hard-block",
+            EFFECTIVE_STATUS="hard-block",
+            SHOULD_BLOCK="true",
+        )
+        self.assertEqual(0, valid_policy_block.returncode, valid_policy_block.stderr)
+        self.assertIn("::warning::", valid_policy_block.stdout)
+
+        for invalid in (
+            {
+                "ACTION_OUTCOME": "failure",
+                "FAILURE_KIND": "operational-error",
+                "POLICY_STATUS": "hard-block",
+                "CONFIGURED_MODE": "hard-block",
+                "EFFECTIVE_STATUS": "hard-block",
+                "SHOULD_BLOCK": "true",
+            },
+            {
+                "ACTION_OUTCOME": "success",
+                "FAILURE_KIND": "none",
+                "POLICY_STATUS": "warn",
+                "CONFIGURED_MODE": "advisory",
+                "EFFECTIVE_STATUS": "warn",
+                "SHOULD_BLOCK": "false",
+            },
+            {
+                "ACTION_OUTCOME": "success",
+                "FAILURE_KIND": "none",
+                "POLICY_STATUS": "",
+                "CONFIGURED_MODE": "advisory",
+                "EFFECTIVE_STATUS": "advisory",
+                "SHOULD_BLOCK": "false",
+            },
+        ):
+            with self.subTest(invalid=invalid):
+                result = run_validator(**invalid)
+                self.assertNotEqual(0, result.returncode)
 
     @patch("integrations.github.init_service._require_binary")
     @patch("integrations.github.init_service._run_command")

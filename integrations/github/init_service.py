@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from enum import Enum
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from textwrap import dedent
@@ -19,6 +21,7 @@ DEFAULT_BRANCH_NAME = "feature/deploywhisper-github-init"
 ANALYZE_ACTION_PINNED_SHA = "3b37ed72bfb2d201030bef873268f2170794b160"
 # Immutable commit resolved from actions/checkout v4, reviewed 2026-09-09.
 CHECKOUT_ACTION_PINNED_SHA = "11d5960a326750d5838078e36cf38b85af677262"
+CHECKOUT_ACTION_REVISIONS = frozenset({CHECKOUT_ACTION_PINNED_SHA})
 
 
 class AnalyzeActionCapability(str, Enum):
@@ -48,6 +51,11 @@ class GitHubInitError(RuntimeError):
 
 
 def _analyze_action_capability(revision: str) -> AnalyzeActionCapability:
+    _validate_reviewed_revision(
+        revision,
+        label="DeployWhisper Analyze Action",
+        reviewed_revisions=ANALYZE_ACTION_CAPABILITIES,
+    )
     try:
         capability = ANALYZE_ACTION_CAPABILITIES[revision]
     except KeyError as exc:
@@ -61,6 +69,21 @@ def _analyze_action_capability(revision: str) -> AnalyzeActionCapability:
             f"revision {revision}: {capability!r}."
         )
     return capability
+
+
+def _validate_reviewed_revision(
+    revision: str,
+    *,
+    label: str,
+    reviewed_revisions: Collection[str],
+) -> None:
+    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise GitHubInitError(
+            f"{label} must use a reviewed immutable 40-character commit SHA: "
+            f"{revision!r}."
+        )
+    if revision not in reviewed_revisions:
+        raise GitHubInitError(f"Unreviewed {label} revision: {revision}.")
 
 
 @dataclass(frozen=True)
@@ -312,21 +335,68 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
 
 def _render_workflow(options: GitHubInitOptions) -> str:
     capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    _validate_reviewed_revision(
+        CHECKOUT_ACTION_PINNED_SHA,
+        label="actions/checkout",
+        reviewed_revisions=CHECKOUT_ACTION_REVISIONS,
+    )
     advisory_safeguard = (
         "                continue-on-error: true\n"
         if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
         else ""
     )
     onboarding_terminal_steps = (
-        "      - name: Fail DeployWhisper onboarding operational errors\n"
-        "        if: ${{ always() && steps.deploywhisper.outcome == 'failure' && steps.deploywhisper.outputs.should-block != 'true' }}\n"
+        "      - name: Validate DeployWhisper onboarding decision\n"
+        "        if: ${{ always() }}\n"
+        "        shell: bash\n"
+        "        env:\n"
+        "          ACTION_OUTCOME: ${{ steps.deploywhisper.outcome }}\n"
+        "          FAILURE_KIND: ${{ steps.deploywhisper.outputs.failure-kind }}\n"
+        "          POLICY_STATUS: ${{ steps.deploywhisper.outputs.policy-status }}\n"
+        "          CONFIGURED_MODE: ${{ steps.deploywhisper.outputs.configured-mode }}\n"
+        "          EFFECTIVE_STATUS: ${{ steps.deploywhisper.outputs.effective-status }}\n"
+        "          SHOULD_BLOCK: ${{ steps.deploywhisper.outputs.should-block }}\n"
         "        run: |\n"
-        '          echo "::error::DeployWhisper failed without a validated blocking decision"\n'
-        "          exit 1\n"
-        "      - name: Surface advisory onboarding policy block\n"
-        "        if: ${{ always() && steps.deploywhisper.outcome == 'failure' && steps.deploywhisper.outputs.should-block == 'true' }}\n"
-        "        run: |\n"
-        '          echo "::warning::DeployWhisper reported a policy block while the onboarding safeguard is active"\n'
+        "          set -euo pipefail\n"
+        "          fail() {\n"
+        '            echo "::error::$1"\n'
+        "            exit 1\n"
+        "          }\n"
+        "          rank() {\n"
+        '            case "$1" in\n'
+        "              advisory) echo 0 ;;\n"
+        "              warn) echo 1 ;;\n"
+        "              soft-block) echo 2 ;;\n"
+        "              hard-block) echo 3 ;;\n"
+        "              *) return 1 ;;\n"
+        "            esac\n"
+        "          }\n"
+        '          policy_rank="$(rank "$POLICY_STATUS")" || fail "Unknown policy-status"\n'
+        '          configured_rank="$(rank "$CONFIGURED_MODE")" || fail "Unknown configured-mode"\n'
+        '          rank "$EFFECTIVE_STATUS" >/dev/null || fail "Unknown effective-status"\n'
+        "          if (( policy_rank < configured_rank )); then\n"
+        '            expected_effective="$POLICY_STATUS"\n'
+        "          else\n"
+        '            expected_effective="$CONFIGURED_MODE"\n'
+        "          fi\n"
+        '          [[ "$EFFECTIVE_STATUS" == "$expected_effective" ]] || fail "Effective status violates configured-mode ceiling"\n'
+        '          case "$EFFECTIVE_STATUS" in\n'
+        '            soft-block|hard-block) expected_block="true" ;;\n'
+        '            advisory|warn) expected_block="false" ;;\n'
+        "          esac\n"
+        '          [[ "$SHOULD_BLOCK" == "$expected_block" ]] || fail "should-block contradicts effective-status"\n'
+        '          case "$ACTION_OUTCOME" in\n'
+        "            success)\n"
+        '              [[ "$FAILURE_KIND" == "none" ]] || fail "Successful Action reported a failure kind"\n'
+        '              [[ "$SHOULD_BLOCK" == "false" ]] || fail "Blocking decision returned success"\n'
+        "              ;;\n"
+        "            failure)\n"
+        '              [[ "$FAILURE_KIND" == "validated-policy-block" ]] || fail "Action failure was not a validated policy block"\n'
+        '              [[ "$SHOULD_BLOCK" == "true" ]] || fail "Policy-block failure was not blocking"\n'
+        '              echo "::warning::DeployWhisper reported a validated policy block while the onboarding safeguard is active"\n'
+        "              ;;\n"
+        '            *) fail "DeployWhisper Action did not complete" ;;\n'
+        "          esac\n"
         if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
         else ""
     )
