@@ -3,7 +3,9 @@
 DeployWhisper's GitHub Marketplace action runtime lives outside this
 application repository in
 [`deploywhisper/analyze-action`](https://github.com/deploywhisper/analyze-action).
-Use the published action from workflow files as `deploywhisper/analyze-action@v1`.
+Use the published action from workflow files pinned to a reviewed full commit
+SHA. Treat `deploywhisper/analyze-action@v1` as a compatibility pointer, not an
+immutable workflow reference.
 
 This repository documents and integrates with the action contract. It must not
 host local Marketplace action manifests such as `action.yml` or `action.yaml`,
@@ -27,10 +29,11 @@ jobs:
   deploywhisper:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
-      - uses: deploywhisper/analyze-action@v1
+      - id: deploywhisper
+        uses: deploywhisper/analyze-action@3b37ed72bfb2d201030bef873268f2170794b160
         with:
           api-url: ${{ secrets.DEPLOYWHISPER_API_URL }}
           project-key: payments
@@ -61,15 +64,59 @@ DeployWhisper's canonical result remains advisory in CI. Successful analysis sho
 workflow based only on risk score or recommendation. Consumers should use
 `data.advisory.requires_attention` to decide whether to notify reviewers or add
 manual checks. Advisory-first boundary: the action does not block unless the
-`github-action` integration is explicitly configured for an effective
-`soft-block` or `hard-block` decision. After persisting a report, the action
-consumes the configured policy decision, defaults to `advisory`, and keeps raw
-policy and effective integration statuses distinct. It fails the action only
-when the server's validated `should_block` decision is true; it does not derive
-blocking from severity, risk score, or recommendation. The external
+resolved setting, selected from the integration override before the inherited
+project default, permits an effective `soft-block` or `hard-block` decision. An
+enforcement-capable Action revision
+consumes the configured policy decision after persisting a report, resolves the
+integration override before the inherited project and built-in defaults, and
+keeps raw policy and effective integration statuses distinct.
+Such a revision fails when the server's validated `should_block` decision is
+true and also fails with an operational error when that decision cannot be
+retrieved or validated; it does not derive blocking from severity, risk score,
+or recommendation. The external
 `deploywhisper/analyze-action` repository owns that runtime behavior; this
 repository owns the shared API and contract at
 `GET /api/v1/analyses/{report_id}/enforcement-decision?integration=github-action`.
+Operators considering a required blocking check must first complete the
+[Enforcement Guardrails](./enforcement-guardrails.md).
+
+These enforcement semantics require an Action release that exposes
+`policy-status`, `configured-mode`, `effective-status`, and `should-block` and
+consumes the enforcement-decision endpoint. The moving `@v1` tag follows
+published releases and must not be treated as permanently advisory. The
+published `@v1` ref validated on 2026-09-09 (tag object
+`f2e36cef443129e85c55882b9dafc1f20d409284`, dereferenced commit
+`3b37ed72bfb2d201030bef873268f2170794b160`) did not expose enforcement outputs,
+but a later tag move may. Pin Action revisions for advisory and blocking
+workflows; a server-side advisory override does not make mutable Action code
+trustworthy. Before making a pinned enforcement revision required, run synthetic
+valid-pass, valid-block, unavailable-decision, and malformed-decision cases
+against that exact revision before making its job required. Older Action refs
+that do not expose enforcement outputs remain advisory-only even when the
+server stores a blocking mode.
+
+The example also pins checkout independently. On 2026-09-09,
+actions/checkout `v4` is a lightweight tag that resolved to commit
+`11d5960a326750d5838078e36cf38b85af677262`; no separate annotated-tag object
+was present. Re-resolve that upstream ref instead of assuming this dated
+mapping remains current.
+
+Update the two dependencies independently:
+
+1. For `deploywhisper/analyze-action`, resolve the candidate ref, dereference
+   annotated tags, review the full diff from the existing pin, run the Action
+   repository tests and smoke consumer against the exact candidate commit, and
+   then replace the full SHA. Before changing the scaffold pin, classify the
+   candidate SHA in the capability registry. Record the reviewed manifest and
+   enforcement-decision endpoint evidence that proves whether the revision is
+   `advisory-only` or `enforcement-capable`; an unclassified candidate must keep
+   scaffold generation fail-closed.
+2. For `actions/checkout`, resolve and review the checkout candidate independently,
+   peel an annotated tag to the executed commit, inspect its release provenance
+   and full diff from the existing pin, and run the protected workflow's checkout
+   and artifact-selection smoke cases before replacing its full SHA.
+3. Update the scaffold constants, README, this guide, and their contract tests in
+   the same change. Never copy a moving tag into a protected workflow.
 
 ## Canonical Report Output Mapping
 
@@ -90,10 +137,39 @@ action should not invent a separate report contract.
 | `effective-status` | `data.effective_status` from the enforcement decision |
 | `should-block` | `data.should_block` from the enforcement decision |
 
+The four policy rows describe the server-owned enforcement contract, not the
+currently published `@v1` manifest. Verify the installed immutable revision
+before relying on them.
+
 GitHub Action outputs are strings. The `share-summary-json` output is a
 JSON-encoded string of `data.share_summary.json_payload`; consumers should parse
 it with `fromJSON(steps.deploywhisper.outputs.share-summary-json)` in workflow
 expressions or `JSON.parse(...)` in scripts.
+
+`should-block` is also a string. In GitHub expressions, branch with an exact
+comparison such as
+`steps.deploywhisper.outputs.should-block == 'true'` or parse it with
+`fromJSON(steps.deploywhisper.outputs.should-block)`. Do not use the nonempty
+string directly as a boolean because both `"true"` and `"false"` are strings.
+Before either operation, reject a missing output and reject any `should-block`
+value other than the exact strings `"true"` and `"false"`; treat malformed
+values and `fromJSON` failures as operational errors that fail the workflow.
+Validate the allowed values for `policy-status`, `configured-mode`, and
+`effective-status` too: each must be exactly `advisory`, `warn`, `soft-block`,
+or `hard-block`. Apply the configured-mode ceiling to `policy-status` using that
+order and require the result to equal `effective-status`. Finally, require that
+`should-block` is `true` if and only if `effective-status` is `soft-block` or
+`hard-block`. A missing, unknown, or cross-field-inconsistent output is an
+operational error, not a non-blocking decision.
+
+An enforcement-capable Action must also expose the Action-owned `failure-kind`
+output. Its only allowed values are `none`, `validated-policy-block`, and
+`operational-error`. `validated-policy-block` is valid only after all four
+server-owned policy outputs pass the allowed-value and cross-field checks above,
+`should-block` is exactly `true`, and the Action exits nonzero because of that
+decision. Any failure after decision validation—including comment or output
+publication—must emit `operational-error`; consumers must never infer failure
+kind from `should-block` alone.
 
 The `report-link` output is publicly shareable only when the DeployWhisper
 server is configured with a public base URL such as `APP_BASE_URL` or
@@ -127,6 +203,7 @@ fields:
 | `comment-id` | GitHub PR comment identifier returned by the external action |
 | `comment-url` | GitHub PR comment URL returned by the external action |
 | `comment-updated` | GitHub PR comment create/update state returned by the external action |
+| `failure-kind` | Action execution classification: `none`, `validated-policy-block`, or `operational-error` |
 
 ## Input Boundary
 

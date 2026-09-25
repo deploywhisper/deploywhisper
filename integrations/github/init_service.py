@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
+from enum import Enum
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from textwrap import dedent
@@ -14,8 +17,29 @@ from urllib.parse import urlparse
 DEFAULT_WORKFLOW_PATH = ".github/workflows/deploywhisper.yml"
 DEFAULT_APP_NOTES_PATH = ".github/deploywhisper-self-hosted-github-app.md"
 DEFAULT_BRANCH_NAME = "feature/deploywhisper-github-init"
+# Immutable commit behind deploywhisper/analyze-action v1, reviewed 2026-09-09.
+ANALYZE_ACTION_PINNED_SHA = "3b37ed72bfb2d201030bef873268f2170794b160"
+# Immutable commit resolved from actions/checkout v4, reviewed 2026-09-09.
+CHECKOUT_ACTION_PINNED_SHA = "11d5960a326750d5838078e36cf38b85af677262"
+CHECKOUT_ACTION_REVISIONS = frozenset({"11d5960a326750d5838078e36cf38b85af677262"})
+
+
+class AnalyzeActionCapability(str, Enum):
+    """Runtime capabilities that generated guidance may safely promise."""
+
+    ADVISORY_ONLY = "advisory-only"
+    ENFORCEMENT_CAPABLE = "enforcement-capable"
+
+
+ANALYZE_ACTION_CAPABILITIES = {
+    "3b37ed72bfb2d201030bef873268f2170794b160": (AnalyzeActionCapability.ADVISORY_ONLY),
+}
 README_SECTION_START = "<!-- deploywhisper:start -->"
 README_SECTION_END = "<!-- deploywhisper:end -->"
+ENFORCEMENT_GUARDRAILS_URL = (
+    "https://github.com/deploywhisper/deploywhisper/blob/develop/"
+    "docs/enforcement-guardrails.md"
+)
 OPERATOR_DOCS_URL = (
     "https://github.com/deploywhisper/deploywhisper/blob/develop/"
     "docs/github-app-self-hosted-setup.md"
@@ -24,6 +48,36 @@ OPERATOR_DOCS_URL = (
 
 class GitHubInitError(RuntimeError):
     """Raised when the GitHub init wizard cannot complete."""
+
+
+def _analyze_action_capability(revision: str) -> AnalyzeActionCapability:
+    _validate_reviewed_revision(
+        revision,
+        label="DeployWhisper Analyze Action",
+        reviewed_revisions=ANALYZE_ACTION_CAPABILITIES,
+    )
+    capability = ANALYZE_ACTION_CAPABILITIES[revision]
+    if not isinstance(capability, AnalyzeActionCapability):
+        raise GitHubInitError(
+            "Invalid capability classification for DeployWhisper Analyze Action "
+            f"revision {revision}: {capability!r}."
+        )
+    return capability
+
+
+def _validate_reviewed_revision(
+    revision: str,
+    *,
+    label: str,
+    reviewed_revisions: Collection[str],
+) -> None:
+    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise GitHubInitError(
+            f"{label} must use a reviewed immutable 40-character commit SHA: "
+            f"{revision!r}."
+        )
+    if revision not in reviewed_revisions:
+        raise GitHubInitError(f"Unreviewed {label} revision: {revision}.")
 
 
 @dataclass(frozen=True)
@@ -274,6 +328,72 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
 
 
 def _render_workflow(options: GitHubInitOptions) -> str:
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    _validate_reviewed_revision(
+        CHECKOUT_ACTION_PINNED_SHA,
+        label="actions/checkout",
+        reviewed_revisions=CHECKOUT_ACTION_REVISIONS,
+    )
+    advisory_safeguard = (
+        "                continue-on-error: true\n"
+        if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+        else ""
+    )
+    onboarding_terminal_steps = (
+        "      - name: Validate DeployWhisper onboarding decision\n"
+        "        if: ${{ always() }}\n"
+        "        shell: bash\n"
+        "        env:\n"
+        "          ACTION_OUTCOME: ${{ steps.deploywhisper.outcome }}\n"
+        "          FAILURE_KIND: ${{ steps.deploywhisper.outputs.failure-kind }}\n"
+        "          POLICY_STATUS: ${{ steps.deploywhisper.outputs.policy-status }}\n"
+        "          CONFIGURED_MODE: ${{ steps.deploywhisper.outputs.configured-mode }}\n"
+        "          EFFECTIVE_STATUS: ${{ steps.deploywhisper.outputs.effective-status }}\n"
+        "          SHOULD_BLOCK: ${{ steps.deploywhisper.outputs.should-block }}\n"
+        "        run: |\n"
+        "          set -euo pipefail\n"
+        "          fail() {\n"
+        '            echo "::error::$1"\n'
+        "            exit 1\n"
+        "          }\n"
+        "          rank() {\n"
+        '            case "$1" in\n'
+        "              advisory) echo 0 ;;\n"
+        "              warn) echo 1 ;;\n"
+        "              soft-block) echo 2 ;;\n"
+        "              hard-block) echo 3 ;;\n"
+        "              *) return 1 ;;\n"
+        "            esac\n"
+        "          }\n"
+        '          policy_rank="$(rank "$POLICY_STATUS")" || fail "Unknown policy-status"\n'
+        '          configured_rank="$(rank "$CONFIGURED_MODE")" || fail "Unknown configured-mode"\n'
+        '          rank "$EFFECTIVE_STATUS" >/dev/null || fail "Unknown effective-status"\n'
+        "          if (( policy_rank < configured_rank )); then\n"
+        '            expected_effective="$POLICY_STATUS"\n'
+        "          else\n"
+        '            expected_effective="$CONFIGURED_MODE"\n'
+        "          fi\n"
+        '          [[ "$EFFECTIVE_STATUS" == "$expected_effective" ]] || fail "Effective status violates configured-mode ceiling"\n'
+        '          case "$EFFECTIVE_STATUS" in\n'
+        '            soft-block|hard-block) expected_block="true" ;;\n'
+        '            advisory|warn) expected_block="false" ;;\n'
+        "          esac\n"
+        '          [[ "$SHOULD_BLOCK" == "$expected_block" ]] || fail "should-block contradicts effective-status"\n'
+        '          case "$ACTION_OUTCOME" in\n'
+        "            success)\n"
+        '              [[ "$FAILURE_KIND" == "none" ]] || fail "Successful Action reported a failure kind"\n'
+        '              [[ "$SHOULD_BLOCK" == "false" ]] || fail "Blocking decision returned success"\n'
+        "              ;;\n"
+        "            failure)\n"
+        '              [[ "$FAILURE_KIND" == "validated-policy-block" ]] || fail "Action failure was not a validated policy block"\n'
+        '              [[ "$SHOULD_BLOCK" == "true" ]] || fail "Policy-block failure was not blocking"\n'
+        '              echo "::warning::DeployWhisper reported a validated policy block while the onboarding safeguard is active"\n'
+        "              ;;\n"
+        '            *) fail "DeployWhisper Action did not complete" ;;\n'
+        "          esac\n"
+        if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+        else ""
+    )
     api_endpoint = options.api_endpoint.strip()
     scope_lines = _render_action_scope_inputs(options)
     workflow = dedent(
@@ -294,16 +414,18 @@ def _render_workflow(options: GitHubInitOptions) -> str:
             env:
               DEPLOYWHISPER_API_URL: {api_endpoint}
             steps:
-              - uses: actions/checkout@v4
+              - uses: actions/checkout@{CHECKOUT_ACTION_PINNED_SHA}
                 with:
                   fetch-depth: 0
-              - uses: deploywhisper/analyze-action@v1
+              - id: deploywhisper
+{advisory_safeguard}\
+                uses: deploywhisper/analyze-action@{ANALYZE_ACTION_PINNED_SHA}
                 with:
                   api-url: ${{{{ env.DEPLOYWHISPER_API_URL }}}}
                   api-token: ${{{{ secrets.DEPLOYWHISPER_API_TOKEN }}}}
         """
     )
-    return f"{workflow.rstrip()}\n{scope_lines}\n"
+    return f"{workflow.rstrip()}\n{scope_lines}\n{onboarding_terminal_steps}"
 
 
 def _render_readme_section(
@@ -312,10 +434,25 @@ def _render_readme_section(
     workflow_path: str,
     notes_path: str | None,
 ) -> str:
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    if capability is AnalyzeActionCapability.ADVISORY_ONLY:
+        capability_summary = (
+            f"Action revision `{ANALYZE_ACTION_PINNED_SHA}` is advisory-only; "
+            "a later reviewed enforcement-capable revision must follow the resolved "
+            "server settings."
+        )
+    else:
+        capability_summary = (
+            f"Action revision `{ANALYZE_ACTION_PINNED_SHA}` is enforcement-capable; "
+            "the generated step uses `continue-on-error: true` as an advisory "
+            "onboarding safeguard until resolved server settings, synthetic failure "
+            "cases, and the enforcement guardrail review are verified."
+        )
     lines = [
         "## DeployWhisper",
         "",
-        "This repository uses DeployWhisper for advisory-only deployment risk review in pull requests.",
+        "This repository uses DeployWhisper canonical advisory reports. "
+        f"{capability_summary}",
         "",
         "### GitHub workflow",
         "",
@@ -323,7 +460,9 @@ def _render_readme_section(
         f"- Configured API endpoint: `{options.api_endpoint}`",
         "- Optional secret: `DEPLOYWHISPER_API_TOKEN` for protected DeployWhisper APIs",
         *_scope_readme_lines(options),
-        "- The `DeployWhisper / Risk Analysis` check is advisory-only and should not be configured as a required status check",
+        "- The scaffold pins the reviewed Action revision but does not configure server enforcement; inspect the resolved `github-action` setting and keep the check non-required until the guardrail review is complete",
+        "- If the workflow Action pin changes, update this generated capability note in the same change",
+        f"- Enforcement guardrails: {ENFORCEMENT_GUARDRAILS_URL}",
         "",
         "### Configuration example",
         "",
@@ -333,6 +472,13 @@ def _render_readme_section(
         "- `DEPLOYWHISPER_API_TOKEN=<optional bearer token>`",
         *_scope_configuration_lines(options),
     ]
+    if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE:
+        lines.extend(
+            [
+                "",
+                "Before the first workflow run under an inherited blocking project default, create a narrow `github-action` integration-specific `advisory` override only when no existing scope shares that project/integration key. If another repository or environment already uses the identity, use a separate project or integration identity for advisory onboarding, or complete the new-scope guardrail review before attachment. After the guardrail review and blocking smoke cases pass, remove `continue-on-error: true` and the advisory policy-block warning together, then make the source-bound check required in one reviewed change.",
+            ]
+        )
     if options.enable_github_app:
         lines.extend(
             [
@@ -373,18 +519,28 @@ def _render_github_app_notes(options: GitHubInitOptions) -> str:
         2. Create the self-hosted GitHub App in your own GitHub account or organization.
         3. Point the webhook and callback URLs at `{options.public_base_url}`.
         4. Follow the operator guide: {OPERATOR_DOCS_URL}
-        5. Keep `DeployWhisper / Risk Analysis` advisory-only in branch protection.
+        5. Keep `DeployWhisper / Risk Analysis` non-required in branch protection until the guardrail review is complete.
         """
     )
 
 
 def _render_pr_body(options: GitHubInitOptions, *, workflow_path: str) -> str:
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    behavior = (
+        "advisory-only"
+        if capability is AnalyzeActionCapability.ADVISORY_ONLY
+        else "enforcement-capable"
+    )
     lines = [
         "## Summary",
         "",
         "- add the DeployWhisper GitHub workflow",
-        "- document the API endpoint and advisory-only check behavior",
+        f"- document the API endpoint and {behavior} check behavior",
     ]
+    if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE:
+        lines.append(
+            "- retain the advisory onboarding safeguard until the narrow override and guardrail review are complete"
+        )
     if options.enable_github_app:
         lines.append("- add advanced self-hosted GitHub App setup notes")
     lines.extend(

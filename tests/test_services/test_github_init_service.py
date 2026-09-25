@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import ast
 import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+
+import yaml
 
 from integrations.github import init_service
 
@@ -182,7 +185,26 @@ class GitHubInitServiceTests(unittest.TestCase):
         self.assertEqual(result.branch_name, "feature/deploywhisper-github-init")
         self.assertEqual(result.commit_sha, "abc123")
         self.assertEqual(result.pr_url, "https://github.com/acme/example-repo/pull/7")
-        self.assertIn("deploywhisper/analyze-action@v1", workflow_text)
+        self.assertIn(
+            f"deploywhisper/analyze-action@{init_service.ANALYZE_ACTION_PINNED_SHA}",
+            workflow_text,
+        )
+        self.assertIn(
+            f"actions/checkout@{init_service.CHECKOUT_ACTION_PINNED_SHA}",
+            workflow_text,
+        )
+        self.assertIn("- id: deploywhisper", workflow_text)
+        self.assertNotIn("continue-on-error: true", workflow_text)
+        self.assertRegex(init_service.ANALYZE_ACTION_PINNED_SHA, r"^[0-9a-f]{40}$")
+        self.assertRegex(init_service.CHECKOUT_ACTION_PINNED_SHA, r"^[0-9a-f]{40}$")
+        self.assertEqual(
+            "3b37ed72bfb2d201030bef873268f2170794b160",
+            init_service.ANALYZE_ACTION_PINNED_SHA,
+        )
+        self.assertEqual(
+            "11d5960a326750d5838078e36cf38b85af677262",
+            init_service.CHECKOUT_ACTION_PINNED_SHA,
+        )
         self.assertIn(
             "DEPLOYWHISPER_API_URL: https://deploywhisper.example.com/api/v1/analyses",
             workflow_text,
@@ -191,6 +213,22 @@ class GitHubInitServiceTests(unittest.TestCase):
         self.assertIn('workspace-key: "prod"', workflow_text)
         self.assertIn('allow-derived-project-scope: "false"', workflow_text)
         self.assertIn(init_service.README_SECTION_START, readme_text)
+        self.assertIn(
+            f"Action revision `{init_service.ANALYZE_ACTION_PINNED_SHA}` is advisory-only",
+            readme_text,
+        )
+        self.assertIn(
+            "a later reviewed enforcement-capable revision must follow the resolved server settings",
+            readme_text,
+        )
+        self.assertIn(
+            "update this generated capability note in the same change",
+            readme_text,
+        )
+        self.assertNotIn(
+            "workflow enforcement follows the resolved server settings", readme_text
+        )
+        self.assertIn(init_service.ENFORCEMENT_GUARDRAILS_URL, readme_text)
         self.assertIn("Project scope: `project-key=payments`", readme_text)
         self.assertIn("Workspace scope: `workspace-key=prod`", readme_text)
         self.assertIn("Advanced self-hosted GitHub App", readme_text)
@@ -209,6 +247,262 @@ class GitHubInitServiceTests(unittest.TestCase):
         self.assertTrue(
             any(command[:3] == ("gh", "pr", "create") for command in command_log)
         )
+
+    def test_readme_generation_rejects_unclassified_action_pin(self) -> None:
+        options = init_service.GitHubInitOptions(
+            repo_path=".",
+            workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+            api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+            enable_github_app=False,
+            base_branch="develop",
+            project_key="payments",
+        )
+
+        with patch.object(
+            init_service,
+            "ANALYZE_ACTION_PINNED_SHA",
+            "a" * 40,
+        ):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "Unreviewed DeployWhisper Analyze Action revision",
+            ):
+                init_service._render_readme_section(
+                    options,
+                    workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+                    notes_path=None,
+                )
+
+    def test_capability_registry_is_independent_of_selected_pin(self) -> None:
+        self.assertEqual(
+            {
+                "3b37ed72bfb2d201030bef873268f2170794b160": (
+                    init_service.AnalyzeActionCapability.ADVISORY_ONLY
+                )
+            },
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+        )
+
+        source_tree = ast.parse(Path(init_service.__file__).read_text(encoding="utf-8"))
+        checkout_registry = next(
+            node.value
+            for node in source_tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "CHECKOUT_ACTION_REVISIONS"
+                for target in node.targets
+            )
+        )
+        self.assertNotIn("CHECKOUT_ACTION_PINNED_SHA", ast.unparse(checkout_registry))
+        self.assertEqual(
+            {"11d5960a326750d5838078e36cf38b85af677262"},
+            init_service.CHECKOUT_ACTION_REVISIONS,
+        )
+
+    def test_action_capability_rejects_invalid_registry_value(self) -> None:
+        revision = "b" * 40
+
+        with patch.dict(
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+            {revision: "enforcement-capable"},
+        ):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "Invalid capability classification",
+            ):
+                init_service._analyze_action_capability(revision)
+
+    def test_action_capability_and_checkout_reject_mutable_or_unreviewed_refs(
+        self,
+    ) -> None:
+        options = init_service.GitHubInitOptions(
+            repo_path=".",
+            workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+            api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+            enable_github_app=False,
+            base_branch="develop",
+            project_key="payments",
+        )
+
+        with patch.dict(
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+            {"v1": init_service.AnalyzeActionCapability.ADVISORY_ONLY},
+        ):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "reviewed immutable 40-character commit SHA",
+            ):
+                init_service._analyze_action_capability("v1")
+
+        with patch.object(init_service, "CHECKOUT_ACTION_PINNED_SHA", "v4"):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "reviewed immutable 40-character commit SHA",
+            ):
+                init_service._render_workflow(options)
+
+        unreviewed_sha = "c" * 40
+        with patch.object(
+            init_service,
+            "CHECKOUT_ACTION_PINNED_SHA",
+            unreviewed_sha,
+        ):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "Unreviewed actions/checkout revision",
+            ):
+                init_service._render_workflow(options)
+
+    def test_enforcement_capable_pin_updates_all_generated_guidance(self) -> None:
+        revision = "b" * 40
+        options = init_service.GitHubInitOptions(
+            repo_path=".",
+            workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+            api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+            enable_github_app=False,
+            base_branch="develop",
+            project_key="payments",
+        )
+
+        with patch.dict(
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+            {revision: init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE},
+        ):
+            with patch.object(init_service, "ANALYZE_ACTION_PINNED_SHA", revision):
+                readme = init_service._render_readme_section(
+                    options,
+                    workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+                    notes_path=None,
+                )
+                pr_body = init_service._render_pr_body(
+                    options,
+                    workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+                )
+                workflow = init_service._render_workflow(options)
+
+        self.assertIn(f"Action revision `{revision}` is enforcement-capable", readme)
+        self.assertNotIn(f"Action revision `{revision}` is advisory-only", readme)
+        self.assertIn("continue-on-error: true", workflow)
+        self.assertIn("integration-specific `advisory` override", readme)
+        self.assertIn("no existing scope shares", readme)
+        self.assertIn("separate project or integration identity", readme)
+        self.assertIn("remove `continue-on-error: true`", readme)
+        self.assertIn("enforcement-capable check behavior", pr_body)
+        self.assertNotIn("advisory-only check behavior", pr_body)
+        self.assertIn("advisory onboarding safeguard", pr_body)
+
+        workflow_payload = yaml.safe_load(workflow)
+        steps = workflow_payload["jobs"]["deploywhisper"]["steps"]
+        action_index = next(
+            index
+            for index, step in enumerate(steps)
+            if str(step.get("uses", "")).startswith("deploywhisper/analyze-action@")
+        )
+        action_step = steps[action_index]
+        self.assertEqual("deploywhisper", action_step["id"])
+        self.assertEqual(
+            f"deploywhisper/analyze-action@{revision}", action_step["uses"]
+        )
+        self.assertIs(True, action_step["continue-on-error"])
+        self.assertEqual(
+            "${{ always() }}",
+            steps[action_index + 1]["if"],
+        )
+        self.assertEqual(
+            {
+                "ACTION_OUTCOME": "${{ steps.deploywhisper.outcome }}",
+                "FAILURE_KIND": "${{ steps.deploywhisper.outputs.failure-kind }}",
+                "POLICY_STATUS": "${{ steps.deploywhisper.outputs.policy-status }}",
+                "CONFIGURED_MODE": "${{ steps.deploywhisper.outputs.configured-mode }}",
+                "EFFECTIVE_STATUS": "${{ steps.deploywhisper.outputs.effective-status }}",
+                "SHOULD_BLOCK": "${{ steps.deploywhisper.outputs.should-block }}",
+            },
+            steps[action_index + 1]["env"],
+        )
+        self.assertIn("validated-policy-block", steps[action_index + 1]["run"])
+        self.assertIn("expected_effective", steps[action_index + 1]["run"])
+        self.assertIn("exit 1", steps[action_index + 1]["run"])
+
+    def test_enforcement_onboarding_validator_distinguishes_policy_and_errors(
+        self,
+    ) -> None:
+        revision = "b" * 40
+        options = init_service.GitHubInitOptions(
+            repo_path=".",
+            workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+            api_endpoint="https://deploywhisper.example.com/api/v1/analyses",
+            enable_github_app=False,
+            base_branch="develop",
+            project_key="payments",
+        )
+        with patch.dict(
+            init_service.ANALYZE_ACTION_CAPABILITIES,
+            {revision: init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE},
+        ):
+            with patch.object(init_service, "ANALYZE_ACTION_PINNED_SHA", revision):
+                workflow = yaml.safe_load(init_service._render_workflow(options))
+        validator = workflow["jobs"]["deploywhisper"]["steps"][-1]
+
+        def run_validator(**values: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["bash", "-c", validator["run"]],
+                check=False,
+                capture_output=True,
+                text=True,
+                env={**os.environ, **values},
+            )
+
+        valid_pass = run_validator(
+            ACTION_OUTCOME="success",
+            FAILURE_KIND="none",
+            POLICY_STATUS="advisory",
+            CONFIGURED_MODE="hard-block",
+            EFFECTIVE_STATUS="advisory",
+            SHOULD_BLOCK="false",
+        )
+        self.assertEqual(0, valid_pass.returncode, valid_pass.stderr)
+
+        valid_policy_block = run_validator(
+            ACTION_OUTCOME="failure",
+            FAILURE_KIND="validated-policy-block",
+            POLICY_STATUS="hard-block",
+            CONFIGURED_MODE="hard-block",
+            EFFECTIVE_STATUS="hard-block",
+            SHOULD_BLOCK="true",
+        )
+        self.assertEqual(0, valid_policy_block.returncode, valid_policy_block.stderr)
+        self.assertIn("::warning::", valid_policy_block.stdout)
+
+        for invalid in (
+            {
+                "ACTION_OUTCOME": "failure",
+                "FAILURE_KIND": "operational-error",
+                "POLICY_STATUS": "hard-block",
+                "CONFIGURED_MODE": "hard-block",
+                "EFFECTIVE_STATUS": "hard-block",
+                "SHOULD_BLOCK": "true",
+            },
+            {
+                "ACTION_OUTCOME": "success",
+                "FAILURE_KIND": "none",
+                "POLICY_STATUS": "warn",
+                "CONFIGURED_MODE": "advisory",
+                "EFFECTIVE_STATUS": "warn",
+                "SHOULD_BLOCK": "false",
+            },
+            {
+                "ACTION_OUTCOME": "success",
+                "FAILURE_KIND": "none",
+                "POLICY_STATUS": "",
+                "CONFIGURED_MODE": "advisory",
+                "EFFECTIVE_STATUS": "advisory",
+                "SHOULD_BLOCK": "false",
+            },
+        ):
+            with self.subTest(invalid=invalid):
+                result = run_validator(**invalid)
+                self.assertNotEqual(0, result.returncode)
 
     @patch("integrations.github.init_service._require_binary")
     @patch("integrations.github.init_service._run_command")

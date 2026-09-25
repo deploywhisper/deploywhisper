@@ -1,0 +1,664 @@
+# Enforcement Guardrails
+
+DeployWhisper's canonical report is always advisory. An integration may turn a
+separate policy interpretation into a warning or blocking workflow result only
+after an authorized operator explicitly configures either its
+integration-specific override or the project-level default it inherits. The
+adapter decision is a review control; it is not a safety certificate,
+deployment approval, or remediation instruction.
+
+Use this guide before changing an integration from `advisory` or `warn` to
+`soft-block` or `hard-block`, onboarding an integration under an inherited
+blocking default, deleting an override, or expanding an existing integration to
+a new scope.
+
+GitHub Action effects in this guide apply only to an enforcement-capable
+revision whose manifest exposes the four policy outputs and whose runtime has
+passed the required smoke cases. The published `@v1` ref validated on
+2026-09-09 (tag object `f2e36cef443129e85c55882b9dafc1f20d409284`,
+dereferenced commit `3b37ed72bfb2d201030bef873268f2170794b160`)
+does not expose those outputs; enforcement is not a released `@v1` capability
+at that snapshot. Recheck the installed immutable revision rather than relying
+on this dated observation.
+
+## Choose the least forceful mode that works
+
+| Effective status | Workflow effect | Appropriate use |
+| --- | --- | --- |
+| `advisory` | The policy decision does not request Action failure; after all runtime work succeeds, the Action exits `0`. The GitHub App reports `success` for `GO` and `neutral` otherwise. | Default, initial rollout, incomplete context, or an uncalibrated project. |
+| `warn` | The policy decision does not request Action failure; after all runtime work succeeds, the Action exits `0`. The GitHub App reports `neutral`. | Teams have reviewed signal quality and want consistent reviewer attention. |
+| `soft-block` | GitHub Action exits nonzero; GitHub App reports `action_required`. | Every blocking prerequisite below is satisfied, and a human-owned exception path has been exercised. |
+| `hard-block` | GitHub Action exits nonzero; GitHub App reports `failure`. | Every blocking prerequisite below is satisfied, and the organization has approved strict enforcement for this scope. |
+
+A mode-table row describes runtime behavior, not sufficient readiness criteria.
+Both blocking modes require the complete prerequisites and rollout checklist in
+this guide. A required workflow remains blocked until the policy conditions
+change or an authorized human follows the documented exception procedure.
+The table describes policy effects only. Output publication, comment delivery,
+authentication, timeouts, and other operational work may still fail after a
+valid non-blocking decision and produce a nonzero Action exit or failed App
+conclusion.
+
+The table is keyed by the decision's effective status, not its configured mode.
+The configured mode is a ceiling, not a severity override: `advisory` always
+produces effective `advisory`; `warn` permits effective `advisory` or `warn`;
+`soft-block` permits effective `advisory`, `warn`, or `soft-block`; and
+`hard-block` preserves any raw status. Integrations must consume the shared
+enforcement decision and must not infer blocking from risk score, severity,
+recommendation, or narrative text. If any prerequisite below is missing, keep
+the integration in `advisory` or `warn`.
+
+An installed Action ref must expose the `policy-status`, `configured-mode`,
+`effective-status`, and `should-block` outputs and must consume
+`/enforcement-decision` before it can enforce these modes. Older Action refs
+remain advisory-only even if the server has blocking settings.
+
+Pin every Action and workflow dependency use—advisory or blocking—to an
+immutable reviewed commit SHA rather than a moving major tag. A server-side
+advisory override does not mitigate mutable-code execution, token exfiltration,
+or falsified results. Before making a pinned revision required, run a synthetic
+fail-closed smoke test against that exact SHA: prove a
+valid non-blocking decision passes, a valid blocking decision fails, and an
+unavailable or malformed decision fails as an operational error.
+
+## Wire blocking into the protected workflow
+
+A blocking adapter result only controls delivery when its GitHub check or
+workflow job must succeed. The selected check must be a required status check
+or required job in the repository or deployment protection rules and must be
+bound to the expected GitHub App or workflow source. Do not rely on the check
+name alone when protection settings can restrict its source. The Action step
+and its containing job must not use `continue-on-error: true`, and later jobs
+must not ignore or replace its failed result.
+
+Run enforcement from an immutable protected workflow. Require review ownership
+for workflow changes. Keep the checkout ref, artifact selection,
+`changed-files`, project and workspace scope, and working directory—along with
+endpoint and integration identity—in protected configuration rather than
+pull-request-controlled data. The required job must fail when the enforcement
+step is skipped. The job result must be bound to the protected commit, not
+merely to a reusable check name.
+
+Audit path and event filters, job-level `if` conditions, dependency skips, and
+cancellation. Top-level event or path filters can prevent a workflow from
+starting, so the required context must come from a separate always-triggered
+terminal workflow for every protected event. An independent watchdog outside
+the cancellable analysis workflow must own or fail the required context when a
+run is cancelled or times out. In-workflow cleanup cannot rely on `if: always()`
+after cancellation; use it only to report skips and failures while that workflow
+is still executing. Do not leave the required context absent or pending
+indefinitely.
+
+Test the protected branch or environment with a synthetic blocking result and
+an authorized exception before rollout. If the change can still merge or
+deploy, the integration is not operating as a block regardless of its reported
+mode.
+
+## Review inherited settings before changing scope
+
+Project-level settings are inherited by every integration that has no
+integration-specific override. Treat a project-level enforcement change as a
+change to every inheriting CI, GitHub, and future adapter: inventory those
+consumers, verify their owners and prerequisites, and communicate the rollout
+before saving the new mode.
+
+Deleting an integration override immediately exposes the project default,
+which may be more restrictive and may begin blocking that integration. Inspect
+the resolved setting source and configured enforcement mode and complete the
+same review before deleting an override. Do not assume that reset means
+`advisory`.
+
+The same risk applies when a new integration is added after a project default
+has become blocking. Create an integration-specific `advisory` override before
+onboarding a new consumer only when no existing scope shares that
+project/integration key. If another repository or environment shares the key,
+use a separate project or integration identity for advisory onboarding, or
+complete the new scope's guardrail review before attachment. Then complete this
+guide for that consumer before raising its mode. The new consumer must complete
+its own benchmark and guardrail review; recording that an older project review
+exists is not a substitute for evidence about the new consumer revision and
+scope.
+
+Treat a new repository, environment, change class, or other scope added to an
+existing integration the same way as a new consumer. Inspect the resolved
+setting source and configured enforcement mode first. An integration-wide
+override would also downgrade every existing scope using that integration key,
+so do not use it to stage one new repository. Complete the new-scope review
+before attachment, or isolate the scope behind a separate project or integration
+identity that can remain `advisory` without weakening existing protections.
+
+Limit policy-setting write access to named operators, require approval from a
+different authorized reviewer for every move into or out of a blocking mode,
+and retain a durable before/after audit record with actor, approver, timestamp,
+scope, reason, and resolved setting source. If those ordinary settings-change
+controls are unavailable, do not enable blocking.
+
+For any mode, threshold, override, or protection-rule change, freeze delivery
+before changing enforcement settings. Commit the approved settings, invalidate
+prior results, rerun every open pull-request head and pending deployment in
+scope, and lift the freeze only after current results are published. A result
+produced under earlier settings is not evidence that the new configuration
+evaluated that commit.
+
+## Treat an unavailable decision as an operational failure
+
+An enforcement decision must be rejected for an HTTP or transport failure,
+non-JSON or missing data, unsupported contract or status values, report or
+integration mismatch, and any decision-invariant failure. HTTP consumers must
+also require authenticated transport, a trusted server identity, a fixed
+operator-controlled endpoint, and a least-privilege credential loaded from
+protected secrets. In-process consumers must call the same trusted service
+boundary. These conditions must never be reported as a pass. Do not fabricate
+an `advisory` result, reuse a prior decision, or derive a replacement from
+score, severity, recommendation, or narrative text.
+
+The current application does not authenticate caller-supplied project role and
+scope headers itself, and omitted actor headers retain local all-project admin
+behavior. Before using enforcement on a shared installation, place DeployWhisper
+behind a [trusted identity layer](./project-workspaces.md#guardrails) that strips
+caller-supplied project actor headers and injects verified role/scope values.
+The Action bearer token alone does not establish this boundary. Keep every
+integration non-blocking when that trusted proxy or middleware is absent.
+
+A decision is current only when it comes from the decision path used by the
+actual consumer: the enforcement endpoint for HTTP adapters or the shared
+in-process enforcement service for the GitHub App. Bind the returned report ID
+to the report created by that protected workflow invocation, and bind that
+invocation to the protected commit SHA and submitted artifact manifest. Record
+the integration/project scope and verify the complete nested `applied_settings`
+snapshot. Immediately before publishing the result, verify that the protected
+target identity is still current for that consumer. A PR-head workflow must
+verify that its tested commit SHA equals the current PR head SHA and record the
+current base SHA; it must rerun when either head or base changes. A merge-ref or
+merge-queue workflow must bind the report to the current generated merge commit
+and record its base and PR-head parents; it must not compare the synthetic commit
+directly with the head. A non-PR consumer must resolve a moving deployment ref
+to an immutable commit or an algorithm-qualified SHA-256 digest over the exact
+deployed artifact bytes, bind the decision to that digest, and deploy those same
+bytes. Record the digest algorithm and byte-source identity with the decision.
+Never accept a report ID, endpoint, target identity, or manifest from untrusted
+change content.
+
+The v1 contract has no atomic settings revision or evaluate-and-publish
+operation. Retrieval immediately before publication cannot eliminate a
+settings-change race. Serialize policy-setting changes with enforcement runs,
+freeze mutations for the publication window, and verify the returned settings
+snapshot against the approved expected values. If the organization cannot
+enforce that change-control boundary, keep the integration non-blocking until a
+revision token or atomic contract exists. Treat a decision as stale after the
+report ID, manifest, protected commit, integration scope, settings, consumer
+revision, workflow, immutable application/server revision, dependency-lock
+identity, or endpoint-contract version changes; rerun instead of reusing a
+passing check. Hash the exact validated decision bytes with SHA-256 and retain
+that validated decision digest as part of the complete identity.
+
+Define a material report-context invalidation policy for topology, ownership,
+incident, scanner, and other decision inputs. When a material input changes
+after publication, invalidate the protected result and generate a fresh report;
+do not attach a newly queried decision to the older context snapshot.
+
+Make that policy reproducible with a versioned material-context record. Define
+the exact included fields for every approved context source: source identity,
+schema/version, immutable snapshot or content digest, retrieval time, freshness
+boundary, and the topology, ownership, incident, scanner, or other values that
+affected the decision. Represent missing and null values distinctly. Serialize
+the record as deterministic UTF-8 JSON with lexicographically sorted object keys,
+no insignificant whitespace, and arrays in their policy-defined order; record
+the serialization version. Hash those exact bytes with SHA-256 and use the
+resulting material-context SHA-256 digest in the complete decision identity.
+Create the manifest snapshot digest and settings snapshot digest with the same
+versioned deterministic UTF-8 JSON rules: record each snapshot schema/version,
+sort object keys lexicographically, preserve policy-defined array order, encode
+missing and null distinctly, omit insignificant whitespace, and hash the exact
+UTF-8 bytes with SHA-256. Consumers must retain those exact snapshot bytes so
+independent approval controls can reproduce every digest.
+
+Sensitive, unsupported, rejected, or otherwise excluded artifacts do not
+produce findings. A blocking workflow must validate complete and partial intake
+coverage against the changed-file set and submitted artifact manifest; it must
+not accept a decision that covers only supported siblings while silently
+excluding other in-scope changes. A missing or partial decision must not be
+accepted as an enforcement pass. Surface the excluded scope, stop
+enforcement-dependent automation, and require documented human disposition or
+a protection-layer bypass.
+
+Use the exact persisted report `submission_manifest` returned by the analysis
+response. Require `submitted_artifact_count` to equal the trusted in-scope
+changed-file count and `len(items)`, with one item for every trusted path.
+Define one canonical path normalization policy for the protected platform,
+including separator normalization, `.`/`..` rejection, symlink/alias handling,
+Unicode normalization, and case-folding behavior. Reject duplicate canonical
+paths. Compare the canonical unique normalized path-to-content-hash mapping with
+the independently derived trusted changed-file mapping using exact set equality;
+counts alone are insufficient.
+Require `accepted_artifact_count` to equal the count of items with status
+`accepted` or `failed`, `analyzed_artifact_count` to equal the count with status
+`accepted`, and each excluded, sensitive, failed, and partial counter to equal
+its corresponding item count. `partial_analysis` must equal whether
+`partial_artifact_count` is nonzero. Complete enforcement coverage additionally
+requires `analyzed_artifact_count == submitted_artifact_count`, every item to be
+`accepted`, and `partial_analysis=false`; any other result is incomplete. Do not
+infer completeness from the enforcement-decision envelope alone; it does not
+repeat the manifest.
+
+For source-tracked inputs, generate the trusted path set and content hashes from
+a clean checkout of the protected target. Hash each submitted byte sequence and
+verify it matches the corresponding checkout artifact before accepting the
+report binding. A generated or build-produced artifact that does not exist in
+source control instead requires an immutable producer attestation signed or
+published by the trusted build boundary. Bind that attestation to the producer
+revision, build-run identity, protected source commit, input digests, output
+path, and exact artifact SHA-256; compare the submitted bytes with that attested
+output. Without clean-checkout bytes or a verified producer attestation, keep
+the scope non-blocking. A deleted or renamed artifact also requires diff
+coverage: record the prior path and a deletion tombstone, and for a rename
+validate both the tombstone and new-path bytes. The current submission manifest
+cannot represent an analyzed deletion tombstone. Until a separate deterministic
+diff-coverage control validates those operations, treat deletion/rename coverage
+as incomplete and keep that scope non-blocking.
+
+`accepted_artifact_count` is an intake counter: it includes items with status
+`accepted` and parser-`failed`. It does not mean every item was analyzed.
+`analyzed_artifact_count` alone counts successfully parsed `accepted` items;
+this distinction is why complete coverage requires equality with the submitted
+count and no failed item.
+
+The current GitHub App reports `neutral` when intake has no analyzable artifact,
+and GitHub may treat `neutral` as satisfying a required check. Do not use that
+App check as the sole blocking control for a scope where exclusions can occur;
+add a separate required intake-coverage control that fails on missing or partial
+coverage, or keep the integration non-blocking.
+
+The GitHub App also reports `neutral` for a project-scope resolution failure,
+before any report or decision exists. A blocking deployment must add a separate
+required project-scope control that fails closed, or keep the App check
+non-blocking until that runtime path produces a failing conclusion.
+
+An enforcement-capable Action revision must exit nonzero when it cannot retrieve
+and validate the shared decision; the published `@v1` ref does not implement
+this behavior yet. The GitHub App reports a failed enforcement result when its
+configured decision cannot be validated and check delivery succeeds.
+Future consumers must surface a distinct operational error, stop the
+enforcement-dependent automation, and require documented human disposition
+under the organization's outage or break-glass procedure. Failure handling
+must not become autonomous approval or remediation.
+
+Label that state with an explicit `operational-error` classification in the
+check summary and structured logs. Include the failing stage and stable error
+code, but do not manufacture an effective policy status. A validated hard-block
+must instead identify the validated report and decision, effective
+`hard-block` status, and policy reasons. The Action may exit nonzero and the App
+may report `failure` for either case, so operators and automation must use this
+classification and evidence—not the conclusion alone—to distinguish an
+operational failure from a policy block.
+
+Set a bounded timeout for analysis, decision retrieval, and check publication.
+Retry only transient failures with capped attempts and exponential backoff.
+Before submission, build a pre-submission request identity from values already
+available at that boundary: protected target and commit, canonical manifest
+digest, project/integration scope, settings snapshot digest, consumer and
+workflow revisions, and immutable application/server and endpoint-contract
+versions. It must not depend on report ID or validated decision digest, which do
+not exist yet. Combine that request identity with a logical run identifier to
+form the protected-workflow idempotency key; exclude the retry-attempt number so
+every retry of one unknown outcome reuses the same key, while an intentional
+fresh rerun uses a new logical run identifier. Extend the request identity with
+the returned report ID and validated decision digest only in the post-decision
+audit identity. Use the idempotency key for submission and check coordination.
+The current analysis API and GitHub App do not provide native idempotent create
+or check-update semantics. A blocking consumer therefore needs a durable
+external coordinator that owns that key, suppresses duplicate submissions, and
+updates one authoritative conclusion. Without that coordinator, keep the
+consumer non-blocking. When check-publication retries are exhausted, the failed
+publication channel cannot report its own terminal state. The external
+coordinator must send an out-of-band alert through an independently monitored
+channel and engage an independent delivery freeze that prevents merge or
+deployment until an operator verifies a valid protected result or approves the
+break-glass path.
+
+An analysis-submission timeout creates an unknown submission outcome because the
+server may have committed a report before the client lost the response. Freeze
+delivery and have the external coordinator reconcile the original request
+before retrying, using operator-owned request identity, report provenance, and
+audit records. Never issue a blind retry that can create competing reports. If
+the original outcome cannot be reconciled, do not retry as a blocking consumer;
+keep the integration non-blocking and require operator disposition.
+
+A protection-layer bypass does not change the DeployWhisper decision and does
+not require an unchanged analysis rerun to pretend that the result changed.
+Prefer a report- and integration-scoped protection bypass approved by a human
+who cannot write the applicable settings; this separation of duties prevents a
+settings writer from self-approving a downgrade. Record the failed decision and
+the separate bypass event in a durable operator-owned audit system because the
+v1 settings API does not provide a complete bypass audit log.
+
+For a failed required GitHub check, use an authorized repository-ruleset bypass
+that actually permits the intended merge without changing or ignoring the
+failed result. A normal protected-environment approval does not turn a failed
+prerequisite job or required status check into a pass. For an emergency
+deployment, use a separately protected emergency workflow only when its rules
+explicitly allow deployment independent of that failed job.
+
+Record the ruleset or emergency-workflow ID, protected target, provider
+audit-event identifier or URL, approver, reason, and expiry. Automation outside
+DeployWhisper must automatically revoke the bypass capability at expiry and
+verify its removal; if revocation fails, freeze delivery and escalate. Verify
+that the bypass applied only to the intended delivery. Keep the independent
+delivery freeze active for unrelated deliveries throughout approval, bypass,
+and verified revocation so a repository-wide provider capability cannot expose
+other changes.
+
+Bind each exception to one immutable exception identifier and one immutable
+expiry no later than the organization-approved maximum TTL. An extension is a
+new exception request with a new independent approval; editing the existing
+expiry or repeatedly reusing the same approval is prohibited. The independent
+approver must be unable to write the applicable DeployWhisper settings or
+unilaterally disable the delivery freeze.
+
+Prefer a per-exception bypass capability whose provider identity is bound to the
+exception identifier and intended delivery. If only one repository-wide bypass
+capability exists, allow one active exception at a time and serialize approval,
+use, revocation, and revocation verification. Do not activate a second exception
+until the first capability is verifiably revoked; otherwise one revocation can
+terminate a valid exception or one approval can extend an expired exception.
+
+Do not use policy settings as break glass in v1. The API has no atomic
+compare-and-swap or enforced expiry, and restoring the blocking setting before a
+rerun can block the excepted commit again. Keep the failed DeployWhisper result
+unchanged and use the scoped protection-layer path above.
+
+The audit record must retain the complete decision identity, invocation
+timestamp, report ID, original decision payload, integration and project scope,
+complete `applied_settings` snapshot, retained manifest snapshot, retained
+material-context snapshot, raw policy status, configured and effective modes,
+approver, reason, expiry, and bypass mechanism. Preserve those identity and
+snapshot records for the same audit-retention horizon even when primary report
+storage expires earlier. For HTTP consumers, hash the exact retained
+authenticated response bytes with SHA-256; do not reserialize the response and
+call it canonical. In-process consumers must freeze the validated decision
+object, serialize the frozen decision once using a recorded serializer and
+version, and use that same object for both the check conclusion and persisted
+audit bytes. Hash that retained byte sequence. Record a retention period that
+extends through the longest exception, compliance-audit, and
+incident-attribution horizon, and preserve the evidence as an encrypted
+immutable raw response for at least that period; state that its SHA-256 digest
+covers those exact raw bytes. Provide a separate redacted reviewer view for
+ordinary inspection. Redaction must never mutate or replace the retained bytes
+covered by the digest. Restrict both representations to authorized reviewers,
+and redact secrets or sensitive artifact metadata from the reviewer view when
+they are not required to reconstruct the decision. For a protection-layer
+bypass, record the
+protected-delivery or bypass event and automatic-revocation evidence. Review
+repeated exceptions as a calibration signal.
+
+The payload digest proves only the integrity of the retained bytes; it does not
+prove server provenance, freshness, or which payload controlled delivery. Also
+retain the authenticated server/principal identity, a trusted timestamp, the
+protected workflow-run identifier, and an append-only audit receipt from a sink
+the settings writer cannot rewrite.
+
+## Evidence Law is a prerequisite, not an approval
+
+No high or critical finding may drive enforcement without deterministic
+evidence. Reviewers must be able to trace the finding to the changed artifact,
+resource, operation, and available project context. Narrative text, an LLM
+explanation, an external scanner label, or an incident similarity score is not
+a substitute for that evidence.
+
+Before enabling a blocking mode:
+
+- verify that high and critical findings satisfy the Evidence Law;
+- inspect the referenced evidence, not only the summary or check conclusion;
+- treat missing, partial, stale, or conflicting context as a reason for human
+  investigation;
+- keep the canonical severity, evidence, findings, uncertainty, and policy
+  reasons available in the audit trail.
+
+`Satisfied` means the report met the evidence contract. It does not mean the
+change is correct, complete, authorized, or safe to deploy.
+
+The built-in Evidence Law specifically governs high and critical findings.
+Blocking thresholds below `high` do not receive an additional Evidence Law
+guarantee. The current shared decision contract cannot apply an additional
+deterministic-evidence gate below `high`. Keep lower thresholds non-blocking.
+A future consumer may block below `high` only after a separate, documented,
+tested gate is implemented in the shared decision path and requires
+deterministic evidence for every signal that can produce `should_block=true`.
+
+## Set benchmark thresholds before blocking
+
+DeployWhisper does not define a universal numeric threshold for enabling
+blocking modes. Each organization must approve thresholds for its own change
+types, environments, risk tolerance, and representative benchmark corpus.
+Until those thresholds exist and are met, use `advisory` or `warn`.
+
+The current benchmark runner emits scenario-level results and honest-failure
+categories; it does not emit a universal enforcement-readiness score or
+precomputed precision, recall, false-reassurance, or false-positive rates.
+Capture the runner JSON, corpus ID and version, sample size, scenario labels and
+change classes, supported and unsupported counts, and every exclusion. If the
+organization calculates rates from those results or from deployment outcomes,
+document the formulas and denominators so the decision can be reproduced.
+
+Define ground-truth labels and the mapping from scenario or production outcomes
+to true positives, false positives, true negatives, false negatives, false
+reassurance, and unsupported results before calculating rates. Record exclusion
+rules and zero-denominator handling. The organization must approve minimum
+positive and negative sample sizes for every covered change class and a stated
+statistical confidence method; a tiny or undefined sample cannot authorize
+blocking merely because its observed rate is perfect.
+
+A benchmark false negative is an expected finding the analysis does not detect.
+Benchmark false reassurance is a controlled scenario whose expected
+recommendation is `warn` or `stop` but whose actual verdict is less severe.
+Track decision-level enforcement false negatives separately: for every
+blocking-labeled scenario, record the expected and actual `effective-status` and
+`should-block`, and count a false negative whenever the expected blocking result
+becomes non-blocking. Report its numerator over all blocking-labeled decision
+scenarios as its own denominator; do not merge it with recommendation-level
+benchmark false reassurance.
+Reviewer-feedback false reassurance is a reviewer-reported missed finding on a
+completed report. Deployment-backed false reassurance is a workflow pass
+followed by an attributable adverse production outcome within the recorded
+incident-attribution horizon. Record and report these three signal families with
+separate numerators and denominators; do not count a benchmark miss or reviewer
+report as a production outcome, and do not label a recent deployment pass before
+its observation window closes.
+
+The decision record must identify the corpus, immutable application revision,
+and actual enforcement consumer revision evaluated: for example an Action
+commit SHA, GitHub App server commit or image digest, or another adapter's
+immutable build identity. Include dependency-lock identity, endpoint contract
+version, configuration, and feature flags. Export the workflow and protection
+configuration snapshot used by the evaluation and retain a digest of its exact
+bytes. When the provider offers a canonical export, retain that export and its
+digest. Every allowed evidence form requires a digest so later approval can
+identify mutable rules precisely.
+It must also record the minimum acceptable precision and recall, maximum
+acceptable false-reassurance and false-positive rates, minimum evidence
+coverage, zero Evidence Law violations, an unsupported-scenario limit, and a
+regression-stability tolerance. A nonzero Evidence Law violation count fails
+the blocking prerequisite; it is not an organization-configurable tolerance.
+The record should also identify who approved the thresholds and when they must
+be reviewed again. Verify that the deployed application and consumer revisions
+match those evaluated artifacts before enabling or retaining enforcement.
+
+Rerun the benchmark gate after behavior-affecting changes to parsers, evidence
+extraction, scoring, policy interpretation, the benchmark corpus, relevant
+context connectors, the enforcement consumer or its dependencies, the endpoint
+schema, or workflow or protection wiring. Reapproval is required when the new
+result falls outside any recorded threshold or introduces a new miss,
+unsupported scenario, regression, or Evidence Law violation. Every listed
+consumer, dependency, schema, workflow, or protection identity change also
+requires a fresh approval tied to the new immutable revisions even when all
+metrics still pass. Every application, corpus, configuration, feature-flag, and
+context change that materially changes benchmark inputs or enforcement behavior
+likewise requires fresh approval of the new benchmark record, even when the
+resulting metrics still pass. Routine report-specific topology, ownership, or
+incident updates require a fresh report under the context invalidation policy;
+they do not revoke benchmark approval unless they change the approved benchmark
+scope or consumer behavior.
+
+Before labeling production outcomes, define an organization-owned
+outcome-observation window and incident-attribution horizon for each covered
+change class. Define the attribution method, adverse-outcome severity boundary,
+required evidence, independent adjudicator, and dispute/relabeling process. Do
+not label a deployment a true negative before that horizon has elapsed; update
+prior labels when a later attributable incident is discovered.
+
+Do not hide misses behind one aggregate pass rate. Review the honest-failure
+report, including scenarios missed, false reassurance, false positives,
+unsupported cases, context limitations, and regressions. A material miss in a
+change class that the integration will block or pass is a reason to delay or
+narrow enforcement.
+
+## Blocking does not prove a change is safe
+
+A passing check can still be false reassurance. DeployWhisper can miss a risk
+when a parser does not cover a construct, topology or ownership context is
+missing or stale, an incident is absent from the index, a scanner input is
+unavailable, or a novel interaction is outside the benchmark corpus.
+
+Treat a pass as one review signal. Continue to apply code review, policy,
+security scanning, change-management, testing, and deployment controls. Track
+deployment outcomes and reviewer feedback so false reassurance and false
+positives can be measured. If signal quality regresses, return the integration
+to `warn` or `advisory` while the gap is investigated.
+
+## Human review remains mandatory
+
+No adapter output authorizes autonomous approval, deployment, or remediation.
+Baseline human approval is required for every run whose resolved configured
+enforcement mode is `soft-block` or `hard-block`, including runs whose effective
+status is only `advisory` or `warn`. An authorized human remains responsible for
+the deployment decision and must review the underlying change, deterministic
+evidence, uncertainty, context gaps, policy reasons, and operational impact.
+
+Elevated specialist review beyond that baseline approval is required when:
+
+- the effective status is `soft-block` or `hard-block`;
+- a high or critical finding is present;
+- Evidence Law status, context completeness, ownership, or topology freshness
+  is uncertain;
+- scanners and DeployWhisper disagree;
+- the change is novel, production-sensitive, or outside the benchmark corpus;
+- an exception, override, or break-glass path is requested.
+
+Automation may route the report, request reviewers, or enforce an approved
+check. It must not approve the change, apply a fix, deploy infrastructure, or
+close the review on a person's behalf.
+
+Configure repository review rules or protected-environment approvals so an
+authorized human decision is an observable prerequisite for merge or
+deployment. An automated required check by itself does not satisfy the human
+review requirement. Bind approval to the protected commit SHA, dismiss stale
+approvals when that commit changes, and require a new review for the new head.
+Also dismiss and reacquire approval when the report ID, manifest, settings
+snapshot, material context, consumer revision, or workflow changes without a
+commit change; those inputs can materially change the reviewed decision while
+leaving the protected SHA unchanged.
+
+Repository commit approval alone cannot enforce those non-commit invalidations.
+Use an external approval record or independently enforced approval check keyed
+to the complete decision identity: repository and environment, integration and
+project scope, protected-target identity, protected commit, report ID, manifest
+snapshot digest, settings snapshot digest, material-context digest, consumer
+revision, workflow revision, immutable application/server revision,
+dependency-lock identity, endpoint-contract version, and validated decision
+digest. The delivery control must reject a missing or stale approval record and
+require a new authorized human decision for the new identity.
+
+## Rollback remains an operator responsibility
+
+DeployWhisper may describe rollback steps and complexity, but DeployWhisper
+does not execute, validate, or own the rollback. The service owner and release
+operator remain accountable for recovery planning and execution.
+
+Before making an integration blocking, verify that:
+
+- the rollback or forward-fix procedure is current, tested, and appropriate
+  for the affected environment;
+- backups, state, credentials, tooling, and authorized responders are
+  available;
+- monitoring and stop conditions can detect a failed or harmful rollout;
+- the approval path names who may accept risk or use break-glass;
+- override use is time-bounded, logged, reviewed, and followed by corrective
+  work.
+
+A generated rollback plan must be reviewed against the actual deployment
+system. Never auto-execute it from an adapter decision.
+
+## Rollout checklist
+
+Record the following before enabling `soft-block` or `hard-block` for an
+integration:
+
+1. The integration key, project scope, repositories, environments, and change
+   classes covered.
+2. The approved benchmark report and thresholds, including known misses and
+   unsupported scenarios.
+3. A source-bound required check or job in an immutable protected workflow,
+   with no `continue-on-error`, ignored failure, or skippable enforcement step.
+4. An always-triggered terminal context for every protected event plus an
+   independent cancellation and timeout watchdog that fails the required context
+   when the analysis workflow cannot publish its own terminal state. Include a
+   base-branch update or merge-result trigger that invalidates and reruns a
+   stable PR head whenever its base changes.
+5. Run valid-pass, valid-block, and decision-error smoke cases against the exact
+   consumer revision and protected workflow.
+6. Verify complete and partial intake coverage against the submitted artifact
+   manifest.
+7. A required project-scope control that fails closed for the GitHub App's known
+   `neutral` scope-resolution path.
+8. The resolved setting source, `warn_at`, `soft_block_at`, and `hard_block_at`
+   thresholds, reporting default, and configured enforcement mode.
+   Lower-than-`high` blocking remains prohibited unless the shared decision path
+   implements and the benchmark approves the separate deterministic-evidence
+   gate described above.
+9. The trusted identity/proxy boundary that strips caller-supplied actor headers
+   and injects verified role and project scope.
+10. A durable external idempotency coordinator for blocking consumers. If it is
+   unavailable, record a non-blocking disposition and do not enable blocking.
+   A non-blocking disposition does not satisfy blocking readiness.
+11. Settings-change serialization: freeze delivery before the write, then
+    invalidate and rerun affected results before lifting the freeze.
+12. A deterministic diff-coverage control for deletions and renames. If it is
+    unavailable for a scope where tombstones are possible, record a non-blocking
+    disposition and do not enable blocking. A non-blocking disposition does not
+    satisfy blocking readiness.
+13. Evidence Law, decision and context freshness, and audit-retention expectations.
+14. Named human owners for review, exceptions, incident response, and rollback.
+15. A tested rollback or forward-fix path, immutable exception identifier and
+    immutable maximum expiry timestamp within the organization-approved maximum
+    TTL, automatic bypass revocation before or at that deadline, and retained
+    revocation evidence. Extensions require a new request and independent
+    approval. The independent delivery freeze remains active until timely
+    revocation is verified; delivery fails closed when it cannot be verified.
+    Retain the ruleset or emergency-workflow ID, intended protected target,
+    provider audit-event identifier, scoped bypass capability, separation-of-
+    duties evidence, and the one active exception at a time serialization record.
+16. Monitoring for false reassurance, false positives, regressions, and
+   excessive overrides.
+17. Immutable application and actual consumer revisions plus proof that deployed
+    artifacts match the benchmarked build.
+18. An external approval record or independently enforced approval check that
+    requires human approval for the complete decision identity: repository and
+    environment, integration and project scope, protected-target identity,
+    protected commit, report ID, manifest snapshot digest, settings snapshot
+    digest, material-context digest, consumer revision, workflow revision,
+    immutable application/server revision, dependency-lock identity,
+    endpoint-contract version, and validated decision digest. Native repository
+    review or protected-environment approval may remain an additional control,
+    but cannot replace this non-commit identity binding. Dismiss stale approvals
+    and require a new authorized approval when any identity component changes.
+19. A review date and a trigger for returning to `warn` or `advisory`.
+
+Enable one integration and scope at a time. Observe real outcomes before
+expanding enforcement. Changing a mode does not change the canonical report;
+it changes only how that integration consumes the separate policy decision.
+
+See [Workflow Adapter Output Contract](./workflow-adapter-output-contract.md)
+for the decision fields and settings precedence, and [Benchmark Corpus and
+Runner](./benchmarks/corpus.md) for the available benchmark evidence. Use
+[Deployment Outcome Linking](./outcome-linking.md) when production outcome data
+supplements the synthetic corpus.
