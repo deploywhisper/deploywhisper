@@ -169,7 +169,12 @@ that need the capped integration result use
 `GET /api/v1/analyses/{report_id}/enforcement-decision?integration={integration}`.
 That response exposes `configured_mode`, `effective_status`, `should_block`, and
 the nested raw `policy_output` from the same service used by GitHub App checks.
-CI and future adapters should consume this endpoint rather than deriving
+`/policy-adapter` is the raw configured-policy inspection endpoint: use it to
+inspect the resolved settings and uncapped policy envelope, not to decide
+whether an integration blocks. `/enforcement-decision` is the canonical
+integration-enforcement endpoint. It applies the configured ceiling, effective
+status, and blocking invariant and is the only response CI and future
+enforcement adapters should consume. Neither endpoint authorizes deriving
 blocking behavior from canonical severity or recommendation.
 
 Before enabling `soft-block` or `hard-block`, follow the

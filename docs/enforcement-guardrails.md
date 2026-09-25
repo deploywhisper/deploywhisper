@@ -110,10 +110,14 @@ same review before deleting an override. Do not assume that reset means
 
 The same risk applies when a new integration is added after a project default
 has become blocking. Create an integration-specific `advisory` override before
-onboarding a new consumer, then complete this guide for that consumer before
-raising its mode. The new consumer must complete its own benchmark and
-guardrail review; recording that an older project review exists is not a
-substitute for evidence about the new consumer revision and scope.
+onboarding a new consumer only when no existing scope shares that
+project/integration key. If another repository or environment shares the key,
+use a separate project or integration identity for advisory onboarding, or
+complete the new scope's guardrail review before attachment. Then complete this
+guide for that consumer before raising its mode. The new consumer must complete
+its own benchmark and guardrail review; recording that an older project review
+exists is not a substitute for evidence about the new consumer revision and
+scope.
 
 Treat a new repository, environment, change class, or other scope added to an
 existing integration the same way as a new consumer. Inspect the resolved
@@ -237,15 +241,21 @@ requires `analyzed_artifact_count == submitted_artifact_count`, every item to be
 infer completeness from the enforcement-decision envelope alone; it does not
 repeat the manifest.
 
-Generate the trusted path set and content hashes from a clean checkout of the
-protected target. Hash each submitted byte sequence and verify it matches the
-corresponding checkout artifact before accepting the report binding. A deleted
-or renamed artifact also requires diff coverage: record the prior path and a
-deletion tombstone, and for a rename validate both the tombstone and new-path
-bytes. The current submission manifest cannot represent an analyzed deletion
-tombstone. Until a separate deterministic diff-coverage control validates those
-operations, treat deletion/rename coverage as incomplete and keep that scope
-non-blocking.
+For source-tracked inputs, generate the trusted path set and content hashes from
+a clean checkout of the protected target. Hash each submitted byte sequence and
+verify it matches the corresponding checkout artifact before accepting the
+report binding. A generated or build-produced artifact that does not exist in
+source control instead requires an immutable producer attestation signed or
+published by the trusted build boundary. Bind that attestation to the producer
+revision, build-run identity, protected source commit, input digests, output
+path, and exact artifact SHA-256; compare the submitted bytes with that attested
+output. Without clean-checkout bytes or a verified producer attestation, keep
+the scope non-blocking. A deleted or renamed artifact also requires diff
+coverage: record the prior path and a deletion tombstone, and for a rename
+validate both the tombstone and new-path bytes. The current submission manifest
+cannot represent an analyzed deletion tombstone. Until a separate deterministic
+diff-coverage control validates those operations, treat deletion/rename coverage
+as incomplete and keep that scope non-blocking.
 
 `accepted_artifact_count` is an intake counter: it includes items with status
 `accepted` and parser-`failed`. It does not mean every item was analyzed.
@@ -283,11 +293,18 @@ classification and evidence—not the conclusion alone—to distinguish an
 operational failure from a policy block.
 
 Set a bounded timeout for analysis, decision retrieval, and check publication.
-Retry only transient failures with capped attempts and exponential backoff. Build
-one protected-workflow idempotency key from the complete decision identity plus
-a logical run identifier; exclude the retry-attempt number so every retry of one
-unknown outcome reuses the same key, while an intentional fresh rerun uses a new
-logical run identifier. Use that key for submission and check coordination.
+Retry only transient failures with capped attempts and exponential backoff.
+Before submission, build a pre-submission request identity from values already
+available at that boundary: protected target and commit, canonical manifest
+digest, project/integration scope, settings snapshot digest, consumer and
+workflow revisions, and immutable application/server and endpoint-contract
+versions. It must not depend on report ID or validated decision digest, which do
+not exist yet. Combine that request identity with a logical run identifier to
+form the protected-workflow idempotency key; exclude the retry-attempt number so
+every retry of one unknown outcome reuses the same key, while an intentional
+fresh rerun uses a new logical run identifier. Extend the request identity with
+the returned report ID and validated decision digest only in the post-decision
+audit identity. Use the idempotency key for submission and check coordination.
 The current analysis API and GitHub App do not provide native idempotent create
 or check-update semantics. A blocking consumer therefore needs a durable
 external coordinator that owns that key, suppresses duplicate submissions, and
@@ -584,7 +601,9 @@ integration:
    with no `continue-on-error`, ignored failure, or skippable enforcement step.
 4. An always-triggered terminal context for every protected event plus an
    independent cancellation and timeout watchdog that fails the required context
-   when the analysis workflow cannot publish its own terminal state.
+   when the analysis workflow cannot publish its own terminal state. Include a
+   base-branch update or merge-result trigger that invalidates and reruns a
+   stable PR head whenever its base changes.
 5. Run valid-pass, valid-block, and decision-error smoke cases against the exact
    consumer revision and protected workflow.
 6. Verify complete and partial intake coverage against the submitted artifact
@@ -615,6 +634,9 @@ integration:
     revocation evidence. Extensions require a new request and independent
     approval. The independent delivery freeze remains active until timely
     revocation is verified; delivery fails closed when it cannot be verified.
+    Retain the ruleset or emergency-workflow ID, intended protected target,
+    provider audit-event identifier, scoped bypass capability, separation-of-
+    duties evidence, and the one active exception at a time serialization record.
 16. Monitoring for false reassurance, false positives, regressions, and
    excessive overrides.
 17. Immutable application and actual consumer revisions plus proof that deployed

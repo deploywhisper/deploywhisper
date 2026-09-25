@@ -85,8 +85,10 @@ PY
 - Do not fail a pipeline based only on risk score or recommendation
 - Before onboarding or expanding a consumer, inspect the resolved setting source
   and configured mode. An integration without an override may inherit
-  `soft-block` or `hard-block` from the project default; create a scoped
-  `advisory` override or complete the blocking guardrail review before enabling
-  the consumer.
+  `soft-block` or `hard-block` from the project default. Create an integration
+  `advisory` override only when no existing scope shares that project/integration
+  key. Otherwise use a separate project or integration identity for advisory
+  onboarding, or complete the new scope's blocking guardrail review before
+  enabling the consumer.
 - Use `requires_attention` and `uncertainty_flags` to decide when to notify reviewers, enrich PR comments, or request additional manual checks
 - Treat non-zero CLI exit codes as operational failures, not advisory outcomes

@@ -21,7 +21,7 @@ DEFAULT_BRANCH_NAME = "feature/deploywhisper-github-init"
 ANALYZE_ACTION_PINNED_SHA = "3b37ed72bfb2d201030bef873268f2170794b160"
 # Immutable commit resolved from actions/checkout v4, reviewed 2026-09-09.
 CHECKOUT_ACTION_PINNED_SHA = "11d5960a326750d5838078e36cf38b85af677262"
-CHECKOUT_ACTION_REVISIONS = frozenset({CHECKOUT_ACTION_PINNED_SHA})
+CHECKOUT_ACTION_REVISIONS = frozenset({"11d5960a326750d5838078e36cf38b85af677262"})
 
 
 class AnalyzeActionCapability(str, Enum):
@@ -56,13 +56,7 @@ def _analyze_action_capability(revision: str) -> AnalyzeActionCapability:
         label="DeployWhisper Analyze Action",
         reviewed_revisions=ANALYZE_ACTION_CAPABILITIES,
     )
-    try:
-        capability = ANALYZE_ACTION_CAPABILITIES[revision]
-    except KeyError as exc:
-        raise GitHubInitError(
-            "Unclassified DeployWhisper Analyze Action revision: "
-            f"{revision}. Classify the immutable revision before generating files."
-        ) from exc
+    capability = ANALYZE_ACTION_CAPABILITIES[revision]
     if not isinstance(capability, AnalyzeActionCapability):
         raise GitHubInitError(
             "Invalid capability classification for DeployWhisper Analyze Action "

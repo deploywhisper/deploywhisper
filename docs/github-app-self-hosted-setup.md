@@ -212,8 +212,11 @@ it must not decide whether protection remains installed. Remove
 configured mode is `advisory` or `warn`. If it is `soft-block` or `hard-block`,
 the required check is an intentional operator control even when one report's
 effective status is non-blocking. Prefer a protection-layer exception. If a mode
-change is authorized, create a narrow integration-specific override rather than
-changing the project default before removing that protection.
+change is authorized and no other scope shares the project/integration key,
+create a narrow integration-specific override rather than changing the project
+default before removing that protection. Otherwise use a separate project or
+integration identity or complete the shared-scope guardrail review without
+downgrading the other consumers.
 Before making the check required, complete the
 [Enforcement Guardrails](./enforcement-guardrails.md), including benchmark,
 human-review, rollback, and break-glass ownership.

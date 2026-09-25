@@ -116,8 +116,9 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "current base SHA",
                 "bounded timeout",
                 "idempotency key",
-                "complete decision identity plus a logical run identifier",
                 "every retry of one unknown outcome reuses the same key",
+                "pre-submission request identity",
+                "must not depend on report ID or validated decision digest",
                 "do not provide native idempotent create or check-update semantics",
                 "durable external coordinator",
                 "unknown submission outcome",
@@ -147,6 +148,9 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "exact set equality",
                 "case-folding behavior",
                 "symlink/alias handling",
+                "generated or build-produced artifact",
+                "immutable producer attestation",
+                "producer revision, build-run identity, protected source commit",
                 "`operational-error` classification",
                 "validated hard-block",
                 "check summary",
@@ -202,12 +206,16 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "fails closed",
                 "always-triggered terminal context",
                 "independent cancellation and timeout watchdog",
+                "base-branch update or merge-result trigger",
                 "complete decision identity",
                 "repository and environment",
                 "integration and project scope",
                 "protected-target identity",
                 "external approval record or independently enforced approval check",
                 "Lower-than-`high` blocking remains prohibited",
+                "ruleset or emergency-workflow ID",
+                "provider audit-event identifier",
+                "one active exception at a time",
             ),
         }
         for heading, expected_clauses in expected_by_section.items():
@@ -527,6 +535,10 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
         self.assertNotIn("until the team explicitly opts into", ci_guidance)
         self.assertIn("inspect the resolved setting source", ci_guidance)
+        self.assertIn(
+            "no existing scope shares that project/integration key", ci_guidance
+        )
+        self.assertIn("separate project or integration identity", ci_guidance)
 
     def test_self_hosted_runbook_preserves_narrow_setting_scope(self) -> None:
         content = (REPO_ROOT / "docs" / "github-app-self-hosted-setup.md").read_text(
@@ -563,6 +575,29 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
         self.assertIn("resolved configured enforcement mode", troubleshooting)
         self.assertIn("effective status for the current report", troubleshooting)
+        self.assertIn(
+            "no other scope shares the project/integration key", troubleshooting
+        )
+        self.assertIn("separate project or integration identity", troubleshooting)
+
+    def test_adapter_docs_distinguish_policy_and_enforcement_endpoints(self) -> None:
+        content = self._normalized(
+            (REPO_ROOT / "docs" / "workflow-adapter-output-contract.md").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertIn(
+            "`/policy-adapter` is the raw configured-policy inspection endpoint",
+            content,
+        )
+        self.assertIn(
+            "`/enforcement-decision` is the canonical integration-enforcement endpoint",
+            content,
+        )
+        self.assertIn(
+            "configured ceiling, effective status, and blocking invariant", content
+        )
 
     def test_epic_11_closes_when_all_stories_are_done(self) -> None:
         payload = yaml.safe_load(
@@ -743,7 +778,7 @@ contradiction
 [Parentheses](./guide_(v2).md)
 [Angle](<./guide with spaces.md>)
 [Escaped](./guide_\(v3\).md)
-<!-- [Unclosed](./unclosed.md)
+<!-- [Hidden tail](./unclosed.md) -->
 """
         self.assertEqual(
             {
@@ -768,6 +803,11 @@ contradiction
         for unsupported in (
             "> ```markdown\n> [Hidden](./missing.md)\n> ```",
             "```text\n<!-- literal comment marker -->\n```\n[Visible](./missing.md)",
+            "- item\n\n      ```text\n      hidden requirement\n      ```",
+            "<h2>Rendered boundary</h2>\nhidden requirement",
+            "`<!--` literal opener",
+            "```text\nunclosed fence",
+            "<!-- unclosed comment",
         ):
             with self.subTest(unsupported=unsupported):
                 with self.assertRaises(AssertionError):
@@ -776,6 +816,8 @@ contradiction
         for unsupported_link in (
             "[guardrail [details]](./missing.md)",
             '<a href="./missing.md">Missing</a>',
+            "<a href=./missing.md>Missing</a>",
+            "[Root local](/docs/missing.md)",
         ):
             with self.subTest(unsupported_link=unsupported_link):
                 with self.assertRaises(AssertionError):
@@ -795,6 +837,9 @@ contradiction
         self.assertNotIn("required-hidden-phrase", visible)
         self.assertNotIn("hidden list code requirement", visible)
 
+        two_spans = "`soft-block` requires review before `hard-block`"
+        self.assertIn(two_spans, "".join(self._rendered_markdown_lines(two_spans)))
+
     def test_rendered_markdown_hides_unclosed_comments_and_code_only_prose(
         self,
     ) -> None:
@@ -803,8 +848,7 @@ contradiction
 visible requirement with `an identifier`
 `hidden normative requirement`
     hidden indented requirement
-<!-- hidden through EOF
-hidden comment requirement
+<!-- hidden comment requirement -->
 """
 
         section = self._normalized(self._section(content, "## Target"))
@@ -841,7 +885,7 @@ jobs:
             self._documented_workflow(f"{hidden_workflows}{real_workflow}"),
         )
 
-        with self.assertRaisesRegex(AssertionError, "Unclosed YAML workflow fence"):
+        with self.assertRaisesRegex(AssertionError, "Unclosed fenced code block"):
             self._documented_workflow(real_workflow.removesuffix("```\n"))
 
     @staticmethod
@@ -882,7 +926,7 @@ jobs:
         if re.search(r"(?<![!\\])\[[^\]\n]*\[[^\n]*\]\]\(", visible):
             raise AssertionError("Nested Markdown link labels are unsupported")
         if re.search(
-            r"(?is)<a\b[^>]*\bhref\s*=\s*['\"](?:\./|\.\./)[^'\"]*['\"][^>]*>",
+            r"(?is)<a\b[^>]*\bhref\s*=\s*(?:['\"](?:\.?\.?/)[^'\"]*['\"]|(?:\.?\.?/)[^\s>]+)[^>]*>",
             visible,
         ):
             raise AssertionError("Repository-local raw HTML links are unsupported")
@@ -919,6 +963,10 @@ jobs:
                 )
             )
             if target is not None:
+                if target.startswith("/"):
+                    raise AssertionError(
+                        "Repository-root-relative Markdown links are unsupported"
+                    )
                 targets.add(target)
                 cursor = link_end
             else:
@@ -1049,6 +1097,7 @@ jobs:
     @staticmethod
     def _documented_workflow(value: str) -> dict[str, object]:
         workflows: list[dict[str, object]] = []
+        EnforcementGuardrailDocumentationTests._validate_supported_markdown(value)
         comment_free = EnforcementGuardrailDocumentationTests._strip_html_comments(
             value
         )
@@ -1192,7 +1241,7 @@ jobs:
                         continue
                 elif line.strip():
                     list_content_indent = None
-                if re.fullmatch(r"\s*(`+).*?\1\s*", line):
+                if EnforcementGuardrailDocumentationTests._is_code_only_line(line):
                     continue
                 rendered.append(line_with_ending)
             elif EnforcementGuardrailDocumentationTests._is_closing_fence(
@@ -1206,12 +1255,38 @@ jobs:
     def _validate_supported_markdown(value: str) -> None:
         fence_character: str | None = None
         fence_length = 0
+        html_comment_open = False
         for line in value.splitlines():
+            if html_comment_open:
+                if "-->" in line:
+                    html_comment_open = False
+                continue
             if fence_character is None:
                 if re.match(r"^ {0,3}>[ \t]?(?:`{3,}|~{3,})", line):
                     raise AssertionError("Blockquoted fenced code is unsupported")
+                if re.match(r"^ {4,}(?:`{3,}|~{3,})", line):
+                    raise AssertionError("List-nested fenced code is unsupported")
+                if re.match(r"^ {0,3}<h[1-6]\b", line, flags=re.IGNORECASE):
+                    raise AssertionError("Raw HTML headings are unsupported")
+                if re.search(r"`+[^`\n]*(?:<!--|-->)[^`\n]*`+", line):
+                    raise AssertionError(
+                        "HTML comment markers inside inline code are unsupported"
+                    )
+                sanitized = line
+                while "<!--" in sanitized:
+                    opening_index = sanitized.index("<!--")
+                    closing_index = sanitized.find("-->", opening_index + 4)
+                    if closing_index < 0:
+                        html_comment_open = True
+                        sanitized = sanitized[:opening_index]
+                        break
+                    sanitized = (
+                        sanitized[:opening_index] + sanitized[closing_index + 3 :]
+                    )
+                if "-->" in sanitized:
+                    raise AssertionError("Unmatched HTML comment closer")
                 opening = EnforcementGuardrailDocumentationTests._opening_fence_info(
-                    line
+                    sanitized
                 )
                 if opening is not None:
                     fence_character = opening[0][0]
@@ -1226,6 +1301,22 @@ jobs:
                 ):
                     fence_character = None
                     fence_length = 0
+        if fence_character is not None:
+            raise AssertionError("Unclosed fenced code block")
+        if html_comment_open:
+            raise AssertionError("Unclosed HTML comment")
+
+    @staticmethod
+    def _is_code_only_line(line: str) -> bool:
+        value = line.strip()
+        if not value.startswith("`"):
+            return False
+        marker_length = len(value) - len(value.lstrip("`"))
+        marker = "`" * marker_length
+        if not value.endswith(marker) or len(value) <= marker_length * 2:
+            return False
+        body = value[marker_length:-marker_length]
+        return marker not in body
 
     @staticmethod
     def _strip_html_comments(value: str) -> str:

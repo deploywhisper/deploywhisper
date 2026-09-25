@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import os
 from pathlib import Path
 import subprocess
@@ -280,6 +281,23 @@ class GitHubInitServiceTests(unittest.TestCase):
                 )
             },
             init_service.ANALYZE_ACTION_CAPABILITIES,
+        )
+
+        source_tree = ast.parse(Path(init_service.__file__).read_text(encoding="utf-8"))
+        checkout_registry = next(
+            node.value
+            for node in source_tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "CHECKOUT_ACTION_REVISIONS"
+                for target in node.targets
+            )
+        )
+        self.assertNotIn("CHECKOUT_ACTION_PINNED_SHA", ast.unparse(checkout_registry))
+        self.assertEqual(
+            {"11d5960a326750d5838078e36cf38b85af677262"},
+            init_service.CHECKOUT_ACTION_REVISIONS,
         )
 
     def test_action_capability_rejects_invalid_registry_value(self) -> None:

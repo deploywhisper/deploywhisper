@@ -209,6 +209,16 @@ So that teams understand when not to block automatically.
 - [x] [Review][Patch] [MEDIUM] Define the protected-workflow idempotency key from the complete decision identity plus a logical run/attempt identity so distinct reruns cannot collapse into stale reports and unknown-outcome retries cannot create competing decisions. [docs/enforcement-guardrails.md:278]
 - [x] [Review][Patch] [MEDIUM] Replace the partial Markdown emulation with rendered-node parsing or reject every unsupported construct; blockquoted/list-nested code, comment markers inside fences, nested-label or raw-HTML links, and link destinations can currently masquerade as normative prose or evade local-link validation. [tests/test_docs/test_enforcement_guardrails.py:803]
 - [x] [Review][Defer] [MEDIUM] GitHub init reruns can overwrite an existing operator-hardened workflow and reintroduce the advisory safeguard, silently downgrading enforcement wiring. [integrations/github/init_service.py:248] — deferred, pre-existing
+- [x] [Review][Patch] [HIGH] Keep the checkout reviewed-revision allowlist independent from `CHECKOUT_ACTION_PINNED_SHA`; deriving the set from the selected pin automatically marks any source edit as reviewed and defeats fail-closed provenance. [integrations/github/init_service.py:24]
+- [x] [Review][Patch] [MEDIUM] Remove the unreachable unclassified-Action lookup branch or separate reviewed revision membership from capability classification; validation currently proves dictionary membership before a redundant `KeyError` handler. [integrations/github/init_service.py:53]
+- [x] [Review][Patch] [HIGH] Split the pre-submission idempotency request identity from the post-decision audit identity; report ID and validated decision digest do not exist when submission begins and cannot form its key. [docs/enforcement-guardrails.md:287]
+- [x] [Review][Patch] [HIGH] Support generated plans, scanner exports, and other build artifacts with immutable producer attestations and artifact provenance instead of universally requiring submitted bytes to exist in a clean source checkout. [docs/enforcement-guardrails.md:240]
+- [x] [Review][Patch] [MEDIUM] Add an explicit base-branch update or merge-result trigger to rollout readiness so a stable PR head cannot retain a stale approval after its base SHA changes. [docs/enforcement-guardrails.md:166]
+- [x] [Review][Patch] [HIGH] Qualify advisory-override guidance consistently across the canonical guide, CI guide, and self-hosted App runbook: never create an integration-wide override when another repository/environment shares the project/integration key. [docs/enforcement-guardrails.md:108]
+- [x] [Review][Patch] [MEDIUM] Explain the distinct roles and guarantees of `/enforcement-decision` and `/policy-adapter`, and identify the enforcement-decision endpoint as canonical for integration enforcement consumers. [docs/workflow-adapter-output-contract.md:158]
+- [x] [Review][Patch] [MEDIUM] Close the remaining rendered-Markdown escapes: list-nested fences, raw HTML headings/links including unquoted hrefs, comment delimiters inside inline code or fences, root-relative links, unclosed fences/comments, multi-span code-only detection, and section prose hidden in destinations. [tests/test_docs/test_enforcement_guardrails.py:884]
+- [x] [Review][Patch] [MEDIUM] Add concrete protection-layer bypass evidence to rollout readiness: mechanism ID, intended protected target, provider audit event, scoped capability, separation of duties, and single-active-exception serialization. [docs/enforcement-guardrails.md:576]
+- [x] [Review][Patch] [LOW] Add `_bmad-output/implementation-artifacts/deferred-work.md` to the Story 11.4 File List so the implementation record includes every changed artifact. [_bmad-output/implementation-artifacts/11-4-enforcement-guardrail-documentation.md:392]
 
 ## Dev Notes
 
@@ -367,6 +377,12 @@ OpenAI Codex (GPT-5)
 - 2026-09-25 required smoke: `./.venv/bin/python -m unittest discover -q` - `436 tests` passed, `1 skipped`.
 - 2026-09-25 full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, skill and prompt-injection gates, and every backend/docs test directory; the final services directory reported `936 tests` passing.
 - 2026-09-25 UI validation not applicable: no React route, component, rendered surface, interaction, keyboard behavior, or accessibility semantics changed.
+- 2026-09-25 latest-review RED: independent checkout provenance, request/audit identity, generated-artifact provenance, base-update, shared-scope override, endpoint-role, bypass-evidence, rendered-Markdown, and File List regressions reproduced all ten findings (`21 failed, 32 passed, 185 subtests passed`).
+- 2026-09-25 latest-review focused GREEN: `./.venv/bin/python -m pytest tests/test_services/test_github_init_service.py tests/test_docs/test_enforcement_guardrails.py -q --tb=short` - `37 passed, 200 subtests passed`.
+- 2026-09-25 latest-review expanded documentation, metadata, and scaffold suite: `./.venv/bin/python -m pytest tests/test_docs tests/test_infra/test_ai_safety_documentation.py tests/test_infra/test_requirements_traceability_matrix.py tests/test_services/test_github_init_service.py -q --tb=short` - `74 passed, 393 subtests passed`.
+- 2026-09-25 latest-review required smoke: `./.venv/bin/python -m unittest discover -q` - `437 tests` passed, `1 skipped`.
+- 2026-09-25 latest-review full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, skill and prompt-injection gates, and every backend/docs test directory; the final services directory reported `936 tests` passing.
+- 2026-09-25 latest-review UI validation not applicable: no React route, component, rendered surface, interaction, keyboard behavior, or accessibility semantics changed.
 
 ### Completion Notes List
 
@@ -388,11 +404,13 @@ OpenAI Codex (GPT-5)
 - Resolved all ten findings from the 2026-09-21 rerun: capability metadata is type-safe; future enforcement-capable scaffolds retain an explicit advisory safeguard; rollout readiness covers terminal watchdogs and complete approval identity; material context, artifact binding, and retention are reproducible; and Markdown regressions reject hidden, malformed, duplicate, or broken local-link content.
 - Resolved all fourteen findings from the post-fix 2026-09-21 rerun: sprint metadata and validation claims agree; pin classification and all policy outputs are verifiable; advisory onboarding preserves operational failures and shared-scope safety; approval/audit identities are complete and reproducible; and rendered GFM tables, links, fences, and anchors are structurally enforced.
 - Resolved all ten actionable findings from the 2026-09-25 rerun: enforcement-capable onboarding validates the full output tuple and explicit failure discriminator; both executable dependencies require reviewed immutable SHAs; approval, manifest, idempotency, thresholds, and decision-level benchmark signals are complete; and unsupported Markdown constructs fail the documentation contract instead of evading it. The pre-existing init overwrite behavior remains tracked in deferred work.
+- Resolved all ten findings from the latest 2026-09-25 rerun: checkout provenance is independently reviewed; pre-submission and post-decision identities are feasible; generated artifacts use trusted producer attestations; base updates, shared scopes, endpoint roles, and bypass evidence are explicit; Markdown escapes fail closed; and the File List includes deferred work.
 
 ### File List
 
 - README.md
 - _bmad-output/implementation-artifacts/11-4-enforcement-guardrail-documentation.md
+- _bmad-output/implementation-artifacts/deferred-work.md
 - _bmad-output/implementation-artifacts/sprint-status.yaml
 - docs/ci-advisory-consumption.md
 - docs/enforcement-guardrails.md
@@ -422,3 +440,4 @@ OpenAI Codex (GPT-5)
 - 2026-09-21: Addressed all ten findings from the latest review rerun, completed focused and repository-wide validation, and retained Story 11.4 and Epic 11 as done.
 - 2026-09-21: Addressed all fourteen findings from the post-fix review rerun, completed focused and repository-wide validation, and retained Story 11.4 and Epic 11 as done.
 - 2026-09-25: Addressed all ten actionable findings from the latest review rerun, retained one pre-existing init-overwrite item in deferred work, completed focused and repository-wide validation, and retained Story 11.4 and Epic 11 as done.
+- 2026-09-25: Addressed all ten findings from the latest post-fix review, completed focused and repository-wide validation, and retained Story 11.4 and Epic 11 as done.
