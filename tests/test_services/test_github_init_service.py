@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import ast
+from dataclasses import replace
 import os
 from pathlib import Path
 import subprocess
@@ -16,6 +16,25 @@ from integrations.github import init_service
 
 
 class GitHubInitServiceTests(unittest.TestCase):
+    @staticmethod
+    def _action_review(
+        capability: init_service.AnalyzeActionCapability,
+    ) -> init_service.AnalyzeActionReview:
+        return init_service.AnalyzeActionReview(
+            reviewed_on="2026-09-28",
+            provenance="synthetic reviewed test revision",
+            manifest_sha256="a" * 64,
+            contract_version="test-enforcement-v1",
+            evidence_reference="test://analyze-action-review",
+            capability=capability,
+            required_outputs=(
+                init_service.ENFORCEMENT_ACTION_OUTPUTS
+                if capability
+                is init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+                else ()
+            ),
+        )
+
     def setUp(self) -> None:
         self.original_app_base_url = os.environ.get("APP_BASE_URL")
         os.environ["APP_BASE_URL"] = "https://deploywhisper.example.com"
@@ -225,6 +244,9 @@ class GitHubInitServiceTests(unittest.TestCase):
             "update this generated capability note in the same change",
             readme_text,
         )
+        self.assertIn("all five required outputs", readme_text)
+        self.assertIn("failure-kind", readme_text)
+        self.assertIn("isolated project/integration identity", readme_text)
         self.assertNotIn(
             "workflow enforcement follows the resolved server settings", readme_text
         )
@@ -274,42 +296,60 @@ class GitHubInitServiceTests(unittest.TestCase):
                 )
 
     def test_capability_registry_is_independent_of_selected_pin(self) -> None:
+        action_review = init_service.ANALYZE_ACTION_REVIEWS[
+            "3b37ed72bfb2d201030bef873268f2170794b160"
+        ]
         self.assertEqual(
-            {
-                "3b37ed72bfb2d201030bef873268f2170794b160": (
-                    init_service.AnalyzeActionCapability.ADVISORY_ONLY
-                )
-            },
-            init_service.ANALYZE_ACTION_CAPABILITIES,
+            init_service.AnalyzeActionCapability.ADVISORY_ONLY,
+            action_review.capability,
+        )
+        self.assertRegex(action_review.manifest_sha256, r"^[0-9a-f]{64}$")
+        self.assertIn(
+            "f2e36cef443129e85c55882b9dafc1f20d409284", action_review.provenance
         )
 
-        source_tree = ast.parse(Path(init_service.__file__).read_text(encoding="utf-8"))
-        checkout_registry = next(
-            node.value
-            for node in source_tree.body
-            if isinstance(node, ast.Assign)
-            and any(
-                isinstance(target, ast.Name)
-                and target.id == "CHECKOUT_ACTION_REVISIONS"
-                for target in node.targets
-            )
-        )
-        self.assertNotIn("CHECKOUT_ACTION_PINNED_SHA", ast.unparse(checkout_registry))
-        self.assertEqual(
-            {"11d5960a326750d5838078e36cf38b85af677262"},
-            init_service.CHECKOUT_ACTION_REVISIONS,
-        )
+        checkout_review = init_service.CHECKOUT_ACTION_REVIEWS[
+            "11d5960a326750d5838078e36cf38b85af677262"
+        ]
+        self.assertRegex(checkout_review.manifest_sha256, r"^[0-9a-f]{64}$")
+        self.assertIn("lightweight tag", checkout_review.provenance)
 
     def test_action_capability_rejects_invalid_registry_value(self) -> None:
         revision = "b" * 40
 
+        invalid_review = init_service.AnalyzeActionReview(
+            reviewed_on="2026-09-28",
+            provenance="synthetic invalid classification",
+            manifest_sha256="a" * 64,
+            contract_version="test",
+            evidence_reference="test://invalid-review",
+            capability="enforcement-capable",  # type: ignore[arg-type]
+            required_outputs=(),
+        )
+
         with patch.dict(
-            init_service.ANALYZE_ACTION_CAPABILITIES,
-            {revision: "enforcement-capable"},
+            init_service.ANALYZE_ACTION_REVIEWS,
+            {revision: invalid_review},
         ):
             with self.assertRaisesRegex(
                 init_service.GitHubInitError,
                 "Invalid capability classification",
+            ):
+                init_service._analyze_action_capability(revision)
+
+        incomplete_review = replace(
+            self._action_review(
+                init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+            ),
+            required_outputs=init_service.ENFORCEMENT_ACTION_OUTPUTS[:-1],
+        )
+        with patch.dict(
+            init_service.ANALYZE_ACTION_REVIEWS,
+            {revision: incomplete_review},
+        ):
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "Incomplete enforcement output contract",
             ):
                 init_service._analyze_action_capability(revision)
 
@@ -326,8 +366,12 @@ class GitHubInitServiceTests(unittest.TestCase):
         )
 
         with patch.dict(
-            init_service.ANALYZE_ACTION_CAPABILITIES,
-            {"v1": init_service.AnalyzeActionCapability.ADVISORY_ONLY},
+            init_service.ANALYZE_ACTION_REVIEWS,
+            {
+                "v1": self._action_review(
+                    init_service.AnalyzeActionCapability.ADVISORY_ONLY
+                )
+            },
         ):
             with self.assertRaisesRegex(
                 init_service.GitHubInitError,
@@ -366,8 +410,12 @@ class GitHubInitServiceTests(unittest.TestCase):
         )
 
         with patch.dict(
-            init_service.ANALYZE_ACTION_CAPABILITIES,
-            {revision: init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE},
+            init_service.ANALYZE_ACTION_REVIEWS,
+            {
+                revision: self._action_review(
+                    init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+                )
+            },
         ):
             with patch.object(init_service, "ANALYZE_ACTION_PINNED_SHA", revision):
                 readme = init_service._render_readme_section(
@@ -437,8 +485,12 @@ class GitHubInitServiceTests(unittest.TestCase):
             project_key="payments",
         )
         with patch.dict(
-            init_service.ANALYZE_ACTION_CAPABILITIES,
-            {revision: init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE},
+            init_service.ANALYZE_ACTION_REVIEWS,
+            {
+                revision: self._action_review(
+                    init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+                )
+            },
         ):
             with patch.object(init_service, "ANALYZE_ACTION_PINNED_SHA", revision):
                 workflow = yaml.safe_load(init_service._render_workflow(options))
@@ -453,26 +505,26 @@ class GitHubInitServiceTests(unittest.TestCase):
                 env={**os.environ, **values},
             )
 
-        valid_pass = run_validator(
-            ACTION_OUTCOME="success",
-            FAILURE_KIND="none",
-            POLICY_STATUS="advisory",
-            CONFIGURED_MODE="hard-block",
-            EFFECTIVE_STATUS="advisory",
-            SHOULD_BLOCK="false",
-        )
-        self.assertEqual(0, valid_pass.returncode, valid_pass.stderr)
-
-        valid_policy_block = run_validator(
-            ACTION_OUTCOME="failure",
-            FAILURE_KIND="validated-policy-block",
-            POLICY_STATUS="hard-block",
-            CONFIGURED_MODE="hard-block",
-            EFFECTIVE_STATUS="hard-block",
-            SHOULD_BLOCK="true",
-        )
-        self.assertEqual(0, valid_policy_block.returncode, valid_policy_block.stderr)
-        self.assertIn("::warning::", valid_policy_block.stdout)
+        statuses = ("advisory", "warn", "soft-block", "hard-block")
+        for configured_index, configured_mode in enumerate(statuses):
+            for policy_index, policy_status in enumerate(statuses):
+                effective_status = statuses[min(configured_index, policy_index)]
+                should_block = effective_status in {"soft-block", "hard-block"}
+                result = run_validator(
+                    ACTION_OUTCOME="failure" if should_block else "success",
+                    FAILURE_KIND=("validated-policy-block" if should_block else "none"),
+                    POLICY_STATUS=policy_status,
+                    CONFIGURED_MODE=configured_mode,
+                    EFFECTIVE_STATUS=effective_status,
+                    SHOULD_BLOCK="true" if should_block else "false",
+                )
+                with self.subTest(
+                    configured_mode=configured_mode,
+                    policy_status=policy_status,
+                ):
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    if should_block:
+                        self.assertIn("::warning::", result.stdout)
 
         for invalid in (
             {
@@ -493,6 +545,38 @@ class GitHubInitServiceTests(unittest.TestCase):
             },
             {
                 "ACTION_OUTCOME": "success",
+                "FAILURE_KIND": "",
+                "POLICY_STATUS": "advisory",
+                "CONFIGURED_MODE": "advisory",
+                "EFFECTIVE_STATUS": "advisory",
+                "SHOULD_BLOCK": "false",
+            },
+            {
+                "ACTION_OUTCOME": "success",
+                "FAILURE_KIND": "none",
+                "POLICY_STATUS": "advisory",
+                "CONFIGURED_MODE": "advisory",
+                "EFFECTIVE_STATUS": "advisory",
+                "SHOULD_BLOCK": "yes",
+            },
+            {
+                "ACTION_OUTCOME": "cancelled",
+                "FAILURE_KIND": "operational-error",
+                "POLICY_STATUS": "advisory",
+                "CONFIGURED_MODE": "advisory",
+                "EFFECTIVE_STATUS": "advisory",
+                "SHOULD_BLOCK": "false",
+            },
+            {
+                "ACTION_OUTCOME": "skipped",
+                "FAILURE_KIND": "operational-error",
+                "POLICY_STATUS": "advisory",
+                "CONFIGURED_MODE": "advisory",
+                "EFFECTIVE_STATUS": "advisory",
+                "SHOULD_BLOCK": "false",
+            },
+            {
+                "ACTION_OUTCOME": "success",
                 "FAILURE_KIND": "none",
                 "POLICY_STATUS": "",
                 "CONFIGURED_MODE": "advisory",
@@ -503,6 +587,27 @@ class GitHubInitServiceTests(unittest.TestCase):
             with self.subTest(invalid=invalid):
                 result = run_validator(**invalid)
                 self.assertNotEqual(0, result.returncode)
+
+    def test_github_init_refuses_to_overwrite_existing_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            workflow_path = repo_root / init_service.DEFAULT_WORKFLOW_PATH
+            workflow_path.parent.mkdir(parents=True)
+            workflow_path.write_text("name: operator-owned\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                init_service.GitHubInitError,
+                "Refusing to overwrite existing workflow",
+            ):
+                init_service._ensure_workflow_path_available(
+                    repo_root,
+                    init_service.DEFAULT_WORKFLOW_PATH,
+                )
+
+            init_service._ensure_workflow_path_available(
+                repo_root,
+                ".github/workflows/new-deploywhisper.yml",
+            )
 
     @patch("integrations.github.init_service._require_binary")
     @patch("integrations.github.init_service._run_command")

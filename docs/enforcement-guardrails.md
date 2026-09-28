@@ -13,7 +13,9 @@ blocking default, deleting an override, or expanding an existing integration to
 a new scope.
 
 GitHub Action effects in this guide apply only to an enforcement-capable
-revision whose manifest exposes the four policy outputs and whose runtime has
+revision whose manifest exposes all five required outputs—`policy-status`,
+`configured-mode`, `effective-status`, `should-block`, and `failure-kind`—and
+whose runtime has
 passed the required smoke cases. The published `@v1` ref validated on
 2026-09-09 (tag object `f2e36cef443129e85c55882b9dafc1f20d409284`,
 dereferenced commit `3b37ed72bfb2d201030bef873268f2170794b160`)
@@ -33,7 +35,9 @@ on this dated observation.
 A mode-table row describes runtime behavior, not sufficient readiness criteria.
 Both blocking modes require the complete prerequisites and rollout checklist in
 this guide. A required workflow remains blocked until the policy conditions
-change or an authorized human follows the documented exception procedure.
+change. The documented exception procedure does not turn that workflow or its
+failed DeployWhisper result into a pass; it grants a separate, scoped
+protection-layer bypass only to the intended protected delivery.
 The table describes policy effects only. Output publication, comment delivery,
 authentication, timeouts, and other operational work may still fail after a
 valid non-blocking decision and produce a nonzero Action exit or failed App
@@ -306,10 +310,17 @@ fresh rerun uses a new logical run identifier. Extend the request identity with
 the returned report ID and validated decision digest only in the post-decision
 audit identity. Use the idempotency key for submission and check coordination.
 The current analysis API and GitHub App do not provide native idempotent create
-or check-update semantics. A blocking consumer therefore needs a durable
-external coordinator that owns that key, suppresses duplicate submissions, and
-updates one authoritative conclusion. Without that coordinator, keep the
-consumer non-blocking. When check-publication retries are exhausted, the failed
+or check-update semantics, and they do not expose deterministic lookup by the
+pre-submission request identity. A client-side coordinator can suppress its own
+duplicate call but cannot prove whether a timed-out request committed or locate
+the authoritative report. Blocking therefore requires a future server contract
+that accepts and persists the idempotency key on submission and returns the same
+report for retries, plus deterministic lookup/reconciliation by that request
+identity. Until that server support exists, keep the consumer non-blocking even
+when a durable external coordinator is present. The coordinator must still own
+the key,
+suppress duplicate attempts, and update one authoritative conclusion. When
+check-publication retries are exhausted, the failed
 publication channel cannot report its own terminal state. The external
 coordinator must send an out-of-band alert through an independently monitored
 channel and engage an independent delivery freeze that prevents merge or
@@ -618,8 +629,10 @@ integration:
 9. The trusted identity/proxy boundary that strips caller-supplied actor headers
    and injects verified role and project scope.
 10. A durable external idempotency coordinator for blocking consumers. If it is
-   unavailable, record a non-blocking disposition and do not enable blocking.
-   A non-blocking disposition does not satisfy blocking readiness.
+   unavailable—or the server does not accept/persist the key and support
+   deterministic request-identity lookup—record a non-blocking disposition and
+   do not enable blocking. A non-blocking disposition does not satisfy blocking
+   readiness.
 11. Settings-change serialization: freeze delivery before the write, then
     invalidate and rerun affected results before lifting the freeze.
 12. A deterministic diff-coverage control for deletions and renames. If it is

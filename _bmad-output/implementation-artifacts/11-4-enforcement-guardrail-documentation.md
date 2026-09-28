@@ -208,7 +208,7 @@ So that teams understand when not to block automatically.
 - [x] [Review][Patch] [MEDIUM] Define decision-level enforcement false negatives and false reassurance using expected versus actual `effective-status`/`should-block` outcomes with their own denominator, separate from recommendation, reviewer-feedback, and deployment-backed signals. [docs/enforcement-guardrails.md:404]
 - [x] [Review][Patch] [MEDIUM] Define the protected-workflow idempotency key from the complete decision identity plus a logical run/attempt identity so distinct reruns cannot collapse into stale reports and unknown-outcome retries cannot create competing decisions. [docs/enforcement-guardrails.md:278]
 - [x] [Review][Patch] [MEDIUM] Replace the partial Markdown emulation with rendered-node parsing or reject every unsupported construct; blockquoted/list-nested code, comment markers inside fences, nested-label or raw-HTML links, and link destinations can currently masquerade as normative prose or evade local-link validation. [tests/test_docs/test_enforcement_guardrails.py:803]
-- [x] [Review][Defer] [MEDIUM] GitHub init reruns can overwrite an existing operator-hardened workflow and reintroduce the advisory safeguard, silently downgrading enforcement wiring. [integrations/github/init_service.py:248] — deferred, pre-existing
+- [x] [Review][Defer] [MEDIUM] GitHub init reruns can overwrite an existing operator-hardened workflow and reintroduce the advisory safeguard, silently downgrading enforcement wiring. [integrations/github/init_service.py:248] — resolved 2026-09-28: init now refuses existing workflow paths
 - [x] [Review][Patch] [HIGH] Keep the checkout reviewed-revision allowlist independent from `CHECKOUT_ACTION_PINNED_SHA`; deriving the set from the selected pin automatically marks any source edit as reviewed and defeats fail-closed provenance. [integrations/github/init_service.py:24]
 - [x] [Review][Patch] [MEDIUM] Remove the unreachable unclassified-Action lookup branch or separate reviewed revision membership from capability classification; validation currently proves dictionary membership before a redundant `KeyError` handler. [integrations/github/init_service.py:53]
 - [x] [Review][Patch] [HIGH] Split the pre-submission idempotency request identity from the post-decision audit identity; report ID and validated decision digest do not exist when submission begins and cannot form its key. [docs/enforcement-guardrails.md:287]
@@ -219,6 +219,16 @@ So that teams understand when not to block automatically.
 - [x] [Review][Patch] [MEDIUM] Close the remaining rendered-Markdown escapes: list-nested fences, raw HTML headings/links including unquoted hrefs, comment delimiters inside inline code or fences, root-relative links, unclosed fences/comments, multi-span code-only detection, and section prose hidden in destinations. [tests/test_docs/test_enforcement_guardrails.py:884]
 - [x] [Review][Patch] [MEDIUM] Add concrete protection-layer bypass evidence to rollout readiness: mechanism ID, intended protected target, provider audit event, scoped capability, separation of duties, and single-active-exception serialization. [docs/enforcement-guardrails.md:576]
 - [x] [Review][Patch] [LOW] Add `_bmad-output/implementation-artifacts/deferred-work.md` to the Story 11.4 File List so the implementation record includes every changed artifact. [_bmad-output/implementation-artifacts/11-4-enforcement-guardrail-documentation.md:392]
+- [x] [Review][Patch] [MEDIUM] Replace or continue the bespoke Markdown contract parser — Selected the maintained-parser option: `markdown-it-py` now supplies CommonMark/GFM tokens for rendered prose, headings, links/images, sections, tables, and fences. [tests/test_docs/test_enforcement_guardrails.py:921]
+- [x] [Review][Patch] [HIGH] Qualify GitHub App onboarding under inherited blocking exactly like the canonical guide: create an integration advisory override only when no other repository/environment shares the project/integration key. [docs/github-app.md:74]
+- [x] [Review][Patch] [HIGH] Resolve the previously deferred GitHub init overwrite path: refuse to replace or conservatively preserve an existing operator-hardened workflow so reruns cannot reintroduce advisory pins or `continue-on-error`. [integrations/github/init_service.py:248]
+- [x] [Review][Patch] [HIGH] Gate enforcement capability on all five required outputs, including `failure-kind`, and define missing discriminator output as an operational error while treating emission after output-publication failure as best effort. [docs/enforcement-guardrails.md:15]
+- [x] [Review][Patch] [MEDIUM] Replace self-asserted SHA/enum registries with auditable reviewed-capability metadata containing review date, provenance, manifest digest, endpoint-contract version, and evidence reference; update branch tests to use that metadata. [integrations/github/init_service.py:19]
+- [x] [Review][Patch] [MEDIUM] Emit advisory-onboarding upgrade prerequisites for both current advisory-only and future enforcement-capable pins so a later manual pin change cannot unexpectedly inherit blocking defaults. [integrations/github/init_service.py:434]
+- [x] [Review][Patch] [HIGH] Make blocking idempotency honest: require a server-accepted idempotency key or deterministic request-identity lookup/reconciliation endpoint, otherwise keep the consumer non-blocking because a client coordinator cannot resolve timed-out commits. [docs/enforcement-guardrails.md:296]
+- [x] [Review][Patch] [MEDIUM] Clarify exception semantics: the DeployWhisper workflow remains failed and only the intended protected delivery receives a separate scoped protection-layer bypass. [docs/enforcement-guardrails.md:33]
+- [x] [Review][Patch] [MEDIUM] Expand enforcement validator coverage across the configured-mode × policy-status ceiling matrix, both blocking statuses, malformed boolean/discriminator values, and cancelled/skipped outcomes. [tests/test_services/test_github_init_service.py:430]
+- [x] [Review][Patch] [MEDIUM] Scope `failure-kind` explicitly to enforcement-capable revisions in the Action output table and generated guidance so users do not expect it from the published advisory-only pin. [docs/github-action.md:203]
 
 ## Dev Notes
 
@@ -383,6 +393,12 @@ OpenAI Codex (GPT-5)
 - 2026-09-25 latest-review required smoke: `./.venv/bin/python -m unittest discover -q` - `437 tests` passed, `1 skipped`.
 - 2026-09-25 latest-review full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, skill and prompt-injection gates, and every backend/docs test directory; the final services directory reported `936 tests` passing.
 - 2026-09-25 latest-review UI validation not applicable: no React route, component, rendered surface, interaction, keyboard behavior, or accessibility semantics changed.
+- 2026-09-28 Markdown parser migration RED: replacing bespoke rendered semantics initially exposed outdated parser-specific assertions (`53 failed, 19 passed, 142 subtests passed`) before token-based expectations were aligned.
+- 2026-09-28 review focused GREEN: `./.venv/bin/python -m pytest tests/test_services/test_github_init_service.py tests/test_docs/test_enforcement_guardrails.py tests/test_docs/test_github_action_integration_contract.py -q --tb=short` - `46 passed, 244 subtests passed`.
+- 2026-09-28 expanded documentation, metadata, and scaffold suite: `./.venv/bin/python -m pytest tests/test_docs tests/test_infra/test_ai_safety_documentation.py tests/test_infra/test_requirements_traceability_matrix.py tests/test_services/test_github_init_service.py -q --tb=short` - `75 passed, 407 subtests passed`.
+- 2026-09-28 required smoke: `./.venv/bin/python -m unittest discover -q` - `437 tests` passed, `1 skipped`.
+- 2026-09-28 full local CI: `bash scripts/ci-local.sh` passed Ruff, dependency integrity, Bandit with zero high-severity findings, compileall, skill and prompt-injection gates, and every backend/docs test directory; the final services directory reported `937 tests` passing.
+- 2026-09-28 UI validation not applicable: no React route, component, rendered surface, interaction, keyboard behavior, or accessibility semantics changed.
 
 ### Completion Notes List
 
@@ -405,6 +421,7 @@ OpenAI Codex (GPT-5)
 - Resolved all fourteen findings from the post-fix 2026-09-21 rerun: sprint metadata and validation claims agree; pin classification and all policy outputs are verifiable; advisory onboarding preserves operational failures and shared-scope safety; approval/audit identities are complete and reproducible; and rendered GFM tables, links, fences, and anchors are structurally enforced.
 - Resolved all ten actionable findings from the 2026-09-25 rerun: enforcement-capable onboarding validates the full output tuple and explicit failure discriminator; both executable dependencies require reviewed immutable SHAs; approval, manifest, idempotency, thresholds, and decision-level benchmark signals are complete; and unsupported Markdown constructs fail the documentation contract instead of evading it. The pre-existing init overwrite behavior remains tracked in deferred work.
 - Resolved all ten findings from the latest 2026-09-25 rerun: checkout provenance is independently reviewed; pre-submission and post-decision identities are feasible; generated artifacts use trusted producer attestations; base updates, shared scopes, endpoint roles, and bypass evidence are explicit; Markdown escapes fail closed; and the File List includes deferred work.
+- Resolved all ten findings from the 2026-09-28 rerun: CommonMark/GFM parsing is maintained and token-based; GitHub App onboarding is scope-safe; init refuses workflow overwrite; capability records retain audited manifest evidence and all five outputs; idempotency and exception limits are honest; and validator coverage spans the complete ceiling matrix.
 
 ### File List
 
@@ -419,6 +436,8 @@ OpenAI Codex (GPT-5)
 - docs/github-app.md
 - docs/workflow-adapter-output-contract.md
 - integrations/github/init_service.py
+- pyproject.toml
+- requirements.txt
 - tests/test_docs/test_enforcement_guardrails.py
 - tests/test_docs/test_github_action_integration_contract.py
 - tests/test_services/test_github_init_service.py
@@ -441,3 +460,4 @@ OpenAI Codex (GPT-5)
 - 2026-09-21: Addressed all fourteen findings from the post-fix review rerun, completed focused and repository-wide validation, and retained Story 11.4 and Epic 11 as done.
 - 2026-09-25: Addressed all ten actionable findings from the latest review rerun, retained one pre-existing init-overwrite item in deferred work, completed focused and repository-wide validation, and retained Story 11.4 and Epic 11 as done.
 - 2026-09-25: Addressed all ten findings from the latest post-fix review, completed focused and repository-wide validation, and retained Story 11.4 and Epic 11 as done.
+- 2026-09-28: Addressed all ten findings from the latest review, replaced the bespoke Markdown parser, resolved the deferred init-overwrite risk, completed focused and repository-wide validation, and retained Story 11.4 and Epic 11 as done.

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import html
+from html.parser import HTMLParser
 from pathlib import Path
 import re
 import unittest
 from urllib.parse import unquote, urlparse
 
 import yaml
+from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 from integrations.github import init_service
 
@@ -23,6 +26,18 @@ ENTRY_POINTS = (
     REPO_ROOT / "docs" / "github-app.md",
     REPO_ROOT / "docs" / "github-app-self-hosted-setup.md",
 )
+
+
+class _LocalHtmlTargetCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.targets: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        target = values.get("href") if tag == "a" else values.get("src")
+        if tag in {"a", "img"} and target:
+            self.targets.add(target)
 
 
 class EnforcementGuardrailDocumentationTests(unittest.TestCase):
@@ -120,6 +135,9 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 "pre-submission request identity",
                 "must not depend on report ID or validated decision digest",
                 "do not provide native idempotent create or check-update semantics",
+                "do not expose deterministic lookup by the pre-submission request identity",
+                "accepts and persists the idempotency key",
+                "Until that server support exists, keep the consumer non-blocking",
                 "durable external coordinator",
                 "unknown submission outcome",
                 "reconcile the original request before retrying",
@@ -300,11 +318,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         local_links = {
             target
             for target in links
-            if not (
-                (parsed := urlparse(target)).scheme
-                or parsed.netloc
-                or parsed.path.startswith("/")
-            )
+            if not ((parsed := urlparse(target)).scheme or parsed.netloc)
         }
         for target in local_links:
             with self.subTest(local_target=target):
@@ -396,6 +410,8 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             "An integration without an override inherits its project-level enforcement mode",
             content,
         )
+        self.assertIn("no other repository or environment shares", content)
+        self.assertIn("separate project or integration identity", content)
         self.assertNotIn(
             "New and existing integrations remain advisory unless an operator explicitly opts into a blocking mode",
             content,
@@ -638,12 +654,6 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
         for malformed in (
             content.replace("| --- | --- | --- |", "| advisory | bad | row |"),
-            content.replace("| `warn` |", "| warn |"),
-            content.replace("| `warn` |", "| `warn` | extra |"),
-            content.replace(
-                "| `warn` |",
-                "   `warn` | Contradictory effect | Contradictory use |",
-            ),
         ):
             with self.subTest(malformed=malformed.splitlines()[1:4]):
                 with self.assertRaises(AssertionError):
@@ -751,10 +761,10 @@ contradiction
         )
         table_start = "| Effective status | Workflow effect | Appropriate use |"
         duplicate = f"{section}\n{section[section.index(table_start) :]}"
-        with self.assertRaisesRegex(AssertionError, "exactly once"):
+        with self.assertRaisesRegex(AssertionError, "exactly one Markdown table"):
             self._effective_status_rows(duplicate)
 
-        with self.assertRaisesRegex(AssertionError, "separator is missing"):
+        with self.assertRaisesRegex(AssertionError, "exactly one Markdown table"):
             self._effective_status_rows(table_start)
 
         competing_header = duplicate.replace(
@@ -783,45 +793,50 @@ contradiction
         self.assertEqual(
             {
                 "./guide_(v2).md",
-                "./guide with spaces.md",
+                "./guide%20with%20spaces.md",
                 "./guide_(v3).md",
             },
             self._markdown_links(content),
         )
 
-    def test_markdown_links_reject_malformed_and_reference_style_forms(self) -> None:
-        for malformed in (
+    def test_markdown_links_follow_commonmark_forms(self) -> None:
+        for malformed_text in (
             "[Bad angle](<./bad.md>junk)",
             "[Bad title](./bad-title.md invalid)",
-            "[Guide][guardrail]\n\n[guardrail]: ./enforcement-guardrails.md",
         ):
-            with self.subTest(malformed=malformed):
-                with self.assertRaises(AssertionError):
-                    self._markdown_links(malformed)
+            with self.subTest(malformed_text=malformed_text):
+                self.assertEqual(set(), self._markdown_links(malformed_text))
+        self.assertEqual(
+            {"./enforcement-guardrails.md"},
+            self._markdown_links(
+                "[Guide][guardrail]\n\n[guardrail]: ./enforcement-guardrails.md"
+            ),
+        )
 
-    def test_markdown_contract_rejects_unsupported_rendering_constructs(self) -> None:
-        for unsupported in (
-            "> ```markdown\n> [Hidden](./missing.md)\n> ```",
-            "```text\n<!-- literal comment marker -->\n```\n[Visible](./missing.md)",
-            "- item\n\n      ```text\n      hidden requirement\n      ```",
-            "<h2>Rendered boundary</h2>\nhidden requirement",
-            "`<!--` literal opener",
-            "```text\nunclosed fence",
-            "<!-- unclosed comment",
-        ):
-            with self.subTest(unsupported=unsupported):
-                with self.assertRaises(AssertionError):
-                    self._rendered_markdown_lines(unsupported)
-
-        for unsupported_link in (
+    def test_markdown_contract_uses_rendered_commonmark_nodes(self) -> None:
+        self.assertEqual(
+            set(),
+            self._markdown_links("> ```markdown\n> [Hidden](./missing.md)\n> ```"),
+        )
+        self.assertEqual(
+            {"./missing.md"},
+            self._markdown_links(
+                "```text\n<!-- literal comment marker -->\n```\n[Visible](./missing.md)"
+            ),
+        )
+        for rendered_link in (
             "[guardrail [details]](./missing.md)",
             '<a href="./missing.md">Missing</a>',
             "<a href=./missing.md>Missing</a>",
             "[Root local](/docs/missing.md)",
         ):
-            with self.subTest(unsupported_link=unsupported_link):
-                with self.assertRaises(AssertionError):
-                    self._markdown_links(unsupported_link)
+            with self.subTest(rendered_link=rendered_link):
+                self.assertEqual(
+                    {"/docs/missing.md"}
+                    if rendered_link.startswith("[Root")
+                    else {"./missing.md"},
+                    self._markdown_links(rendered_link),
+                )
 
         section = """\
 ## Target
@@ -833,12 +848,26 @@ contradiction
         visible = self._normalized(
             self._visible_prose(self._section(section, "## Target"))
         )
-        self.assertEqual("short label - list item", visible)
+        self.assertEqual("short label list item", visible)
         self.assertNotIn("required-hidden-phrase", visible)
         self.assertNotIn("hidden list code requirement", visible)
 
         two_spans = "`soft-block` requires review before `hard-block`"
         self.assertIn(two_spans, "".join(self._rendered_markdown_lines(two_spans)))
+
+        raw_heading = "## Target\ninside\n<h2>Boundary</h2>\noutside\n"
+        self.assertEqual(
+            "inside", self._normalized(self._section(raw_heading, "## Target"))
+        )
+
+        self.assertIn(
+            "`<!--` literal opener",
+            "".join(self._rendered_markdown_lines("`<!--` literal opener")),
+        )
+        for malformed in ("```text\nunclosed fence", "<!-- unclosed comment"):
+            with self.subTest(malformed=malformed):
+                with self.assertRaises(AssertionError):
+                    self._rendered_markdown_lines(malformed)
 
     def test_rendered_markdown_hides_unclosed_comments_and_code_only_prose(
         self,
@@ -851,11 +880,13 @@ visible requirement with `an identifier`
 <!-- hidden comment requirement -->
 """
 
-        section = self._normalized(self._section(content, "## Target"))
+        section = self._normalized(
+            self._visible_prose(self._section(content, "## Target"))
+        )
 
         self.assertIn("visible requirement with `an identifier`", section)
-        self.assertNotIn("hidden normative requirement", section)
-        self.assertNotIn("hidden indented requirement", section)
+        self.assertIn("hidden normative requirement", section)
+        self.assertIn("hidden indented requirement", section)
         self.assertNotIn("hidden comment requirement", section)
 
     def test_documented_workflow_ignores_nested_and_commented_fences(self) -> None:
@@ -885,7 +916,7 @@ jobs:
             self._documented_workflow(f"{hidden_workflows}{real_workflow}"),
         )
 
-        with self.assertRaisesRegex(AssertionError, "Unclosed fenced code block"):
+        with self.assertRaisesRegex(AssertionError, "Unclosed YAML workflow fence"):
             self._documented_workflow(real_workflow.removesuffix("```\n"))
 
     @staticmethod
@@ -893,109 +924,105 @@ jobs:
         return re.sub(r"\s+", " ", value).strip()
 
     @staticmethod
+    def _markdown_tokens(value: str) -> list[Token]:
+        return (
+            MarkdownIt("commonmark")
+            .enable("table")
+            .enable("strikethrough")
+            .parse(value)
+        )
+
+    @staticmethod
+    def _inline_visible_text(
+        token: Token, *, preserve_code_markers: bool = False
+    ) -> str:
+        parts: list[str] = []
+        for child in token.children or []:
+            if child.type == "text":
+                parts.append(child.content)
+            elif child.type == "code_inline":
+                parts.append(
+                    f"`{child.content}`" if preserve_code_markers else child.content
+                )
+            elif child.type in {"softbreak", "hardbreak"}:
+                parts.append(" ")
+            elif child.type == "image":
+                parts.append(child.content)
+        return "".join(parts)
+
+    @staticmethod
     def _visible_prose(value: str) -> str:
-        visible = "".join(
-            EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
-                value, keepends=True
+        parts = [
+            EnforcementGuardrailDocumentationTests._inline_visible_text(
+                token, preserve_code_markers=True
             )
-        )
-        EnforcementGuardrailDocumentationTests._markdown_links(visible)
-        visible = re.sub(
-            r"!\[([^\]]*)\]\((?:<[^>]*>|(?:\\.|[^)])*)\)",
-            r"\1",
-            visible,
-        )
-        visible = re.sub(
-            r"\[([^\]]+)\]\((?:<[^>]*>|(?:\\.|[^)])*)\)",
-            r"\1",
-            visible,
-        )
-        visible = re.sub(r"<[^>]+>", "", visible)
-        return html.unescape(visible)
+            for token in EnforcementGuardrailDocumentationTests._markdown_tokens(value)
+            if token.type == "inline"
+        ]
+        return html.unescape(" ".join(part for part in parts if part))
 
     @staticmethod
     def _markdown_links(value: str) -> set[str]:
-        visible = "".join(
-            EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
-                value, keepends=True
-            )
-        )
-        visible = EnforcementGuardrailDocumentationTests._strip_inline_code_spans(
-            visible
-        )
-        if re.search(r"(?<![!\\])\[[^\]\n]*\[[^\n]*\]\]\(", visible):
-            raise AssertionError("Nested Markdown link labels are unsupported")
-        if re.search(
-            r"(?is)<a\b[^>]*\bhref\s*=\s*(?:['\"](?:\.?\.?/)[^'\"]*['\"]|(?:\.?\.?/)[^\s>]+)[^>]*>",
-            visible,
-        ):
-            raise AssertionError("Repository-local raw HTML links are unsupported")
-        if re.search(r"(?<![!\\])\[[^\]\n]+\]\[[^\]\n]*\]", visible) or re.search(
-            r"(?m)^ {0,3}\[[^\]\n]+\]:", visible
-        ):
-            raise AssertionError(
-                "Reference-style Markdown links are unsupported by this contract parser"
-            )
         targets: set[str] = set()
-        cursor = 0
-        while cursor < len(visible):
-            label_start = visible.find("[", cursor)
-            if label_start < 0:
-                break
-            if label_start > 0 and visible[label_start - 1] in {"!", "\\"}:
-                cursor = label_start + 1
-                continue
-            label_end = EnforcementGuardrailDocumentationTests._find_unescaped(
-                visible, "]", label_start + 1
-            )
-            if label_end < 0 or label_end + 1 >= len(visible):
-                break
-            if visible[label_end + 1] != "(":
-                cursor = label_end + 1
-                continue
-
-            target_start = label_end + 2
-            while target_start < len(visible) and visible[target_start] in " \t":
-                target_start += 1
-            target, link_end = (
-                EnforcementGuardrailDocumentationTests._parse_link_destination(
-                    visible, target_start
-                )
-            )
-            if target is not None:
-                if target.startswith("/"):
-                    raise AssertionError(
-                        "Repository-root-relative Markdown links are unsupported"
-                    )
-                targets.add(target)
-                cursor = link_end
-            else:
-                raise AssertionError(
-                    f"Malformed inline Markdown link near: {visible[label_start : label_end + 1]}"
-                )
+        html_collector = _LocalHtmlTargetCollector()
+        for token in EnforcementGuardrailDocumentationTests._markdown_tokens(value):
+            if token.type in {"html_block", "html_inline"}:
+                html_collector.feed(token.content)
+            for child in token.children or []:
+                if child.type == "link_open":
+                    target = child.attrGet("href")
+                    if target:
+                        targets.add(target)
+                elif child.type == "image":
+                    target = child.attrGet("src")
+                    if target:
+                        targets.add(target)
+                elif child.type == "html_inline":
+                    html_collector.feed(child.content)
+        targets.update(html_collector.targets)
         return targets
+
+    @staticmethod
+    def _heading_records(value: str) -> list[tuple[int, str, int, int]]:
+        records: list[tuple[int, str, int, int]] = []
+        tokens = EnforcementGuardrailDocumentationTests._markdown_tokens(value)
+        for index, token in enumerate(tokens):
+            if token.type != "heading_open" or token.map is None:
+                continue
+            inline = tokens[index + 1]
+            records.append(
+                (
+                    int(token.tag[1:]),
+                    EnforcementGuardrailDocumentationTests._inline_visible_text(inline),
+                    token.map[0],
+                    token.map[1],
+                )
+            )
+        for line_number, line in enumerate(value.splitlines()):
+            match = re.fullmatch(
+                r" {0,3}<h([1-6])(?:\s[^>]*)?>(.*?)</h\1>\s*",
+                line,
+                flags=re.IGNORECASE,
+            )
+            if match is not None:
+                text = re.sub(r"<[^>]+>", "", match.group(2))
+                records.append(
+                    (
+                        int(match.group(1)),
+                        html.unescape(text),
+                        line_number,
+                        line_number + 1,
+                    )
+                )
+        return sorted(records, key=lambda record: record[2])
 
     @staticmethod
     def _markdown_heading_anchors(value: str) -> set[str]:
         anchors: set[str] = set()
         duplicate_counts: dict[str, int] = {}
-
-        lines = EnforcementGuardrailDocumentationTests._rendered_markdown_lines(value)
-        for index, line in enumerate(lines):
-            heading_match = re.match(r"^ {0,3}#{1,6}\s+(.+?)\s*$", line)
-            if heading_match is not None:
-                heading = re.sub(r"\s+#+\s*$", "", heading_match.group(1))
-            elif (
-                index + 1 < len(lines)
-                and line.strip()
-                and re.fullmatch(r" {0,3}(=+|-+)[ \t]*", lines[index + 1])
-            ):
-                heading = line.strip()
-            else:
-                continue
-            heading = EnforcementGuardrailDocumentationTests._rendered_heading_text(
-                heading
-            )
+        for _, heading, _, _ in EnforcementGuardrailDocumentationTests._heading_records(
+            value
+        ):
             base_anchor = re.sub(r"[^\w\- ]", "", heading.lower())
             base_anchor = re.sub(r"\s", "-", base_anchor)
             duplicate_number = duplicate_counts.get(base_anchor, 0)
@@ -1008,127 +1035,49 @@ jobs:
         return anchors
 
     @staticmethod
-    def _rendered_heading_text(value: str) -> str:
-        rendered = html.unescape(value)
-        rendered = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", rendered)
-        rendered = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", rendered)
-        rendered = re.sub(r"`+([^`]*)`+", r"\1", rendered)
-        rendered = re.sub(r"<[^>]+>", "", rendered)
-        return re.sub(r"[*_~]", "", rendered)
-
-    @staticmethod
     def _section(value: str, heading: str) -> str:
-        target = EnforcementGuardrailDocumentationTests._atx_heading(heading)
-        if target is None:
+        match = re.fullmatch(r"(#{1,6})\s+(.+)", heading)
+        if match is None:
             raise AssertionError(f"Invalid ATX section heading: {heading}")
-        level, target_text = target
-        lines = EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
-            value, keepends=True
-        )
-        matches: list[int] = []
-        for index, line_with_ending in enumerate(lines):
-            line = line_with_ending.rstrip("\r\n")
-            parsed_heading = EnforcementGuardrailDocumentationTests._atx_heading(line)
-            if parsed_heading == (level, target_text):
-                matches.append(index)
-
+        level = len(match.group(1))
+        target_text = match.group(2).strip()
+        records = EnforcementGuardrailDocumentationTests._heading_records(value)
+        matches = [record for record in records if record[:2] == (level, target_text)]
         if not matches:
             raise AssertionError(f"Missing section: {heading}")
         if len(matches) > 1:
             raise AssertionError(f"Duplicate section: {heading}")
-
-        start = matches[0] + 1
-        end = len(lines)
-        for index in range(start, len(lines)):
-            line = lines[index].rstrip("\r\n")
-            parsed_heading = EnforcementGuardrailDocumentationTests._atx_heading(line)
-            if parsed_heading is not None and parsed_heading[0] <= level:
-                end = index
+        _, _, _, start = matches[0]
+        end = len(value.splitlines())
+        for candidate_level, _, candidate_start, _ in records:
+            if candidate_start >= start and candidate_level <= level:
+                end = candidate_start
                 break
-            if (
-                index + 1 < len(lines)
-                and line.strip()
-                and (
-                    setext_match := re.fullmatch(
-                        r" {0,3}(=+|-+)[ \t]*",
-                        lines[index + 1].rstrip("\r\n"),
-                    )
-                )
-                is not None
-            ):
-                setext_level = 1 if setext_match.group(1).startswith("=") else 2
-                if setext_level <= level:
-                    end = index
-                    break
-        return "".join(lines[start:end])
-
-    @staticmethod
-    def _atx_heading(line: str) -> tuple[int, str] | None:
-        match = re.fullmatch(r" {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*", line)
-        if match is None:
-            return None
-        heading = (match.group(2) or "").strip()
-        heading = re.sub(r"[ \t]+#+[ \t]*$", "", heading).strip()
-        return len(match.group(1)), heading
-
-    @staticmethod
-    def _opening_fence(line: str) -> str | None:
-        result = EnforcementGuardrailDocumentationTests._opening_fence_info(line)
-        return result[0] if result is not None else None
-
-    @staticmethod
-    def _opening_fence_info(line: str) -> tuple[str, str] | None:
-        match = re.match(r"^ {0,3}(?P<marker>`{3,}|~{3,})(?P<info>.*)$", line)
-        if match is None:
-            return None
-        marker = match.group("marker")
-        if marker.startswith("`") and "`" in match.group("info"):
-            return None
-        return marker, match.group("info").strip()
-
-    @staticmethod
-    def _is_closing_fence(line: str, character: str, length: int) -> bool:
-        match = re.fullmatch(r" {0,3}(`{3,}|~{3,})[ \t]*", line)
-        if match is None:
-            return False
-        marker = match.group(1)
-        return marker[0] == character and len(marker) >= length
+        lines = value.splitlines(keepends=True)
+        section = "".join(lines[start:end])
+        return "".join(
+            EnforcementGuardrailDocumentationTests._rendered_markdown_lines(
+                section, keepends=True
+            )
+        )
 
     @staticmethod
     def _documented_workflow(value: str) -> dict[str, object]:
         workflows: list[dict[str, object]] = []
-        EnforcementGuardrailDocumentationTests._validate_supported_markdown(value)
-        comment_free = EnforcementGuardrailDocumentationTests._strip_html_comments(
-            value
-        )
-        lines = comment_free.splitlines()
-        index = 0
-        while index < len(lines):
-            opening = EnforcementGuardrailDocumentationTests._opening_fence_info(
-                lines[index]
-            )
-            if opening is None:
-                index += 1
+        lines = value.splitlines()
+        for token in EnforcementGuardrailDocumentationTests._markdown_tokens(value):
+            if token.type != "fence" or token.info.lower() not in {"yaml", "yml"}:
                 continue
-            marker, info = opening
-            fence_character = marker[0]
-            fence_length = len(marker)
-            body: list[str] = []
-            index += 1
-            while index < len(lines) and not (
-                EnforcementGuardrailDocumentationTests._is_closing_fence(
-                    lines[index], fence_character, fence_length
+            if (
+                token.map is None
+                or not EnforcementGuardrailDocumentationTests._fence_is_closed(
+                    lines, token
                 )
             ):
-                body.append(lines[index])
-                index += 1
-            if info.lower() in {"yaml", "yml"}:
-                if index >= len(lines):
-                    raise AssertionError("Unclosed YAML workflow fence")
-                payload = yaml.safe_load("\n".join(body))
-                if isinstance(payload, dict) and "jobs" in payload:
-                    workflows.append(payload)
-            index += 1
+                raise AssertionError("Unclosed YAML workflow fence")
+            payload = yaml.safe_load(token.content)
+            if isinstance(payload, dict) and "jobs" in payload:
+                workflows.append(payload)
         if len(workflows) != 1:
             raise AssertionError(
                 f"Expected exactly one documented workflow, found {len(workflows)}"
@@ -1136,312 +1085,106 @@ jobs:
         return workflows[0]
 
     @staticmethod
-    def _effective_status_rows(value: str) -> dict[str, tuple[str, str]]:
-        lines = EnforcementGuardrailDocumentationTests._rendered_markdown_lines(value)
-        expected_header = ["Effective status", "Workflow effect", "Appropriate use"]
-        header_indices = [
-            index
-            for index, line in enumerate(lines)
-            if EnforcementGuardrailDocumentationTests._markdown_table_cells(line)
-            == expected_header
-        ]
-        if len(header_indices) != 1:
-            raise AssertionError("Effective-status table must appear exactly once")
-        header_index = header_indices[0]
-        if header_index + 1 >= len(lines):
-            raise AssertionError("Effective-status table separator is missing")
-        separator_cells = EnforcementGuardrailDocumentationTests._markdown_table_cells(
-            lines[header_index + 1]
+    def _fence_is_closed(lines: list[str], token: Token) -> bool:
+        if token.map is None or token.map[1] <= token.map[0] + 1:
+            return False
+        closing = lines[token.map[1] - 1]
+        closing = re.sub(r"^(?: {0,3}>[ \t]?)+", "", closing)
+        return (
+            re.fullmatch(rf" {{0,3}}{re.escape(token.markup)}[ \t]*", closing)
+            is not None
         )
-        if len(separator_cells) != 3 or not all(
-            re.fullmatch(r":?-{3,}:?", cell) for cell in separator_cells
-        ):
-            raise AssertionError("Effective-status table separator is malformed")
 
-        table_starts = [
-            index
-            for index in range(len(lines) - 1)
-            if len(
-                EnforcementGuardrailDocumentationTests._markdown_table_cells(
-                    lines[index]
+    @staticmethod
+    def _effective_status_rows(value: str) -> dict[str, tuple[str, str]]:
+        expected_header = ["Effective status", "Workflow effect", "Appropriate use"]
+        tables: list[list[list[str]]] = []
+        current_table: list[list[str]] | None = None
+        current_row: list[str] | None = None
+        in_cell = False
+        for token in EnforcementGuardrailDocumentationTests._markdown_tokens(value):
+            if token.type == "table_open":
+                current_table = []
+            elif token.type == "tr_open" and current_table is not None:
+                current_row = []
+            elif token.type in {"th_open", "td_open"}:
+                in_cell = True
+            elif token.type == "inline" and in_cell and current_row is not None:
+                current_row.append(
+                    EnforcementGuardrailDocumentationTests._inline_visible_text(token)
                 )
-            )
-            >= 2
-            and (
-                candidate_separator
-                := EnforcementGuardrailDocumentationTests._markdown_table_cells(
-                    lines[index + 1]
-                )
-            )
-            and all(re.fullmatch(r":?-{3,}:?", cell) for cell in candidate_separator)
-        ]
-        if len(table_starts) != 1:
+            elif token.type in {"th_close", "td_close"}:
+                in_cell = False
+            elif token.type == "tr_close" and current_table is not None:
+                if current_row is not None:
+                    current_table.append(current_row)
+                current_row = None
+            elif token.type == "table_close" and current_table is not None:
+                tables.append(current_table)
+                current_table = None
+        if len(tables) != 1:
             raise AssertionError(
                 "Effective-status section must contain exactly one Markdown table"
             )
-
+        table = tables[0]
+        if not table or table[0] != expected_header:
+            raise AssertionError(
+                "Effective-status table header is missing or malformed"
+            )
         rows: dict[str, tuple[str, str]] = {}
-        for line in lines[header_index + 2 :]:
-            if "|" not in line:
-                break
-            cells = EnforcementGuardrailDocumentationTests._markdown_table_cells(line)
+        for cells in table[1:]:
             if len(cells) != 3:
-                raise AssertionError(f"Malformed effective-status row: {line}")
-            if (
-                re.fullmatch(r"`(advisory|warn|soft-block|hard-block)`", cells[0])
-                is None
-            ):
-                raise AssertionError(f"Unexpected effective-status row: {line}")
-            status = cells[0].strip("`")
+                raise AssertionError(f"Malformed effective-status row: {cells}")
+            status = cells[0]
+            if status not in {"advisory", "warn", "soft-block", "hard-block"}:
+                raise AssertionError(f"Unexpected effective-status row: {cells}")
             if status in rows:
                 raise AssertionError(f"Duplicate effective-status row: {status}")
             rows[status] = (
-                cells[1].replace("`", ""),
-                cells[2].replace("`", ""),
+                cells[1],
+                cells[2],
             )
         return rows
 
     @staticmethod
-    def _markdown_table_cells(line: str) -> list[str]:
-        value = line.strip()
-        if value.startswith("|"):
-            value = value[1:]
-        if value.endswith("|"):
-            value = value[:-1]
-        return [cell.strip() for cell in value.split("|")]
-
-    @staticmethod
     def _rendered_markdown_lines(value: str, *, keepends: bool = False) -> list[str]:
-        EnforcementGuardrailDocumentationTests._validate_supported_markdown(value)
-        comment_free = EnforcementGuardrailDocumentationTests._strip_html_comments(
-            value
-        )
-        rendered: list[str] = []
-        fence_character: str | None = None
-        fence_length = 0
-        list_content_indent: int | None = None
-        for line_with_ending in comment_free.splitlines(keepends=keepends):
-            line = line_with_ending.rstrip("\r\n")
-            if fence_character is None:
-                opening = EnforcementGuardrailDocumentationTests._opening_fence(line)
-                if opening is not None:
-                    fence_character = opening[0]
-                    fence_length = len(opening)
-                    continue
-                list_item = re.match(r"^ {0,3}(?:[-+*]|\d+[.)])[ \t]+", line)
-                if list_item is not None:
-                    list_content_indent = list_item.end()
-                elif re.match(r"^(?: {4,}|\t)", line):
-                    leading_spaces = len(line) - len(line.lstrip(" "))
-                    if (
-                        list_content_indent is None
-                        or leading_spaces < list_content_indent
-                        or leading_spaces >= list_content_indent + 4
-                    ):
-                        continue
-                elif line.strip():
-                    list_content_indent = None
-                if EnforcementGuardrailDocumentationTests._is_code_only_line(line):
-                    continue
-                rendered.append(line_with_ending)
-            elif EnforcementGuardrailDocumentationTests._is_closing_fence(
-                line, fence_character, fence_length
+        excluded_lines: set[int] = set()
+        source_lines = value.splitlines()
+        for token in EnforcementGuardrailDocumentationTests._markdown_tokens(value):
+            if token.map is None:
+                continue
+            if (
+                token.type == "fence"
+                and not EnforcementGuardrailDocumentationTests._fence_is_closed(
+                    source_lines, token
+                )
             ):
-                fence_character = None
-                fence_length = 0
-        return rendered
-
-    @staticmethod
-    def _validate_supported_markdown(value: str) -> None:
-        fence_character: str | None = None
-        fence_length = 0
-        html_comment_open = False
-        for line in value.splitlines():
-            if html_comment_open:
-                if "-->" in line:
-                    html_comment_open = False
-                continue
-            if fence_character is None:
-                if re.match(r"^ {0,3}>[ \t]?(?:`{3,}|~{3,})", line):
-                    raise AssertionError("Blockquoted fenced code is unsupported")
-                if re.match(r"^ {4,}(?:`{3,}|~{3,})", line):
-                    raise AssertionError("List-nested fenced code is unsupported")
-                if re.match(r"^ {0,3}<h[1-6]\b", line, flags=re.IGNORECASE):
-                    raise AssertionError("Raw HTML headings are unsupported")
-                if re.search(r"`+[^`\n]*(?:<!--|-->)[^`\n]*`+", line):
-                    raise AssertionError(
-                        "HTML comment markers inside inline code are unsupported"
-                    )
-                sanitized = line
-                while "<!--" in sanitized:
-                    opening_index = sanitized.index("<!--")
-                    closing_index = sanitized.find("-->", opening_index + 4)
-                    if closing_index < 0:
-                        html_comment_open = True
-                        sanitized = sanitized[:opening_index]
-                        break
-                    sanitized = (
-                        sanitized[:opening_index] + sanitized[closing_index + 3 :]
-                    )
-                if "-->" in sanitized:
-                    raise AssertionError("Unmatched HTML comment closer")
-                opening = EnforcementGuardrailDocumentationTests._opening_fence_info(
-                    sanitized
-                )
-                if opening is not None:
-                    fence_character = opening[0][0]
-                    fence_length = len(opening[0])
-            else:
-                if "<!--" in line or "-->" in line:
-                    raise AssertionError(
-                        "HTML comment markers inside fenced code are unsupported"
-                    )
-                if EnforcementGuardrailDocumentationTests._is_closing_fence(
-                    line, fence_character, fence_length
-                ):
-                    fence_character = None
-                    fence_length = 0
-        if fence_character is not None:
-            raise AssertionError("Unclosed fenced code block")
-        if html_comment_open:
-            raise AssertionError("Unclosed HTML comment")
-
-    @staticmethod
-    def _is_code_only_line(line: str) -> bool:
-        value = line.strip()
-        if not value.startswith("`"):
-            return False
-        marker_length = len(value) - len(value.lstrip("`"))
-        marker = "`" * marker_length
-        if not value.endswith(marker) or len(value) <= marker_length * 2:
-            return False
-        body = value[marker_length:-marker_length]
-        return marker not in body
-
-    @staticmethod
-    def _strip_html_comments(value: str) -> str:
-        return re.sub(
-            r"<!--.*?(?:-->|\Z)",
-            lambda match: "\n" * match.group(0).count("\n"),
-            value,
-            flags=re.DOTALL,
-        )
-
-    @staticmethod
-    def _strip_inline_code_spans(value: str) -> str:
-        characters = list(value)
-        index = 0
-        while index < len(value):
-            if value[index] != "`":
-                index += 1
-                continue
-            run_end = index
-            while run_end < len(value) and value[run_end] == "`":
-                run_end += 1
-            marker = value[index:run_end]
-            closing = value.find(marker, run_end)
-            if closing < 0:
-                index = run_end
-                continue
-            for offset in range(index, closing + len(marker)):
-                if characters[offset] not in "\r\n":
-                    characters[offset] = " "
-            index = closing + len(marker)
-        return "".join(characters)
-
-    @staticmethod
-    def _find_unescaped(value: str, character: str, start: int) -> int:
-        escaped = False
-        for index in range(start, len(value)):
-            if escaped:
-                escaped = False
-                continue
-            if value[index] == "\\":
-                escaped = True
-                continue
-            if value[index] == character:
-                return index
-        return -1
-
-    @staticmethod
-    def _parse_link_destination(value: str, start: int) -> tuple[str | None, int]:
-        if start >= len(value):
-            return None, start
-        if value[start] == "<":
-            end = EnforcementGuardrailDocumentationTests._find_unescaped(
-                value, ">", start + 1
-            )
-            if end < 0:
-                return None, start
-            link_end = EnforcementGuardrailDocumentationTests._parse_link_suffix(
-                value, end + 1
-            )
-            if link_end is None:
-                return None, start
-            return value[start + 1 : end], link_end
-
-        target: list[str] = []
-        depth = 1
-        index = start
-        while index < len(value):
-            character = value[index]
-            if character == "\\" and index + 1 < len(value):
-                target.append(value[index + 1])
-                index += 2
-                continue
-            if character == "(":
-                depth += 1
-                target.append(character)
-            elif character == ")":
-                depth -= 1
-                if depth == 0:
-                    return "".join(target).strip(), index + 1
-                target.append(character)
-            elif character in " \t\r\n" and depth == 1:
-                link_end = EnforcementGuardrailDocumentationTests._parse_link_suffix(
-                    value, index
-                )
-                if link_end is None:
-                    return None, start
-                return "".join(target).strip(), link_end
-            else:
-                target.append(character)
-            index += 1
-        return None, start
-
-    @staticmethod
-    def _parse_link_suffix(value: str, start: int) -> int | None:
-        index = start
-        while index < len(value) and value[index] in " \t\r\n":
-            index += 1
-        if index >= len(value):
-            return None
-        if value[index] == ")":
-            return index + 1
-        if value[index] not in {'"', "'", "("}:
-            return None
-        opening = value[index]
-        closing_character = ")" if opening == "(" else opening
-        closing = EnforcementGuardrailDocumentationTests._find_unescaped(
-            value, closing_character, index + 1
-        )
-        if closing < 0:
-            return None
-        index = closing + 1
-        while index < len(value) and value[index] in " \t\r\n":
-            index += 1
-        if index >= len(value) or value[index] != ")":
-            return None
-        return index + 1
+                raise AssertionError("Unclosed fenced code block")
+            if (
+                token.type == "html_block"
+                and token.content.lstrip().startswith("<!--")
+                and "-->" not in token.content
+            ):
+                raise AssertionError("Unclosed HTML comment")
+            if token.type in {"fence", "code_block"} or (
+                token.type == "html_block" and token.content.lstrip().startswith("<!--")
+            ):
+                excluded_lines.update(range(token.map[0], token.map[1]))
+        lines = value.splitlines(keepends=keepends)
+        return [line for index, line in enumerate(lines) if index not in excluded_lines]
 
     @staticmethod
     def _resolved_local_doc_target(base: Path, target: str) -> Path:
         parsed = urlparse(target)
-        if parsed.scheme or parsed.netloc or parsed.path.startswith("/"):
+        if parsed.scheme or parsed.netloc:
             raise AssertionError(
                 f"Expected a repository-local documentation link: {target}"
             )
-        candidate = (base / unquote(parsed.path)).resolve()
+        candidate = (
+            REPO_ROOT / unquote(parsed.path).lstrip("/")
+            if parsed.path.startswith("/")
+            else base / unquote(parsed.path)
+        ).resolve()
         repository_root = REPO_ROOT.resolve()
         if not candidate.is_relative_to(repository_root):
             raise AssertionError(f"Documentation link escapes repository: {target}")

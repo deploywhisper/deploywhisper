@@ -75,7 +75,11 @@ Configure GitHub enforcement through the policy-adapter settings API. An
 integration without an override inherits its project-level enforcement mode,
 which may already be blocking. Before onboarding a new integration under a
 blocking project default, create an integration-specific `advisory` override or
-complete and record the full guardrail review for that integration:
+complete and record the full guardrail review for that integration. Create the
+override only when no other repository or environment shares that
+project/integration key; otherwise use a separate project or integration
+identity for advisory onboarding, or complete the new scope's review without
+downgrading existing consumers:
 
 ```json
 {

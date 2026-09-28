@@ -168,8 +168,11 @@ output. Its only allowed values are `none`, `validated-policy-block`, and
 server-owned policy outputs pass the allowed-value and cross-field checks above,
 `should-block` is exactly `true`, and the Action exits nonzero because of that
 decision. Any failure after decision validation—including comment or output
-publication—must emit `operational-error`; consumers must never infer failure
-kind from `should-block` alone.
+publication—must be treated as `operational-error`; emit that discriminator when
+the failure occurs before outputs can be published. Output publication itself
+can leave `failure-kind` missing, so consumers must treat a missing discriminator
+as an operational error and must never infer failure kind from `should-block`
+alone.
 
 The `report-link` output is publicly shareable only when the DeployWhisper
 server is configured with a public base URL such as `APP_BASE_URL` or
@@ -203,7 +206,10 @@ fields:
 | `comment-id` | GitHub PR comment identifier returned by the external action |
 | `comment-url` | GitHub PR comment URL returned by the external action |
 | `comment-updated` | GitHub PR comment create/update state returned by the external action |
-| `failure-kind` | Action execution classification: `none`, `validated-policy-block`, or `operational-error` |
+| `failure-kind` | Enforcement-capable Action execution classification: `none`, `validated-policy-block`, or `operational-error` |
+
+`failure-kind` exists only on enforcement-capable revisions. The currently
+published advisory-only pin does not promise that output.
 
 ## Input Boundary
 

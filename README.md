@@ -800,7 +800,7 @@ The moving `@v1` reference follows published Action releases and must not be
 used in a protected workflow. Pin the Action and checkout dependencies to
 reviewed full commit SHAs even for advisory workflows; a server-side advisory
 override cannot make mutable third-party code trustworthy. Before enabling
-blocking against a pinned revision, verify all four policy outputs above,
+blocking against a pinned revision, verify all five enforcement outputs above,
 consumption of the server's enforcement-decision endpoint, and pass, block, and
 decision-error behavior with synthetic smoke cases. Follow the pin-resolution,
 diff-review, and smoke procedure in the Action integration guide.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 import json
@@ -21,7 +21,6 @@ DEFAULT_BRANCH_NAME = "feature/deploywhisper-github-init"
 ANALYZE_ACTION_PINNED_SHA = "3b37ed72bfb2d201030bef873268f2170794b160"
 # Immutable commit resolved from actions/checkout v4, reviewed 2026-09-09.
 CHECKOUT_ACTION_PINNED_SHA = "11d5960a326750d5838078e36cf38b85af677262"
-CHECKOUT_ACTION_REVISIONS = frozenset({"11d5960a326750d5838078e36cf38b85af677262"})
 
 
 class AnalyzeActionCapability(str, Enum):
@@ -31,8 +30,61 @@ class AnalyzeActionCapability(str, Enum):
     ENFORCEMENT_CAPABLE = "enforcement-capable"
 
 
-ANALYZE_ACTION_CAPABILITIES = {
-    "3b37ed72bfb2d201030bef873268f2170794b160": (AnalyzeActionCapability.ADVISORY_ONLY),
+ENFORCEMENT_ACTION_OUTPUTS = (
+    "policy-status",
+    "configured-mode",
+    "effective-status",
+    "should-block",
+    "failure-kind",
+)
+
+
+@dataclass(frozen=True)
+class ReviewedRevision:
+    """Auditable evidence retained for an immutable executable dependency."""
+
+    reviewed_on: str
+    provenance: str
+    manifest_sha256: str
+    contract_version: str
+    evidence_reference: str
+
+
+@dataclass(frozen=True)
+class AnalyzeActionReview(ReviewedRevision):
+    """Reviewed Analyze Action capability bound to immutable evidence."""
+
+    capability: AnalyzeActionCapability
+    required_outputs: tuple[str, ...]
+
+
+ANALYZE_ACTION_REVIEWS = {
+    "3b37ed72bfb2d201030bef873268f2170794b160": AnalyzeActionReview(
+        reviewed_on="2026-09-09",
+        provenance=(
+            "analyze-action v1 tag object f2e36cef443129e85c55882b9dafc1f20d409284"
+        ),
+        manifest_sha256="2d1bc1c6ca5b4bb9d5cb743bdd25c10527d0569e82dcf55ddb09216c50769b53",
+        contract_version="advisory-only; no enforcement-decision contract",
+        evidence_reference=(
+            "https://github.com/deploywhisper/analyze-action/tree/"
+            "3b37ed72bfb2d201030bef873268f2170794b160"
+        ),
+        capability=AnalyzeActionCapability.ADVISORY_ONLY,
+        required_outputs=(),
+    ),
+}
+CHECKOUT_ACTION_REVIEWS = {
+    "11d5960a326750d5838078e36cf38b85af677262": ReviewedRevision(
+        reviewed_on="2026-09-09",
+        provenance="actions/checkout v4 lightweight tag resolved to executed commit",
+        manifest_sha256="6188f6991491ed38977347cdaad0b0cd921a6d6232892363c91f433c22954f4f",
+        contract_version="checkout action.yml",
+        evidence_reference=(
+            "https://github.com/actions/checkout/tree/"
+            "11d5960a326750d5838078e36cf38b85af677262"
+        ),
+    ),
 }
 README_SECTION_START = "<!-- deploywhisper:start -->"
 README_SECTION_END = "<!-- deploywhisper:end -->"
@@ -54,22 +106,31 @@ def _analyze_action_capability(revision: str) -> AnalyzeActionCapability:
     _validate_reviewed_revision(
         revision,
         label="DeployWhisper Analyze Action",
-        reviewed_revisions=ANALYZE_ACTION_CAPABILITIES,
+        reviewed_revisions=ANALYZE_ACTION_REVIEWS,
     )
-    capability = ANALYZE_ACTION_CAPABILITIES[revision]
-    if not isinstance(capability, AnalyzeActionCapability):
+    review = ANALYZE_ACTION_REVIEWS[revision]
+    if not isinstance(review, AnalyzeActionReview) or not isinstance(
+        review.capability, AnalyzeActionCapability
+    ):
         raise GitHubInitError(
             "Invalid capability classification for DeployWhisper Analyze Action "
-            f"revision {revision}: {capability!r}."
+            f"revision {revision}: {review!r}."
         )
-    return capability
+    if review.capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE and set(
+        review.required_outputs
+    ) != set(ENFORCEMENT_ACTION_OUTPUTS):
+        raise GitHubInitError(
+            "Incomplete enforcement output contract for DeployWhisper Analyze "
+            f"Action revision {revision}: {review.required_outputs!r}."
+        )
+    return review.capability
 
 
 def _validate_reviewed_revision(
     revision: str,
     *,
     label: str,
-    reviewed_revisions: Collection[str],
+    reviewed_revisions: Mapping[str, ReviewedRevision],
 ) -> None:
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise GitHubInitError(
@@ -78,6 +139,16 @@ def _validate_reviewed_revision(
         )
     if revision not in reviewed_revisions:
         raise GitHubInitError(f"Unreviewed {label} revision: {revision}.")
+    review = reviewed_revisions[revision]
+    if (
+        not isinstance(review, ReviewedRevision)
+        or not review.reviewed_on
+        or not review.provenance
+        or re.fullmatch(r"[0-9a-f]{64}", review.manifest_sha256) is None
+        or not review.contract_version
+        or not review.evidence_reference
+    ):
+        raise GitHubInitError(f"Incomplete review evidence for {label}: {revision}.")
 
 
 @dataclass(frozen=True)
@@ -256,10 +327,12 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
 
     base_branch = _checkout_base_branch(repo_root, options.base_branch)
 
+    workflow_rel_path = options.workflow_path.strip().replace("\\", "/")
+    _ensure_workflow_path_available(repo_root, workflow_rel_path)
+
     branch_name = _resolve_branch_name(repo_root, options.branch_name)
     _run_command(repo_root, "git", "checkout", "-b", branch_name)
 
-    workflow_rel_path = options.workflow_path.strip().replace("\\", "/")
     workflow_path = repo_root / workflow_rel_path
     workflow_path.parent.mkdir(parents=True, exist_ok=True)
     workflow_path.write_text(_render_workflow(options), encoding="utf-8")
@@ -327,12 +400,22 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
     )
 
 
+def _ensure_workflow_path_available(repo_root: Path, workflow_path: str) -> None:
+    target = repo_root / workflow_path
+    if target.exists():
+        raise GitHubInitError(
+            "Refusing to overwrite existing workflow: "
+            f"{workflow_path}. Choose a new path or merge the generated changes "
+            "manually so operator-owned enforcement controls are preserved."
+        )
+
+
 def _render_workflow(options: GitHubInitOptions) -> str:
     capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
     _validate_reviewed_revision(
         CHECKOUT_ACTION_PINNED_SHA,
         label="actions/checkout",
-        reviewed_revisions=CHECKOUT_ACTION_REVISIONS,
+        reviewed_revisions=CHECKOUT_ACTION_REVIEWS,
     )
     advisory_safeguard = (
         "                continue-on-error: true\n"
@@ -462,6 +545,7 @@ def _render_readme_section(
         *_scope_readme_lines(options),
         "- The scaffold pins the reviewed Action revision but does not configure server enforcement; inspect the resolved `github-action` setting and keep the check non-required until the guardrail review is complete",
         "- If the workflow Action pin changes, update this generated capability note in the same change",
+        "- Before upgrading to an enforcement-capable pin, verify all five required outputs (`policy-status`, `configured-mode`, `effective-status`, `should-block`, and `failure-kind`), inspect inherited settings, and use an isolated project/integration identity when another scope shares the current key",
         f"- Enforcement guardrails: {ENFORCEMENT_GUARDRAILS_URL}",
         "",
         "### Configuration example",

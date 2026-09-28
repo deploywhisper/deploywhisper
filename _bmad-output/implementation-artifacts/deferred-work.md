@@ -82,4 +82,4 @@
 
 ## Deferred from: code review of 11-4-enforcement-guardrail-documentation.md (2026-09-22)
 
-- GitHub init reruns can overwrite an existing operator-hardened workflow and reintroduce the advisory safeguard, silently downgrading enforcement wiring [integrations/github/init_service.py:248]. Deferred as pre-existing init-wizard overwrite/idempotency behavior: Story 11.4 changes rendered guardrail guidance and future capability handling but did not introduce unconditional workflow replacement.
+- Resolved 2026-09-28: GitHub init now refuses to overwrite an existing workflow, preserving operator-hardened enforcement wiring and requiring a new path or manual merge [integrations/github/init_service.py:248].
