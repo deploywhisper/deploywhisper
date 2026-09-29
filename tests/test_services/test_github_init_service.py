@@ -337,6 +337,46 @@ class GitHubInitServiceTests(unittest.TestCase):
             ):
                 init_service._analyze_action_capability(revision)
 
+        for invalid_outputs in (("policy-status",), []):
+            with self.subTest(invalid_outputs=invalid_outputs):
+                advisory_with_outputs = replace(
+                    self._action_review(
+                        init_service.AnalyzeActionCapability.ADVISORY_ONLY
+                    ),
+                    required_outputs=invalid_outputs,  # type: ignore[arg-type]
+                )
+                with patch.dict(
+                    init_service.ANALYZE_ACTION_REVIEWS,
+                    {revision: advisory_with_outputs},
+                ):
+                    with self.assertRaisesRegex(
+                        init_service.GitHubInitError,
+                        "Advisory-only revisions must not declare enforcement outputs",
+                    ):
+                        init_service._analyze_action_capability(revision)
+
+        for invalid_outputs in (
+            tuple(reversed(init_service.ENFORCEMENT_ACTION_OUTPUTS)),
+            init_service.ENFORCEMENT_ACTION_OUTPUTS
+            + (init_service.ENFORCEMENT_ACTION_OUTPUTS[-1],),
+        ):
+            with self.subTest(invalid_outputs=invalid_outputs):
+                invalid_contract = replace(
+                    self._action_review(
+                        init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+                    ),
+                    required_outputs=invalid_outputs,
+                )
+                with patch.dict(
+                    init_service.ANALYZE_ACTION_REVIEWS,
+                    {revision: invalid_contract},
+                ):
+                    with self.assertRaisesRegex(
+                        init_service.GitHubInitError,
+                        "Incomplete enforcement output contract",
+                    ):
+                        init_service._analyze_action_capability(revision)
+
         incomplete_review = replace(
             self._action_review(
                 init_service.AnalyzeActionCapability.ENFORCEMENT_CAPABLE
@@ -352,6 +392,34 @@ class GitHubInitServiceTests(unittest.TestCase):
                 "Incomplete enforcement output contract",
             ):
                 init_service._analyze_action_capability(revision)
+
+    def test_reviewed_revision_rejects_non_string_or_blank_evidence(self) -> None:
+        revision = "b" * 40
+        valid_review = self._action_review(
+            init_service.AnalyzeActionCapability.ADVISORY_ONLY
+        )
+
+        for field_name, invalid_value in (
+            ("reviewed_on", " \t"),
+            ("provenance", None),
+            ("manifest_sha256", 123),
+            ("contract_version", "\n"),
+            ("evidence_reference", []),
+        ):
+            with self.subTest(field_name=field_name, invalid_value=invalid_value):
+                invalid_review = replace(
+                    valid_review,
+                    **{field_name: invalid_value},  # type: ignore[arg-type]
+                )
+                with self.assertRaisesRegex(
+                    init_service.GitHubInitError,
+                    "Incomplete review evidence",
+                ):
+                    init_service._validate_reviewed_revision(
+                        revision,
+                        label="test Action",
+                        reviewed_revisions={revision: invalid_review},
+                    )
 
     def test_action_capability_and_checkout_reject_mutable_or_unreviewed_refs(
         self,
@@ -607,6 +675,131 @@ class GitHubInitServiceTests(unittest.TestCase):
             init_service._ensure_workflow_path_available(
                 repo_root,
                 ".github/workflows/new-deploywhisper.yml",
+            )
+
+    def test_github_init_rejects_non_local_or_non_regular_workflow_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir) / "repo"
+            outside_root = Path(tmpdir) / "outside"
+            repo_root.mkdir()
+            outside_root.mkdir()
+
+            dangling = repo_root / ".github/dangling.yml"
+            dangling.parent.mkdir()
+            dangling.symlink_to(outside_root / "missing.yml")
+            escaping_parent = repo_root / ".github/escaping"
+            escaping_parent.symlink_to(outside_root, target_is_directory=True)
+
+            for invalid_path in (
+                str(outside_root / "absolute.yml"),
+                "../outside.yml",
+                ".github/workflows/../../outside.yml",
+                ".github/dangling.yml",
+                ".github/escaping/deploywhisper.yml",
+            ):
+                with self.subTest(invalid_path=invalid_path):
+                    with self.assertRaises(init_service.GitHubInitError):
+                        init_service._ensure_workflow_path_available(
+                            repo_root,
+                            invalid_path,
+                        )
+
+    @patch("integrations.github.init_service._ensure_origin_remote")
+    @patch("integrations.github.init_service._ensure_clean_worktree")
+    @patch("integrations.github.init_service._ensure_git_repo")
+    @patch("integrations.github.init_service._require_binary")
+    @patch("integrations.github.init_service._checkout_base_branch")
+    def test_run_github_init_validates_workflow_before_base_checkout(
+        self,
+        checkout_base_branch,
+        require_binary,
+        ensure_git_repo,
+        ensure_clean_worktree,
+        ensure_origin_remote,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(init_service.GitHubInitError):
+                init_service.run_github_init(
+                    init_service.GitHubInitOptions(
+                        repo_path=tmpdir,
+                        workflow_path="../outside.yml",
+                        api_endpoint=(
+                            "https://deploywhisper.example.com/api/v1/analyses"
+                        ),
+                        enable_github_app=False,
+                        base_branch="develop",
+                        project_key="payments",
+                    )
+                )
+
+        checkout_base_branch.assert_not_called()
+
+    @patch("integrations.github.init_service._require_binary")
+    @patch("integrations.github.init_service._run_command")
+    def test_run_github_init_does_not_truncate_workflow_created_after_preflight(
+        self,
+        run_command,
+        require_binary,
+    ) -> None:
+        require_binary.return_value = None
+
+        def fake_run_command(repo_root: Path, *args: str, check: bool = True):
+            if args[:3] == ("git", "rev-parse", "--is-inside-work-tree"):
+                return subprocess.CompletedProcess(args, 0, "true\n", "")
+            if args[:3] == ("git", "status", "--porcelain"):
+                return subprocess.CompletedProcess(args, 0, "", "")
+            if args[:4] == ("git", "remote", "get-url", "origin"):
+                return subprocess.CompletedProcess(
+                    args,
+                    0,
+                    "git@github.com:acme/example-repo.git\n",
+                    "",
+                )
+            if args[:3] == ("git", "branch", "--show-current"):
+                return subprocess.CompletedProcess(args, 0, "main\n", "")
+            if args[:4] == ("git", "show-ref", "--verify", "--quiet"):
+                if args[4] == "refs/heads/main":
+                    return subprocess.CompletedProcess(args, 0, "", "")
+                return subprocess.CompletedProcess(args, 1, "", "")
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        run_command.side_effect = fake_run_command
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            workflow_path = repo_root / init_service.DEFAULT_WORKFLOW_PATH
+            original_preflight = init_service._ensure_workflow_path_available
+
+            def race_after_preflight(root: Path, relative_path: str) -> None:
+                original_preflight(root, relative_path)
+                workflow_path.parent.mkdir(parents=True, exist_ok=True)
+                workflow_path.write_text("name: racer\n", encoding="utf-8")
+
+            with patch.object(
+                init_service,
+                "_ensure_workflow_path_available",
+                side_effect=race_after_preflight,
+            ):
+                with self.assertRaisesRegex(
+                    init_service.GitHubInitError,
+                    "Refusing to overwrite existing workflow",
+                ):
+                    init_service.run_github_init(
+                        init_service.GitHubInitOptions(
+                            repo_path=str(repo_root),
+                            workflow_path=init_service.DEFAULT_WORKFLOW_PATH,
+                            api_endpoint=(
+                                "https://deploywhisper.example.com/api/v1/analyses"
+                            ),
+                            enable_github_app=False,
+                            base_branch="main",
+                            project_key="payments",
+                        )
+                    )
+
+            self.assertEqual(
+                "name: racer\n",
+                workflow_path.read_text(encoding="utf-8"),
             )
 
     @patch("integrations.github.init_service._require_binary")

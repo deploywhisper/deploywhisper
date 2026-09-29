@@ -52,8 +52,9 @@ enforcement decision and must not infer blocking from risk score, severity,
 recommendation, or narrative text. If any prerequisite below is missing, keep
 the integration in `advisory` or `warn`.
 
-An installed Action ref must expose the `policy-status`, `configured-mode`,
-`effective-status`, and `should-block` outputs and must consume
+An enforcement-capable Action revision must expose all five required outputs:
+`policy-status`, `configured-mode`, `effective-status`, `should-block`, and
+`failure-kind`, and must consume
 `/enforcement-decision` before it can enforce these modes. Older Action refs
 remain advisory-only even if the server has blocking settings.
 
@@ -281,20 +282,21 @@ non-blocking until that runtime path produces a failing conclusion.
 An enforcement-capable Action revision must exit nonzero when it cannot retrieve
 and validate the shared decision; the published `@v1` ref does not implement
 this behavior yet. The GitHub App reports a failed enforcement result when its
-configured decision cannot be validated and check delivery succeeds.
-Future consumers must surface a distinct operational error, stop the
-enforcement-dependent automation, and require documented human disposition
-under the organization's outage or break-glass procedure. Failure handling
-must not become autonomous approval or remediation.
+configured decision cannot be validated and check delivery succeeds. The
+current GitHub App does not publish an `operational-error` classification,
+failing stage, or stable error code. Keep the GitHub App check non-blocking until
+that evidence contract is implemented and validated; a `failure` conclusion by
+itself cannot distinguish an operational failure from a policy block.
 
-Label that state with an explicit `operational-error` classification in the
-check summary and structured logs. Include the failing stage and stable error
-code, but do not manufacture an effective policy status. A validated hard-block
-must instead identify the validated report and decision, effective
-`hard-block` status, and policy reasons. The Action may exit nonzero and the App
-may report `failure` for either case, so operators and automation must use this
-classification and evidence—not the conclusion alone—to distinguish an
-operational failure from a policy block.
+An enforcement-capable consumer must surface a distinct operational error, stop
+the enforcement-dependent automation, and require documented human disposition
+under the organization's outage or break-glass procedure. Label that state with
+an explicit `operational-error` classification in the check summary and
+structured logs. Include the failing stage and stable error code, but do not
+manufacture an effective policy status. A validated hard-block must instead
+identify the validated report and decision, effective `hard-block` status, and
+policy reasons. Failure handling must not become autonomous approval or
+remediation.
 
 Set a bounded timeout for analysis, decision retrieval, and check publication.
 Retry only transient failures with capped attempts and exponential backoff.

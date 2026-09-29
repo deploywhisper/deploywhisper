@@ -116,9 +116,19 @@ def _analyze_action_capability(revision: str) -> AnalyzeActionCapability:
             "Invalid capability classification for DeployWhisper Analyze Action "
             f"revision {revision}: {review!r}."
         )
-    if review.capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE and set(
-        review.required_outputs
-    ) != set(ENFORCEMENT_ACTION_OUTPUTS):
+    if (
+        review.capability is AnalyzeActionCapability.ADVISORY_ONLY
+        and review.required_outputs != ()
+    ):
+        raise GitHubInitError(
+            "Advisory-only revisions must not declare enforcement outputs for "
+            f"DeployWhisper Analyze Action revision {revision}: "
+            f"{review.required_outputs!r}."
+        )
+    if (
+        review.capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+        and review.required_outputs != ENFORCEMENT_ACTION_OUTPUTS
+    ):
         raise GitHubInitError(
             "Incomplete enforcement output contract for DeployWhisper Analyze "
             f"Action revision {revision}: {review.required_outputs!r}."
@@ -142,13 +152,18 @@ def _validate_reviewed_revision(
     review = reviewed_revisions[revision]
     if (
         not isinstance(review, ReviewedRevision)
-        or not review.reviewed_on
-        or not review.provenance
+        or not _is_nonblank_string(review.reviewed_on)
+        or not _is_nonblank_string(review.provenance)
+        or not isinstance(review.manifest_sha256, str)
         or re.fullmatch(r"[0-9a-f]{64}", review.manifest_sha256) is None
-        or not review.contract_version
-        or not review.evidence_reference
+        or not _is_nonblank_string(review.contract_version)
+        or not _is_nonblank_string(review.evidence_reference)
     ):
         raise GitHubInitError(f"Incomplete review evidence for {label}: {revision}.")
+
+
+def _is_nonblank_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
 
 
 @dataclass(frozen=True)
@@ -325,17 +340,17 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
     _ensure_clean_worktree(repo_root)
     _ensure_origin_remote(repo_root)
 
-    base_branch = _checkout_base_branch(repo_root, options.base_branch)
-
     workflow_rel_path = options.workflow_path.strip().replace("\\", "/")
     _ensure_workflow_path_available(repo_root, workflow_rel_path)
+
+    base_branch = _checkout_base_branch(repo_root, options.base_branch)
 
     branch_name = _resolve_branch_name(repo_root, options.branch_name)
     _run_command(repo_root, "git", "checkout", "-b", branch_name)
 
     workflow_path = repo_root / workflow_rel_path
     workflow_path.parent.mkdir(parents=True, exist_ok=True)
-    workflow_path.write_text(_render_workflow(options), encoding="utf-8")
+    _write_workflow_exclusively(workflow_path, _render_workflow(options))
 
     readme_path = repo_root / "README.md"
     existing_readme = (
@@ -401,13 +416,50 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
 
 
 def _ensure_workflow_path_available(repo_root: Path, workflow_path: str) -> None:
-    target = repo_root / workflow_path
+    relative_path = Path(workflow_path)
+    if (
+        not workflow_path
+        or relative_path.is_absolute()
+        or re.match(r"^[A-Za-z]:/", workflow_path)
+        or ".." in relative_path.parts
+    ):
+        raise GitHubInitError(
+            "Workflow path must be a repository-local relative path: "
+            f"{workflow_path!r}."
+        )
+
+    repo_resolved = repo_root.resolve()
+    target = repo_root / relative_path
+    try:
+        target.resolve(strict=False).relative_to(repo_resolved)
+    except ValueError as exc:
+        raise GitHubInitError(
+            f"Workflow path must remain inside the repository: {workflow_path!r}."
+        ) from exc
+
+    if target.is_symlink():
+        raise GitHubInitError(
+            "Workflow path must be a regular repository-local file, not a "
+            f"symbolic link: {workflow_path!r}."
+        )
     if target.exists():
         raise GitHubInitError(
             "Refusing to overwrite existing workflow: "
             f"{workflow_path}. Choose a new path or merge the generated changes "
             "manually so operator-owned enforcement controls are preserved."
         )
+
+
+def _write_workflow_exclusively(workflow_path: Path, content: str) -> None:
+    try:
+        with workflow_path.open("x", encoding="utf-8") as workflow_file:
+            workflow_file.write(content)
+    except FileExistsError as exc:
+        raise GitHubInitError(
+            "Refusing to overwrite existing workflow: "
+            f"{workflow_path}. Choose a new path or merge the generated changes "
+            "manually so operator-owned enforcement controls are preserved."
+        ) from exc
 
 
 def _render_workflow(options: GitHubInitOptions) -> str:

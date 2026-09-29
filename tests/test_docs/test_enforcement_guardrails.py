@@ -40,6 +40,32 @@ class _LocalHtmlTargetCollector(HTMLParser):
             self.targets.add(target)
 
 
+class _HtmlHeadingCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.headings: list[tuple[int, str, int, int]] = []
+        self._active: tuple[int, int, list[str]] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        match = re.fullmatch(r"h([1-6])", tag, flags=re.IGNORECASE)
+        if match is not None and self._active is None:
+            self._active = (int(match.group(1)), self.getpos()[0] - 1, [])
+
+    def handle_data(self, data: str) -> None:
+        if self._active is not None:
+            self._active[2].append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._active is None:
+            return
+        level, start, parts = self._active
+        if tag.lower() != f"h{level}":
+            return
+        text = re.sub(r"\s+", " ", "".join(parts)).strip()
+        self.headings.append((level, text, start, self.getpos()[0]))
+        self._active = None
+
+
 class EnforcementGuardrailDocumentationTests(unittest.TestCase):
     def test_effective_status_table_locks_behavior_and_prerequisites(self) -> None:
         content = GUARDRAIL_GUIDE.read_text(encoding="utf-8")
@@ -306,7 +332,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
                 )
                 self.assertIn(expected_target, links)
                 self.assertTrue(
-                    self._resolved_local_doc_target(source.parent, expected_target)
+                    self._resolved_local_doc_target(source, expected_target)
                     .resolve()
                     .is_file()
                 )
@@ -322,9 +348,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         }
         for target in local_links:
             with self.subTest(local_target=target):
-                target_path = self._resolved_local_doc_target(
-                    GUARDRAIL_GUIDE.parent, target
-                )
+                target_path = self._resolved_local_doc_target(GUARDRAIL_GUIDE, target)
                 if "#" in target:
                     fragment = target.split("#", 1)[1]
                     self.assertIn(
@@ -343,7 +367,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
             with self.subTest(expected_target=expected_target):
                 self.assertIn(expected_target, links)
                 target_path = self._resolved_local_doc_target(
-                    GUARDRAIL_GUIDE.parent, expected_target
+                    GUARDRAIL_GUIDE, expected_target
                 )
                 self.assertTrue(target_path.is_file())
                 if "#" in expected_target:
@@ -435,7 +459,7 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "These enforcement semantics require an Action release that exposes `policy-status`, `configured-mode`, `effective-status`, and `should-block` and consumes the enforcement-decision endpoint.",
+            "These enforcement semantics require an Action release that exposes all five required outputs: `policy-status`, `configured-mode`, `effective-status`, `should-block`, and `failure-kind`, and consumes the enforcement-decision endpoint.",
             content,
         )
         self.assertIn(
@@ -498,6 +522,30 @@ class EnforcementGuardrailDocumentationTests(unittest.TestCase):
         self.assertIn("configured-mode ceiling", content)
         self.assertIn(
             "`should-block` is `true` if and only if `effective-status` is `soft-block` or `hard-block`",
+            content,
+        )
+        self.assertIn(
+            "Publication of `failure-kind` is best effort when output publication itself fails",
+            content,
+        )
+        self.assertIn(
+            "A missing `failure-kind` must fail closed as an operational error",
+            content,
+        )
+
+    def test_guardrail_guide_discloses_current_app_evidence_limit(self) -> None:
+        content = self._normalized(GUARDRAIL_GUIDE.read_text(encoding="utf-8"))
+
+        self.assertIn(
+            "An enforcement-capable Action revision must expose all five required outputs: `policy-status`, `configured-mode`, `effective-status`, `should-block`, and `failure-kind`",
+            content,
+        )
+        self.assertIn(
+            "The current GitHub App does not publish an `operational-error` classification, failing stage, or stable error code",
+            content,
+        )
+        self.assertIn(
+            "Keep the GitHub App check non-blocking until that evidence contract is implemented and validated",
             content,
         )
 
@@ -919,6 +967,68 @@ jobs:
         with self.assertRaisesRegex(AssertionError, "Unclosed YAML workflow fence"):
             self._documented_workflow(real_workflow.removesuffix("```\n"))
 
+    def test_raw_html_headings_follow_rendered_markdown_boundaries(self) -> None:
+        content = """\
+```html
+<h2>Hidden fence boundary</h2>
+```
+<!--
+<h2>Hidden comment boundary</h2>
+-->
+<h2
+ class="scope-boundary">
+Target <em>scope</em>
+</h2>
+inside target
+<h2 data-boundary="next">Next scope</h2>
+outside target
+"""
+
+        self.assertEqual(
+            {"target-scope", "next-scope"},
+            self._markdown_heading_anchors(content),
+        )
+        self.assertEqual(
+            "inside target",
+            self._normalized(self._section(content, "## Target scope")),
+        )
+
+    def test_documented_workflow_accepts_yaml_info_attributes_and_longer_close(
+        self,
+    ) -> None:
+        content = """\
+```yaml title="protected workflow"
+jobs:
+  deploywhisper:
+    steps: []
+````
+"""
+
+        self.assertEqual(
+            {"jobs": {"deploywhisper": {"steps": []}}},
+            self._documented_workflow(content),
+        )
+
+    def test_effective_status_rows_require_code_formatted_statuses(self) -> None:
+        section = self._section(
+            GUARDRAIL_GUIDE.read_text(encoding="utf-8"),
+            "## Choose the least forceful mode that works",
+        )
+
+        malformed = section.replace("| `advisory` |", "| advisory |", 1)
+
+        with self.assertRaisesRegex(AssertionError, "inline code"):
+            self._effective_status_rows(malformed)
+
+    def test_fragment_only_link_resolves_to_the_source_document(self) -> None:
+        self.assertEqual(
+            GUARDRAIL_GUIDE.resolve(),
+            self._resolved_local_doc_target(
+                GUARDRAIL_GUIDE,
+                "#choose-the-least-forceful-mode-that-works",
+            ),
+        )
+
     @staticmethod
     def _normalized(value: str) -> str:
         return re.sub(r"\s+", " ", value).strip()
@@ -998,22 +1108,15 @@ jobs:
                     token.map[1],
                 )
             )
-        for line_number, line in enumerate(value.splitlines()):
-            match = re.fullmatch(
-                r" {0,3}<h([1-6])(?:\s[^>]*)?>(.*?)</h\1>\s*",
-                line,
-                flags=re.IGNORECASE,
+        for token in tokens:
+            if token.type != "html_block" or token.map is None:
+                continue
+            collector = _HtmlHeadingCollector()
+            collector.feed(token.content)
+            records.extend(
+                (level, text, token.map[0] + start, token.map[0] + end)
+                for level, text, start, end in collector.headings
             )
-            if match is not None:
-                text = re.sub(r"<[^>]+>", "", match.group(2))
-                records.append(
-                    (
-                        int(match.group(1)),
-                        html.unescape(text),
-                        line_number,
-                        line_number + 1,
-                    )
-                )
         return sorted(records, key=lambda record: record[2])
 
     @staticmethod
@@ -1066,7 +1169,8 @@ jobs:
         workflows: list[dict[str, object]] = []
         lines = value.splitlines()
         for token in EnforcementGuardrailDocumentationTests._markdown_tokens(value):
-            if token.type != "fence" or token.info.lower() not in {"yaml", "yml"}:
+            info_name = token.info.split(maxsplit=1)[0].lower() if token.info else ""
+            if token.type != "fence" or info_name not in {"yaml", "yml"}:
                 continue
             if (
                 token.map is None
@@ -1090,8 +1194,12 @@ jobs:
             return False
         closing = lines[token.map[1] - 1]
         closing = re.sub(r"^(?: {0,3}>[ \t]?)+", "", closing)
+        marker = token.markup[0]
         return (
-            re.fullmatch(rf" {{0,3}}{re.escape(token.markup)}[ \t]*", closing)
+            re.fullmatch(
+                rf" {{0,3}}{re.escape(marker)}{{{len(token.markup)},}}[ \t]*",
+                closing,
+            )
             is not None
         )
 
@@ -1111,7 +1219,9 @@ jobs:
                 in_cell = True
             elif token.type == "inline" and in_cell and current_row is not None:
                 current_row.append(
-                    EnforcementGuardrailDocumentationTests._inline_visible_text(token)
+                    EnforcementGuardrailDocumentationTests._inline_visible_text(
+                        token, preserve_code_markers=len(current_row) == 0
+                    )
                 )
             elif token.type in {"th_close", "td_close"}:
                 in_cell = False
@@ -1135,7 +1245,15 @@ jobs:
         for cells in table[1:]:
             if len(cells) != 3:
                 raise AssertionError(f"Malformed effective-status row: {cells}")
-            status = cells[0]
+            status_match = re.fullmatch(
+                r"`(advisory|warn|soft-block|hard-block)`", cells[0]
+            )
+            if status_match is None:
+                raise AssertionError(
+                    "Effective-status row label must be a single inline code span: "
+                    f"{cells[0]}"
+                )
+            status = status_match.group(1)
             if status not in {"advisory", "warn", "soft-block", "hard-block"}:
                 raise AssertionError(f"Unexpected effective-status row: {cells}")
             if status in rows:
@@ -1174,17 +1292,19 @@ jobs:
         return [line for index, line in enumerate(lines) if index not in excluded_lines]
 
     @staticmethod
-    def _resolved_local_doc_target(base: Path, target: str) -> Path:
+    def _resolved_local_doc_target(source: Path, target: str) -> Path:
         parsed = urlparse(target)
         if parsed.scheme or parsed.netloc:
             raise AssertionError(
                 f"Expected a repository-local documentation link: {target}"
             )
-        candidate = (
-            REPO_ROOT / unquote(parsed.path).lstrip("/")
-            if parsed.path.startswith("/")
-            else base / unquote(parsed.path)
-        ).resolve()
+        decoded_path = unquote(parsed.path)
+        if not decoded_path:
+            candidate = source.resolve()
+        elif decoded_path.startswith("/"):
+            candidate = (REPO_ROOT / decoded_path.lstrip("/")).resolve()
+        else:
+            candidate = (source.parent / decoded_path).resolve()
         repository_root = REPO_ROOT.resolve()
         if not candidate.is_relative_to(repository_root):
             raise AssertionError(f"Documentation link escapes repository: {target}")

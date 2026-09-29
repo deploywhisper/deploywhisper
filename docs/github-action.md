@@ -80,9 +80,10 @@ repository owns the shared API and contract at
 Operators considering a required blocking check must first complete the
 [Enforcement Guardrails](./enforcement-guardrails.md).
 
-These enforcement semantics require an Action release that exposes
-`policy-status`, `configured-mode`, `effective-status`, and `should-block` and
-consumes the enforcement-decision endpoint. The moving `@v1` tag follows
+These enforcement semantics require an Action release that exposes all five
+required outputs: `policy-status`, `configured-mode`, `effective-status`,
+`should-block`, and `failure-kind`, and consumes the enforcement-decision
+endpoint. The moving `@v1` tag follows
 published releases and must not be treated as permanently advisory. The
 published `@v1` ref validated on 2026-09-09 (tag object
 `f2e36cef443129e85c55882b9dafc1f20d409284`, dereferenced commit
@@ -168,10 +169,11 @@ output. Its only allowed values are `none`, `validated-policy-block`, and
 server-owned policy outputs pass the allowed-value and cross-field checks above,
 `should-block` is exactly `true`, and the Action exits nonzero because of that
 decision. Any failure after decision validation—including comment or output
-publication—must be treated as `operational-error`; emit that discriminator when
-the failure occurs before outputs can be published. Output publication itself
-can leave `failure-kind` missing, so consumers must treat a missing discriminator
-as an operational error and must never infer failure kind from `should-block`
+publication—must be treated as `operational-error`. Publish that discriminator
+whenever the output channel remains available. Publication of `failure-kind` is
+best effort when output publication itself fails, so it can be missing precisely
+when publication is unavailable. A missing `failure-kind` must fail closed as an
+operational error; consumers must never infer failure kind from `should-block`
 alone.
 
 The `report-link` output is publicly shareable only when the DeployWhisper
