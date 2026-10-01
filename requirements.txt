@@ -12,3 +12,4 @@ ruamel.yaml==0.19.1
 deepdiff==9.0.0
 python-hcl2==8.1.2
 python-dotenv==1.2.2
+markdown-it-py==4.0.0

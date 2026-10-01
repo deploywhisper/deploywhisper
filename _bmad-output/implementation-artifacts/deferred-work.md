@@ -79,3 +79,7 @@
 ## Deferred from: code review of 11-3-integration-level-enforcement-settings.md (2026-08-18)
 
 - Resolved 2026-08-18: Project-scope failures now return failed results with their original machine-readable root-cause code; compounded GitHub check delivery failures are exposed separately through `delivery_code` [integrations/github/app_service.py:668].
+
+## Deferred from: code review of 11-4-enforcement-guardrail-documentation.md (2026-09-22)
+
+- Resolved 2026-09-28: GitHub init now refuses to overwrite an existing workflow, preserving operator-hardened enforcement wiring and requiring a new path or manual merge [integrations/github/init_service.py:248].
