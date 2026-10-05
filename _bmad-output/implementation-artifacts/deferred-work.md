@@ -87,3 +87,8 @@
 ## Deferred from: code review of 12-1-secrets-and-raw-artifact-boundary-audit.md (2026-10-05, re-review)
 
 - **P2, pre-existing:** Multiple low/medium findings can populate top-risk evidence IDs owned by distinct findings, while `models/repositories/analysis_reports.py:_validate_top_risk_contributor_refs` requires a single owner for every severity. An ordinary Secret + Ansible control fails persistence with `Top-risk contributors must belong to one persisted finding`. A git-show/AST-extracted `develop` builder and the reviewed builder fail identically with isolated DB/snapshot settings. Reconcile the scoring/validation contract in the evidence/report workstream; Story 12.1 does not alter scoring semantics.
+
+## Deferred from: code review of 12-2-provider-settings-administration.md (2026-10-05)
+
+- Existing Settings copy says temporary keys validate for a session; runtime and provider administration docs limit use to one immediate request (`frontend/src/screens/Settings.tsx:74`).
+- Existing generated story guidance references retired Python UI composition; mandatory project context already specifies React. Correct the story generation template in a separate documentation task.

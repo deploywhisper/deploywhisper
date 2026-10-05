@@ -41,6 +41,7 @@ from api.schemas import (
     TopologyValidationResponse,
     build_meta,
 )
+from llm.providers import redact_provider_field
 from llm.skill_context import get_custom_skill_statuses, save_custom_skill
 from services.feedback_service import fetch_feedback_summary
 from services.project_service import (
@@ -50,7 +51,6 @@ from services.project_service import (
 )
 from services.settings_service import (
     TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS,
-    activate_local_mode,
     delete_policy_adapter_settings,
     get_provider_settings,
     get_policy_adapter_settings,
@@ -145,9 +145,9 @@ def _masked_key_preview(api_key: str | None) -> str | None:
 
 def _provider_settings_data(provider_settings) -> ProviderSettingsData:
     return ProviderSettingsData(
-        provider=provider_settings.provider,
-        model=provider_settings.model,
-        api_base=provider_settings.api_base,
+        provider=redact_provider_field(provider_settings.provider),
+        model=redact_provider_field(provider_settings.model),
+        api_base=redact_provider_field(provider_settings.api_base),
         local_mode=provider_settings.local_mode,
         request_timeout_seconds=provider_settings.request_timeout_seconds,
         source=provider_settings.source,
@@ -427,23 +427,20 @@ def update_provider_settings(
     payload: ProviderSettingsRequest,
 ) -> ProviderSettingsResponse:
     """Persist active narrative provider settings and return validation state."""
-    local_mode = bool(payload.local_mode) if payload.provider == "ollama" else False
-    if local_mode:
-        saved = activate_local_mode(
-            model=payload.model.strip(),
-            api_base=payload.api_base.strip(),
-            request_timeout_seconds=payload.request_timeout_seconds,
-        )
-    else:
+    try:
         saved = save_provider_settings(
-            provider=payload.provider.strip(),
-            model=payload.model.strip(),
-            api_base=payload.api_base.strip(),
+            provider=payload.provider,
+            model=payload.model,
+            api_base=payload.api_base,
             api_key=payload.api_key.strip() if payload.api_key else None,
-            local_mode=local_mode,
+            local_mode=payload.local_mode,
             request_timeout_seconds=payload.request_timeout_seconds,
             activate=True,
         )
+    except ValueError as exc:
+        raise ApiError(
+            status_code=400, code="invalid_provider_settings", message=str(exc)
+        ) from exc
     validation = validate_provider_settings(saved)
     return ProviderSettingsResponse(
         data=ProviderSettingsSaveData(

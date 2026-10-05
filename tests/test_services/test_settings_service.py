@@ -59,6 +59,138 @@ class SettingsServiceTests(unittest.TestCase):
         self.assertNotIn("llm_api_key", keys)
         self.assertNotIn("llm_provider_config::openai::api_key", keys)
 
+    def test_invalid_provider_settings_do_not_replace_active_profile(self) -> None:
+        settings_service_module.activate_local_mode(
+            model="ollama/test", api_base="http://localhost:11434"
+        )
+        for overrides in (
+            {"provider": "unknown"},
+            {"model": "   "},
+            {"api_base": "file:///tmp/provider"},
+            {"api_base": "https://bad host/v1"},
+            {"api_base": "https://%ZZ/v1"},
+            {"api_base": "https://bad^host/v1"},
+            {"api_base": "https://-invalid.example/v1"},
+            {"api_base": "https://999.999.999.999/v1"},
+            {"api_base": "https://bad\nhost/v1"},
+            {"api_base": "https://example.invalid/\x00"},
+            {"api_base": "https://user:secret@example.invalid/v1"},
+            {"api_base": "https://example.invalid/v1?api_key=secret"},
+            {"local_mode": True},
+            {"request_timeout_seconds": float("nan")},
+        ):
+            with self.subTest(overrides=overrides):
+                values = dict(
+                    provider="openai",
+                    model="test",
+                    api_base="https://example.invalid/v1",
+                )
+                values.update(overrides)
+                with self.assertRaises(ValueError):
+                    settings_service_module.save_provider_settings(**values)
+                self.assertEqual(
+                    settings_service_module.get_provider_settings().provider, "ollama"
+                )
+
+    def test_save_uses_environment_key_when_no_transient_key_is_supplied(self) -> None:
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "synthetic-environment-key"}):
+            saved = settings_service_module.save_provider_settings(
+                provider="openai", model="test", api_base="https://example.invalid/v1"
+            )
+        self.assertEqual(saved.api_key, "synthetic-environment-key")
+
+    def test_health_rejects_invalid_stored_profile_without_network_probe(self) -> None:
+        invalid = settings_service_module.ProviderSettings(
+            provider="openai",
+            model="test",
+            api_base="https://example.invalid",
+            local_mode=True,
+            api_key="synthetic",
+            source="database",
+        )
+        with (
+            patch.object(
+                settings_service_module, "get_provider_settings", return_value=invalid
+            ),
+            patch.object(
+                settings_service_module, "validate_provider_settings"
+            ) as probe,
+        ):
+            readiness = settings_service_module.get_provider_health_snapshot()
+        self.assertFalse(readiness.ready)
+        probe.assert_not_called()
+
+    def test_provider_credentials_cannot_be_hidden_in_persisted_profile_fields(
+        self,
+    ) -> None:
+        token = "sk-syntheticBoundaryToken12345"
+        for overrides in (
+            {"model": token},
+            {"model": "%73k-syntheticBoundaryToken12345"},
+            {"model": "%2573k-syntheticBoundaryToken12345"},
+            {"api_base": "https://example.invalid/%2563ustom%252denv%252dsecret"},
+            {"api_base": "https://example.invalid/%73k-syntheticBoundaryToken12345"},
+            {"api_base": "https://example.invalid/%63ustom%2denv%2dsecret"},
+            {"api_base": f"https://example.invalid/{token}"},
+            {"model": "custom-transient-secret", "api_key": "custom-transient-secret"},
+            {"api_base": "https://example.invalid/custom-env-secret"},
+            {"model": "custom-env-secret", "api_key": "different-transient-key"},
+            {
+                "api_base": "https://example.invalid/custom-env-secret",
+                "api_key": "different-transient-key",
+            },
+        ):
+            values = dict(
+                provider="openai", model="test", api_base="https://example.invalid/v1"
+            )
+            values.update(overrides)
+            with (
+                self.subTest(overrides=overrides),
+                patch.dict(os.environ, {"OPENAI_API_KEY": "custom-env-secret"}),
+            ):
+                with self.assertRaises(ValueError) as caught:
+                    settings_service_module.save_provider_settings(**values)
+                self.assertNotIn(token, str(caught.exception))
+                self.assertNotIn("custom-env-secret", str(caught.exception))
+                self.assertNotIn("custom-transient-secret", str(caught.exception))
+        with database_module.SessionLocal() as session:
+            self.assertFalse(
+                any(
+                    record.key.startswith("llm_") or record.key == "active_llm_provider"
+                    for record in settings_repository_module.list_settings(session)
+                )
+            )
+
+    def test_unselected_fallback_alias_and_provider_credentials_cannot_be_saved(
+        self,
+    ) -> None:
+        credentials = {
+            "OPENAI_API_KEY": "opaque-active-secret-1234",
+            "LLM_API_KEY": "opaque-fallback-secret-5678",
+            "GEMINI_API_KEY": "opaque-gemini-secret-9012",
+            "GOOGLE_API_KEY": "opaque-google-secret-3456",
+            "ANTHROPIC_API_KEY": "opaque-anthropic-secret-7890",
+        }
+        with patch.dict(os.environ, credentials):
+            for provider in ("openai", "gemini", "ollama"):
+                for credential in credentials.values():
+                    for field in ("model", "api_base"):
+                        with self.subTest(
+                            provider=provider, credential=credential, field=field
+                        ):
+                            values = dict(
+                                provider=provider,
+                                model="test",
+                                api_base="http://localhost:1",
+                            )
+                            values[field] = (
+                                credential
+                                if field == "model"
+                                else f"http://localhost:1/{credential}"
+                            )
+                            with self.assertRaises(ValueError):
+                                settings_service_module.save_provider_settings(**values)
+
     def test_policy_adapter_settings_resolve_integration_then_project_defaults(
         self,
     ) -> None:
