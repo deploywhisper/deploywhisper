@@ -264,6 +264,68 @@ class ReportServiceTests(unittest.TestCase):
             raw.decode(),
         )
 
+    def test_filename_credentials_screen_persisted_sibling_content(self) -> None:
+        from services.content_security import BLOCKED_CONTENT
+
+        secret = "synthetic-filename-only-credential.tf"
+        parse_batch, assessment, narrative = self._content_boundary_models()
+        parse_batch.files[0].changes[0].summary = f"Review {secret}."
+        narrative.explanation = f"Review {secret}."
+        raw = f"hosts: all\ntasks:\n  - name: Review {secret}\n    debug:\n      msg: safe\n".encode()
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            submitted_artifacts=[
+                (f"password={secret}", b"benign excluded bytes"),
+                ("playbook.yaml", raw),
+            ],
+            audit_context={"source_interface": "api", "actor": secret},
+        )
+
+        self.assertNotIn(secret, json.dumps(report))
+        self.assertNotIn(secret.encode(), self.db_path.read_bytes())
+        self.assertEqual(
+            report["submission_manifest"]["items"][0]["status"], "sensitive"
+        )
+        self.assertEqual(
+            report["submission_manifest"]["items"][1]["redaction_status"], "redacted"
+        )
+        snapshot = artifact_snapshot_service_module.load_report_artifact(
+            report["id"], "playbook.yaml"
+        )
+        self.assertEqual(snapshot.content, BLOCKED_CONTENT)
+        self.assertNotIn(
+            secret.encode(),
+            b"".join(
+                path.read_bytes()
+                for path in self.snapshot_dir.rglob("*")
+                if path.is_file()
+            ),
+        )
+
+    def test_sensitive_extension_alias_retains_original_intake_classification(
+        self,
+    ) -> None:
+        raw = b"hosts: all\ntasks: []\n"
+        report = report_service_module.persist_analysis_report(
+            *self._content_boundary_models(),
+            submitted_artifacts=[(".env", b"PASSWORD=yaml"), ("playbook.yaml", raw)],
+            artifact_snapshots={"playbook.yaml": raw},
+        )
+
+        item = report["submission_manifest"]["items"][1]
+        self.assertEqual(item["status"], "accepted")
+        self.assertEqual(item["intake_status"], "ready")
+        self.assertEqual(item["tool"], "ansible")
+        self.assertNotIn("yaml", item["name"])
+        self.assertEqual(report["audit"]["files_analyzed"], [item["name"]])
+        snapshot = artifact_snapshot_service_module.load_report_artifact(
+            report["id"], item["name"]
+        )
+        self.assertIsNotNone(snapshot)
+        self.assertEqual(snapshot.content, raw.decode())
+
     def test_create_analysis_report_validates_finding_context_payloads(self) -> None:
         project = project_service_module.ensure_default_project()
         report_kwargs = {

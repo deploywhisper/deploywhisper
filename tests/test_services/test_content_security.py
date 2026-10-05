@@ -23,6 +23,65 @@ from services.content_security import (
 
 
 class ContentSecurityTests(unittest.TestCase):
+    def test_plural_credential_assignments_are_screened_in_text(self):
+        for raw in (
+            "CREDENTIALS=synthetic-value",
+            'resource "example" "test" { credentials = "synthetic-value" }',
+            "received auth.credentials: synthetic-value",
+            "DB-CREDENTIALS='synthetic-value'",
+        ):
+            with self.subTest(raw=raw):
+                self.assertNotIn("synthetic-value", redact_text(raw))
+                self.assertIn(
+                    "synthetic-value", sensitive_artifact_values(raw.encode())
+                )
+
+    def test_maximal_identifiers_preserve_assignment_and_url_detection(self):
+        for label in ("auth.password", "db-password", "AUTH.API_KEY"):
+            with self.subTest(label=label):
+                self.assertEqual(
+                    redact_text(f"{label}=synthetic-value"), f"{label}={REDACTED}"
+                )
+        for scheme in ("https", "git+https", "vendor.proto-v1"):
+            raw = f"{scheme}://reader:synthetic-value@db.example.com/path"
+            with self.subTest(scheme=scheme):
+                self.assertEqual(
+                    redact_text(raw), f"{scheme}://{REDACTED}@db.example.com/path"
+                )
+                self.assertIn(
+                    "synthetic-value", sensitive_artifact_values(raw.encode())
+                )
+        long_label = "component." * 2048 + "password"
+        self.assertEqual(
+            redact_text(f"{long_label}=synthetic-value"),
+            f"{long_label}={REDACTED}",
+        )
+        long_scheme = "vendor." * 2048 + "proto"
+        self.assertEqual(
+            redact_text(f"{long_scheme}://reader:synthetic-value@db.example.com"),
+            f"{long_scheme}://{REDACTED}@db.example.com",
+        )
+        self.assertEqual(
+            redact_text("db.example.com ordinary-identifier"),
+            "db.example.com ordinary-identifier",
+        )
+
+    def test_submission_values_collect_filename_and_artifact_credentials(self):
+        from services.content_security import sensitive_submission_values
+
+        files = [
+            ("CREDENTIALS=synthetic-filename.tf", b"password=synthetic-body"),
+            ("secret.yaml", b"kind: Secret\nstringData:\n  opaque: synthetic-k8s\n"),
+            ("public.tf", b"label=ordinary"),
+        ]
+        values = sensitive_submission_values(files)
+        self.assertIn("synthetic-filename.tf", values)
+        self.assertIn("synthetic-body", values)
+        self.assertIn("synthetic-k8s", values)
+        self.assertNotIn("ordinary", values)
+        self.assertEqual(values, tuple(sorted(set(values))))
+        self.assertEqual(sensitive_submission_values([]), ())
+
     def test_escaped_hcl_credentials_keep_literal_and_decoded_variants(self):
         for literal, decoded in (
             (r"\u0073ynthetic-value", "synthetic-value"),

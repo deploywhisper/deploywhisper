@@ -16,12 +16,34 @@ from services.intake_service import (
     trusted_relative_artifact_path,
     uniquify_artifact_names,
     untrusted_upload_filename,
+    artifact_security_aliases,
 )
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 from services.submission_manifest import build_submission_manifest
 
 
 class IntakeServiceTests(unittest.TestCase):
+    def test_security_aliases_survive_suffix_and_prefix_credentials(self):
+        from services.content_security import redact_text
+
+        for name, credential in (
+            ("playbook.yaml", "yaml"),
+            ("artifact.yaml", "artifact"),
+            ("playbook.yaml", "playbook.yaml"),
+        ):
+            with self.subTest(credential=credential):
+                files = [
+                    (name, b"hosts: all\ntasks: []\n"),
+                    (".env", f"PASSWORD={credential}".encode()),
+                ]
+                aliases = artifact_security_aliases(files)
+                self.assertIn(name, aliases)
+                for alias in aliases.values():
+                    self.assertEqual(
+                        redact_text(alias, sensitive_values=(credential,)), alias
+                    )
+                self.assertEqual(aliases, artifact_security_aliases(files))
+
     def test_detect_tool_type_for_terraform_plan_json(self) -> None:
         raw = b'{"resource_changes": [{"address": "aws_security_group.main"}]}'
         self.assertEqual(detect_tool_type("plan.json", raw), "terraform")

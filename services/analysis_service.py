@@ -35,13 +35,13 @@ from llm.narrator import NarrativeResult, generate_narrative
 from services.content_security import (
     REDACTION_WARNING,
     redact_value,
-    sensitive_artifact_values,
+    sensitive_submission_values,
 )
 from llm.prompt_security import (
     UNTRUSTED_DATA_SYSTEM_INSTRUCTION,
     build_untrusted_json_payload,
 )
-from llm.providers import generate_completion_with_settings
+from llm.providers import generate_completion_with_settings, SENSITIVE_RESPONSE_NOTICE
 from parsers.base import ParseBatchResult, UnifiedChange, is_non_mutating_action
 from services.intake_service import (
     build_parse_batch,
@@ -1343,7 +1343,10 @@ def _interaction_confidence_overrides(
             completion_client=completion_client,
         )
         payload = json.loads(raw_response)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        if str(exc) == SENSITIVE_RESPONSE_NOTICE:
+            notice = f"Interaction confidence: {SENSITIVE_RESPONSE_NOTICE}"
+            assessment.warnings = list(dict.fromkeys([*assessment.warnings, notice]))
         return {}
 
     overrides: dict[str, float] = {}
@@ -2476,9 +2479,7 @@ def build_analysis_artifacts(
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
-    sensitive_values = tuple(
-        value for _, raw in files for value in sensitive_artifact_values(raw)
-    )
+    sensitive_values = sensitive_submission_values(files)
     submission_manifest = build_submission_manifest(
         files,
         parse_batch=parse_batch,

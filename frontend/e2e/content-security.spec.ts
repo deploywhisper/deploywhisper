@@ -107,3 +107,37 @@ test("screens public intake and audit metadata for excluded credentials", async 
   await expect(page.locator("body")).not.toContainText(actorSecret);
   await expect(page.locator("body")).not.toContainText(filenameSecret);
 });
+
+test("retains accepted artifact identity when its extension is a detected value", async ({ page, request }) => {
+  const projectKey = `alias-security-${Date.now()}`;
+  const project = await request.post("/api/v1/projects", {
+    data: { project_key: projectKey, display_name: "Artifact alias boundary audit" },
+  });
+  expect(project.ok()).toBeTruthy();
+  const boundary = `----alias-boundary-${Date.now()}`;
+  const body = [
+    `--${boundary}\r\nContent-Disposition: form-data; name="project_key"\r\n\r\n${projectKey}\r\n`,
+    `--${boundary}\r\nContent-Disposition: form-data; name="files"; filename=".env"\r\nContent-Type: text/plain\r\n\r\nPASSWORD=yaml\r\n`,
+    `--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="playbook.yaml"\r\nContent-Type: application/x-yaml\r\n\r\nhosts: all\ntasks:\n  - name: Review deployment\n    debug:\n      msg: safe\n\r\n`,
+    `--${boundary}--\r\n`,
+  ].join("");
+  const run = await request.post("/api/v1/analyses", {
+    headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+    data: Buffer.from(body),
+  });
+  expect(run.ok()).toBeTruthy();
+  const data = (await run.json()).data;
+  const accepted = data.persisted_report.submission_manifest.items[1];
+  expect(accepted.status).toBe("accepted");
+  expect(accepted.parse_status).toBe("parsed");
+  expect(data.intake.items[1]).toMatchObject({ name: accepted.name, status: "ready", tool: "ansible" });
+  expect(data.parse_batch.files[0].file_name).toBe(accepted.name);
+  expect(accepted.name).not.toContain("[REDACTED]");
+  const reportId = data.persisted_report.id;
+  const detail = await request.get(`/api/v1/analyses/${reportId}`);
+  expect(detail.ok()).toBeTruthy();
+  expect((await detail.json()).data.submission_manifest.items[1].name).toBe(accepted.name);
+  await page.goto(`/reports/${reportId}?private=1&tab=audit`);
+  await expect(page.getByText("Content redaction", { exact: true })).toBeVisible();
+  await expect(page.getByText("sensitive_blocked", { exact: true })).toBeVisible();
+});

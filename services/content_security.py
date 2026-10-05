@@ -28,8 +28,10 @@ BLOCKED_CONTENT = (
     "[Sensitive artifact content blocked; review the redaction status in the report.]"
 )
 REDACTION_WARNING = "Sensitive content was redacted from report data; sensitive artifact snapshots were blocked."
-_SECRET_NAME = r"(?:[\w.-]*(?:password|passwd|api[_-]?key|access[_-]?key|secret(?:[_-]?key)?|token|credential|private[_-]?key|connection[_-]?string))"
-_ASSIGNMENT_PREFIX = rf"(?P<prefix>\b{_SECRET_NAME}\b[\"']?\s*[:=]\s*)"
+_SECRET_NAME = r"(?:[\w.-]*(?:password|passwd|api[_-]?key|access[_-]?key|secret(?:[_-]?key)?|token|credentials?|private[_-]?key|connection[_-]?string))"
+# Start once per maximal identifier, including dotted/hyphenated names. Word
+# boundaries would restart the greedy prefix at every dot or hyphen.
+_ASSIGNMENT_PREFIX = rf"(?P<prefix>(?<![\w.-]){_SECRET_NAME}(?![\w.-])[\"']?\s*[:=]\s*)"
 _ASSIGNMENT = re.compile(
     _ASSIGNMENT_PREFIX
     + r"(?P<value>\"(?:\\.|[^\"\\])*\"|'(?:\\.|''|[^'\\])*'|[^\s,;\}\]\"']+)",
@@ -63,7 +65,7 @@ _AUTHORIZATION = re.compile(
     r"\b(?:bearer|basic)\s+)(?P<credential>[A-Za-z0-9._~+/=-]+)"
 )
 _URL_CREDENTIAL = re.compile(
-    r"(\b[a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/@]+:(?P<credential>[^\s/@]+)@"
+    r"((?<![\w+.-])[a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/@]+:(?P<credential>[^\s/@]+)@"
 )
 _SEVERITIES = set(get_args(RiskSeverity))
 _ACTIONS = {
@@ -471,3 +473,14 @@ def sensitive_artifact_values(raw_content: bytes | None) -> tuple[str, ...]:
         # Failed parser messages are handled separately; never expose their input.
         pass
     return tuple(sorted(value for value in found if value and value != REDACTED))
+
+
+def sensitive_submission_values(
+    files: Iterable[tuple[str, bytes | None]],
+) -> tuple[str, ...]:
+    """Collect filename and artifact credentials locally across a submission."""
+    found: set[str] = set()
+    for filename, raw_content in files:
+        found.update(_text_sensitive_values(filename))
+        found.update(sensitive_artifact_values(raw_content))
+    return tuple(sorted(found))

@@ -18,6 +18,60 @@ RUNTIME = {
 
 
 class AnalysisContentBoundaryTests(unittest.TestCase):
+    def test_sensitive_confidence_output_retains_an_explicit_warning(self):
+        from llm.providers import SENSITIVE_RESPONSE_NOTICE
+
+        captured = []
+
+        def completion(**kwargs):
+            payload = json.loads(kwargs["messages"][-1]["content"])["untrusted_data"]
+            captured.append(payload)
+            if "interactions" in payload:
+                return json.dumps(
+                    {"confidences": [], "debug": "PASSWORD=synthetic-sensitive-output"}
+                )
+            if "findings" in payload:
+                return json.dumps(
+                    {
+                        "opening_sentence": payload["recommendation"].upper()
+                        + ": review the change.",
+                        "explanation": "Verify the deployment.",
+                        "guidance": [],
+                    }
+                )
+            return json.dumps({"change_scores": []})
+
+        with (
+            patch(
+                "analysis.risk_scorer.resolve_provider_runtime", return_value=RUNTIME
+            ),
+            patch(
+                "services.analysis_service.resolve_provider_runtime",
+                return_value=RUNTIME,
+            ),
+            patch("llm.narrator.resolve_provider_runtime", return_value=RUNTIME),
+        ):
+            result = build_analysis_artifacts(
+                [
+                    ("main.tf", b'resource "aws_instance" "payments" {}'),
+                    (
+                        "Jenkinsfile",
+                        b'pipeline { stages { stage("payments") { steps { echo "safe" } } } }',
+                    ),
+                ],
+                completion_client=completion,
+                include_topology_context=False,
+                include_incident_context=False,
+            )
+        self.assertEqual(len(captured), 3)
+        self.assertTrue(
+            any(
+                SENSITIVE_RESPONSE_NOTICE in warning
+                for warning in result.assessment.warnings
+            )
+        )
+        self.assertNotIn("synthetic-sensitive-output", result.model_dump_json())
+
     def test_credential_bearing_artifact_name_is_excluded_before_parsing(self):
         from services.intake_service import build_pending_analysis, build_parse_batch
         from services.artifact_snapshot_service import save_report_artifacts

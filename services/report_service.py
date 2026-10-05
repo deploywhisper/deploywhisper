@@ -82,13 +82,14 @@ from services.submission_manifest import (
 )
 from services.intake_service import (
     artifact_security_aliases,
+    build_pending_analysis,
     remap_artifact_identities,
 )
 from services.topology_service import STALE_AFTER_DAYS
 from services.content_security import (
     REDACTION_WARNING,
     redact_value,
-    sensitive_artifact_values,
+    sensitive_submission_values,
 )
 
 LEGACY_REPORT_SCHEMA_VERSION = "v1"
@@ -4528,11 +4529,23 @@ def persist_analysis_report(
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
     security_inputs = submitted_artifacts or list((artifact_snapshots or {}).items())
-    sensitive_values = tuple(
-        value for _, raw in security_inputs for value in sensitive_artifact_values(raw)
+    sensitive_values = sensitive_submission_values(security_inputs)
+    original_pending_analysis = (
+        build_pending_analysis(security_inputs)
+        if submitted_artifacts is not None or artifact_snapshots is not None
+        else None
     )
     artifact_aliases = artifact_security_aliases(
         security_inputs, sensitive_values=sensitive_values
+    )
+    aliased_pending_analysis = (
+        PendingAnalysis.model_validate(
+            remap_artifact_identities(
+                original_pending_analysis.model_dump(mode="json"), artifact_aliases
+            )
+        )
+        if original_pending_analysis is not None
+        else None
     )
     if submitted_artifacts is not None:
         submitted_artifacts = [
@@ -4673,11 +4686,11 @@ def persist_analysis_report(
     }
     if submitted_artifacts is not None:
         submission_files = list(submitted_artifacts)
-        pending_analysis = None
+        pending_analysis = aliased_pending_analysis
         manifest_warnings: list[str] = []
     elif artifact_snapshots is not None:
         submission_files = list(artifact_snapshots.items())
-        pending_analysis = None
+        pending_analysis = aliased_pending_analysis
         manifest_warnings = [_SUBMISSION_MANIFEST_INFERRED_WARNING]
     else:
         submission_files = list(fallback_snapshots.items())
@@ -4687,6 +4700,7 @@ def persist_analysis_report(
         submission_files,
         pending_analysis=pending_analysis,
         parse_batch=parse_batch,
+        sensitive_values=sensitive_values,
         audit_context={
             **(audit_context or {}),
             "source_interface": audit["source_interface"],

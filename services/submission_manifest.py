@@ -10,7 +10,11 @@ from api.schemas import PendingAnalysis
 from parsers.base import ParseBatchResult, ParsedFileResult
 from services.ai_iac_risk_service import assess_iac_provenance
 from services.intake_service import build_pending_analysis
-from services.content_security import redact_text, sensitive_artifact_values
+from services.content_security import (
+    redact_text,
+    sensitive_artifact_values,
+    sensitive_submission_values,
+)
 
 ManifestStatus = Literal["accepted", "excluded", "failed", "sensitive"]
 RedactionStatus = Literal["none", "redacted", "sensitive_blocked"]
@@ -160,16 +164,13 @@ def build_submission_manifest(
     pending_analysis: PendingAnalysis | None = None,
     parse_batch: ParseBatchResult,
     audit_context: dict[str, Any] | None = None,
+    sensitive_values: tuple[str, ...] = (),
 ) -> SubmissionManifest:
     """Return a durable manifest for submitted artifacts and coverage outcomes."""
     pending = pending_analysis or build_pending_analysis(files)
     parse_by_name = _parse_results_by_name(parse_batch)
     context = audit_context or {}
-    batch_sensitive_values = tuple(
-        value
-        for _, raw_content in files
-        for value in sensitive_artifact_values(raw_content)
-    )
+    batch_sensitive_values = sensitive_values or sensitive_submission_values(files)
     provenance = {
         "source_interface": context.get("source_interface"),
         "trigger_type": context.get("trigger_type"),

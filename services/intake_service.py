@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 from api.schemas import IntakeItem, PendingAnalysis
 from parsers.registry import detect_tool_type, parse_uploaded_files
-from services.content_security import redact_text, sensitive_artifact_values
+from services.content_security import redact_text, sensitive_submission_values
 
 
 def artifact_security_aliases(
@@ -17,11 +17,7 @@ def artifact_security_aliases(
 ) -> dict[str, str]:
     """Give colliding artifact identities stable safe names without reparsing inputs."""
     submitted = list(files)
-    values = sensitive_values or tuple(
-        value
-        for _, content in submitted
-        for value in sensitive_artifact_values(content)
-    )
+    values = sensitive_values or sensitive_submission_values(submitted)
     aliases = {}
     reserved_names = {name for name, _ in submitted}
     for name, _ in submitted:
@@ -29,15 +25,27 @@ def artifact_security_aliases(
             not is_sensitive_file(name)
             and redact_text(name, sensitive_values=values) != name
         ):
-            digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
-            candidate = f"artifact-{digest}{Path(name).suffix}"
             counter = 0
-            while candidate in reserved_names:
+            while True:
+                seed = name if counter == 0 else f"{name}\0{counter}"
+                digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+                candidates = (
+                    f"artifact-{digest}{Path(name).suffix}",
+                    f"{digest}{Path(name).suffix}",
+                    digest,
+                )
+                candidate = next(
+                    (
+                        value
+                        for value in candidates
+                        if value not in reserved_names
+                        and redact_text(value, sensitive_values=values) == value
+                    ),
+                    None,
+                )
+                if candidate is not None:
+                    break
                 counter += 1
-                digest = hashlib.sha256(
-                    f"{name}\0{counter}".encode("utf-8")
-                ).hexdigest()[:16]
-                candidate = f"artifact-{digest}{Path(name).suffix}"
             aliases[name] = candidate
             reserved_names.add(candidate)
     return aliases

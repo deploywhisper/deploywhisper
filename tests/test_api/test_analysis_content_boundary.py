@@ -7,10 +7,12 @@ import json
 import sys
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
 from cli.analyze import main
+import llm.narrator as narrator_module
 from services.analysis_service import build_analysis_artifacts
 from services.artifact_snapshot_service import load_report_artifact
 from tests.test_api import test_analyses as analyses_tests
@@ -119,6 +121,89 @@ class PublicAnalysisBoundaryTests(unittest.TestCase):
         self.assertEqual(data["intake"]["items"][1]["name"], names[1])
         self.assertEqual(data["parse_batch"]["files"][0]["file_name"], names[1])
         snapshot = load_report_artifact(report["id"], names[1])
+        self.assertIsNotNone(snapshot)
+        self.assertEqual(snapshot.content, SAFE_PLAYBOOK.decode())
+
+    def test_filename_credentials_screen_prompts_and_sibling_snapshots(self):
+        secret = "synthetic-filename-only-credential.tf"
+        sibling = SAFE_PLAYBOOK.replace(
+            b"Review deployment", f"Review {secret}".encode()
+        )
+
+        def with_narrative(files, **kwargs):
+            kwargs.update(
+                include_narrative=True,
+                allow_llm_assistance=False,
+                include_topology_context=False,
+                include_incident_context=False,
+            )
+            return build_analysis_artifacts(files, **kwargs)
+
+        with (
+            patch(
+                "services.analysis_service.build_analysis_artifacts",
+                side_effect=with_narrative,
+            ),
+            patch(
+                "llm.narrator.settings",
+                replace(narrator_module.settings, narrator_enabled=True),
+            ),
+            patch(
+                "llm.narrator.generate_completion_with_settings", return_value="{}"
+            ) as completion,
+        ):
+            data = self.submit(
+                [
+                    (f"password={secret}", b"benign excluded bytes"),
+                    ("playbook.yaml", sibling),
+                ]
+            )
+
+        self.assertTrue(completion.called)
+        self.assertNotIn(secret, json.dumps(completion.call_args.args[0]))
+        self.assertNotIn(secret, json.dumps(data))
+        report = data["persisted_report"]
+        self.assertEqual(
+            report["submission_manifest"]["items"][0]["status"], "sensitive"
+        )
+        self.assertEqual(
+            report["submission_manifest"]["items"][1]["redaction_status"], "redacted"
+        )
+        evidence = next(
+            item
+            for item in report["evidence_items"]
+            if item["artifact"] == "playbook.yaml"
+        )
+        self.assertEqual(evidence["redaction_status"], "redacted")
+        detail = self.fixture.client.get(f"/api/v1/analyses/{report['id']}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertNotIn(secret, detail.text)
+        snapshot = load_report_artifact(report["id"], "playbook.yaml")
+        self.assertIsNotNone(snapshot)
+        self.assertNotIn(secret, snapshot.content)
+        self.assertNotIn(secret.encode(), self.fixture.db_path.read_bytes())
+        self.assertNotIn(
+            secret.encode(),
+            b"".join(
+                path.read_bytes()
+                for path in (Path(self.fixture.tempdir.name) / "snapshots").rglob("*")
+                if path.is_file()
+            ),
+        )
+
+    def test_sensitive_extension_alias_preserves_ready_intake_and_snapshot(self):
+        data = self.submit(
+            [(".env", b"PASSWORD=yaml"), ("playbook.yaml", SAFE_PLAYBOOK)]
+        )
+        report = data["persisted_report"]
+        item = report["submission_manifest"]["items"][1]
+        self.assertEqual(item["status"], "accepted")
+        self.assertEqual(item["intake_status"], "ready")
+        self.assertEqual(item["tool"], "ansible")
+        self.assertNotIn("yaml", item["name"])
+        self.assertEqual(data["intake"]["items"][1]["status"], "ready")
+        self.assertEqual(data["intake"]["items"][1]["name"], item["name"])
+        snapshot = load_report_artifact(report["id"], item["name"])
         self.assertIsNotNone(snapshot)
         self.assertEqual(snapshot.content, SAFE_PLAYBOOK.decode())
 

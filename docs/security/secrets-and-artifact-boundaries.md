@@ -49,7 +49,9 @@ screening context used by valid sibling artifacts.
 
 API and CLI intake responses use the screened manifest names. If an artifact
 name itself matches a detected credential, a stable hash-based alias preserves
-its extension and correlation through evidence, manifests, and snapshot lookup.
+its correlation through evidence, manifests, and snapshot lookup. The extension
+is retained when it is safe; an overlapping suffix uses a neutral hash identity.
+The original intake classification and tool family are preserved.
 Parsing and local ownership resolution use the original name before publication.
 Redaction status follows the first screening pass and batch-only snapshot blocking.
 
@@ -58,6 +60,10 @@ Secret data, and CloudFormation intrinsic tags/NoEcho defaults. Reversible URL
 forms are screened alongside their plaintext values. Credentials found in one
 field protect sibling fields and models; excluded inputs still protect audit
 and provenance metadata. Snapshot writes apply the same submitted-batch context.
+Detected values in artifact names also protect sibling artifacts, including
+excluded filenames. Lexical scanning does not restart within long dotted or
+hyphenated identifiers. Blocked interaction-confidence model output leaves an
+explicit assessment/narrative warning rather than silently omitting overrides.
 
 ![Composed report showing a redacted synthetic credential and Audit status](../design/story-12-1-content-redaction.png)
 

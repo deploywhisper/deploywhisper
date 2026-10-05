@@ -64,6 +64,14 @@ So that self-hosted analysis does not leak sensitive deployment data.
 
 - [x] [Review][Patch][P2] Match the installed Gemini SDK logger namespace [logging_config.py:PayloadLogFilter] — the SDK uses google_genai, which escaped the google.genai-only debug suppression; verified directly from installed SDK source.
 
+### Third Review Findings
+
+- [x] [Review][Patch][P1] Bound credential scanning on dotted input [services/content_security.py] — Assignment/URI prefix matching retries inside identifiers, showing quadratic timings on benign 1–8KB text.
+- [x] [Review][Patch][P2] Keep generated aliases unchanged under screening [services/intake_service.py] — A credential matching the original suffix (e.g. yaml) changes the published alias and breaks manifest/snapshot lookup.
+- [x] [Review][Patch][P1] Recognize plural credentials text labels [services/content_security.py] — CREDENTIALS/credentials is accepted by structured screening but missed by lexical collection, logs and HCL snapshots.
+- [x] [Review][Patch][P1] Include filename credentials in submitted context [services/analysis_service.py] — Detected filename credentials are omitted from pre-provider/persistence/manifest collection and can leak through sibling prompts/snapshots.
+- [x] [Review][Patch][P2] Expose blocked interaction-confidence output [services/analysis_service.py] — Sensitive confidence-provider output is rejected but the catch path returns no override without a warning/status.
+
 ## Dev Notes
 
 ### Epic Context
@@ -179,6 +187,7 @@ Codex (GPT-6), with bounded native subagents for independent boundary review, pr
 - `tests/test_api/test_error_security.py`
 - `tests/test_api/test_stats.py`
 - `tests/test_cli/test_analyze.py`
+- `tests/test_infra/test_content_scan_performance.py`
 - `tests/test_infra/test_logging_security.py`
 - `tests/test_infra/test_logging_startup_security.py`
 - `tests/test_llm/test_content_boundary.py`
@@ -186,6 +195,7 @@ Codex (GPT-6), with bounded native subagents for independent boundary review, pr
 - `tests/test_services/test_analysis_content_boundary.py`
 - `tests/test_services/test_analysis_service.py`
 - `tests/test_services/test_content_security.py`
+- `tests/test_services/test_intake_service.py`
 - `tests/test_services/test_narrator.py`
 - `tests/test_services/test_report_service.py`
 - `tests/test_services/test_settings_service.py`
@@ -235,3 +245,21 @@ Codex (GPT-6), with bounded native subagents for independent boundary review, pr
 - Git Flow closure: follow-up commit on `feature/12-1-secrets-raw-artifact-boundary`, push to origin, update existing PR #128 targeting develop.
 
 - 2026-10-05: Re-ran layered code review, fixed 11 new findings, documented the baseline deferral and snapshot-isolation incident, added public/cross-boundary regression coverage, and reverified the composed app.
+
+## Third Independent Code Review (AI)
+
+- Base: `1874cad`, PR #128, 2026-10-05. Outcome: **APPROVE after 5 fixes**. Fresh Blind Hunter, Edge Case Hunter, and Acceptance Auditor completed full-scope reviews and independently re-probed the original findings. No new deferrals; existing baseline top-risk ownership issue remains tracked separately.
+- Fixed: lexical scan restart boundaries for assignments and URI schemes; plural `credentials` labels; shared filename-plus-content collection; redaction-invariant aliases with original intake/tool classification preserved; explicit warning when interaction-confidence output is blocked. No new dependencies, model fields, or scoring decisions.
+- Simplifications: one submitted-credential collector now serves analysis, aliases, manifests, and persistence. Alias selection keeps the original extension when safe and uses a neutral hash otherwise. No reparse of aliases or competing tool classification.
+- Red-first regressions reproduced plural/filename leaks, alias suffix mismatch, silent confidence rejection, and 16KB benign text exceeding a subprocess timeout. Fix probes show 16KB lexical scanning in milliseconds with near-linear scaling; supported long keys/URL schemes still match.
+- `./.venv/bin/ruff check .` / `./.venv/bin/ruff format --check .`: passed (284 Python files). `git diff --check`: passed.
+- `./.venv/bin/python -m unittest discover -q`: 474 passed, one opt-in live smoke skipped.
+- `bash scripts/ci-local.sh`: passed all 9 directories, 1,658 tests (one opt-in smoke skipped), dependency consistency, compilation, Skills, prompt-injection, and high-severity Bandit. Same unrelated sample-IP B104 false positive, no new touched-code finding. Services directory: 987 passed.
+- `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: 414 passed, 132 subtests, existing deprecation warnings.
+- Owned verification: scanner/performance 30 unittest tests; persistence/public API 181 pytest tests plus 55 subtests; combined root intake/shared/public regressions 33 tests.
+- Frontend: 56 tests, typecheck and production build passed. Compose build/health passed; `BASE_URL=http://localhost:8080 npm run test:ui-review`: 14 passed. New browser regression confirms accepted/parsed/ready tool state and stable published alias when `yaml` is a detected credential. Screenshot refreshed; compose shut down with data volume retained.
+- Evidence logs: `/private/tmp/story12-review3-{ci,smoke,shard,browser,context-green,root-red,frontend,frontend-build}.log`. All new probes used temporary DB/snapshot storage; stat checks confirmed no writes to the previously affected shared manifests during this review.
+- Limits unchanged: best-effort recognition for custom/unlabelled/irreversible obfuscation, no historical stored-byte cleanup, no live hosted network calls. Previous local-manifest restoration and baseline scoring contract remain separate follow-up work.
+- Git Flow closure: same feature branch; follow-up commit/push and PR #128 update to develop.
+
+- 2026-10-05: Completed third fresh layered code review, fixed all 5 new findings, verified scan scaling, filename propagation, alias/tool invariants and confidence notices, and revalidated the composed browser flows.
