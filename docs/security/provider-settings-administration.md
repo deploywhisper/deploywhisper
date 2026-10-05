@@ -20,7 +20,8 @@ profile and active settings are removed when saving.
 
 Keep credentials out of models and URLs. API bases must be absolute HTTP/HTTPS
 URLs without userinfo, query parameters or fragments. Recognized credentials and the supplied/environment key are also rejected
-in URL paths and model names. Do not put any secrets in these fields. The settings API returns a masked key presence hint.
+in URL paths and model names, including percent-encoded representations.
+Whitespace and control characters in API bases are rejected. Do not put any secrets in these fields. The settings API returns a masked key presence hint.
 
 ## Fully local operation and degraded output
 

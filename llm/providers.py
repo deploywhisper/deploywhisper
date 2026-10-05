@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from llm.adapters._shared import request_timeout_seconds as validate_timeout
 from typing import Any, Callable
@@ -90,6 +90,13 @@ def validate_provider_settings_shape(
         )
     if not model.strip():
         raise NarrativeProviderError("Provider model must not be blank.")
+    if any(
+        character.isspace() or ord(character) < 32 or ord(character) == 127
+        for character in api_base
+    ):
+        raise NarrativeProviderError(
+            "Provider API base must be an absolute HTTP or HTTPS URL."
+        )
     try:
         endpoint = urlsplit(api_base)
         valid_url = endpoint.scheme in {"http", "https"} and bool(endpoint.hostname)
@@ -112,7 +119,7 @@ def validate_provider_settings_shape(
     sensitive_values = sensitive_values + ((api_key,) if api_key else ())
     if any(
         redact_text(value, sensitive_values=sensitive_values) != value
-        for value in (model, api_base)
+        for value in (model, api_base, unquote(model), unquote(api_base))
     ):
         raise NarrativeProviderError(
             "Provider model and API base must not contain credentials."

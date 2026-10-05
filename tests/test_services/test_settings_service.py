@@ -67,6 +67,9 @@ class SettingsServiceTests(unittest.TestCase):
             {"provider": "unknown"},
             {"model": "   "},
             {"api_base": "file:///tmp/provider"},
+            {"api_base": "https://bad host/v1"},
+            {"api_base": "https://bad\nhost/v1"},
+            {"api_base": "https://example.invalid/\x00"},
             {"api_base": "https://user:secret@example.invalid/v1"},
             {"api_base": "https://example.invalid/v1?api_key=secret"},
             {"local_mode": True},
@@ -119,6 +122,9 @@ class SettingsServiceTests(unittest.TestCase):
         token = "sk-syntheticBoundaryToken12345"
         for overrides in (
             {"model": token},
+            {"model": "%73k-syntheticBoundaryToken12345"},
+            {"api_base": "https://example.invalid/%73k-syntheticBoundaryToken12345"},
+            {"api_base": "https://example.invalid/%63ustom%2denv%2dsecret"},
             {"api_base": f"https://example.invalid/{token}"},
             {"model": "custom-transient-secret", "api_key": "custom-transient-secret"},
             {"api_base": "https://example.invalid/custom-env-secret"},

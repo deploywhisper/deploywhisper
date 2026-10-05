@@ -152,7 +152,7 @@ development_status:
 
   epic-12: in-progress
   12-1-secrets-and-raw-artifact-boundary-audit: done
-  12-2-provider-settings-administration: review
+  12-2-provider-settings-administration: done
   12-3-connector-credential-handling-and-redaction-audit: ready-for-dev
   12-4-openssf-scorecard-and-codeql: ready-for-dev
   12-5-sbom-and-release-checksums: ready-for-dev

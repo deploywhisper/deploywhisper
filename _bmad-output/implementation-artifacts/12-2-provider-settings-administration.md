@@ -1,6 +1,6 @@
 # Story 12.2: Provider Settings Administration
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -30,6 +30,16 @@ So that external or local model usage is explicit, local-first, and safe.
 - [x] Add or update deterministic regression coverage for the changed behavior. (AC: all)
 - [x] Update relevant docs or examples if the story changes user-visible, operator, API, CLI, integration, or contribution behavior. (AC: all)
 - [x] Run required validation and record commands/results in the Dev Agent Record. (AC: all)
+
+### Review Findings
+
+- [x] [Review][Patch] Reject whitespace/control characters in provider endpoints before persistence [llm/providers.py:93].
+- [x] [Review][Patch] Screen percent-decoded model/endpoint values for recoverable credentials [llm/providers.py:112].
+- [x] [Review][Patch] Preserve environment-source settings when browser tests restore global configuration [frontend/e2e/provider-administration.spec.ts:43].
+- [x] [Review][Patch] Keep browser validation local when hosted credentials are configured [frontend/e2e/provider-administration.spec.ts:34].
+- [x] [Review][Patch] Restore reloaded configuration/service modules after fallback test cleanup [tests/test_services/test_provider_administration_fallback.py:28].
+- [x] [Review][Defer] Settings UI describes temporary validation as lasting a session [frontend/src/screens/Settings.tsx:74] — deferred, pre-existing; runtime and operator docs correctly scope it to one request.
+- [x] [Review][Defer] Generated Source Tree Guidance references retired Python UI style — deferred, pre-existing; mandatory project context specifies React.
 
 ## Dev Notes
 
@@ -134,6 +144,8 @@ GPT-6 (Codex), with native subagents for bounded fallback tests and independent 
 - `llm/providers.py`
 - `services/settings_service.py`
 - `docs/security/provider-settings-administration.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
+- `docs/verification/story-12-2/provider-settings.png`
 - `frontend/e2e/provider-administration.spec.ts`
 - `tests/test_api/test_settings.py`
 - `tests/test_llm/test_providers.py`
@@ -145,3 +157,21 @@ GPT-6 (Codex), with native subagents for bounded fallback tests and independent 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 
 - 2026-10-05: Implemented provider administration validation and credential screening, deterministic degraded-report regressions, operator docs, and composed-app browser coverage.
+
+- 2026-10-05: Code review approved after five fixes, deterministic regressions and Compose browser/isolation checks; story/sprint moved to done and deferred documentation issues recorded.
+
+## Senior Developer Review (AI)
+
+- Date: 2026-10-05
+- Reviewer: Codex with independent Blind Hunter, Edge Case Hunter and Acceptance Auditor layers.
+- Outcome: **Approve** after fixes; no unresolved high or medium findings.
+- Scope: implementation commit `e4e82e8` plus review fixes on `feature/12-2-provider-settings-administration`, compared with `develop`.
+- Triage: five actionable findings fixed (one high credential-screening finding, four medium validation/test-isolation findings), two pre-existing low copy/template issues deferred, four candidates dismissed. All review layers completed.
+- Fixed: raw whitespace/control endpoint rejection; percent-decoded credential screening in models and endpoints; browser preservation of environment-source settings; localhost-only browser probes with configured credentials; fallback test cleanup restoring environment/configuration/service modules.
+- Dismissed: global browser concurrency is already serialized (`workers: 1`, `fullyParallel: false`); hypothetical keyless future adapters are outside the supported provider catalog; profile validation occurs entirely before database writes; environment-source Ollama cannot have `local_mode=false` under the current resolver.
+- Independent recheck: 39 provider/fallback tests and 26 subtests passed; acceptance remains satisfied and original edge findings are resolved.
+- Validation: focused suite 129 passed, one optional live-provider skip, 140 subtests; API/CLI/infra shard 415 passed and 132 subtests; root unittest 475 tests OK with one optional live-provider skip; local CI all nine test directories passed (1,667 tests total), including lint, repo-wide formatting (285 Python files), compilation, dependency consistency, Skill harness, prompt-injection tests and configured Bandit gate.
+- Browser validation: rebuilt Compose app at root SPA URLs, seeded through APIs, full Playwright 15 passed; additional isolated temporary-database runs each passed for environment-source preservation and configured synthetic hosted credentials. Health remained `source=environment` after the first isolated check. Localhost-only successful-save probe covers the configured-key case without hosted network calls. All Compose instances stopped; persistent original data volume retained.
+- Evidence: `/private/tmp/story12-2-review-{red,focused,ci,unittest,shard,browser,env-browser,key-browser}.log`; screenshot committed at `docs/verification/story-12-2/provider-settings.png`.
+- Limitations: real hosted-provider connectivity remains untested. Existing unrelated medium Bandit B104 sample-data finding remains; no touched-file finding and the configured security gate passes. Two low copy/template issues are recorded in `deferred-work.md`.
+- Git Flow: verified compliant feature branch; review fixes and closure record are committed there. Push/PR closure follows this record; no merge is authorized by this review.

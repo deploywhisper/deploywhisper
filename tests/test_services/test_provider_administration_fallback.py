@@ -23,6 +23,9 @@ from services.analysis_service import build_analysis_artifacts
 
 class ProviderAdministrationFallbackTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.original_database_url = os.getenv(
+            "DATABASE_URL", "sqlite:///data/deploywhisper.db"
+        )
         self.tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tempdir.cleanup)
         environment = patch.dict(
@@ -35,9 +38,9 @@ class ProviderAdministrationFallbackTests(unittest.TestCase):
                 "NARRATOR_ENABLED": "true",
             },
         )
+        self.environment = environment
         environment.start()
-        self.addCleanup(environment.stop)
-        for module in (
+        self.modules = (
             config_module,
             tables_module,
             database_module,
@@ -47,10 +50,11 @@ class ProviderAdministrationFallbackTests(unittest.TestCase):
             project_service_module,
             settings_service_module,
             report_service_module,
-        ):
+        )
+        for module in self.modules:
             reload(module)
         database_module.init_db()
-        self.addCleanup(database_module.engine.dispose)
+        self.addCleanup(self._restore_runtime)
         self.files = [
             (
                 "main.tf",
@@ -64,6 +68,26 @@ class ProviderAdministrationFallbackTests(unittest.TestCase):
                 b"}\n",
             )
         ]
+
+    def _restore_runtime(self) -> None:
+        database_module.engine.dispose()
+        self.environment.stop()
+        for module in self.modules:
+            reload(module)
+
+    def test_cleanup_restores_runtime_before_temporary_database_is_removed(
+        self,
+    ) -> None:
+        temporary_url = config_module.settings.database_url
+        self.assertNotEqual(temporary_url, self.original_database_url)
+        self._restore_runtime()
+        self.assertEqual(
+            config_module.settings.database_url, self.original_database_url
+        )
+        self.assertEqual(str(database_module.engine.url), self.original_database_url)
+        self.assertEqual(
+            settings_service_module.settings.database_url, self.original_database_url
+        )
 
     def _store_runtime(self, provider: str, *, local_mode: bool = False) -> None:
         # Emulate existing persisted configuration, including invalid legacy rows.
