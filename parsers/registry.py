@@ -146,6 +146,13 @@ def parse_uploaded_files(files: list[tuple[str, bytes | None]]) -> ParseBatchRes
                 )
             )
         except Exception as exc:  # noqa: BLE001
+            message = (
+                "Duplicate Terraform action declarations are invalid."
+                if tool == "terraform"
+                and isinstance(exc, ValueError)
+                and str(exc).startswith("Duplicate Terraform action(s) for ")
+                else f"{tool.title()} parser could not process the artifact ({type(exc).__name__})."
+            )
             results.append(
                 ParsedFileResult(
                     file_name=name,
@@ -154,7 +161,7 @@ def parse_uploaded_files(files: list[tuple[str, bytes | None]]) -> ParseBatchRes
                     issue=ParseIssue(
                         file_name=name,
                         tool=tool,
-                        message=str(exc),
+                        message=message,
                     ),
                 )
             )

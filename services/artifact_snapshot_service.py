@@ -10,6 +10,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from config import settings
+from services.content_security import BLOCKED_CONTENT, sensitive_artifact_values
+from services.intake_service import is_sensitive_file
 
 
 class ArtifactSnapshot(BaseModel):
@@ -51,10 +53,15 @@ def save_report_artifacts(
     report_dir.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, str] = {}
     for artifact_name, raw_content in artifact_snapshots.items():
-        if raw_content is None:
+        if raw_content is None or is_sensitive_file(artifact_name):
             continue
         stored_name = _stored_name(artifact_name)
-        (report_dir / stored_name).write_bytes(raw_content)
+        content = (
+            BLOCKED_CONTENT.encode("utf-8")
+            if sensitive_artifact_values(raw_content)
+            else raw_content
+        )
+        (report_dir / stored_name).write_bytes(content)
         manifest[artifact_name] = stored_name
     _manifest_path(report_id).write_text(
         json.dumps(manifest, indent=2, sort_keys=True),
@@ -74,10 +81,15 @@ def load_report_artifact(report_id: int, artifact_name: str) -> ArtifactSnapshot
     artifact_path = _report_dir(report_id, create=False) / stored_name
     if not artifact_path.exists():
         return None
+    raw_content = artifact_path.read_bytes()
     return ArtifactSnapshot(
         report_id=report_id,
         artifact_name=artifact_name,
-        content=artifact_path.read_text(encoding="utf-8", errors="replace"),
+        content=(
+            BLOCKED_CONTENT
+            if sensitive_artifact_values(raw_content)
+            else raw_content.decode("utf-8", errors="replace")
+        ),
     )
 
 

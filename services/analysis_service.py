@@ -32,6 +32,11 @@ from evidence.models import (
     OwnerSignal,
 )
 from llm.narrator import NarrativeResult, generate_narrative
+from services.content_security import (
+    REDACTION_WARNING,
+    redact_value,
+    sensitive_artifact_values,
+)
 from llm.prompt_security import (
     UNTRUSTED_DATA_SYSTEM_INSTRUCTION,
     build_untrusted_json_payload,
@@ -77,6 +82,7 @@ def evaluate_evidence(
     supplemental_changes: list[UnifiedChange] | None = None,
     completion_client=None,
     allow_llm_assistance: bool = True,
+    sensitive_values: tuple[str, ...] = (),
 ) -> RiskAssessment:
     """Return a reusable unified risk assessment from evidence inputs."""
     return score_evidence(
@@ -88,6 +94,7 @@ def evaluate_evidence(
         supplemental_changes=supplemental_changes,
         completion_client=completion_client,
         allow_llm_assistance=allow_llm_assistance,
+        sensitive_values=sensitive_values,
     )
 
 
@@ -136,6 +143,7 @@ def evaluate_parse_batch(
     raw_files: dict[str, bytes | None] | None = None,
     completion_client=None,
     allow_llm_assistance: bool = True,
+    sensitive_values: tuple[str, ...] = (),
 ) -> RiskAssessment:
     """Compatibility wrapper that scores extracted evidence for a parse batch."""
     scored_evidence_items = (
@@ -155,6 +163,7 @@ def evaluate_parse_batch(
             raw_files=raw_files,
             completion_client=completion_client,
             allow_llm_assistance=allow_llm_assistance,
+            sensitive_values=sensitive_values,
         )
     if not scored_evidence_items:
         scored_evidence_items = extract_batch_evidence(batch)
@@ -169,6 +178,7 @@ def evaluate_parse_batch(
         ),
         completion_client=completion_client,
         allow_llm_assistance=allow_llm_assistance,
+        sensitive_values=sensitive_values,
     )
 
 
@@ -1257,7 +1267,9 @@ def _skipped_narrative(reason: str, assessment: RiskAssessment) -> NarrativeResu
     )
 
 
-def _interaction_confidence_prompt_payload(assessment: RiskAssessment) -> str:
+def _interaction_confidence_prompt_payload(
+    assessment: RiskAssessment, *, sensitive_values: tuple[str, ...] = ()
+) -> str:
     payload = {
         "instructions": {
             "format": "Return JSON with key 'confidences' containing objects with keys 'key' and 'confidence'.",
@@ -1286,11 +1298,16 @@ def _interaction_confidence_prompt_payload(assessment: RiskAssessment) -> str:
             for contributor in assessment.contributors[:5]
         ],
     }
-    return build_untrusted_json_payload(payload)
+    return build_untrusted_json_payload(
+        redact_value(payload, sensitive_values=sensitive_values)
+    )
 
 
 def _interaction_confidence_overrides(
-    assessment: RiskAssessment, *, completion_client=None
+    assessment: RiskAssessment,
+    *,
+    completion_client=None,
+    sensitive_values: tuple[str, ...] = (),
 ) -> dict[str, float]:
     if assessment.source != "heuristic+llm" or not assessment.interaction_risks:
         return {}
@@ -1309,7 +1326,9 @@ def _interaction_confidence_overrides(
                 },
                 {
                     "role": "user",
-                    "content": _interaction_confidence_prompt_payload(assessment),
+                    "content": _interaction_confidence_prompt_payload(
+                        assessment, sensitive_values=sensitive_values
+                    ),
                 },
             ],
             provider=runtime["provider"],
@@ -2453,6 +2472,9 @@ def build_analysis_artifacts(
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
+    sensitive_values = tuple(
+        value for _, raw in files for value in sensitive_artifact_values(raw)
+    )
     submission_manifest = build_submission_manifest(
         files,
         parse_batch=parse_batch,
@@ -2469,6 +2491,9 @@ def build_analysis_artifacts(
         project_key=project_key,
         workspace_id=workspace_id,
         workspace_key=workspace_key,
+        redaction_status_by_artifact={
+            item.name: item.redaction_status for item in submission_manifest.items
+        },
     )
     changes = _collect_changes(parse_batch)
     if include_topology_context:
@@ -2488,6 +2513,7 @@ def build_analysis_artifacts(
         raw_files=analysis_raw_files,
         completion_client=completion_client,
         allow_llm_assistance=allow_llm_assistance,
+        sensitive_values=sensitive_values,
     )
     context_completeness = _build_context_completeness(
         parse_batch,
@@ -2510,7 +2536,9 @@ def build_analysis_artifacts(
         assessment=assessment,
         evidence_items=evidence_items,
         interaction_confidence_overrides=_interaction_confidence_overrides(
-            assessment, completion_client=completion_client
+            assessment,
+            completion_client=completion_client,
+            sensitive_values=sensitive_values,
         ),
     )
     findings = label_ai_iac_risk_findings(
@@ -2540,13 +2568,14 @@ def build_analysis_artifacts(
             [finding.model_copy(deep=True) for finding in findings],
             completion_client=completion_client,
             raw_files=analysis_raw_files,
+            sensitive_values=sensitive_values,
         )
     else:
         narrative = _skipped_narrative(
             "Narrative skipped for deterministic benchmark profile.",
             assessment,
         )
-    return AnalysisArtifacts(
+    artifacts = AnalysisArtifacts(
         parse_batch=parse_batch,
         submission_manifest=submission_manifest,
         evidence_items=evidence_items,
@@ -2557,6 +2586,13 @@ def build_analysis_artifacts(
         incident_matches=incident_matches,
         narrative=narrative,
     )
+    payload = artifacts.model_dump(mode="json")
+    sanitized = redact_value(payload, sensitive_values=sensitive_values)
+    if sanitized != payload or submission_manifest.redaction.get("content_redacted"):
+        sanitized["assessment"]["warnings"] = list(
+            dict.fromkeys([*sanitized["assessment"]["warnings"], REDACTION_WARNING])
+        )
+    return AnalysisArtifacts.model_validate(sanitized)
 
 
 def resolve_analysis_project_scope(

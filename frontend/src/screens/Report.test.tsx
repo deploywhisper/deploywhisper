@@ -258,6 +258,15 @@ function renderReport(path = "/reports/77?private=1", detail: ReportDetail = rep
 }
 
 describe("ReportScreen", () => {
+  it("shows content redaction status in the existing audit metadata card", () => {
+    const markup = renderReport("/reports/77?private=1&tab=audit", {
+      ...report,
+      audit: { ...report.audit, redaction_status: "redacted" },
+    });
+    expect(markup).toContain("Content redaction");
+    expect(markup).toContain("redacted");
+  });
+
   it("renders Part B3 header and overview from persisted report data", () => {
     const markup = renderReport();
 

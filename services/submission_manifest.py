@@ -10,6 +10,7 @@ from api.schemas import PendingAnalysis
 from parsers.base import ParseBatchResult, ParsedFileResult
 from services.ai_iac_risk_service import assess_iac_provenance
 from services.intake_service import build_pending_analysis
+from services.content_security import sensitive_artifact_values
 
 ManifestStatus = Literal["accepted", "excluded", "failed", "sensitive"]
 RedactionStatus = Literal["none", "redacted", "sensitive_blocked"]
@@ -231,6 +232,14 @@ def build_submission_manifest(
         )
     )
     for item in items:
+        if item.status in {"accepted", "failed"} and sensitive_artifact_values(
+            raw_content_by_name.get(item.name)
+        ):
+            item.redaction_status = "redacted"
+            if item.status == "accepted":
+                item.message += (
+                    " Sensitive content redacted; local artifact snapshot blocked."
+                )
         item_raw_files = (
             {item.name: raw_content_by_name.get(item.name)}
             if item.status in {"accepted", "failed"}
@@ -255,6 +264,9 @@ def build_submission_manifest(
         redaction={
             "filenames_redacted": False,
             "sensitive_content_excluded": sensitive_count > 0,
+            "content_redacted": any(
+                item.redaction_status == "redacted" for item in items
+            ),
         },
         items=items,
     )

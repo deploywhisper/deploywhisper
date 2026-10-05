@@ -80,7 +80,13 @@ from services.submission_manifest import (
     normalize_manifest_redaction_status,
     normalize_submission_manifest_payload,
 )
+from services.intake_service import is_sensitive_file
 from services.topology_service import STALE_AFTER_DAYS
+from services.content_security import (
+    REDACTION_WARNING,
+    redact_value,
+    sensitive_artifact_values,
+)
 
 LEGACY_REPORT_SCHEMA_VERSION = "v1"
 REPORT_SCHEMA_VERSION = "v2"
@@ -853,6 +859,8 @@ def _report_redaction_status(
             return "redacted"
         if item_status == "redacted":
             return item_status
+        if isinstance(redaction, dict) and redaction.get("content_redacted"):
+            return "redacted"
         if item_status == "none" or has_redaction_metadata:
             return "none"
     fallback_status = _redaction_status_from_items(submission_manifest_fallback)
@@ -3222,7 +3230,9 @@ def _evidence_items_with_report_context(
                 "redaction_status": redaction_status_by_artifact.get(
                     evidence_item.artifact,
                     evidence_item.redaction_status,
-                ),
+                )
+                if evidence_item.redaction_status == "none"
+                else evidence_item.redaction_status,
             }
         )
         for evidence_item in evidence_items
@@ -4484,7 +4494,15 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         payload,
         evidence_detail_available=include_evidence,
     )
-    return payload
+    sanitized = redact_value(payload)
+    if sanitized != payload or REDACTION_WARNING in sanitized["warnings"]:
+        sanitized["warnings"] = list(
+            dict.fromkeys([*sanitized["warnings"], REDACTION_WARNING])
+        )
+        if sanitized["audit"]["redaction_status"] != "sensitive_blocked":
+            sanitized["audit"]["redaction_status"] = "redacted"
+        sanitized["audit"]["redaction"]["content_redacted"] = True
+    return sanitized
 
 
 def persist_analysis_report(
@@ -4506,6 +4524,64 @@ def persist_analysis_report(
     analysis_duration_seconds: int | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
+    sensitive_values = tuple(
+        value
+        for name, raw in (
+            submitted_artifacts or list((artifact_snapshots or {}).items())
+        )
+        if not is_sensitive_file(name)
+        for value in sensitive_artifact_values(raw)
+    )
+
+    def screen(model):
+        return type(model).model_validate(
+            redact_value(
+                model.model_dump(mode="json"), sensitive_values=sensitive_values
+            )
+        )
+
+    original_content = {
+        "parse_batch": parse_batch.model_dump(mode="json"),
+        "assessment": assessment.model_dump(mode="json"),
+        "narrative": narrative.model_dump(mode="json"),
+        "findings": [item.model_dump(mode="json") for item in (findings or [])],
+        "evidence": [item.model_dump(mode="json") for item in (evidence_items or [])],
+        "blast_radius": blast_radius.model_dump(mode="json")
+        if blast_radius is not None
+        else None,
+        "rollback_plan": rollback_plan.model_dump(mode="json")
+        if rollback_plan is not None
+        else None,
+        "incident_matches": [
+            item.model_dump(mode="json") for item in (incident_matches or [])
+        ],
+        "audit_context": audit_context,
+    }
+    content_redacted = (
+        redact_value(original_content, sensitive_values=sensitive_values)
+        != original_content
+    )
+    parse_batch = screen(parse_batch)
+    assessment = screen(assessment)
+    narrative = screen(narrative)
+    findings = [screen(item) for item in (findings or [])]
+    evidence_items = [screen(item) for item in (evidence_items or [])]
+    blast_radius = screen(blast_radius) if blast_radius is not None else None
+    rollback_plan = screen(rollback_plan) if rollback_plan is not None else None
+    incident_matches = [screen(item) for item in (incident_matches or [])]
+    audit_context = redact_value(audit_context, sensitive_values=sensitive_values)
+    if content_redacted or sensitive_values:
+        assessment.warnings = list(
+            dict.fromkeys([*assessment.warnings, REDACTION_WARNING])
+        )
+        for original, item in zip(
+            original_content["evidence"], evidence_items, strict=True
+        ):
+            if (
+                original != item.model_dump(mode="json")
+                and item.redaction_status == "none"
+            ):
+                item.redaction_status = "redacted"
     assessment = apply_context_uncertainty(assessment)
     assessment, findings = _repair_assessment_evidence_links(
         assessment,
@@ -4589,6 +4665,9 @@ def persist_analysis_report(
             ),
         },
     )
+    if content_redacted:
+        submission_manifest.redaction["content_redacted"] = True
+    submission_manifest = screen(submission_manifest)
     evidence_items = _evidence_items_with_report_context(
         evidence_items,
         project=resolved_project,

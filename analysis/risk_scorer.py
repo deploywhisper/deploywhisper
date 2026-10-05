@@ -16,7 +16,16 @@ from llm.prompt_security import (
     UNTRUSTED_DATA_SYSTEM_INSTRUCTION,
     build_untrusted_json_payload,
 )
-from llm.providers import generate_completion_with_settings
+from llm.providers import (
+    SENSITIVE_RESPONSE_NOTICE,
+    generate_completion_with_settings,
+    safe_error_message,
+)
+from services.content_security import (
+    redact_text,
+    redact_value,
+    sensitive_artifact_values,
+)
 from parsers.base import (
     NON_MUTATING_ACTIONS,
     ParseBatchResult,
@@ -628,7 +637,10 @@ def _sanitize_scope_claims(text: str, contributors: list[RiskContributor]) -> st
 
 
 def _assessment_prompt_payload(
-    contributors: list[RiskContributor], partial_context: bool
+    contributors: list[RiskContributor],
+    partial_context: bool,
+    *,
+    sensitive_values: tuple[str, ...] = (),
 ) -> str:
     payload = {
         "policy": {
@@ -637,9 +649,32 @@ def _assessment_prompt_payload(
             "rollup_rule": "Overall severity must equal the highest individual resource severity.",
         },
         "partial_context": partial_context,
-        "changes": [contributor.model_dump() for contributor in contributors],
+        "changes": [
+            contributor.model_dump(
+                include={
+                    "evidence_id",
+                    "source_file",
+                    "tool",
+                    "resource_id",
+                    "action",
+                    "contribution",
+                    "summary",
+                    "normalized_action",
+                    "resource_category",
+                    "blast_radius",
+                    "downstream_scope",
+                    "security_flags",
+                    "environment",
+                    "severity",
+                    "reasoning",
+                }
+            )
+            for contributor in contributors
+        ],
     }
-    return build_untrusted_json_payload(payload)
+    return build_untrusted_json_payload(
+        redact_value(payload, sensitive_values=sensitive_values)
+    )
 
 
 def _assessment_system_prompt() -> str:
@@ -668,17 +703,23 @@ def _apply_llm_scores(
     *,
     partial_context: bool,
     completion_client=None,
+    sensitive_values: tuple[str, ...] = (),
 ) -> tuple[list[RiskContributor], str | None, bool]:
     if not contributors:
         return contributors, None, False
 
     runtime = resolve_provider_runtime()
+    sensitive_values = sensitive_values + (
+        (runtime["api_key"],) if runtime["api_key"] else ()
+    )
     try:
         prompt_messages = [
             {"role": "system", "content": _assessment_system_prompt()},
             {
                 "role": "user",
-                "content": _assessment_prompt_payload(contributors, partial_context),
+                "content": _assessment_prompt_payload(
+                    contributors, partial_context, sensitive_values=sensitive_values
+                ),
             },
         ]
         raw_response = generate_completion_with_settings(
@@ -691,11 +732,16 @@ def _apply_llm_scores(
             request_timeout_seconds=runtime.get("request_timeout_seconds", 30.0),
             completion_client=completion_client,
         )
+        if redact_text(raw_response, sensitive_values=sensitive_values) != raw_response:
+            raise ValueError(SENSITIVE_RESPONSE_NOTICE)
         payload = json.loads(raw_response)
+        if redact_value(payload, sensitive_values=sensitive_values) != payload:
+            raise ValueError(SENSITIVE_RESPONSE_NOTICE)
     except Exception as exc:  # noqa: BLE001
         return (
             contributors,
-            f"LLM severity assessment unavailable; falling back to heuristic matrix: {exc}",
+            "LLM severity assessment unavailable; falling back to heuristic matrix: "
+            f"{safe_error_message(exc)}",
             False,
         )
 
@@ -792,6 +838,7 @@ def score_changes(
     raw_files: dict[str, bytes | None] | None = None,
     completion_client=None,
     allow_llm_assistance: bool = True,
+    sensitive_values: tuple[str, ...] = (),
 ) -> RiskAssessment:
     contributors = [
         _build_contributor(change, topology=topology, raw_files=raw_files)
@@ -808,6 +855,12 @@ def score_changes(
             contributors,
             partial_context=partial_context,
             completion_client=completion_client,
+            sensitive_values=sensitive_values
+            + tuple(
+                value
+                for content in (raw_files or {}).values()
+                for value in sensitive_artifact_values(content)
+            ),
         )
     else:
         llm_warning = None
@@ -854,6 +907,7 @@ def score_parse_batch(
     raw_files: dict[str, bytes | None] | None = None,
     completion_client=None,
     allow_llm_assistance: bool = True,
+    sensitive_values: tuple[str, ...] = (),
 ) -> RiskAssessment:
     changes: list[UnifiedChange] = []
     for file_result in batch.files:
@@ -866,4 +920,5 @@ def score_parse_batch(
         raw_files=raw_files,
         completion_client=completion_client,
         allow_llm_assistance=allow_llm_assistance,
+        sensitive_values=sensitive_values,
     )

@@ -63,6 +63,59 @@ class ReportServiceTests(unittest.TestCase):
         os.environ.pop("ARTIFACT_SNAPSHOT_DIR", None)
         self.tempdir.cleanup()
 
+    def test_report_persistence_redacts_secrets_and_records_visible_status(
+        self,
+    ) -> None:
+        from services.analysis_service import build_analysis_artifacts
+        from services.content_security import BLOCKED_CONTENT, REDACTION_WARNING
+
+        raw = b"hosts: all\ntasks:\n  - name: Configure password=synthetic-task-value\n    debug:\n      msg: safe\n"
+        artifacts = build_analysis_artifacts(
+            [("playbook.yaml", raw)],
+            include_narrative=False,
+            include_topology_context=False,
+            include_incident_context=False,
+            allow_llm_assistance=False,
+        )
+        artifacts.narrative.explanation = "Review api_key=synthetic-output-value"
+        artifacts.assessment.contributors[0].metadata = {
+            "api_key": "synthetic-metadata-value"
+        }
+        artifacts.evidence_items[0].summary += " password=synthetic-evidence-value"
+        persisted = report_service_module.persist_analysis_report(
+            artifacts.parse_batch,
+            artifacts.assessment,
+            artifacts.narrative,
+            findings=artifacts.findings,
+            evidence_items=artifacts.evidence_items,
+            artifact_snapshots={"playbook.yaml": raw},
+            submitted_artifacts=[("playbook.yaml", raw)],
+        )
+        encoded = json.dumps(persisted)
+        for secret in (
+            "synthetic-task-value",
+            "synthetic-output-value",
+            "synthetic-metadata-value",
+            "synthetic-evidence-value",
+        ):
+            self.assertNotIn(secret, encoded)
+            self.assertNotIn(secret.encode(), self.db_path.read_bytes())
+        self.assertEqual(
+            persisted["submission_manifest"]["items"][0]["redaction_status"], "redacted"
+        )
+        self.assertEqual(persisted["evidence_items"][0]["redaction_status"], "redacted")
+        self.assertIn(REDACTION_WARNING, persisted["warnings"])
+        self.assertEqual(
+            artifact_snapshot_service_module.load_report_artifact(
+                persisted["id"], "playbook.yaml"
+            ).content,
+            BLOCKED_CONTENT,
+        )
+        self.assertEqual(
+            artifacts.assessment.contributors[0].metadata["api_key"],
+            "synthetic-metadata-value",
+        )
+
     def test_create_analysis_report_validates_finding_context_payloads(self) -> None:
         project = project_service_module.ensure_default_project()
         report_kwargs = {

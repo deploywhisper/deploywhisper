@@ -7,6 +7,7 @@ from typing import Iterable
 
 from api.schemas import IntakeItem, PendingAnalysis
 from parsers.registry import detect_tool_type, parse_uploaded_files
+from services.content_security import redact_text
 
 SENSITIVE_FILE_MARKERS = {
     ".env",
@@ -225,6 +226,8 @@ def normalize_artifact_name(
 
 
 def is_sensitive_file(name: str) -> bool:
+    if redact_text(name) != name:
+        return True
     lower_name = name.lower()
     path = Path(lower_name)
     if path.name in SENSITIVE_FILE_MARKERS:

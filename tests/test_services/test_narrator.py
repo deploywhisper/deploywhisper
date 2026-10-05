@@ -72,7 +72,7 @@ class NarratorTests(unittest.TestCase):
         self.assertEqual(narrative.skills_applied, ["terraform"])
         self.assertIsNotNone(narrative.failure_notice)
         self.assertIn("Narrative provider unavailable", narrative.failure_notice or "")
-        self.assertIn("Expecting property name", " ".join(narrative.warnings))
+        self.assertIn("JSONDecodeError", " ".join(narrative.warnings))
 
     def test_generate_narrative_keeps_clean_fallback_when_skill_resolution_fails(
         self,
@@ -171,12 +171,14 @@ class NarratorTests(unittest.TestCase):
         self.assertEqual(narrative.provider, "anthropic")
         self.assertEqual(narrative.model, "claude-3-5-sonnet-latest")
         self.assertEqual(
-            narrative.failure_notice, "Narrative provider unavailable: provider offline"
+            narrative.failure_notice,
+            "Narrative provider unavailable: Provider operation failed (NarrativeProviderError).",
         )
         self.assertIn(
-            "Narrative provider unavailable: provider offline",
+            "Narrative provider unavailable: Provider operation failed (NarrativeProviderError).",
             narrative.warnings,
         )
+        self.assertNotIn("provider offline", " ".join(narrative.warnings))
 
     def test_generate_narrative_falls_back_when_provider_call_times_out(self) -> None:
         def timed_out_completion(**_: object):
@@ -212,8 +214,9 @@ class NarratorTests(unittest.TestCase):
         self.assertEqual(narrative.source, "fallback")
         self.assertEqual(
             narrative.failure_notice,
-            "Narrative provider unavailable: provider timed out",
+            "Narrative provider unavailable: Provider operation failed (NarrativeProviderError).",
         )
+        self.assertNotIn("provider timed out", narrative.failure_notice or "")
 
     def test_generate_narrative_passes_runtime_timeout_to_provider_call(self) -> None:
         captured: dict[str, object] = {}
@@ -302,7 +305,8 @@ class NarratorTests(unittest.TestCase):
             "Narrative provider unavailable", narrative.failure_notice or ""
         )
         self.assertIn("Narrative setup unavailable", narrative.failure_notice or "")
-        self.assertIn("skill context failed", narrative.failure_notice or "")
+        self.assertIn("RuntimeError", narrative.failure_notice or "")
+        self.assertNotIn("skill context failed", narrative.failure_notice or "")
 
     def test_generate_narrative_falls_back_when_provider_returns_empty_text(
         self,

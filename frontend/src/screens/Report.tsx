@@ -948,6 +948,7 @@ function AuditTab({ report }: { report: ReportDetail }) {
     ["Model", report.narrative_model || report.audit.llm_model || "none"],
     ["Risk scoring", report.assessment_source || "heuristic-only"],
     ["Narrative source", report.narrative_source || "fallback"],
+    ["Content redaction", report.audit.redaction_status || "unknown"],
     ["Schema", report.report_schema_version],
     ["Files analyzed", String(report.filenames.length)],
     ["Skills applied", skills.join(" - ") || "none"],

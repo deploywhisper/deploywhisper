@@ -1,0 +1,415 @@
+"""Local credential screening for prompts, reports, snapshots, and errors."""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import json
+import re
+from typing import Any, Iterable, get_args
+
+import yaml
+from evidence.models import (
+    ContextSourceType,
+    EvidenceSourceType,
+    DeterminismLevel,
+    FindingEvidenceClassification,
+    ContextSourceFreshness,
+    OwnerSignalScope,
+    RiskSeverity,
+    DeployRecommendation,
+    ContextConfidenceLevel,
+)
+
+REDACTED = "[REDACTED]"
+BLOCKED_CONTENT = (
+    "[Sensitive artifact content blocked; review the redaction status in the report.]"
+)
+REDACTION_WARNING = "Sensitive content was redacted from report data; sensitive artifact snapshots were blocked."
+_SECRET_NAME = r"(?:[\w.-]*(?:password|passwd|api[_-]?key|access[_-]?key|secret(?:[_-]?key)?|token|credential|private[_-]?key|connection[_-]?string))"
+_ASSIGNMENT_PREFIX = rf"(?P<prefix>\b{_SECRET_NAME}\b[\"']?\s*[:=]\s*)"
+_ASSIGNMENT = re.compile(
+    _ASSIGNMENT_PREFIX
+    + r"(?P<value>\"(?:\\.|[^\"\\])*\"|'(?:\\.|''|[^'\\])*'|[^\s,;\}\]\"']+)",
+    re.IGNORECASE | re.DOTALL,
+)
+_BLOCK_ASSIGNMENT = re.compile(
+    _ASSIGNMENT_PREFIX
+    + r"[|>](?:[+-][1-9]?|[1-9][+-]?)?[ \t]*(?:\#[^\r\n]*)?\r?\n"
+    + r"(?P<value>(?:(?:[ \t]+[^\r\n]*|[ \t]*)\r?\n|[ \t]+[^\r\n]*$)+)",
+    re.IGNORECASE,
+)
+_HEREDOC_ASSIGNMENT = re.compile(
+    "(?i:"
+    + _ASSIGNMENT_PREFIX
+    + ")"
+    + r"<<-?(?P<delimiter>[A-Za-z_][A-Za-z0-9_]*)[ \t]*\r?\n"
+    + r"(?P<value>.*?)(?:^[ \t]*(?P=delimiter)[ \t]*(?:\r?\n|$)|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+_PRIVATE_KEY = re.compile(
+    r"-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----.*?"
+    r"(?:-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----|$)",
+    re.DOTALL,
+)
+_TOKEN = re.compile(
+    r"\b(?:AKIA[A-Z0-9]{16}|ASIA[A-Z0-9]{16}|gh[pousr]_[A-Za-z0-9]{20,}"
+    r"|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{12,})\b"
+)
+_AUTHORIZATION = re.compile(
+    r"(?i)(\b(?:authorization[\"']?\s*[:=]\s*[\"']?\s*)?"
+    r"\b(?:bearer|basic)\s+)(?P<credential>[A-Za-z0-9._~+/=-]+)"
+)
+_URL_CREDENTIAL = re.compile(
+    r"(\b[a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/@]+:(?P<credential>[^\s/@]+)@"
+)
+_SEVERITIES = set(get_args(RiskSeverity))
+_ACTIONS = {
+    "create",
+    "modify",
+    "replace",
+    "destroy",
+    "delete",
+    "apply",
+    "no-op",
+    "read",
+    "update",
+}
+_SOURCES = set(get_args(ContextSourceType)) | set(get_args(EvidenceSourceType))
+_PROTOCOL_VALUES = {
+    "severity": _SEVERITIES,
+    "overall_severity": _SEVERITIES,
+    "severity_hint": _SEVERITIES,
+    "recommendation": set(get_args(DeployRecommendation)),
+    "action": _ACTIONS,
+    "normalized_action": _ACTIONS,
+    "operation": _ACTIONS,
+    "tool": {
+        "terraform",
+        "kubernetes",
+        "ansible",
+        "jenkins",
+        "cloudformation",
+        "unsupported",
+    },
+    "source_type": _SOURCES,
+    "source_kind": _SOURCES,
+    "kind": {"secret"},
+    "determinism_level": set(get_args(DeterminismLevel)),
+    "status": {
+        "accepted",
+        "excluded",
+        "failed",
+        "sensitive",
+        "parsed",
+        "skipped",
+        "ready",
+        "pending",
+        "persisted",
+    },
+    "intake_status": {"ready", "unsupported", "sensitive"},
+    "parse_status": {"parsed", "failed", "skipped"},
+    "redaction_status": {"none", "redacted", "sensitive_blocked", "unknown"},
+    "confidence_level": set(get_args(ContextConfidenceLevel)),
+    "confidence_label": set(get_args(ContextConfidenceLevel)),
+    "complexity": set(get_args(ContextConfidenceLevel)),
+    "evidence_classification": set(get_args(FindingEvidenceClassification)),
+    "freshness_status": set(get_args(ContextSourceFreshness)),
+    "incident_index_freshness_status": set(get_args(ContextSourceFreshness)),
+    "scope": set(get_args(OwnerSignalScope)),
+    "match_type": {"organization_incident", "public_risk_pattern"},
+    "source": {
+        "llm",
+        "fallback",
+        "heuristic-only",
+        "heuristic+llm",
+        "environment",
+        "database",
+    },
+    "report_schema_version": {"v1", "v2"},
+}
+_SECRET_SUFFIXES = (
+    "password",
+    "passwd",
+    "apikey",
+    "accesskey",
+    "secret",
+    "secretkey",
+    "token",
+    "credential",
+    "credentials",
+    "privatekey",
+    "connectionstring",
+)
+_RAW_CONTENT_KEYS = {
+    "rawartifact",
+    "rawcontent",
+    "rawprompt",
+    "rawresponse",
+    "rawiac",
+    "artifactcontent",
+}
+
+
+def _secret_key(key: str) -> bool:
+    return re.sub(r"[^a-z0-9]", "", key.lower()).endswith(_SECRET_SUFFIXES)
+
+
+def redact_text(value: str, *, sensitive_values: Iterable[str] = ()) -> str:
+    """Redact recognizable credentials and locally identified sensitive values."""
+    # Consume whole scalar bodies before replacing their header or delimiter.
+    text = _HEREDOC_ASSIGNMENT.sub(lambda m: m.group("prefix") + REDACTED + "\n", value)
+    text = _BLOCK_ASSIGNMENT.sub(lambda m: m.group("prefix") + REDACTED + "\n", text)
+    for secret in sorted(set(sensitive_values), key=len, reverse=True):
+        if secret and secret != REDACTED:
+            text = (
+                re.sub(rf"(?<!\w){re.escape(secret)}(?!\w)", lambda _: REDACTED, text)
+                if len(secret) < 4
+                else text.replace(secret, REDACTED)
+            )
+    text = _PRIVATE_KEY.sub(REDACTED, text)
+    text = _TOKEN.sub(REDACTED, text)
+    text = _AUTHORIZATION.sub(lambda match: match.group(1) + REDACTED, text)
+    text = _URL_CREDENTIAL.sub(lambda match: match.group(1) + REDACTED + "@", text)
+
+    def replace_assignment(match: re.Match[str]) -> str:
+        raw = match.group("value")
+        # Keep a stable marker when screening an already redacted payload.
+        if raw in {REDACTED, REDACTED[:-1]} or raw.strip("\"'") == REDACTED:
+            return match.group(0)
+        quote = raw[0] if raw.startswith(('"', "'")) else ""
+        return match.group("prefix") + quote + REDACTED + quote
+
+    return _ASSIGNMENT.sub(replace_assignment, text)
+
+
+def _screen_value(
+    value: Any,
+    sensitive_values: tuple[str, ...],
+    found: set[str],
+    changed: list[bool] | None = None,
+) -> Any:
+    active: set[int] = set()
+    memo: dict[tuple[int, bool], Any] = {}
+    hidden: dict[tuple[int, bool], Any] = {}
+    hiding: set[int] = set()
+    mask_memo: dict[tuple[int, int], Any] = {}
+    # Masked values and parsed JSON strings create temporary containers. Retain
+    # their sources so object IDs cannot be reused within these memo tables.
+    memo_sources: list[Any] = []
+
+    def mark_changed() -> None:
+        if changed is not None:
+            changed[0] = True
+
+    def collect(item: str) -> None:
+        # Block scalars carry a trailing newline; derived explanations often do not.
+        found.update((item, item.strip(), "".join(item.splitlines()).strip()))
+
+    def hide(item: Any, depth: int = 0, *, encoded: bool = False) -> Any:
+        if depth > 32 or id(item) in hiding:
+            mark_changed()
+            return BLOCKED_CONTENT
+        mark_changed()
+        if isinstance(item, bytes):
+            collect(item.decode("utf-8", errors="replace"))
+            collect(base64.b64encode(item).decode("ascii"))
+            return REDACTED
+        if isinstance(item, str):
+            if item and item != REDACTED:
+                collect(item)
+                if encoded:
+                    try:
+                        decoded = base64.b64decode(item, validate=True).decode("utf-8")
+                    except (ValueError, binascii.Error, UnicodeDecodeError):
+                        pass
+                    else:
+                        collect(decoded)
+            return REDACTED
+        if isinstance(item, (dict, list, tuple)):
+            cache_key = (id(item), encoded)
+            if cache_key in hidden:
+                return hidden[cache_key]
+            hiding.add(id(item))
+            try:
+                result = (
+                    {
+                        str(key): hide(nested, depth + 1, encoded=encoded)
+                        for key, nested in item.items()
+                    }
+                    if isinstance(item, dict)
+                    else [hide(nested, depth + 1, encoded=encoded) for nested in item]
+                )
+                hidden[cache_key] = result
+                memo_sources.append(item)
+                return result
+            finally:
+                hiding.remove(id(item))
+        # Safe YAML may resolve unquoted values to dates or other scalar types.
+        if item is not None and not isinstance(item, bool):
+            found.add(str(item))
+        return REDACTED if item is not None else None
+
+    def masked(item: Any, mask: Any, depth: int = 0) -> Any:
+        if mask is True:
+            return hide(item)
+        if depth > 32:
+            mark_changed()
+            return BLOCKED_CONTENT
+        cache_key = (id(item), id(mask))
+        if cache_key in mask_memo:
+            return mask_memo[cache_key]
+        if isinstance(item, dict) and isinstance(mask, dict):
+            result = {}
+            mask_memo[cache_key] = result
+            memo_sources.extend((item, mask))
+            result.update(
+                (key, masked(nested, mask.get(key), depth + 1))
+                for key, nested in item.items()
+            )
+            return result
+        if isinstance(item, list) and isinstance(mask, list):
+            result = []
+            mask_memo[cache_key] = result
+            memo_sources.extend((item, mask))
+            result.extend(
+                masked(nested, mask[index] if index < len(mask) else None, depth + 1)
+                for index, nested in enumerate(item)
+            )
+            return result
+        return item
+
+    def walk(item: Any, depth: int = 0, *, metadata: bool = False) -> Any:
+        if isinstance(item, str):
+            safe = redact_text(item, sensitive_values=sensitive_values)
+            if safe != item:
+                mark_changed()
+            return safe
+        if not isinstance(item, (dict, list, tuple)):
+            if (
+                metadata
+                and isinstance(item, (int, float))
+                and not isinstance(item, bool)
+                and str(item) in sensitive_values
+            ):
+                mark_changed()
+                return REDACTED
+            return item
+        if id(item) in active or depth > 32:
+            mark_changed()
+            return BLOCKED_CONTENT
+        cache_key = (id(item), metadata)
+        if cache_key in memo:
+            return memo[cache_key]
+        active.add(id(item))
+        try:
+            if isinstance(item, (list, tuple)):
+                result = [walk(nested, depth + 1, metadata=metadata) for nested in item]
+                memo[cache_key] = result
+                memo_sources.append(item)
+                return result
+            result = {}
+            secret_object = str(item.get("kind", "")).lower() == "secret"
+            secret_env = isinstance(item.get("name"), str) and _secret_key(item["name"])
+            for key, nested in item.items():
+                key_text = str(key)
+                normalized = re.sub(r"[^a-z0-9]", "", key_text.lower())
+                if key in {"before", "after", "values"}:
+                    nested = masked(
+                        nested,
+                        item.get(f"{key}_sensitive", item.get("sensitive_values")),
+                    )
+                if normalized in _RAW_CONTENT_KEYS:
+                    safe = BLOCKED_CONTENT
+                    mark_changed()
+                elif (
+                    _secret_key(key_text)
+                    or (secret_object and key in {"data", "stringData"})
+                    or (secret_env and key == "value")
+                    or (item.get("sensitive") is True and key == "value")
+                ):
+                    safe = hide(nested, encoded=secret_object and key == "data")
+                elif key_text.endswith("_json") and isinstance(nested, str):
+                    try:
+                        decoded = json.loads(nested)
+                    except (ValueError, TypeError):
+                        safe = walk(nested, depth + 1, metadata=metadata)
+                    else:
+                        # JSON has no aliases, so this equality cannot expand a DAG.
+                        screened = walk(decoded, depth + 1, metadata=metadata)
+                        safe = json.dumps(screened) if screened != decoded else nested
+                elif isinstance(nested, str) and nested.lower() in _PROTOCOL_VALUES.get(
+                    key_text, set()
+                ):
+                    # Public enums retain their meaning even if a short secret
+                    # happens to have the same spelling as an enum value.
+                    safe = redact_text(nested)
+                    if safe != nested:
+                        mark_changed()
+                else:
+                    safe = walk(
+                        nested,
+                        depth + 1,
+                        metadata=metadata or normalized == "metadata",
+                    )
+                safe_key = redact_text(
+                    key_text, sensitive_values=sensitive_values if metadata else ()
+                )
+                if safe_key != key_text:
+                    mark_changed()
+                result[safe_key] = safe
+            memo[cache_key] = result
+            memo_sources.append(item)
+            return result
+        finally:
+            active.remove(id(item))
+
+    return walk(value)
+
+
+def redact_value(value: Any, *, sensitive_values: Iterable[str] = ()) -> Any:
+    """Screen nested JSON-like data without mutating the caller's objects."""
+    return _screen_value(value, tuple(sensitive_values), set())
+
+
+def sensitive_artifact_values(raw_content: bytes | None) -> tuple[str, ...]:
+    """Identify credential values locally, including K8s data and TF sensitive masks."""
+    if not raw_content:
+        return ()
+    text = raw_content.decode("utf-8", errors="replace")
+    found = {
+        match.group("value").strip("\"'")
+        for match in _ASSIGNMENT.finditer(text)
+        if match.group("value").strip("\"'") != REDACTED
+    }
+    for pattern in (_BLOCK_ASSIGNMENT, _HEREDOC_ASSIGNMENT):
+        for match in pattern.finditer(text):
+            scalar = match.group("value")
+            found.update((scalar, scalar.strip(), "".join(scalar.splitlines()).strip()))
+    found.discard("|")
+    found.discard(">")
+    found.update(match.group(0) for match in _TOKEN.finditer(text))
+    found.update(match.group(0) for match in _PRIVATE_KEY.finditer(text))
+    found.update(match.group("credential") for match in _AUTHORIZATION.finditer(text))
+    found.update(match.group("credential") for match in _URL_CREDENTIAL.finditer(text))
+    if redact_text(text) != text and not found:
+        # Authorization and credential-bearing URLs also block the snapshot.
+        found.add(text)
+    try:
+        if text.lstrip().startswith(("{", "[")):
+            try:
+                documents = [json.loads(text)]
+            except ValueError:
+                documents = yaml.safe_load_all(text)
+        else:
+            # YAML permits quoted keys, spacing and tags; lexical filters miss them.
+            documents = yaml.safe_load_all(text)
+        for document in documents:
+            changed = [False]
+            _screen_value(document, (), found, changed)
+            if changed[0] and not found:
+                found.add(text)
+    except (ValueError, yaml.YAMLError, RecursionError):
+        # Failed parser messages are handled separately; never expose their input.
+        pass
+    return tuple(sorted(value for value in found if value and value != REDACTED))
