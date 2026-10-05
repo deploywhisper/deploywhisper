@@ -666,14 +666,22 @@ def create_analysis_report(
         dashboard_display_duration_seconds=dashboard_display_duration_seconds,
         analysis_duration_seconds=analysis_duration_seconds,
     )
-    safe_report_values = redact_value(report_values)
     assessment_values = {
         "top_risk_contributors_json": top_risk_contributors_json,
         "context_completeness_json": context_completeness_json,
     }
-    safe_assessment_values = redact_value(assessment_values)
-    safe_findings = redact_value(findings_payload or [])
-    safe_evidence = redact_value(evidence_payload)
+    safe_payload = redact_value(
+        {
+            "report": report_values,
+            "assessment": assessment_values,
+            "findings": findings_payload or [],
+            "evidence": evidence_payload,
+        }
+    )
+    safe_report_values = safe_payload["report"]
+    safe_assessment_values = safe_payload["assessment"]
+    safe_findings = safe_payload["findings"]
+    safe_evidence = safe_payload["evidence"]
     if (
         safe_report_values != report_values
         or safe_assessment_values != assessment_values

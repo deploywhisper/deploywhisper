@@ -47,6 +47,23 @@ So that self-hosted analysis does not leak sensitive deployment data.
 
 - [x] [Review][Patch][P1] Retain safe logging through migrations and Uvicorn startup [migrations/env.py:18] — Alembic fileConfig replaced the application formatter/filter and Uvicorn installed independent console handlers. Reuse the shared configuration and preserve it in the canonical entrypoint.
 
+### Re-review Findings
+
+- [x] [Review][Patch][P1] Decode quoted-source credential variants [services/content_security.py] — Escaped HCL quoted values are collected in source spelling only and decoded sibling values can enter prompts.
+- [x] [Review][Patch][P1] Reuse values detected within a structured payload [services/content_security.py] — Sensitive labelled fields are redacted but duplicated unlabelled values survive; constrain enum exemptions to typed fields rather than freeform metadata.
+- [x] [Review][Patch][P1] Decode standard multiline base64 Secret values [services/content_security.py] — Base64 validation rejects CR/LF in valid Secret.data block scalars and does not screen decoded echoes.
+- [x] [Review][Patch][P1] Inspect supported CloudFormation intrinsic YAML [services/content_security.py] — SafeLoader rejects supported intrinsic tags before reaching sensitive parameter defaults.
+- [x] [Review][Patch][P1] Screen encoded evidence references [services/content_security.py] — URI-encoded credential values remain reversible in evidence source references.
+- [x] [Review][Patch][P1] Apply submitted credential context to all snapshots [services/artifact_snapshot_service.py] — Per-file snapshot screening retains an opaque credential discovered in a sibling artifact.
+- [x] [Review][Patch][P2] Preserve artifact identity through redaction [services/analysis_service.py] — A secret equal to an artifact name makes sanitized names fail correlation with original submitted names during persistence.
+- [x] [Review][Patch][P2] Carry redaction status from the first screening pass [services/analysis_service.py] — Already-screened evidence remains marked none when persistence does not see another change.
+- [x] [Review][Patch][P1] Retain excluded-upload credentials during persistence [services/report_service.py] — An excluded .env credential reappears in original audit context and manifest provenance.
+- [x] [Review][Patch][P2] Screen public intake serialization [api/schemas.py] — Successful API and CLI response intake items expose detected sensitive filenames outside screened artifacts.
+
+- [x] [Review][Defer][P2] Reconcile multi-finding top-risk ownership validation [models/repositories/analysis_reports.py:_validate_top_risk_contributor_refs] — pre-existing; isolated develop and current controls fail identically. Tracked in deferred-work.md; scoring semantics unchanged.
+
+- [x] [Review][Patch][P2] Match the installed Gemini SDK logger namespace [logging_config.py:PayloadLogFilter] — the SDK uses google_genai, which escaped the google.genai-only debug suppression; verified directly from installed SDK source.
+
 ## Dev Notes
 
 ### Epic Context
@@ -128,10 +145,12 @@ Codex (GPT-6), with bounded native subagents for independent boundary review, pr
 - `README.md`
 - `SECURITY.md`
 - `_bmad-output/implementation-artifacts/12-1-secrets-and-raw-artifact-boundary-audit.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `analysis/risk_engine.py`
 - `analysis/risk_scorer.py`
 - `api/errors.py`
+- `api/schemas.py`
 - `app.py`
 - `docs/design/story-12-1-content-redaction.png`
 - `docs/design/ui-parity-audit.md`
@@ -152,7 +171,14 @@ Codex (GPT-6), with bounded native subagents for independent boundary review, pr
 - `services/intake_service.py`
 - `services/report_service.py`
 - `services/submission_manifest.py`
+- `tests/snapshot_isolation.py`
+- `tests/test_api/test_agent.py`
+- `tests/test_api/test_analyses.py`
+- `tests/test_api/test_analysis_content_boundary.py`
+- `tests/test_api/test_deployments.py`
 - `tests/test_api/test_error_security.py`
+- `tests/test_api/test_stats.py`
+- `tests/test_cli/test_analyze.py`
 - `tests/test_infra/test_logging_security.py`
 - `tests/test_infra/test_logging_startup_security.py`
 - `tests/test_llm/test_content_boundary.py`
@@ -163,6 +189,7 @@ Codex (GPT-6), with bounded native subagents for independent boundary review, pr
 - `tests/test_services/test_narrator.py`
 - `tests/test_services/test_report_service.py`
 - `tests/test_services/test_settings_service.py`
+- `tests/test_services/test_snapshot_content_boundary.py`
 
 ## Change Log
 
@@ -189,3 +216,22 @@ Codex (GPT-6), with bounded native subagents for independent boundary review, pr
 - Git Flow: reviewed branch `feature/12-1-secrets-raw-artifact-boundary`; mandatory commit/push/PR closure follows verified approval.
 
 - 2026-10-05: Completed layered code review, fixed all 10 findings, added runtime/credential regressions, verified CI and composed browser flows, and approved Story 12.1.
+
+## Senior Developer Re-review (AI)
+
+- Date: 2026-10-05. Base reviewed: `490d473`, PR #128. Outcome: **APPROVE after 11 additional fixes**, with one confirmed pre-existing issue deferred. Blind Hunter, Edge Case Hunter, and Acceptance Auditor reviewed independently without inherited conclusions; original findings passed independent fix checks.
+- Fixed: decoded quoted-source and base64 credentials; CloudFormation tags/NoEcho; whole-payload and cross-model sibling protection; URL-encoded evidence; batch snapshots; stable artifact aliases; carried redaction status; excluded-input audit/provenance; public API/CLI intake; actual installed Gemini SDK debug logger namespace. No new dependencies, public model fields, or scoring changes.
+- Simplifications: reused credential collection across payload groups and snapshot batches; shared API run-data builder protects both API and CLI; deterministic aliases keep local parsing/ownership on original names and preserve report/manifest/snapshot correlations; shared test snapshot isolation replaces accidental default-directory writes.
+- Deferred: existing low/medium multi-finding top-risk evidence ownership conflict. Isolated `develop` and reviewed builders fail the same control; tracked in `deferred-work.md`. It is not introduced by Story 12.1.
+- Regression checks: helper/public-surface/provider tests passed; real TestClient and CLI cases verify intake, excluded audit context, encoded evidence, alias/snapshot lookup, and reviewer redaction status. Cross-model repository/service/log regressions passed. Installed SDK source confirmed `google_genai` namespace; red-first filter regression now passes.
+- Final Ruff lint, repository-wide formatting (283 files), and git diff check: passed.
+- `./.venv/bin/python -m unittest discover -q`: 471 passed, one opt-in live smoke skipped.
+- `bash scripts/ci-local.sh`: passed all nine test directories, 1,648 tests (one opt-in live smoke skipped), dependency consistency, compile, Skill/prompt-injection checks, and high-severity Bandit gate. The same unrelated sample-IP comparison B104 remains a documented false positive.
+- `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: 411 passed, 132 subtests; existing deprecation warnings retained.
+- Frontend unit tests/typecheck/build passed (56 tests). Compose build/health passed; full `BASE_URL=http://localhost:8080 npm run test:ui-review`: 13 passed; final `-- content-security.spec.ts`: 3 passed. Screenshot refreshed. Compose shut down, data volume preserved.
+- Evidence logs: `/private/tmp/story12-rereview-{ci-final,smoke-verified,shard-verified,browser,browser-verified,focused-final,aggregate}.log`.
+- Operational incident: an early read-only review probe isolated its SQLite database but not snapshot storage, overwriting pre-existing ignored `data/report-artifacts/1/manifest.json` and `2/manifest.json`; it also created a safe synthetic snapshot. Prior manifest contents were not captured. Read-only recovery inspection found persisted metadata did not match the existing snapshot hashes, so reconstructing the old indexes was ambiguous and no guessed restore was performed. Existing artifact bytes were retained. Shared API/CLI snapshot fixtures now isolate storage; filesystem timestamps confirmed no subsequent writes to those manifests during final validation.
+- Remaining limits: deterministic recognition is best-effort, older stored bytes/backups are not purged, and live hosted network calls were not used. The baseline persistence contract and prior local manifest restoration remain separate follow-up work.
+- Git Flow closure: follow-up commit on `feature/12-1-secrets-raw-artifact-boundary`, push to origin, update existing PR #128 targeting develop.
+
+- 2026-10-05: Re-ran layered code review, fixed 11 new findings, documented the baseline deferral and snapshot-isolation incident, added public/cross-boundary regression coverage, and reverified the composed app.

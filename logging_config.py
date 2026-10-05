@@ -7,7 +7,7 @@ from copy import copy
 from logging.config import dictConfig
 
 from config import settings
-from services.content_security import redact_text
+from services.content_security import redact_text, redact_value
 
 
 class SafeFormatter(logging.Formatter):
@@ -15,7 +15,7 @@ class SafeFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         safe_record = copy(record)
-        safe_record.msg = redact_text(record.getMessage())
+        safe_record.msg = redact_value(record.getMessage())
         safe_record.args = ()
         # Other handlers can cache full exception text on the shared record.
         safe_record.exc_text = None
@@ -35,6 +35,7 @@ class PayloadLogFilter(logging.Filter):
         "openai",
         "anthropic",
         "google.genai",
+        "google_genai",
         "urllib3",
     )
 

@@ -80,7 +80,10 @@ from services.submission_manifest import (
     normalize_manifest_redaction_status,
     normalize_submission_manifest_payload,
 )
-from services.intake_service import is_sensitive_file
+from services.intake_service import (
+    artifact_security_aliases,
+    remap_artifact_identities,
+)
 from services.topology_service import STALE_AFTER_DAYS
 from services.content_security import (
     REDACTION_WARNING,
@@ -4524,19 +4527,32 @@ def persist_analysis_report(
     analysis_duration_seconds: int | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
+    security_inputs = submitted_artifacts or list((artifact_snapshots or {}).items())
     sensitive_values = tuple(
-        value
-        for name, raw in (
-            submitted_artifacts or list((artifact_snapshots or {}).items())
-        )
-        if not is_sensitive_file(name)
-        for value in sensitive_artifact_values(raw)
+        value for _, raw in security_inputs for value in sensitive_artifact_values(raw)
     )
+    artifact_aliases = artifact_security_aliases(
+        security_inputs, sensitive_values=sensitive_values
+    )
+    if submitted_artifacts is not None:
+        submitted_artifacts = [
+            (artifact_aliases.get(name, name), raw) for name, raw in submitted_artifacts
+        ]
+    if artifact_snapshots is not None:
+        artifact_snapshots = {
+            artifact_aliases.get(name, name): raw
+            for name, raw in artifact_snapshots.items()
+        }
 
-    def screen(model):
+    def screen(model, screened_payload=None):
+        if screened_payload is not None:
+            return type(model).model_validate(screened_payload)
         return type(model).model_validate(
             redact_value(
-                model.model_dump(mode="json"), sensitive_values=sensitive_values
+                remap_artifact_identities(
+                    model.model_dump(mode="json"), artifact_aliases
+                ),
+                sensitive_values=sensitive_values,
             )
         )
 
@@ -4557,20 +4573,40 @@ def persist_analysis_report(
         ],
         "audit_context": audit_context,
     }
-    content_redacted = (
-        redact_value(original_content, sensitive_values=sensitive_values)
-        != original_content
+    original_content = remap_artifact_identities(original_content, artifact_aliases)
+    screened_content = redact_value(original_content, sensitive_values=sensitive_values)
+    content_redacted = screened_content != original_content
+    parse_batch = screen(parse_batch, screened_content["parse_batch"])
+    assessment = screen(assessment, screened_content["assessment"])
+    narrative = screen(narrative, screened_content["narrative"])
+    findings = [
+        screen(item, safe)
+        for item, safe in zip(findings or [], screened_content["findings"], strict=True)
+    ]
+    evidence_items = [
+        screen(item, safe)
+        for item, safe in zip(
+            evidence_items or [], screened_content["evidence"], strict=True
+        )
+    ]
+    blast_radius = (
+        screen(blast_radius, screened_content["blast_radius"])
+        if blast_radius is not None
+        else None
     )
-    parse_batch = screen(parse_batch)
-    assessment = screen(assessment)
-    narrative = screen(narrative)
-    findings = [screen(item) for item in (findings or [])]
-    evidence_items = [screen(item) for item in (evidence_items or [])]
-    blast_radius = screen(blast_radius) if blast_radius is not None else None
-    rollback_plan = screen(rollback_plan) if rollback_plan is not None else None
-    incident_matches = [screen(item) for item in (incident_matches or [])]
-    audit_context = redact_value(audit_context, sensitive_values=sensitive_values)
-    if content_redacted or sensitive_values:
+    rollback_plan = (
+        screen(rollback_plan, screened_content["rollback_plan"])
+        if rollback_plan is not None
+        else None
+    )
+    incident_matches = [
+        screen(item, safe)
+        for item, safe in zip(
+            incident_matches or [], screened_content["incident_matches"], strict=True
+        )
+    ]
+    audit_context = screened_content["audit_context"]
+    if content_redacted:
         assessment.warnings = list(
             dict.fromkeys([*assessment.warnings, REDACTION_WARNING])
         )
@@ -4785,7 +4821,11 @@ def persist_analysis_report(
                     ],
                 )
                 report_id = int(report.id)
-                save_report_artifacts(report_id, safe_artifact_snapshots)
+                save_report_artifacts(
+                    report_id,
+                    safe_artifact_snapshots,
+                    sensitive_values=sensitive_values,
+                )
                 return _serialize_report(report, include_evidence=True)
         except Exception:
             _cleanup_partial_report(report_id)

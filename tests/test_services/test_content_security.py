@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from urllib.parse import quote, quote_plus
 from pathlib import Path
 from types import SimpleNamespace
 from typing import get_args
@@ -22,6 +23,98 @@ from services.content_security import (
 
 
 class ContentSecurityTests(unittest.TestCase):
+    def test_escaped_hcl_credentials_keep_literal_and_decoded_variants(self):
+        for literal, decoded in (
+            (r"\u0073ynthetic-value", "synthetic-value"),
+            (r"synthetic\"value", 'synthetic"value'),
+            (r"synthetic\nvalue", "synthetic\nvalue"),
+            (r"synthetic\U0000002fvalue", "synthetic/value"),
+        ):
+            with self.subTest(literal=literal):
+                raw = f'resource "example" "test" {{\n password = "{literal}"\n}}'
+                values = sensitive_artifact_values(raw.encode())
+                self.assertIn(literal, values)
+                self.assertIn(decoded, values)
+                self.assertNotIn(
+                    decoded,
+                    redact_value({"echo": decoded}, sensitive_values=values)["echo"],
+                )
+
+    def test_local_credentials_screen_sibling_echoes_and_skill_prose(self):
+        for payload in (
+            {"echo": "synthetic-value", "api_key": "synthetic-value"},
+            {"echo": "synthetic-value", "skill": "password=synthetic-value"},
+            {"echo": 'synthetic"value', "skill": r'password="synthetic\"value"'},
+            {
+                "echo": "synthetic-value",
+                "env": [{"name": "AUTH_TOKEN", "value": "synthetic-value"}],
+            },
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(redact_value(payload)["echo"], REDACTED)
+
+    def test_metadata_protocol_spellings_do_not_exempt_credentials(self):
+        safe = redact_value(
+            {
+                "source": "database",
+                "metadata": {"source": "database", "status": "ready"},
+            },
+            sensitive_values=("database", "ready"),
+        )
+        self.assertEqual(safe["source"], "database")
+        self.assertEqual(safe["metadata"], {"source": REDACTED, "status": REDACTED})
+
+    def test_kubernetes_base64_block_scalars_collect_decoded_credentials(self):
+        for marker in ("|", "|-", ">", ">-"):
+            with self.subTest(marker=marker):
+                raw = (
+                    f"kind: Secret\r\ndata:\r\n  opaque: {marker}\r\n"
+                    "    c3ludGhldGlj\r\n    LXZhbHVl\r\n"
+                ).encode()
+                values = sensitive_artifact_values(raw)
+                self.assertIn("synthetic-value", values)
+                self.assertEqual(
+                    redact_value({"echo": "synthetic-value"}, sensitive_values=values)[
+                        "echo"
+                    ],
+                    REDACTED,
+                )
+
+    def test_cloudformation_tags_and_noecho_defaults_are_screened(self):
+        raw = b"""Parameters:
+  Opaque:
+    Type: String
+    NoEcho: true
+    Default: synthetic-default
+Resources:
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      MasterUserPassword: synthetic-password
+      Name: !Sub '${AWS::StackName}-db'
+      Other: !Join [':', [one, two]]
+"""
+        values = sensitive_artifact_values(raw)
+        self.assertIn("synthetic-password", values)
+        self.assertIn("synthetic-default", values)
+        self.assertEqual(
+            redact_value({"NoEcho": True, "Default": "synthetic-default"})["Default"],
+            REDACTED,
+        )
+
+    def test_known_credentials_screen_url_encoded_evidence_references(self):
+        secret = 'synthetic value/"quoted"'
+        for encoded in (quote(secret), quote(secret, safe=""), quote_plus(secret)):
+            with self.subTest(encoded=encoded):
+                safe = redact_value(
+                    {
+                        "api_key": secret,
+                        "evidence_reference": f"file:///source/{encoded}.tf",
+                    }
+                )
+                self.assertNotIn(encoded, safe["evidence_reference"])
+                self.assertIn(REDACTED, safe["evidence_reference"])
+
     def test_large_valid_payload_preserves_container_and_numeric_contracts(self):
         payload = {
             "tasks": [
@@ -248,9 +341,23 @@ class ContentSecurityTests(unittest.TestCase):
             trigger_type=None,
             trigger_id=None,
             dashboard_display_duration_seconds=None,
+            findings_payload=[
+                {
+                    "finding_id": "finding-cross-model",
+                    "analysis_id": 0,
+                    "title": "LOW: review",
+                    "description": "Echo synthetic-direct-metadata",
+                    "severity": "low",
+                    "category": "generic infrastructure",
+                    "deterministic": True,
+                    "confidence": 1.0,
+                    "evidence_refs": [],
+                }
+            ],
         )
         self.assertNotIn("synthetic-direct-value", report.narrative_explanation)
         self.assertNotIn("synthetic-direct-metadata", report.contributors_json)
+        self.assertNotIn("synthetic-direct-metadata", report.findings[0].description)
         self.assertIn(REDACTION_WARNING, json.loads(report.warnings_json))
 
     def test_credentials_are_redacted_in_text_without_hiding_risk_flags(self):

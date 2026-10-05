@@ -2,12 +2,95 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
+from urllib.parse import quote
 
 from api.schemas import IntakeItem, PendingAnalysis
 from parsers.registry import detect_tool_type, parse_uploaded_files
-from services.content_security import redact_text
+from services.content_security import redact_text, sensitive_artifact_values
+
+
+def artifact_security_aliases(
+    files: Iterable[tuple[str, bytes | None]], *, sensitive_values: tuple[str, ...] = ()
+) -> dict[str, str]:
+    """Give colliding artifact identities stable safe names without reparsing inputs."""
+    submitted = list(files)
+    values = sensitive_values or tuple(
+        value
+        for _, content in submitted
+        for value in sensitive_artifact_values(content)
+    )
+    aliases = {}
+    reserved_names = {name for name, _ in submitted}
+    for name, _ in submitted:
+        if (
+            not is_sensitive_file(name)
+            and redact_text(name, sensitive_values=values) != name
+        ):
+            digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
+            candidate = f"artifact-{digest}{Path(name).suffix}"
+            counter = 0
+            while candidate in reserved_names:
+                counter += 1
+                digest = hashlib.sha256(
+                    f"{name}\0{counter}".encode("utf-8")
+                ).hexdigest()[:16]
+                candidate = f"artifact-{digest}{Path(name).suffix}"
+            aliases[name] = candidate
+            reserved_names.add(candidate)
+    return aliases
+
+
+def remap_artifact_identities(value: Any, aliases: dict[str, str]) -> Any:
+    """Remap artifact references together while retaining opaque data for screening."""
+    if not aliases:
+        return value
+    identity_fields = {"source_file", "file_name", "artifact", "submitted_name", "name"}
+    identity_lists = {
+        "filenames",
+        "files_analyzed",
+        "analyzed_files",
+        "contributing_files",
+        "ownership_unmapped_subjects",
+    }
+    reference_fields = {"source_ref", "source_id", "location"}
+    replacements = sorted(aliases.items(), key=lambda pair: len(pair[0]), reverse=True)
+
+    def reference(text: str) -> str:
+        for original, alias in replacements:
+            text = text.replace(quote(original, safe=""), quote(alias, safe=""))
+            text = text.replace(original, alias)
+        return text
+
+    def walk(item: Any, field: str = "") -> Any:
+        if isinstance(item, str):
+            if (
+                field in identity_fields
+                or field in identity_lists
+                or field == "file_subject"
+            ):
+                return aliases.get(item, item)
+            return reference(item) if field in reference_fields else item
+        if isinstance(item, list):
+            return [walk(nested, field) for nested in item]
+        if isinstance(item, dict):
+            return {
+                key: nested
+                if key == "metadata"
+                else walk(
+                    nested,
+                    "file_subject"
+                    if key == "subject" and item.get("scope") == "file"
+                    else key,
+                )
+                for key, nested in item.items()
+            }
+        return item
+
+    return walk(value)
+
 
 SENSITIVE_FILE_MARKERS = {
     ".env",

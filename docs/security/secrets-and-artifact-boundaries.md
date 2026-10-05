@@ -47,6 +47,18 @@ snapshot manifest writes. Their outcome uses the existing `sensitive_blocked`
 status. A failed parser does not remove its detected credentials from the
 screening context used by valid sibling artifacts.
 
+API and CLI intake responses use the screened manifest names. If an artifact
+name itself matches a detected credential, a stable hash-based alias preserves
+its extension and correlation through evidence, manifests, and snapshot lookup.
+Parsing and local ownership resolution use the original name before publication.
+Redaction status follows the first screening pass and batch-only snapshot blocking.
+
+Credential collection recognizes escaped source strings, whitespace in base64
+Secret data, and CloudFormation intrinsic tags/NoEcho defaults. Reversible URL
+forms are screened alongside their plaintext values. Credentials found in one
+field protect sibling fields and models; excluded inputs still protect audit
+and provenance metadata. Snapshot writes apply the same submitted-batch context.
+
 ![Composed report showing a redacted synthetic credential and Audit status](../design/story-12-1-content-redaction.png)
 
 ## Operator guidance and limits

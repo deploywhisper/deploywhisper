@@ -98,6 +98,8 @@ class LoggingSecurityTests(unittest.TestCase):
             "openai._base_client",
             "anthropic._base_client",
             "google.genai._api_client",
+            "google_genai._api_client",
+            "google_genai.models",
             "urllib3.connectionpool",
         ):
             with self.subTest(logger=name):
@@ -151,3 +153,10 @@ class LoggingSecurityTests(unittest.TestCase):
         logger = logging.getLogger("deploywhisper.security_test")
         self.assertFalse(logger.disabled)
         self.assertEqual(self.root.level, logging.DEBUG)
+
+    def test_known_labelled_credential_cannot_survive_in_a_sibling_log_field(self):
+        logging.getLogger("deploywhisper.security_test").warning(
+            "%s",
+            {"password": "synthetic-log-value", "actor": "echo synthetic-log-value"},
+        )
+        self.assertNotIn("synthetic-log-value", self.output.getvalue())

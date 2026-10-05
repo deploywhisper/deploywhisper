@@ -2530,6 +2530,8 @@ def build_analysis_run_data(
     advisory: BaseModel,
     share_summary: BaseModel,
 ) -> AnalysisRunData:
+    from services.content_security import redact_value
+
     parse_batch = result.parse_batch
     assessment = result.assessment
     blast_radius = result.blast_radius
@@ -2547,9 +2549,15 @@ def build_analysis_run_data(
     persisted_report_payload["context_completeness"] = persisted_context.model_dump(
         mode="json"
     )
+    public_intake = redact_value(intake.model_dump())
+    manifest = persisted_report.get("submission_manifest") or {}
+    manifest_items = manifest.get("items") or []
+    if len(manifest_items) == len(public_intake["items"]):
+        for item, artifact in zip(public_intake["items"], manifest_items, strict=True):
+            item["name"] = str(artifact["name"])
 
     return AnalysisRunData(
-        intake=PendingAnalysis.model_validate(intake.model_dump()),
+        intake=PendingAnalysis.model_validate(public_intake),
         parse_batch=ParseBatchData(
             files=[
                 ParsedArtifactData(

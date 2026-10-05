@@ -69,3 +69,41 @@ test("protects a credential from a failed artifact when a sibling echoes it", as
   await expect(page.getByText("redacted", { exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(secret);
 });
+
+test("screens public intake and audit metadata for excluded credentials", async ({ page, request }) => {
+  const projectKey = `intake-security-${Date.now()}`;
+  const project = await request.post("/api/v1/projects", {
+    data: { project_key: projectKey, display_name: "Public intake boundary audit" },
+  });
+  expect(project.ok()).toBeTruthy();
+  const actorSecret = "synthetic-excluded-actor-value";
+  const filenameSecret = "synthetic-intake-filename-value";
+  const boundary = `----intake-boundary-${Date.now()}`;
+  const parts = [
+    `--${boundary}\r\nContent-Disposition: form-data; name="project_key"\r\n\r\n${projectKey}\r\n`,
+    `--${boundary}\r\nContent-Disposition: form-data; name="files"; filename=".env"\r\nContent-Type: text/plain\r\n\r\nPASSWORD=${actorSecret}\r\n`,
+    `--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="password=${filenameSecret}.tf"\r\nContent-Type: text/plain\r\n\r\nresource "aws_instance" "web" {}\r\n`,
+    `--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="playbook.yaml"\r\nContent-Type: application/x-yaml\r\n\r\nhosts: all\ntasks:\n  - name: Review deployment\n    debug:\n      msg: safe\n\r\n`,
+    `--${boundary}--\r\n`,
+  ];
+  const run = await request.post("/api/v1/analyses", {
+    headers: { "Content-Type": `multipart/form-data; boundary=${boundary}`, "X-DeployWhisper-Actor": actorSecret },
+    data: Buffer.from(parts.join("")),
+  });
+  expect(run.ok()).toBeTruthy();
+  const data = (await run.json()).data;
+  expect(JSON.stringify(data)).not.toContain(actorSecret);
+  expect(JSON.stringify(data)).not.toContain(filenameSecret);
+  expect(data.intake.items[1].status).toBe("sensitive");
+  const reportId = data.persisted_report.id;
+  const detail = await request.get(`/api/v1/analyses/${reportId}`);
+  expect(detail.ok()).toBeTruthy();
+  const report = (await detail.json()).data;
+  expect(JSON.stringify(report)).not.toContain(actorSecret);
+  expect(JSON.stringify(report)).not.toContain(filenameSecret);
+  await page.goto(`/reports/${reportId}?private=1&tab=audit`);
+  await expect(page.getByText("Content redaction", { exact: true })).toBeVisible();
+  await expect(page.getByText("sensitive_blocked", { exact: true })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(actorSecret);
+  await expect(page.locator("body")).not.toContainText(filenameSecret);
+});

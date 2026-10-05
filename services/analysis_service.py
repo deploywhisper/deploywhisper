@@ -43,7 +43,11 @@ from llm.prompt_security import (
 )
 from llm.providers import generate_completion_with_settings
 from parsers.base import ParseBatchResult, UnifiedChange, is_non_mutating_action
-from services.intake_service import build_parse_batch
+from services.intake_service import (
+    build_parse_batch,
+    artifact_security_aliases,
+    remap_artifact_identities,
+)
 from services.ai_iac_risk_service import label_ai_iac_risk_findings
 from services.project_service import (
     ProjectResolutionError,
@@ -2587,7 +2591,29 @@ def build_analysis_artifacts(
         narrative=narrative,
     )
     payload = artifacts.model_dump(mode="json")
-    sanitized = redact_value(payload, sensitive_values=sensitive_values)
+    aliases = artifact_security_aliases(files, sensitive_values=sensitive_values)
+    identities = remap_artifact_identities(payload, aliases)
+    sanitized = redact_value(identities, sensitive_values=sensitive_values)
+    redacted_names = {
+        item["name"]
+        for original, item in zip(
+            payload["submission_manifest"]["items"],
+            sanitized["submission_manifest"]["items"],
+            strict=True,
+        )
+        if original != item
+    }
+    for original, item in zip(
+        payload["evidence_items"], sanitized["evidence_items"], strict=True
+    ):
+        if original != item and item["redaction_status"] == "none":
+            item["redaction_status"] = "redacted"
+            redacted_names.add(item["artifact"])
+    for item in sanitized["submission_manifest"]["items"]:
+        if item["name"] in redacted_names and item["redaction_status"] == "none":
+            item["redaction_status"] = "redacted"
+    if redacted_names:
+        sanitized["submission_manifest"]["redaction"]["content_redacted"] = True
     if sanitized != payload or submission_manifest.redaction.get("content_redacted"):
         sanitized["assessment"]["warnings"] = list(
             dict.fromkeys([*sanitized["assessment"]["warnings"], REDACTION_WARNING])

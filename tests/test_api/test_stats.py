@@ -6,6 +6,8 @@ import os
 import sqlite3
 import tempfile
 import unittest
+
+from tests.snapshot_isolation import isolate_artifact_snapshots
 from importlib import reload
 from pathlib import Path
 
@@ -26,6 +28,7 @@ from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
 class StatsApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
+        isolate_artifact_snapshots(self, self.tempdir.name)
         self.db_path = Path(self.tempdir.name) / "stats-api.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
         reload(config_module)

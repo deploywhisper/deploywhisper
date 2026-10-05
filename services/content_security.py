@@ -7,8 +7,10 @@ import binascii
 import json
 import re
 from typing import Any, Iterable, get_args
+from urllib.parse import quote, quote_plus
 
 import yaml
+from parsers.cloudformation_parser import _CloudFormationLoader
 from evidence.models import (
     ContextSourceType,
     EvidenceSourceType,
@@ -155,12 +157,68 @@ def _secret_key(key: str) -> bool:
     return re.sub(r"[^a-z0-9]", "", key.lower()).endswith(_SECRET_SUFFIXES)
 
 
+def _sensitive_variants(item: str) -> set[str]:
+    variants = {item, item.strip(), "".join(item.splitlines()).strip()}
+    variants.difference_update({"", REDACTED, REDACTED[:-1]})
+    return variants | {
+        encoded
+        for value in variants
+        for encoded in (
+            quote(value, errors="surrogatepass"),
+            quote(value, safe="", errors="surrogatepass"),
+            quote_plus(value, errors="surrogatepass"),
+        )
+    }
+
+
+def _text_sensitive_values(text: str) -> set[str]:
+    found: set[str] = set()
+    for match in _ASSIGNMENT.finditer(text):
+        raw = match.group("value")
+        literal = raw[1:-1] if raw.startswith(('"', "'")) else raw
+        found.update(_sensitive_variants(literal))
+        if raw.startswith('"'):
+            # HCL quoted strings share JSON escapes, plus eight-digit Unicode.
+            # Decode only supported escapes; never evaluate source expressions.
+            def decode_escape(escape: re.Match[str]) -> str:
+                value = escape.group(0)[1:]
+                if value.startswith(("u", "U")):
+                    try:
+                        return chr(int(value[1:], 16))
+                    except ValueError:
+                        return escape.group(0)
+                return {"n": "\n", "r": "\r", "t": "\t", '"': '"', "\\": "\\"}[value]
+
+            decoded = re.sub(
+                r'\\(?:[nrt"\\]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})',
+                decode_escape,
+                literal,
+            )
+            found.update(_sensitive_variants(decoded))
+    for pattern in (_BLOCK_ASSIGNMENT, _HEREDOC_ASSIGNMENT):
+        for match in pattern.finditer(text):
+            found.update(_sensitive_variants(match.group("value")))
+    found.difference_update({"|", ">"})
+    for pattern, group in (
+        (_TOKEN, 0),
+        (_PRIVATE_KEY, 0),
+        (_AUTHORIZATION, "credential"),
+        (_URL_CREDENTIAL, "credential"),
+    ):
+        for match in pattern.finditer(text):
+            found.update(_sensitive_variants(match.group(group)))
+    return found
+
+
 def redact_text(value: str, *, sensitive_values: Iterable[str] = ()) -> str:
     """Redact recognizable credentials and locally identified sensitive values."""
     # Consume whole scalar bodies before replacing their header or delimiter.
     text = _HEREDOC_ASSIGNMENT.sub(lambda m: m.group("prefix") + REDACTED + "\n", value)
     text = _BLOCK_ASSIGNMENT.sub(lambda m: m.group("prefix") + REDACTED + "\n", text)
-    for secret in sorted(set(sensitive_values), key=len, reverse=True):
+    variants = {
+        variant for item in sensitive_values for variant in _sensitive_variants(item)
+    }
+    for secret in sorted(variants, key=len, reverse=True):
         if secret and secret != REDACTED:
             text = (
                 re.sub(rf"(?<!\w){re.escape(secret)}(?!\w)", lambda _: REDACTED, text)
@@ -204,7 +262,7 @@ def _screen_value(
 
     def collect(item: str) -> None:
         # Block scalars carry a trailing newline; derived explanations often do not.
-        found.update((item, item.strip(), "".join(item.splitlines()).strip()))
+        found.update(_sensitive_variants(item))
 
     def hide(item: Any, depth: int = 0, *, encoded: bool = False) -> Any:
         if depth > 32 or id(item) in hiding:
@@ -220,10 +278,14 @@ def _screen_value(
                 collect(item)
                 if encoded:
                     try:
-                        decoded = base64.b64decode(item, validate=True).decode("utf-8")
+                        normalized = re.sub(r"[ \t\r\n]", "", item)
+                        decoded = base64.b64decode(normalized, validate=True).decode(
+                            "utf-8"
+                        )
                     except (ValueError, binascii.Error, UnicodeDecodeError):
                         pass
                     else:
+                        collect(normalized)
                         collect(decoded)
             return REDACTED
         if isinstance(item, (dict, list, tuple)):
@@ -281,6 +343,7 @@ def _screen_value(
 
     def walk(item: Any, depth: int = 0, *, metadata: bool = False) -> Any:
         if isinstance(item, str):
+            found.update(_text_sensitive_values(item))
             safe = redact_text(item, sensitive_values=sensitive_values)
             if safe != item:
                 mark_changed()
@@ -327,6 +390,7 @@ def _screen_value(
                     or (secret_object and key in {"data", "stringData"})
                     or (secret_env and key == "value")
                     or (item.get("sensitive") is True and key == "value")
+                    or (item.get("NoEcho") is True and key == "Default")
                 ):
                     safe = hide(nested, encoded=secret_object and key == "data")
                 elif key_text.endswith("_json") and isinstance(nested, str):
@@ -338,8 +402,10 @@ def _screen_value(
                         # JSON has no aliases, so this equality cannot expand a DAG.
                         screened = walk(decoded, depth + 1, metadata=metadata)
                         safe = json.dumps(screened) if screened != decoded else nested
-                elif isinstance(nested, str) and nested.lower() in _PROTOCOL_VALUES.get(
-                    key_text, set()
+                elif (
+                    not metadata
+                    and isinstance(nested, str)
+                    and nested.lower() in _PROTOCOL_VALUES.get(key_text, set())
                 ):
                     # Public enums retain their meaning even if a short secret
                     # happens to have the same spelling as an enum value.
@@ -369,7 +435,12 @@ def _screen_value(
 
 def redact_value(value: Any, *, sensitive_values: Iterable[str] = ()) -> Any:
     """Screen nested JSON-like data without mutating the caller's objects."""
-    return _screen_value(value, tuple(sensitive_values), set())
+    found = {
+        variant for item in sensitive_values for variant in _sensitive_variants(item)
+    }
+    # Collect from the whole input first so sibling order cannot expose an echo.
+    _screen_value(value, (), found)
+    return _screen_value(value, tuple(found), set())
 
 
 def sensitive_artifact_values(raw_content: bytes | None) -> tuple[str, ...]:
@@ -377,21 +448,7 @@ def sensitive_artifact_values(raw_content: bytes | None) -> tuple[str, ...]:
     if not raw_content:
         return ()
     text = raw_content.decode("utf-8", errors="replace")
-    found = {
-        match.group("value").strip("\"'")
-        for match in _ASSIGNMENT.finditer(text)
-        if match.group("value").strip("\"'") != REDACTED
-    }
-    for pattern in (_BLOCK_ASSIGNMENT, _HEREDOC_ASSIGNMENT):
-        for match in pattern.finditer(text):
-            scalar = match.group("value")
-            found.update((scalar, scalar.strip(), "".join(scalar.splitlines()).strip()))
-    found.discard("|")
-    found.discard(">")
-    found.update(match.group(0) for match in _TOKEN.finditer(text))
-    found.update(match.group(0) for match in _PRIVATE_KEY.finditer(text))
-    found.update(match.group("credential") for match in _AUTHORIZATION.finditer(text))
-    found.update(match.group("credential") for match in _URL_CREDENTIAL.finditer(text))
+    found = _text_sensitive_values(text)
     if redact_text(text) != text and not found:
         # Authorization and credential-bearing URLs also block the snapshot.
         found.add(text)
@@ -400,10 +457,11 @@ def sensitive_artifact_values(raw_content: bytes | None) -> tuple[str, ...]:
             try:
                 documents = [json.loads(text)]
             except ValueError:
-                documents = yaml.safe_load_all(text)
+                documents = yaml.load_all(text, Loader=_CloudFormationLoader)  # nosec B506
         else:
             # YAML permits quoted keys, spacing and tags; lexical filters miss them.
-            documents = yaml.safe_load_all(text)
+            # Reuse the SafeLoader-derived CF loader; intrinsic tags remain inert.
+            documents = yaml.load_all(text, Loader=_CloudFormationLoader)  # nosec B506
         for document in documents:
             changed = [False]
             _screen_value(document, (), found, changed)

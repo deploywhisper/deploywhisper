@@ -6,11 +6,16 @@ import hashlib
 import json
 import shutil
 from pathlib import Path
+from typing import Iterable
 
 from pydantic import BaseModel, Field
 
 from config import settings
-from services.content_security import BLOCKED_CONTENT, sensitive_artifact_values
+from services.content_security import (
+    BLOCKED_CONTENT,
+    redact_text,
+    sensitive_artifact_values,
+)
 from services.intake_service import is_sensitive_file
 
 
@@ -44,21 +49,30 @@ def _stored_name(artifact_name: str) -> str:
 
 
 def save_report_artifacts(
-    report_id: int, artifact_snapshots: dict[str, bytes | None] | None
+    report_id: int,
+    artifact_snapshots: dict[str, bytes | None] | None,
+    *,
+    sensitive_values: Iterable[str] = (),
 ) -> None:
     """Persist uploaded artifact snapshots for one report."""
     if not artifact_snapshots:
         return
+    if not any(content is not None for content in artifact_snapshots.values()):
+        return
     report_dir = _report_dir(report_id, create=True)
     report_dir.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, str] = {}
+    sensitive_values = tuple(sensitive_values)
     for artifact_name, raw_content in artifact_snapshots.items():
         if raw_content is None or is_sensitive_file(artifact_name):
             continue
         stored_name = _stored_name(artifact_name)
+        decoded_content = raw_content.decode("utf-8", errors="replace")
         content = (
             BLOCKED_CONTENT.encode("utf-8")
             if sensitive_artifact_values(raw_content)
+            or redact_text(decoded_content, sensitive_values=sensitive_values)
+            != decoded_content
             else raw_content
         )
         (report_dir / stored_name).write_bytes(content)
@@ -82,13 +96,17 @@ def load_report_artifact(report_id: int, artifact_name: str) -> ArtifactSnapshot
     if not artifact_path.exists():
         return None
     raw_content = artifact_path.read_bytes()
+    sensitive_values = sensitive_artifact_values(raw_content)
+    decoded_content = raw_content.decode("utf-8", errors="replace")
     return ArtifactSnapshot(
         report_id=report_id,
-        artifact_name=artifact_name,
+        artifact_name=redact_text(artifact_name, sensitive_values=sensitive_values),
         content=(
             BLOCKED_CONTENT
-            if sensitive_artifact_values(raw_content)
-            else raw_content.decode("utf-8", errors="replace")
+            if is_sensitive_file(artifact_name)
+            or sensitive_values
+            or redact_text(decoded_content) != decoded_content
+            else decoded_content
         ),
     )
 
