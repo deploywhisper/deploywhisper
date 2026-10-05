@@ -4389,7 +4389,12 @@ resource "aws_security_group" "human_web" {
         rollback_plan = RollbackPlan(steps=[], complexity="low", warning=None)
 
         def mutating_narrator(
-            passed_assessment, passed_findings, completion_client=None, raw_files=None
+            passed_assessment,
+            passed_findings,
+            completion_client=None,
+            raw_files=None,
+            *,
+            sensitive_values=(),
         ):
             passed_assessment.score = 1
             passed_assessment.severity = "low"

@@ -313,6 +313,7 @@ def run() -> None:
         fastapi_app,
         host=settings.app_host,
         port=settings.app_port,
+        log_config=None,
     )
 
 

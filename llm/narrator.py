@@ -18,9 +18,18 @@ from llm.prompt_security import (
     contains_unsafe_instruction,
     contradicts_deployment_recommendation,
 )
-from llm.providers import generate_completion_with_settings
+from llm.providers import (
+    SENSITIVE_RESPONSE_NOTICE,
+    generate_completion_with_settings,
+    safe_error_message,
+)
 from llm.skill_context import build_skill_context, resolve_skills
 from services.settings_service import resolve_provider_runtime
+from services.content_security import (
+    redact_text,
+    redact_value,
+    sensitive_artifact_values,
+)
 
 _NON_VISIBLE_TEXT_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
 _VERDICT_PREFIX_PATTERN = re.compile(
@@ -182,6 +191,8 @@ def generate_narrative(
     findings: list[Finding],
     completion_client=None,
     raw_files: dict[str, bytes | None] | None = None,
+    *,
+    sensitive_values: tuple[str, ...] = (),
 ) -> NarrativeResult:
     runtime = resolve_provider_runtime()
     if not settings.narrator_enabled:
@@ -209,6 +220,15 @@ def generate_narrative(
 
     applied_skills: list[str] = []
     try:
+        sensitive_values = (
+            sensitive_values
+            + tuple(
+                value
+                for content in (raw_files or {}).values()
+                for value in sensitive_artifact_values(content)
+            )
+            + ((runtime["api_key"],) if runtime["api_key"] else ())
+        )
         applied_skills = [
             skill.name for skill in resolve_skills(assessment, raw_files=raw_files)
         ]
@@ -221,6 +241,7 @@ def generate_narrative(
                     assessment,
                     findings,
                     skill_context=skill_context,
+                    sensitive_values=sensitive_values,
                 ),
             },
         ]
@@ -228,7 +249,7 @@ def generate_narrative(
         return _fallback_narrative(
             assessment,
             findings,
-            str(exc),
+            safe_error_message(exc),
             provider=runtime["provider"],
             model=runtime["model"],
             local_mode=runtime["local_mode"],
@@ -247,7 +268,11 @@ def generate_narrative(
             request_timeout_seconds=runtime.get("request_timeout_seconds", 30.0),
             completion_client=completion_client,
         )
+        if redact_text(raw_content, sensitive_values=sensitive_values) != raw_content:
+            raise ValueError(SENSITIVE_RESPONSE_NOTICE)
         payload = json.loads(raw_content)
+        if redact_value(payload, sensitive_values=sensitive_values) != payload:
+            raise ValueError(SENSITIVE_RESPONSE_NOTICE)
         known_scopes = {
             contributor.downstream_scope
             for contributor in assessment.contributors
@@ -309,7 +334,7 @@ def generate_narrative(
         return _fallback_narrative(
             assessment,
             findings,
-            str(exc),
+            safe_error_message(exc),
             provider=runtime["provider"],
             model=runtime["model"],
             local_mode=runtime["local_mode"],

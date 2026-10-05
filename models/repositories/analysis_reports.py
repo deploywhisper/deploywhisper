@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from evidence.models import EvidenceItem as EvidenceItemPayload
 from evidence.models import Finding as FindingPayload
+from services.content_security import REDACTION_WARNING, redact_value
 from models.tables import (
     AnalysisReport,
     DeploymentOutcome,
@@ -631,7 +632,7 @@ def create_analysis_report(
     evidence_payload = [
         _normalize_evidence_payload(evidence) for evidence in evidence_payload or []
     ]
-    report = AnalysisReport(
+    report_values = dict(
         project_id=project_id,
         workspace_id=workspace_id,
         risk_score=risk_score,
@@ -665,6 +666,38 @@ def create_analysis_report(
         dashboard_display_duration_seconds=dashboard_display_duration_seconds,
         analysis_duration_seconds=analysis_duration_seconds,
     )
+    assessment_values = {
+        "top_risk_contributors_json": top_risk_contributors_json,
+        "context_completeness_json": context_completeness_json,
+    }
+    safe_payload = redact_value(
+        {
+            "report": report_values,
+            "assessment": assessment_values,
+            "findings": findings_payload or [],
+            "evidence": evidence_payload,
+        }
+    )
+    safe_report_values = safe_payload["report"]
+    safe_assessment_values = safe_payload["assessment"]
+    safe_findings = safe_payload["findings"]
+    safe_evidence = safe_payload["evidence"]
+    if (
+        safe_report_values != report_values
+        or safe_assessment_values != assessment_values
+        or safe_findings != (findings_payload or [])
+        or safe_evidence != evidence_payload
+    ):
+        warnings = json.loads(safe_report_values["warnings_json"])
+        safe_report_values["warnings_json"] = json.dumps(
+            list(dict.fromkeys([*warnings, REDACTION_WARNING]))
+        )
+    for original, safe in zip(evidence_payload, safe_evidence, strict=True):
+        if original != safe and safe.get("redaction_status", "none") == "none":
+            safe["redaction_status"] = "redacted"
+    report = AnalysisReport(**safe_report_values)
+    findings_payload = safe_findings
+    evidence_payload = safe_evidence
     finding_rows: list[tuple[PersistedFinding, list[str]]] = []
     for finding in findings_payload or []:
         finding_payload = FindingPayload.model_validate(finding)
@@ -700,9 +733,9 @@ def create_analysis_report(
     _validate_report_verdict_text(
         severity,
         recommendation,
-        top_risk,
-        narrative_opening,
-        narrative_explanation,
+        report.top_risk,
+        report.narrative_opening,
+        report.narrative_explanation,
     )
     _validate_top_risk_contributor_refs(
         top_risk_contributors_json,
@@ -715,8 +748,7 @@ def create_analysis_report(
         recommendation=recommendation,
         score=risk_score,
         confidence=risk_confidence,
-        top_risk_contributors_json=top_risk_contributors_json,
-        context_completeness_json=context_completeness_json,
+        **safe_assessment_values,
     )
     report.findings = [persisted_finding for persisted_finding, _ in finding_rows]
     session.add(report)

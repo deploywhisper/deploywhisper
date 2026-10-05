@@ -91,8 +91,8 @@ class NarrativeTests(unittest.TestCase):
         self.assertEqual(narrative.opening_sentence, "")
         self.assertEqual(narrative.explanation, "")
         self.assertEqual(narrative.guidance, [])
-        self.assertIn("provider offline", narrative.failure_notice or "")
-        self.assertIn("provider offline", narrative.warnings[-1])
+        self.assertIn("Provider operation failed", narrative.failure_notice or "")
+        self.assertNotIn("provider offline", narrative.warnings[-1])
 
     def test_generate_narrative_gracefully_degrades_on_invalid_json(self) -> None:
         class Message:
@@ -115,7 +115,7 @@ class NarrativeTests(unittest.TestCase):
         )
         self.assertTrue(narrative.degraded)
         self.assertTrue(
-            any("Expecting value" in warning for warning in narrative.warnings)
+            any("JSONDecodeError" in warning for warning in narrative.warnings)
         )
 
     def test_generate_narrative_gracefully_degrades_on_missing_keys(self) -> None:
@@ -138,7 +138,7 @@ class NarrativeTests(unittest.TestCase):
             self._assessment(), self._findings(), completion_client=fake_completion
         )
         self.assertTrue(narrative.degraded)
-        self.assertTrue(any("explanation" in warning for warning in narrative.warnings))
+        self.assertTrue(any("KeyError" in warning for warning in narrative.warnings))
 
     def test_generate_narrative_sanitizes_fabricated_scope_claims(self) -> None:
         class Message:

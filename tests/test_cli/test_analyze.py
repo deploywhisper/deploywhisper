@@ -8,6 +8,8 @@ import os
 import sys
 import tempfile
 import unittest
+
+from tests.snapshot_isolation import isolate_artifact_snapshots
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
@@ -48,6 +50,7 @@ from services.skill_test_harness_service import (
 class AnalyzeCliTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
+        isolate_artifact_snapshots(self, self.tempdir.name)
         self.db_path = Path(self.tempdir.name) / "cli.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
         os.environ["APP_BASE_URL"] = "https://deploywhisper.example.com"

@@ -6,6 +6,8 @@ import os
 import sqlite3
 import tempfile
 import unittest
+
+from tests.snapshot_isolation import isolate_artifact_snapshots
 from datetime import UTC, datetime
 from importlib import reload
 from pathlib import Path
@@ -46,6 +48,7 @@ from pydantic import ValidationError
 class AnalysesApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
+        isolate_artifact_snapshots(self, self.tempdir.name)
         self.db_path = Path(self.tempdir.name) / "reports.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
         os.environ["APP_BASE_URL"] = "https://deploywhisper.example.com"

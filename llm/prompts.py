@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from analysis.risk_scorer import RiskAssessment
 from evidence.models import Finding
 from llm.prompt_security import (
     UNTRUSTED_DATA_SYSTEM_INSTRUCTION,
     build_untrusted_json_payload,
 )
+from services.content_security import redact_value
 
 
 def build_system_prompt() -> str:
@@ -36,6 +39,7 @@ def build_user_payload(
     findings: list[Finding],
     *,
     skill_context: str = "",
+    sensitive_values: Iterable[str] = (),
 ) -> str:
     payload = {
         "score": assessment.score,
@@ -79,4 +83,6 @@ def build_user_payload(
         "findings": [finding.model_dump(mode="json") for finding in findings],
         "skill_context": skill_context,
     }
-    return build_untrusted_json_payload(payload)
+    return build_untrusted_json_payload(
+        redact_value(payload, sensitive_values=sensitive_values)
+    )

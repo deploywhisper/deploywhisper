@@ -595,6 +595,11 @@ DeployWhisper is designed so that:
 - provider API keys are not stored in the application database
 - advisory results remain non-blocking in v1
 
+Recognizable credentials are redacted from structured prompts and reports;
+sensitive model responses and artifact snapshots are blocked with visible
+redaction notices. See the [secrets and artifact boundary audit](docs/security/secrets-and-artifact-boundaries.md)
+for coverage, local-only operation, and detection limits.
+
 ## Architecture
 
 DeployWhisper uses one shared analysis core with three access surfaces:

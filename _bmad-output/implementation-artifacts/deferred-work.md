@@ -83,3 +83,7 @@
 ## Deferred from: code review of 11-4-enforcement-guardrail-documentation.md (2026-09-22)
 
 - Resolved 2026-09-28: GitHub init now refuses to overwrite an existing workflow, preserving operator-hardened enforcement wiring and requiring a new path or manual merge [integrations/github/init_service.py:248].
+
+## Deferred from: code review of 12-1-secrets-and-raw-artifact-boundary-audit.md (2026-10-05, re-review)
+
+- **P2, pre-existing:** Multiple low/medium findings can populate top-risk evidence IDs owned by distinct findings, while `models/repositories/analysis_reports.py:_validate_top_risk_contributor_refs` requires a single owner for every severity. An ordinary Secret + Ansible control fails persistence with `Top-risk contributors must belong to one persisted finding`. A git-show/AST-extracted `develop` builder and the reviewed builder fail identically with isolated DB/snapshot settings. Reconcile the scoring/validation contract in the evidence/report workstream; Story 12.1 does not alter scoring semantics.

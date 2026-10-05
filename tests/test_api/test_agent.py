@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+
+from tests.snapshot_isolation import isolate_artifact_snapshots
 from importlib import reload
 from pathlib import Path
 from unittest.mock import patch
@@ -27,6 +29,7 @@ from sqlalchemy import text
 class AgentApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
+        isolate_artifact_snapshots(self, self.tempdir.name)
         self.db_path = Path(self.tempdir.name) / "agent.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
         reload(config_module)

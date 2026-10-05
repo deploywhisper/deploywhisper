@@ -521,7 +521,8 @@ class SettingsServiceTests(unittest.TestCase):
             config, completion_client=broken_completion
         )
         self.assertFalse(result["valid"])
-        self.assertIn("provider offline", result["message"])
+        self.assertIn("RuntimeError", result["message"])
+        self.assertNotIn("provider offline", result["message"])
 
     def test_check_provider_readiness_reports_missing_api_key(self) -> None:
         with patch.dict(
@@ -574,7 +575,8 @@ class SettingsServiceTests(unittest.TestCase):
 
         self.assertFalse(readiness.ready)
         self.assertTrue(readiness.has_api_key)
-        self.assertIn("provider offline", readiness.message)
+        self.assertIn("RuntimeError", readiness.message)
+        self.assertNotIn("provider offline", readiness.message)
         os.environ.pop("OPENAI_API_KEY", None)
 
     def test_check_provider_readiness_validates_local_mode_without_api_key(

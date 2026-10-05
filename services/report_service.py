@@ -80,7 +80,17 @@ from services.submission_manifest import (
     normalize_manifest_redaction_status,
     normalize_submission_manifest_payload,
 )
+from services.intake_service import (
+    artifact_security_aliases,
+    build_pending_analysis,
+    remap_artifact_identities,
+)
 from services.topology_service import STALE_AFTER_DAYS
+from services.content_security import (
+    REDACTION_WARNING,
+    redact_value,
+    sensitive_submission_values,
+)
 
 LEGACY_REPORT_SCHEMA_VERSION = "v1"
 REPORT_SCHEMA_VERSION = "v2"
@@ -853,6 +863,8 @@ def _report_redaction_status(
             return "redacted"
         if item_status == "redacted":
             return item_status
+        if isinstance(redaction, dict) and redaction.get("content_redacted"):
+            return "redacted"
         if item_status == "none" or has_redaction_metadata:
             return "none"
     fallback_status = _redaction_status_from_items(submission_manifest_fallback)
@@ -3222,7 +3234,9 @@ def _evidence_items_with_report_context(
                 "redaction_status": redaction_status_by_artifact.get(
                     evidence_item.artifact,
                     evidence_item.redaction_status,
-                ),
+                )
+                if evidence_item.redaction_status == "none"
+                else evidence_item.redaction_status,
             }
         )
         for evidence_item in evidence_items
@@ -4484,7 +4498,15 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         payload,
         evidence_detail_available=include_evidence,
     )
-    return payload
+    sanitized = redact_value(payload)
+    if sanitized != payload or REDACTION_WARNING in sanitized["warnings"]:
+        sanitized["warnings"] = list(
+            dict.fromkeys([*sanitized["warnings"], REDACTION_WARNING])
+        )
+        if sanitized["audit"]["redaction_status"] != "sensitive_blocked":
+            sanitized["audit"]["redaction_status"] = "redacted"
+        sanitized["audit"]["redaction"]["content_redacted"] = True
+    return sanitized
 
 
 def persist_analysis_report(
@@ -4506,6 +4528,109 @@ def persist_analysis_report(
     analysis_duration_seconds: int | None = None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
+    security_inputs = submitted_artifacts or list((artifact_snapshots or {}).items())
+    sensitive_values = sensitive_submission_values(security_inputs)
+    original_pending_analysis = (
+        build_pending_analysis(security_inputs)
+        if submitted_artifacts is not None or artifact_snapshots is not None
+        else None
+    )
+    artifact_aliases = artifact_security_aliases(
+        security_inputs, sensitive_values=sensitive_values
+    )
+    aliased_pending_analysis = (
+        PendingAnalysis.model_validate(
+            remap_artifact_identities(
+                original_pending_analysis.model_dump(mode="json"), artifact_aliases
+            )
+        )
+        if original_pending_analysis is not None
+        else None
+    )
+    if submitted_artifacts is not None:
+        submitted_artifacts = [
+            (artifact_aliases.get(name, name), raw) for name, raw in submitted_artifacts
+        ]
+    if artifact_snapshots is not None:
+        artifact_snapshots = {
+            artifact_aliases.get(name, name): raw
+            for name, raw in artifact_snapshots.items()
+        }
+
+    def screen(model, screened_payload=None):
+        if screened_payload is not None:
+            return type(model).model_validate(screened_payload)
+        return type(model).model_validate(
+            redact_value(
+                remap_artifact_identities(
+                    model.model_dump(mode="json"), artifact_aliases
+                ),
+                sensitive_values=sensitive_values,
+            )
+        )
+
+    original_content = {
+        "parse_batch": parse_batch.model_dump(mode="json"),
+        "assessment": assessment.model_dump(mode="json"),
+        "narrative": narrative.model_dump(mode="json"),
+        "findings": [item.model_dump(mode="json") for item in (findings or [])],
+        "evidence": [item.model_dump(mode="json") for item in (evidence_items or [])],
+        "blast_radius": blast_radius.model_dump(mode="json")
+        if blast_radius is not None
+        else None,
+        "rollback_plan": rollback_plan.model_dump(mode="json")
+        if rollback_plan is not None
+        else None,
+        "incident_matches": [
+            item.model_dump(mode="json") for item in (incident_matches or [])
+        ],
+        "audit_context": audit_context,
+    }
+    original_content = remap_artifact_identities(original_content, artifact_aliases)
+    screened_content = redact_value(original_content, sensitive_values=sensitive_values)
+    content_redacted = screened_content != original_content
+    parse_batch = screen(parse_batch, screened_content["parse_batch"])
+    assessment = screen(assessment, screened_content["assessment"])
+    narrative = screen(narrative, screened_content["narrative"])
+    findings = [
+        screen(item, safe)
+        for item, safe in zip(findings or [], screened_content["findings"], strict=True)
+    ]
+    evidence_items = [
+        screen(item, safe)
+        for item, safe in zip(
+            evidence_items or [], screened_content["evidence"], strict=True
+        )
+    ]
+    blast_radius = (
+        screen(blast_radius, screened_content["blast_radius"])
+        if blast_radius is not None
+        else None
+    )
+    rollback_plan = (
+        screen(rollback_plan, screened_content["rollback_plan"])
+        if rollback_plan is not None
+        else None
+    )
+    incident_matches = [
+        screen(item, safe)
+        for item, safe in zip(
+            incident_matches or [], screened_content["incident_matches"], strict=True
+        )
+    ]
+    audit_context = screened_content["audit_context"]
+    if content_redacted:
+        assessment.warnings = list(
+            dict.fromkeys([*assessment.warnings, REDACTION_WARNING])
+        )
+        for original, item in zip(
+            original_content["evidence"], evidence_items, strict=True
+        ):
+            if (
+                original != item.model_dump(mode="json")
+                and item.redaction_status == "none"
+            ):
+                item.redaction_status = "redacted"
     assessment = apply_context_uncertainty(assessment)
     assessment, findings = _repair_assessment_evidence_links(
         assessment,
@@ -4561,11 +4686,11 @@ def persist_analysis_report(
     }
     if submitted_artifacts is not None:
         submission_files = list(submitted_artifacts)
-        pending_analysis = None
+        pending_analysis = aliased_pending_analysis
         manifest_warnings: list[str] = []
     elif artifact_snapshots is not None:
         submission_files = list(artifact_snapshots.items())
-        pending_analysis = None
+        pending_analysis = aliased_pending_analysis
         manifest_warnings = [_SUBMISSION_MANIFEST_INFERRED_WARNING]
     else:
         submission_files = list(fallback_snapshots.items())
@@ -4575,6 +4700,7 @@ def persist_analysis_report(
         submission_files,
         pending_analysis=pending_analysis,
         parse_batch=parse_batch,
+        sensitive_values=sensitive_values,
         audit_context={
             **(audit_context or {}),
             "source_interface": audit["source_interface"],
@@ -4589,6 +4715,9 @@ def persist_analysis_report(
             ),
         },
     )
+    if content_redacted:
+        submission_manifest.redaction["content_redacted"] = True
+    submission_manifest = screen(submission_manifest)
     evidence_items = _evidence_items_with_report_context(
         evidence_items,
         project=resolved_project,
@@ -4706,7 +4835,11 @@ def persist_analysis_report(
                     ],
                 )
                 report_id = int(report.id)
-                save_report_artifacts(report_id, safe_artifact_snapshots)
+                save_report_artifacts(
+                    report_id,
+                    safe_artifact_snapshots,
+                    sensitive_values=sensitive_values,
+                )
                 return _serialize_report(report, include_evidence=True)
         except Exception:
             _cleanup_partial_report(report_id)
