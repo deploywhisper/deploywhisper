@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import urlsplit
+
+from llm.adapters._shared import request_timeout_seconds as validate_timeout
 from typing import Any, Callable
 
 from llm.adapters.base import (
@@ -24,6 +27,11 @@ SENSITIVE_RESPONSE_NOTICE = (
 _SAFE_ERROR_MESSAGES = frozenset(
     {
         SENSITIVE_RESPONSE_NOTICE,
+        "Provider model must not be blank.",
+        "Provider model and API base must not contain credentials.",
+        "Provider API base must be an absolute HTTP or HTTPS URL.",
+        "Provider API base must not contain credentials, query parameters, or fragments.",
+        "Provider API key is missing from environment-backed configuration.",
         "Local mode requires an Ollama/local provider path.",
         "Request timeout must be a positive finite number.",
         "Ollama API base must use http or https scheme",
@@ -64,6 +72,54 @@ def get_provider_adapter(provider: str):
     return _provider_registry.resolve(provider)
 
 
+def validate_provider_settings_shape(
+    *,
+    provider: str,
+    model: str,
+    api_base: str,
+    local_mode: bool,
+    request_timeout_seconds: float,
+    api_key: str | None = None,
+    sensitive_values: tuple[str, ...] = (),
+) -> None:
+    """Check configuration through the adapter boundary without network access."""
+    adapter = get_provider_adapter(provider)
+    if local_mode and not adapter.capabilities_for(provider).supports_local_only_mode:
+        raise NarrativeProviderError(
+            "Local mode requires an Ollama/local provider path."
+        )
+    if not model.strip():
+        raise NarrativeProviderError("Provider model must not be blank.")
+    try:
+        endpoint = urlsplit(api_base)
+        valid_url = endpoint.scheme in {"http", "https"} and bool(endpoint.hostname)
+        valid_url = valid_url and endpoint.port != 0
+    except ValueError:
+        valid_url = False
+    if not valid_url:
+        raise NarrativeProviderError(
+            "Provider API base must be an absolute HTTP or HTTPS URL."
+        )
+    if (
+        endpoint.username is not None
+        or endpoint.password is not None
+        or endpoint.query
+        or endpoint.fragment
+    ):
+        raise NarrativeProviderError(
+            "Provider API base must not contain credentials, query parameters, or fragments."
+        )
+    sensitive_values = sensitive_values + ((api_key,) if api_key else ())
+    if any(
+        redact_text(value, sensitive_values=sensitive_values) != value
+        for value in (model, api_base)
+    ):
+        raise NarrativeProviderError(
+            "Provider model and API base must not contain credentials."
+        )
+    validate_timeout(request_timeout_seconds)
+
+
 def generate_completion(
     messages: list[dict[str, str]], completion_client: Callable[..., Any] | None = None
 ) -> str:
@@ -93,6 +149,18 @@ def generate_completion_with_settings(
         request_timeout_seconds=request_timeout_seconds,
     )
     try:
+        validate_provider_settings_shape(
+            provider=provider,
+            model=model,
+            api_base=api_base,
+            local_mode=local_mode,
+            request_timeout_seconds=request_timeout_seconds,
+            api_key=api_key,
+        )
+        if provider.lower() != "ollama" and not api_key and completion_client is None:
+            raise NarrativeProviderError(
+                "Provider API key is missing from environment-backed configuration."
+            )
         adapter = get_provider_adapter(provider)
         safe_messages = redact_value(
             messages, sensitive_values=(api_key,) if api_key else ()
@@ -154,6 +222,18 @@ def validate_provider_configuration(
         request_timeout_seconds=request_timeout_seconds,
     )
     try:
+        validate_provider_settings_shape(
+            provider=provider,
+            model=model,
+            api_base=api_base,
+            local_mode=local_mode,
+            request_timeout_seconds=request_timeout_seconds,
+            api_key=api_key,
+        )
+        if provider.lower() != "ollama" and not api_key and completion_client is None:
+            raise NarrativeProviderError(
+                "Provider API key is missing from environment-backed configuration."
+            )
         adapter = get_provider_adapter(provider)
         adapter.validate_configuration(
             runtime=runtime, completion_client=completion_client

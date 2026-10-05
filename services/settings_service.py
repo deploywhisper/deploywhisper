@@ -12,8 +12,10 @@ from sqlalchemy.exc import OperationalError
 from config import settings
 from llm.providers import (
     NarrativeProviderError,
+    safe_error_message,
     get_provider_capabilities,
     validate_provider_configuration,
+    validate_provider_settings_shape,
 )
 from models.database import SessionLocal
 from models.repositories.settings import delete_setting, get_setting, upsert_setting
@@ -388,6 +390,27 @@ def save_provider_settings(
     activate: bool = True,
 ) -> ProviderSettings:
     """Persist provider settings and optionally mark them as active."""
+    provider = provider.strip().lower()
+    model = model.strip()
+    api_base = api_base.strip()
+    environment_key = _provider_env_api_key(provider)
+    # Validate before normalization/persistence, so rejected profiles cannot become active.
+    try:
+        validate_provider_settings_shape(
+            provider=provider,
+            model=model,
+            api_base=api_base,
+            local_mode=local_mode,
+            api_key=api_key,
+            sensitive_values=(environment_key,) if environment_key else (),
+            request_timeout_seconds=(
+                settings.llm_request_timeout_seconds
+                if request_timeout_seconds is None
+                else request_timeout_seconds
+            ),
+        )
+    except NarrativeProviderError as exc:
+        raise ValueError(safe_error_message(exc)) from None
     normalized_timeout = _normalize_request_timeout_seconds(request_timeout_seconds)
     with SessionLocal() as session:
         upsert_setting(session, key=_provider_key(provider, "model"), value=model)
@@ -423,7 +446,7 @@ def save_provider_settings(
         provider=provider,
         model=model,
         api_base=api_base,
-        api_key=api_key,
+        api_key=api_key or environment_key,
         local_mode=local_mode,
         request_timeout_seconds=normalized_timeout,
         capabilities=_provider_capability_summary(provider),
@@ -608,6 +631,29 @@ def get_provider_health_snapshot() -> ProviderReadiness:
     requires_api_key = bool(defaults.get("requires_api_key", False))
     has_api_key = bool(provider_settings.api_key)
 
+    try:
+        validate_provider_settings_shape(
+            provider=provider_settings.provider,
+            model=provider_settings.model,
+            api_base=provider_settings.api_base,
+            local_mode=provider_settings.local_mode,
+            api_key=provider_settings.api_key,
+            request_timeout_seconds=provider_settings.request_timeout_seconds,
+        )
+    except NarrativeProviderError as exc:
+        return ProviderReadiness(
+            provider=provider_settings.provider,
+            model=provider_settings.model,
+            local_mode=provider_settings.local_mode,
+            capabilities=provider_settings.capabilities,
+            ready=False,
+            requires_api_key=requires_api_key,
+            has_api_key=has_api_key,
+            message=safe_error_message(exc)
+            + " Analysis can continue with heuristic-only results.",
+            source=provider_settings.source,
+        )
+
     if requires_api_key and not has_api_key:
         return ProviderReadiness(
             provider=provider_settings.provider,
@@ -662,7 +708,7 @@ def deactivate_local_mode() -> ProviderSettings:
 
 
 def resolve_provider_runtime() -> dict:
-    """Resolve the current provider runtime, including persisted secrets."""
+    """Resolve the current provider runtime with environment-backed credentials."""
     provider_settings = get_provider_settings()
     return {
         "provider": provider_settings.provider,

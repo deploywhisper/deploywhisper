@@ -89,6 +89,24 @@ class SettingsApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["settings"]["request_timeout_seconds"], 120)
         self.assertIn("valid", payload["data"]["validation"])
 
+    def test_external_provider_cannot_silently_disable_local_only_mode(self) -> None:
+        with patch("api.routes.settings.validate_provider_settings") as probe:
+            response = self.client.put(
+                "/api/v1/settings/provider",
+                json={
+                    "provider": "openai",
+                    "model": "test",
+                    "api_base": "https://example.invalid/v1",
+                    "local_mode": True,
+                },
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "invalid_provider_settings")
+        probe.assert_not_called()
+        self.assertEqual(
+            settings_service_module.get_provider_settings().provider, "ollama"
+        )
+
     def test_policy_adapter_defaults_can_be_managed_per_project_and_integration(
         self,
     ) -> None:

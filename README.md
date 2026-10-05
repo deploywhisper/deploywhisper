@@ -337,12 +337,21 @@ docker compose up -d --force-recreate
 
 If provider settings were already saved in the DeployWhisper settings page,
 those non-secret database settings take precedence over `LLM_PROVIDER`,
-`LLM_MODEL`, and `LLM_API_BASE`; provider request timeout still comes from
-`LLM_REQUEST_TIMEOUT_SECONDS`; API keys still come only from container
-environment variables or runtime secrets. When you select a provider in the
-settings page, DeployWhisper resolves that provider's environment key
-(`GROQ_API_KEY` for Groq, `OPENAI_API_KEY` for OpenAI, or fallback
-`LLM_API_KEY`) and pre-fills the API key field from the running container.
+`LLM_MODEL`, and `LLM_API_BASE`. The saved request timeout overrides
+`LLM_REQUEST_TIMEOUT_SECONDS`. API keys remain environment-backed; the settings
+screen shows a masked presence hint and accepts a temporary key only for the
+immediate validation request.
+
+Provider profiles are checked through the shared adapter boundary before saving.
+Unknown providers, blank models, malformed endpoints, credential-bearing URLs,
+and external providers with local-only mode enabled are rejected without replacing
+the active profile. API bases must use HTTP or HTTPS and omit URL credentials,
+query parameters, and fragments. A saved profile may still fail its live probe
+(for example, if a key is missing or Ollama is offline); deterministic analysis
+continues and records degraded narrative status. See
+[provider settings administration](docs/security/provider-settings-administration.md)
+for operator guidance.
+
 Saving the settings page activates the selected provider as the single runtime
 provider.
 

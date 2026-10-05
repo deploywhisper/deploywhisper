@@ -68,7 +68,9 @@ class ProviderFacadeTests(unittest.TestCase):
                 captured["completion_client"] = completion_client
 
             def capabilities_for(self, provider: str):
-                raise AssertionError("not used in this test")
+                return providers_module.ProviderCapabilities(
+                    supports_local_only_mode=True
+                )
 
         with patch.object(
             providers_module.get_provider_registry(),

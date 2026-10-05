@@ -50,7 +50,6 @@ from services.project_service import (
 )
 from services.settings_service import (
     TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS,
-    activate_local_mode,
     delete_policy_adapter_settings,
     get_provider_settings,
     get_policy_adapter_settings,
@@ -427,23 +426,20 @@ def update_provider_settings(
     payload: ProviderSettingsRequest,
 ) -> ProviderSettingsResponse:
     """Persist active narrative provider settings and return validation state."""
-    local_mode = bool(payload.local_mode) if payload.provider == "ollama" else False
-    if local_mode:
-        saved = activate_local_mode(
-            model=payload.model.strip(),
-            api_base=payload.api_base.strip(),
-            request_timeout_seconds=payload.request_timeout_seconds,
-        )
-    else:
+    try:
         saved = save_provider_settings(
-            provider=payload.provider.strip(),
-            model=payload.model.strip(),
-            api_base=payload.api_base.strip(),
+            provider=payload.provider,
+            model=payload.model,
+            api_base=payload.api_base,
             api_key=payload.api_key.strip() if payload.api_key else None,
-            local_mode=local_mode,
+            local_mode=payload.local_mode,
             request_timeout_seconds=payload.request_timeout_seconds,
             activate=True,
         )
+    except ValueError as exc:
+        raise ApiError(
+            status_code=400, code="invalid_provider_settings", message=str(exc)
+        ) from exc
     validation = validate_provider_settings(saved)
     return ProviderSettingsResponse(
         data=ProviderSettingsSaveData(
