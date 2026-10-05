@@ -7,6 +7,29 @@ import math
 import os
 
 
+PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
+    "openai": ("OPENAI_API_KEY",),
+    "anthropic": ("ANTHROPIC_API_KEY",),
+    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "openrouter": ("OPENROUTER_API_KEY",),
+    "groq": ("GROQ_API_KEY",),
+    "xai": ("XAI_API_KEY",),
+    "ollama": (),
+}
+
+
+def provider_credential_values() -> tuple[str, ...]:
+    """Return configured credentials for screening, regardless of key precedence."""
+    names = {"LLM_API_KEY"} | {
+        name
+        for provider_names in PROVIDER_ENV_API_KEYS.values()
+        for name in provider_names
+    }
+    return tuple(
+        dict.fromkeys(value for name in sorted(names) if (value := os.getenv(name)))
+    )
+
+
 def _float_env(name: str, default: float) -> float:
     raw_value = os.getenv(name)
     if raw_value is None or not raw_value.strip():

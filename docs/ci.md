@@ -85,6 +85,25 @@ BASE_URL=http://localhost:8080 npm run test:ui-review
 
 Use root SPA routes under `http://localhost:8080/`, for example `/`, `/history`, `/settings`, `/skills`, `/incidents`, and `/reports/{id}`.
 
+Provider administration browser checks use rejected saves and unsaved UI
+interactions by default, preserving active and inactive profiles and environment
+provenance. Successful-save coverage requires an explicit opt-in:
+
+```bash
+BASE_URL=http://localhost:8080 PROVIDER_ADMIN_TEST_MUTATION=1 npm run test:ui-review -- provider-administration.spec.ts
+```
+
+Run this command only against a disposable Compose app and database. The opted-in
+test changes the active provider and its OpenAI profile and intentionally leaves
+those changes in the disposable database. Recreating the container alone does
+not isolate a persistent database; use a separate disposable data volume or bind
+mount and remove it after verification. Validation uses a closed localhost port
+and a synthetic transient key, so it never sends traffic to a hosted provider.
+The checks cover successful saves, transient-key validation, and environment
+credential re-resolution. Run once with no OpenAI environment key (clear both
+`OPENAI_API_KEY` and generic `LLM_API_KEY`) to cover the missing-key warning,
+then with a synthetic environment key to cover environment credential recovery.
+
 For full local parity with the CI security lane, make sure `bandit` is installed in the active environment or available via `BANDIT_BIN`. When available, `scripts/ci-local.sh` runs the same two-pass Bandit gate used in CI.
 
 To run only changed tests relative to the default base branch:

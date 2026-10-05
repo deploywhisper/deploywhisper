@@ -21,10 +21,14 @@ from llm.prompt_security import (
 from llm.providers import (
     SENSITIVE_RESPONSE_NOTICE,
     generate_completion_with_settings,
+    redact_provider_field,
     safe_error_message,
 )
 from llm.skill_context import build_skill_context, resolve_skills
-from services.settings_service import resolve_provider_runtime
+from services.settings_service import (
+    provider_credential_values,
+    resolve_provider_runtime,
+)
 from services.content_security import (
     redact_text,
     redact_value,
@@ -153,25 +157,38 @@ def _fallback_narrative(
     local_mode: bool | None = None,
     skills_applied: list[str] | None = None,
     failure_prefix: str = "Narrative provider unavailable",
+    sensitive_values: tuple[str, ...] = (),
 ) -> NarrativeResult:
     warnings = list(assessment.warnings)
     failure_notice = None
     if error_message:
         failure_notice = f"{failure_prefix}: {error_message}"
         warnings.append(failure_notice)
+    safe_metadata = redact_value(
+        {
+            "warnings": warnings,
+            "failure_notice": failure_notice,
+            "provider": redact_provider_field(
+                provider, sensitive_values=sensitive_values
+            ),
+            "model": redact_provider_field(model, sensitive_values=sensitive_values),
+            "skills_applied": list(skills_applied or []),
+        },
+        sensitive_values=sensitive_values + provider_credential_values(),
+    )
     return NarrativeResult(
         available=False,
         opening_sentence="",
         explanation="",
         guidance=[],
         degraded=True,
-        warnings=warnings,
-        failure_notice=failure_notice,
+        warnings=safe_metadata["warnings"],
+        failure_notice=safe_metadata["failure_notice"],
         source="fallback",
-        provider=provider,
-        model=model,
+        provider=safe_metadata["provider"],
+        model=safe_metadata["model"],
         local_mode=local_mode,
-        skills_applied=list(skills_applied or []),
+        skills_applied=safe_metadata["skills_applied"],
     )
 
 
@@ -195,27 +212,41 @@ def generate_narrative(
     sensitive_values: tuple[str, ...] = (),
 ) -> NarrativeResult:
     runtime = resolve_provider_runtime()
+    sensitive_values = sensitive_values + provider_credential_values()
+    metadata = redact_value(
+        {
+            "provider": redact_provider_field(
+                runtime["provider"], sensitive_values=sensitive_values
+            ),
+            "model": redact_provider_field(
+                runtime["model"], sensitive_values=sensitive_values
+            ),
+        },
+        sensitive_values=sensitive_values,
+    )
     if not settings.narrator_enabled:
         applied_skills = _resolve_skill_names_safely(assessment, raw_files=raw_files)
         return _fallback_narrative(
             assessment,
             findings,
             "Narrator disabled by configuration.",
-            provider=runtime["provider"],
-            model=runtime["model"],
+            provider=metadata["provider"],
+            model=metadata["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
             failure_prefix="Narrative unavailable",
+            sensitive_values=sensitive_values,
         )
     if not assessment.contributors:
         applied_skills = _resolve_skill_names_safely(assessment, raw_files=raw_files)
         return _fallback_narrative(
             assessment,
             findings,
-            provider=runtime["provider"],
-            model=runtime["model"],
+            provider=metadata["provider"],
+            model=metadata["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
+            sensitive_values=sensitive_values,
         )
 
     applied_skills: list[str] = []
@@ -255,6 +286,7 @@ def generate_narrative(
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
             failure_prefix="Narrative setup unavailable",
+            sensitive_values=sensitive_values,
         )
 
     try:
@@ -325,8 +357,8 @@ def generate_narrative(
             warnings=list(assessment.warnings),
             failure_notice=None,
             source="llm",
-            provider=runtime["provider"],
-            model=runtime["model"],
+            provider=metadata["provider"],
+            model=metadata["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
         )
@@ -339,4 +371,5 @@ def generate_narrative(
             model=runtime["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
+            sensitive_values=sensitive_values,
         )

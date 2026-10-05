@@ -3,13 +3,31 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+import os
+from unittest.mock import Mock, patch
 
 import llm.providers as providers_module
 from llm.adapters.base import NarrativeProviderError
 
 
 class ProviderFacadeTests(unittest.TestCase):
+    def test_unselected_environment_credentials_are_rejected_before_invocation(
+        self,
+    ) -> None:
+        secret = "opaque-inactive-provider-credential"
+        client = Mock()
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": secret}):
+            with self.assertRaises(NarrativeProviderError):
+                providers_module.generate_completion_with_settings(
+                    [{"role": "user", "content": "{}"}],
+                    provider="openai",
+                    model=secret,
+                    api_base="https://example.invalid/v1",
+                    api_key="opaque-active-credential",
+                    completion_client=client,
+                )
+        client.assert_not_called()
+
     def test_generate_completion_routes_through_registered_adapter(self) -> None:
         class FakeAdapter:
             def supports_provider(self, provider: str) -> bool:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import tempfile
 import unittest
 from importlib import reload
@@ -106,6 +107,27 @@ class SettingsApiTests(unittest.TestCase):
         self.assertEqual(
             settings_service_module.get_provider_settings().provider, "ollama"
         )
+
+    def test_legacy_credentials_are_screened_in_settings_and_health_metadata(
+        self,
+    ) -> None:
+        secret = "opaque-provider-metadata-credential"
+        with database_module.SessionLocal() as session:
+            for key, value in {
+                "active_llm_provider": "openai",
+                "llm_provider_config::openai::model": secret,
+                "llm_provider_config::openai::api_base": "http://localhost:1",
+                "llm_provider_config::openai::local_mode": "false",
+            }.items():
+                settings_repository_module.upsert_setting(session, key=key, value=value)
+        with patch.dict(os.environ, {"OPENAI_API_KEY": secret}):
+            for endpoint in ("/api/v1/settings", "/api/v1/health"):
+                with self.subTest(endpoint=endpoint):
+                    response = self.client.get(
+                        endpoint, params={"project_key": self.project.project_key}
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertNotIn(secret, json.dumps(response.json()))
 
     def test_policy_adapter_defaults_can_be_managed_per_project_and_integration(
         self,

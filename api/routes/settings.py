@@ -41,6 +41,7 @@ from api.schemas import (
     TopologyValidationResponse,
     build_meta,
 )
+from llm.providers import redact_provider_field
 from llm.skill_context import get_custom_skill_statuses, save_custom_skill
 from services.feedback_service import fetch_feedback_summary
 from services.project_service import (
@@ -144,9 +145,9 @@ def _masked_key_preview(api_key: str | None) -> str | None:
 
 def _provider_settings_data(provider_settings) -> ProviderSettingsData:
     return ProviderSettingsData(
-        provider=provider_settings.provider,
-        model=provider_settings.model,
-        api_base=provider_settings.api_base,
+        provider=redact_provider_field(provider_settings.provider),
+        model=redact_provider_field(provider_settings.model),
+        api_base=redact_provider_field(provider_settings.api_base),
         local_mode=provider_settings.local_mode,
         request_timeout_seconds=provider_settings.request_timeout_seconds,
         source=provider_settings.source,

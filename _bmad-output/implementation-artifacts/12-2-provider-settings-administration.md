@@ -41,6 +41,16 @@ So that external or local model usage is explicit, local-first, and safe.
 - [x] [Review][Defer] Settings UI describes temporary validation as lasting a session [frontend/src/screens/Settings.tsx:74] — deferred, pre-existing; runtime and operator docs correctly scope it to one request.
 - [x] [Review][Defer] Generated Source Tree Guidance references retired Python UI style — deferred, pre-existing; mandatory project context specifies React.
 
+### Re-review Findings
+
+- [x] [Review][Patch] Screen every configured provider credential, including fallback and secondary aliases [services/settings_service.py:396].
+- [x] [Review][Patch] Reject recoverable credentials hidden by nested percent encoding [llm/providers.py:124].
+- [x] [Review][Patch] Validate malformed host authorities before saving provider settings [llm/providers.py:101].
+- [x] [Review][Patch] Keep default browser tests from overwriting inactive provider profiles; isolate successful/temporary-key saves [frontend/e2e/provider-administration.spec.ts:43].
+- [x] [Review][Patch] Register fixture cleanup before module reload or database initialization can fail [tests/test_services/test_provider_administration_fallback.py:42].
+- [x] [Review][Patch] Correct deterministic-only guidance and clarify surrounding endpoint whitespace normalization [docs/security/provider-settings-administration.md:31].
+- [x] [Review][Patch] Prevent invalid legacy provider credentials from leaking into fallback/report metadata [llm/narrator.py:339] — reproduced on develop too; repaired within AC1's credential boundary.
+
 ## Dev Notes
 
 ### Epic Context
@@ -152,6 +162,14 @@ GPT-6 (Codex), with native subagents for bounded fallback tests and independent 
 - `tests/test_services/test_settings_service.py`
 - `tests/test_services/test_provider_administration_fallback.py`
 
+- `api/routes/health.py`
+- `config.py`
+- `docs/ci.md`
+- `docs/verification/story-12-2/provider-settings-transient-key.png`
+- `llm/narrator.py`
+- `services/report_service.py`
+- `tests/test_llm/test_narrator.py`
+
 ## Change Log
 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
@@ -159,6 +177,8 @@ GPT-6 (Codex), with native subagents for bounded fallback tests and independent 
 - 2026-10-05: Implemented provider administration validation and credential screening, deterministic degraded-report regressions, operator docs, and composed-app browser coverage.
 
 - 2026-10-05: Code review approved after five fixes, deterministic regressions and Compose browser/isolation checks; story/sprint moved to done and deferred documentation issues recorded.
+
+- 2026-10-05: Fresh re-review fixed seven additional credential, endpoint, fixture-isolation and documentation findings; verified full Python and disposable Compose browser lanes.
 
 ## Senior Developer Review (AI)
 
@@ -175,3 +195,18 @@ GPT-6 (Codex), with native subagents for bounded fallback tests and independent 
 - Evidence: `/private/tmp/story12-2-review-{red,focused,ci,unittest,shard,browser,env-browser,key-browser}.log`; screenshot committed at `docs/verification/story-12-2/provider-settings.png`.
 - Limitations: real hosted-provider connectivity remains untested. Existing unrelated medium Bandit B104 sample-data finding remains; no touched-file finding and the configured security gate passes. Two low copy/template issues are recorded in `deferred-work.md`.
 - Git Flow: verified compliant feature branch; review fixes and closure record are committed there. Push/PR closure follows this record; no merge is authorized by this review.
+
+## Fresh Re-review (AI)
+
+- Date: 2026-10-05
+- Outcome: **Approve after fixes**; no remaining high/medium blocker.
+- Scope: PR #129 at `23adf97`, all changes from `develop`, plus the fresh review fixes on the existing feature branch.
+- Layers: fresh Blind Hunter (diff only), Edge Case Hunter (reachable paths) and Acceptance Auditor (AC1/AC2 plus context). All completed; independent rechecks found no concrete blocker.
+- Fixed seven actionable findings: full configured credential collection including inactive provider keys, fallback and Gemini aliases; bounded nested percent-decoding; DNS/IP authority checks; default browser tests preserving inactive profiles with successful writes isolated behind `PROVIDER_ADMIN_TEST_MUTATION=1`; fixture cleanup registered before reload/init failure; correct narration-only operator guidance; credential-safe legacy fallback and report metadata.
+- Credential collection lives in `config.py` and is reused by the provider/service boundary. Invocation and prompt/response screening, settings/health serialization and narrative/report persistence/read boundaries use the same configured values. Healthy metadata and credential precedence are preserved.
+- Legacy metadata exposure was also reproduced on `develop`; it was repaired within AC1 rather than leaving that credential leak on the new degraded-result path. No data migration, schema/constructor change, scoring-rule change, dependency addition, or production React change.
+- Regression verification: fresh focused suite 137 passed, one optional live-provider skip, 185 subtests; root unittest 478 tests OK with one optional live-provider skip; affected API/CLI/infra shard 416 passed and 134 subtests; full local CI nine directories, 1,675 tests total, including configured security gate, compilation, dependency checks, Skill harness and prompt-injection lane. Ruff lint and repository-wide formatting passed (285 Python files); frontend typecheck passed.
+- Browser verification: production Compose build at `http://localhost:8080`, all `/app/data` test storage overridden to disposable tmpfs. Default provider run passed and skipped the opt-in mutation test; direct SQL comparison confirmed every active, inactive and legacy provider setting stayed unchanged (background maintenance rows excluded). Full opt-in suite passed all 16 tests with keys absent; additional configured synthetic key run passed both provider tests, proving temporary key validation and environment re-resolution without persistence or hosted calls. The existing report seed requires `/app/data/deploywhisper.db`; an initial alternate-basename fixture was corrected and the full suite rerun successfully. Original persistent data volume was never mounted by these fixtures; all disposable instances stopped.
+- Evidence: `/private/tmp/story12-2-rereview-{shape-red,metadata-red,final-focused,ci,unittest,shard,default-browser,browser-final,key-browser,profile-preservation}.log`. Screenshots: `docs/verification/story-12-2/provider-settings.png` and `provider-settings-transient-key.png`.
+- Limitations: real hosted-provider connectivity remains untested. The unrelated existing medium Bandit B104 sample-data finding remains; no touched-file finding. The two prior low copy/template issues remain deferred; no new deferral or human decision was required.
+- Git Flow: existing `feature/12-2-provider-settings-administration` verified, fixes and this record committed there, PR #129 targets `develop`; remote closure/checks recorded in runtime state and the PR description.

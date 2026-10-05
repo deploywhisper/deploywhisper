@@ -12,7 +12,8 @@ operators to configure an offline provider without losing deterministic analysis
 Set credentials in the running process or container environment: `OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `OPENROUTER_API_KEY`,
 `GROQ_API_KEY`, or `XAI_API_KEY`. `LLM_API_KEY` is the generic fallback. Provider
-specific keys take precedence. Restart the process/container after changing its
+specific keys take precedence for invocation; all configured provider keys,
+including unused fallback and alias values, are screened before persistence. Restart the process/container after changing its
 environment. Database profiles never retain API keys. Entering a key in Settings
 uses it only for the immediate validation request; subsequent analysis resolves
 credentials from the environment again. Existing legacy key rows for the saved
@@ -21,7 +22,9 @@ profile and active settings are removed when saving.
 Keep credentials out of models and URLs. API bases must be absolute HTTP/HTTPS
 URLs without userinfo, query parameters or fragments. Recognized credentials and the supplied/environment key are also rejected
 in URL paths and model names, including percent-encoded representations.
-Whitespace and control characters in API bases are rejected. Do not put any secrets in these fields. The settings API returns a masked key presence hint.
+Surrounding endpoint whitespace is normalized; embedded whitespace/control
+characters and malformed hostnames are rejected. Nested percent encodings are
+screened with a bounded decoder; excessive encoding is rejected. Do not put any secrets in these fields. The settings API returns a masked key presence hint.
 
 ## Fully local operation and degraded output
 
@@ -29,8 +32,12 @@ Select Ollama and enable **Local-only mode**. Use an Ollama endpoint controlled
 by your organization (for Compose on macOS, the configured host endpoint is
 `http://host.docker.internal:11434`). Local-only mode rejects hosted providers
 before provider invocation. Selecting Ollama is not a network firewall: the
-operator is responsible for the endpoint and network boundary. Disable narration
-with `NARRATOR_ENABLED=false` when deterministic-only operation is desired.
+operator is responsible for the endpoint and network boundary.
+`NARRATOR_ENABLED=false` disables narrative generation only; risk assessment may
+still use the configured provider for model assistance. Use local Ollama for fully
+local operation. Service callers can explicitly select `allow_llm_assistance=False`
+and `include_narrative=False` when deterministic-only processing is required;
+there is no global deterministic-only settings toggle in this story.
 
 Missing credentials, unsupported legacy configuration, unavailable models and
 provider failures preserve deterministic findings and the advisory verdict. Reports
@@ -38,4 +45,7 @@ persist `narrative_degraded`, `narrative_failure_notice` and provider/model/loca
 metadata. Config-derived health checks validate profile structure without network
 access; live validation and analysis may contact the explicitly selected provider.
 Raw uploaded artifacts remain local; only sanitized structured summaries reach
-narrative providers. See [secrets and artifact boundaries](secrets-and-artifact-boundaries.md).
+narrative providers. Configured provider credentials are also screened from
+settings/health responses, narrative metadata, persisted report metadata and
+legacy report reads. Invalid credential-bearing metadata is shown as
+`[REDACTED]`; healthy provider/model values retain their existing form. See [secrets and artifact boundaries](secrets-and-artifact-boundaries.md).

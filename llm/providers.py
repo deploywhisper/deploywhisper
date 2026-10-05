@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+from ipaddress import ip_address
 from urllib.parse import unquote, urlsplit
 
 from llm.adapters._shared import request_timeout_seconds as validate_timeout
 from typing import Any, Callable
+
+from config import provider_credential_values
 
 from llm.adapters.base import (
     NarrativeProviderError,
@@ -19,7 +22,7 @@ from llm.adapters.ollama_adapter import OllamaProviderAdapter
 from llm.adapters.openai_compatible_adapter import OpenAICompatibleProviderAdapter
 from llm.adapters.openai_adapter import OpenAIProviderAdapter
 from llm.adapters.registry import ProviderAdapterRegistry
-from services.content_security import redact_text, redact_value
+from services.content_security import REDACTED, redact_text, redact_value
 
 SENSITIVE_RESPONSE_NOTICE = (
     "Provider response blocked because sensitive content was detected."
@@ -72,6 +75,56 @@ def get_provider_adapter(provider: str):
     return _provider_registry.resolve(provider)
 
 
+def redact_provider_field(
+    value: str | None,
+    *,
+    sensitive_values: tuple[str, ...] = (),
+) -> str | None:
+    """Screen provider metadata through bounded successive percent decoding."""
+    if value is None:
+        return None
+    sensitive_values = sensitive_values + provider_credential_values()
+    candidate = value
+    for _ in range(9):
+        if redact_text(candidate, sensitive_values=sensitive_values) != candidate:
+            return REDACTED
+        decoded = unquote(candidate)
+        if decoded == candidate:
+            return value
+        candidate = decoded
+    return REDACTED
+
+
+def _valid_provider_host(host: str) -> bool:
+    """Accept IP addresses and DNS/private-network names with valid labels."""
+    if ":" in host or all(
+        character.isdigit() or character == "." for character in host
+    ):
+        try:
+            ip_address(host)
+        except ValueError:
+            return False
+        return True
+    try:
+        encoded = host.removesuffix(".").encode("idna").decode("ascii")
+    except UnicodeError:
+        return False
+    return (
+        bool(encoded)
+        and len(encoded) <= 253
+        and all(
+            label
+            and len(label) <= 63
+            and not label.startswith("-")
+            and not label.endswith("-")
+            and all(
+                character.isalnum() or character in {"-", "_"} for character in label
+            )
+            for label in encoded.split(".")
+        )
+    )
+
+
 def validate_provider_settings_shape(
     *,
     provider: str,
@@ -99,7 +152,11 @@ def validate_provider_settings_shape(
         )
     try:
         endpoint = urlsplit(api_base)
-        valid_url = endpoint.scheme in {"http", "https"} and bool(endpoint.hostname)
+        valid_url = (
+            endpoint.scheme in {"http", "https"}
+            and bool(endpoint.hostname)
+            and _valid_provider_host(endpoint.hostname)
+        )
         valid_url = valid_url and endpoint.port != 0
     except ValueError:
         valid_url = False
@@ -118,8 +175,8 @@ def validate_provider_settings_shape(
         )
     sensitive_values = sensitive_values + ((api_key,) if api_key else ())
     if any(
-        redact_text(value, sensitive_values=sensitive_values) != value
-        for value in (model, api_base, unquote(model), unquote(api_base))
+        redact_provider_field(value, sensitive_values=sensitive_values) != value
+        for value in (model, api_base)
     ):
         raise NarrativeProviderError(
             "Provider model and API base must not contain credentials."
@@ -155,6 +212,7 @@ def generate_completion_with_settings(
         local_mode=local_mode,
         request_timeout_seconds=request_timeout_seconds,
     )
+    credentials = provider_credential_values() + ((api_key,) if api_key else ())
     try:
         validate_provider_settings_shape(
             provider=provider,
@@ -169,40 +227,30 @@ def generate_completion_with_settings(
                 "Provider API key is missing from environment-backed configuration."
             )
         adapter = get_provider_adapter(provider)
-        safe_messages = redact_value(
-            messages, sensitive_values=(api_key,) if api_key else ()
-        )
+        safe_messages = redact_value(messages, sensitive_values=credentials)
         for message, safe_message in zip(messages, safe_messages):
             try:
                 message_payload = json.loads(message["content"])
             except (ValueError, TypeError, KeyError):
                 continue
-            safe_payload = redact_value(
-                message_payload, sensitive_values=(api_key,) if api_key else ()
-            )
+            safe_payload = redact_value(message_payload, sensitive_values=credentials)
             if safe_payload != message_payload:
                 safe_message["content"] = redact_text(
                     json.dumps(safe_payload),
-                    sensitive_values=(api_key,) if api_key else (),
+                    sensitive_values=credentials,
                 )
         content = adapter.generate_completion(
             safe_messages,
             runtime=runtime,
             completion_client=completion_client,
         )
-        if (
-            redact_text(content, sensitive_values=(api_key,) if api_key else ())
-            != content
-        ):
+        if redact_text(content, sensitive_values=credentials) != content:
             raise NarrativeProviderError(SENSITIVE_RESPONSE_NOTICE)
         try:
             payload = json.loads(content)
         except (ValueError, TypeError):
             payload = None
-        if (
-            redact_value(payload, sensitive_values=(api_key,) if api_key else ())
-            != payload
-        ):
+        if redact_value(payload, sensitive_values=credentials) != payload:
             raise NarrativeProviderError(SENSITIVE_RESPONSE_NOTICE)
         return content
     except Exception as exc:  # noqa: BLE001

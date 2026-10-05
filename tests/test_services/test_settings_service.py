@@ -68,6 +68,10 @@ class SettingsServiceTests(unittest.TestCase):
             {"model": "   "},
             {"api_base": "file:///tmp/provider"},
             {"api_base": "https://bad host/v1"},
+            {"api_base": "https://%ZZ/v1"},
+            {"api_base": "https://bad^host/v1"},
+            {"api_base": "https://-invalid.example/v1"},
+            {"api_base": "https://999.999.999.999/v1"},
             {"api_base": "https://bad\nhost/v1"},
             {"api_base": "https://example.invalid/\x00"},
             {"api_base": "https://user:secret@example.invalid/v1"},
@@ -123,6 +127,8 @@ class SettingsServiceTests(unittest.TestCase):
         for overrides in (
             {"model": token},
             {"model": "%73k-syntheticBoundaryToken12345"},
+            {"model": "%2573k-syntheticBoundaryToken12345"},
+            {"api_base": "https://example.invalid/%2563ustom%252denv%252dsecret"},
             {"api_base": "https://example.invalid/%73k-syntheticBoundaryToken12345"},
             {"api_base": "https://example.invalid/%63ustom%2denv%2dsecret"},
             {"api_base": f"https://example.invalid/{token}"},
@@ -154,6 +160,36 @@ class SettingsServiceTests(unittest.TestCase):
                     for record in settings_repository_module.list_settings(session)
                 )
             )
+
+    def test_unselected_fallback_alias_and_provider_credentials_cannot_be_saved(
+        self,
+    ) -> None:
+        credentials = {
+            "OPENAI_API_KEY": "opaque-active-secret-1234",
+            "LLM_API_KEY": "opaque-fallback-secret-5678",
+            "GEMINI_API_KEY": "opaque-gemini-secret-9012",
+            "GOOGLE_API_KEY": "opaque-google-secret-3456",
+            "ANTHROPIC_API_KEY": "opaque-anthropic-secret-7890",
+        }
+        with patch.dict(os.environ, credentials):
+            for provider in ("openai", "gemini", "ollama"):
+                for credential in credentials.values():
+                    for field in ("model", "api_base"):
+                        with self.subTest(
+                            provider=provider, credential=credential, field=field
+                        ):
+                            values = dict(
+                                provider=provider,
+                                model="test",
+                                api_base="http://localhost:1",
+                            )
+                            values[field] = (
+                                credential
+                                if field == "model"
+                                else f"http://localhost:1/{credential}"
+                            )
+                            with self.assertRaises(ValueError):
+                                settings_service_module.save_provider_settings(**values)
 
     def test_policy_adapter_settings_resolve_integration_then_project_defaults(
         self,

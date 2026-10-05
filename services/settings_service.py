@@ -9,7 +9,7 @@ import os
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import OperationalError
 
-from config import settings
+from config import PROVIDER_ENV_API_KEYS, provider_credential_values, settings
 from llm.providers import (
     NarrativeProviderError,
     safe_error_message,
@@ -156,15 +156,7 @@ TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS = [6, 12, 24, 168]
 DEFAULT_TOPOLOGY_DRIFT_CHECK_INTERVAL_HOURS = 24
 MIN_PROVIDER_TIMEOUT_SECONDS = 1.0
 MAX_PROVIDER_TIMEOUT_SECONDS = 600.0
-PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
-    "openai": ("OPENAI_API_KEY",),
-    "anthropic": ("ANTHROPIC_API_KEY",),
-    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
-    "openrouter": ("OPENROUTER_API_KEY",),
-    "groq": ("GROQ_API_KEY",),
-    "xai": ("XAI_API_KEY",),
-    "ollama": (),
-}
+
 
 POLICY_ADAPTER_SETTINGS_PREFIX = "policy_adapter_defaults"
 POLICY_ADAPTER_SETTINGS_KEY_MAX_LENGTH = 100
@@ -402,7 +394,7 @@ def save_provider_settings(
             api_base=api_base,
             local_mode=local_mode,
             api_key=api_key,
-            sensitive_values=(environment_key,) if environment_key else (),
+            sensitive_values=provider_credential_values(),
             request_timeout_seconds=(
                 settings.llm_request_timeout_seconds
                 if request_timeout_seconds is None

@@ -39,6 +39,7 @@ from evidence.models import (
     Finding,
 )
 from llm.narrator import NarrativeResult
+from llm.providers import redact_provider_field
 
 from models.database import SessionLocal
 from models.repositories.analysis_reports import (
@@ -73,7 +74,10 @@ from services.project_service import (
     resolve_workspace_reference,
 )
 from services.settings_service import get_dashboard_result_display_duration_seconds
-from services.settings_service import resolve_provider_runtime
+from services.settings_service import (
+    provider_credential_values,
+    resolve_provider_runtime,
+)
 from services.submission_manifest import (
     SubmissionManifest,
     build_submission_manifest,
@@ -793,8 +797,12 @@ def _build_audit_metadata(
             for file_result in parse_batch.files
             if file_result.status == "parsed"
         ],
-        "llm_provider": runtime["provider"],
-        "llm_model": runtime["model"],
+        "llm_provider": redact_provider_field(
+            runtime["provider"], sensitive_values=provider_credential_values()
+        ),
+        "llm_model": redact_provider_field(
+            runtime["model"], sensitive_values=provider_credential_values()
+        ),
         "llm_local_mode": runtime["local_mode"],
         "source_interface": source_interface,
         "trigger_type": trigger_type,
@@ -4498,8 +4506,24 @@ def _serialize_report(report, *, include_evidence: bool = True) -> dict:
         payload,
         evidence_detail_available=include_evidence,
     )
-    sanitized = redact_value(payload)
-    if sanitized != payload or REDACTION_WARNING in sanitized["warnings"]:
+    credentials = provider_credential_values()
+    provider_metadata_redacted = False
+    for key in ("narrative_provider", "narrative_model"):
+        safe_value = redact_provider_field(payload[key], sensitive_values=credentials)
+        provider_metadata_redacted |= safe_value != payload[key]
+        payload[key] = safe_value
+    for key in ("llm_provider", "llm_model"):
+        safe_value = redact_provider_field(
+            payload["audit"][key], sensitive_values=credentials
+        )
+        provider_metadata_redacted |= safe_value != payload["audit"][key]
+        payload["audit"][key] = safe_value
+    sanitized = redact_value(payload, sensitive_values=credentials)
+    if (
+        provider_metadata_redacted
+        or sanitized != payload
+        or REDACTION_WARNING in sanitized["warnings"]
+    ):
         sanitized["warnings"] = list(
             dict.fromkeys([*sanitized["warnings"], REDACTION_WARNING])
         )
@@ -4529,7 +4553,9 @@ def persist_analysis_report(
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
     security_inputs = submitted_artifacts or list((artifact_snapshots or {}).items())
-    sensitive_values = sensitive_submission_values(security_inputs)
+    sensitive_values = (
+        sensitive_submission_values(security_inputs) + provider_credential_values()
+    )
     original_pending_analysis = (
         build_pending_analysis(security_inputs)
         if submitted_artifacts is not None or artifact_snapshots is not None
@@ -4558,16 +4584,19 @@ def persist_analysis_report(
         }
 
     def screen(model, screened_payload=None):
-        if screened_payload is not None:
-            return type(model).model_validate(screened_payload)
-        return type(model).model_validate(
-            redact_value(
+        if screened_payload is None:
+            screened_payload = redact_value(
                 remap_artifact_identities(
                     model.model_dump(mode="json"), artifact_aliases
                 ),
                 sensitive_values=sensitive_values,
             )
-        )
+        if isinstance(model, NarrativeResult):
+            for key in ("provider", "model"):
+                screened_payload[key] = redact_provider_field(
+                    screened_payload[key], sensitive_values=sensitive_values
+                )
+        return type(model).model_validate(screened_payload)
 
     original_content = {
         "parse_batch": parse_batch.model_dump(mode="json"),
@@ -4592,6 +4621,9 @@ def persist_analysis_report(
     parse_batch = screen(parse_batch, screened_content["parse_batch"])
     assessment = screen(assessment, screened_content["assessment"])
     narrative = screen(narrative, screened_content["narrative"])
+    content_redacted |= (
+        narrative.model_dump(mode="json") != original_content["narrative"]
+    )
     findings = [
         screen(item, safe)
         for item, safe in zip(findings or [], screened_content["findings"], strict=True)
@@ -4662,6 +4694,7 @@ def persist_analysis_report(
     audit = _build_audit_metadata(parse_batch, audit_context=audit_context)
     audit["llm_provider"] = narrative.provider or audit["llm_provider"]
     audit["llm_model"] = narrative.model or audit["llm_model"]
+    audit = redact_value(audit, sensitive_values=sensitive_values)
     if narrative.local_mode is not None:
         audit["llm_local_mode"] = narrative.local_mode
     resolved_project_id, resolved_workspace_id = _resolve_report_scope(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import tempfile
 import unittest
 from importlib import reload
@@ -39,7 +40,6 @@ class ProviderAdministrationFallbackTests(unittest.TestCase):
             },
         )
         self.environment = environment
-        environment.start()
         self.modules = (
             config_module,
             tables_module,
@@ -51,10 +51,11 @@ class ProviderAdministrationFallbackTests(unittest.TestCase):
             settings_service_module,
             report_service_module,
         )
+        environment.start()
+        self.addCleanup(self._restore_runtime)
         for module in self.modules:
             reload(module)
         database_module.init_db()
-        self.addCleanup(self._restore_runtime)
         self.files = [
             (
                 "main.tf",
@@ -89,6 +90,60 @@ class ProviderAdministrationFallbackTests(unittest.TestCase):
             settings_service_module.settings.database_url, self.original_database_url
         )
 
+    def test_setup_failure_restores_runtime_and_environment(self) -> None:
+        original_url = config_module.settings.database_url
+        original_snapshot_dir = os.environ.get("ARTIFACT_SNAPSHOT_DIR")
+        for failure in ("reload", "init_db"):
+            with self.subTest(failure=failure):
+                fixture = ProviderAdministrationFallbackTests(
+                    "test_missing_environment_credential_preserves_persisted_report"
+                )
+                try:
+                    target = (
+                        f"{__name__}.reload"
+                        if failure == "reload"
+                        else f"{__name__}.database_module.init_db"
+                    )
+                    if failure == "reload":
+                        with patch(
+                            target, side_effect=RuntimeError("synthetic setup failure")
+                        ):
+                            with self.assertRaisesRegex(
+                                RuntimeError, "synthetic setup"
+                            ):
+                                fixture.setUp()
+                    else:
+                        original_reload = reload
+
+                        def reload_without_database(module):
+                            return (
+                                module
+                                if module is database_module
+                                else original_reload(module)
+                            )
+
+                        with (
+                            patch(
+                                target,
+                                side_effect=RuntimeError("synthetic setup failure"),
+                            ),
+                            patch(
+                                f"{__name__}.reload",
+                                side_effect=reload_without_database,
+                            ),
+                        ):
+                            with self.assertRaisesRegex(
+                                RuntimeError, "synthetic setup"
+                            ):
+                                fixture.setUp()
+                finally:
+                    fixture.doCleanups()
+                self.assertEqual(config_module.settings.database_url, original_url)
+                self.assertEqual(str(database_module.engine.url), original_url)
+                self.assertEqual(
+                    os.environ.get("ARTIFACT_SNAPSHOT_DIR"), original_snapshot_dir
+                )
+
     def _store_runtime(self, provider: str, *, local_mode: bool = False) -> None:
         # Emulate existing persisted configuration, including invalid legacy rows.
         # The administration save path should reject invalid new configurations.
@@ -104,7 +159,9 @@ class ProviderAdministrationFallbackTests(unittest.TestCase):
             for key, value in values.items():
                 settings_repository_module.upsert_setting(session, key=key, value=value)
 
-    def _assert_deterministic_report_survives(self, completion_client=None):
+    def _assert_deterministic_report_survives(
+        self, completion_client=None, *, secret=None
+    ):
         baseline = build_analysis_artifacts(
             self.files,
             allow_llm_assistance=False,
@@ -133,6 +190,8 @@ class ProviderAdministrationFallbackTests(unittest.TestCase):
         self.assertFalse(result.narrative.available)
         self.assertEqual(result.narrative.source, "fallback")
         self.assertTrue(result.narrative.failure_notice)
+        if secret is not None:
+            self.assertNotIn(secret, result.narrative.model_dump_json())
 
         baseline_persisted = report_service_module.persist_analysis_report(
             baseline.parse_batch,
@@ -170,6 +229,98 @@ class ProviderAdministrationFallbackTests(unittest.TestCase):
         self.assertEqual(report["narrative_local_mode"], result.narrative.local_mode)
         self.assertIn(result.narrative.failure_notice, report["warnings"])
         return report
+
+    def test_malformed_known_provider_runtime_preserves_deterministic_report(
+        self,
+    ) -> None:
+        self._store_runtime("openai")
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key="llm_provider_config::openai::api_base",
+                value="https://api.openai.com:invalid/v1",
+            )
+        completion_client = Mock()
+        self._assert_deterministic_report_survives(completion_client)
+        completion_client.assert_not_called()
+
+    def test_legacy_model_credentials_are_screened_in_memory_and_at_rest(self) -> None:
+        self._store_runtime("openai", local_mode=True)
+        for key_name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "LLM_API_KEY"):
+            with self.subTest(key_name=key_name):
+                secret = f"synthetic-{key_name.lower()}-credential"
+                metadata_value = (
+                    "".join(f"%{ord(character):02X}" for character in secret).replace(
+                        "%", "%2525"
+                    )
+                    if key_name == "LLM_API_KEY"
+                    else secret
+                )
+                with database_module.SessionLocal() as session:
+                    settings_repository_module.upsert_setting(
+                        session,
+                        key="llm_provider_config::openai::model",
+                        value=f"legacy-model-{metadata_value}",
+                    )
+                completion_client = Mock()
+                with patch.dict(os.environ, {key_name: secret}):
+                    report = self._assert_deterministic_report_survives(
+                        completion_client, secret=secret
+                    )
+                    self.assertNotIn(secret, json.dumps(report))
+                    self.assertNotIn(metadata_value, json.dumps(report))
+                    with database_module.SessionLocal() as session:
+                        stored = reports_repository_module.get_analysis_report(
+                            session, report["id"]
+                        )
+                        self.assertNotIn(secret, stored.llm_model or "")
+                        self.assertNotIn(metadata_value, stored.llm_model or "")
+                        # Also screen legacy reports created before credential-aware
+                        # persistence, while the configured credential is available.
+                        stored.llm_model = f"legacy-model-{metadata_value}"
+                        session.commit()
+                    legacy_report = report_service_module.fetch_analysis_report(
+                        report["id"]
+                    )
+                    self.assertNotIn(secret, json.dumps(legacy_report))
+                    self.assertNotIn(metadata_value, json.dumps(legacy_report))
+                completion_client.assert_not_called()
+
+    def test_persistence_screens_provider_credentials_from_supplied_narrative(
+        self,
+    ) -> None:
+        result = build_analysis_artifacts(
+            self.files,
+            allow_llm_assistance=False,
+            include_narrative=False,
+            include_topology_context=False,
+            include_incident_context=False,
+        )
+        secret = "synthetic-narrative-metadata-credential"
+        encoded = "".join(f"%{ord(character):02X}" for character in secret).replace(
+            "%", "%2525"
+        )
+        narrative = result.narrative.model_copy(
+            update={"model": encoded, "warnings": [f"Legacy warning: {secret}"]}
+        )
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": secret}):
+            persisted = report_service_module.persist_analysis_report(
+                result.parse_batch,
+                result.assessment,
+                narrative,
+                findings=result.findings,
+                evidence_items=result.evidence_items,
+                submitted_artifacts=self.files,
+            )
+            self.assertNotIn(secret, json.dumps(persisted))
+            self.assertNotIn(encoded, json.dumps(persisted))
+            with database_module.SessionLocal() as session:
+                stored = reports_repository_module.get_analysis_report(
+                    session, persisted["id"]
+                )
+                self.assertNotIn(secret, stored.llm_model or "")
+                self.assertNotIn(encoded, stored.llm_model or "")
+                self.assertNotIn(secret, stored.warnings_json)
 
     def test_missing_environment_credential_preserves_persisted_report(self) -> None:
         self._store_runtime("openai")

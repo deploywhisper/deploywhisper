@@ -12,6 +12,37 @@ from llm.narrator import generate_narrative
 
 
 class NarrativeTests(unittest.TestCase):
+    def test_fallback_metadata_screens_all_configured_provider_credentials(
+        self,
+    ) -> None:
+        import os
+
+        secret = "synthetic-inactive-provider-credential"
+        runtime = {
+            "provider": "openai",
+            "model": f"legacy-model-{secret}",
+            "api_base": "https://api.openai.com/v1",
+            "api_key": "",
+            "local_mode": True,
+        }
+        encoded = "".join(f"%{ord(character):02X}" for character in secret)
+        for value in (secret, encoded.replace("%", "%2525")):
+            with self.subTest(value=value):
+                runtime["model"] = f"legacy-model-{value}"
+                with (
+                    patch.dict(os.environ, {"ANTHROPIC_API_KEY": secret}),
+                    patch(
+                        "llm.narrator.resolve_provider_runtime", return_value=runtime
+                    ),
+                    patch(
+                        "llm.narrator.settings", SimpleNamespace(narrator_enabled=False)
+                    ),
+                ):
+                    narrative = generate_narrative(self._assessment(), self._findings())
+                self.assertTrue(narrative.degraded)
+                self.assertNotIn(secret, narrative.model_dump_json())
+                self.assertNotIn(value, narrative.model_dump_json())
+
     def _assessment(self) -> RiskAssessment:
         return RiskAssessment(
             score=42,
