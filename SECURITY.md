@@ -34,6 +34,11 @@ The [secrets and artifact boundary audit](docs/security/secrets-and-artifact-bou
 documents credential screening, blocked snapshots/model output, safe logging,
 reviewer-visible redaction status, and operator responsibilities for older data.
 
+Repository security scans and finding dispositions follow the
+[Scorecard and CodeQL review process](docs/security/supply-chain-scanning.md).
+High-priority findings need an owner and a follow-up issue or evidence-backed
+rationale; vulnerability details retain the private disclosure boundary above.
+
 ## Disclosure Expectations
 
 Maintainers should acknowledge credible private reports, triage severity, and coordinate a fix before public disclosure. Public advisories should avoid exposing exploit details before users have a reasonable opportunity to update or mitigate.

@@ -2,6 +2,11 @@
 
 DeployWhisper uses GitHub Actions at [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
+Repository supply-chain scans run separately through the
+[Scorecard and CodeQL workflows](security/supply-chain-scanning.md). The guide
+documents result visibility, PR-local versus default-branch coverage and the
+required high-priority finding dispositions.
+
 ## Stages
 
 - `quality`: installs dependencies, runs `pip check`, and bytecode-compiles project modules.

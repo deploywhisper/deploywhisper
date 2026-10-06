@@ -139,6 +139,7 @@ What users can use today:
 - **Published GitHub Action path**: use the dedicated `deploywhisper/analyze-action` pinned to a reviewed full commit SHA to analyze PR artifact changes, post/update an advisory PR comment, and expose report outputs for follow-on workflow steps.
 - **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.3.0` with SQLite-backed persistence for a self-hosted single-container setup.
 - **Project quality baseline**: GitHub Actions CI, Python quality checks, sharded tests, local CI scripts, and optional UI accessibility smoke checks are in place.
+- **Repository supply-chain visibility**: [Scorecard and CodeQL](docs/security/supply-chain-scanning.md) provide maintainer-visible security results and a documented high-priority findings review process.
 
 Why this gives users value:
 
