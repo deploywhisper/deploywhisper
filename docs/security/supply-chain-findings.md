@@ -42,6 +42,24 @@ scope; decisions expire on the next review date or when that scope changes.
   [#131](https://github.com/deploywhisper/deploywhisper/issues/131).
 - `Security-Policy`: **4/10**, Medium. The private reporting boundary in `SECURITY.md`
   remains authoritative; a low score does not justify publishing exploit details.
-- PR-local Scorecard and three-language CodeQL execution records are added after
-  live validation. Default-branch workflow execution remains a distinct
-  post-integration verification event; no badge/public API publication is enabled.
+- [PR #132](https://github.com/deploywhisper/deploywhisper/pull/132), head `df01ebd`,
+  merge analysis `0e33ca4`, 2026-10-06: [CodeQL run](https://github.com/deploywhisper/deploywhisper/actions/runs/37489620206)
+  completed Python, JavaScript/TypeScript and Actions analyses with **zero results**,
+  distinct language categories and three retained SARIF artifacts. This is a
+  scan result for that source tree/query suite, not a claim of vulnerability-free code.
+- [Scorecard PR run](https://github.com/deploywhisper/deploywhisper/actions/runs/37489620101)
+  completed in **local mode**, retained its SARIF and uploaded **70 results**.
+  Five High results (`DependencyUpdateToolID`: 1, `TokenPermissionsID`: 3,
+  `VulnerabilitiesID`: 1) map to assigned follow-up #131 above. Other results:
+  `PinnedDependenciesID`: 63, `SecurityPolicyID`: 1, `FuzzingID`: 1 (Medium).
+  GitHub processed all four analyses without errors.
+  The alerts API confirmed all 70 open PR findings are visible, including
+  High alerts [#1](https://github.com/deploywhisper/deploywhisper/security/code-scanning/1),
+  [#3](https://github.com/deploywhisper/deploywhisper/security/code-scanning/3),
+  [#4](https://github.com/deploywhisper/deploywhisper/security/code-scanning/4),
+  [#5](https://github.com/deploywhisper/deploywhisper/security/code-scanning/5) and
+  [#70](https://github.com/deploywhisper/deploywhisper/security/code-scanning/70).
+- [Sanitized PR verification summary](../verification/story-12-4/pr-scan-summary.json).
+  Raw SARIF remains in the linked run artifacts/code-scanning interface.
+- Default-branch workflow execution remains a distinct post-integration
+  verification event; no badge/public API publication is enabled.
