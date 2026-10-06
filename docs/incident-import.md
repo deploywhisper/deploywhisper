@@ -75,3 +75,9 @@ Set `remove_missing_sources` to `true` when the submitted source list should bec
 Reindex replacement is transactional: source validation, stale managed-source removal, replacement incident rows, and source status updates succeed or fail as one unit. Reports also snapshot the incident index version and freshness state used during analysis so consumers can tell whether incident matches came from current, stale, or empty incident memory.
 
 Credential-bearing filenames use stable hash-based public aliases. Only recognized Markdown, YAML and JSON suffixes are retained for local format dispatch; unsafe or unsupported suffixes are not copied into errors. Distinct source names remain distinct after screening.
+
+Credential screening applies across the complete incident batch, so a declaration
+in one file protects copies in another. Unsafe source filenames use stable opaque
+aliases with their recognized extension. Reindexing reuses existing aliases within
+the selected project/workspace even when a later version removes the credential
+declaration; healthy filenames keep their original names.

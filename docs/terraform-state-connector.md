@@ -22,6 +22,8 @@ Terraform `sensitive_attributes` paths and `sensitive_values` masks exclude mark
 
 These controls do not classify every opaque string as a secret. Supply accurate Terraform sensitivity markers and use synthetic state in examples/tests. Historical database rows and operator-owned source files are not rewritten by read-time screening; operators should remove or replace historical sensitive copies under their retention policy.
 
+Credential discovery examines the complete local snapshot before normalization, including discarded attributes and nested Terraform sensitivity paths/masks. Discovered values are screened across all resources, dependency notes, and import results so an identity field cannot reintroduce a credential from another resource. A credential echoed in a graph identity causes a safe rejection.
+
 ### What Is Mapped
 
 - Managed Terraform resources become topology services keyed by Terraform address, such as `aws_db_instance.primary`.

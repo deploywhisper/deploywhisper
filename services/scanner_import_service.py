@@ -295,6 +295,19 @@ def import_semgrep_json_file(
     )
 
 
+def _scanner_source_alias(
+    source_file: str, *, sensitive_values: tuple[str, ...]
+) -> str:
+    if redact_reference(source_file, sensitive_values=sensitive_values) == source_file:
+        return source_file
+    suffix = Path(source_file).suffix.lower()
+    suffix = suffix if suffix in {".sarif", ".json"} else ""
+    digest = hashlib.sha256(
+        source_file.encode("utf-8", errors="surrogatepass")
+    ).hexdigest()[:16]
+    return f"[REDACTED]-{digest}{suffix}"
+
+
 def _import_parsed_scanner_evidence(
     file: ScannerImportFile,
     *,
@@ -311,7 +324,7 @@ def _import_parsed_scanner_evidence(
     )
     file = file.model_copy(
         update={
-            "source_file": redact_reference(
+            "source_file": _scanner_source_alias(
                 file.source_file, sensitive_values=sensitive_values
             )
         }
@@ -2886,7 +2899,15 @@ def _serialize_evidence(record) -> ExternalScannerEvidenceRecord:
         properties=json.loads(record.properties_json or "{}"),
     )
     safe = redact_value(payload, sensitive_values=sensitive_values)
-    for key in ("source_file", "source_ref", "artifact_uri", "location"):
+    for key in (
+        "source_file",
+        "source_ref",
+        "artifact_uri",
+        "location",
+        "tool_name",
+        "rule_id",
+        "rule_name",
+    ):
         safe[key] = redact_reference(safe[key], sensitive_values=sensitive_values)
     return ExternalScannerEvidenceRecord.model_validate(safe)
 

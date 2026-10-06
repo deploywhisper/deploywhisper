@@ -178,3 +178,8 @@ records when returned by the scanner service. Raw finding identity remains local
 for stable hashing and reimport matching; it is not persisted as raw payload.
 Screening cannot identify arbitrary sensitive prose, so redact scanner exports
 before import when they contain organization-sensitive context.
+
+Unsafe scanner source filenames use stable opaque aliases rather than a shared
+redaction marker. This preserves separate import sources while finding refresh
+continues using the scanner's original hashed identity. Legacy tool and rule labels
+are screened with bounded URL decoding when returned.

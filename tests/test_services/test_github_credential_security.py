@@ -145,6 +145,29 @@ class GitHubCredentialSecurityTests(unittest.TestCase):
             redirected.get_header("Authorization"), req.get_header("Authorization")
         )
 
+    def test_write_redirects_never_replay_authorization_or_credentials(self):
+        handler = app_service._GitHubRedirectHandler()
+        for method in ("POST", "PATCH", "PUT", "DELETE"):
+            for status in (301, 302, 303, 307, 308):
+                with self.subTest(method=method, status=status):
+                    req = Request(
+                        "https://github.example/api/v3/token",
+                        data=b"opaque-body-credential",
+                        headers={"Authorization": "Bearer opaque-header-credential"},
+                        method=method,
+                    )
+                    with self.assertRaises(app_service.GitHubAppRequestError) as caught:
+                        handler.redirect_request(
+                            req,
+                            None,
+                            status,
+                            "Redirect",
+                            {},
+                            "https://github.example/api/v3/other",
+                        )
+                    self.assertNotIn("opaque-body-credential", str(caught.exception))
+                    self.assertNotIn("opaque-header-credential", str(caught.exception))
+
     def test_download_fallback_uses_trusted_contents_endpoint_for_enterprise(self):
         for base in ("https://api.github.com", "https://github.example/api/v3"):
             with (

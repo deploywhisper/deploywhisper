@@ -21,6 +21,7 @@ from services.content_security import (
     redact_reference,
     redact_text,
     redact_value,
+    sensitive_artifact_values,
 )
 from services.project_service import (
     build_project_payload,
@@ -267,27 +268,38 @@ def _unique_messages(messages: list[str]) -> list[str]:
     return unique
 
 
-def _require_safe_topology_reference(value: str) -> None:
-    if redact_reference(value) != value or REDACTED in value:
+def _require_safe_topology_reference(
+    value: str, *, sensitive_values: tuple[str, ...] = ()
+) -> None:
+    if (
+        redact_reference(value, sensitive_values=sensitive_values) != value
+        or REDACTED in value
+    ):
         raise TopologyImportError(
             "sensitive_topology_reference",
             "Topology references must not contain credentials or sensitive values.",
         )
 
 
-def _screen_topology_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _screen_topology_payload(
+    payload: dict[str, Any], *, sensitive_values: tuple[str, ...] = ()
+) -> dict[str, Any]:
     """Screen retained context without changing the graph's stable identities."""
     services = payload.get("services", [])
     if isinstance(services, list):
         for service in services:
             if not isinstance(service, dict):
                 continue
-            _require_safe_topology_reference(str(service.get("id", "")).strip())
+            _require_safe_topology_reference(
+                str(service.get("id", "")).strip(), sensitive_values=sensitive_values
+            )
             downstream = service.get("downstream", [])
             if isinstance(downstream, list):
                 for target in downstream:
-                    _require_safe_topology_reference(str(target).strip())
-    screened = redact_value(payload)
+                    _require_safe_topology_reference(
+                        str(target).strip(), sensitive_values=sensitive_values
+                    )
+    screened = redact_value(payload, sensitive_values=sensitive_values)
     import_metadata = _import_metadata(screened)
     for field in ("source_ref", "requested_source_ref"):
         if isinstance(import_metadata.get(field), str):
@@ -320,6 +332,80 @@ def _screen_topology_payload(payload: dict[str, Any]) -> dict[str, Any]:
                     and REDACTED not in str(key)
                 ]
     return screened
+
+
+def _sensitive_topology_values(payload: dict[str, Any]) -> tuple[str, ...]:
+    """Collect raw credentials and Terraform sensitivity declarations before projection."""
+    declarations: list[dict[str, Any]] = []
+
+    def visit(item: Any) -> None:
+        if isinstance(item, list):
+            for nested in item:
+                visit(nested)
+        elif isinstance(item, dict):
+            if "index_key" in item and _terraform_identity_is_sensitive(
+                item, "index_key"
+            ):
+                declarations.append({"value": item["index_key"], "sensitive": True})
+            attributes = item.get("attributes", item.get("values"))
+            if isinstance(attributes, (dict, list)):
+                for mask_key in ("sensitive_values", "sensitive_attributes"):
+                    mask = item.get(mask_key)
+                    if isinstance(mask, dict) or mask is True:
+                        masked_value = (
+                            item
+                            if isinstance(mask, dict)
+                            and any(key in mask for key in ("attributes", "values"))
+                            else attributes
+                        )
+                        declarations.append(
+                            {"values": masked_value, "sensitive_values": mask}
+                        )
+                    elif isinstance(mask, list):
+                        for path in mask:
+                            if isinstance(path, str):
+                                path = [path]
+                            if not isinstance(path, list):
+                                continue
+                            selected = (
+                                item
+                                if path[:1] in (["attributes"], ["values"])
+                                else attributes
+                            )
+                            for component in path:
+                                if isinstance(selected, dict):
+                                    selected = selected.get(component)
+                                elif (
+                                    isinstance(selected, list)
+                                    and isinstance(component, int)
+                                    and 0 <= component < len(selected)
+                                ):
+                                    selected = selected[component]
+                                else:
+                                    selected = None
+                                    break
+                            if selected is not None:
+                                declarations.append(
+                                    {"value": selected, "sensitive": True}
+                                )
+            for nested in item.values():
+                visit(nested)
+
+    visit(payload)
+    raw_context = json.dumps(
+        {"raw_context": payload, "sensitivity_declarations": declarations}
+    ).encode("utf-8")
+    return sensitive_artifact_values(raw_context)
+
+
+def _screen_connector_change_set(
+    change_set: TopologyChangeSet, *, sensitive_values: tuple[str, ...]
+) -> TopologyChangeSet:
+    payload = change_set.model_dump()
+    payload["services"] = _screen_topology_payload(
+        {"services": payload["services"]}, sensitive_values=sensitive_values
+    )["services"]
+    return TopologyChangeSet(**redact_value(payload, sensitive_values=sensitive_values))
 
 
 def _import_metadata(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1065,10 +1151,19 @@ def _terraform_state_resource_address(resource: dict[str, Any]) -> str:
 
 
 def _terraform_state_identity_keys(
-    address: str, resource: dict[str, Any], instances: list[Any]
+    address: str,
+    resource: dict[str, Any],
+    instances: list[Any],
+    *,
+    sensitive_values: tuple[str, ...] = (),
 ) -> list[str]:
     keys = [address]
-    sensitive_values: list[str] = []
+    sensitive_values = tuple(
+        set(sensitive_values)
+        | set(
+            _sensitive_topology_values({"resource": resource, "instances": instances})
+        )
+    )
     for field in ("provider", "type"):
         value = str(resource.get(field) or "").strip()
         if value:
@@ -1077,10 +1172,6 @@ def _terraform_state_identity_keys(
         if not isinstance(instance, dict):
             continue
         index_key = instance.get("index_key")
-        if isinstance(index_key, str) and _terraform_identity_is_sensitive(
-            instance, "index_key"
-        ):
-            sensitive_values.append(index_key)
         if index_key is not None and not _terraform_identity_is_sensitive(
             instance, "index_key"
         ):
@@ -1093,8 +1184,6 @@ def _terraform_state_identity_keys(
             continue
         for field in ("id", "arn", "name", "resource_id", "self_link"):
             if _terraform_identity_is_sensitive(instance, field):
-                if isinstance(attributes.get(field), str):
-                    sensitive_values.append(attributes[field])
                 continue
             value = attributes.get(field)
             if isinstance(value, str) and value.strip():
@@ -1605,6 +1694,8 @@ def _parse_kubernetes_live_state_source(
             "Kubernetes live-state context TODO: kubectl output did not include an items list; no topology changes were applied.",
         )
 
+    sensitive_values = _sensitive_topology_values(payload)
+    _require_safe_topology_reference(source_ref, sensitive_values=sensitive_values)
     services_by_id: dict[str, dict[str, Any]] = {}
     accepted_resources: list[TopologyImportResource] = []
     partially_parsed_resources: list[TopologyImportResource] = []
@@ -1760,18 +1851,24 @@ def _parse_kubernetes_live_state_source(
             "Kubernetes live-state import did not produce any supported resources to apply."
         )
         if not items and not read_warnings:
-            return TopologyChangeSet(
-                operation="replace",
-                services=[],
+            return _screen_connector_change_set(
+                TopologyChangeSet(
+                    operation="replace",
+                    services=[],
+                    warnings=warnings,
+                    skipped_resources=skipped_resources,
+                    partially_parsed_resources=partially_parsed_resources,
+                ),
+                sensitive_values=sensitive_values,
+            )
+        return _screen_connector_change_set(
+            TopologyChangeSet(
+                operation="noop",
                 warnings=warnings,
                 skipped_resources=skipped_resources,
                 partially_parsed_resources=partially_parsed_resources,
-            )
-        return TopologyChangeSet(
-            operation="noop",
-            warnings=warnings,
-            skipped_resources=skipped_resources,
-            partially_parsed_resources=partially_parsed_resources,
+            ),
+            sensitive_values=sensitive_values,
         )
 
     if not any(
@@ -1780,21 +1877,27 @@ def _parse_kubernetes_live_state_source(
         warnings.append(
             "Kubernetes live-state import did not produce any non-namespace resources to apply."
         )
-        return TopologyChangeSet(
-            operation="noop",
+        return _screen_connector_change_set(
+            TopologyChangeSet(
+                operation="noop",
+                warnings=warnings,
+                accepted_resources=accepted_resources,
+                skipped_resources=skipped_resources,
+                partially_parsed_resources=partially_parsed_resources,
+            ),
+            sensitive_values=sensitive_values,
+        )
+
+    return _screen_connector_change_set(
+        TopologyChangeSet(
+            operation="replace",
+            services=normalized_services,
             warnings=warnings,
             accepted_resources=accepted_resources,
             skipped_resources=skipped_resources,
             partially_parsed_resources=partially_parsed_resources,
-        )
-
-    return TopologyChangeSet(
-        operation="replace",
-        services=normalized_services,
-        warnings=warnings,
-        accepted_resources=accepted_resources,
-        skipped_resources=skipped_resources,
-        partially_parsed_resources=partially_parsed_resources,
+        ),
+        sensitive_values=sensitive_values,
     )
 
 
@@ -1846,6 +1949,8 @@ def _parse_terraform_state_source(source_ref: str) -> TopologyChangeSet:
             "Terraform state context is unavailable because resources are missing or malformed; no topology changes were applied.",
         )
 
+    sensitive_values = _sensitive_topology_values(payload)
+    _require_safe_topology_reference(source_ref, sensitive_values=sensitive_values)
     warnings: list[str] = []
     stale_warning = _terraform_state_staleness_warning(path)
     if stale_warning:
@@ -1903,7 +2008,9 @@ def _parse_terraform_state_source(source_ref: str) -> TopologyChangeSet:
                 )
             )
             instances = []
-        resource_keys = _terraform_state_identity_keys(address, resource, instances)
+        resource_keys = _terraform_state_identity_keys(
+            address, resource, instances, sensitive_values=sensitive_values
+        )
         services_by_id[address] = {
             "id": address,
             "label": address,
@@ -1961,20 +2068,26 @@ def _parse_terraform_state_source(source_ref: str) -> TopologyChangeSet:
         warnings.append(
             "Terraform state import did not produce any valid managed resources to apply."
         )
-        return TopologyChangeSet(
-            operation="noop",
-            warnings=warnings,
-            skipped_resources=skipped_resources,
-            partially_parsed_resources=partially_parsed_resources,
+        return _screen_connector_change_set(
+            TopologyChangeSet(
+                operation="noop",
+                warnings=warnings,
+                skipped_resources=skipped_resources,
+                partially_parsed_resources=partially_parsed_resources,
+            ),
+            sensitive_values=sensitive_values,
         )
 
-    return TopologyChangeSet(
-        operation="replace",
-        services=services,
-        warnings=warnings,
-        accepted_resources=accepted_resources,
-        skipped_resources=skipped_resources,
-        partially_parsed_resources=partially_parsed_resources,
+    return _screen_connector_change_set(
+        TopologyChangeSet(
+            operation="replace",
+            services=services,
+            warnings=warnings,
+            accepted_resources=accepted_resources,
+            skipped_resources=skipped_resources,
+            partially_parsed_resources=partially_parsed_resources,
+        ),
+        sensitive_values=sensitive_values,
     )
 
 

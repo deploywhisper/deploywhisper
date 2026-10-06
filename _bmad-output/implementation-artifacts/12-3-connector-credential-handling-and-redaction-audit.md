@@ -1,6 +1,6 @@
 # Story 12.3: Connector Credential Handling and Redaction Audit
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -30,6 +30,19 @@ So that topology, incident, scanner, and workflow integrations do not leak secre
 - [x] Run required validation and record commands/results in the Dev Agent Record. (AC: all)
 
 - [x] Run Compose browser validation of imported connector context and rendered incident/report surfaces. (AC: 1)
+
+### Review Findings
+
+Three independent review layers assessed the full story diff against `develop`; seven grouped patch findings were repaired and rechecked. No decision-needed or unresolved high/medium findings remain.
+
+- [x] [Review][Patch] Preserve full Terraform/Kubernetes sensitivity context before topology projection, including discarded-field and cross-resource echoes [services/topology_service.py:1094].
+- [x] [Review][Patch] Preserve batch incident sensitivity through sibling content and import/reindex scope-validation errors [services/incident_import_service.py:120].
+- [x] [Review][Patch] Keep incident source identity stable across content changes and distinct across plain-document sources [services/incident_import_service.py:481].
+- [x] [Review][Patch] Preserve distinct scanner source filenames and screen encoded legacy tool/rule labels [services/scanner_import_service.py:306].
+- [x] [Review][Patch] Decode nested query credential values before protecting sibling echoes [services/content_security.py:238].
+- [x] [Review][Patch] Strengthen rendered connector coverage and enforce disposable fixture controls [frontend/e2e/connector-security.spec.ts:4].
+- [x] [Review][Patch] Cover rejected POST redirects and preservation of all supported SARIF coordinates [tests/test_services/test_github_credential_security.py].
+- [x] [Review][Defer] Scanner imports are standalone API evidence and are not automatically attached to analysis reports — deferred, pre-existing; recorded in `deferred-work.md`. Browser coverage now verifies actual incident matching and scanner import identity separately.
 
 ## Dev Notes
 
@@ -122,15 +135,29 @@ Codex, with native subagents for bounded connector slices and independent verifi
 - Compose production build and health check, API fixtures, `BASE_URL=http://localhost:8080 PROVIDER_ADMIN_TEST_MUTATION=1 npm run test:ui-review`: 17 passed. `/app/data` was overridden to disposable tmpfs; original operator volumes were never mounted. Screenshots captured from root `/incidents` and `/reports/{id}` routes, then Compose stopped.
 - One existing unrelated medium Bandit B104 sample-data finding remains; configured high-severity gate passes and changed files add no finding. Live remote connector/provider credentials were not exercised; transport tests use synthetic mocks. Local VoiceOver lane is not applicable per project memory.
 - Scalar/API model fields unchanged. Optional ScannerImportValidationError constructor keyword was searched across the repository; affected GitHub shard passed. External Marketplace action implementation remained outside this repository.
-- Definition of Done: PASS. No pending story task or known test error. `bmad-help` recommends `bmad-code-review` next in a fresh context; reviewer owns final story closure/push/PR.
+- Development Definition of Done: PASS. Review was handed off to `bmad-code-review`; final closure is recorded below.
+
+### Code Review Record — 2026-10-06
+
+- `bash scripts/ci-local.sh`: passed, 1,726 tests across all nine directories, plus the deterministic Skill harness/prompt checks and configured static-analysis gate. Final logs: `/private/tmp/story12-3-review-ci-final.log`, `story12-3-review-unittest-final.log`, `story12-3-review-shard-final.log`, `story12-3-review-browser-final.log`.
+
+- Applied seven grouped findings: full raw snapshot sensitivity before projection; cross-file incident and scope-error screening; stable incident aliases including project-wide reindex; distinct scanner filenames and encoded legacy labels; nested query decoding; disposable browser fixtures with actual report match assertions; POST redirect and SARIF coordinate regressions.
+- Reused shared screening and source alias helpers. No new dependency, schema field, production React flow or scoring rule. Full raw data stays local and is discarded after sensitivity collection.
+- Final independent acceptance/edge probes confirm nonidentity, cross-resource and marked outer `index_key` credential echoes are screened, batch scope errors stay bounded, and alias reuse preserves explicit workspace isolation.
+- `./.venv/bin/python -m unittest discover -q`: passed, 480 tests with one optional live-provider skip. API/CLI/infra pytest shard: 418 passed plus 134 subtests. Ruff check/format (289 files), TypeScript and diff checks pass.
+- Rebuilt production Compose app with `/app/data` on disposable tmpfs and default DB filename; health passed. `BASE_URL=http://localhost:8080 PROVIDER_ADMIN_TEST_MUTATION=1 CONNECTOR_SECURITY_TEST_DISPOSABLE=1 npm run test:ui-review`: 17 passed. Screenshot evidence includes the matched redacted incident on `/reports/{id}`. Compose stopped; operator volumes never mounted.
+- `bmad-help` next-step check: Story 12.4 is already `ready-for-dev`; use `bmad-dev-story` for its existing story in a fresh context after this PR. Epic 12 remains in progress.
+- Residual limits: live remote credentials were not exercised; custom opaque values/encodings need manual screening; legacy stored rows/backups need operator retention cleanup. The pre-existing medium Bandit B104 sample-data finding remains outside this diff; configured high-severity gate passes. Scanner automatic report attachment remains a separate existing integration gap.
 
 ### File List
 
 - `README.md`
 - `_bmad-output/implementation-artifacts/12-3-connector-credential-handling-and-redaction-audit.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `api/routes/github_app.py`
 - `config.py`
+- `docs/ci.md`
 - `docs/github-action.md`
 - `docs/github-app-self-hosted-setup.md`
 - `docs/github-app.md`
@@ -142,6 +169,7 @@ Codex, with native subagents for bounded connector slices and independent verifi
 - `docs/terraform-state-connector.md`
 - `docs/verification/story-12-3/connector-incidents.png`
 - `docs/verification/story-12-3/connector-report.png`
+- `docs/verification/story-12-3/connector-report-context.png`
 - `frontend/e2e/connector-security.spec.ts`
 - `integrations/github/app_service.py`
 - `integrations/github/init_service.py`
@@ -162,3 +190,5 @@ Codex, with native subagents for bounded connector slices and independent verifi
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 
 - 2026-10-06: Implemented connector credential/redaction guards, isolated regressions, operator controls and composed-app browser evidence; moved story to review.
+
+- 2026-10-06: Layered code review repaired seven grouped findings, strengthened isolated browser evidence and documented one pre-existing scanner integration gap; all final verification passed and story/sprint moved to done.

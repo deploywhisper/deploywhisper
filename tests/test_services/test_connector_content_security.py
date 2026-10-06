@@ -104,6 +104,21 @@ class ConnectorContentSecurityTests(unittest.TestCase):
                     completion_client=lambda **kwargs: secret,
                 )
 
+    def test_nested_query_encodings_protect_plaintext_sibling_echoes(self):
+        for credential in (
+            "s%2565cret",
+            "%256Fpaque-query-credential",
+            "%25256Fpaque-query-credential",
+        ):
+            expected = (
+                "secret" if credential.startswith("s") else "opaque-query-credential"
+            )
+            with self.subTest(credential=credential):
+                payload = {"url": f"/callback?code={credential}", "echo": expected}
+                self.assertNotIn(expected, str(security.redact_value(payload)))
+                values = security.sensitive_artifact_values(payload["url"].encode())
+                self.assertIn(expected, values)
+
     def test_secure_reference_paths_and_protocol_enums_keep_their_meaning(self):
         with patch.dict(
             os.environ,

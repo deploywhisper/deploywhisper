@@ -16,6 +16,141 @@ SECRET = "synthetic-topology-secret-731"
 
 
 class TopologyCredentialTests(unittest.TestCase):
+    def test_sensitive_instance_index_key_cannot_echo_in_attribute_identity(
+        self,
+    ) -> None:
+        keys = topology._terraform_state_identity_keys(
+            "test.example",
+            {"type": "test"},
+            [
+                {
+                    "index_key": SECRET,
+                    "attributes": {"name": SECRET},
+                    "sensitive_attributes": [["index_key"]],
+                }
+            ],
+        )
+        self.assertNotIn(SECRET, json.dumps(keys))
+
+    def test_terraform_discarded_sensitive_values_do_not_echo_across_resources(
+        self,
+    ) -> None:
+        for credential in (
+            {"attributes": {"password": SECRET}},
+            {
+                "attributes": {"nested": [{"opaque": SECRET}]},
+                "sensitive_attributes": [["nested", 0, "opaque"]],
+            },
+            {
+                "attributes": {"nested": [{"opaque": SECRET}]},
+                "sensitive_values": {"nested": [{"opaque": True}]},
+            },
+        ):
+            with (
+                self.subTest(credential=credential),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                path = Path(directory) / "synthetic.tfstate"
+                path.write_text(
+                    json.dumps(
+                        {
+                            "resources": [
+                                {
+                                    "type": "test",
+                                    "name": "echo",
+                                    "instances": [
+                                        {
+                                            "attributes": {"name": SECRET},
+                                            "dependencies": [f"test.{SECRET}"],
+                                        }
+                                    ],
+                                },
+                                {
+                                    "type": "test",
+                                    "name": "credential",
+                                    "instances": [credential],
+                                },
+                            ]
+                        }
+                    )
+                )
+                result = topology._parse_terraform_state_source(str(path))
+                self.assertNotIn(SECRET, result.model_dump_json())
+                payload = topology._build_payload_from_change_set(
+                    change_set=result, source_type="terraform", source_ref=str(path)
+                )
+                public_result = topology._build_import_result(
+                    source_type="terraform",
+                    source_ref=str(path),
+                    applied=True,
+                    change_set=result,
+                    before_payload=None,
+                    after_payload=payload,
+                    warnings=result.warnings,
+                )
+                self.assertNotIn(SECRET, public_result.model_dump_json())
+                with patch.object(topology, "SessionLocal") as factory:
+                    topology._persist_topology_payload(
+                        payload,
+                        project={"id": 1, "project_key": "synthetic"},
+                        workspace=None,
+                        source_type="terraform",
+                    )
+                    row = (
+                        factory.return_value.__enter__.return_value.add.call_args.args[
+                            0
+                        ]
+                    )
+                    self.assertNotIn(SECRET, row.payload_json)
+
+    def test_terraform_discarded_sensitive_field_blocks_echoed_graph_identity(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "synthetic.tfstate"
+            path.write_text(
+                json.dumps(
+                    {
+                        "resources": [
+                            {"type": "test", "name": SECRET, "instances": []},
+                            {
+                                "type": "test",
+                                "name": "credential",
+                                "instances": [
+                                    {
+                                        "attributes": {"opaque": SECRET},
+                                        "sensitive_attributes": [["opaque"]],
+                                    }
+                                ],
+                            },
+                        ]
+                    }
+                )
+            )
+            with self.assertRaises(topology.TopologyImportError) as caught:
+                topology._parse_terraform_state_source(str(path))
+        self.assertNotIn(SECRET, str(caught.exception))
+
+    def test_kubernetes_discarded_selector_credential_blocks_identity_echo(
+        self,
+    ) -> None:
+        items = [
+            {"kind": "Deployment", "metadata": {"name": SECRET, "namespace": "test"}},
+            {
+                "kind": "Service",
+                "metadata": {"name": "api", "namespace": "test"},
+                "spec": {"selector": {"token": SECRET}},
+            },
+        ]
+        with patch.object(
+            topology,
+            "_read_kubernetes_live_state",
+            return_value=(json.dumps({"items": items}), []),
+        ):
+            with self.assertRaises(topology.TopologyImportError) as caught:
+                topology._parse_kubernetes_live_state_source("context:test")
+        self.assertNotIn(SECRET, str(caught.exception))
+
     def test_persistence_screens_database_json_and_legacy_mirror(self) -> None:
         project = {"id": 1, "project_key": "synthetic", "is_default": True}
         payload = {

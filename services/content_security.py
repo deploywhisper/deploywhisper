@@ -237,7 +237,13 @@ def _text_sensitive_values(text: str) -> set[str]:
             found.update(_sensitive_variants(match.group(group)))
     for match in _QUERY_PARAMETER.finditer(text):
         if _sensitive_query_name(match.group("name")):
-            found.update(_sensitive_variants(unquote(match.group("credential"))))
+            candidate = match.group("credential")
+            for _ in range(9):
+                found.update(_sensitive_variants(candidate))
+                decoded = unquote(candidate)
+                if decoded == candidate:
+                    break
+                candidate = decoded
     return found
 
 

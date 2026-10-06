@@ -278,6 +278,189 @@ class ConnectorImportSecurityTests(unittest.TestCase):
         self.assertNotIn(self.secret, legacy[0].model_dump_json())
         self.assertEqual(legacy[0].region, {"startLine": 1})
 
+    def test_incident_batch_context_protects_sibling_echoes_and_scope_errors(
+        self,
+    ) -> None:
+        first = self._incident()
+        second = self._incident()
+        second.pop("connector")
+        files = [
+            self.incidents.IncidentImportFile(
+                source_file="declaration.json", content=json.dumps(first)
+            ),
+            self.incidents.IncidentImportFile(
+                source_file="echo.json", content=json.dumps(second)
+            ),
+        ]
+        for importer in (
+            self.incidents.import_incident_files,
+            self.incidents.reindex_incident_files,
+        ):
+            result = importer(files, project_id=self.project.id)
+            self.assertNotIn(self.secret, result.model_dump_json())
+            self.assertNotIn(
+                self.secret,
+                json.dumps(
+                    self.incident_service.get_incident_records(
+                        project_id=self.project.id
+                    )
+                ),
+            )
+            with self.assertRaises(ValueError) as captured:
+                importer(
+                    files, project_id=self.project.id, workspace_key=self.secret.lower()
+                )
+            self.assertNotIn(
+                self.secret.lower().replace("_", "-"), str(captured.exception)
+            )
+
+    def test_incident_alias_survives_declaration_removal_and_plain_names_are_distinct(
+        self,
+    ) -> None:
+        payload = self._incident()
+        filename = f"{self.secret}.json"
+        first = self.incidents.import_incident_files(
+            [
+                self.incidents.IncidentImportFile(
+                    source_file=filename, content=json.dumps(payload)
+                )
+            ],
+            project_id=self.project.id,
+        )
+        alias = first.records[0]["source_file"]
+        payload.pop("connector")
+        payload["title"] = "Routine incident"
+        payload["prevention_notes"] = ["Verify rotation"]
+        second = self.incidents.reindex_incident_files(
+            [
+                self.incidents.IncidentImportFile(
+                    source_file=filename, content=json.dumps(payload)
+                )
+            ],
+            project_id=self.project.id,
+        )
+        self.assertEqual(second.replaced_count, 1)
+        records = self.incident_service.get_incident_records(project_id=self.project.id)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["source_file"], alias)
+        plain = [
+            self.incident_service.ingest_incident_document(
+                f"{self.secret}-{name}.md",
+                f"# Incident\npassword: {self.secret}",
+                project_id=self.project.id,
+            )
+            for name in ("one", "two")
+        ]
+        self.assertEqual(len({item["source_file"] for item in plain}), 2)
+        self.assertTrue(all(self.secret not in item["source_file"] for item in plain))
+        remembered = self.incident_service.ingest_incident_document(
+            f"{self.secret}-one.md", "", project_id=self.project.id
+        )
+        self.assertEqual(remembered["source_file"], plain[0]["source_file"])
+        self.assertNotIn(self.secret, json.dumps(remembered))
+
+    def test_project_wide_reindex_reuses_workspace_alias_but_explicit_scope_isolated(
+        self,
+    ) -> None:
+        workspace = project_service_module.create_workspace(
+            project_key=self.project.project_key,
+            workspace_key="production",
+            display_name="Production",
+        )
+        other = project_service_module.create_workspace(
+            project_key=self.project.project_key,
+            workspace_key="staging",
+            display_name="Staging",
+        )
+        payload = self._incident()
+        filename = f"{self.secret}.json"
+        original = self.incidents.import_incident_files(
+            [
+                self.incidents.IncidentImportFile(
+                    source_file=filename, content=json.dumps(payload)
+                )
+            ],
+            project_id=self.project.id,
+            workspace_id=workspace.id,
+        )
+        alias = original.records[0]["source_file"]
+        payload.pop("connector")
+        payload["title"] = "Routine incident"
+        payload["prevention_notes"] = ["Verify rotation"]
+        file = self.incidents.IncidentImportFile(
+            source_file=filename, content=json.dumps(payload)
+        )
+        isolated = self.incidents.reindex_incident_files(
+            [file], project_id=self.project.id, workspace_id=other.id
+        )
+        self.assertEqual(isolated.status.sources[0].import_source, filename)
+        wide = self.incidents.reindex_incident_files(
+            [file], project_id=self.project.id, remove_missing_sources=True
+        )
+        self.assertEqual(
+            wide.removed_count, 1
+        )  # The unrelated raw staging source is missing.
+        records = self.incident_service.get_incident_records(project_id=self.project.id)
+        self.assertEqual({record["source_file"] for record in records}, {alias})
+        self.assertEqual(
+            {record["workspace_id"] for record in records}, {None, workspace.id}
+        )
+        self.assertTrue(
+            all(
+                source.import_source == alias
+                for source in wide.status.sources
+                if source.indexed_count
+            )
+        )
+
+    def test_scanner_names_remain_distinct_and_legacy_labels_screen_encoded_values(
+        self,
+    ) -> None:
+        from urllib.parse import quote
+
+        results = [
+            self.scanners.import_sarif_file(
+                self.scanners.ScannerImportFile(
+                    source_file=f"{self.secret}-{name}.sarif",
+                    content=json.dumps(self._sarif()),
+                ),
+                project_id=self.project.id,
+            )
+            for name in ("one", "two")
+        ]
+        self.assertEqual(len({item.source_file for item in results}), 2)
+        self.assertEqual(results[0].evidence[0].id, results[1].evidence[0].id)
+        with self.database.SessionLocal() as session:
+            record = session.query(self.tables.ExternalScannerEvidence).one()
+            record.tool_name = quote("api_key=OPAQUE_ENCODED_VALUE", safe="")
+            record.rule_id = quote("token=OPAQUE_ENCODED_VALUE", safe="")
+            session.commit()
+        legacy = self.scanners.list_external_scanner_evidence(
+            project_id=self.project.id
+        )[0]
+        self.assertNotIn("OPAQUE_ENCODED_VALUE", legacy.model_dump_json())
+
+    def test_sarif_preserves_all_valid_coordinates(self) -> None:
+        payload = self._sarif()
+        region = payload["runs"][0]["results"][0]["locations"][0]["physicalLocation"][
+            "region"
+        ]
+        coordinates = {"startLine": 1, "startColumn": 2, "endLine": 2, "endColumn": 3}
+        region.update(coordinates)
+        result = self.scanners.import_sarif_file(
+            self.scanners.ScannerImportFile(
+                source_file="coordinates.sarif", content=json.dumps(payload)
+            ),
+            project_id=self.project.id,
+        )
+        self.assertEqual(result.evidence[0].region, coordinates)
+        self.assertEqual(
+            self.scanners.list_external_scanner_evidence(project_id=self.project.id)[
+                0
+            ].region,
+            coordinates,
+        )
+
     def test_sensitive_incident_filename_preserves_format_dispatch(self) -> None:
         for suffix in (".json", ".yaml", ".md"):
             with self.subTest(suffix=suffix):

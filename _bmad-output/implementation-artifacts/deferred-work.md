@@ -92,3 +92,7 @@
 
 - Existing Settings copy says temporary keys validate for a session; runtime and provider administration docs limit use to one immediate request (`frontend/src/screens/Settings.tsx:74`).
 - Existing generated story guidance references retired Python UI composition; mandatory project context already specifies React. Correct the story generation template in a separate documentation task.
+
+## Deferred from: code review of 12-3-connector-credential-handling-and-redaction-audit.md (2026-10-06)
+
+- Pre-existing scanner imports remain standalone API evidence and are not automatically attached by the analysis pipeline to persisted reports. Connector browser coverage now verifies scanner identity/redaction through the import API and actual imported incident matching in reports. Automatic scanner attachment needs a separate evidence/report integration workstream; this privacy audit does not change analysis inputs or scoring semantics.

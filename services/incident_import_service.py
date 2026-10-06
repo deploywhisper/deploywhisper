@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import re
 from pathlib import Path
 from typing import Any
@@ -19,6 +18,7 @@ from models.repositories.incident_ingestion_sources import (
 from models.repositories.incident_records import (
     count_incident_records_by_sources,
     delete_incident_records_by_sources,
+    list_incident_records,
 )
 from services.content_security import (
     redact_reference,
@@ -33,6 +33,7 @@ from services.incident_service import (
     create_incident_record_in_session,
     get_incident_ingestion_status,
     record_incident_ingestion_source_status,
+    screen_incident_source_file,
 )
 from services.project_service import (
     ProjectResolutionError,
@@ -95,13 +96,22 @@ class IncidentReindexResult(BaseModel):
 class IncidentImportValidationError(ValueError):
     """Raised when incident import validation fails."""
 
-    def __init__(self, field_errors: list[IncidentImportFieldError]) -> None:
+    def __init__(
+        self,
+        field_errors: list[IncidentImportFieldError],
+        *,
+        sensitive_values: tuple[str, ...] = (),
+    ) -> None:
         self.field_errors = [
-            IncidentImportFieldError.model_validate(redact_value(error.model_dump()))
+            IncidentImportFieldError.model_validate(
+                redact_value(error.model_dump(), sensitive_values=sensitive_values)
+            )
             for error in field_errors
         ]
         for error in self.field_errors:
-            error.source_file = redact_reference(error.source_file)
+            error.source_file = redact_reference(
+                error.source_file, sensitive_values=sensitive_values
+            )
         field_errors = self.field_errors
         detail = "; ".join(
             f"{error.source_file}:{error.field}: {error.message}"
@@ -119,7 +129,19 @@ def import_incident_files(
     workspace_key: str | None = None,
 ) -> IncidentImportResult:
     """Validate and import simple Markdown, YAML, and JSON incident files."""
-    files = [_screen_import_file(item) for item in files]
+    raw_files = files
+    sensitive_values = tuple(
+        {
+            value
+            for item in files
+            for value in sensitive_artifact_values(
+                item.content.encode("utf-8", errors="replace")
+            )
+        }
+    )
+    files = [
+        _screen_import_file(item, sensitive_values=sensitive_values) for item in files
+    ]
     field_errors: list[IncidentImportFieldError] = []
     if project_id is None and project_key is None:
         field_errors.append(
@@ -129,7 +151,9 @@ def import_incident_files(
                 message="Project scope is required for incident imports.",
             )
         )
-        raise IncidentImportValidationError(field_errors)
+        raise IncidentImportValidationError(
+            field_errors, sensitive_values=sensitive_values
+        )
 
     try:
         project = resolve_project_reference(
@@ -146,16 +170,23 @@ def import_incident_files(
                 IncidentImportFieldError(
                     source_file="batch",
                     field=_scope_error_field(exc),
-                    message=exc.message,
+                    message=_scope_error_message(exc, sensitive_values),
                 )
             ]
-        ) from exc
+        ) from None
 
     resolved_workspace_id = workspace.id if workspace is not None else None
+    files = _reuse_source_aliases(
+        raw_files, files, project_id=project.id, workspace_id=resolved_workspace_id
+    )
     parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
     for item in files:
         try:
-            parsed = _screen_incident_record(_parse_incident_file(item), item.content)
+            parsed = _screen_incident_record(
+                _parse_incident_file(item),
+                item.content,
+                sensitive_values=sensitive_values,
+            )
         except ValueError as exc:
             field_errors.append(
                 IncidentImportFieldError(
@@ -182,7 +213,9 @@ def import_incident_files(
             workspace_id=resolved_workspace_id,
             errors=field_errors,
         )
-        raise IncidentImportValidationError(field_errors)
+        raise IncidentImportValidationError(
+            field_errors, sensitive_values=sensitive_values
+        )
 
     records: list[dict[str, Any]] = []
     with SessionLocal() as session:
@@ -237,7 +270,19 @@ def reindex_incident_files(
     remove_missing_sources: bool = False,
 ) -> IncidentReindexResult:
     """Replace indexed incident entries from source files within one project scope."""
-    files = [_screen_import_file(item) for item in files]
+    raw_files = files
+    sensitive_values = tuple(
+        {
+            value
+            for item in files
+            for value in sensitive_artifact_values(
+                item.content.encode("utf-8", errors="replace")
+            )
+        }
+    )
+    files = [
+        _screen_import_file(item, sensitive_values=sensitive_values) for item in files
+    ]
     field_errors: list[IncidentImportFieldError] = []
     if project_id is None and project_key is None:
         field_errors.append(
@@ -247,15 +292,31 @@ def reindex_incident_files(
                 message="Project scope is required for incident reindexing.",
             )
         )
-        raise IncidentImportValidationError(field_errors)
+        raise IncidentImportValidationError(
+            field_errors, sensitive_values=sensitive_values
+        )
 
-    project = resolve_project_reference(project_id=project_id, project_key=project_key)
-    workspace = resolve_workspace_reference(
-        project_id=project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
+    try:
+        project = resolve_project_reference(
+            project_id=project_id, project_key=project_key
+        )
+        workspace = resolve_workspace_reference(
+            project_id=project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+    except ProjectResolutionError as exc:
+        raise ProjectResolutionError(
+            exc.code, _scope_error_message(exc, sensitive_values)
+        ) from None
     resolved_workspace_id = workspace.id if workspace is not None else None
+    files = _reuse_source_aliases(
+        raw_files,
+        files,
+        project_id=project.id,
+        workspace_id=resolved_workspace_id,
+        project_wide=resolved_workspace_id is None,
+    )
 
     seen_source_files: set[str] = set()
     duplicate_source_files: set[str] = set()
@@ -275,7 +336,11 @@ def reindex_incident_files(
     parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
     for item in files:
         try:
-            parsed = _screen_incident_record(_parse_incident_file(item), item.content)
+            parsed = _screen_incident_record(
+                _parse_incident_file(item),
+                item.content,
+                sensitive_values=sensitive_values,
+            )
         except ValueError as exc:
             field_errors.append(
                 IncidentImportFieldError(
@@ -302,7 +367,9 @@ def reindex_incident_files(
             workspace_id=resolved_workspace_id,
             errors=field_errors,
         )
-        raise IncidentImportValidationError(field_errors)
+        raise IncidentImportValidationError(
+            field_errors, sensitive_values=sensitive_values
+        )
 
     source_files = sorted({item.source_file for item, _ in parsed_records})
     with SessionLocal() as session:
@@ -478,37 +545,83 @@ def _record_source_failures(
                 )
 
 
-def _screen_import_file(item: IncidentImportFile) -> IncidentImportFile:
-    sensitive_values = sensitive_artifact_values(
-        item.content.encode("utf-8", errors="replace")
+def _scope_error_message(
+    exc: ProjectResolutionError, sensitive_values: tuple[str, ...]
+) -> str:
+    variants = tuple(
+        {
+            variant
+            for value in sensitive_values
+            for variant in (
+                value,
+                value.lower(),
+                re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-"),
+            )
+        }
     )
-    safe_source_file = redact_reference(
-        item.source_file, sensitive_values=sensitive_values
-    )
-    if safe_source_file != item.source_file:
-        # Preserve recognized dispatch without restoring an unsafe suffix or merging sources.
-        suffix = Path(item.source_file).suffix.lower()
-        if suffix not in MARKDOWN_SUFFIXES | YAML_SUFFIXES | JSON_SUFFIXES:
-            suffix = ""
-        digest = hashlib.sha256(
-            item.source_file.encode("utf-8", errors="surrogatepass")
-        ).hexdigest()[:16]
-        safe_source_file = f"[REDACTED]-{digest}{suffix}"
-    return item.model_copy(update={"source_file": safe_source_file})
+    return redact_text(exc.message, sensitive_values=variants)
 
 
-def _screen_incident_record(record: dict[str, Any], raw_content: str) -> dict[str, Any]:
-    sensitive_values = sensitive_artifact_values(
+def _reuse_source_aliases(
+    raw_files: list[IncidentImportFile],
+    files: list[IncidentImportFile],
+    *,
+    project_id: int,
+    workspace_id: int | None,
+    project_wide: bool = False,
+) -> list[IncidentImportFile]:
+    with SessionLocal() as session:
+        aliases = {
+            source.source_file
+            for source in list_incident_ingestion_sources(
+                session, project_id=project_id, workspace_id=workspace_id
+            )
+            if project_wide or source.workspace_id == workspace_id
+        }
+        aliases.update(
+            record.source_file
+            for record in list_incident_records(
+                session, project_id=project_id, workspace_id=workspace_id
+            )
+            if project_wide or record.workspace_id == workspace_id
+        )
+    screened = []
+    for raw, item in zip(raw_files, files, strict=True):
+        existing = screen_incident_source_file(
+            raw.source_file, existing_aliases=aliases
+        )
+        screened.append(
+            item.model_copy(update={"source_file": existing})
+            if existing != raw.source_file
+            else item
+        )
+    return screened
+
+
+def _screen_import_file(
+    item: IncidentImportFile, *, sensitive_values: tuple[str, ...] = ()
+) -> IncidentImportFile:
+    return item.model_copy(
+        update={
+            "source_file": screen_incident_source_file(
+                item.source_file, sensitive_values=sensitive_values
+            )
+        }
+    )
+
+
+def _screen_incident_record(
+    record: dict[str, Any], raw_content: str, *, sensitive_values: tuple[str, ...] = ()
+) -> dict[str, Any]:
+    values = sensitive_values + sensitive_artifact_values(
         raw_content.encode("utf-8", errors="replace")
     )
-    safe = redact_value(record, sensitive_values=sensitive_values)
+    safe = redact_value(record, sensitive_values=values)
     if safe != record and isinstance(safe.get("redaction"), dict):
         safe["redaction"]["status"] = "redacted"
     source = safe.get("source")
     if isinstance(source, dict) and isinstance(source.get("reference"), str):
-        reference = redact_reference(
-            source["reference"], sensitive_values=sensitive_values
-        )
+        reference = redact_reference(source["reference"], sensitive_values=values)
         if reference != source["reference"] and isinstance(safe.get("redaction"), dict):
             safe["redaction"]["status"] = "redacted"
         source["reference"] = reference

@@ -10,15 +10,15 @@ shared analysis core and advisory verdict semantics unchanged.
 
 | Boundary | Protection | Regression evidence |
 | --- | --- | --- |
-| Terraform state | Only normalized context is retained. Marked-sensitive identity paths/masks and credential-bearing identity values are omitted; their values cannot reappear through other allowlisted keys. | `tests/test_services/test_topology_credentials.py` |
+| Terraform state | Full snapshot sensitivity paths/masks are collected before projection, including discarded fields and marked instance keys. Their values cannot reappear through sibling identity fields or other resources. | `tests/test_services/test_topology_credentials.py` |
 | Kubernetes discovery | Kubectl handles authentication through local credential references. Auth values, env/annotations and raw API objects are excluded. Sensitive selector pairs are omitted from persisted keys while local selector matching is retained. | topology credential/service suites |
 | Operational context references | Credential-bearing source refs are rejected before dispatch. Public status, drift caches, validation previews and older context reads are screened. Unsafe graph IDs are rejected rather than collapsing distinct identities to a marker. | topology credential/service suites |
-| Incident intake | Full raw input supplies locally detected values before field projection. Actual content screening protects sibling prose, DB writes, source labels, import results and legacy reads; caller-declared redaction flags are not the sole control. | `tests/test_services/test_connector_import_security.py` |
+| Incident intake | Full batch input supplies locally detected values before field projection and scope validation. Screening protects sibling files, DB writes, source labels, import results and legacy reads. Stable source aliases survive content changes and respect workspace scope; caller-declared redaction flags are not the sole control. | `tests/test_services/test_connector_import_security.py` |
 | Scanner intake | Messages and metadata are screened. SARIF regions retain validated coordinates, excluding raw snippets and arbitrary fields. Stable raw-input hashes preserve deduplication while readable references are screened. | connector import/scanner suites |
 | Syntax/validation errors | YAML/frontmatter errors expose syntax locations, not source excerpts. Rejected inputs still protect public field/source errors. | connector import/API suites |
 | GitHub transport | Authenticated requests require HTTPS and permitted same-origin redirects. Raw file fallback uses the configured Contents API rather than forwarding installation tokens to supplied download URLs. Upstream error bodies, CLI stderr and command arguments are omitted from public failures. | `tests/test_services/test_github_credential_security.py` |
 | Scaffold and OAuth output | Static URLs must be credential-free before generation/publication. Workflow credentials use GitHub Secrets references. OAuth codes, state and access tokens are excluded from rendered metadata; unsafe callback links fall back to safe targets. | GitHub credential/API suites |
-| Configured console logs | Shared screening masks configured connector values and sensitive query parameters, including encoded parameter names. Exceptions retain classes only; SDK payload dumps and SQL parameter logs stay suppressed. | connector content/logging suites |
+| Configured console logs | Shared screening masks configured connector values and sensitive query parameters, including encoded names and bounded repeated value decoding before sibling screening. Exceptions retain classes only; SDK payload dumps and SQL parameter logs stay suppressed. | connector content/logging suites |
 | Reports and model prompts | Existing shared screens now include configured connector values as well as provider keys. Inputs remain local; outbound model calls receive screened structured summaries. | connector content, content-boundary and report suites |
 | Telemetry | This app has no outbound telemetry exporter. External proxies, tracing/debug agents and custom handlers require operator controls below. | code inspection and logging tests |
 
@@ -73,7 +73,10 @@ introduced. The external Marketplace Action runtime remains in
 Run `bash scripts/ci-local.sh`, root unittest discovery and the affected GitHub
 API/CLI/infra pytest shard. Browser verification uses the production Compose app
 at `http://localhost:8080/`; seed only synthetic context through APIs and run
-`BASE_URL=http://localhost:8080 npm run test:ui-review`. The connector browser test
-checks imported context and rendered incident/report surfaces. Use disposable
-storage for fixtures, capture screenshots, then stop Compose while retaining
-operator volumes. See [CI guidance](../ci.md) for provider test mutation controls.
+`BASE_URL=http://localhost:8080 CONNECTOR_SECURITY_TEST_DISPOSABLE=1 npm run test:ui-review`.
+Enable this flag only with disposable storage: the test creates persistent fixtures.
+It checks scanner identity/redaction through its import API and a matched imported
+incident through the saved report and rendered page. Scanner imports are currently
+standalone evidence; automatic report attachment is a separate existing gap.
+Capture screenshots, then stop Compose while retaining operator volumes. See
+[CI guidance](../ci.md) for the disposable Compose override and provider test controls.

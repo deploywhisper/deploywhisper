@@ -238,6 +238,32 @@ def _source_status_from_records(
     )
 
 
+def incident_source_alias(source_file: str) -> str:
+    """Return a stable opaque identity while preserving recognized local formats."""
+    suffix = source_file.rsplit(".", 1)[-1].lower() if "." in source_file else ""
+    suffix = f".{suffix}" if suffix in {"md", "markdown", "yaml", "yml", "json"} else ""
+    digest = hashlib.sha256(
+        source_file.encode("utf-8", errors="surrogatepass")
+    ).hexdigest()[:16]
+    return f"[REDACTED]-{digest}{suffix}"
+
+
+def screen_incident_source_file(
+    source_file: str,
+    *,
+    sensitive_values: tuple[str, ...] = (),
+    existing_aliases: set[str] | None = None,
+) -> str:
+    alias = incident_source_alias(source_file)
+    if (
+        alias in (existing_aliases or ())
+        or redact_reference(source_file, sensitive_values=sensitive_values)
+        != source_file
+    ):
+        return alias
+    return source_file
+
+
 def create_incident_record_in_session(
     session: Session,
     *,
@@ -252,7 +278,9 @@ def create_incident_record_in_session(
         content.encode("utf-8", errors="replace")
     )
     normalized_content = redact_text(content.strip(), sensitive_values=sensitive_values)
-    source_file = redact_reference(source_file, sensitive_values=sensitive_values)
+    source_file = screen_incident_source_file(
+        source_file, sensitive_values=sensitive_values
+    )
     return create_incident_record(
         session,
         project_id=project_id,
@@ -282,7 +310,10 @@ def ingest_incident_document(
         content.encode("utf-8", errors="replace")
     )
     normalized_content = redact_text(content.strip(), sensitive_values=sensitive_values)
-    source_file = redact_reference(source_file, sensitive_values=sensitive_values)
+    raw_source_file = source_file
+    source_file = screen_incident_source_file(
+        source_file, sensitive_values=sensitive_values
+    )
     title = _extract_title(normalized_content, source_file)
     severity = _extract_severity(normalized_content)
     incident_date = _extract_incident_date(normalized_content)
@@ -337,6 +368,21 @@ def ingest_incident_document(
             )
             resolved_project_id = project.id
             resolved_workspace_id = workspace.id if workspace is not None else None
+        existing_aliases = {
+            record.source_file
+            for record in list_incident_records(
+                session,
+                project_id=resolved_project_id,
+                workspace_id=resolved_workspace_id,
+            )
+            if record.workspace_id == resolved_workspace_id
+        }
+        source_file = screen_incident_source_file(
+            raw_source_file,
+            sensitive_values=sensitive_values,
+            existing_aliases=existing_aliases,
+        )
+        title = _extract_title(normalized_content, source_file)
         record = create_incident_record(
             session,
             project_id=resolved_project_id,
