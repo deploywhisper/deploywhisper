@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-10-05
+# last_updated: 2026-10-06
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-10-05
+last_updated: 2026-10-06
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -153,7 +153,7 @@ development_status:
   epic-12: in-progress
   12-1-secrets-and-raw-artifact-boundary-audit: done
   12-2-provider-settings-administration: done
-  12-3-connector-credential-handling-and-redaction-audit: ready-for-dev
+  12-3-connector-credential-handling-and-redaction-audit: review
   12-4-openssf-scorecard-and-codeql: ready-for-dev
   12-5-sbom-and-release-checksums: ready-for-dev
   12-6-signing-and-provenance: ready-for-dev

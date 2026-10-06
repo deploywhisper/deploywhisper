@@ -259,3 +259,28 @@ The repository includes OAuth start/callback endpoints for advanced setups, but 
 5. Verify webhook delivery and advisory check runs
 
 Do not store GitHub client secrets, webhook secrets, private keys, or user access tokens in the application database.
+
+## Credential storage and logging
+
+- Set secrets through your deployment's secret environment mechanism. Prefer
+  `DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY_PATH` with a read-only private key mount;
+  restrict the file to the runtime user (for example, mode `0600`). Signing creates
+  a restricted temporary key file and removes it after the signing attempt. Keep
+  the host temporary directory and backups within your security boundary.
+- Use only trusted HTTPS GitHub or GitHub Enterprise API/OAuth endpoints. Do not
+  embed credentials in endpoint or public base URLs: userinfo, query strings,
+  fragments, and configured credential values are rejected. Local DeployWhisper
+  HTTP URLs remain usable for development, but protect externally reachable
+  report and callback links with HTTPS.
+- Exclude OAuth callback `code` and `state` parameters from reverse-proxy access
+  logs, traces, error monitoring, and analytics. Apply these controls before
+  enabling the optional OAuth helper; application-side redaction cannot control
+  upstream proxies or external telemetry collectors.
+- Never publish webhook payloads, request authorization headers, OAuth form
+  bodies, tokens, or key files in troubleshooting tickets. GitHub request errors
+  intentionally omit upstream bodies and complete request URLs.
+- After suspected disclosure, revoke or rotate the affected App private key,
+  client secret, webhook secret, or user token through GitHub, replace server
+  configuration, and verify the previous credential no longer works. Rotate
+  webhook secrets on both ends. Limit App installation access to the required
+  repositories and keep the documented repository permissions.

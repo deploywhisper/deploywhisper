@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,12 @@ from models.repositories.incident_ingestion_sources import (
 from models.repositories.incident_records import (
     count_incident_records_by_sources,
     delete_incident_records_by_sources,
+)
+from services.content_security import (
+    redact_reference,
+    redact_text,
+    redact_value,
+    sensitive_artifact_values,
 )
 from services.backtesting_service import invalidate_backtesting_snapshot
 from services.incident_service import (
@@ -89,7 +96,13 @@ class IncidentImportValidationError(ValueError):
     """Raised when incident import validation fails."""
 
     def __init__(self, field_errors: list[IncidentImportFieldError]) -> None:
-        self.field_errors = field_errors
+        self.field_errors = [
+            IncidentImportFieldError.model_validate(redact_value(error.model_dump()))
+            for error in field_errors
+        ]
+        for error in self.field_errors:
+            error.source_file = redact_reference(error.source_file)
+        field_errors = self.field_errors
         detail = "; ".join(
             f"{error.source_file}:{error.field}: {error.message}"
             for error in field_errors
@@ -106,6 +119,7 @@ def import_incident_files(
     workspace_key: str | None = None,
 ) -> IncidentImportResult:
     """Validate and import simple Markdown, YAML, and JSON incident files."""
+    files = [_screen_import_file(item) for item in files]
     field_errors: list[IncidentImportFieldError] = []
     if project_id is None and project_key is None:
         field_errors.append(
@@ -141,7 +155,7 @@ def import_incident_files(
     parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
     for item in files:
         try:
-            parsed = _parse_incident_file(item)
+            parsed = _screen_incident_record(_parse_incident_file(item), item.content)
         except ValueError as exc:
             field_errors.append(
                 IncidentImportFieldError(
@@ -223,6 +237,7 @@ def reindex_incident_files(
     remove_missing_sources: bool = False,
 ) -> IncidentReindexResult:
     """Replace indexed incident entries from source files within one project scope."""
+    files = [_screen_import_file(item) for item in files]
     field_errors: list[IncidentImportFieldError] = []
     if project_id is None and project_key is None:
         field_errors.append(
@@ -260,7 +275,7 @@ def reindex_incident_files(
     parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
     for item in files:
         try:
-            parsed = _parse_incident_file(item)
+            parsed = _screen_incident_record(_parse_incident_file(item), item.content)
         except ValueError as exc:
             field_errors.append(
                 IncidentImportFieldError(
@@ -424,9 +439,9 @@ def incident_import_failure_summaries(
     """Convert validation failures into admin-actionable correction paths."""
     return [
         IncidentIngestionFailureSummary(
-            source_file=error.source_file,
+            source_file=redact_reference(error.source_file),
             field=error.field,
-            message=error.message,
+            message=redact_text(error.message),
             correction_path=_correction_path(error.field),
         )
         for error in errors
@@ -463,6 +478,53 @@ def _record_source_failures(
                 )
 
 
+def _screen_import_file(item: IncidentImportFile) -> IncidentImportFile:
+    sensitive_values = sensitive_artifact_values(
+        item.content.encode("utf-8", errors="replace")
+    )
+    safe_source_file = redact_reference(
+        item.source_file, sensitive_values=sensitive_values
+    )
+    if safe_source_file != item.source_file:
+        # Preserve recognized dispatch without restoring an unsafe suffix or merging sources.
+        suffix = Path(item.source_file).suffix.lower()
+        if suffix not in MARKDOWN_SUFFIXES | YAML_SUFFIXES | JSON_SUFFIXES:
+            suffix = ""
+        digest = hashlib.sha256(
+            item.source_file.encode("utf-8", errors="surrogatepass")
+        ).hexdigest()[:16]
+        safe_source_file = f"[REDACTED]-{digest}{suffix}"
+    return item.model_copy(update={"source_file": safe_source_file})
+
+
+def _screen_incident_record(record: dict[str, Any], raw_content: str) -> dict[str, Any]:
+    sensitive_values = sensitive_artifact_values(
+        raw_content.encode("utf-8", errors="replace")
+    )
+    safe = redact_value(record, sensitive_values=sensitive_values)
+    if safe != record and isinstance(safe.get("redaction"), dict):
+        safe["redaction"]["status"] = "redacted"
+    source = safe.get("source")
+    if isinstance(source, dict) and isinstance(source.get("reference"), str):
+        reference = redact_reference(
+            source["reference"], sensitive_values=sensitive_values
+        )
+        if reference != source["reference"] and isinstance(safe.get("redaction"), dict):
+            safe["redaction"]["status"] = "redacted"
+        source["reference"] = reference
+    return safe
+
+
+def _syntax_error_notice(label: str, exc: yaml.YAMLError) -> str:
+    mark = getattr(exc, "problem_mark", None)
+    location = (
+        f" at line {mark.line + 1}, column {mark.column + 1}"
+        if mark is not None
+        else ""
+    )
+    return f"{label} is invalid{location}."
+
+
 def _parse_incident_file(item: IncidentImportFile) -> dict[str, Any]:
     suffix = Path(item.source_file).suffix.lower()
     if suffix in MARKDOWN_SUFFIXES:
@@ -471,13 +533,15 @@ def _parse_incident_file(item: IncidentImportFile) -> dict[str, Any]:
         try:
             payload = yaml.safe_load(item.content)
         except yaml.YAMLError as exc:
-            raise ValueError(f"YAML incident is invalid: {exc}") from exc
+            raise ValueError(_syntax_error_notice("YAML incident", exc)) from None
         return _ensure_mapping(payload, "YAML incident")
     if suffix in JSON_SUFFIXES:
         try:
             payload = json.loads(item.content)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"JSON incident is invalid: {exc}") from exc
+            raise ValueError(
+                f"JSON incident is invalid at line {exc.lineno}, column {exc.colno}."
+            ) from exc
         return _ensure_mapping(payload, "JSON incident")
     raise ValueError(
         "Unsupported incident file type. Expected Markdown, YAML, or JSON."
@@ -492,7 +556,9 @@ def _parse_markdown_incident(content: str) -> dict[str, Any]:
         try:
             payload = yaml.safe_load(frontmatter) if frontmatter.strip() else {}
         except yaml.YAMLError as exc:
-            raise ValueError(f"Markdown frontmatter is invalid: {exc}") from exc
+            raise ValueError(
+                _syntax_error_notice("Markdown frontmatter", exc)
+            ) from None
         metadata = _ensure_mapping(
             payload,
             "Markdown frontmatter",

@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from importlib import reload
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import app as app_module
 import config as config_module
@@ -67,6 +68,50 @@ class GitHubAppRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("client_id=client-123", response.headers["location"])
         self.assertIn("state=", response.headers["location"])
+
+    def test_callback_does_not_echo_temporary_or_configured_credentials(self) -> None:
+        secret = "opaque-callback-credential"
+        with (
+            patch.dict(os.environ, {"GH_TOKEN": secret}),
+            patch(
+                "api.routes.github_app.complete_github_app_oauth",
+                return_value=SimpleNamespace(
+                    install_url="https://github.com/apps/example/installations/new",
+                    marketplace_url=None,
+                    state_return_to=f"/settings?code={secret}",
+                    token_type=secret,
+                    scope="scope opaque-access-token",
+                    user_access_token="opaque-access-token",
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/v1/github/app/oauth/callback",
+                params={"code": "opaque-input-code", "state": "opaque-input-state"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(secret, response.text)
+        self.assertNotIn("opaque-access-token", response.text)
+
+    def test_callback_links_reject_executable_schemes(self) -> None:
+        with patch(
+            "api.routes.github_app.complete_github_app_oauth",
+            return_value=SimpleNamespace(
+                install_url="javascript:alert(1)",
+                marketplace_url=None,
+                state_return_to="//untrusted.example/path",
+                token_type="bearer",
+                scope=None,
+                user_access_token="opaque-access-token",
+            ),
+        ):
+            response = self.client.get(
+                "/api/v1/github/app/oauth/callback",
+                params={"code": "safe-code", "state": "safe-state"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("javascript:", response.text)
+        self.assertNotIn("//untrusted.example", response.text)
 
     def test_webhook_rejects_invalid_signature(self) -> None:
         response = self.client.post(

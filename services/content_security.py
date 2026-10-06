@@ -7,9 +7,10 @@ import binascii
 import json
 import re
 from typing import Any, Iterable, get_args
-from urllib.parse import quote, quote_plus
+from urllib.parse import quote, quote_plus, unquote
 
 import yaml
+from config import configured_credential_values
 from parsers.cloudformation_parser import _CloudFormationLoader
 from evidence.models import (
     ContextSourceType,
@@ -67,6 +68,22 @@ _AUTHORIZATION = re.compile(
 _URL_CREDENTIAL = re.compile(
     r"((?<![\w+.-])[a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/@]+:(?P<credential>[^\s/@]+)@"
 )
+_QUERY_PARAMETER = re.compile(
+    r"(?P<prefix>[?&])(?P<name>[^=&\s\"'<>#]+)=(?P<credential>[^&#\s\"'<>]*)"
+)
+_SENSITIVE_QUERY_NAMES = {
+    "code",
+    "state",
+    "session",
+    "sessionid",
+    "session_id",
+    "sig",
+    "signature",
+    "key",
+    "authorization",
+    "samlresponse",
+}
+
 _SEVERITIES = set(get_args(RiskSeverity))
 _ACTIONS = {
     "create",
@@ -159,6 +176,15 @@ def _secret_key(key: str) -> bool:
     return re.sub(r"[^a-z0-9]", "", key.lower()).endswith(_SECRET_SUFFIXES)
 
 
+def _sensitive_query_name(value: str) -> bool:
+    for _ in range(9):
+        decoded = unquote(value)
+        if decoded == value:
+            break
+        value = decoded
+    return value.lower() in _SENSITIVE_QUERY_NAMES or _secret_key(value)
+
+
 def _sensitive_variants(item: str) -> set[str]:
     variants = {item, item.strip(), "".join(item.splitlines()).strip()}
     variants.difference_update({"", REDACTED, REDACTED[:-1]})
@@ -209,11 +235,39 @@ def _text_sensitive_values(text: str) -> set[str]:
     ):
         for match in pattern.finditer(text):
             found.update(_sensitive_variants(match.group(group)))
+    for match in _QUERY_PARAMETER.finditer(text):
+        if _sensitive_query_name(match.group("name")):
+            found.update(_sensitive_variants(unquote(match.group("credential"))))
     return found
 
 
 def redact_text(value: str, *, sensitive_values: Iterable[str] = ()) -> str:
-    """Redact recognizable credentials and locally identified sensitive values."""
+    """Redact recognizable, configured, and locally identified credentials."""
+    return _redact_text(
+        value, sensitive_values=tuple(sensitive_values) + configured_credential_values()
+    )
+
+
+def redact_reference(
+    value: str | None, *, sensitive_values: Iterable[str] = ()
+) -> str | None:
+    """Screen references and metadata with bounded decoding, preserving safe values."""
+    if value is None:
+        return None
+    values = tuple(sensitive_values) + configured_credential_values()
+    candidate = value
+    for _ in range(9):
+        if _redact_text(candidate, sensitive_values=values) != candidate:
+            return REDACTED
+        decoded = unquote(candidate)
+        if decoded == candidate:
+            return value
+        candidate = decoded
+    return REDACTED
+
+
+def _redact_text(value: str, *, sensitive_values: Iterable[str] = ()) -> str:
+    """Apply lexical screening with the caller's prepared credential context."""
     # Consume whole scalar bodies before replacing their header or delimiter.
     text = _HEREDOC_ASSIGNMENT.sub(lambda m: m.group("prefix") + REDACTED + "\n", value)
     text = _BLOCK_ASSIGNMENT.sub(lambda m: m.group("prefix") + REDACTED + "\n", text)
@@ -240,7 +294,15 @@ def redact_text(value: str, *, sensitive_values: Iterable[str] = ()) -> str:
         quote = raw[0] if raw.startswith(('"', "'")) else ""
         return match.group("prefix") + quote + REDACTED + quote
 
-    return _ASSIGNMENT.sub(replace_assignment, text)
+    text = _ASSIGNMENT.sub(replace_assignment, text)
+    return _QUERY_PARAMETER.sub(
+        lambda match: (
+            match.group("prefix") + match.group("name") + "=" + REDACTED
+            if _sensitive_query_name(match.group("name"))
+            else match.group(0)
+        ),
+        text,
+    )
 
 
 def _screen_value(
@@ -346,7 +408,7 @@ def _screen_value(
     def walk(item: Any, depth: int = 0, *, metadata: bool = False) -> Any:
         if isinstance(item, str):
             found.update(_text_sensitive_values(item))
-            safe = redact_text(item, sensitive_values=sensitive_values)
+            safe = _redact_text(item, sensitive_values=sensitive_values)
             if safe != item:
                 mark_changed()
             return safe
@@ -411,7 +473,7 @@ def _screen_value(
                 ):
                     # Public enums retain their meaning even if a short secret
                     # happens to have the same spelling as an enum value.
-                    safe = redact_text(nested)
+                    safe = _redact_text(nested)
                     if safe != nested:
                         mark_changed()
                 else:
@@ -420,7 +482,7 @@ def _screen_value(
                         depth + 1,
                         metadata=metadata or normalized == "metadata",
                     )
-                safe_key = redact_text(
+                safe_key = _redact_text(
                     key_text, sensitive_values=sensitive_values if metadata else ()
                 )
                 if safe_key != key_text:
@@ -438,7 +500,9 @@ def _screen_value(
 def redact_value(value: Any, *, sensitive_values: Iterable[str] = ()) -> Any:
     """Screen nested JSON-like data without mutating the caller's objects."""
     found = {
-        variant for item in sensitive_values for variant in _sensitive_variants(item)
+        variant
+        for item in tuple(sensitive_values) + configured_credential_values()
+        for variant in _sensitive_variants(item)
     }
     # Collect from the whole input first so sibling order cannot expose an echo.
     _screen_value(value, (), found)

@@ -130,3 +130,21 @@ Public hosted / Marketplace GitHub App rollout is intentionally deferred. If tha
 ## OpenSSL note
 
 DeployWhisper signs GitHub App JWTs by calling the system `openssl` binary. Ensure OpenSSL is available in the runtime image or host where the app adapter will run.
+
+## Connector credential boundary
+
+Keep client secrets, webhook secrets, and private keys in server environment
+variables or a protected key-file mount. Installation tokens, App JWTs, and
+optional OAuth user tokens are transient; they must not enter reports, prompts,
+database rows, or telemetry. GitHub HTTP failures expose a status code and fixed
+message, never the upstream response body.
+
+All GitHub API and OAuth endpoint overrides require HTTPS. Configure only trusted
+GitHub or GitHub Enterprise endpoints. Static endpoint and public base URLs must
+contain no userinfo, query, fragment, or credential value. GitHub authenticated
+GET redirects stay on the same HTTPS origin; token-exchange redirects are
+rejected. Artifact downloads use the configured Contents API's raw media response,
+including on Enterprise, instead of forwarding tokens to supplied download URLs.
+
+See the [operator credential controls](./github-app-self-hosted-setup.md#credential-storage-and-logging)
+for key files, rotation, access logs, and telemetry.

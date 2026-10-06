@@ -23,6 +23,12 @@ from models.repositories.incident_records import (
     create_incident_record,
     list_incident_records,
 )
+from services.content_security import (
+    redact_reference,
+    redact_text,
+    redact_value,
+    sensitive_artifact_values,
+)
 from services.backtesting_service import invalidate_backtesting_snapshot
 from services.project_service import (
     resolve_project_reference,
@@ -242,7 +248,11 @@ def create_incident_record_in_session(
     analysis_id: int | None = None,
 ):
     """Stage a normalized incident record in an existing transaction."""
-    normalized_content = content.strip()
+    sensitive_values = sensitive_artifact_values(
+        content.encode("utf-8", errors="replace")
+    )
+    normalized_content = redact_text(content.strip(), sensitive_values=sensitive_values)
+    source_file = redact_reference(source_file, sensitive_values=sensitive_values)
     return create_incident_record(
         session,
         project_id=project_id,
@@ -268,7 +278,11 @@ def ingest_incident_document(
     workspace_key: str | None = None,
 ) -> dict:
     """Normalize and persist an incident document from markdown/plain text input."""
-    normalized_content = content.strip()
+    sensitive_values = sensitive_artifact_values(
+        content.encode("utf-8", errors="replace")
+    )
+    normalized_content = redact_text(content.strip(), sensitive_values=sensitive_values)
+    source_file = redact_reference(source_file, sensitive_values=sensitive_values)
     title = _extract_title(normalized_content, source_file)
     severity = _extract_severity(normalized_content)
     incident_date = _extract_incident_date(normalized_content)
@@ -371,7 +385,7 @@ def get_incident_records(
             project_id=project.id,
             workspace_id=workspace.id if workspace is not None else None,
         )
-    return [
+    payload = [
         {
             "id": record.id,
             "project_id": record.project_id,
@@ -386,6 +400,19 @@ def get_incident_records(
         }
         for record in records
     ]
+    sensitive_values = tuple(
+        value
+        for record in records
+        for value in sensitive_artifact_values(
+            record.content.encode("utf-8", errors="replace")
+        )
+    )
+    safe = redact_value(payload, sensitive_values=sensitive_values)
+    for record in safe:
+        record["source_file"] = redact_reference(
+            record["source_file"], sensitive_values=sensitive_values
+        )
+    return safe
 
 
 def get_incident_ingestion_status(
@@ -474,7 +501,7 @@ def get_incident_ingestion_status(
         [source.redaction_status for source in sources]
     )
     index_version = _index_version_for_records(records)
-    return IncidentIngestionStatus(
+    result = IncidentIngestionStatus(
         project_id=project.id,
         workspace_id=workspace.id if workspace is not None else None,
         indexed_count=indexed_count,
@@ -491,6 +518,23 @@ def get_incident_ingestion_status(
         freshness_status="current" if indexed_count else "empty",
         sources=sources,
     )
+    raw_values = tuple(
+        value
+        for record in records
+        for value in sensitive_artifact_values(
+            record.content.encode("utf-8", errors="replace")
+        )
+    )
+    safe = redact_value(result.model_dump(), sensitive_values=raw_values)
+    for source in safe["sources"]:
+        source["import_source"] = redact_reference(
+            source["import_source"], sensitive_values=raw_values
+        )
+        for failure in source["failure_summaries"]:
+            failure["source_file"] = redact_reference(
+                failure["source_file"], sensitive_values=raw_values
+            )
+    return IncidentIngestionStatus.model_validate(safe)
 
 
 def get_incident_index_snapshot(
@@ -534,13 +578,18 @@ def record_incident_ingestion_source_status(
         session,
         project_id=project_id,
         workspace_id=workspace_id,
-        source_file=source_file,
+        source_file=redact_reference(source_file),
         status=status,
         indexed_count=indexed_count,
         rejected_count=rejected_count,
-        redaction_status=redaction_status,
+        redaction_status=redact_text(redaction_status),
         failure_summaries_json=json.dumps(
-            [failure.model_dump(mode="json") for failure in (failure_summaries or [])]
+            redact_value(
+                [
+                    failure.model_dump(mode="json")
+                    for failure in (failure_summaries or [])
+                ]
+            )
         ),
         index_version=index_version,
         last_indexed_at=last_indexed_at,
