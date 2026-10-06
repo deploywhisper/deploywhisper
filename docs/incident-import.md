@@ -50,7 +50,9 @@ Restore the previous access range and redeploy.
 Require expiry checks for temporary access.
 ```
 
-YAML and JSON records use the same field names directly. Validation errors include the source file, field name, and corrective message so operators can fix the record before retrying.
+YAML and JSON records use the same field names directly. Validation errors include the screened source file, field name, and corrective message so operators can fix the record before retrying. YAML and Markdown syntax failures report line and column without echoing source lines.
+
+The importer collects recognizable credential values from the complete local input before selecting incident fields. It screens persisted narrative, titles, source references, and sibling echoes, and screens existing records when returning incident memory or ingestion status. If screening changes structured incident content, `redaction.status` becomes `redacted`; the supplied status and `contains_sensitive_data` declaration are context, not proof that the file is safe. Arbitrary sensitive prose cannot be inferred reliably: operators should redact source exports before importing them. Raw exports stay local and are not retained by the importer.
 
 ## Management and Reindexing
 
@@ -71,3 +73,11 @@ POST /api/v1/incidents/reindex
 Set `remove_missing_sources` to `true` when the submitted source list should become the complete managed index for that project/workspace. In that mode, omitted files are removed only when they already exist in DeployWhisper's ingestion source registry for the requested scope; manually recorded or otherwise unmanaged incident history is preserved. Duplicate source file names in a single reindex request are rejected because they would create ambiguous replacement state.
 
 Reindex replacement is transactional: source validation, stale managed-source removal, replacement incident rows, and source status updates succeed or fail as one unit. Reports also snapshot the incident index version and freshness state used during analysis so consumers can tell whether incident matches came from current, stale, or empty incident memory.
+
+Credential-bearing filenames use stable hash-based public aliases. Only recognized Markdown, YAML and JSON suffixes are retained for local format dispatch; unsafe or unsupported suffixes are not copied into errors. Distinct source names remain distinct after screening.
+
+Credential screening applies across the complete incident batch, so a declaration
+in one file protects copies in another. Unsafe source filenames use stable opaque
+aliases with their recognized extension. Reindexing reuses existing aliases within
+the selected project/workspace even when a later version removes the credential
+declaration; healthy filenames keep their original names.

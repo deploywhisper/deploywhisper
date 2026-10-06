@@ -89,8 +89,10 @@ Custom logging handlers, SQLAlchemy echo handlers, external log collectors, and
 debug instrumentation must enforce equivalent restrictions; the guarantee here
 covers DeployWhisper's configured console handler.
 
-Connector credential administration, provider administration, release scanning,
-and backup/retention procedures remain in their separate Epic 12 stories. This
+Connector credential handling is covered by the
+[connector boundary audit](connector-credential-boundaries.md), and provider
+administration by [provider settings](provider-settings-administration.md).
+Release scanning and backup/retention remain in their separate Epic 12 stories. This
 audit adds no dependencies, schema migrations, telemetry, or enforcement.
 
 ## Verification

@@ -241,6 +241,22 @@ calls should receive structured summaries, not raw uploads.
 Secret-storage prohibition: the action contract must not persist API tokens,
 provider credentials, raw infrastructure state, or deployment secrets.
 
+Keep `api-url` credential-free: do not place bearer tokens in URL userinfo,
+query strings, fragments, or path segments. Pass the API token through
+`${{ secrets.DEPLOYWHISPER_API_TOKEN }}` to the action's `api-token` input and
+grant only the access required by the protected endpoint. Share-management and
+deployment-outcome tokens authorize their own operations; they are not general
+analysis-submission credentials.
+
+The local GitHub setup wizard validates endpoint URLs before creating files or
+publishing a PR. Its generated workflow, README section, App setup notes, and PR
+body are committed or published material; enter public configuration references
+only. GitHub CLI credentials (`GH_TOKEN` / `GITHUB_TOKEN`) belong in the local
+environment or GitHub CLI credential store. Setup command failures omit captured
+stdout/stderr and arguments because git/gh diagnostics may contain credentials.
+The external Action repository owns runtime token masking and telemetry controls;
+review that exact pinned revision before relying on those controls.
+
 ## Repository Ownership
 
 - Application repo: `deploywhisper/deploywhisper`

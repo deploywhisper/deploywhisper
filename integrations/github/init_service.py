@@ -14,6 +14,8 @@ import subprocess
 from textwrap import dedent
 from urllib.parse import urlparse
 
+from services.content_security import redact_reference
+
 DEFAULT_WORKFLOW_PATH = ".github/workflows/deploywhisper.yml"
 DEFAULT_APP_NOTES_PATH = ".github/deploywhisper-self-hosted-github-app.md"
 DEFAULT_BRANCH_NAME = "feature/deploywhisper-github-init"
@@ -858,9 +860,25 @@ def _validate_scope_options(options: GitHubInitOptions) -> None:
 
 
 def _validate_url(value: str, *, field_name: str) -> None:
-    parsed = urlparse(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise GitHubInitError(f"{field_name} must be an absolute http(s) URL.")
+    try:
+        parsed = urlparse(value)
+        valid = (
+            parsed.scheme in {"http", "https"}
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+            and parsed.port != 0
+            and not any(char.isspace() for char in value)
+            and redact_reference(value) == value
+        )
+    except ValueError:
+        valid = False
+    if not valid:
+        raise GitHubInitError(
+            f"{field_name} must be a credential-free HTTP(S) URL without query or fragment."
+        )
 
 
 def _require_binary(name: str) -> None:
@@ -996,16 +1014,20 @@ def _run_command(
     *args: str,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    completed = subprocess.run(
-        args,
-        cwd=repo_root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if check and completed.returncode != 0:
-        stderr = (
-            completed.stderr.strip() or completed.stdout.strip() or "unknown failure"
+    try:
+        completed = subprocess.run(
+            args,
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
         )
-        raise GitHubInitError(f"Command failed ({' '.join(args)}): {stderr}")
+    except OSError as exc:
+        raise GitHubInitError(
+            "GitHub setup command could not start; check local git/gh configuration."
+        ) from exc
+    if check and completed.returncode != 0:
+        raise GitHubInitError(
+            f"GitHub setup command failed (exit {completed.returncode}); check repository access and local git/gh configuration."
+        )
     return completed

@@ -22,6 +22,15 @@ from models.repositories.analysis_reports import get_analysis_report
 from models.repositories.incident_records import (
     create_incident_record,
     list_incident_records,
+    list_incident_source_files,
+)
+from services.content_security import (
+    redact_reference,
+    redact_scope_error_message,
+    redact_text,
+    redact_value,
+    sensitive_artifact_values,
+    sensitive_submission_values,
 )
 from services.backtesting_service import invalidate_backtesting_snapshot
 from services.project_service import (
@@ -232,6 +241,32 @@ def _source_status_from_records(
     )
 
 
+def incident_source_alias(source_file: str) -> str:
+    """Return a stable opaque identity while preserving recognized local formats."""
+    suffix = source_file.rsplit(".", 1)[-1].lower() if "." in source_file else ""
+    suffix = f".{suffix}" if suffix in {"md", "markdown", "yaml", "yml", "json"} else ""
+    digest = hashlib.sha256(
+        source_file.encode("utf-8", errors="surrogatepass")
+    ).hexdigest()[:16]
+    return f"[REDACTED]-{digest}{suffix}"
+
+
+def screen_incident_source_file(
+    source_file: str,
+    *,
+    sensitive_values: tuple[str, ...] = (),
+    existing_aliases: set[str] | None = None,
+) -> str:
+    alias = incident_source_alias(source_file)
+    if (
+        alias in (existing_aliases or ())
+        or redact_reference(source_file, sensitive_values=sensitive_values)
+        != source_file
+    ):
+        return alias
+    return source_file
+
+
 def create_incident_record_in_session(
     session: Session,
     *,
@@ -242,7 +277,13 @@ def create_incident_record_in_session(
     analysis_id: int | None = None,
 ):
     """Stage a normalized incident record in an existing transaction."""
-    normalized_content = content.strip()
+    sensitive_values = sensitive_artifact_values(
+        content.encode("utf-8", errors="replace")
+    )
+    normalized_content = redact_text(content.strip(), sensitive_values=sensitive_values)
+    source_file = screen_incident_source_file(
+        source_file, sensitive_values=sensitive_values
+    )
     return create_incident_record(
         session,
         project_id=project_id,
@@ -268,72 +309,101 @@ def ingest_incident_document(
     workspace_key: str | None = None,
 ) -> dict:
     """Normalize and persist an incident document from markdown/plain text input."""
-    normalized_content = content.strip()
+    sensitive_values = sensitive_submission_values(
+        [(source_file, content.encode("utf-8", errors="replace"))]
+    )
+    normalized_content = redact_text(content.strip(), sensitive_values=sensitive_values)
+    raw_source_file = source_file
+    source_file = screen_incident_source_file(
+        source_file, sensitive_values=sensitive_values
+    )
     title = _extract_title(normalized_content, source_file)
     severity = _extract_severity(normalized_content)
     incident_date = _extract_incident_date(normalized_content)
     report = None
     resolved_project_id: int | None = None
     resolved_workspace_id: int | None = None
-    with SessionLocal() as session:
-        if analysis_id is not None:
-            report = get_analysis_report(session, analysis_id, include_evidence=False)
-        if analysis_id is not None and report is None:
-            raise ValueError(f"Analysis report not found: {analysis_id}.")
-        if report is not None:
-            resolved_project_id = report.project_id
-            resolved_workspace_id = report.workspace_id
-            requested_project = (
-                resolve_project_reference(
-                    project_id=project_id, project_key=project_key
+    try:
+        with SessionLocal() as session:
+            if analysis_id is not None:
+                report = get_analysis_report(
+                    session, analysis_id, include_evidence=False
                 )
-                if project_id is not None or project_key is not None
-                else None
+            if analysis_id is not None and report is None:
+                raise ValueError(f"Analysis report not found: {analysis_id}.")
+            if report is not None:
+                resolved_project_id = report.project_id
+                resolved_workspace_id = report.workspace_id
+                requested_project = (
+                    resolve_project_reference(
+                        project_id=project_id, project_key=project_key
+                    )
+                    if project_id is not None or project_key is not None
+                    else None
+                )
+                if (
+                    requested_project is not None
+                    and requested_project.id != resolved_project_id
+                ):
+                    raise ValueError(
+                        "The supplied project reference does not match the analysis report project."
+                    )
+                requested_workspace = resolve_workspace_reference(
+                    project_id=resolved_project_id,
+                    workspace_id=workspace_id,
+                    workspace_key=workspace_key,
+                )
+                if (
+                    requested_workspace is not None
+                    and requested_workspace.id != resolved_workspace_id
+                ):
+                    raise ValueError(
+                        "The supplied workspace reference does not match the analysis report workspace."
+                    )
+            else:
+                if project_id is None and project_key is None:
+                    raise ValueError("Project scope is required for incident records.")
+                project = resolve_project_reference(
+                    project_id=project_id,
+                    project_key=project_key,
+                )
+                workspace = resolve_workspace_reference(
+                    project_id=project.id,
+                    workspace_id=workspace_id,
+                    workspace_key=workspace_key,
+                )
+                resolved_project_id = project.id
+                resolved_workspace_id = workspace.id if workspace is not None else None
+            existing_aliases = set(
+                list_incident_source_files(
+                    session,
+                    project_id=resolved_project_id,
+                    workspace_id=resolved_workspace_id,
+                )
             )
-            if (
-                requested_project is not None
-                and requested_project.id != resolved_project_id
-            ):
-                raise ValueError(
-                    "The supplied project reference does not match the analysis report project."
-                )
-            requested_workspace = resolve_workspace_reference(
+            source_file = screen_incident_source_file(
+                raw_source_file,
+                sensitive_values=sensitive_values,
+                existing_aliases=existing_aliases,
+            )
+            title = _extract_title(normalized_content, source_file)
+            record = create_incident_record(
+                session,
                 project_id=resolved_project_id,
-                workspace_id=workspace_id,
-                workspace_key=workspace_key,
+                workspace_id=resolved_workspace_id,
+                title=title,
+                severity=severity,
+                source_file=source_file,
+                incident_date=incident_date,
+                analysis_id=analysis_id,
+                content=normalized_content,
             )
-            if (
-                requested_workspace is not None
-                and requested_workspace.id != resolved_workspace_id
-            ):
-                raise ValueError(
-                    "The supplied workspace reference does not match the analysis report workspace."
-                )
-        else:
-            if project_id is None and project_key is None:
-                raise ValueError("Project scope is required for incident records.")
-            project = resolve_project_reference(
-                project_id=project_id,
-                project_key=project_key,
-            )
-            workspace = resolve_workspace_reference(
-                project_id=project.id,
-                workspace_id=workspace_id,
-                workspace_key=workspace_key,
-            )
-            resolved_project_id = project.id
-            resolved_workspace_id = workspace.id if workspace is not None else None
-        record = create_incident_record(
-            session,
-            project_id=resolved_project_id,
-            workspace_id=resolved_workspace_id,
-            title=title,
-            severity=severity,
-            source_file=source_file,
-            incident_date=incident_date,
-            analysis_id=analysis_id,
-            content=normalized_content,
-        )
+    except ValueError as exc:
+        message = redact_scope_error_message(str(exc), sensitive_values)
+        exc.args = (message,)
+        if hasattr(exc, "message"):
+            exc.message = message
+        raise
     if resolved_project_id is not None:
         invalidate_backtesting_snapshot(project_id=resolved_project_id)
     return {
@@ -371,7 +441,7 @@ def get_incident_records(
             project_id=project.id,
             workspace_id=workspace.id if workspace is not None else None,
         )
-    return [
+    payload = [
         {
             "id": record.id,
             "project_id": record.project_id,
@@ -386,6 +456,19 @@ def get_incident_records(
         }
         for record in records
     ]
+    sensitive_values = tuple(
+        value
+        for record in records
+        for value in sensitive_artifact_values(
+            record.content.encode("utf-8", errors="replace")
+        )
+    )
+    safe = redact_value(payload, sensitive_values=sensitive_values)
+    for record in safe:
+        record["source_file"] = redact_reference(
+            record["source_file"], sensitive_values=sensitive_values
+        )
+    return safe
 
 
 def get_incident_ingestion_status(
@@ -474,7 +557,7 @@ def get_incident_ingestion_status(
         [source.redaction_status for source in sources]
     )
     index_version = _index_version_for_records(records)
-    return IncidentIngestionStatus(
+    result = IncidentIngestionStatus(
         project_id=project.id,
         workspace_id=workspace.id if workspace is not None else None,
         indexed_count=indexed_count,
@@ -491,6 +574,23 @@ def get_incident_ingestion_status(
         freshness_status="current" if indexed_count else "empty",
         sources=sources,
     )
+    raw_values = tuple(
+        value
+        for record in records
+        for value in sensitive_artifact_values(
+            record.content.encode("utf-8", errors="replace")
+        )
+    )
+    safe = redact_value(result.model_dump(), sensitive_values=raw_values)
+    for source in safe["sources"]:
+        source["import_source"] = redact_reference(
+            source["import_source"], sensitive_values=raw_values
+        )
+        for failure in source["failure_summaries"]:
+            failure["source_file"] = redact_reference(
+                failure["source_file"], sensitive_values=raw_values
+            )
+    return IncidentIngestionStatus.model_validate(safe)
 
 
 def get_incident_index_snapshot(
@@ -534,13 +634,18 @@ def record_incident_ingestion_source_status(
         session,
         project_id=project_id,
         workspace_id=workspace_id,
-        source_file=source_file,
+        source_file=redact_reference(source_file),
         status=status,
         indexed_count=indexed_count,
         rejected_count=rejected_count,
-        redaction_status=redaction_status,
+        redaction_status=redact_text(redaction_status),
         failure_summaries_json=json.dumps(
-            [failure.model_dump(mode="json") for failure in (failure_summaries or [])]
+            redact_value(
+                [
+                    failure.model_dump(mode="json")
+                    for failure in (failure_summaries or [])
+                ]
+            )
         ),
         index_version=index_version,
         last_indexed_at=last_indexed_at,

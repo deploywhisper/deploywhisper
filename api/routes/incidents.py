@@ -16,6 +16,10 @@ from services.incident_import_service import (
     reindex_incident_files,
 )
 from services.incident_service import get_incident_ingestion_status
+from services.content_security import (
+    redact_scope_error_message,
+    sensitive_submission_values,
+)
 from services.project_service import (
     has_restricted_project_scope,
     require_project_permission,
@@ -58,7 +62,9 @@ def _authorization_context(
     }
 
 
-def _project_api_error(exc: ValueError) -> ApiError:
+def _project_api_error(
+    exc: ValueError, sensitive_values: tuple[str, ...] = ()
+) -> ApiError:
     code = getattr(exc, "code", "invalid_project_request")
     status_code = getattr(exc, "status_code", None) or (
         404 if code in {"project_not_found", "workspace_not_found"} else 400
@@ -66,7 +72,9 @@ def _project_api_error(exc: ValueError) -> ApiError:
     return ApiError(
         status_code=status_code,
         code=code,
-        message=getattr(exc, "message", str(exc)),
+        message=redact_scope_error_message(
+            getattr(exc, "message", str(exc)), sensitive_values
+        ),
     )
 
 
@@ -132,7 +140,11 @@ def _require_incident_permission(
 
 
 def _raise_project_error(
-    exc: ValueError, *, authorization: dict[str, object], project_id: int | None
+    exc: ValueError,
+    *,
+    authorization: dict[str, object],
+    project_id: int | None,
+    files: list[IncidentImportFile] | None = None,
 ) -> None:
     if _should_mask_scope_reference_error(
         authorization=authorization,
@@ -140,7 +152,11 @@ def _raise_project_error(
         exc=exc,
     ):
         raise _project_scope_forbidden_error() from exc
-    raise _project_api_error(exc) from exc
+    sensitive_values = sensitive_submission_values(
+        (file.source_file, file.content.encode("utf-8", errors="replace"))
+        for file in (files or [])
+    )
+    raise _project_api_error(exc, sensitive_values) from exc
 
 
 def _validation_error(exc: IncidentImportValidationError, *, code: str) -> ApiError:
@@ -239,7 +255,10 @@ def incident_reindex(
         ) from exc
     except ValueError as exc:
         _raise_project_error(
-            exc, authorization=auth_context, project_id=request.project_id
+            exc,
+            authorization=auth_context,
+            project_id=request.project_id,
+            files=request.files,
         )
     return {
         "data": result.model_dump(mode="json"),

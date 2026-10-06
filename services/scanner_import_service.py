@@ -21,6 +21,12 @@ from models.repositories.scanner_imports import (
     list_external_scanner_evidence as list_external_scanner_evidence_records,
     refresh_external_scanner_evidence,
 )
+from services.content_security import (
+    redact_reference,
+    redact_scope_error_message,
+    redact_value,
+    sensitive_artifact_values,
+)
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     artifact_name_is_ownership_untrusted,
@@ -29,6 +35,7 @@ from services.intake_service import (
     trusted_relative_artifact_path,
 )
 from services.project_service import (
+    ProjectResolutionError,
     resolve_project_reference,
     resolve_workspace_reference,
 )
@@ -140,8 +147,26 @@ class ScannerImportResult(BaseModel):
 class ScannerImportValidationError(ValueError):
     """Raised when scanner import validation fails."""
 
-    def __init__(self, field_errors: list[ScannerImportFieldError]) -> None:
-        self.field_errors = field_errors
+    def __init__(
+        self,
+        field_errors: list[ScannerImportFieldError],
+        *,
+        sensitive_values: tuple[str, ...] = (),
+    ) -> None:
+        self.field_errors = [
+            ScannerImportFieldError.model_validate(
+                redact_value(error.model_dump(), sensitive_values=sensitive_values)
+            )
+            for error in field_errors
+        ]
+        for error in self.field_errors:
+            error.source_file = redact_reference(
+                error.source_file, sensitive_values=sensitive_values
+            )
+            error.field = redact_reference(
+                error.field, sensitive_values=sensitive_values
+            )
+        field_errors = self.field_errors
         detail = "; ".join(
             f"{error.source_file}:{error.field}: {error.message}"
             for error in field_errors
@@ -218,8 +243,16 @@ def import_sarif_file(
     workspace_key: str | None = None,
 ) -> ScannerImportResult:
     """Validate and import SARIF results as project-scoped external evidence."""
-    file = _validate_sarif_file_envelope(file)
-    parsed = _parse_sarif(file)
+    try:
+        file = _validate_sarif_file_envelope(file)
+        parsed = _parse_sarif(file)
+    except ScannerImportValidationError as exc:
+        raise ScannerImportValidationError(
+            exc.field_errors,
+            sensitive_values=sensitive_artifact_values(
+                file.content.encode("utf-8", errors="replace")
+            ),
+        ) from None
     return _import_parsed_scanner_evidence(
         file,
         parsed=parsed,
@@ -241,8 +274,16 @@ def import_semgrep_json_file(
     workspace_key: str | None = None,
 ) -> ScannerImportResult:
     """Validate and import Semgrep native JSON results as external evidence."""
-    file = _validate_semgrep_file_envelope(file)
-    parsed = _parse_semgrep_json(file)
+    try:
+        file = _validate_semgrep_file_envelope(file)
+        parsed = _parse_semgrep_json(file)
+    except ScannerImportValidationError as exc:
+        raise ScannerImportValidationError(
+            exc.field_errors,
+            sensitive_values=sensitive_artifact_values(
+                file.content.encode("utf-8", errors="replace")
+            ),
+        ) from None
     return _import_parsed_scanner_evidence(
         file,
         parsed=parsed,
@@ -253,6 +294,19 @@ def import_semgrep_json_file(
         workspace_id=workspace_id,
         workspace_key=workspace_key,
     )
+
+
+def _scanner_source_alias(
+    source_file: str, *, sensitive_values: tuple[str, ...]
+) -> str:
+    if redact_reference(source_file, sensitive_values=sensitive_values) == source_file:
+        return source_file
+    suffix = Path(source_file).suffix.lower()
+    suffix = suffix if suffix in {".sarif", ".json"} else ""
+    digest = hashlib.sha256(
+        source_file.encode("utf-8", errors="surrogatepass")
+    ).hexdigest()[:16]
+    return f"[REDACTED]-{digest}{suffix}"
 
 
 def _import_parsed_scanner_evidence(
@@ -266,6 +320,16 @@ def _import_parsed_scanner_evidence(
     workspace_id: int | None,
     workspace_key: str | None,
 ) -> ScannerImportResult:
+    sensitive_values = sensitive_artifact_values(
+        file.content.encode("utf-8", errors="replace")
+    )
+    file = file.model_copy(
+        update={
+            "source_file": _scanner_source_alias(
+                file.source_file, sensitive_values=sensitive_values
+            )
+        }
+    )
     if project_id is None and project_key is None:
         raise ScannerImportValidationError(
             [
@@ -277,24 +341,55 @@ def _import_parsed_scanner_evidence(
                         f"Submit project_id or project_key with every {format_label} import."
                     ),
                 )
-            ]
+            ],
+            sensitive_values=sensitive_values,
         )
 
-    project = resolve_project_reference(
-        project_id=project_id,
-        project_key=project_key,
-    )
-    workspace = resolve_workspace_reference(
-        project_id=project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    _validate_parsed_storage_bounds(file, parsed)
+    try:
+        project = resolve_project_reference(
+            project_id=project_id,
+            project_key=project_key,
+        )
+        workspace = resolve_workspace_reference(
+            project_id=project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+    except ProjectResolutionError as exc:
+        raise ProjectResolutionError(
+            exc.code,
+            redact_scope_error_message(exc.message, sensitive_values=sensitive_values),
+        ) from None
+    try:
+        _validate_parsed_storage_bounds(file, parsed)
+        source_refs = _source_refs_by_field(file, parsed)
+        _validate_unique_source_refs(file, source_refs)
+    except ScannerImportValidationError as exc:
+        raise ScannerImportValidationError(
+            exc.field_errors, sensitive_values=sensitive_values
+        ) from None
     workspace_id_value = workspace.id if workspace is not None else None
     workspace_key_value = workspace.workspace_key if workspace is not None else None
+    safe_parsed = []
+    safe_source_refs = {}
+    for item in parsed:
+        safe = redact_value(
+            item.model_dump(exclude={"identity"}), sensitive_values=sensitive_values
+        )
+        for key in ("artifact_uri", "location", "tool_name", "rule_id", "rule_name"):
+            safe[key] = redact_reference(safe[key], sensitive_values=sensitive_values)
+        safe_parsed.append(item.model_copy(update=safe))
+        # Hash the original identity, but expose only screened query labels.
+        safe_source_refs[item.field_prefix] = _source_ref(
+            item=item,
+            tool_name=redact_reference(
+                item.tool_name, sensitive_values=sensitive_values
+            ),
+            rule_id=redact_reference(item.rule_id, sensitive_values=sensitive_values),
+        )
+    parsed = safe_parsed
+    source_refs = safe_source_refs
     tool_names = sorted({item.tool_name for item in parsed})
-    source_refs = _source_refs_by_field(file, parsed)
-    _validate_unique_source_refs(file, source_refs)
 
     try:
         with SessionLocal() as session:
@@ -380,7 +475,7 @@ def _import_parsed_scanner_evidence(
             raise _scope_changed_error(file, format_label=format_label) from exc
         raise
 
-    return ScannerImportResult(
+    result = ScannerImportResult(
         import_id=import_id,
         project_id=project.id,
         project_key=project.project_key,
@@ -391,6 +486,9 @@ def _import_parsed_scanner_evidence(
         imported_count=len(evidence),
         rejected_count=0,
         evidence=evidence,
+    )
+    return ScannerImportResult.model_validate(
+        redact_value(result.model_dump(), sensitive_values=sensitive_values)
     )
 
 
@@ -415,7 +513,10 @@ def scanner_import_failure_summaries(
     errors: list[ScannerImportFieldError],
 ) -> list[dict[str, str]]:
     """Return API-safe scanner import validation failures."""
-    return [error.model_dump(mode="json") for error in errors]
+    return [
+        error.model_dump(mode="json")
+        for error in ScannerImportValidationError(errors).field_errors
+    ]
 
 
 def _validate_sarif_file_envelope(file: ScannerImportFile) -> ScannerImportFile:
@@ -1998,7 +2099,14 @@ def _physical_location(
     )
     if safe_artifact_uri is None:
         return None
-    region = physical.get("region") if isinstance(physical.get("region"), dict) else {}
+    raw_region = (
+        physical.get("region") if isinstance(physical.get("region"), dict) else {}
+    )
+    region = {
+        key: raw_region[key]
+        for key in ("startLine", "startColumn", "endLine", "endColumn")
+        if key in raw_region
+    }
     line = region.get("startLine")
     column = region.get("startColumn")
     invalid_region = False
@@ -2757,7 +2865,16 @@ def _contains_surrogate(value: str) -> bool:
 
 
 def _serialize_evidence(record) -> ExternalScannerEvidenceRecord:
-    return ExternalScannerEvidenceRecord(
+    sensitive_values = sensitive_artifact_values(
+        json.dumps(
+            {
+                "message": record.message,
+                "properties": json.loads(record.properties_json or "{}"),
+                "region": json.loads(record.region_json or "{}"),
+            }
+        ).encode("utf-8", errors="replace")
+    )
+    payload = dict(
         id=record.id,
         import_id=record.import_id,
         evidence_id=record.evidence_id,
@@ -2776,9 +2893,25 @@ def _serialize_evidence(record) -> ExternalScannerEvidenceRecord:
         message=record.message,
         location=record.location,
         artifact_uri=record.artifact_uri,
-        region=json.loads(record.region_json or "{}"),
+        region={
+            key: value
+            for key, value in json.loads(record.region_json or "{}").items()
+            if key in {"startLine", "startColumn", "endLine", "endColumn"}
+        },
         properties=json.loads(record.properties_json or "{}"),
     )
+    safe = redact_value(payload, sensitive_values=sensitive_values)
+    for key in (
+        "source_file",
+        "source_ref",
+        "artifact_uri",
+        "location",
+        "tool_name",
+        "rule_id",
+        "rule_name",
+    ):
+        safe[key] = redact_reference(safe[key], sensitive_values=sensitive_values)
+    return ExternalScannerEvidenceRecord.model_validate(safe)
 
 
 def _add_error(

@@ -104,6 +104,20 @@ credential re-resolution. Run once with no OpenAI environment key (clear both
 `OPENAI_API_KEY` and generic `LLM_API_KEY`) to cover the missing-key warning,
 then with a synthetic environment key to cover environment credential recovery.
 
+Connector credential browser coverage also requires an explicit disposable-storage
+opt-in because it creates project, topology, incident, scanner, and report records:
+
+```bash
+BASE_URL=http://localhost:8080 CONNECTOR_SECURITY_TEST_DISPOSABLE=1 npm run test:ui-review -- connector-security.spec.ts
+```
+
+Use a separate disposable Compose data volume or a tmpfs mount for `/app/data`,
+then remove that storage after verification. Do not set this flag against an
+operator database. The test is skipped without it. It checks scanner identities
+and redaction in the import API, plus a matching incident in the persisted report
+API and rendered report. Imported scanner findings are standalone context and
+are not automatically attached to analysis reports.
+
 For full local parity with the CI security lane, make sure `bandit` is installed in the active environment or available via `BANDIT_BIN`. When available, `scripts/ci-local.sh` runs the same two-pass Bandit gate used in CI.
 
 To run only changed tests relative to the default base branch:

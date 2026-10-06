@@ -59,6 +59,26 @@ def get_incident_record(session: Session, record_id: int) -> IncidentRecord | No
     return session.get(IncidentRecord, record_id)
 
 
+def list_incident_source_files(
+    session: Session,
+    *,
+    project_id: int,
+    workspace_id: int | None,
+    project_wide: bool = False,
+) -> list[str]:
+    """Read alias identities without loading documents or adjacent scopes."""
+    stmt = (
+        select(IncidentRecord.source_file)
+        .distinct()
+        .where(IncidentRecord.project_id == project_id)
+    )
+    if not project_wide:
+        stmt = stmt.where(IncidentRecord.workspace_id == workspace_id)
+    return list(
+        session.execute(stmt.order_by(IncidentRecord.source_file)).scalars().all()
+    )
+
+
 def count_incident_records_by_sources(
     session: Session,
     *,

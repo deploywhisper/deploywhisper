@@ -606,7 +606,8 @@ DeployWhisper is designed so that:
 
 Recognizable credentials are redacted from structured prompts and reports;
 sensitive model responses and artifact snapshots are blocked with visible
-redaction notices. See the [secrets and artifact boundary audit](docs/security/secrets-and-artifact-boundaries.md)
+redaction notices. See the [secrets and artifact boundary audit](docs/security/secrets-and-artifact-boundaries.md) and the
+[connector credential boundary audit](docs/security/connector-credential-boundaries.md)
 for coverage, local-only operation, and detection limits.
 
 ## Architecture

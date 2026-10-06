@@ -166,4 +166,20 @@ Semgrep validation example:
 The importer parses scanner JSON locally and persists normalized fields needed
 for review. It does not send raw scanner output to an external service, and it
 does not persist arbitrary scanner-defined metadata because those fields may
-contain snippets, fingerprints, or local paths.
+contain snippets, fingerprints, or local paths. SARIF region storage is limited to
+validated start/end line and column coordinates; source snippets and other region
+fields are discarded.
+
+Credential screening collects recognizable values from the complete scanner
+input before projecting normalized fields, so a credential in discarded
+metadata also protects copies in messages or approved metadata. Persisted
+messages, tool/rule labels, and public references are screened, as are legacy
+records when returned by the scanner service. Raw finding identity remains local
+for stable hashing and reimport matching; it is not persisted as raw payload.
+Screening cannot identify arbitrary sensitive prose, so redact scanner exports
+before import when they contain organization-sensitive context.
+
+Unsafe scanner source filenames use stable opaque aliases rather than a shared
+redaction marker. This preserves separate import sources while finding refresh
+continues using the scanner's original hashed identity. Legacy tool and rule labels
+are screened with bounded URL decoding when returned.

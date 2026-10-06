@@ -30,6 +30,54 @@ def provider_credential_values() -> tuple[str, ...]:
     )
 
 
+CONNECTOR_CREDENTIAL_ENV_NAMES = (
+    "GH_TOKEN",
+    "GITHUB_TOKEN",
+    "GITHUB_ACCESS_TOKEN",
+    "DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET",
+    "DEPLOYWHISPER_GITHUB_APP_WEBHOOK_SECRET",
+    "DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY",
+    "DEPLOYWHISPER_API_TOKEN",
+    "DEPLOYWHISPER_SHARE_TOKEN",
+    "APP_SHARE_MANAGEMENT_TOKEN",
+    "DEPLOYWHISPER_OUTCOME_TOKEN",
+    "APP_DEPLOYMENT_OUTCOME_TOKEN",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AWS_SECRET_KEY",
+    "AWS_SECURITY_TOKEN",
+    "KUBERNETES_TOKEN",
+    "K8S_TOKEN",
+    "KUBE_TOKEN",
+    "AZURE_CLIENT_SECRET",
+    "AZURE_STORAGE_KEY",
+    "AZURE_STORAGE_ACCOUNT_KEY",
+    "AZURE_STORAGE_SAS_TOKEN",
+    "GOOGLE_OAUTH_ACCESS_TOKEN",
+    "CLOUDSDK_AUTH_ACCESS_TOKEN",
+    "TFC_TOKEN",
+    "TFE_TOKEN",
+)
+
+
+def connector_credential_values() -> tuple[str, ...]:
+    """Collect literal connector credentials; credential-file paths remain references."""
+    names = set(CONNECTOR_CREDENTIAL_ENV_NAMES) | {
+        name for name in os.environ if name.startswith("TF_TOKEN_")
+    }
+    return tuple(
+        dict.fromkeys(value for name in sorted(names) if (value := os.getenv(name)))
+    )
+
+
+def configured_credential_values() -> tuple[str, ...]:
+    """Return credentials shared by screening boundaries, never persistent storage."""
+    return tuple(
+        dict.fromkeys(provider_credential_values() + connector_credential_values())
+    )
+
+
 def _float_env(name: str, default: float) -> float:
     raw_value = os.getenv(name)
     if raw_value is None or not raw_value.strip():

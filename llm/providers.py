@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from ipaddress import ip_address
-from urllib.parse import unquote, urlsplit
+from urllib.parse import urlsplit
 
 from llm.adapters._shared import request_timeout_seconds as validate_timeout
 from typing import Any, Callable
@@ -22,7 +22,7 @@ from llm.adapters.ollama_adapter import OllamaProviderAdapter
 from llm.adapters.openai_compatible_adapter import OpenAICompatibleProviderAdapter
 from llm.adapters.openai_adapter import OpenAIProviderAdapter
 from llm.adapters.registry import ProviderAdapterRegistry
-from services.content_security import REDACTED, redact_text, redact_value
+from services.content_security import redact_reference, redact_text, redact_value
 
 SENSITIVE_RESPONSE_NOTICE = (
     "Provider response blocked because sensitive content was detected."
@@ -81,18 +81,9 @@ def redact_provider_field(
     sensitive_values: tuple[str, ...] = (),
 ) -> str | None:
     """Screen provider metadata through bounded successive percent decoding."""
-    if value is None:
-        return None
-    sensitive_values = sensitive_values + provider_credential_values()
-    candidate = value
-    for _ in range(9):
-        if redact_text(candidate, sensitive_values=sensitive_values) != candidate:
-            return REDACTED
-        decoded = unquote(candidate)
-        if decoded == candidate:
-            return value
-        candidate = decoded
-    return REDACTED
+    return redact_reference(
+        value, sensitive_values=sensitive_values + provider_credential_values()
+    )
 
 
 def _valid_provider_host(host: str) -> bool:
