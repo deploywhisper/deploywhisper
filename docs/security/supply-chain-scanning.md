@@ -10,15 +10,17 @@ incident exports or provider credentials.
 | Workflow | Coverage | Maintainer results |
 | --- | --- | --- |
 | [CodeQL](../../.github/workflows/codeql.yml) | Python, JavaScript/TypeScript and GitHub Actions; extended security queries | Security → Code scanning, PR annotations, per-language SARIF artifacts and the analysis job summary |
-| [OpenSSF Scorecard](../../.github/workflows/scorecard.yml) | Repository supply-chain practices; PR local mode and default-branch repository mode | Security → Code scanning, `scorecard-sarif` SARIF artifact and the analysis job summary |
+| [OpenSSF Scorecard PR](../../.github/workflows/scorecard.yml) | Local PR supply-chain checks | Security → Code scanning, `scorecard-sarif` SARIF artifact and the analysis job summary |
+| [Scorecard publisher](../../.github/workflows/scorecard-publish.yml) | Full default-branch repository posture and public badge | Security → Code scanning, `scorecard-repository-sarif`, the official Scorecard API/viewer and README badge |
 
-Both run on ordinary pull requests targeting `develop`/`main`, trusted branch
-pushes, a weekly schedule and manual dispatch. Actions are pinned to reviewed
+CodeQL and PR-local Scorecard run on ordinary pull requests targeting
+`develop`/`main`. CodeQL and the separate Scorecard publisher also run on trusted
+branch pushes, a weekly schedule and manual dispatch. Actions are pinned to reviewed
 full commit SHAs, tokens are job-scoped, and checkout does not persist credentials.
 CodeQL uses `build-mode: none`; no project installation, build or test command
 runs in its analysis job. Runtime dependencies and product behavior are unchanged.
 
-Scorecard accepts non-PR events only on the repository default branch. Its job
+Scorecard accepts non-PR events only on the repository default branch. Its publishing job
 therefore skips manual dispatch or push on a non-default ref. The current default
 is `develop`; the guard follows GitHub's default-branch metadata if this changes.
 PR Scorecard mode inspects the checked-out directory. Hosted settings checks are
@@ -27,10 +29,15 @@ repository posture. Full repository mode begins on default-branch pushes or its
 schedule after the workflow is integrated. GitHub documents PR/dispatch support
 as experimental in Scorecard; workflow execution in fork repositories is unsupported.
 
-Scorecard public API/badge publication is disabled (`publish_results: false`).
-Artifacts and code-scanning results provide maintainer visibility without an
-OIDC permission or an additional public result publishing service. There is no
-PAT or new repository secret. A missing/failed analysis stays a failed check;
+PR-local Scorecard publication remains disabled (`publish_results: false`) and
+that job has no OIDC permission. The user-requested README badge uses a separate
+single-job publisher with `publish_results: true` and job-scoped `id-token: write`
+only on the non-fork default branch. Publication uses only approved SHA-pinned
+actions; no environment/default overrides, services, shell steps or repository
+scripts run in that workflow. A PAT or new repository secret is not required.
+The badge will reflect the scan only after the first default-branch publishing run;
+PR-local SARIF and the CLI baseline cannot populate that public badge.
+A missing/failed analysis stays a failed check;
 an unavailable Scorecard check is unknown, not a passing control.
 
 ## Maintainer review and follow-up
@@ -81,8 +88,8 @@ bash scripts/ci-local.sh
 Validate GitHub execution on an ordinary draft PR: all three CodeQL matrix jobs
 and PR-local Scorecard must finish and retain SARIF. Verify code-scanning analyses
 through the repository Security tab. Workflow dispatch is available only once
-the workflow is registered on the default branch; select that branch for a full
-Scorecard scan. Default-branch repository-mode verification is distinct from
+the publishing workflow is registered on the default branch; select that branch
+for a full Scorecard scan and badge refresh. Default-branch repository-mode verification is distinct from
 PR-local validation and must be recorded after integration.
 
 For a full pre-integration repository baseline, maintainers may run the official

@@ -19,35 +19,45 @@ class SupplyChainWorkflowTests(unittest.TestCase):
         return yaml.load(text, Loader=yaml.BaseLoader), text
 
     def test_scans_run_for_prs_long_lived_branches_and_weekly(self):
-        for name in ("codeql", "scorecard"):
+        expected = {
+            "codeql": {"push", "pull_request", "schedule", "workflow_dispatch"},
+            "scorecard": {"pull_request"},
+            "scorecard-publish": {"push", "schedule", "workflow_dispatch"},
+        }
+        for name, events in expected.items():
             with self.subTest(workflow=name):
                 workflow, _ = self.load_workflow(name)
                 self.assertEqual(
                     set(workflow["on"]),
-                    {"push", "pull_request", "schedule", "workflow_dispatch"},
+                    events,
                 )
                 for event in ("push", "pull_request"):
+                    if event not in events:
+                        continue
                     self.assertEqual(
                         set(workflow["on"][event]["branches"]), {"main", "develop"}
                     )
                     self.assertNotIn("paths", workflow["on"][event])
-                self.assertEqual(len(workflow["on"]["schedule"]), 1)
-                self.assertRegex(
-                    workflow["on"]["schedule"][0]["cron"], r"^\d+ \d+ \* \* [0-6]$"
-                )
+                if "schedule" in events:
+                    self.assertEqual(len(workflow["on"]["schedule"]), 1)
+                    self.assertRegex(
+                        workflow["on"]["schedule"][0]["cron"], r"^\d+ \d+ \* \* [0-6]$"
+                    )
 
     def test_scans_limit_permissions_and_pin_external_code(self):
-        for name in ("codeql", "scorecard"):
+        for name in ("codeql", "scorecard", "scorecard-publish"):
             with self.subTest(workflow=name):
                 workflow, text = self.load_workflow(name)
                 self.assertEqual(workflow["permissions"], {"contents": "read"})
                 self.assertNotIn("secrets.", text)
-                self.assertNotIn("id-token", text)
                 self.assertNotIn("env", workflow)
                 for job in workflow["jobs"].values():
+                    permissions = {"contents": "read", "security-events": "write"}
+                    if name == "scorecard-publish":
+                        permissions["id-token"] = "write"
                     self.assertEqual(
                         job["permissions"],
-                        {"contents": "read", "security-events": "write"},
+                        permissions,
                     )
                     self.assertGreater(int(job["timeout-minutes"]), 0)
                     self.assertNotIn("continue-on-error", job)
@@ -82,7 +92,7 @@ class SupplyChainWorkflowTests(unittest.TestCase):
         self.assertTrue(analyze["with"]["output"])
 
     def test_sarif_artifacts_remain_visible_on_failure(self):
-        for name in ("codeql", "scorecard"):
+        for name in ("codeql", "scorecard", "scorecard-publish"):
             with self.subTest(workflow=name):
                 workflow, _ = self.load_workflow(name)
                 for job in workflow["jobs"].values():
@@ -102,8 +112,7 @@ class SupplyChainWorkflowTests(unittest.TestCase):
         workflow, _ = self.load_workflow("scorecard")
         job = workflow["jobs"]["scorecard"]
         self.assertIn("github.event_name == 'pull_request'", job["if"])
-        self.assertIn("github.event.repository.default_branch", job["if"])
-        self.assertIn("github.ref == format('refs/heads/{0}'", job["if"])
+        self.assertIn("github.event.repository.fork == false", job["if"])
         score = next(s for s in job["steps"] if s.get("uses", "").startswith("ossf/"))
         self.assertEqual(score["with"]["publish_results"], "false")
         self.assertEqual(score["with"]["results_format"], "sarif")
@@ -111,6 +120,40 @@ class SupplyChainWorkflowTests(unittest.TestCase):
         self.assertEqual(sarif["with"]["sarif_file"], score["with"]["results_file"])
         self.assertIn("always()", sarif["if"])
         self.assertIn("hashFiles(", sarif["if"])
+
+    def test_badge_publisher_is_single_restricted_default_branch_job(self):
+        workflow, text = self.load_workflow("scorecard-publish")
+        self.assertEqual(set(workflow["jobs"]), {"publish"})
+        self.assertNotIn("pull_request", workflow["on"])
+        self.assertNotIn("pull_request_target", workflow["on"])
+        self.assertNotIn("env", workflow)
+        self.assertNotIn("defaults", workflow)
+        job = workflow["jobs"]["publish"]
+        self.assertIn("github.event.repository.fork == false", job["if"])
+        self.assertIn("github.event.repository.default_branch", job["if"])
+        self.assertIn("github.ref == format('refs/heads/{0}'", job["if"])
+        for forbidden in ("env", "defaults", "container", "services"):
+            self.assertNotIn(forbidden, job)
+        allowed = (
+            "actions/checkout@",
+            "ossf/scorecard-action@",
+            "actions/upload-artifact@",
+            "github/codeql-action/upload-sarif@",
+        )
+        for step in job["steps"]:
+            self.assertNotIn("run", step)
+            self.assertTrue(step.get("uses", "").startswith(allowed))
+        score = next(step for step in job["steps"] if step["uses"].startswith("ossf/"))
+        self.assertEqual(score["with"]["publish_results"], "true")
+        readme = (ROOT / "README.md").read_text()
+        self.assertIn(
+            "https://api.scorecard.dev/projects/github.com/deploywhisper/deploywhisper/badge",
+            readme,
+        )
+        self.assertIn(
+            "https://scorecard.dev/viewer/?uri=github.com/deploywhisper/deploywhisper",
+            readme,
+        )
 
     def test_scorecard_summary_uses_trusted_literal_text_only(self):
         workflow, _ = self.load_workflow("scorecard")
@@ -165,6 +208,8 @@ class SupplyChainWorkflowTests(unittest.TestCase):
         guide = (ROOT / "docs/security/supply-chain-scanning.md").read_text()
         self.assertIn("scorecard-sarif", guide)
         self.assertIn("publish_results: false", guide)
+        self.assertIn("publish_results: true", guide)
+        self.assertIn("first default-branch publishing run", guide)
         self.assertIn("private disclosure", guide)
         self.assertIn("recorded after integration", guide)
 

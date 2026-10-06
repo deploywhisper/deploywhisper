@@ -1,13 +1,8 @@
 name: OpenSSF Scorecard
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
     branches: [main, develop]
-  schedule:
-    - cron: "37 5 * * 1"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,9 +14,9 @@ concurrency:
 jobs:
   scorecard:
     name: Scorecard posture
-    # PR runs inspect the checkout locally; repository/API checks use the
-    # default branch. Never publish a feature/release branch as that baseline.
-    if: github.event_name == 'pull_request' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    # Base-repository PRs, including fork contributions, get unpublished local
+    # scans. Workflow execution inside a fork repository is unsupported.
+    if: github.event_name == 'pull_request' && github.event.repository.fork == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -59,7 +54,7 @@ jobs:
           ## OpenSSF Scorecard
 
           PR local runs inspect the submitted checkout and provide a partial posture assessment.
-          Full default-branch runs include repository/API checks. Compare those runs for the baseline.
+          Full default-branch runs and badge publication use the separate restricted publishing workflow.
           Available SARIF is retained as the scorecard-sarif artifact and uploaded to the Security code scanning tab.
           Scan or upload failures remain visible in this job; a missing report is not a clean result.
           Results are not published to the external Scorecard service.

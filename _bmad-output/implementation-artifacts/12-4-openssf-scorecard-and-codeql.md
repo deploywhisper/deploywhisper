@@ -28,6 +28,7 @@ So that supply-chain posture is visible.
 - [x] Add or update deterministic regression coverage for the changed behavior. (AC: all)
 - [x] Update relevant docs or examples if the story changes user-visible, operator, API, CLI, integration, or contribution behavior. (AC: all)
 - [x] Run required validation and record commands/results in the Dev Agent Record. (AC: all)
+- [x] Add the user-requested official Scorecard badge and a restricted default-branch publisher; verify PR scans stay unpublished. (AC: 1)
 
 ## Dev Notes
 
@@ -93,7 +94,7 @@ Codex with native subagents for official-source research and bounded workflow/te
 
 - Implementation plan: add SHA-pinned, least-privilege CodeQL/Scorecard workflows with safe PR behavior and retained SARIF; document coverage and weekly owner-based triage; verify workflow contracts/actionlint, actual full repository baseline and live PR execution.
 - CodeQL default setup was not configured; repository is public and its default branch is `develop`. Advanced analysis covers Python, JavaScript/TypeScript and Actions with no-build mode and extended security queries.
-- Scorecard PR mode is local/partial; repository/API checks require the default branch. The job follows default-branch metadata and disables external badge/API publication, PAT inputs and OIDC privileges. Full hosted CLI baseline at `495f845` scored 3.8/10; observed high-priority/unknown signing checks have assigned follow-up [#131](https://github.com/deploywhisper/deploywhisper/issues/131), with no unsupported claim that they are safe.
+- Scorecard PR mode is local/partial; repository/API checks require the default branch. The initial implementation disabled external publication. The subsequent user-requested badge uses a separate restricted publisher as recorded below; PR-local scans retain no publication/OIDC privileges. Full hosted CLI baseline at `495f845` scored 3.8/10; observed high-priority/unknown signing checks have assigned follow-up [#131](https://github.com/deploywhisper/deploywhisper/issues/131), with no unsupported claim that they are safe.
 - No product/backend/UI behavior, runtime dependency, constructor/schema or release-policy setting changed. UI validation not applicable.
 - A draft PR is used to verify real GitHub analysis, processing and artifacts before marking this story ready for review. Default-branch workflow verification remains a separate post-integration event.
 
@@ -106,13 +107,14 @@ Codex with native subagents for official-source research and bounded workflow/te
 - Live validation head `df01ebd`, analyzed PR merge `0e33ca4`: [CodeQL run](https://github.com/deploywhisper/deploywhisper/actions/runs/37489620206) completed all three language jobs, retained nonempty per-language SARIF artifacts and uploaded/processed **zero results** in each category. [Scorecard run](https://github.com/deploywhisper/deploywhisper/actions/runs/37489620101) completed local PR mode, retained `scorecard-sarif` and uploaded/processed **70 results**. GitHub alerts API confirms all 70 are maintainer-visible, including five High results (alerts #1/#3/#4/#5/#70), all mapped to assigned follow-up #131. No analysis processing errors. [PR CI](https://github.com/deploywhisper/deploywhisper/actions/runs/37489620053) also passed.
 - Full repository CLI baseline at `495f845`, Scorecard **v5.5.0**, scored **3.8/10**; high-priority posture gaps and unknown release-signing coverage are recorded with owner, next review date and [follow-up #131](https://github.com/deploywhisper/deploywhisper/issues/131). SAST and pinning are Medium per official definitions. No unknown/failed control is treated as passing or accepted as safe. A green scanner execution is not a clean security posture.
 - Independent read-only verifier passed focused tests and found no workflow/security blocker; it confirmed least privilege, pins, safe triggers, scoped/default behavior, artifacts and finding ownership. No new dependencies or custom report abstractions. Official action versions and pins were verified through release metadata and peeled tags.
-- Limits: full default-branch workflow execution is a post-integration event and is not inferred from the PR-local scan. The baseline's advisory reports still require version/manifest triage under #131. External Scorecard publication is intentionally disabled. Reviewer Git Flow closeout remains the next step after code review; no protected-branch merge was performed by this workflow.
+- Limits: full default-branch workflow execution is a post-integration event and is not inferred from the PR-local scan. The baseline's advisory reports still require version/manifest triage under #131. PR-local Scorecard publication stays disabled; the later requested default-branch badge publisher requires post-integration verification. Reviewer Git Flow closeout remains the next step after code review; no protected-branch merge was performed by this workflow.
 - `bmad-help` next step: `bmad-code-review` for Story 12.4; Story 12.5 remains ready-for-dev until this review/closeout is handled.
 
 ### File List
 
 - `.github/workflows/codeql.yml`
 - `.github/workflows/scorecard.yml`
+- `.github/workflows/scorecard-publish.yml`
 - `tests/test_infra/test_supply_chain_workflows.py`
 - `README.md`
 - `SECURITY.md`
@@ -124,8 +126,17 @@ Codex with native subagents for official-source research and bounded workflow/te
 - `_bmad-output/implementation-artifacts/12-4-openssf-scorecard-and-codeql.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
+### User-requested Scorecard Badge — 2026-10-06
+
+- Added the official Scorecard API badge and viewer link beside the README badges. User request supersedes the original no-publication choice. PR-local scans remain unpublished and lack OIDC; a separate `scorecard-publish.yml` single job runs only on the non-fork default branch, with job-scoped OIDC/security-events write and only approved SHA-pinned actions. It has no PR trigger, environment/default overrides, shell steps, services or repository execution, satisfying upstream publication-provenance restrictions.
+- Updated guide and ledger to distinguish PR artifacts, full repository scans and public badge publication. The official API currently returns 404/no published result; the badge SVG shows `invalid repo path` until the first repository publication. The repository itself is public/non-fork and the URL matches upstream's documented badge format. No score or successful publication is fabricated. First publication is a post-integration default-branch event; no merge/default-branch setting change was made to bypass that boundary.
+- Badge-specific regressions first failed (**7 failing cases**), then passed: **8 tests +15 subtests**. They enforce the separate restricted publisher, no PR/OIDC/publication crossover, action whitelist, credential-free checkout, default/fork guard and official badge/viewer URLs. Independent reviewer verified the addon with no blocker. actionlint passed all three scan workflows.
+- Final badge-source verification: `bash scripts/ci-local.sh`: **1,766 tests across all nine directories**; `./.venv/bin/python -m unittest discover -q`: **494 passed**, one optional skip; `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: **431 passed +167 subtests**. Ruff lint/format (**295 files**) and diff checks passed. Logs: `/private/tmp/story12-4-badge-ci.log`, `/private/tmp/story12-4-badge-unittest.log`, `/private/tmp/story12-4-badge-shard.log`. UI validation not applicable.
+- The badge update is included in the same Story 12.4 draft PR. PR-local Scorecard/CodeQL will be rechecked on the updated branch; trusted publisher execution and badge score population remain pending the first integrated default-branch run.
+
 ## Change Log
 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-10-06: Started baseline security workflows, owner-based finding dispositions, static regressions and live validation on the dedicated feature branch.
 - 2026-10-06: CodeQL/Scorecard live runs, SARIF visibility/artifacts, full local CI and high-priority follow-up verified; story/sprint moved to review on draft PR #132.
+- 2026-10-06: Added requested official Scorecard badge and isolated OIDC-backed default-branch publisher; badge safety regressions and full local CI passed; first publication remains post-integration verification.

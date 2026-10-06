@@ -12,6 +12,7 @@ DeployWhisper helps platform engineers, DevOps teams, and SREs review deployment
 
 <p>
   <a href="https://github.com/deploywhisper/deploywhisper/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/deploywhisper/deploywhisper/ci.yml?branch=develop&label=CI&style=flat-square" alt="CI"/></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/deploywhisper/deploywhisper"><img src="https://api.scorecard.dev/projects/github.com/deploywhisper/deploywhisper/badge" alt="OpenSSF Scorecard"/></a>
   <a href="https://github.com/deploywhisper/deploywhisper/stargazers"><img src="https://img.shields.io/github/stars/deploywhisper/deploywhisper?style=flat-square" alt="GitHub stars"/></a>
   <a href="https://github.com/deploywhisper/deploywhisper/network/members"><img src="https://img.shields.io/github/forks/deploywhisper/deploywhisper?style=flat-square" alt="GitHub forks"/></a>
   <a href="https://github.com/deploywhisper/deploywhisper/issues"><img src="https://img.shields.io/github/issues/deploywhisper/deploywhisper?style=flat-square" alt="GitHub issues"/></a>

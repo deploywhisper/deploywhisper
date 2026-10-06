@@ -62,4 +62,7 @@ scope; decisions expire on the next review date or when that scope changes.
 - [Sanitized PR verification summary](../verification/story-12-4/pr-scan-summary.json).
   Raw SARIF remains in the linked run artifacts/code-scanning interface.
 - Default-branch workflow execution remains a distinct post-integration
-  verification event; no badge/public API publication is enabled.
+  verification event. The user-requested README badge/public API publication is
+  enabled only in the separate restricted default-branch publishing workflow;
+  first publication and badge population are pending integration, not inferred
+  from PR-local or CLI baseline success.
