@@ -12,19 +12,22 @@ from pydantic import BaseModel, Field
 
 from models.database import SessionLocal
 from models.repositories.incident_ingestion_sources import (
+    list_incident_ingestion_source_files,
     list_incident_ingestion_sources,
     list_managed_incident_source_files,
 )
 from models.repositories.incident_records import (
     count_incident_records_by_sources,
     delete_incident_records_by_sources,
-    list_incident_records,
+    list_incident_source_files,
 )
 from services.content_security import (
     redact_reference,
+    redact_scope_error_message,
     redact_text,
     redact_value,
     sensitive_artifact_values,
+    sensitive_submission_values,
 )
 from services.backtesting_service import invalidate_backtesting_snapshot
 from services.incident_service import (
@@ -130,14 +133,9 @@ def import_incident_files(
 ) -> IncidentImportResult:
     """Validate and import simple Markdown, YAML, and JSON incident files."""
     raw_files = files
-    sensitive_values = tuple(
-        {
-            value
-            for item in files
-            for value in sensitive_artifact_values(
-                item.content.encode("utf-8", errors="replace")
-            )
-        }
+    sensitive_values = sensitive_submission_values(
+        (item.source_file, item.content.encode("utf-8", errors="replace"))
+        for item in files
     )
     files = [
         _screen_import_file(item, sensitive_values=sensitive_values) for item in files
@@ -170,7 +168,7 @@ def import_incident_files(
                 IncidentImportFieldError(
                     source_file="batch",
                     field=_scope_error_field(exc),
-                    message=_scope_error_message(exc, sensitive_values),
+                    message=redact_scope_error_message(exc.message, sensitive_values),
                 )
             ]
         ) from None
@@ -271,14 +269,9 @@ def reindex_incident_files(
 ) -> IncidentReindexResult:
     """Replace indexed incident entries from source files within one project scope."""
     raw_files = files
-    sensitive_values = tuple(
-        {
-            value
-            for item in files
-            for value in sensitive_artifact_values(
-                item.content.encode("utf-8", errors="replace")
-            )
-        }
+    sensitive_values = sensitive_submission_values(
+        (item.source_file, item.content.encode("utf-8", errors="replace"))
+        for item in files
     )
     files = [
         _screen_import_file(item, sensitive_values=sensitive_values) for item in files
@@ -307,7 +300,7 @@ def reindex_incident_files(
         )
     except ProjectResolutionError as exc:
         raise ProjectResolutionError(
-            exc.code, _scope_error_message(exc, sensitive_values)
+            exc.code, redact_scope_error_message(exc.message, sensitive_values)
         ) from None
     resolved_workspace_id = workspace.id if workspace is not None else None
     files = _reuse_source_aliases(
@@ -545,23 +538,6 @@ def _record_source_failures(
                 )
 
 
-def _scope_error_message(
-    exc: ProjectResolutionError, sensitive_values: tuple[str, ...]
-) -> str:
-    variants = tuple(
-        {
-            variant
-            for value in sensitive_values
-            for variant in (
-                value,
-                value.lower(),
-                re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-"),
-            )
-        }
-    )
-    return redact_text(exc.message, sensitive_values=variants)
-
-
 def _reuse_source_aliases(
     raw_files: list[IncidentImportFile],
     files: list[IncidentImportFile],
@@ -571,19 +547,21 @@ def _reuse_source_aliases(
     project_wide: bool = False,
 ) -> list[IncidentImportFile]:
     with SessionLocal() as session:
-        aliases = {
-            source.source_file
-            for source in list_incident_ingestion_sources(
-                session, project_id=project_id, workspace_id=workspace_id
+        aliases = set(
+            list_incident_ingestion_source_files(
+                session,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                project_wide=project_wide,
             )
-            if project_wide or source.workspace_id == workspace_id
-        }
+        )
         aliases.update(
-            record.source_file
-            for record in list_incident_records(
-                session, project_id=project_id, workspace_id=workspace_id
+            list_incident_source_files(
+                session,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                project_wide=project_wide,
             )
-            if project_wide or record.workspace_id == workspace_id
         )
     screened = []
     for raw, item in zip(raw_files, files, strict=True):
@@ -616,6 +594,26 @@ def _screen_incident_record(
     values = sensitive_values + sensitive_artifact_values(
         raw_content.encode("utf-8", errors="replace")
     )
+    # These retained fields become prose during normalization. Convert them
+    # while submission sensitivity is available, preserving missing-value
+    # validation and the shared severity protocol exemption.
+    record = dict(record)
+    for field in (
+        "title",
+        "severity",
+        "incident_date",
+        "root_cause",
+        "trigger_change",
+        "rollback_path",
+    ):
+        if _has_value(record.get(field)):
+            record[field] = str(record[field])
+    if isinstance(record.get("source"), dict):
+        source = dict(record["source"])
+        for field in ("system", "reference"):
+            if _has_value(source.get(field)):
+                source[field] = str(source[field])
+        record["source"] = source
     safe = redact_value(record, sensitive_values=values)
     if safe != record and isinstance(safe.get("redaction"), dict):
         safe["redaction"]["status"] = "redacted"

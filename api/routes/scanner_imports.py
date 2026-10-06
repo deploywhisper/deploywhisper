@@ -11,6 +11,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from api.errors import ApiError, ApiRoute, api_error_handler
 from api.schemas import ErrorResponse, ListMetaPayload, build_meta
 from services import scanner_import_service as scanner_import_service_module
+from services.content_security import (
+    redact_scope_error_message,
+    sensitive_submission_values,
+)
 from services.project_service import (
     has_restricted_project_scope,
     require_project_permission,
@@ -127,7 +131,9 @@ def _authorization_context(
     }
 
 
-def _project_api_error(exc: ValueError) -> ApiError:
+def _project_api_error(
+    exc: ValueError, sensitive_values: tuple[str, ...] = ()
+) -> ApiError:
     code = getattr(exc, "code", "invalid_project_request")
     status_code = getattr(exc, "status_code", None) or (
         404 if code in {"project_not_found", "workspace_not_found"} else 400
@@ -135,7 +141,9 @@ def _project_api_error(exc: ValueError) -> ApiError:
     return ApiError(
         status_code=status_code,
         code=code,
-        message=getattr(exc, "message", str(exc)),
+        message=redact_scope_error_message(
+            getattr(exc, "message", str(exc)), sensitive_values
+        ),
     )
 
 
@@ -196,6 +204,7 @@ def _raise_project_error(
     *,
     authorization: dict[str, object],
     project_id: int | None,
+    request: SarifImportRequest,
 ) -> None:
     if _should_mask_scope_reference_error(
         authorization=authorization,
@@ -203,7 +212,10 @@ def _raise_project_error(
         exc=exc,
     ):
         raise _project_scope_forbidden_error() from exc
-    raise _project_api_error(exc) from exc
+    sensitive_values = sensitive_submission_values(
+        [(request.source_file, request.content.encode("utf-8", errors="replace"))]
+    )
+    raise _project_api_error(exc, sensitive_values) from exc
 
 
 def _validation_error(
@@ -309,6 +321,7 @@ def import_sarif(
             exc,
             authorization=auth_context,
             project_id=request.project_id,
+            request=request,
         )
     return {
         "data": result.model_dump(mode="json"),
@@ -376,6 +389,7 @@ def import_semgrep(
             exc,
             authorization=auth_context,
             project_id=request.project_id,
+            request=request,
         )
     return {
         "data": result.model_dump(mode="json"),

@@ -7,7 +7,7 @@ import binascii
 import json
 import re
 from typing import Any, Iterable, get_args
-from urllib.parse import quote, quote_plus, unquote
+from urllib.parse import quote, quote_plus, unquote, unquote_plus
 
 import yaml
 from config import configured_credential_values
@@ -200,6 +200,18 @@ def _sensitive_variants(item: str) -> set[str]:
 
 
 def _text_sensitive_values(text: str) -> set[str]:
+    """Collect lexical credentials across the same bounded decoded candidates."""
+    found: set[str] = set()
+    for _ in range(9):
+        found.update(_lexical_sensitive_values(text))
+        decoded = unquote(text)
+        if decoded == text:
+            break
+        text = decoded
+    return found
+
+
+def _lexical_sensitive_values(text: str) -> set[str]:
     found: set[str] = set()
     for match in _ASSIGNMENT.finditer(text):
         raw = match.group("value")
@@ -234,16 +246,28 @@ def _text_sensitive_values(text: str) -> set[str]:
         (_URL_CREDENTIAL, "credential"),
     ):
         for match in pattern.finditer(text):
-            found.update(_sensitive_variants(match.group(group)))
+            credential = match.group(group)
+            found.update(_sensitive_variants(credential))
+            if pattern is _URL_CREDENTIAL:
+                # Decode the credential before decoding the whole URL: an
+                # escaped slash or @ would otherwise destroy userinfo syntax.
+                for _ in range(8):
+                    decoded = unquote(credential)
+                    if decoded == credential:
+                        break
+                    credential = decoded
+                    found.update(_sensitive_variants(credential))
     for match in _QUERY_PARAMETER.finditer(text):
         if _sensitive_query_name(match.group("name")):
-            candidate = match.group("credential")
-            for _ in range(9):
-                found.update(_sensitive_variants(candidate))
-                decoded = unquote(candidate)
-                if decoded == candidate:
-                    break
-                candidate = decoded
+            # Keep literal '+' values as well as form-decoded OAuth echoes.
+            for decoder in (unquote, unquote_plus):
+                candidate = match.group("credential")
+                for _ in range(9):
+                    found.update(_sensitive_variants(candidate))
+                    decoded = decoder(candidate)
+                    if decoded == candidate:
+                        break
+                    candidate = decoded
     return found
 
 
@@ -252,6 +276,22 @@ def redact_text(value: str, *, sensitive_values: Iterable[str] = ()) -> str:
     return _redact_text(
         value, sensitive_values=tuple(sensitive_values) + configured_credential_values()
     )
+
+
+def redact_scope_error_message(message: str, sensitive_values: tuple[str, ...]) -> str:
+    """Screen credential echoes after scope resolution lowercases or slugs keys."""
+    variants = tuple(
+        {
+            variant
+            for value in sensitive_values + configured_credential_values()
+            for variant in (
+                value,
+                value.lower(),
+                re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-"),
+            )
+        }
+    )
+    return redact_text(message, sensitive_values=variants)
 
 
 def redact_reference(
@@ -273,6 +313,26 @@ def redact_reference(
 
 
 def _redact_text(value: str, *, sensitive_values: Iterable[str] = ()) -> str:
+    """Screen retained text without exposing credentials hidden by URL encoding."""
+    values = tuple(sensitive_values)
+    screened = _redact_lexical_text(value, sensitive_values=values)
+    if "%" not in screened:
+        return screened
+    candidate = screened
+    # Match reference screening's bound. Keep harmless encoding unchanged, but
+    # block the whole scalar if decoded content is sensitive or still changing
+    # at the bound; its original spelling cannot safely identify a replacement.
+    for _ in range(9):
+        if _redact_lexical_text(candidate, sensitive_values=values) != candidate:
+            return REDACTED
+        decoded = unquote(candidate)
+        if decoded == candidate:
+            return screened
+        candidate = decoded
+    return REDACTED
+
+
+def _redact_lexical_text(value: str, *, sensitive_values: Iterable[str] = ()) -> str:
     """Apply lexical screening with the caller's prepared credential context."""
     # Consume whole scalar bodies before replacing their header or delimiter.
     text = _HEREDOC_ASSIGNMENT.sub(lambda m: m.group("prefix") + REDACTED + "\n", value)

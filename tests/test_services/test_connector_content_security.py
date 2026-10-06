@@ -2,14 +2,104 @@
 
 from __future__ import annotations
 import logging
+import json
 import os
 import unittest
 from unittest.mock import patch
+from urllib.parse import quote
 from services import content_security as security
 from logging_config import SafeFormatter
 
 
 class ConnectorContentSecurityTests(unittest.TestCase):
+    @staticmethod
+    def encoded(value, rounds):
+        for _ in range(rounds):
+            value = quote(value, safe="")
+        return value
+
+    def test_repeated_encoding_screens_named_password_echoes_in_nested_values(self):
+        secret = "opaque narrative/password!:credential"
+        encoded = self.encoded(secret, 5)
+        for echo in (encoded, encoded.lower(), encoded.replace("2F", "2f")):
+            with self.subTest(echo=echo):
+                result = security.redact_value(
+                    {
+                        "password": secret,
+                        "nested": [{"message": f"Scanner returned {echo}"}],
+                        "payload_json": json.dumps({"note": echo}),
+                    }
+                )
+                self.assertEqual(result["nested"][0]["message"], security.REDACTED)
+                self.assertEqual(
+                    json.loads(result["payload_json"])["note"], security.REDACTED
+                )
+                self.assertEqual(security.redact_value(result), result)
+
+    def test_repeated_encoding_screens_configured_and_direct_text_credentials(self):
+        secret = "opaque configured/credential!"
+        with patch.dict(os.environ, {"GH_TOKEN": secret}):
+            encoded = self.encoded(secret, 5)
+            self.assertEqual(
+                security.redact_text(f"Incident contains {encoded}"), security.REDACTED
+            )
+            self.assertEqual(
+                security.redact_value({"note": encoded})["note"], security.REDACTED
+            )
+        self.assertEqual(
+            security.redact_text(self.encoded("password=opaque-password", 5)),
+            security.REDACTED,
+        )
+        self.assertEqual(
+            security.redact_text("Issue: password=opaque-password; retry"),
+            "Issue: password=[REDACTED]; retry",
+        )
+
+    def test_encoded_prose_and_literal_percent_keep_exact_original_spelling(self):
+        for value in (
+            "Progress is 95% complete",
+            "Run%20completed%2fnext",
+            self.encoded("ordinary prose!", 5),
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(security.redact_text(value), value)
+                self.assertEqual(
+                    security.redact_value({"note": value}), {"note": value}
+                )
+        with patch.dict(os.environ, {"GH_TOKEN": "high"}):
+            self.assertEqual(
+                security.redact_value({"severity": "high", "note": "high"}),
+                {"severity": "high", "note": security.REDACTED},
+            )
+
+    def test_unresolved_percent_encoding_at_bound_fails_closed(self):
+        for rounds in (9, 20):
+            value = self.encoded("ordinary prose!", rounds)
+            with self.subTest(rounds=rounds):
+                self.assertEqual(security.redact_reference(value), security.REDACTED)
+                self.assertEqual(security.redact_text(value), security.REDACTED)
+                self.assertEqual(
+                    security.redact_value({"note": value})["note"], security.REDACTED
+                )
+
+    def test_encoded_filename_credentials_collect_plaintext_sibling_context(self):
+        for filename in (
+            "password%3D%27Opaque%2FValue%21%27.json",
+            "https://user:Opaque%2FValue%21@example.invalid/incident.json",
+            self.encoded("password='Opaque/Value!'", 5) + ".json",
+        ):
+            with self.subTest(filename=filename):
+                values = security.sensitive_submission_values([(filename, None)])
+                self.assertIn("Opaque/Value!", values)
+                self.assertEqual(
+                    security.redact_text("Opaque/Value!", sensitive_values=values),
+                    security.REDACTED,
+                )
+        self.assertEqual(
+            security.sensitive_submission_values([("ordinary%20incident.json", None)]),
+            (),
+        )
+
     def test_configured_connector_values_are_screened_without_labels(self):
         for name in (
             "GH_TOKEN",
@@ -135,6 +225,38 @@ class ConnectorContentSecurityTests(unittest.TestCase):
         self.assertEqual(result["metadata"]["note"], security.REDACTED)
         self.assertEqual(result["ref"], "/run/credentials/kubeconfig")
 
+    def test_oauth_form_decoding_screens_siblings_and_preserves_literal_plus(self):
+        for encoded in (
+            "opaque+oauth+state",
+            "opaque%2Boauth%2Bstate",
+            "opaque%252Boauth%252Bstate",
+        ):
+            with self.subTest(encoded=encoded):
+                url = f"/callback?state={encoded}&project_id=42"
+                values = security.sensitive_artifact_values(url.encode())
+                self.assertIn("opaque+oauth+state", values)
+                self.assertIn("opaque oauth state", values)
+                screened = security.redact_value(
+                    {
+                        "url": url,
+                        "literal": "opaque+oauth+state",
+                        "decoded": "opaque oauth state",
+                    },
+                    sensitive_values=values,
+                )
+                self.assertEqual(screened["literal"], security.REDACTED)
+                self.assertEqual(screened["decoded"], security.REDACTED)
+                self.assertIn("project_id=42", screened["url"])
+
+    def test_scope_error_screen_covers_raw_lowercase_and_project_slug(self):
+        secret = "Opaque Review/Value!"
+        message = f"Unknown project_key=opaque-review-value; lowercase=opaque review/value!; raw={secret}"
+        screened = security.redact_scope_error_message(message, (secret,))
+        self.assertNotIn(secret, screened)
+        self.assertNotIn(secret.lower(), screened)
+        self.assertNotIn("opaque-review-value", screened)
+        self.assertIn("Unknown project_key=", screened)
+
     def test_reference_screen_handles_nested_encoding(self):
         with patch.dict(os.environ, {"GH_TOKEN": "opaque-reference-credential"}):
             self.assertEqual(
@@ -153,3 +275,9 @@ class ConnectorContentSecurityTests(unittest.TestCase):
                 security.redact_reference("/run/credentials/kubeconfig"),
                 "/run/credentials/kubeconfig",
             )
+
+    def test_scope_error_screen_normalizes_configured_credentials_without_upload(self):
+        with patch.dict(os.environ, {"GH_TOKEN": "Configured_Secret_ABC"}):
+            message = "Unknown project reference: project_key=configured-secret-abc."
+            screened = security.redact_scope_error_message(message, ())
+        self.assertEqual(screened, "Unknown project reference: project_key=[REDACTED].")

@@ -285,6 +285,9 @@ def _screen_topology_payload(
     payload: dict[str, Any], *, sensitive_values: tuple[str, ...] = ()
 ) -> dict[str, Any]:
     """Screen retained context without changing the graph's stable identities."""
+    sensitive_values = tuple(
+        set(sensitive_values) | set(_sensitive_topology_values(payload))
+    )
     services = payload.get("services", [])
     if isinstance(services, list):
         for service in services:
@@ -303,7 +306,9 @@ def _screen_topology_payload(
     import_metadata = _import_metadata(screened)
     for field in ("source_ref", "requested_source_ref"):
         if isinstance(import_metadata.get(field), str):
-            import_metadata[field] = redact_reference(import_metadata[field])
+            import_metadata[field] = redact_reference(
+                import_metadata[field], sensitive_values=sensitive_values
+            )
     if isinstance(services, list) and isinstance(screened.get("services"), list):
         for original, safe in zip(services, screened["services"]):
             if not isinstance(original, dict) or not isinstance(safe, dict):
@@ -317,10 +322,14 @@ def _screen_topology_payload(
                 )
             for field in ("label", "owner"):
                 if isinstance(safe.get(field), str):
-                    safe[field] = redact_reference(safe[field])
+                    safe[field] = redact_reference(
+                        safe[field], sensitive_values=sensitive_values
+                    )
             if isinstance(safe.get("owners"), list):
                 safe["owners"] = [
-                    redact_reference(owner) if isinstance(owner, str) else owner
+                    redact_reference(owner, sensitive_values=sensitive_values)
+                    if isinstance(owner, str)
+                    else owner
                     for owner in safe["owners"]
                 ]
             keys = original.get("resource_keys")
@@ -328,7 +337,10 @@ def _screen_topology_payload(
                 safe["resource_keys"] = [
                     str(key).strip()
                     for key in safe.get("resource_keys", [])
-                    if redact_reference(str(key).strip()) == str(key).strip()
+                    if redact_reference(
+                        str(key).strip(), sensitive_values=sensitive_values
+                    )
+                    == str(key).strip()
                     and REDACTED not in str(key)
                 ]
     return screened

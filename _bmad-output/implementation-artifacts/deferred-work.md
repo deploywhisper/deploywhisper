@@ -96,3 +96,7 @@
 ## Deferred from: code review of 12-3-connector-credential-handling-and-redaction-audit.md (2026-10-06)
 
 - Pre-existing scanner imports remain standalone API evidence and are not automatically attached by the analysis pipeline to persisted reports. Connector browser coverage now verifies scanner identity/redaction through the import API and actual imported incident matching in reports. Automatic scanner attachment needs a separate evidence/report integration workstream; this privacy audit does not change analysis inputs or scoring semantics.
+
+## Deferred from: code review of 12-3-connector-credential-handling-and-redaction-audit.md (2026-10-06, fresh re-review)
+
+- **Resolved 2026-10-06:** Incident reindex and scanner import permission prechecks resolve project/workspace references before the service collects sensitive values from imported content (`api/routes/incidents.py:216`, `api/routes/scanner_imports.py:182,282`). An isolated temporary DB/TestClient request with a valid project ID and an unknown key echoed from a named imported password returns the key verbatim in a 404 error. Direct incident ingestion also resolves scope without contextual error screening (`services/incident_service.py:335,355`). Originally confirmed baseline behavior. This follow-up adds request-context error screening, including configured/normalized credential variants, while preserving authorization ordering; isolated API tests cover incident reindex and both scanner routes, and direct ingestion service tests cover the same boundary.

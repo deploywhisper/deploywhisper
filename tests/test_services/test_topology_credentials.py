@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import quote
 
 import services.topology_service as topology
 
@@ -16,6 +17,136 @@ SECRET = "synthetic-topology-secret-731"
 
 
 class TopologyCredentialTests(unittest.TestCase):
+    def test_manual_topology_discovers_credentials_before_projection(self):
+        secret = "manual-review/value!"
+        encoded = secret
+        for _ in range(5):
+            encoded = quote(encoded, safe="")
+        payload = {
+            "connector": {"password": secret},
+            "services": [
+                {
+                    "id": "api",
+                    "label": encoded,
+                    "owner": encoded,
+                    "owners": [encoded, "safe-team"],
+                    "resource_keys": [encoded, "safe-key"],
+                    "downstream": [],
+                }
+            ],
+            "metadata": {
+                "import": {"source_ref": encoded, "requested_source_ref": encoded}
+            },
+        }
+        screened = topology._screen_topology_payload(payload)
+        self.assertNotIn(encoded, json.dumps(screened))
+        self.assertNotIn(secret, json.dumps(screened))
+        projected = topology._build_custom_change_set(payload)
+        self.assertNotIn(encoded, projected.model_dump_json())
+        self.assertEqual(projected.services[0]["id"], "api")
+        self.assertEqual(projected.services[0]["resource_keys"], ["safe-key"])
+        self.assertEqual(
+            projected.services[0]["owners"], [topology.REDACTED, "safe-team"]
+        )
+
+    def test_manual_validate_and_save_screen_raw_local_credentials(self):
+        secret = "manual-review/value!"
+        encoded = secret
+        for _ in range(5):
+            encoded = quote(encoded, safe="")
+        raw_text = json.dumps(
+            {
+                "connector": {"password": secret},
+                "services": [
+                    {
+                        "id": "api",
+                        "label": "API",
+                        "owner": encoded,
+                        "resource_keys": ["safe-key"],
+                        "downstream": [],
+                    },
+                ],
+            }
+        )
+        project = {"id": 1, "project_key": "synthetic"}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(topology, "resolve_project_reference"),
+            patch.object(topology, "build_project_payload", return_value=project),
+            patch.object(topology, "resolve_workspace_reference", return_value=None),
+            patch.object(
+                topology,
+                "_topology_scope_path",
+                return_value=Path(directory) / "topology.json",
+            ),
+            patch.object(topology, "_persist_topology_payload") as persist,
+            patch.object(topology, "_save_topology_source_status"),
+            patch.object(topology, "get_topology_status") as get_status,
+        ):
+            status = topology.validate_topology_definition(raw_text, project_id=1)
+            self.assertEqual(status.blocking_errors, [])
+            self.assertNotIn(encoded, status.model_dump_json())
+            self.assertEqual(status.payload["services"][0]["owner"], topology.REDACTED)
+            persist.return_value = get_status.return_value = status
+            saved = topology.save_topology_definition(raw_text, project_id=1)
+            self.assertNotIn(encoded, saved.model_dump_json())
+            persisted_payload = persist.call_args.args[0]
+            self.assertNotIn(encoded, json.dumps(persisted_payload))
+            self.assertNotIn(secret, json.dumps(persisted_payload))
+            self.assertEqual(
+                persisted_payload["services"][0]["owner"], topology.REDACTED
+            )
+            self.assertNotIn("connector", persisted_payload)
+
+    def test_local_discarded_credentials_screen_all_encoded_topology_references(self):
+        secret = "opaque-review/value!"
+        values = topology._sensitive_topology_values(
+            {"resources": [{"attributes": {"password": secret}}]}
+        )
+        self.assertIn(secret, values)
+        for depth in (3, 5):
+            encoded = secret
+            for _ in range(depth):
+                encoded = quote(encoded, safe="")
+            with self.subTest(depth=depth):
+                payload = {
+                    "services": [
+                        {
+                            "id": "api",
+                            "label": encoded,
+                            "owner": encoded,
+                            "owners": [encoded, "safe-team"],
+                            "resource_keys": [encoded, "safe-key"],
+                            "downstream": ["database"],
+                        },
+                        {"id": "database", "label": "database"},
+                    ],
+                    "metadata": {
+                        "import": {
+                            "source_ref": encoded,
+                            "requested_source_ref": encoded,
+                        }
+                    },
+                }
+                screened = topology._screen_topology_payload(
+                    payload, sensitive_values=values
+                )
+                service = screened["services"][0]
+                self.assertEqual(service["label"], topology.REDACTED)
+                self.assertEqual(service["owner"], topology.REDACTED)
+                self.assertEqual(service["owners"], [topology.REDACTED, "safe-team"])
+                self.assertEqual(service["resource_keys"], ["safe-key"])
+                self.assertEqual(service["id"], "api")
+                self.assertEqual(service["downstream"], ["database"])
+                self.assertEqual(
+                    screened["metadata"]["import"],
+                    {
+                        "source_ref": topology.REDACTED,
+                        "requested_source_ref": topology.REDACTED,
+                    },
+                )
+                self.assertNotIn(encoded, json.dumps(screened))
+
     def test_sensitive_instance_index_key_cannot_echo_in_attribute_identity(
         self,
     ) -> None:

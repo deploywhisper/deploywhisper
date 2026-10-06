@@ -67,6 +67,28 @@ def list_managed_incident_source_files(
     return list(session.execute(stmt).scalars().all())
 
 
+def list_incident_ingestion_source_files(
+    session: Session,
+    *,
+    project_id: int,
+    workspace_id: int | None,
+    project_wide: bool = False,
+) -> list[str]:
+    """Read all alias identities, including removed sources, within explicit scope."""
+    stmt = (
+        select(IncidentIngestionSource.source_file)
+        .distinct()
+        .where(IncidentIngestionSource.project_id == project_id)
+    )
+    if not project_wide:
+        stmt = stmt.where(IncidentIngestionSource.workspace_id == workspace_id)
+    return list(
+        session.execute(stmt.order_by(IncidentIngestionSource.source_file))
+        .scalars()
+        .all()
+    )
+
+
 def upsert_incident_ingestion_source(
     session: Session,
     *,

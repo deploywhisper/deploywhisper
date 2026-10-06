@@ -22,12 +22,15 @@ from models.repositories.analysis_reports import get_analysis_report
 from models.repositories.incident_records import (
     create_incident_record,
     list_incident_records,
+    list_incident_source_files,
 )
 from services.content_security import (
     redact_reference,
+    redact_scope_error_message,
     redact_text,
     redact_value,
     sensitive_artifact_values,
+    sensitive_submission_values,
 )
 from services.backtesting_service import invalidate_backtesting_snapshot
 from services.project_service import (
@@ -306,8 +309,8 @@ def ingest_incident_document(
     workspace_key: str | None = None,
 ) -> dict:
     """Normalize and persist an incident document from markdown/plain text input."""
-    sensitive_values = sensitive_artifact_values(
-        content.encode("utf-8", errors="replace")
+    sensitive_values = sensitive_submission_values(
+        [(source_file, content.encode("utf-8", errors="replace"))]
     )
     normalized_content = redact_text(content.strip(), sensitive_values=sensitive_values)
     raw_source_file = source_file
@@ -320,80 +323,87 @@ def ingest_incident_document(
     report = None
     resolved_project_id: int | None = None
     resolved_workspace_id: int | None = None
-    with SessionLocal() as session:
-        if analysis_id is not None:
-            report = get_analysis_report(session, analysis_id, include_evidence=False)
-        if analysis_id is not None and report is None:
-            raise ValueError(f"Analysis report not found: {analysis_id}.")
-        if report is not None:
-            resolved_project_id = report.project_id
-            resolved_workspace_id = report.workspace_id
-            requested_project = (
-                resolve_project_reference(
-                    project_id=project_id, project_key=project_key
+    try:
+        with SessionLocal() as session:
+            if analysis_id is not None:
+                report = get_analysis_report(
+                    session, analysis_id, include_evidence=False
                 )
-                if project_id is not None or project_key is not None
-                else None
-            )
-            if (
-                requested_project is not None
-                and requested_project.id != resolved_project_id
-            ):
-                raise ValueError(
-                    "The supplied project reference does not match the analysis report project."
+            if analysis_id is not None and report is None:
+                raise ValueError(f"Analysis report not found: {analysis_id}.")
+            if report is not None:
+                resolved_project_id = report.project_id
+                resolved_workspace_id = report.workspace_id
+                requested_project = (
+                    resolve_project_reference(
+                        project_id=project_id, project_key=project_key
+                    )
+                    if project_id is not None or project_key is not None
+                    else None
                 )
-            requested_workspace = resolve_workspace_reference(
-                project_id=resolved_project_id,
-                workspace_id=workspace_id,
-                workspace_key=workspace_key,
-            )
-            if (
-                requested_workspace is not None
-                and requested_workspace.id != resolved_workspace_id
-            ):
-                raise ValueError(
-                    "The supplied workspace reference does not match the analysis report workspace."
+                if (
+                    requested_project is not None
+                    and requested_project.id != resolved_project_id
+                ):
+                    raise ValueError(
+                        "The supplied project reference does not match the analysis report project."
+                    )
+                requested_workspace = resolve_workspace_reference(
+                    project_id=resolved_project_id,
+                    workspace_id=workspace_id,
+                    workspace_key=workspace_key,
                 )
-        else:
-            if project_id is None and project_key is None:
-                raise ValueError("Project scope is required for incident records.")
-            project = resolve_project_reference(
-                project_id=project_id,
-                project_key=project_key,
+                if (
+                    requested_workspace is not None
+                    and requested_workspace.id != resolved_workspace_id
+                ):
+                    raise ValueError(
+                        "The supplied workspace reference does not match the analysis report workspace."
+                    )
+            else:
+                if project_id is None and project_key is None:
+                    raise ValueError("Project scope is required for incident records.")
+                project = resolve_project_reference(
+                    project_id=project_id,
+                    project_key=project_key,
+                )
+                workspace = resolve_workspace_reference(
+                    project_id=project.id,
+                    workspace_id=workspace_id,
+                    workspace_key=workspace_key,
+                )
+                resolved_project_id = project.id
+                resolved_workspace_id = workspace.id if workspace is not None else None
+            existing_aliases = set(
+                list_incident_source_files(
+                    session,
+                    project_id=resolved_project_id,
+                    workspace_id=resolved_workspace_id,
+                )
             )
-            workspace = resolve_workspace_reference(
-                project_id=project.id,
-                workspace_id=workspace_id,
-                workspace_key=workspace_key,
+            source_file = screen_incident_source_file(
+                raw_source_file,
+                sensitive_values=sensitive_values,
+                existing_aliases=existing_aliases,
             )
-            resolved_project_id = project.id
-            resolved_workspace_id = workspace.id if workspace is not None else None
-        existing_aliases = {
-            record.source_file
-            for record in list_incident_records(
+            title = _extract_title(normalized_content, source_file)
+            record = create_incident_record(
                 session,
                 project_id=resolved_project_id,
                 workspace_id=resolved_workspace_id,
+                title=title,
+                severity=severity,
+                source_file=source_file,
+                incident_date=incident_date,
+                analysis_id=analysis_id,
+                content=normalized_content,
             )
-            if record.workspace_id == resolved_workspace_id
-        }
-        source_file = screen_incident_source_file(
-            raw_source_file,
-            sensitive_values=sensitive_values,
-            existing_aliases=existing_aliases,
-        )
-        title = _extract_title(normalized_content, source_file)
-        record = create_incident_record(
-            session,
-            project_id=resolved_project_id,
-            workspace_id=resolved_workspace_id,
-            title=title,
-            severity=severity,
-            source_file=source_file,
-            incident_date=incident_date,
-            analysis_id=analysis_id,
-            content=normalized_content,
-        )
+    except ValueError as exc:
+        message = redact_scope_error_message(str(exc), sensitive_values)
+        exc.args = (message,)
+        if hasattr(exc, "message"):
+            exc.message = message
+        raise
     if resolved_project_id is not None:
         invalidate_backtesting_snapshot(project_id=resolved_project_id)
     return {

@@ -23,6 +23,7 @@ from models.repositories.scanner_imports import (
 )
 from services.content_security import (
     redact_reference,
+    redact_scope_error_message,
     redact_value,
     sensitive_artifact_values,
 )
@@ -356,7 +357,8 @@ def _import_parsed_scanner_evidence(
         )
     except ProjectResolutionError as exc:
         raise ProjectResolutionError(
-            exc.code, redact_value(exc.message, sensitive_values=sensitive_values)
+            exc.code,
+            redact_scope_error_message(exc.message, sensitive_values=sensitive_values),
         ) from None
     try:
         _validate_parsed_storage_bounds(file, parsed)
@@ -374,7 +376,7 @@ def _import_parsed_scanner_evidence(
         safe = redact_value(
             item.model_dump(exclude={"identity"}), sensitive_values=sensitive_values
         )
-        for key in ("artifact_uri", "location"):
+        for key in ("artifact_uri", "location", "tool_name", "rule_id", "rule_name"):
             safe[key] = redact_reference(safe[key], sensitive_values=sensitive_values)
         safe_parsed.append(item.model_copy(update=safe))
         # Hash the original identity, but expose only screened query labels.
