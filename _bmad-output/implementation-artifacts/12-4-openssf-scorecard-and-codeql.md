@@ -1,6 +1,6 @@
 # Story 12.4: OpenSSF Scorecard and CodeQL
 
-Status: in-progress
+Status: review
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -32,8 +32,8 @@ So that supply-chain posture is visible.
 
 ### Review Findings — 2026-10-07
 
-- [ ] [Review][Patch][P2] Require fresh Scorecard report provenance before artifact/code-scanning upload [.github/workflows/scorecard.yml:37; .github/workflows/scorecard-publish.yml:41]. Both workflows select checkout-relative `results.sarif` and upload with `always()` plus file existence alone. The pinned scanner exits before formatting on option/scan errors without clearing a pre-existing file. A repository-supplied valid SARIF therefore passes the upload guard when scanning fails before output, creating misleading scanner evidence or fabricated findings/clean results. Isolate fresh outputs or add a scan-outcome/provenance guard and failure regressions for both workflows; preserve legitimate report retention after publication failure without adding forbidden shell steps to the publishing job.
-- [ ] [Review][Patch][P3] Include Critical checks in the baseline disposition regression [tests/test_infra/test_supply_chain_workflows.py:185]. The fixed set includes High checks but excludes `Dangerous-Workflow`/`Webhooks`, which the guide prioritizes as Critical. An in-memory mutation making retained `Dangerous-Workflow` score 0 with no corresponding ledger disposition still passes the real test. Extend the priority set/classification and add a negative ownership/disposition case so Critical failures cannot silently escape this guard.
+- [x] [Review][Patch][P2] Require fresh Scorecard report provenance before artifact/code-scanning upload [.github/workflows/scorecard.yml:37; .github/workflows/scorecard-publish.yml:41]. Both workflows select checkout-relative `results.sarif` and upload with `always()` plus file existence alone. The pinned scanner exits before formatting on option/scan errors without clearing a pre-existing file. A repository-supplied valid SARIF therefore passes the upload guard when scanning fails before output, creating misleading scanner evidence or fabricated findings/clean results. Isolate fresh outputs or add a scan-outcome/provenance guard and failure regressions for both workflows; preserve legitimate report retention after publication failure without adding forbidden shell steps to the publishing job.
+- [x] [Review][Patch][P3] Include Critical checks in the baseline disposition regression [tests/test_infra/test_supply_chain_workflows.py:185]. The fixed set includes High checks but excludes `Dangerous-Workflow`/`Webhooks`, which the guide prioritizes as Critical. An in-memory mutation making retained `Dangerous-Workflow` score 0 with no corresponding ledger disposition still passes the real test. Extend the priority set/classification and add a negative ownership/disposition case so Critical failures cannot silently escape this guard.
 
 ## Dev Notes
 
@@ -152,8 +152,6 @@ Codex with native subagents for official-source research and bounded workflow/te
 - Findings recorded as action items; story/sprint reopened to `in-progress`. No code fix, commit or push performed during this review because follow-up work remains open. `bmad-help` next step: repair the two Story 12.4 findings and rerun review before Git Flow closeout/default-branch integration.
 
 
-## Change Log
-
 ### Review Fix Implementation — 2026-10-07
 
 - Fixed both review findings. Scorecard producer and consumers now use report filenames bound to the immutable checkout SHA, run ID and attempt. Default checkout without a ref/repository override means a tracked report cannot pre-seed its own commit-dependent filename; previous-run/attempt files also miss the exact guard. PR uploads require scanner success, while the restricted publisher preserves fresh formatted output after publication failure without shell cleanup/environment overrides.
@@ -162,9 +160,23 @@ Codex with native subagents for official-source research and bounded workflow/te
 - Focused tests: **14 passed +29 subtests**. actionlint and Ruff lint/format (**296 files**) pass. Smoke **500 tests** (one optional skip), API/CLI/infra **437 +181 subtests** pass; full local CI/live updated-PR verification recorded on completion below. Independent reviewer found no residual blocker. UI validation not applicable.
 - Temporary SARIF fixture content was strengthened to include a valid Scorecard driver/run; predicates and behavior unchanged. Source changes remain on the existing draft PR #132. The first trusted badge publication remains post-integration verification.
 
+
+### Review Fix Verification — 2026-10-07
+
+- Both P2/P3 findings resolved and checked. Independent reviewer reran the guarded failure/retention paths and Critical ownership cases with no residual blocker. Publisher still obeys the approved-action-only layout, default/fork guard, minimum permissions and no repository cleanup/execution.
+- Final `bash scripts/ci-local.sh`: **1,772 tests passed across all nine directories**, plus Skill/prompt checks, compilation, dependency consistency and configured Bandit. `./.venv/bin/python -m unittest discover -q`: **500 passed**, one optional live-provider skip. `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: **437 passed +181 subtests**. Logs: `/private/tmp/story12-4-reviewfix-ci.log`, `/private/tmp/story12-4-reviewfix-unittest.log`, `/private/tmp/story12-4-reviewfix-shard.log`. Focused workflow/provenance tests: **14 passed +29 subtests**. Ruff lint/format (**296 files**), actionlint on all three workflows and diff checks passed.
+- Live implementation head `f81f699`, PR merge `17d91ea`: [Scorecard run](https://github.com/deploywhisper/deploywhisper/actions/runs/37573610812) succeeded and its artifact contains exactly one `scorecard-17d91ea87f8a391171a2bfd9e003c9037554dfe5-37573610812-1.sarif`, proving producer/consumer binding to the actual merge/run/attempt. All 70 findings processed without errors; existing five High findings remain tracked under #131.
+- [CodeQL](https://github.com/deploywhisper/deploywhisper/actions/runs/37573610852) succeeded in all three languages; [PR CI](https://github.com/deploywhisper/deploywhisper/actions/runs/37573610799) succeeded. Failure-path tests—not a live malicious upload—verify stale data cannot pass either workflow's guards. Updated documentation explains fresh-report handling and Critical triage.
+- UI validation not applicable. Existing medium sample-data Bandit B104 remains unchanged; high-severity gate passed. No new dependencies, app/API/schema behavior or extra publisher privileges. First integrated default-branch publisher/badge population is still pending integration and not claimed from PR-local success.
+- Definition of Done: PASS for these fixes. Story/sprint returned to `review`; fixes and evidence included in existing draft PR #132. `bmad-help` next step: rerun `bmad-code-review` before final Git Flow closeout. The baseline's high-priority follow-ups remain assigned/open under #131.
+
+
+## Change Log
+
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-10-06: Started baseline security workflows, owner-based finding dispositions, static regressions and live validation on the dedicated feature branch.
 - 2026-10-06: CodeQL/Scorecard live runs, SARIF visibility/artifacts, full local CI and high-priority follow-up verified; story/sprint moved to review on draft PR #132.
 - 2026-10-06: Added requested official Scorecard badge and isolated OIDC-backed default-branch publisher; badge safety regressions and full local CI passed; first publication remains post-integration verification.
 - 2026-10-07: Three-layer code review found two actionable report-provenance/critical-triage regression gaps; recorded findings and reopened story/sprint to in-progress.
 - 2026-10-07: Implemented commit/run/attempt-bound report uploads and Critical ownership regressions; full/local and live PR validation underway.
+- 2026-10-07: Both review fixes verified by full local tests, live fresh-report upload, CodeQL and PR CI; story/sprint returned to review.
