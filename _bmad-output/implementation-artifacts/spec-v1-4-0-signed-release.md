@@ -89,3 +89,7 @@ Back-merge main to default develop before tag push so tag-triggered ancestry pol
 ## Local verification evidence
 
 2026-10-07: all blocking local commands passed. Full local CI1,841; smoke555(one optional skip); affected shard492+257subtests; complete release suite1,840passed+one optional skip+1,295subtests,95.18%coverage; frontend56/typecheck/build;17/17composed browser tests; migration, lint/format, audits and real publication guard passed. Generatedschema drift was resolved before the successful composed build. Original compose service is restored healthy, original volume preserved. Hosted PR/source/publication checks follow before closure.
+
+## Security gate iteration
+
+PR#151 CodeQL alert aggregation failed despite analysis-job success. Independent triage identified actual quadratic query/authorization scans(90/91/93), repaired with failing-before-fix subprocess regressions and preserved question-mark/quoted credential behavior. URL/YAML/path/HTML/cookie/transport guards and synthetic fixtures were verified separately; legacy password verification is an explicit compatibility risk, not a false positive. An independent edge review compared30,000generated old/new pattern cases with identical semantics and confirmed linear full-boundary growth. Complete local/hosted suites and composed tests are rerun after this security source change. See docs/security/v1.4.0-security-triage.md for individual dispositions.
