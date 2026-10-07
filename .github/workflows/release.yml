@@ -1,31 +1,19 @@
-# =============================================================================
-# Release Pipeline — DeployWhisper
-# =============================================================================
-# Triggers when a version tag (v*) is pushed from the repository default branch.
-#
-# Pipeline stages (in order):
-#   1. validate   — verify tag format, extract version, check branch
-#   2. test       — full (non-sharded) test suite as final safety net
-#   3. security   — dependency audit (block release on known vulnerabilities)
-#   4. docker     — build, tag, and push image to GitHub Container Registry
-#   5. release    — create GitHub Release with auto-generated changelog
-#   6. notify     — post release announcement to Slack (optional)
-#
-# Prerequisites:
-#   - Push a tag matching v*.*.* from the repository default branch
-#   - Example: git tag -a v1.0.0 -m "Release v1.0.0" && git push origin v1.0.0
-# =============================================================================
-
+# Candidate image and signed source must pass verification before publication.
 name: Release
 
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'       # v1.0.0
-      - 'v[0-9]+.[0-9]+.[0-9]+-rc.*'   # v1.0.0-rc.1 (release candidates)
+      - 'v*'
 
 permissions:
   contents: read
+
+# Serialize all releases, including reruns, across version tags.
+concurrency:
+  group: deploywhisper-release-publication
+  cancel-in-progress: false
+  queue: max
 
 env:
   PYTHON_VERSION: "3.11"
@@ -33,66 +21,27 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/deploywhisper
 
 jobs:
-  # ===========================================================================
-  # STAGE 1 — VALIDATE RELEASE TAG
-  # ===========================================================================
   validate:
     name: "Validate Release"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       version: ${{ steps.meta.outputs.version }}
+      image_version: ${{ steps.meta.outputs.image_version }}
       is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
     steps:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          fetch-depth: 0  # full history for changelog generation
-
-      - name: Extract version metadata
+          fetch-depth: 0
+      - name: Validate exact tag and project version
         id: meta
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
-
-          # Determine if this is a pre-release (rc, alpha, beta)
-          if [[ "$TAG" == *"-rc"* ]] || [[ "$TAG" == *"-alpha"* ]] || [[ "$TAG" == *"-beta"* ]]; then
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "Pre-release detected: $TAG"
-          else
-            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-            echo "Stable release detected: $TAG"
-          fi
-
+        run: python3 scripts/release_policy.py validate --tag "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
       - name: Verify tag is on default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
-          # Ensure the tagged commit exists on the repository default branch.
-          if git branch -r --contains "$GITHUB_SHA" | grep -q "origin/${DEFAULT_BRANCH}$"; then
-            echo "Tag is on default branch (${DEFAULT_BRANCH}). OK."
-          else
-            echo "::error::Release tags must be created from the repository default branch (${DEFAULT_BRANCH})."
-            echo "::error::This tag points to a commit not on ${DEFAULT_BRANCH}."
-            exit 1
-          fi
-
-      - name: Verify tag matches pyproject.toml version
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"  # strip leading 'v'
-          PYPROJECT_VERSION=$(python3 -c "
-          import re
-          with open('pyproject.toml') as f:
-              content = f.read()
-          match = re.search(r'version\s*=\s*\"([^\"]+)\"', content)
-          print(match.group(1) if match else 'NOT_FOUND')
-          ")
-          echo "Tag version:        $TAG"
-          echo "pyproject.toml:     $PYPROJECT_VERSION"
-          if [ "$TAG" != "$PYPROJECT_VERSION" ] && [ "${TAG%%-*}" != "$PYPROJECT_VERSION" ]; then
-            echo "::warning::Tag version ($TAG) does not match pyproject.toml ($PYPROJECT_VERSION)"
-            echo "::warning::Consider updating pyproject.toml before releasing"
-          fi
-
+          git merge-base --is-ancestor "$GITHUB_SHA" "origin/$DEFAULT_BRANCH"
   # ===========================================================================
   # STAGE 2 — FULL TEST SUITE (non-sharded, final gate)
   # ===========================================================================
@@ -184,269 +133,177 @@ jobs:
           path: pip-audit-release.log
           retention-days: 90
 
-  # ===========================================================================
-  # STAGE 4 — BUILD AND PUSH DOCKER IMAGE
-  # ===========================================================================
+  artifacts:
+    name: Signed source artifacts
+    needs: [validate, test, security]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: ./.github/workflows/release-artifacts.yml
+    with:
+      release-label: ${{ needs.validate.outputs.version }}
+
   docker:
-    name: "Build & Push Docker Image"
+    name: "Verify Candidate Image"
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs:
-      - validate
-      - test
-      - security
+    needs: [validate, test, security]
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image: ${{ steps.image.outputs.name }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.validate.outputs.image_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: docker-meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ needs.validate.outputs.is_prerelease == 'false' }}
-          labels: |
-            org.opencontainers.image.title=DeployWhisper
-            org.opencontainers.image.description=AI-Powered Pre-Deployment Risk Intelligence Platform
-            org.opencontainers.image.vendor=pramodksahoo
-
-      - name: Build and push Docker image
+      - name: Establish lowercase image identity
+        id: image
+        run: echo "name=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+      - name: Refuse existing release or immutable image and stable downgrade
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: python3 scripts/release_policy.py guard --version "$VERSION" --image "$IMAGE" --repository "$GITHUB_REPOSITORY"
+      - name: Build and push unique candidate only
+        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.docker-meta.outputs.tags }}
-          labels: ${{ steps.docker-meta.outputs.labels }}
+          tags: ${{ steps.image.outputs.name }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            BUILD_VERSION=${{ needs.validate.outputs.version }}
+            BUILD_VERSION=${{ needs.validate.outputs.image_version }}
             BUILD_SHA=${{ github.sha }}
-
-      - name: Smoke test — pull and verify pushed image
+      - name: Smoke test the exact candidate digest
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${DOCKER_METADATA_OUTPUT_VERSION}"
-          echo "Pulling image: $IMAGE"
-          docker pull --platform linux/amd64 "$IMAGE"
-
-          docker run -d \
-            --name release-smoke \
-            --platform linux/amd64 \
-            -p 8080:8080 \
-            -v whisper-release-data:/app/data \
-            -e APP_HOST=0.0.0.0 \
-            -e APP_PORT=8080 \
-            -e LOG_LEVEL=INFO \
-            -e DATABASE_URL=sqlite:///data/deploywhisper.db \
-            "$IMAGE"
-
-          echo "Waiting for container to be ready..."
+          docker pull --platform linux/amd64 "$IMAGE@$DIGEST"
+          test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$IMAGE@$DIGEST")" = "$VERSION"
+          test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$IMAGE@$DIGEST")" = "$GITHUB_SHA"
+          docker run -d --name release-smoke --platform linux/amd64 -p 8080:8080 \
+            -v whisper-release-data:/app/data -e APP_HOST=0.0.0.0 -e APP_PORT=8080 \
+            -e DATABASE_URL=sqlite:///data/deploywhisper.db "$IMAGE@$DIGEST"
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
-              echo "Health check passed on attempt $i"
-              break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "::error::Pushed image failed health check"
-              docker logs release-smoke
-              exit 1
+            if curl -sf http://localhost:8080/api/v1/health > /dev/null; then
+              docker exec release-smoke python -c 'import sys; from config import settings; assert settings.app_version == sys.argv[1]' "$VERSION"
+              exit 0
             fi
             sleep 2
           done
-          echo "Pushed image verified successfully."
-
+          docker logs release-smoke
+          exit 1
+      - name: Attest verified OCI candidate
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Verify OCI provenance and source identity
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          gh attestation verify "oci://$IMAGE@$DIGEST" --bundle-from-oci \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" --deny-self-hosted-runners
       - name: Cleanup
         if: always()
         run: |
-          docker stop release-smoke 2>/dev/null || true
-          docker rm release-smoke 2>/dev/null || true
+          docker rm -f release-smoke 2>/dev/null || true
           docker volume rm whisper-release-data 2>/dev/null || true
-  # ===========================================================================
-  # STAGE 5 — CREATE GITHUB RELEASE
-  # ===========================================================================
+
   release:
-    name: "GitHub Release"
+    name: "Promote Verified Release"
     permissions:
       contents: write
+      packages: write
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs:
-      - validate
-      - docker
+    timeout-minutes: 15
+    needs: [validate, docker, artifacts]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.validate.outputs.image_version }}
+      RELEASE_TAG: ${{ needs.validate.outputs.version }}
+      IMAGE: ${{ needs.docker.outputs.image }}
+      DIGEST: ${{ needs.docker.outputs.digest }}
     steps:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
-
-      - name: Generate release notes
-        id: notes
-        run: |
-          VERSION="${{ needs.validate.outputs.version }}"
-          CURATED_NOTES="docs/releases/${VERSION}.md"
-
-          if [ -f "$CURATED_NOTES" ]; then
-            echo "Using curated release notes from $CURATED_NOTES"
-            cp "$CURATED_NOTES" release-notes.md
-            cat release-notes.md
-            exit 0
-          fi
-
-          # Find the previous tag for changelog range
-          PREV_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -2 | tail -1)
-          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$VERSION" ]; then
-            echo "First release — using full commit history"
-            RANGE="HEAD"
-          else
-            echo "Changelog range: $PREV_TAG..$VERSION"
-            RANGE="$PREV_TAG..$VERSION"
-          fi
-
-          # Generate categorised changelog
-          {
-            echo "## What's changed"
-            echo ""
-
-            # Features
-            FEATS=$(git log "$RANGE" --pretty=format:"- %s (%h)" --grep="^feat" 2>/dev/null || true)
-            if [ -n "$FEATS" ]; then
-              echo "### New features"
-              echo "$FEATS"
-              echo ""
-            fi
-
-            # Fixes
-            FIXES=$(git log "$RANGE" --pretty=format:"- %s (%h)" --grep="^fix" 2>/dev/null || true)
-            if [ -n "$FIXES" ]; then
-              echo "### Bug fixes"
-              echo "$FIXES"
-              echo ""
-            fi
-
-            # Other changes
-            OTHERS=$(git log "$RANGE" --pretty=format:"- %s (%h)" --grep="^feat" --grep="^fix" --invert-grep 2>/dev/null || true)
-            if [ -n "$OTHERS" ]; then
-              echo "### Other changes"
-              echo "$OTHERS"
-              echo ""
-            fi
-
-            echo "---"
-            echo ""
-            echo "**Docker image**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION#v}\`"
-            echo ""
-            echo "\`\`\`bash"
-            echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION#v}"
-            echo "\`\`\`"
-          } > release-notes.md
-
-          cat release-notes.md
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
+      - name: Download signed source from this run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          tag_name: ${{ needs.validate.outputs.version }}
-          name: "DeployWhisper ${{ needs.validate.outputs.version }}"
-          body_path: release-notes.md
-          prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
-          generate_release_notes: false
-          make_latest: ${{ needs.validate.outputs.is_prerelease == 'false' }}
-
-  # ===========================================================================
-  # STAGE 6 — RELEASE NOTIFICATION
-  # ===========================================================================
-  notify:
-    name: "Release Notification"
-    permissions: {}
-    runs-on: ubuntu-latest
-    if: always()
-    needs:
-      - validate
-      - docker
-      - release
-    env:
-      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-    steps:
-      - name: Notify Slack on successful release
-        if: needs.release.result == 'success' && env.SLACK_WEBHOOK != ''
-        env:
-          VERSION: ${{ needs.validate.outputs.version }}
+          name: ${{ needs.artifacts.outputs.artifact-name }}
+          path: dist/release
+      - name: Verify source asset bundle before publication
         run: |
-          python3 - <<'PY'
-          import json, os, urllib.request
-          version = os.environ.get("VERSION") or os.environ.get("GITHUB_REF_NAME", "unknown")
-          payload = {
-              "text": (
-                  f":white_check_mark: *DeployWhisper {version} released!*\n"
-                  f"<https://github.com/${{ github.repository }}/releases/tag/{version}|Release notes> · "
-                  f"<https://github.com/${{ github.repository }}/pkgs/container/deploywhisper|Docker image>"
-              )
-          }
-          req = urllib.request.Request(
-              os.environ["SLACK_WEBHOOK"],
-              data=json.dumps(payload).encode(),
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
-          with urllib.request.urlopen(req, timeout=10):
-              pass
-          PY
-
-      - name: Notify on release failure
-        if: needs.release.result == 'failure' && env.SLACK_WEBHOOK != ''
-        env:
-          VERSION: ${{ needs.validate.outputs.version }}
+          test "${{ needs.artifacts.outputs.source-sha }}" = "$GITHUB_SHA"
+          for subject in "dist/release/deploywhisper-$RELEASE_TAG.tar.gz" dist/release/SHA256SUMS dist/release/source-manifest.json; do
+            gh attestation verify "$subject" \
+              --bundle dist/release/artifact.intoto.jsonl --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-artifacts.yml" \
+              --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" \
+              --source-ref "$GITHUB_REF" --deny-self-hosted-runners
+          done
+          (cd dist/release && sha256sum --strict --check SHA256SUMS)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Recheck publication state under release concurrency lock
+        run: python3 scripts/release_policy.py guard --version "$VERSION" --image "$IMAGE" --repository "$GITHUB_REPOSITORY"
+      - name: Prepare release notes
         run: |
-          python3 - <<'PY'
-          import json, os, urllib.request
-          version = os.environ.get("VERSION") or os.environ.get("GITHUB_REF_NAME", "unknown")
-          payload = {
-              "text": (
-                  f":red_circle: *DeployWhisper {version} release FAILED*\n"
-                  f"<{os.environ.get('GITHUB_SERVER_URL', '')}/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}|View run>"
-              )
-          }
-          req = urllib.request.Request(
-              os.environ["SLACK_WEBHOOK"],
-              data=json.dumps(payload).encode(),
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
-          with urllib.request.urlopen(req, timeout=10):
-              pass
-          PY
-
-      - name: Print release summary
-        if: always()
+          if [ -f "docs/releases/$RELEASE_TAG.md" ]; then
+            cp "docs/releases/$RELEASE_TAG.md" release-notes.md
+          else
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+              -f tag_name="$RELEASE_TAG" --jq .body > release-notes.md
+          fi
+      - name: Create new release with verified immutable assets
         run: |
-          echo "## Release Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Stage | Result |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Validation  | \`${{ needs.validate.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Docker push | \`${{ needs.docker.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| GitHub Release | \`${{ needs.release.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Version**: ${{ needs.validate.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Pre-release**: ${{ needs.validate.outputs.is_prerelease }}" >> "$GITHUB_STEP_SUMMARY"
+          options=()
+          if [[ "$VERSION" == *-* ]]; then options+=(--prerelease --latest=false); else options+=(--latest); fi
+          python3 scripts/release_policy.py verify-remote-tag --tag "$RELEASE_TAG" --source-sha "$GITHUB_SHA"
+          gh release create "$RELEASE_TAG" --verify-tag --title "DeployWhisper $RELEASE_TAG" \
+            --notes-file release-notes.md "${options[@]}" \
+            "dist/release/deploywhisper-$RELEASE_TAG.tar.gz" \
+            dist/release/SHA256SUMS dist/release/source-manifest.json dist/release/artifact.intoto.jsonl
+      - name: Promote verified digest to version and eligible stable aliases
+        run: |
+          tags=(--tag "$IMAGE:$VERSION")
+          if [[ "$VERSION" != *-* ]]; then
+            tags+=(--tag "$IMAGE:latest" --tag "$IMAGE:${VERSION%.*}" --tag "$IMAGE:${VERSION%%.*}")
+          fi
+          docker buildx imagetools create "${tags[@]}" "$IMAGE@$DIGEST"

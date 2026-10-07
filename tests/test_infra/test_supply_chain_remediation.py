@@ -49,11 +49,22 @@ class SupplyChainRemediationTests(unittest.TestCase):
             permissions = job.get("permissions", data["permissions"])
             expected = {"contents": "read"}
             if name == "docker":
-                expected = {"contents": "read", "packages": "write"}
+                expected = {
+                    "contents": "read",
+                    "packages": "write",
+                    "id-token": "write",
+                    "attestations": "write",
+                    "artifact-metadata": "write",
+                }
             elif name == "release":
-                expected = {"contents": "write"}
-            elif name == "notify":
-                expected = {}
+                expected = {"contents": "write", "packages": "write"}
+            elif name == "artifacts":
+                expected = {
+                    "contents": "read",
+                    "id-token": "write",
+                    "attestations": "write",
+                    "artifact-metadata": "write",
+                }
             with self.subTest(job=name):
                 self.assertEqual(permissions, expected)
 

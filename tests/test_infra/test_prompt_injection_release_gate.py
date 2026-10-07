@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import os
+import subprocess
+import sys
 import unittest
 
 import yaml
@@ -43,10 +47,37 @@ class PromptInjectionReleaseGateTests(unittest.TestCase):
 
         self.assertEqual(len(llm_shards), 1)
         self.assertIn("test", jobs["report"]["needs"])
-        report_commands = "\n".join(
-            step.get("run", "") for step in jobs["report"]["steps"]
+        gate = next(
+            step
+            for step in jobs["report"]["steps"]
+            if step["name"] == "Determine overall CI result"
         )
-        self.assertIn('needs.test.result }}" == "failure"', report_commands)
+        program = gate["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+        needs = {
+            name: {"result": "success"}
+            for name in (
+                "quality",
+                "security",
+                "frontend",
+                "test",
+                "docker",
+                "migration",
+                "changed-tests",
+            )
+        }
+        needs["test"]["result"] = "failure"
+        result = subprocess.run(
+            [sys.executable, "-c", program],
+            env={
+                **os.environ,
+                "NEEDS_JSON": json.dumps(needs),
+                "EVENT_NAME": "pull_request",
+            },
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('"test": "failure"', result.stdout)
 
     def test_release_runs_prompt_injection_gate_before_full_suite(self) -> None:
         workflow = yaml.load(

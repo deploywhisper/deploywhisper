@@ -156,7 +156,7 @@ development_status:
   12-3-connector-credential-handling-and-redaction-audit: done
   12-4-openssf-scorecard-and-codeql: done
   12-5-sbom-and-release-checksums: ready-for-dev
-  12-6-signing-and-provenance: ready-for-dev
+  12-6-signing-and-provenance: in-progress
   12-7-backup-restore-upgrade-and-retention-docs: ready-for-dev
   12-8-air-gapped-and-restricted-network-guide: ready-for-dev
   epic-12-retrospective: optional

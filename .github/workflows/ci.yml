@@ -531,17 +531,28 @@ jobs:
           echo "Failure logs are attached as workflow artifacts when a job fails." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Determine overall CI result
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          # Fail the report if any required stage failed
-          if [[ "${{ needs.quality.result }}" == "failure" ]] || \
-             [[ "${{ needs.security.result }}" == "failure" ]] || \
-             [[ "${{ needs.frontend.result }}" == "failure" ]] || \
-             [[ "${{ needs.test.result }}" == "failure" ]] || \
-             [[ "${{ needs.docker.result }}" == "failure" ]] || \
-             [[ "${{ needs.migration.result }}" == "failure" ]]; then
-            echo "::error::One or more CI stages failed. See summary above."
-            exit 1
-          fi
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ["NEEDS_JSON"])
+          core = ("quality", "security", "frontend", "test", "docker", "migration")
+          rejected = {
+              name: needs.get(name, {}).get("result", "missing")
+              for name in core
+              if needs.get(name, {}).get("result") != "success"
+          }
+          changed_result = needs.get("changed-tests", {}).get("result", "missing")
+          allowed_changed = {"success"} if os.environ["EVENT_NAME"] == "pull_request" else {"success", "skipped"}
+          if changed_result not in allowed_changed:
+              rejected["changed-tests"] = changed_result
+          if rejected:
+              print("::error::Required CI stages did not succeed: " + json.dumps(rejected, sort_keys=True))
+              sys.exit(1)
+          print("All required CI stages succeeded.")
+          PY
 
   # ===========================================================================
   # STAGE 7 — FAILURE NOTIFICATION

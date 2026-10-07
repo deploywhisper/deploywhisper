@@ -34,9 +34,16 @@ RUN npm run build            # outputs /frontend/dist
 
 FROM python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce AS runtime
 
+ARG BUILD_VERSION=1.3.0
+ARG BUILD_SHA=unknown
+
+LABEL org.opencontainers.image.version="${BUILD_VERSION}" \
+    org.opencontainers.image.revision="${BUILD_SHA}"
+
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ENV APP_VERSION="${BUILD_VERSION}" \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:${PATH}"
