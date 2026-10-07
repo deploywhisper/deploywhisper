@@ -6,13 +6,27 @@ DeployWhisper analyzes infrastructure artifacts, deployment context, incident me
 
 Do not open public issues for vulnerabilities that could expose credentials, private infrastructure, unsafe parsing behavior, prompt-injection paths, or deployment-risk bypasses.
 
-Use the most private available repository reporting path:
+Use [GitHub private vulnerability reporting](https://github.com/deploywhisper/deploywhisper/security/advisories/new)
+to submit a report to the maintainers. Private reporting is enabled for this
+repository. See [GitHub's reporting instructions](https://docs.github.com/en/code-security/security-advisories/working-with-repository-security-advisories/privately-reporting-a-security-vulnerability)
+for the reporter's workflow.
 
-1. GitHub private vulnerability reporting, if enabled for the repository.
-2. A private maintainer contact path listed by the repository owner or CODEOWNERS.
-3. If no private path is available, open a public issue with only a minimal, non-sensitive summary and ask maintainers to establish a private channel before sharing details.
+If that form is unavailable, open a public issue containing only a request for
+a private contact channel. Do not include credentials, infrastructure artifacts,
+incident details, or an exploit in that request.
 
 Include enough information for maintainers to reproduce and assess the issue without sharing real secrets or production artifacts.
+
+## Supported Versions
+
+| Version | Security support |
+| --- | --- |
+| Latest 1.3.x release | Current supported release line |
+| Earlier releases | Upgrade to the current release before applying a fix |
+| develop | Development branch; fixes land here before release |
+
+Consult the [release history](https://github.com/deploywhisper/deploywhisper/releases)
+for published versions and remediation notes.
 
 ## Supported Scope
 
@@ -42,6 +56,14 @@ rationale; vulnerability details retain the private disclosure boundary above.
 ## Disclosure Expectations
 
 Maintainers should acknowledge credible private reports, triage severity, and coordinate a fix before public disclosure. Public advisories should avoid exposing exploit details before users have a reasonable opportunity to update or mitigate.
+
+The target is acknowledgement within seven business days and an initial
+assessment within fourteen business days. These are response targets, not a
+guaranteed fix deadline. Maintainers and reporters should agree on a disclosure
+date based on severity, reproducibility and available mitigations. Release notes
+and a [GitHub security advisory](https://github.com/deploywhisper/deploywhisper/security/advisories)
+will document affected versions, fixed versions and any mitigation when a
+confirmed issue is disclosed.
 
 ## Sensitive Data Guidance
 

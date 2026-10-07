@@ -174,3 +174,26 @@ These logs are retained for 14 days.
 ### Dependency freshness and delivery permissions
 
 Dependabot proposes weekly Python, root/frontend npm and GitHub Actions updates targeting `develop`; updates must pass normal review/CI. Frontend CI audits both npm graphs at all severities. Runtime Python audit remains enabled. Workflow defaults are read-only; container pushes, release creation and committed analytics snapshots receive only their required job-scoped writes. Public analytics feeds receive no GitHub bearer credential. Third-party workflow actions are SHA-pinned and included in automated update coverage. See [the remediation record](security/remediation-2026-10-07.md) for advisory dispositions and validation limits.
+
+### Hash-locked Python installations
+
+Use `python -m pip install --require-hashes --only-binary=:all: -r requirements.txt`
+for runtime-only setup. Contributors and local CI use the same command with
+`requirements-dev.txt`, which includes runtime dependencies and reviewed test,
+lint and audit tools. Both locks include transitive distributions and SHA256
+hashes; a version pin alone does not verify downloaded bytes.
+
+For runtime updates, edit `requirements-runtime.txt` and keep the dependency
+list in `pyproject.toml` synchronized. For tool updates, edit
+`requirements-dev-input.txt`. Install the official `uv` 0.11.2 development tool,
+then run `bash scripts/lock-dependencies.sh` to regenerate **both** locks and
+run the hash/parity tests plus relevant application/CI checks. This generator
+uses universal resolution for the declared Python floor, retaining platform
+and Python-version markers; production execution is verified on Python 3.11.
+
+Dependabot can refresh ordinary hashed requirements files. Review its changes
+alongside source inputs and packaging metadata, regenerate any stale lock, and
+require the parity tests before accepting an update. Automatic merging is not
+enabled. Fuzzing uses its own small hashed lock and documented update command
+in [the fuzzing guide](security/fuzzing.md). Docker digest update proposals also
+need build/runtime verification before merging.

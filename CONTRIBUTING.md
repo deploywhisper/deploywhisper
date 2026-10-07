@@ -46,7 +46,7 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
 # Copy the example environment file
 cp .env.example .env

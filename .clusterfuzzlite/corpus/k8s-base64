@@ -1,0 +1,3 @@
+kind: Secret
+data:
+  opaque: c3ludGhldGljLWNvcnB1cy12YWx1ZQ==

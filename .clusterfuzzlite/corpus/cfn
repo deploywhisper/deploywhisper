@@ -1,0 +1,4 @@
+Resources:
+  Example:
+    Type: !Ref SyntheticType
+    Properties: !Sub [synthetic, {Key: value}]

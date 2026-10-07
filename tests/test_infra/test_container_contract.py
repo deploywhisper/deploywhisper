@@ -210,8 +210,12 @@ class ContainerContractTests(unittest.TestCase):
 
     def test_dockerfile_uses_multistage_non_root_runtime(self) -> None:
         dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
-        self.assertIn("FROM python:3.11-slim AS builder", dockerfile)
-        self.assertIn("FROM python:3.11-slim AS runtime", dockerfile)
+        self.assertRegex(
+            dockerfile, r"FROM python:3\.11-slim@sha256:[0-9a-f]{64} AS builder"
+        )
+        self.assertRegex(
+            dockerfile, r"FROM python:3\.11-slim@sha256:[0-9a-f]{64} AS runtime"
+        )
         self.assertIn("COPY --from=builder /opt/venv /opt/venv", dockerfile)
         self.assertIn(
             "COPY --chown=appuser:appuser integrations ./integrations", dockerfile

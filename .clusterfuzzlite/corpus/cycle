@@ -1,0 +1,3 @@
+root: &root
+  self: *root
+  api_key: synthetic-corpus-value

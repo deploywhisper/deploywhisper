@@ -1,0 +1,8 @@
+-r requirements-runtime.txt
+pytest==9.0.3
+pytest-cov==7.1.0
+httpx==0.28.1
+ruff==0.15.11
+mypy==1.19.1
+pip-audit==2.10.0
+bandit==1.9.4

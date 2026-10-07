@@ -2369,6 +2369,9 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         output = io.StringIO()
 
+        def unavailable_completion_client(**_kwargs):
+            raise RuntimeError("Synthetic completion provider is unavailable")
+
         def passthrough_analyze_uploaded_files(
             files,
             completion_client=None,
@@ -2380,7 +2383,7 @@ class AnalyzeCliTests(unittest.TestCase):
         ):
             return analysis_service_module.analyze_uploaded_files(
                 files,
-                completion_client=completion_client,
+                completion_client=unavailable_completion_client,
                 audit_context=audit_context,
                 project_id=project_id,
                 project_key=project_key,

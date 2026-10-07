@@ -110,13 +110,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest-cov
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
       - name: Run prompt-injection release gate
         run: python -m pytest tests/test_llm/test_prompt_injection.py -v --tb=short
@@ -168,7 +168,7 @@ jobs:
 
       - name: Audit dependencies
         run: |
-          pip install pip-audit
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
           pip-audit \
             --requirement requirements.txt \
             --strict \

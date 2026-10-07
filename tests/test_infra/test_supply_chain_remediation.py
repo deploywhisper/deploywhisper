@@ -28,7 +28,15 @@ class SupplyChainRemediationTests(unittest.TestCase):
         updates = data["updates"]
         self.assertEqual(
             {(u["package-ecosystem"], u["directory"]) for u in updates},
-            {("pip", "/"), ("npm", "/"), ("npm", "/frontend"), ("github-actions", "/")},
+            {
+                ("pip", "/"),
+                ("npm", "/"),
+                ("npm", "/frontend"),
+                ("github-actions", "/"),
+                ("docker", "/"),
+                ("docker", "/.clusterfuzzlite"),
+                ("pip", "/.clusterfuzzlite"),
+            },
         )
         for update in updates:
             self.assertEqual(update["target-branch"], "develop")

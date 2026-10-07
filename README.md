@@ -187,8 +187,7 @@ Provider settings and health surfaces also expose explicit capability metadata f
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
 python app.py
 ```
 
@@ -678,7 +677,7 @@ tests/        API, CLI, parser, service, frontend, and infra tests
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 ```
 
 Run the app:
