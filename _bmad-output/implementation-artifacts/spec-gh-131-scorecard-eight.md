@@ -2,7 +2,7 @@
 title: 'Raise verified repository security posture to at least 8'
 type: 'chore'
 created: '2026-10-07'
-status: 'in-review'
+status: 'done'
 baseline_commit: '046b0207dbfd7edebc3ae1b1415246ba333393b9'
 context: ['_bmad-output/project-context.md']
 ---
@@ -53,7 +53,7 @@ context: ['_bmad-output/project-context.md']
 - [x] Enable private vulnerability reporting, link the actual form and document supported versions/acknowledgement/disclosure expectations.
 - [x] Protect develop/main against force-push and deletion with recorded settings; handle review/CI requirements only after policy clarification.
 - [x] Run lint/actionlint, audits, full local suites, clean compatible Python/container installs, production frontend/Compose browser validation where packaging changes require it; perform layered review.
-- [ ] Publish validated controls, run real fuzzing/CI/CodeQL/publisher, verify public report and badge >=8, and record remaining honest limitations.
+- [x] Publish validated controls, run real fuzzing/CI/CodeQL/publisher, verify public report and badge >=8, and record remaining honest limitations.
 
 **Acceptance Criteria:**
 - Given current manifests, when clean installs run, then exact hashes are enforced and existing app/test behavior works on supported runtime Python.
@@ -88,3 +88,10 @@ Current risk-weighted projection for full hashing/policy/fuzzing plus basic hist
 - Composed production build passed. All17browser tests passed, zero skips, against isolated deploywhisper-score8 on localhost8080 with both disposable security flags enabled. Original app restored healthy; only disposable test volume removed. Frontend typecheck and56unit tests passed. Root smoke521tests passed, one optional skip. Final CI/shard counts follow after completion.
 
 Final validation: full local CI **1,805 tests across nine directories**, all suites passed (one optional live-provider skip); smoke **521 tests**, one optional skip; exact API/CLI/infra shard **458 passed +222 subtests**; **56 frontend unit tests** and all **17 production Compose browser tests**, no browser skips. Runtime/dev/fuzz audits each zero. Ruff (**300 files**), actionlint and diff checks pass; existing medium B104 remains unchanged. Hosted publication/fuzz/CI and the actual >=8 report remain the final unchecked task.
+
+## Published Completion
+
+- Source `5318488` published on develop. Publisher37590006627 completed successfully; official API at2026-10-07T07:52:20Z reports **8.0**, badge independently reports **8**. Security-Policy/Pinned-Dependencies/Fuzzing10, history protection3. Target achieved.
+- Full CI37590005777 and CodeQL37590005685 passed. Hosted fuzz37590005754 passed300-second run with47,634executions, coverage1,090/features4,739, no crashes. All implementation, review and publication tasks checked.
+- Follow-ups remain actual human review/merge policy, contributor diversity, unearned best-practices badge and concrete signed-release delivery. No administrative approval rule was inferred from an unanswered question. Existing disabled rulesets not activated; no collaborators/release assets changed. Final evidence commit only updates docs/tracking.
+- `bmad-help` next: choose the reviewer/merge policy or implement actual SBOM/signing release delivery in Stories12.5/12.6; neither is falsely marked complete by reaching a numeric score.

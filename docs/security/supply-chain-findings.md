@@ -74,3 +74,7 @@ See [the advisory and source-disposition record](remediation-2026-10-07.md) for 
 ### Published remediation verification
 
 The tested remediation commit `9190270` is now on `develop`. The [successful publisher](https://github.com/deploywhisper/deploywhisper/actions/runs/37585646199) and official badge verify **6.7/10**, up from 4.2: Vulnerabilities, Dependency-Update-Tool and Token-Permissions are now 10; Pinned-Dependencies is 4. See [the published verification record](remediation-2026-10-07.md#published-verification--2026-10-07). Remaining branch/review/signing and other controls remain owned under #131.
+
+### Verified target reached — 2026-10-07
+
+Source `5318488` and the [successful publisher](https://github.com/deploywhisper/deploywhisper/actions/runs/37590006627) now verify **8.0/10** in both official API and badge. Policy, hash pinning and fuzzing are10; real hosted production fuzzing, CodeQL and full CI passed. Active history-only ruleset24634960 protects develop/main from force/deletion. See [the control/evidence ledger](scorecard-eight.md) for metrics, tested boundaries and remaining human-review/release controls. No unearned badge, fake approval or contributor affiliation was added.

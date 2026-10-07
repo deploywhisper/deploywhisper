@@ -1,0 +1,113 @@
+{
+  "repository": "github.com/deploywhisper/deploywhisper",
+  "commit": "5318488c8eaf354f2024353e6b87a61daf2dac72",
+  "published_at": "2026-10-07T07:52:20Z",
+  "scorecard_version": "v5.5.0",
+  "previous_score": 6.7,
+  "score": 8,
+  "badge_verified_score": 8.0,
+  "publisher_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37590006627",
+  "checks": [
+    {
+      "name": "Code-Review",
+      "score": 0,
+      "reason": "Found 0/30 approved changesets -- score normalized to 0"
+    },
+    {
+      "name": "Dangerous-Workflow",
+      "score": 10,
+      "reason": "no dangerous workflow patterns detected"
+    },
+    {
+      "name": "Dependency-Update-Tool",
+      "score": 10,
+      "reason": "update tool detected"
+    },
+    {
+      "name": "Maintained",
+      "score": 10,
+      "reason": "30 commit(s) and 0 issue activity found in the last 90 days -- score normalized to 10"
+    },
+    {
+      "name": "Security-Policy",
+      "score": 10,
+      "reason": "security policy file detected"
+    },
+    {
+      "name": "Token-Permissions",
+      "score": 10,
+      "reason": "GitHub workflow tokens follow principle of least privilege"
+    },
+    {
+      "name": "Binary-Artifacts",
+      "score": 10,
+      "reason": "no binaries found in the repo"
+    },
+    {
+      "name": "Pinned-Dependencies",
+      "score": 10,
+      "reason": "all dependencies are pinned"
+    },
+    {
+      "name": "CII-Best-Practices",
+      "score": 0,
+      "reason": "no effort to earn an OpenSSF best practices badge detected"
+    },
+    {
+      "name": "SAST",
+      "score": 7,
+      "reason": "SAST tool detected but not run on all commits"
+    },
+    {
+      "name": "Signed-Releases",
+      "score": -1,
+      "reason": "no releases found"
+    },
+    {
+      "name": "Packaging",
+      "score": 10,
+      "reason": "packaging workflow detected"
+    },
+    {
+      "name": "Branch-Protection",
+      "score": 3,
+      "reason": "branch protection is not maximal on development and all release branches"
+    },
+    {
+      "name": "Fuzzing",
+      "score": 10,
+      "reason": "project is fuzzed"
+    },
+    {
+      "name": "License",
+      "score": 10,
+      "reason": "license file detected"
+    },
+    {
+      "name": "Contributors",
+      "score": 0,
+      "reason": "project has 0 contributing companies or organizations -- score normalized to 0"
+    },
+    {
+      "name": "CI-Tests",
+      "score": 10,
+      "reason": "6 out of 6 merged PRs checked by a CI test -- score normalized to 10"
+    },
+    {
+      "name": "Vulnerabilities",
+      "score": 10,
+      "reason": "0 existing vulnerabilities detected"
+    }
+  ],
+  "ci_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37590005777",
+  "ci_conclusion": "success",
+  "codeql_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37590005685",
+  "codeql_conclusion": "success",
+  "fuzz_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37590005754",
+  "fuzz_conclusion": "success",
+  "fuzz_executions": 47634,
+  "fuzz_coverage": 1090,
+  "fuzz_features": 4739,
+  "history_ruleset": 24634960,
+  "private_reporting_enabled": true
+}

@@ -137,3 +137,7 @@ runner image, but the action commit alone does not freeze those upstream helper
 image tags. The hosted job holds only repository-read privileges. Keep this
 transitive tooling limit distinct from the pinned project builder and hash-locked
 fuzzer dependencies; no claim of fully immutable upstream helper execution is made.
+
+### Hosted validation
+
+[The first hosted run](https://github.com/deploywhisper/deploywhisper/actions/runs/37590005754) completed build checks and300seconds of production fuzzing successfully on `5318488`:47,634 executions, coverage1,090, features4,739, no crashes. These are actual libFuzzer/Atheris log statistics, separate from Scorecard's configuration detection.
