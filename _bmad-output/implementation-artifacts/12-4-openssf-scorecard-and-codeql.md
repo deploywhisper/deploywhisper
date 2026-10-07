@@ -1,6 +1,6 @@
 # Story 12.4: OpenSSF Scorecard and CodeQL
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -198,6 +198,15 @@ Codex with native subagents for official-source research and bounded workflow/te
 - [Updated PR CI](https://github.com/deploywhisper/deploywhisper/actions/runs/37576859785) is still running its broader shards at this recording; no failure is claimed or hidden. All local required checks passed. The existing draft PR #132 contains the fix; no merge performed. First default-branch publisher/numeric badge verification remains post-integration work.
 - Definition of Done: PASS for the review fix. Story/sprint returned to `review`. `bmad-help` next step: rerun `bmad-code-review` before final Git Flow closeout. Story 12.5 is not started by this fix.
 
+### Final Review and Git Flow Closeout — 2026-10-07
+
+- Full review scope: `495f845..03420e9`, **14 files, 1,107 added / 3 removed lines**, clean starting worktree. Frozen diff: `/private/tmp/story12-4-closeout-review.diff`. All three independent BMad layers passed: blind found no actionable defects, edge reported no unhandled paths, acceptance confirmed AC1 and the user-requested badge. Zero patches/decisions/new deferrals; one exploratory remote-HEAD candidate dismissed as expected hosted Scorecard semantics. Invocation-bound filenames establish fresh report provenance, not a promise that hosted repository posture is a checkout snapshot.
+- All prior review findings resolved. Fresh focused suite **17 passed +31 subtests**; Ruff lint/format (**296 files**), actionlint on all three workflows and diff checks passed. Full validation of unchanged final implementation remains **1,775 local CI tests**, **503 smoke tests** (one optional skip), and **440 API/CLI/infra tests +183 subtests**. UI validation not applicable. No further source simplification was needed; existing helpers and pinned workflow actions suffice.
+- Exact reviewed head `03420e9`: [PR CI](https://github.com/deploywhisper/deploywhisper/actions/runs/37577231287), [CodeQL](https://github.com/deploywhisper/deploywhisper/actions/runs/37577231164), and [Scorecard](https://github.com/deploywhisper/deploywhisper/actions/runs/37577231247) all succeeded. All applicable PR checks passed, including type checks, security, four test shards, migration, frontend build and Docker; failure-notification and unneeded feedback checks skipped normally. The broader source-fix CI previously pending also completed successfully.
+- Story/sprint marked `done`. Git Flow closure uses the existing `feature/12-4-openssf-scorecard-codeql` branch and [PR #132](https://github.com/deploywhisper/deploywhisper/pull/132) targeting `develop`; closure metadata committed/pushed and PR prepared for normal review. This final change affects tracking documents only. No protected-branch merge performed.
+- Remaining operational follow-ups are explicit: first integrated default-branch Scorecard publication/numeric badge verification; owned baseline posture gaps under #131, including the documented pinning gap. Scanner success does not mean those gaps are repaired. Existing sample-data Bandit B104 remains outside this change.
+- `bmad-help` next step: normal PR review/integration, then `bmad-dev-story` for ready-for-dev Story 12.5 in a fresh task. Epic 12 remains in-progress; no next story started here.
+
 ## Change Log
 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
@@ -210,3 +219,4 @@ Codex with native subagents for official-source research and bounded workflow/te
 - 2026-10-07: Review rerun identified one remaining CodeQL artifact provenance gap on initialization failure; story/sprint reopened to in-progress with an action item.
 - 2026-10-07: Bound CodeQL SARIF artifacts to checkout/run/attempt and added initialization/upload-failure regressions; broad/live verification in progress.
 - 2026-10-07: Remaining CodeQL finding resolved; full local tests and live producer/artifact binding verified; story/sprint returned to review.
+- 2026-10-07: Final three-layer review and all applicable PR checks passed; story/sprint marked done and Git Flow PR closeout recorded.
