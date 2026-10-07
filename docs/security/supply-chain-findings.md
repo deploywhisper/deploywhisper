@@ -70,3 +70,7 @@ scope; decisions expire on the next review date or when that scope changes.
 ## Remediation work — 2026-10-07
 
 See [the advisory and source-disposition record](remediation-2026-10-07.md) for all 21 advisory mappings, confirmed source fixes, supported false positives, dependency updates and minimum workflow permissions. The user authorized direct `develop` work. Local dependency audits are clean after compatible updates. Full local/end-to-end validation and publication state are recorded in the remediation spec; no refreshed public score or automatic alert closure is inferred from local success. Owner remains @pramodksahoo under [#131](https://github.com/deploywhisper/deploywhisper/issues/131); branch/review policy and signing follow-ups remain open.
+
+### Published remediation verification
+
+The tested remediation commit `9190270` is now on `develop`. The [successful publisher](https://github.com/deploywhisper/deploywhisper/actions/runs/37585646199) and official badge verify **6.7/10**, up from 4.2: Vulnerabilities, Dependency-Update-Tool and Token-Permissions are now 10; Pinned-Dependencies is 4. See [the published verification record](remediation-2026-10-07.md#published-verification--2026-10-07). Remaining branch/review/signing and other controls remain owned under #131.

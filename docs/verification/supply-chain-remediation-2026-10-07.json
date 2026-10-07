@@ -1,0 +1,124 @@
+{
+  "repository": "github.com/deploywhisper/deploywhisper",
+  "commit": "9190270e271de71fcbe650aae58138afda5d3830",
+  "published_at": "2026-10-07T07:09:53Z",
+  "scorecard_version": "v5.5.0",
+  "previous_score": 4.2,
+  "score": 6.7,
+  "publisher_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37585646199",
+  "badge_verified_score": 6.7,
+  "checks": [
+    {
+      "name": "Code-Review",
+      "before": 0,
+      "score": 0,
+      "reason": "Found 0/30 approved changesets -- score normalized to 0"
+    },
+    {
+      "name": "Dependency-Update-Tool",
+      "before": 0,
+      "score": 10,
+      "reason": "update tool detected"
+    },
+    {
+      "name": "Maintained",
+      "before": 10,
+      "score": 10,
+      "reason": "30 commit(s) and 0 issue activity found in the last 90 days -- score normalized to 10"
+    },
+    {
+      "name": "Security-Policy",
+      "before": 4,
+      "score": 4,
+      "reason": "security policy file detected"
+    },
+    {
+      "name": "Token-Permissions",
+      "before": 0,
+      "score": 10,
+      "reason": "GitHub workflow tokens follow principle of least privilege"
+    },
+    {
+      "name": "Dangerous-Workflow",
+      "before": 10,
+      "score": 10,
+      "reason": "no dangerous workflow patterns detected"
+    },
+    {
+      "name": "Binary-Artifacts",
+      "before": 10,
+      "score": 10,
+      "reason": "no binaries found in the repo"
+    },
+    {
+      "name": "License",
+      "before": 10,
+      "score": 10,
+      "reason": "license file detected"
+    },
+    {
+      "name": "CII-Best-Practices",
+      "before": 0,
+      "score": 0,
+      "reason": "no effort to earn an OpenSSF best practices badge detected"
+    },
+    {
+      "name": "Pinned-Dependencies",
+      "before": 1,
+      "score": 4,
+      "reason": "dependency not pinned by hash detected -- score normalized to 4"
+    },
+    {
+      "name": "SAST",
+      "before": 7,
+      "score": 7,
+      "reason": "SAST tool detected but not run on all commits"
+    },
+    {
+      "name": "Packaging",
+      "before": 10,
+      "score": 10,
+      "reason": "packaging workflow detected"
+    },
+    {
+      "name": "Fuzzing",
+      "before": 0,
+      "score": 0,
+      "reason": "project is not fuzzed"
+    },
+    {
+      "name": "Signed-Releases",
+      "before": -1,
+      "score": -1,
+      "reason": "no releases found"
+    },
+    {
+      "name": "Branch-Protection",
+      "before": 0,
+      "score": 0,
+      "reason": "branch protection not enabled on development/release branches"
+    },
+    {
+      "name": "Vulnerabilities",
+      "before": 0,
+      "score": 10,
+      "reason": "0 existing vulnerabilities detected"
+    },
+    {
+      "name": "Contributors",
+      "before": 0,
+      "score": 0,
+      "reason": "project has 0 contributing companies or organizations -- score normalized to 0"
+    },
+    {
+      "name": "CI-Tests",
+      "before": 10,
+      "score": 10,
+      "reason": "6 out of 6 merged PRs checked by a CI test -- score normalized to 10"
+    }
+  ],
+  "ci_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37585645478",
+  "ci_conclusion": "success",
+  "codeql_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37585645462",
+  "codeql_conclusion": "success"
+}

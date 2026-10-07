@@ -137,3 +137,7 @@ SAST 7 reflects recent merged PR scan history, not missing current source langua
   [remediation-2026-10-07.md:1](../../docs/security/remediation-2026-10-07.md#L1)
 
 Final affected CI shard: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -q --tb=short` — **447 passed +193 subtests**. Log: `/private/tmp/deploywhisper-hardening-final-shard.log`. All implementation tasks and review patches complete; local commit on user-authorized develop.
+
+## Published Outcome — 2026-10-07
+
+User subsequently authorized publishing/running workflows to increase and verify the public score. Commit `9190270` was pushed to `develop`; the previous manual scan had used old remote commit `7a5fbd8`. Publisher run `37585646199` succeeded and the official API/badge both verified **6.7/10**, up from **4.2/10**, at `2026-10-07T07:09:53Z`. Vulnerabilities, Dependency-Update-Tool and Token-Permissions are now 10; Pinned-Dependencies is 4. Full CI `37585645478` and CodeQL `37585645462` on the published source both passed. The accompanying evidence commit changes documentation only. Remaining branch/review/signing/pinning and other controls stay owner-tracked; no remote source alert was dismissed to obtain this result.
