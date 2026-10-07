@@ -32,22 +32,24 @@ jobs:
         with:
           persist-credentials: false
       - name: Assess and publish repository posture
+        id: scorecard
         uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
         with:
-          results_file: results.sarif
+          # Bind output to this immutable checkout and workflow attempt.
+          results_file: scorecard-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.sarif
           results_format: sarif
           publish_results: true
       - name: Preserve available SARIF even after a failed scan
-        if: always() && hashFiles('results.sarif') != ''
+        if: always() && hashFiles(format('scorecard-{0}-{1}-{2}.sarif', github.sha, github.run_id, github.run_attempt)) != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: scorecard-repository-sarif
-          path: results.sarif
+          path: scorecard-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.sarif
           if-no-files-found: error
           retention-days: 30
       - name: Upload repository posture to code scanning
-        if: always() && hashFiles('results.sarif') != ''
+        if: always() && hashFiles(format('scorecard-{0}-{1}-{2}.sarif', github.sha, github.run_id, github.run_attempt)) != ''
         uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
-          sarif_file: results.sarif
+          sarif_file: scorecard-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.sarif
           category: openssf-scorecard-repository

@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import re
 import unittest
+from unittest.mock import patch
 
 import yaml
 
@@ -182,7 +183,9 @@ class SupplyChainWorkflowTests(unittest.TestCase):
             (ROOT / "docs/verification/story-12-4/scorecard-baseline.json").read_text()
         )
         ledger = (ROOT / "docs/security/supply-chain-findings.md").read_text()
-        high = {
+        high_priority = {
+            "Dangerous-Workflow",
+            "Webhooks",
             "Binary-Artifacts",
             "Branch-Protection",
             "Code-Review",
@@ -193,12 +196,18 @@ class SupplyChainWorkflowTests(unittest.TestCase):
             "Vulnerabilities",
         }
         for check in evidence["checks"]:
-            if check["name"] in high and check["score"] < 10:
+            if check["name"] in high_priority and check["score"] < 10:
                 with self.subTest(check=check["name"]):
                     row = next(
-                        line
-                        for line in ledger.splitlines()
-                        if line.startswith("| " + check["name"] + ",")
+                        (
+                            line
+                            for line in ledger.splitlines()
+                            if line.startswith("| " + check["name"] + ",")
+                        ),
+                        None,
+                    )
+                    self.assertIsNotNone(
+                        row, f"Missing disposition for {check['name']}"
                     )
                     self.assertIn("@pramodksahoo", row)
                     self.assertIn(
@@ -212,6 +221,77 @@ class SupplyChainWorkflowTests(unittest.TestCase):
         self.assertIn("first default-branch publishing run", guide)
         self.assertIn("private disclosure", guide)
         self.assertIn("recorded after integration", guide)
+
+    def test_critical_failures_without_dispositions_are_rejected(self):
+        baseline_path = ROOT / "docs/verification/story-12-4/scorecard-baseline.json"
+        original_read = Path.read_text
+        baseline = json.loads(baseline_path.read_text())
+        for critical in ("Dangerous-Workflow", "Webhooks"):
+            for score in (0, -1):
+                with self.subTest(check=critical, score=score):
+                    evidence = {
+                        **baseline,
+                        "checks": [
+                            *baseline["checks"],
+                            {"name": critical, "score": score},
+                        ],
+                    }
+
+                    def read(path, *args, **kwargs):
+                        if path == baseline_path:
+                            return json.dumps(evidence)
+                        return original_read(path, *args, **kwargs)
+
+                    with patch.object(Path, "read_text", read):
+                        result = unittest.TestResult()
+                        SupplyChainWorkflowTests(
+                            "test_baseline_high_priority_findings_have_owned_followups"
+                        ).run(result)
+                    self.assertFalse(
+                        result.wasSuccessful(),
+                        "Critical failure/unknown check needs an owned disposition",
+                    )
+                    self.assertFalse(result.errors)
+                    self.assertTrue(result.failures)
+                    self.assertIn(
+                        "Missing disposition for " + critical, result.failures[0][1]
+                    )
+
+    def test_critical_failures_with_owned_dispositions_are_accepted(self):
+        baseline_path = ROOT / "docs/verification/story-12-4/scorecard-baseline.json"
+        ledger_path = ROOT / "docs/security/supply-chain-findings.md"
+        original_read = Path.read_text
+        baseline = json.loads(baseline_path.read_text())
+        evidence = {
+            **baseline,
+            "checks": [
+                *baseline["checks"],
+                {"name": "Dangerous-Workflow", "score": 0},
+                {"name": "Webhooks", "score": -1},
+            ],
+        }
+        ledger = (
+            ledger_path.read_text()
+            + "\n"
+            + "\n".join(
+                f"| {name}, 0/10 | Critical | synthetic fixture | @pramodksahoo | Open follow-up | https://github.com/deploywhisper/deploywhisper/issues/131 | 2026-10-13 |"
+                for name in ("Dangerous-Workflow", "Webhooks")
+            )
+        )
+
+        def read(path, *args, **kwargs):
+            if path == baseline_path:
+                return json.dumps(evidence)
+            if path == ledger_path:
+                return ledger
+            return original_read(path, *args, **kwargs)
+
+        with patch.object(Path, "read_text", read):
+            result = unittest.TestResult()
+            SupplyChainWorkflowTests(
+                "test_baseline_high_priority_findings_have_owned_followups"
+            ).run(result)
+        self.assertTrue(result.wasSuccessful(), str(result.failures + result.errors))
 
 
 if __name__ == "__main__":

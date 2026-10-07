@@ -70,10 +70,21 @@ a green workflow exit.
    to improve the displayed score.
 
 SARIF artifacts are retained for a bounded period configured in each workflow.
+Scorecard report filenames bind to the immutable checkout SHA, workflow run ID
+and attempt, so checkout-supplied `results.sarif` or a previous run's output
+cannot masquerade as fresh evidence. PR artifact/code-scanning uploads also
+require a successful scanner step. The restricted publisher can retain a fresh
+report after publication fails, without repository cleanup scripts or accepting
+old checkout data. Workflow regressions exercise both failure phases.
 Download them from the run's Artifacts section when troubleshooting or reviewing
 details absent from annotations. Missing artifacts on a failed analysis are not
 evidence that no vulnerabilities exist. Code-scanning upload failures must be
 resolved rather than hidden by `continue-on-error`.
+
+The baseline disposition regression covers Critical as well as High checks,
+including failed or unknown `Dangerous-Workflow` and `Webhooks` results. Its
+negative fixtures require an owned disposition; positive fixtures verify valid
+follow-up rows are accepted.
 
 ## Verification and operation
 

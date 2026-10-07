@@ -1,6 +1,6 @@
 # Story 12.4: OpenSSF Scorecard and CodeQL
 
-Status: review
+Status: in-progress
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -29,6 +29,11 @@ So that supply-chain posture is visible.
 - [x] Update relevant docs or examples if the story changes user-visible, operator, API, CLI, integration, or contribution behavior. (AC: all)
 - [x] Run required validation and record commands/results in the Dev Agent Record. (AC: all)
 - [x] Add the user-requested official Scorecard badge and a restricted default-branch publisher; verify PR scans stay unpublished. (AC: 1)
+
+### Review Findings — 2026-10-07
+
+- [ ] [Review][Patch][P2] Require fresh Scorecard report provenance before artifact/code-scanning upload [.github/workflows/scorecard.yml:37; .github/workflows/scorecard-publish.yml:41]. Both workflows select checkout-relative `results.sarif` and upload with `always()` plus file existence alone. The pinned scanner exits before formatting on option/scan errors without clearing a pre-existing file. A repository-supplied valid SARIF therefore passes the upload guard when scanning fails before output, creating misleading scanner evidence or fabricated findings/clean results. Isolate fresh outputs or add a scan-outcome/provenance guard and failure regressions for both workflows; preserve legitimate report retention after publication failure without adding forbidden shell steps to the publishing job.
+- [ ] [Review][Patch][P3] Include Critical checks in the baseline disposition regression [tests/test_infra/test_supply_chain_workflows.py:185]. The fixed set includes High checks but excludes `Dangerous-Workflow`/`Webhooks`, which the guide prioritizes as Critical. An in-memory mutation making retained `Dangerous-Workflow` score 0 with no corresponding ledger disposition still passes the real test. Extend the priority set/classification and add a negative ownership/disposition case so Critical failures cannot silently escape this guard.
 
 ## Dev Notes
 
@@ -116,6 +121,7 @@ Codex with native subagents for official-source research and bounded workflow/te
 - `.github/workflows/scorecard.yml`
 - `.github/workflows/scorecard-publish.yml`
 - `tests/test_infra/test_supply_chain_workflows.py`
+- `tests/test_infra/test_supply_chain_report_provenance.py`
 - `README.md`
 - `SECURITY.md`
 - `docs/ci.md`
@@ -134,9 +140,31 @@ Codex with native subagents for official-source research and bounded workflow/te
 - Final badge-source verification: `bash scripts/ci-local.sh`: **1,766 tests across all nine directories**; `./.venv/bin/python -m unittest discover -q`: **494 passed**, one optional skip; `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: **431 passed +167 subtests**. Ruff lint/format (**295 files**) and diff checks passed. Logs: `/private/tmp/story12-4-badge-ci.log`, `/private/tmp/story12-4-badge-unittest.log`, `/private/tmp/story12-4-badge-shard.log`. UI validation not applicable.
 - The badge update is included in the same Story 12.4 draft PR. PR-local Scorecard/CodeQL will be rechecked on the updated branch; trusted publisher execution and badge score population remain pending the first integrated default-branch run.
 
+### Code Review Record — 2026-10-07
+
+- Full review scope: `495f845..c8fb694`, **13 files, 749 added / 1 removed lines**, clean original working tree. Frozen diff: `/private/tmp/story12-4-code-review.diff`. Story/project/security context loaded for acceptance; blind reviewer received the diff only.
+- All three independent BMad review layers completed. Triage: **two patches (P2/P3), zero decision-needed, zero new deferrals, one dismissed category candidate**. The acceptance layer verified AC1 result visibility and assigned High follow-ups; edge tracing exposed a failed-scan provenance branch. The baseline-practice gaps in #131 remain existing tracked findings rather than new workflow defects.
+- Report-provenance evidence: the pinned [Scorecard entrypoint](https://github.com/ossf/scorecard-action/blob/2d1146689b8cda280b9bc96326124645441f03bc/main.go) returns on option/scan failures before formatting. An isolated temporary directory with a pre-seeded valid SARIF and scan outcome `failure` still satisfies the existing `always()/hashFiles` predicate. This is a reproduced conditional failure path, not a claim that observed successful runs were forged. CodeQL's pinned `runFinalize` clears its output directory before generating/uploading results, so the analogous successful-analysis auto-upload concern was rejected.
+- Critical-triage evidence: parent invoked the actual `test_baseline_high_priority_findings_have_owned_followups` with a patched in-memory baseline where `Dangerous-Workflow` score changed from 10 to 0. The test passed despite no Critical ledger row. No fixture or operator data was changed on disk.
+- Category candidate dismissed as an unestablished contract violation: actual uploaded Scorecard SARIF carries native `supply-chain/local` automation metadata, rather than the literal upload input; PR-local and hosted coverage are intentionally distinct and documented. No introduced-only attribution is promised. Avoid inferring a full repository posture or public badge value from the PR-local analysis.
+- Fresh validation: workflow regressions **8 passed +15 subtests**; Ruff lint/format (**295 files**), actionlint on all three workflows and diff checks passed. Exact-head GitHub PR checks for `c8fb694` were all successful, including three CodeQL jobs, local Scorecard, security, test shards, migrations and Docker build. This review changes tracking documents only; broad CI/live scanners were not rerun because workflow code was unchanged.
+- Publisher layout/permissions/pins match upstream restrictions and badge/viewer URLs target the correct repository. Public badge API remains without a published score; first trusted default-branch publication and numeric badge verification are still post-integration work, not evidence supplied by the 3.8 CLI baseline. This limitation remains explicit rather than being waived or claimed complete.
+- Findings recorded as action items; story/sprint reopened to `in-progress`. No code fix, commit or push performed during this review because follow-up work remains open. `bmad-help` next step: repair the two Story 12.4 findings and rerun review before Git Flow closeout/default-branch integration.
+
+
 ## Change Log
+
+### Review Fix Implementation — 2026-10-07
+
+- Fixed both review findings. Scorecard producer and consumers now use report filenames bound to the immutable checkout SHA, run ID and attempt. Default checkout without a ref/repository override means a tracked report cannot pre-seed its own commit-dependent filename; previous-run/attempt files also miss the exact guard. PR uploads require scanner success, while the restricted publisher preserves fresh formatted output after publication failure without shell cleanup/environment overrides.
+- Added four temporary-filesystem provenance regressions: valid seeded SARIF, prior commits/runs/attempts and scan failure before output cannot upload; fresh successful PR output can upload; failed/skipped PR scans are blocked; publisher publication failure retains fresh output. Tests initially reproduced 10 failing cases, then passed.
+- Extended ownership assertions to Critical `Dangerous-Workflow`/`Webhooks`. Negative fixtures invoke the actual baseline validator with failed/unknown Critical checks and require the specific missing-disposition failure; positive owned rows pass. Four Critical cases failed before repair. No baseline evidence or live finding is forged or waived.
+- Focused tests: **14 passed +29 subtests**. actionlint and Ruff lint/format (**296 files**) pass. Smoke **500 tests** (one optional skip), API/CLI/infra **437 +181 subtests** pass; full local CI/live updated-PR verification recorded on completion below. Independent reviewer found no residual blocker. UI validation not applicable.
+- Temporary SARIF fixture content was strengthened to include a valid Scorecard driver/run; predicates and behavior unchanged. Source changes remain on the existing draft PR #132. The first trusted badge publication remains post-integration verification.
 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-10-06: Started baseline security workflows, owner-based finding dispositions, static regressions and live validation on the dedicated feature branch.
 - 2026-10-06: CodeQL/Scorecard live runs, SARIF visibility/artifacts, full local CI and high-priority follow-up verified; story/sprint moved to review on draft PR #132.
 - 2026-10-06: Added requested official Scorecard badge and isolated OIDC-backed default-branch publisher; badge safety regressions and full local CI passed; first publication remains post-integration verification.
+- 2026-10-07: Three-layer code review found two actionable report-provenance/critical-triage regression gaps; recorded findings and reopened story/sprint to in-progress.
+- 2026-10-07: Implemented commit/run/attempt-bound report uploads and Critical ownership regressions; full/local and live PR validation underway.
