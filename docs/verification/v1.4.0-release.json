@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-07",
+  "release": "v1.4.0",
+  "baseline_tag": "v1.3.0",
+  "product_scope": "Accepted work through Story12.4, plus vulnerability remediation and signed release infrastructure",
+  "local_ci_tests": 1845,
+  "smoke_tests": 555,
+  "release_pytest": {
+    "passed": 1844,
+    "skipped": 1,
+    "subtests_passed": 1318,
+    "coverage_percent": 95.18
+  },
+  "api_cli_infra": {
+    "passed": 492,
+    "subtests_passed": 257
+  },
+  "frontend_unit_tests": 56,
+  "composed_browser_tests": {
+    "passed": 17,
+    "skipped": 0,
+    "base_url": "http://localhost:8080",
+    "disposable_data": true,
+    "original_app_restored_healthy": true
+  },
+  "audits": {
+    "python": "no known vulnerabilities",
+    "root_npm": "zero",
+    "frontend_npm": "zero"
+  },
+  "openapi": "Refreshed actual current runtime schema; regenerated TS types unchanged",
+  "review": "Three independent preparation reviews; contributor release/back-merge ordering patched; existing partial-promotion recovery documented",
+  "known_limitations": [
+    "One optional test skip",
+    "Pre-existing nonblocking mypy backlog; no new application logic in release preparation",
+    "Code-Review governance still requires a legitimate independent human reviewer",
+    "Obsolete root Dependabot graph alerts individually classified inaccurate with current lock/install/audit evidence; actual frontend advisories repaired"
+  ],
+  "publication": "pending authorized tag workflow",
+  "validated_security_source": "d2cb917f7f0c0eb4f4db601196ed9bf5fe4a4686",
+  "security_regressions": {
+    "passed": 43,
+    "subtests_passed": 142,
+    "differential_cases": 30000,
+    "actual_redos_alerts_repaired": [
+      90,
+      91,
+      93
+    ]
+  },
+  "alert_triage": {
+    "codeql_pr_open": 0,
+    "dependabot_open": 0,
+    "false_positives": 15,
+    "synthetic_test_fixtures": 4,
+    "accepted_legacy_compatibility": 1,
+    "legacy_risk": "Dormant or write-failed legacy SHA256 shares remain weak; reconfigure passwords proactively",
+    "individual_dispositions": "v1.4.0-alert-triage.json"
+  }
+}

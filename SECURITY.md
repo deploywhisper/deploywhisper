@@ -21,7 +21,7 @@ Include enough information for maintainers to reproduce and assess the issue wit
 
 | Version | Security support |
 | --- | --- |
-| Latest 1.3.x release | Current supported release line |
+| Latest 1.4.x release | Current supported release line |
 | Earlier releases | Upgrade to the current release before applying a fix |
 | develop | Development branch; fixes land here before release |
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from urllib.parse import quote, quote_plus
@@ -23,6 +25,63 @@ from services.content_security import (
 
 
 class ContentSecurityTests(unittest.TestCase):
+    def test_query_and_authorization_failing_inputs_have_bounded_scans(self):
+        script = """
+import sys
+from services.content_security import redact_text, sensitive_artifact_values
+text = ('&' + '?!' * 32768 if sys.argv[1] == 'query'
+        else 'authorization:' + ' ' * 32768 + '!')
+assert redact_text(text) == text
+assert sensitive_artifact_values(text.encode()) == ()
+"""
+        for family in ("query", "authorization"):
+            with self.subTest(family=family):
+                result = subprocess.run(  # nosec B603
+                    [sys.executable, "-c", script, family],
+                    cwd=Path(__file__).resolve().parents[2],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_authorization_quotes_and_spacing_preserve_credential_screening(self):
+        for header in (
+            "Bearer ",
+            "Basic\t",
+            "Authorization: Bearer ",
+            '"Authorization" : "  Bearer ',
+            "'authorization' = ' \t Basic ",
+        ):
+            with self.subTest(header=header):
+                raw = header + "synthetic-value"
+                self.assertNotIn("synthetic-value", redact_text(raw))
+                self.assertIn(
+                    "synthetic-value", sensitive_artifact_values(raw.encode())
+                )
+
+    def test_sensitive_substitution_treats_regex_metacharacters_as_literals(self):
+        for secret in (".*", "a|b", "[", "a\\1", "(a+)+$"):
+            with self.subTest(secret=secret):
+                self.assertEqual(
+                    redact_text(f"echo {secret} ordinary", sensitive_values=(secret,)),
+                    f"echo {REDACTED} ordinary",
+                )
+
+    def test_query_names_with_question_marks_keep_sensitive_normalization(self):
+        for name in ("token", "tok?en", "api?key", "%74oken"):
+            with self.subTest(name=name):
+                raw = f"https://example.invalid/?{name}=synthetic-value&label=ordinary"
+                self.assertNotIn("synthetic-value", redact_text(raw))
+                self.assertIn(
+                    "synthetic-value", sensitive_artifact_values(raw.encode())
+                )
+        for raw in ("?token", "&tok?en", "?ordinary=value", "?token=", "?token=x"):
+            with self.subTest(raw=raw):
+                expected = f"?token={REDACTED}" if raw.startswith("?token=") else raw
+                self.assertEqual(redact_text(raw), expected)
+
     def test_marker_fragments_do_not_corrupt_redacted_sibling_values(self):
         for fragment in ("[REDAC", "REDA", "DACT", "CTED]", "[", "]"):
             with self.subTest(fragment=fragment):
@@ -120,10 +179,13 @@ class ContentSecurityTests(unittest.TestCase):
                 self.assertEqual(redact_text(block), f"password: {REDACTED}\n")
 
     def test_yaml_python_object_tags_never_execute(self):
-        raw = b'!!python/object/apply:os.system ["echo synthetic-value"]'
-        with patch("os.system") as execute:
-            self.assertEqual(sensitive_artifact_values(raw), ())
-        execute.assert_not_called()
+        for raw in (
+            b'!!python/object/apply:os.system ["echo synthetic-value"]',
+            b'{value: !!python/object/apply:os.system ["echo synthetic-value"]}',
+        ):
+            with self.subTest(raw=raw), patch("os.system") as execute:
+                self.assertEqual(sensitive_artifact_values(raw), ())
+                execute.assert_not_called()
 
     def test_escaped_hcl_credentials_keep_literal_and_decoded_variants(self):
         for literal, decoded in (

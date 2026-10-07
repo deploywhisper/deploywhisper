@@ -19,7 +19,7 @@ The release pipeline calls this reusable workflow with a matching version tag.
 The caller's SHA/ref remain the provenance source; the reusable workflow is the
 signer identity. Stable and RC versions must match source packaging metadata:
 `v1.4.0-rc.1` requires `1.4.0rc1` or `1.4.0-rc.1`, and cannot match `1.4.0`.
-Publication of a new public version remains a separate owner decision.
+The owner authorized stable `v1.4.0` on 2026-10-07. Publication still requires the full release pipeline gates; an artifact preview alone is insufficient.
 
 ## Reproduce locally
 

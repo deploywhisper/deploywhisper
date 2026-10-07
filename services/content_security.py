@@ -64,7 +64,9 @@ _TOKEN = re.compile(
     r"|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{12,})\b"
 )
 _AUTHORIZATION = re.compile(
-    r"(?i)(\b(?:authorization[\"']?\s*[:=]\s*[\"']?\s*)?"
+    # Whitespace before an optional quote is consumed once. Separate repeats
+    # on both sides of an absent quote would repartition failing whitespace.
+    r"(?i)(\b(?:authorization[\"']?\s*[:=]\s*(?:[\"']\s*)?)?"
     r"\b(?:bearer|basic)\s+)(?P<credential>[A-Za-z0-9._~+/=-]+)"
 )
 _URL_CREDENTIAL = re.compile(
@@ -73,7 +75,10 @@ _URL_CREDENTIAL = re.compile(
     r"((?<![\w+.-])[a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/:@]+:(?P<credential>[^\s/@]+)@"
 )
 _QUERY_PARAMETER = re.compile(
-    r"(?P<prefix>[?&])(?P<name>[^=&\s\"'<>#]+)=(?P<credential>[^&#\s\"'<>]*)"
+    # Consume a whole candidate even when '=' is absent, so '?' characters
+    # inside a failing name cannot restart scans of its overlapping suffixes.
+    # Callers ignore candidates without a credential (None, unlike empty '').
+    r"(?P<prefix>[?&])(?P<name>[^=&\s\"'<>#]+)(?:=(?P<credential>[^&#\s\"'<>]*))?"
 )
 _SENSITIVE_QUERY_NAMES = {
     "code",
@@ -262,7 +267,9 @@ def _lexical_sensitive_values(text: str) -> set[str]:
                     credential = decoded
                     found.update(_sensitive_variants(credential))
     for match in _QUERY_PARAMETER.finditer(text):
-        if _sensitive_query_name(match.group("name")):
+        if match.group("credential") is not None and _sensitive_query_name(
+            match.group("name")
+        ):
             # Keep literal '+' values as well as form-decoded OAuth echoes.
             for decoder in (unquote, unquote_plus):
                 candidate = match.group("credential")
@@ -379,7 +386,8 @@ def _redact_lexical_text(value: str, *, sensitive_values: Iterable[str] = ()) ->
     return _QUERY_PARAMETER.sub(
         lambda match: (
             match.group("prefix") + match.group("name") + "=" + REDACTED
-            if _sensitive_query_name(match.group("name"))
+            if match.group("credential") is not None
+            and _sensitive_query_name(match.group("name"))
             else match.group(0)
         ),
         text,

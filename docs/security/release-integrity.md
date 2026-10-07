@@ -16,13 +16,15 @@ Signed-Releases was unassessed(-1), not a passing control. Four published GitHub
 
 Read [the artifact/consumer verification guide](release-artifacts.md). A source-only preview publishes no tag, release or image alias. Hosted preview and negative cryptographic checks must be recorded before choosing a public release version. OCI registry signing/promotion still requires an authorized real tag and cannot be claimed from artifact-only preview.
 
-## Pending owner decisions
+## Reviewer decision and release authorization
 
 **Reviewer:** choose an independent person to hold write access and approve changes; explicitly authorize any role promotion. Requiring an approval without that person would block owner-authored PRs. The proposed rule requires one approval, stale-review dismissal, approval after the last push, resolved review threads and current successful CI, with no bypass. It replaces direct pushes to develop/main with PRs. No role or mandatory-review rule has been applied by this preparation.
 
-**Release:** develop is127 commits ahead of v1.3.0. A1.4.0-rc.1 prerelease is the suggested reviewable candidate, not an approved version. Publishing it requires matching packaging metadata1.4.0rc1, a validated tag/source and successful release gates. Old releases/tags/assets remain unchanged. A new asset-bearing signed-provenance prerelease is assessable by Scorecard, but a draft/workflow preview is not. Do not publish a stable patch containing this entire development span solely to increase a metric.
+**Release:** On2026-10-07 the owner authorized stable **v1.4.0**, professional notes comparing v1.3.0 with accepted product changes through Story 12.4, consistent version metadata and signed publication. The earlier 1.4.0-rc.1 suggestion was an unapproved preparation recommendation; stable1.4.0 is now the selected release. Necessary vulnerability fixes and signing infrastructure are included without advertising later product stories. Historical releases/tags/assets remain unchanged.
 
-The public score cannot reflect these two controls until the real review process and approved public release are in place. Remaining decisions are owner responsibilities under issue#131. Local/hosted test and signature evidence will be appended after validation.
+Preparation uses `release/v1.4.0`, a reviewed merge into main and a main-to-develop back-merge before the immutable tag is pushed. This preserves Git Flow and satisfies the release pipeline's default-branch ancestry guard. Tests, security audit, signed source verification, exact-digest container smoke and OCI provenance verification must pass before publication. Actual release evidence will be recorded separately from the preview results below.
+
+The public score can reflect Signed-Releases only after actual public signed assets exist. Human Code-Review remains a separate unresolved prerequisite under issue#131; no reviewer role or approval was invented for this release.
 
 ## Concrete review-policy proposal
 
@@ -61,8 +63,8 @@ A concurrent real hosted fuzz run found marker corruption: a discovered value su
 
 [Preview37605206305](https://github.com/deploywhisper/deploywhisper/actions/runs/37605206305) succeeded on509d723 with the marker fix. Independent verification again accepted archive/checksums/manifest and rejected all five altered-byte/identity/ref/digest cases. [The verification record](../verification/release-attestation-preview.json) retains both runs; neither is a public software release. CodeQL passed on corrected source. Full hosted CI and retained-crash-seed fuzzing complete before source readiness is claimed. No reviewer-role/approval rules or public version choice were guessed.
 
-## Ready for owner decisions
+## Verified preparation before stable authorization
 
 Corrected source509d723 passed [full CI37605204825](https://github.com/deploywhisper/deploywhisper/actions/runs/37605204825), [CodeQL37605204721](https://github.com/deploywhisper/deploywhisper/actions/runs/37605204721), [signed preview37605206305](https://github.com/deploywhisper/deploywhisper/actions/runs/37605206305) and [real fuzz37605204817](https://github.com/deploywhisper/deploywhisper/actions/runs/37605204817). Fuzzing completed36,044executions, coverage1,063/features4,624, no crashes. Independent three-subject verification and all five negative cases passed; local suites1841tests, smoke555, affectedshard492+257subtests, all17productionbrowsertests passed.
 
-Preparation is complete. Public Code-Review remains0 and Signed-Releases remains unassessed(-1): the human reviewer/role and new public version are intentionally not guessed. Choose the reviewer plus authorization for write access/PR-only human-codeowner delivery, and choose/approve a new release version (recommended1.4.0-rc.1) so metadata/tag/publication can proceed through the prepared gates. The proposed prerequisite switch also allows bot PR creation only behind the required human-codeowner process, never automatic approval/merge. No old release/tag/assets or stable aliases were altered. Full registry-tag promotion awaits the real authorized release, and remains a declared untested path until it runs.
+Preparation evidence above predates the owner's stable v1.4.0 authorization. At that point Code-Review was0 and Signed-Releases was unassessed(-1). The reviewer role/PR-only human-codeowner decision remains pending. Public release version is now authorized as described above; registry signing/promotion remains unverified until the real release gates finish. No old release/tag/assets are modified.
