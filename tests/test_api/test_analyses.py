@@ -6,6 +6,8 @@ import os
 import sqlite3
 import tempfile
 import unittest
+
+from tests.snapshot_isolation import isolate_artifact_snapshots
 from datetime import UTC, datetime
 from importlib import reload
 from pathlib import Path
@@ -14,12 +16,18 @@ from unittest.mock import patch
 import config as config_module
 import models.database as database_module
 import models.repositories.analysis_reports as analysis_reports_repository_module
+import models.repositories.settings as settings_repository_module
 import models.tables as tables_module
 import services.deployment_outcome_service as deployment_outcome_service_module
 import services.project_service as project_service_module
 import services.report_service as report_service_module
 from analysis.blast_radius import BlastRadiusResult, ImpactNode
-from api.schemas import BlastRadiusData, ContextCompletenessData, PersistedReportData
+from api.schemas import (
+    BlastRadiusData,
+    ContextCompletenessData,
+    EvidenceItemData,
+    PersistedReportData,
+)
 from services.analysis_service import AnalysisPersistenceError
 from services.analysis_service import AnalysisRunResult
 from analysis.rollback_planner import RollbackPlan
@@ -40,6 +48,7 @@ from pydantic import ValidationError
 class AnalysesApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
+        isolate_artifact_snapshots(self, self.tempdir.name)
         self.db_path = Path(self.tempdir.name) / "reports.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
         os.environ["APP_BASE_URL"] = "https://deploywhisper.example.com"
@@ -149,6 +158,71 @@ class AnalysesApiTests(unittest.TestCase):
         os.environ.pop("DEPLOYWHISPER_SHARE_TOKEN", None)
         self.tempdir.cleanup()
 
+    def test_context_completeness_api_schema_exposes_source_freshness_ledger(
+        self,
+    ) -> None:
+        context = ContextCompletenessData.model_validate(
+            {
+                "context_score": 0.68,
+                "confidence_level": "low",
+                "context_sources": [
+                    {
+                        "source_id": "topology:terraform-state:state://prod",
+                        "source_type": "topology",
+                        "source_ref": "state://prod",
+                        "scope": "project:payments/workspace:prod",
+                        "freshness_status": "stale",
+                        "last_observed_at": "2026-05-01T00:00:00Z",
+                        "age_days": 47,
+                        "confidence": 0.42,
+                        "conflicts": ["kubernetes-live-state"],
+                        "limitations": ["stale_topology"],
+                    }
+                ],
+            }
+        )
+
+        source = context.context_sources[0]
+        self.assertEqual(source.source_type, "topology")
+        self.assertEqual(source.freshness_status, "stale")
+        self.assertEqual(source.scope, "project:payments/workspace:prod")
+        self.assertEqual(source.confidence, 0.42)
+        self.assertEqual(source.conflicts, ["kubernetes-live-state"])
+
+    def test_evidence_item_api_schema_can_reference_context_source_metadata(
+        self,
+    ) -> None:
+        evidence = EvidenceItemData.model_validate(
+            {
+                "evidence_id": "ev-topology-1",
+                "analysis_id": 1,
+                "finding_id": "finding-1",
+                "source_type": "topology",
+                "source_ref": "state://prod#aws_instance.web",
+                "summary": "Terraform state mapped aws_instance.web to checkout.",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "confidence": 0.81,
+                "context_source": {
+                    "source_id": "topology:terraform-state:state://prod",
+                    "source_type": "topology",
+                    "source_ref": "state://prod",
+                    "scope": "project:payments/workspace:prod",
+                    "freshness_status": "current",
+                    "last_observed_at": "2026-06-16T00:00:00Z",
+                    "age_days": 1,
+                    "confidence": 0.81,
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        self.assertEqual(
+            evidence.context_source.source_id, "topology:terraform-state:state://prod"
+        )
+        self.assertEqual(evidence.context_source.freshness_status, "current")
+
     def _analysis_result_with_persisted_report(
         self,
         persisted_report: dict,
@@ -205,6 +279,95 @@ class AnalysesApiTests(unittest.TestCase):
             ),
             persisted_report=persisted_report,
         )
+
+    def _persisted_report_with_scanner_conflict(self) -> dict:
+        analysis_id = self.persisted["id"]
+        persisted_report = dict(self.persisted)
+        persisted_report.update(
+            {
+                "severity": "medium",
+                "recommendation": "caution",
+                "top_risk": "Scanner severity disagrees with deterministic proof.",
+                "narrative_opening": (
+                    "CAUTION: scanner output needs deterministic reconciliation."
+                ),
+                "findings": [
+                    {
+                        "finding_id": "finding-001",
+                        "analysis_id": analysis_id,
+                        "title": "MEDIUM: aws_security_group.main",
+                        "description": "Security group exposure should be reviewed.",
+                        "explanation": "Scanner severity disagrees with proof.",
+                        "guidance": ["Review scanner evidence before acting."],
+                        "severity": "medium",
+                        "category": "network",
+                        "deterministic": True,
+                        "confidence": 0.62,
+                        "evidence_classification": "deterministic",
+                        "evidence_refs": ["ev-det", "ev-scan"],
+                    }
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-det",
+                        "analysis_id": analysis_id,
+                        "finding_id": "finding-001",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://plan#aws_security_group.main",
+                        "artifact": "plan.json",
+                        "location": "plan.json",
+                        "resource": "aws_security_group.main",
+                        "operation": "modify",
+                        "source_kind": "artifact",
+                        "summary": "Terraform proof marks the finding medium.",
+                        "severity_hint": "medium",
+                        "deterministic": True,
+                        "determinism_level": "deterministic",
+                        "confidence": 0.9,
+                        "context_source": {
+                            "source_id": "evidence:terraform:plan",
+                            "source_type": "artifact",
+                            "source_ref": "plan.json",
+                            "scope": "project:payments",
+                            "freshness_status": "current",
+                            "confidence": 0.9,
+                            "conflicts": [],
+                            "limitations": [],
+                        },
+                    },
+                    {
+                        "evidence_id": "ev-scan",
+                        "analysis_id": analysis_id,
+                        "finding_id": "finding-001",
+                        "source_type": "external_scanner",
+                        "source_ref": "semgrep://results/api-conflict",
+                        "artifact": "semgrep.sarif",
+                        "location": "main.tf:12",
+                        "resource": "aws_security_group.main",
+                        "operation": "scan",
+                        "source_kind": "external_scanner",
+                        "summary": "Semgrep marks the same exposure high.",
+                        "severity_hint": "high",
+                        "deterministic": True,
+                        "determinism_level": "deterministic",
+                        "confidence": 0.88,
+                        "context_source": {
+                            "source_id": "scanner:semgrep:semgrep.sarif",
+                            "source_type": "external_scanner",
+                            "source_ref": "semgrep.sarif",
+                            "scope": "project:payments",
+                            "freshness_status": "current",
+                            "confidence": 0.88,
+                            "conflicts": [],
+                            "limitations": [],
+                        },
+                    },
+                ],
+                "top_risk_contributors": ["ev-det"],
+                "context_completeness": {"context_score": 0.84},
+            }
+        )
+        return persisted_report
 
     def test_list_analyses_returns_persisted_reports(self) -> None:
         response = self.client.get("/api/v1/analyses")
@@ -437,6 +600,147 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(payload["data"]["advisory"]["recommendation"], "caution")
         self.assertEqual(payload["data"]["audit"]["llm_provider"], "ollama")
         self.assertEqual(payload["data"]["blast_radius"]["direct_count"], 0)
+
+    def test_policy_adapter_output_applies_saved_integration_defaults(self) -> None:
+        project_key = self.persisted["project"]["project_key"]
+        saved = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                "project_key": project_key,
+                "integration": "jenkins",
+                "warn_at": "high",
+                "soft_block_at": "critical",
+                "hard_block_at": None,
+                "reporting_default": "advisory",
+            },
+        )
+
+        response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}/policy-adapter",
+            params={"integration": "jenkins"},
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["status"], "advisory")
+        self.assertEqual(payload["data"]["applied_settings"]["source"], "integration")
+        self.assertEqual(payload["data"]["applied_settings"]["integration"], "jenkins")
+        self.assertEqual(
+            payload["data"]["adapter_output"]["canonical_summary"]["severity"],
+            "medium",
+        )
+        self.assertTrue(payload["data"]["canonical_report_advisory"])
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+
+    def test_enforcement_decision_exposes_capped_status_for_external_adapters(
+        self,
+    ) -> None:
+        project_key = self.persisted["project"]["project_key"]
+        saved = self.client.put(
+            "/api/v1/settings/policy-adapter",
+            json={
+                "project_key": project_key,
+                "integration": "jenkins",
+                "warn_at": "low",
+                "soft_block_at": None,
+                "hard_block_at": "medium",
+                "reporting_default": "advisory",
+                "enforcement_mode": "warn",
+            },
+        )
+
+        response = self.client.get(
+            f"/api/v1/analyses/{self.persisted['id']}/enforcement-decision",
+            params={"integration": "jenkins"},
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["configured_mode"], "warn")
+        self.assertEqual(payload["data"]["effective_status"], "warn")
+        self.assertFalse(payload["data"]["should_block"])
+        self.assertEqual(payload["data"]["policy_output"]["status"], "hard-block")
+        self.assertTrue(payload["data"]["policy_output"]["canonical_report_advisory"])
+        self.assertEqual(payload["meta"]["report_schema_version"], "v2")
+
+    def test_policy_adapter_output_enforces_report_scope_access(self) -> None:
+        for endpoint in ("policy-adapter", "enforcement-decision"):
+            for report_id in (self.persisted["id"], 999_999):
+                with self.subTest(endpoint=endpoint, report_id=report_id):
+                    response = self.client.get(
+                        f"/api/v1/analyses/{report_id}/{endpoint}",
+                        params={"integration": "jenkins"},
+                        headers={
+                            "X-DeployWhisper-Project-Role": "read-only",
+                            "X-DeployWhisper-Project-Keys": "payments",
+                        },
+                    )
+
+                    self.assertEqual(response.status_code, 403)
+                    self.assertEqual(
+                        response.json()["error"]["code"], "project_scope_forbidden"
+                    )
+
+    def test_policy_adapter_output_reports_corrupt_settings_as_server_error(
+        self,
+    ) -> None:
+        project_key = self.persisted["project"]["project_key"]
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key=f"policy_adapter_defaults::{project_key}::project",
+                value="not-json",
+            )
+
+        for endpoint in ("policy-adapter", "enforcement-decision"):
+            with self.subTest(endpoint=endpoint):
+                response = self.client.get(
+                    f"/api/v1/analyses/{self.persisted['id']}/{endpoint}",
+                    params={"integration": "jenkins"},
+                )
+
+                self.assertEqual(response.status_code, 500)
+                self.assertEqual(
+                    response.json()["error"]["code"],
+                    "policy_adapter_settings_integrity_error",
+                )
+
+    def test_enforcement_decision_reports_internal_invariant_failure_as_server_error(
+        self,
+    ) -> None:
+        with patch(
+            "api.routes.analyses.build_integration_enforcement_decision",
+            side_effect=ValueError("internal invariant detail"),
+        ):
+            response = self.client.get(
+                f"/api/v1/analyses/{self.persisted['id']}/enforcement-decision",
+                params={"integration": "jenkins"},
+            )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.json()["error"]["code"],
+            "integration_enforcement_decision_invalid",
+        )
+        self.assertNotIn("internal invariant detail", response.text)
+
+    def test_enforcement_decision_rejects_invalid_integration_as_client_error(
+        self,
+    ) -> None:
+        for integration in ("   ", "github/action"):
+            with self.subTest(integration=integration):
+                response = self.client.get(
+                    f"/api/v1/analyses/{self.persisted['id']}/enforcement-decision",
+                    params={"integration": integration},
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["error"]["code"],
+                    "invalid_integration_identifier",
+                )
 
     def test_blast_radius_api_schema_preserves_topology_context_fields(self) -> None:
         blast_radius = BlastRadiusData.model_validate(
@@ -1392,6 +1696,57 @@ class AnalysesApiTests(unittest.TestCase):
         self.assertEqual(unlocked_response.status_code, 200)
         self.assertTrue(unlocked_response.json()["data"]["share"]["redact_filenames"])
 
+    def test_unlock_shared_report_preserves_requested_previous_comparison(
+        self,
+    ) -> None:
+        report_service_module.configure_report_share(
+            self.persisted["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+        comparison_payload = {
+            "risk_score_delta": 7,
+            "summary": {"warnings": []},
+        }
+
+        with patch(
+            "api.routes.analyses.fetch_shared_report_comparison",
+            return_value=comparison_payload,
+        ) as comparison_mock:
+            response = self.client.post(
+                f"/api/v1/analyses/{self.persisted['id']}/shared/unlock?compare=previous",
+                json={"password": "s3cret-pass"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["comparison"], comparison_payload)
+        comparison_mock.assert_called_once_with(
+            self.persisted["id"],
+            bypass_password=True,
+            previous_bypass_password=True,
+        )
+
+    def test_unlock_shared_report_does_not_fail_when_comparison_is_unavailable(
+        self,
+    ) -> None:
+        report_service_module.configure_report_share(
+            self.persisted["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        with patch(
+            "api.routes.analyses.fetch_shared_report_comparison",
+            side_effect=ValueError("comparison cannot be built"),
+        ):
+            response = self.client.post(
+                f"/api/v1/analyses/{self.persisted['id']}/shared/unlock?compare=previous",
+                json={"password": "s3cret-pass"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["data"]["comparison"])
+
     def test_create_analysis_masks_foreign_workspace_for_scoped_actor(self) -> None:
         allowed = project_service_module.create_project(
             project_key="payments",
@@ -1880,6 +2235,42 @@ class AnalysesApiTests(unittest.TestCase):
             [name for name, _ in raw_files],
             [".github/CODEOWNERS", "services/payments/plan.json"],
         )
+
+    def test_create_analysis_serializes_scanner_conflict_share_summary_payload(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments-api-conflict",
+            display_name="Payments API Conflict",
+        )
+        persisted_report = self._persisted_report_with_scanner_conflict()
+
+        with patch(
+            "api.routes.analyses.analyze_uploaded_files",
+            return_value=self._analysis_result_with_persisted_report(persisted_report),
+        ):
+            response = self.client.post(
+                "/api/v1/analyses",
+                files={"files": ("plan.json", b'{"resource_changes": []}')},
+                data={"project_key": "payments-api-conflict"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        share_summary = response.json()["data"]["share_summary"]
+        conflicts = share_summary["json_payload"]["scanner_conflicts"]
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(
+            conflicts[0]["scanner_source"], "semgrep://results/api-conflict"
+        )
+        self.assertEqual(
+            conflicts[0]["deterministic_source"],
+            "ev-det",
+        )
+        self.assertEqual(conflicts[0]["scanner_freshness"], "current")
+        self.assertEqual(conflicts[0]["deterministic_freshness"], "current")
+        self.assertIn("Evidence Law", conflicts[0]["confidence_impact"])
+        self.assertIn("recommended_verification", conflicts[0])
+        self.assertIn("Scanner conflict", share_summary["markdown"])
 
     def test_create_analysis_does_not_trust_pathlike_filenames_without_metadata(
         self,

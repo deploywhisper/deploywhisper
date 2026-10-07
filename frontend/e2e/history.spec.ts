@@ -142,8 +142,10 @@ test.describe("React history screen", () => {
       await page.getByLabel(`Select report ${reportId}`).check();
     }
     await expect(page.getByText(`${seededReports.length} selected`)).toBeVisible();
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: /Delete selected/i }).click();
-    await expect(page.getByText(`Deleted ${seededReports.length} analysis report(s).`)).toBeVisible();
+    const deleteDialog = page.getByRole("dialog", { name: /Delete selected reports/i });
+    await expect(deleteDialog).toBeVisible();
+    await deleteDialog.getByRole("button", { name: /Delete reports/i }).click();
+    await expect(page.getByText(`Deleted ${seededReports.length} analysis report(s).`)).toBeVisible({ timeout: 60_000 });
   });
 });

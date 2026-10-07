@@ -263,6 +263,13 @@
   white-space: nowrap;
 }
 
+.dw-finding-tag-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
 .dw-decision-list li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

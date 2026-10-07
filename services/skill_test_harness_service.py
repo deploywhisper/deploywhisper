@@ -10,7 +10,11 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from llm.skill_context import ActiveSkill, build_skill_context_from_active_skills
-from services.skill_manifest_service import REPO_ROOT, load_skill_document
+from services.skill_manifest_service import (
+    REPO_ROOT,
+    SkillTrustLevel,
+    load_skill_document,
+)
 
 
 SKILLS_DIR = REPO_ROOT / "skills"
@@ -28,11 +32,12 @@ class SkillTestScenarioDefinition(BaseModel):
         ..., description="Contributor tool name used to build assessment context."
     )
     contributor_summary: str = Field(
-        default="Exercise skill guidance.",
+        ...,
         description="Summary used for the single contributor in the scenario.",
     )
     raw_files: dict[str, str] = Field(
-        default_factory=dict,
+        ...,
+        min_length=1,
         description="Filename to text payload map supplied to skill resolution.",
     )
     expect_selected: bool = Field(
@@ -88,12 +93,33 @@ class SkillTestSummary(BaseModel):
     generated_at: str
 
 
+class SkillTestCoverage(BaseModel):
+    """Coverage of the deterministic assertions required by Story 9.3."""
+
+    expected_triggers: bool
+    expected_outputs: bool
+    evidence_assumptions: bool
+    safety_constraints: bool
+    complete: bool
+
+
+class SkillTrustRequirement(BaseModel):
+    """Whether the harness result satisfies the Skill's trust-level gate."""
+
+    trust_level: SkillTrustLevel
+    required: bool
+    satisfied: bool
+    failures: list[str] = Field(default_factory=list)
+
+
 class SkillTestSuiteResult(BaseModel):
     """Complete harness result for one skill."""
 
     skill_id: str
     version: str
     summary: SkillTestSummary
+    coverage: SkillTestCoverage
+    trust_requirement: SkillTrustRequirement
     scenarios: list[SkillTestScenarioResult] = Field(default_factory=list)
 
 
@@ -113,6 +139,8 @@ def _timestamp() -> str:
 def _build_summary(
     skill_id: str,
     scenario_results: list[SkillTestScenarioResult],
+    *,
+    suite_failed: bool = False,
 ) -> SkillTestSummary:
     total = len(scenario_results)
     passed = sum(1 for result in scenario_results if result.passed)
@@ -120,7 +148,7 @@ def _build_summary(
     status: SkillHarnessStatus
     if total == 0:
         status = "missing"
-    elif failed > 0:
+    elif failed > 0 or suite_failed:
         status = "failing"
     else:
         status = "passing"
@@ -157,7 +185,9 @@ def _load_scenarios(suite_dir: Path) -> list[SkillTestScenarioDefinition]:
     return scenarios
 
 
-def _load_active_skill(skill_id: str) -> tuple[ActiveSkill, str, Path] | None:
+def _load_active_skill(
+    skill_id: str,
+) -> tuple[ActiveSkill, str, SkillTrustLevel, Path] | None:
     path = SKILLS_DIR / f"{skill_id}.md"
     if not path.exists():
         return None
@@ -180,7 +210,150 @@ def _load_active_skill(skill_id: str) -> tuple[ActiveSkill, str, Path] | None:
             trigger_content_patterns=list(document.manifest.trigger_content_patterns),
         ),
         document.manifest.version,
+        document.manifest.trust_level,
         REPO_ROOT / document.manifest.test_suite_path,
+    )
+
+
+def _filename_matches_trigger(filename: str, trigger: str) -> bool:
+    normalized_filename = filename.lower()
+    normalized_trigger = trigger.lower()
+    if normalized_trigger.startswith("."):
+        return normalized_filename.endswith(normalized_trigger)
+    if normalized_filename == normalized_trigger:
+        return True
+    return Path(normalized_filename).name == normalized_trigger
+
+
+def _scenario_has_expected_trigger(
+    active_skill: ActiveSkill,
+    scenario: SkillTestScenarioDefinition,
+) -> bool:
+    if not scenario.expect_selected:
+        return False
+    if scenario.assessment_tool.lower() == active_skill.name:
+        return True
+    if any(
+        _filename_matches_trigger(filename, trigger)
+        for filename in scenario.raw_files
+        for trigger in active_skill.triggers
+    ):
+        return True
+    raw_blob = "\n".join([*scenario.raw_files, *scenario.raw_files.values()]).lower()
+    return any(
+        pattern.lower() in raw_blob for pattern in active_skill.trigger_content_patterns
+    )
+
+
+def _evaluate_coverage(
+    active_skill: ActiveSkill,
+    scenarios: list[SkillTestScenarioDefinition],
+    scenario_results: list[SkillTestScenarioResult],
+) -> SkillTestCoverage:
+    passing_scenarios = [
+        scenario
+        for scenario, result in zip(scenarios, scenario_results, strict=False)
+        if result.passed
+    ]
+    positive_scenarios = [
+        scenario for scenario in passing_scenarios if scenario.expect_selected
+    ]
+    expected_triggers = any(
+        _scenario_has_expected_trigger(active_skill, scenario)
+        for scenario in positive_scenarios
+    )
+    expected_outputs = any(
+        scenario.expected_substrings for scenario in positive_scenarios
+    )
+    evidence_assumptions = any(
+        scenario.raw_files and scenario.assessment_tool and scenario.contributor_summary
+        for scenario in positive_scenarios
+    )
+    safety_constraints = any(
+        not scenario.expect_selected and scenario.expected_absent_substrings
+        for scenario in passing_scenarios
+    )
+    return SkillTestCoverage(
+        expected_triggers=expected_triggers,
+        expected_outputs=expected_outputs,
+        evidence_assumptions=evidence_assumptions,
+        safety_constraints=safety_constraints,
+        complete=all(
+            (
+                expected_triggers,
+                expected_outputs,
+                evidence_assumptions,
+                safety_constraints,
+            )
+        ),
+    )
+
+
+def _evaluate_trust_requirement(
+    trust_level: SkillTrustLevel,
+    coverage: SkillTestCoverage,
+    scenario_results: list[SkillTestScenarioResult],
+) -> SkillTrustRequirement:
+    required = trust_level in {"verified", "core"}
+    if not required:
+        return SkillTrustRequirement(
+            trust_level=trust_level,
+            required=False,
+            satisfied=True,
+        )
+
+    failures: list[str] = []
+    if not scenario_results:
+        failures.append(
+            "A verified/core Skill must have at least one passing scenario."
+        )
+    elif any(not result.passed for result in scenario_results):
+        failures.append("Every declared scenario must pass for verified/core trust.")
+    coverage_labels = (
+        ("expected triggers", coverage.expected_triggers),
+        ("expected outputs", coverage.expected_outputs),
+        ("evidence assumptions", coverage.evidence_assumptions),
+        ("safety constraints", coverage.safety_constraints),
+    )
+    missing_coverage = [label for label, present in coverage_labels if not present]
+    if missing_coverage:
+        failures.append(
+            "Verified/core suites must cover " + ", ".join(missing_coverage) + "."
+        )
+    return SkillTrustRequirement(
+        trust_level=trust_level,
+        required=True,
+        satisfied=not failures,
+        failures=failures,
+    )
+
+
+def _build_suite_result(
+    *,
+    skill_id: str,
+    version: str,
+    trust_level: SkillTrustLevel,
+    active_skill: ActiveSkill,
+    scenarios: list[SkillTestScenarioDefinition],
+    scenario_results: list[SkillTestScenarioResult],
+) -> SkillTestSuiteResult:
+    coverage = _evaluate_coverage(active_skill, scenarios, scenario_results)
+    trust_requirement = _evaluate_trust_requirement(
+        trust_level,
+        coverage,
+        scenario_results,
+    )
+    return SkillTestSuiteResult(
+        skill_id=skill_id,
+        version=version,
+        summary=_build_summary(
+            skill_id,
+            scenario_results,
+            suite_failed=trust_requirement.required and not trust_requirement.satisfied,
+        ),
+        coverage=coverage,
+        trust_requirement=trust_requirement,
+        scenarios=scenario_results,
     )
 
 
@@ -250,7 +423,7 @@ def run_skill_test_suite(skill_id: str) -> SkillTestSuiteResult | None:
     loaded = _load_active_skill(skill_id)
     if loaded is None:
         return None
-    active_skill, version, suite_dir = loaded
+    active_skill, version, trust_level, suite_dir = loaded
     try:
         loaded_scenarios = _load_scenarios(suite_dir)
     except SkillScenarioLoadError as exc:
@@ -262,21 +435,25 @@ def run_skill_test_suite(skill_id: str) -> SkillTestSuiteResult | None:
                 failures=[f"{exc.path.name}: {exc.message}"],
             )
         ]
-        return SkillTestSuiteResult(
+        return _build_suite_result(
             skill_id=skill_id,
             version=version,
-            summary=_build_summary(skill_id, scenario_results),
-            scenarios=scenario_results,
+            trust_level=trust_level,
+            active_skill=active_skill,
+            scenarios=[],
+            scenario_results=scenario_results,
         )
 
     scenario_results = [
         _run_scenario(skill_id, active_skill, scenario) for scenario in loaded_scenarios
     ]
-    return SkillTestSuiteResult(
+    return _build_suite_result(
         skill_id=skill_id,
         version=version,
-        summary=_build_summary(skill_id, scenario_results),
-        scenarios=scenario_results,
+        trust_level=trust_level,
+        active_skill=active_skill,
+        scenarios=loaded_scenarios,
+        scenario_results=scenario_results,
     )
 
 

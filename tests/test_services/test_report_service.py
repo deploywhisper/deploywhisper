@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import os
 import sqlite3
@@ -26,11 +27,17 @@ from analysis.blast_radius import BlastRadiusResult, ImpactNode
 from analysis.incident_matcher import IncidentMatch
 from analysis.rollback_planner import RollbackPlan, RollbackStep
 from analysis.risk_scorer import RiskAssessment, RiskContributor
-from evidence.models import ContextCompleteness, EvidenceItem, Finding
+from evidence.models import (
+    ContextCompleteness,
+    ContextSourceMetadata,
+    EvidenceItem,
+    Finding,
+)
 from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 from parsers.terraform_parser import parse_terraform
 from pydantic import ValidationError
+from sqlalchemy.exc import OperationalError
 
 
 class ReportServiceTests(unittest.TestCase):
@@ -57,6 +64,269 @@ class ReportServiceTests(unittest.TestCase):
         os.environ.pop("APP_BASE_URL", None)
         os.environ.pop("ARTIFACT_SNAPSHOT_DIR", None)
         self.tempdir.cleanup()
+
+    def test_report_persistence_redacts_secrets_and_records_visible_status(
+        self,
+    ) -> None:
+        from services.analysis_service import build_analysis_artifacts
+        from services.content_security import BLOCKED_CONTENT, REDACTION_WARNING
+
+        raw = b"hosts: all\ntasks:\n  - name: Configure password=synthetic-task-value\n    debug:\n      msg: safe\n"
+        artifacts = build_analysis_artifacts(
+            [("playbook.yaml", raw)],
+            include_narrative=False,
+            include_topology_context=False,
+            include_incident_context=False,
+            allow_llm_assistance=False,
+        )
+        artifacts.narrative.explanation = "Review api_key=synthetic-output-value"
+        artifacts.assessment.contributors[0].metadata = {
+            "api_key": "synthetic-metadata-value"
+        }
+        artifacts.narrative.guidance = ["Echo synthetic-metadata-value"]
+        artifacts.evidence_items[0].summary += " password=synthetic-evidence-value"
+        persisted = report_service_module.persist_analysis_report(
+            artifacts.parse_batch,
+            artifacts.assessment,
+            artifacts.narrative,
+            findings=artifacts.findings,
+            evidence_items=artifacts.evidence_items,
+            artifact_snapshots={"playbook.yaml": raw},
+            submitted_artifacts=[("playbook.yaml", raw)],
+        )
+        encoded = json.dumps(persisted)
+        for secret in (
+            "synthetic-task-value",
+            "synthetic-output-value",
+            "synthetic-metadata-value",
+            "synthetic-evidence-value",
+        ):
+            self.assertNotIn(secret, encoded)
+            self.assertNotIn(secret.encode(), self.db_path.read_bytes())
+        self.assertEqual(
+            persisted["submission_manifest"]["items"][0]["redaction_status"], "redacted"
+        )
+        self.assertEqual(persisted["evidence_items"][0]["redaction_status"], "redacted")
+        self.assertIn(REDACTION_WARNING, persisted["warnings"])
+        self.assertEqual(
+            artifact_snapshot_service_module.load_report_artifact(
+                persisted["id"], "playbook.yaml"
+            ).content,
+            BLOCKED_CONTENT,
+        )
+        self.assertEqual(
+            artifacts.assessment.contributors[0].metadata["api_key"],
+            "synthetic-metadata-value",
+        )
+
+    def _content_boundary_models(self) -> tuple:
+        return (
+            ParseBatchResult(
+                files=[
+                    ParsedFileResult(
+                        file_name="playbook.yaml",
+                        tool="ansible",
+                        status="parsed",
+                        changes=[
+                            UnifiedChange(
+                                source_file="playbook.yaml",
+                                tool="ansible",
+                                resource_id="task:review",
+                                action="modify",
+                                summary="Review the deployment task.",
+                            )
+                        ],
+                    )
+                ]
+            ),
+            RiskAssessment(
+                score=10,
+                severity="low",
+                recommendation="go",
+                top_risk="Review the deployment task.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=True,
+                warnings=[],
+            ),
+            NarrativeResult(
+                opening_sentence="GO: review the deployment task.",
+                explanation="Review the task before deployment.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+        )
+
+    def test_excluded_artifact_credentials_screen_audit_provenance(self) -> None:
+        secret = "synthetic-excluded-audit-value"
+        report = report_service_module.persist_analysis_report(
+            *self._content_boundary_models(),
+            submitted_artifacts=[
+                ("playbook.yaml", b"hosts: all\ntasks: []\n"),
+                (".env", f"PASSWORD={secret}".encode()),
+            ],
+            audit_context={
+                "source_interface": "api",
+                "actor": secret,
+                "trigger_id": secret,
+            },
+        )
+
+        self.assertNotIn(secret, json.dumps(report))
+        self.assertNotIn(secret.encode(), self.db_path.read_bytes())
+        self.assertNotIn(
+            secret.encode(),
+            b"".join(
+                path.read_bytes()
+                for path in self.snapshot_dir.rglob("*")
+                if path.is_file()
+            ),
+        )
+        self.assertEqual(report["audit"]["actor"], "[REDACTED]")
+        self.assertEqual(
+            report["submission_manifest"]["provenance"]["actor"], "[REDACTED]"
+        )
+
+    def test_excluded_credentials_without_echo_do_not_claim_content_redaction(
+        self,
+    ) -> None:
+        from services.content_security import REDACTION_WARNING
+
+        report = report_service_module.persist_analysis_report(
+            *self._content_boundary_models(),
+            submitted_artifacts=[
+                ("playbook.yaml", b"hosts: all\ntasks: []\n"),
+                (".env", b"PASSWORD=synthetic-excluded-only-value"),
+            ],
+            audit_context={"source_interface": "api"},
+        )
+
+        self.assertNotIn(REDACTION_WARNING, report["warnings"])
+        self.assertFalse(report["audit"]["redaction"]["content_redacted"])
+
+    def test_report_snapshot_blocks_sibling_credential_echo(self) -> None:
+        from services.content_security import BLOCKED_CONTENT
+
+        secret = "synthetic-sibling-snapshot-value"
+        raw = f"hosts: all\ntasks:\n  - name: {secret}\n    debug:\n      msg: safe\n".encode()
+        report = report_service_module.persist_analysis_report(
+            *self._content_boundary_models(),
+            submitted_artifacts=[
+                ("playbook.yaml", raw),
+                (".env", f"PASSWORD={secret}".encode()),
+            ],
+            audit_context={"source_interface": "api"},
+        )
+
+        snapshot = artifact_snapshot_service_module.load_report_artifact(
+            report["id"], "playbook.yaml"
+        )
+        self.assertEqual(snapshot.content, BLOCKED_CONTENT)
+        self.assertNotIn(
+            secret.encode(),
+            b"".join(
+                path.read_bytes()
+                for path in self.snapshot_dir.rglob("*")
+                if path.is_file()
+            ),
+        )
+
+    def test_secret_colliding_artifact_names_preserve_snapshot_lookup(self) -> None:
+        secret = "synthetic-credential-name"
+        original_name = f"{secret}.yaml"
+        parse_batch, assessment, narrative = self._content_boundary_models()
+        parse_batch.files[0].file_name = original_name
+        parse_batch.files[0].changes[0].source_file = original_name
+        raw = b"hosts: all\ntasks: []\n"
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            submitted_artifacts=[
+                (original_name, raw),
+                (".env", f"PASSWORD={secret}".encode()),
+            ],
+            artifact_snapshots={original_name: raw},
+            audit_context={"source_interface": "api"},
+        )
+
+        accepted = next(
+            item
+            for item in report["submission_manifest"]["items"]
+            if item["status"] == "accepted"
+        )
+        self.assertNotIn(secret, accepted["name"])
+        self.assertEqual(report["audit"]["files_analyzed"], [accepted["name"]])
+        self.assertEqual(
+            artifact_snapshot_service_module.load_report_artifact(
+                report["id"], accepted["name"]
+            ).content,
+            raw.decode(),
+        )
+
+    def test_filename_credentials_screen_persisted_sibling_content(self) -> None:
+        from services.content_security import BLOCKED_CONTENT
+
+        secret = "synthetic-filename-only-credential.tf"
+        parse_batch, assessment, narrative = self._content_boundary_models()
+        parse_batch.files[0].changes[0].summary = f"Review {secret}."
+        narrative.explanation = f"Review {secret}."
+        raw = f"hosts: all\ntasks:\n  - name: Review {secret}\n    debug:\n      msg: safe\n".encode()
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            submitted_artifacts=[
+                (f"password={secret}", b"benign excluded bytes"),
+                ("playbook.yaml", raw),
+            ],
+            audit_context={"source_interface": "api", "actor": secret},
+        )
+
+        self.assertNotIn(secret, json.dumps(report))
+        self.assertNotIn(secret.encode(), self.db_path.read_bytes())
+        self.assertEqual(
+            report["submission_manifest"]["items"][0]["status"], "sensitive"
+        )
+        self.assertEqual(
+            report["submission_manifest"]["items"][1]["redaction_status"], "redacted"
+        )
+        snapshot = artifact_snapshot_service_module.load_report_artifact(
+            report["id"], "playbook.yaml"
+        )
+        self.assertEqual(snapshot.content, BLOCKED_CONTENT)
+        self.assertNotIn(
+            secret.encode(),
+            b"".join(
+                path.read_bytes()
+                for path in self.snapshot_dir.rglob("*")
+                if path.is_file()
+            ),
+        )
+
+    def test_sensitive_extension_alias_retains_original_intake_classification(
+        self,
+    ) -> None:
+        raw = b"hosts: all\ntasks: []\n"
+        report = report_service_module.persist_analysis_report(
+            *self._content_boundary_models(),
+            submitted_artifacts=[(".env", b"PASSWORD=yaml"), ("playbook.yaml", raw)],
+            artifact_snapshots={"playbook.yaml": raw},
+        )
+
+        item = report["submission_manifest"]["items"][1]
+        self.assertEqual(item["status"], "accepted")
+        self.assertEqual(item["intake_status"], "ready")
+        self.assertEqual(item["tool"], "ansible")
+        self.assertNotIn("yaml", item["name"])
+        self.assertEqual(report["audit"]["files_analyzed"], [item["name"]])
+        snapshot = artifact_snapshot_service_module.load_report_artifact(
+            report["id"], item["name"]
+        )
+        self.assertIsNotNone(snapshot)
+        self.assertEqual(snapshot.content, raw.decode())
 
     def test_create_analysis_report_validates_finding_context_payloads(self) -> None:
         project = project_service_module.ensure_default_project()
@@ -212,6 +482,42 @@ class ReportServiceTests(unittest.TestCase):
                     ],
                     evidence_payload=[string_false_evidence],
                 )
+        user_context_evidence = {
+            **heuristic_evidence,
+            "evidence_id": "ev-user-context",
+            "source_type": "user_context",
+            "source_ref": "user://review-note/1",
+            "deterministic": True,
+            "determinism_level": "deterministic",
+        }
+        with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without linked deterministic evidence",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **report_kwargs,
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-user-context",
+                            "severity": "high",
+                            "evidence_refs": ["ev-user-context"],
+                        }
+                    ],
+                    evidence_payload=[user_context_evidence],
+                )
+        self.assertTrue(
+            analysis_reports_repository_module._is_deploywhisper_evidence(
+                {"source_type": "parser"}
+            )
+        )
+        self.assertFalse(
+            analysis_reports_repository_module._is_deploywhisper_evidence(
+                {"source_type": "user_context"}
+            )
+        )
         string_true_evidence = {
             **heuristic_evidence,
             "evidence_id": "ev-string-true",
@@ -776,6 +1082,7 @@ class ReportServiceTests(unittest.TestCase):
             "analysis_id": 0,
             "finding_id": "finding-external-high",
             "source_type": "external_scanner",
+            "source_kind": "artifact",
             "source_ref": "scanner://sast.json#rule.high?action=flag",
             "summary": "External scanner flagged a high risk.",
             "severity_hint": "high",
@@ -784,24 +1091,60 @@ class ReportServiceTests(unittest.TestCase):
             "related_change_ids": ["chg-001"],
         }
         with database_module.SessionLocal() as session:
+            with self.assertRaisesRegex(
+                ValueError,
+                "without linked deterministic evidence",
+            ):
+                analysis_reports_repository_module.create_analysis_report(
+                    session,
+                    **{
+                        **report_kwargs,
+                        "risk_score": 72,
+                        "severity": "high",
+                        "recommendation": "no-go",
+                        "top_risk": "HIGH: External scanner high risk.",
+                        "narrative_opening": "NO-GO: External scanner high risk.",
+                        "narrative_explanation": (
+                            "External scanner evidence is reviewer context."
+                        ),
+                        "top_risk_contributors_json": '["ev-external-high"]',
+                    },
+                    findings_payload=[
+                        {
+                            **finding,
+                            "finding_id": "finding-external-high",
+                            "title": "HIGH: External scanner high risk.",
+                            "severity": "high",
+                            "deterministic": True,
+                            "evidence_classification": "external",
+                            "evidence_refs": ["ev-external-high"],
+                        }
+                    ],
+                    evidence_payload=[external_evidence],
+                )
+        with database_module.SessionLocal() as session:
             report = analysis_reports_repository_module.create_analysis_report(
                 session,
                 **{
                     **report_kwargs,
-                    "risk_score": 72,
-                    "severity": "high",
-                    "recommendation": "no-go",
-                    "top_risk": "HIGH: External scanner high risk.",
-                    "narrative_opening": "NO-GO: External scanner high risk.",
-                    "narrative_explanation": "External scanner evidence is deterministic.",
+                    "risk_score": 55,
+                    "severity": "medium",
+                    "recommendation": "caution",
+                    "top_risk": "MEDIUM: External scanner context needs review.",
+                    "narrative_opening": (
+                        "CAUTION: External scanner context needs review."
+                    ),
+                    "narrative_explanation": (
+                        "External scanner evidence is reviewer context."
+                    ),
                     "top_risk_contributors_json": '["ev-external-high"]',
                 },
                 findings_payload=[
                     {
                         **finding,
                         "finding_id": "finding-external-high",
-                        "title": "HIGH: External scanner high risk.",
-                        "severity": "high",
+                        "title": "MEDIUM: External scanner context needs review.",
+                        "severity": "medium",
                         "deterministic": True,
                         "evidence_classification": "external",
                         "evidence_refs": ["ev-external-high"],
@@ -1088,6 +1431,189 @@ class ReportServiceTests(unittest.TestCase):
         self.assertEqual(
             report["evidence_items"][0]["finding_id"],
             report["findings"][0]["finding_id"],
+        )
+
+    def test_persist_analysis_report_labels_ref_linked_external_scanner_context(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="scanner.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=55,
+            severity="medium",
+            recommendation="caution",
+            top_risk="External scanner context supports manual review.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: scanner context supports manual review.",
+            explanation="Scanner context is present alongside DeployWhisper evidence.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-scanner",
+                    analysis_id=0,
+                    title="MEDIUM: scanner context",
+                    description="External scanner context needs review.",
+                    severity="medium",
+                    category="external/scanner",
+                    deterministic=False,
+                    confidence=0.8,
+                    uncertainty_note=None,
+                    evidence_classification="external",
+                    evidence_refs=["ev-scanner"],
+                    skill_id=None,
+                ),
+                Finding(
+                    finding_id="finding-mixed",
+                    analysis_id=0,
+                    title="MEDIUM: mixed context",
+                    description="DeployWhisper evidence has supporting scanner context.",
+                    severity="medium",
+                    category="networking/ingress",
+                    deterministic=True,
+                    confidence=0.85,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-internal", "ev-scanner"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-scanner",
+                    analysis_id=0,
+                    finding_id="finding-scanner",
+                    source_type="external_scanner",
+                    source_ref="scanner://semgrep.json#rule.one?action=flag",
+                    summary="External scanner flagged related context.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                ),
+                EvidenceItem(
+                    evidence_id="ev-internal",
+                    analysis_id=0,
+                    finding_id="finding-mixed",
+                    source_type="artifact",
+                    source_ref="terraform://plan.json#aws_security_group.db?action=modify",
+                    summary="DeployWhisper found ingress evidence.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                ),
+            ],
+        )
+
+        labels_by_title = {
+            finding["title"]: finding["evidence_label"]
+            for finding in report["findings"]
+        }
+        self.assertEqual(
+            labels_by_title["MEDIUM: scanner context"], "External evidence"
+        )
+        self.assertEqual(
+            labels_by_title["MEDIUM: mixed context"],
+            "Includes external context",
+        )
+
+    def test_persist_analysis_report_does_not_label_user_context_as_deploywhisper_support(
+        self,
+    ) -> None:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="scanner.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=50,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Scanner finding has user-supplied context.",
+            contributors=[],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: scanner finding has user context.",
+            explanation="External context is present without DeployWhisper evidence.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+
+        report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            findings=[
+                Finding(
+                    finding_id="finding-scanner-user-context",
+                    analysis_id=0,
+                    title="MEDIUM: scanner plus user context",
+                    description="Scanner evidence has user-supplied context only.",
+                    severity="medium",
+                    category="external/scanner",
+                    deterministic=False,
+                    confidence=0.75,
+                    uncertainty_note=None,
+                    evidence_refs=["ev-scanner", "ev-user-context"],
+                    skill_id=None,
+                ),
+            ],
+            evidence_items=[
+                EvidenceItem(
+                    evidence_id="ev-scanner",
+                    analysis_id=0,
+                    finding_id="finding-scanner-user-context",
+                    source_type="external_scanner",
+                    source_ref="scanner://semgrep.json#rule.one?action=flag",
+                    summary="External scanner flagged related context.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                ),
+                EvidenceItem(
+                    evidence_id="ev-user-context",
+                    analysis_id=0,
+                    finding_id="finding-scanner-user-context",
+                    source_type="user_context",
+                    source_ref="user://review-note/1",
+                    summary="Reviewer supplied additional context.",
+                    severity_hint="medium",
+                    deterministic=True,
+                    confidence=1.0,
+                ),
+            ],
+        )
+
+        self.assertEqual(
+            report["findings"][0]["evidence_label"],
+            "External evidence",
         )
 
     def test_persist_analysis_report_prefers_severe_owner_for_generated_shared_evidence(
@@ -2958,7 +3484,7 @@ class ReportServiceTests(unittest.TestCase):
         )
         self.assertNotIn("Evidence Law downgraded", " ".join(report["warnings"]))
 
-    def test_persist_analysis_report_preserves_external_deterministic_severe_finding(
+    def test_persist_analysis_report_downgrades_external_scanner_only_severe_finding(
         self,
     ) -> None:
         parse_batch = ParseBatchResult(
@@ -3015,6 +3541,7 @@ class ReportServiceTests(unittest.TestCase):
                     analysis_id=0,
                     finding_id="pending:scanner-1",
                     source_type="external_scanner",
+                    source_kind="artifact",
                     source_ref="scanner://sast.json#rule.high?action=flag",
                     summary="External scanner flagged a high risk.",
                     severity_hint="high",
@@ -3025,10 +3552,18 @@ class ReportServiceTests(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(report["severity"], "high")
-        self.assertEqual(report["findings"][0]["severity"], "high")
-        self.assertTrue(report["findings"][0]["deterministic"])
+        self.assertEqual(report["severity"], "medium")
+        self.assertEqual(report["recommendation"], "caution")
+        self.assertEqual(report["findings"][0]["severity"], "medium")
+        self.assertFalse(report["findings"][0]["deterministic"])
         self.assertEqual(report["findings"][0]["evidence_classification"], "external")
+        self.assertEqual(report["findings"][0]["evidence_label"], "External evidence")
+        self.assertIn("Evidence Law downgraded", " ".join(report["warnings"]))
+        self.assertEqual(report["evidence_items"][0]["source_type"], "external_scanner")
+        self.assertEqual(report["evidence_items"][0]["source_kind"], "external_scanner")
+        self.assertEqual(
+            report["evidence_items"][0]["evidence_label"], "External evidence"
+        )
 
     def test_persist_analysis_report_rejects_unmatched_single_finding_evidence(
         self,
@@ -4154,6 +4689,16 @@ class ReportServiceTests(unittest.TestCase):
                 incident_index_freshness_status=str(
                     snapshot["incident_index_freshness_status"]
                 ),
+                context_sources=[
+                    ContextSourceMetadata(
+                        source_id="incident:index:test",
+                        source_type="incident",
+                        source_ref=str(snapshot["incident_index_version"]),
+                        scope="project:payments",
+                        freshness_status="current",
+                        confidence=0.8,
+                    )
+                ],
             ),
             partial_context=False,
             warnings=[],
@@ -4189,6 +4734,19 @@ class ReportServiceTests(unittest.TestCase):
             fetched["context_completeness"]["incident_index_version"],
             snapshot["incident_index_version"],
         )
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.76)
+        self.assertEqual(fetched["context_completeness"]["confidence_level"], "medium")
+        self.assertIn(
+            "Refresh stale incident history for this project/workspace.",
+            fetched["context_completeness"]["context_todos"],
+        )
+        incident_sources = [
+            source
+            for source in fetched["context_completeness"]["context_sources"]
+            if source["source_type"] == "incident"
+        ]
+        self.assertEqual(incident_sources[0]["freshness_status"], "stale")
+        self.assertIn("stale_incident_index", incident_sources[0]["limitations"])
 
     def test_fetch_analysis_report_marks_incident_index_stale_when_lookup_fails(
         self,
@@ -4228,6 +4786,16 @@ class ReportServiceTests(unittest.TestCase):
                 incident_index_version="incidents:1:old",
                 incident_index_last_indexed_at="2026-05-20T00:00:00Z",
                 incident_index_freshness_status="current",
+                context_sources=[
+                    ContextSourceMetadata(
+                        source_id="incident:index:old",
+                        source_type="incident",
+                        source_ref="incidents:1:old",
+                        scope="project:payments",
+                        freshness_status="current",
+                        confidence=0.8,
+                    )
+                ],
             ),
             partial_context=False,
             warnings=[],
@@ -4258,6 +4826,690 @@ class ReportServiceTests(unittest.TestCase):
             fetched["context_completeness"]["incident_index_freshness_status"],
             "stale",
         )
+        self.assertEqual(fetched["context_completeness"]["context_score"], 0.76)
+        self.assertEqual(fetched["context_completeness"]["confidence_level"], "medium")
+        incident_source = fetched["context_completeness"]["context_sources"][0]
+        self.assertEqual(incident_source["freshness_status"], "stale")
+        self.assertIn("stale_incident_index", incident_source["limitations"])
+
+    def test_mark_incident_context_stale_targets_matching_source_version(self) -> None:
+        context = report_service_module._mark_incident_context_stale(
+            {
+                "context_score": 0.9,
+                "confidence_level": "high",
+                "incident_index_size": 1,
+                "incident_index_version": "incidents:1:old",
+                "incident_index_freshness_status": "current",
+                "context_todos": [],
+                "context_sources": [
+                    {
+                        "source_id": "incident:index:old",
+                        "source_type": "incident",
+                        "source_ref": "incidents:1:old",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.8,
+                        "limitations": [],
+                    },
+                    {
+                        "source_id": "incident:index:other",
+                        "source_type": "incident",
+                        "source_ref": "incidents:2:other",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.8,
+                        "limitations": [],
+                    },
+                ],
+            }
+        )
+
+        sources = {
+            source["source_ref"]: source for source in context["context_sources"]
+        }
+        self.assertEqual(sources["incidents:1:old"]["freshness_status"], "stale")
+        self.assertEqual(sources["incidents:2:other"]["freshness_status"], "current")
+        self.assertEqual(sources["incidents:1:old"]["confidence"], 0.1)
+        self.assertEqual(sources["incidents:2:other"]["confidence"], 0.8)
+        self.assertEqual(context["context_score"], 0.76)
+        self.assertEqual(context["confidence_level"], "medium")
+
+    def test_mark_incident_context_stale_recomputes_score_below_cap(self) -> None:
+        context = report_service_module._mark_incident_context_stale(
+            {
+                "context_score": 0.73,
+                "confidence_level": "medium",
+                "parser_success_rate": 0.8,
+                "evidence_success_rate": 0.8,
+                "incident_index_size": 8,
+                "incident_index_version": "incidents:8:old",
+                "incident_index_freshness_status": "current",
+                "context_todos": [],
+                "context_sources": [
+                    {
+                        "source_id": "topology:kubernetes:current-context",
+                        "source_type": "topology",
+                        "source_ref": "current-context",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.5,
+                        "limitations": [],
+                    },
+                    {
+                        "source_id": "incident:index:old",
+                        "source_type": "incident",
+                        "source_ref": "incidents:8:old",
+                        "scope": "project:payments",
+                        "freshness_status": "current",
+                        "confidence": 0.8,
+                        "limitations": [],
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(context["context_score"], 0.67)
+        self.assertEqual(context["confidence_level"], "low")
+        self.assertTrue(context["insufficient_context"])
+        incident_source = next(
+            source
+            for source in context["context_sources"]
+            if source["source_type"] == "incident"
+        )
+        self.assertEqual(incident_source["confidence"], 0.5)
+
+    def test_load_evidence_context_source_marks_incident_source_stale(self) -> None:
+        context_source = report_service_module._load_evidence_context_source(
+            json.dumps(
+                {
+                    "source_id": "incident:index:old",
+                    "source_type": "incident",
+                    "source_ref": "incidents:1:old",
+                    "scope": "project:payments",
+                    "freshness_status": "current",
+                    "confidence": 0.8,
+                    "conflicts": [],
+                    "limitations": [],
+                }
+            ),
+            context_completeness={
+                "incident_index_freshness_status": "stale",
+                "incident_index_version": "incidents:1:old",
+                "incident_index_size": 1,
+            },
+        )
+
+        self.assertIsNotNone(context_source)
+        self.assertEqual(context_source["freshness_status"], "stale")
+        self.assertEqual(context_source["confidence"], 0.1)
+        self.assertIn("stale_incident_index", context_source["limitations"])
+
+    def test_load_evidence_context_source_rejects_invalid_payload(self) -> None:
+        context_source = report_service_module._load_evidence_context_source(
+            json.dumps(
+                {
+                    "source_id": "incident:index:old",
+                    "source_type": "incident",
+                    "freshness_status": "current",
+                }
+            ),
+            context_completeness={
+                "incident_index_freshness_status": "current",
+                "incident_index_version": "incidents:1:old",
+            },
+        )
+
+        self.assertIsNone(context_source)
+
+    def test_load_evidence_context_source_preserves_forward_compatible_payload(
+        self,
+    ) -> None:
+        context_source = report_service_module._load_evidence_context_source(
+            json.dumps(
+                {
+                    "source_id": "topology:kubernetes:current-context",
+                    "source_type": "topology",
+                    "source_ref": "current-context",
+                    "scope": "project:checkout",
+                    "freshness_status": "current",
+                    "confidence": 0.9,
+                    "conflicts": [],
+                    "limitations": [],
+                    "future_writer_field": {"producer": "newer-deploywhisper"},
+                }
+            ),
+            context_completeness={
+                "incident_index_freshness_status": "current",
+                "incident_index_version": "incidents:1:current",
+            },
+        )
+
+        self.assertIsNotNone(context_source)
+        self.assertEqual(
+            context_source["source_id"],
+            "topology:kubernetes:current-context",
+        )
+        self.assertEqual(context_source["freshness_status"], "current")
+        self.assertNotIn("future_writer_field", context_source)
+
+    def test_load_context_completeness_adds_non_stale_incident_guidance(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=2,
+                    incident_index_version="incidents:2:conflict",
+                    incident_index_freshness_status="conflicting",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.88)
+        self.assertIn(
+            "Resolve incident history freshness: conflicting.",
+            context["context_todos"],
+        )
+        self.assertNotIn(
+            "Refresh stale incident history for this project/workspace.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_drops_only_malformed_context_sources(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.76,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=0,
+            incident_index_freshness_status="empty",
+            context_sources=[
+                ContextSourceMetadata(
+                    source_id="topology:kubernetes:current-context",
+                    source_type="topology",
+                    source_ref="current-context",
+                    scope="project:checkout",
+                    freshness_status="current",
+                    confidence=0.9,
+                )
+            ],
+        ).model_dump(mode="json")
+        payload["context_sources"].append(
+            {
+                "source_id": "",
+                "source_type": "topology",
+                "source_ref": "bad-context.json",
+                "scope": "project:checkout",
+                "freshness_status": "current",
+                "confidence": 0.5,
+            }
+        )
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.76)
+        self.assertEqual(len(context["context_sources"]), 1)
+        self.assertEqual(
+            context["context_sources"][0]["source_id"],
+            "topology:kubernetes:current-context",
+        )
+        self.assertIn(
+            "Review dropped context source metadata for this report.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_flags_all_malformed_context_sources(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.92,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=0,
+            incident_index_freshness_status="empty",
+        ).model_dump(mode="json")
+        payload["context_sources"] = [
+            {
+                "source_id": "",
+                "source_type": "topology",
+                "source_ref": "bad-context.json",
+                "scope": "project:checkout",
+                "freshness_status": "current",
+                "confidence": 0.5,
+            },
+            "not-a-source-row",
+        ]
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.92)
+        self.assertEqual(context["context_sources"], [])
+        self.assertIn(
+            "Review dropped context source metadata for this report.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_flags_malformed_context_source_shape(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.92,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=0,
+            incident_index_freshness_status="empty",
+        ).model_dump(mode="json")
+        payload["context_sources"] = {"source_id": "not-a-list"}
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.92)
+        self.assertEqual(context["context_sources"], [])
+        self.assertIn(
+            "Review dropped context source metadata for this report.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_preserves_forward_compatible_context_source(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.92,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=0,
+            incident_index_freshness_status="empty",
+            context_sources=[
+                ContextSourceMetadata(
+                    source_id="topology:kubernetes:current-context",
+                    source_type="topology",
+                    source_ref="current-context",
+                    scope="project:checkout",
+                    freshness_status="current",
+                    confidence=0.9,
+                )
+            ],
+        ).model_dump(mode="json")
+        payload["context_sources"][0]["future_writer_field"] = {
+            "producer": "newer-deploywhisper"
+        }
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["context_score"], 0.92)
+        self.assertEqual(len(context["context_sources"]), 1)
+        self.assertEqual(
+            context["context_sources"][0]["source_id"],
+            "topology:kubernetes:current-context",
+        )
+        self.assertNotIn(
+            "future_writer_field",
+            context["context_sources"][0],
+        )
+        self.assertNotIn(
+            "Review dropped context source metadata for this report.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_coerces_unknown_incident_freshness(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=2,
+                    incident_index_version="incidents:2:conflict",
+                    incident_index_freshness_status="currnet",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["incident_index_freshness_status"], "unknown")
+        self.assertIn(
+            "Resolve incident history freshness: unknown.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_coerces_invalid_zero_incident_freshness_to_unknown(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=0,
+                    incident_index_version="incidents:unknown",
+                    incident_index_freshness_status="currnet",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["incident_index_freshness_status"], "unknown")
+        self.assertIn(
+            "Resolve incident history freshness: unknown.",
+            context["context_todos"],
+        )
+        self.assertNotIn(
+            "Import relevant incident history for this project/workspace.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_coerces_supported_zero_incident_freshness_to_unknown(
+        self,
+    ) -> None:
+        for freshness_status in ("current", "stale", "conflicting", "incomplete"):
+            with self.subTest(freshness_status=freshness_status):
+                context, warning = (
+                    report_service_module._load_context_completeness_payload(
+                        json.dumps(
+                            ContextCompleteness(
+                                context_score=0.88,
+                                parser_success_rate=1.0,
+                                evidence_success_rate=1.0,
+                                incident_index_size=0,
+                                incident_index_version=f"incidents:0:{freshness_status}",
+                                incident_index_freshness_status=freshness_status,
+                                context_todos=[],
+                            ).model_dump(mode="json")
+                        )
+                    )
+                )
+
+                self.assertIsNone(warning)
+                self.assertEqual(
+                    context["incident_index_freshness_status"],
+                    "unknown",
+                )
+                self.assertIn(
+                    "Resolve incident history freshness: unknown.",
+                    context["context_todos"],
+                )
+                self.assertNotIn(
+                    "Import relevant incident history for this project/workspace.",
+                    context["context_todos"],
+                )
+
+    def test_load_context_completeness_flags_populated_empty_incident_freshness(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=2,
+                    incident_index_version="incidents:2:conflict",
+                    incident_index_freshness_status="empty",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertIn(
+            "Resolve incident history freshness: empty state conflicts with populated index.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_adds_empty_incident_import_guidance_with_other_incident_todos(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=0,
+                    incident_index_version="incidents:empty",
+                    incident_index_freshness_status="empty",
+                    context_todos=[
+                        "Resolve incident history freshness: unknown.",
+                    ],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertIn(
+            "Resolve incident history freshness: unknown.",
+            context["context_todos"],
+        )
+        self.assertIn(
+            "Import relevant incident history for this project/workspace.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_flags_blank_explicit_empty_incident_freshness(
+        self,
+    ) -> None:
+        payload = ContextCompleteness(
+            context_score=0.88,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            incident_index_size=2,
+            incident_index_version="incidents:empty",
+            incident_index_freshness_status="empty",
+            context_todos=[],
+        ).model_dump(mode="json")
+        payload["incident_index_freshness_status"] = ""
+
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(payload)
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["incident_index_freshness_status"], "conflicting")
+        self.assertIn(
+            "Resolve incident history freshness: empty state conflicts with populated index.",
+            context["context_todos"],
+        )
+
+    def test_load_context_completeness_flags_populated_explicit_empty_incident_freshness(
+        self,
+    ) -> None:
+        for freshness_status in ("current", "empty", "stale", "unknown"):
+            with self.subTest(freshness_status=freshness_status):
+                context, warning = (
+                    report_service_module._load_context_completeness_payload(
+                        json.dumps(
+                            ContextCompleteness(
+                                context_score=0.88,
+                                parser_success_rate=1.0,
+                                evidence_success_rate=1.0,
+                                incident_index_size=2,
+                                incident_index_version="incidents:empty",
+                                incident_index_freshness_status=freshness_status,
+                                context_todos=[],
+                            ).model_dump(mode="json")
+                        )
+                    )
+                )
+
+                self.assertIsNone(warning)
+                self.assertEqual(
+                    context["incident_index_freshness_status"],
+                    "conflicting",
+                )
+                self.assertIn(
+                    "Resolve incident history freshness: empty state conflicts with populated index.",
+                    context["context_todos"],
+                )
+                self.assertNotIn(
+                    "Resolve incident history freshness: conflicting.",
+                    context["context_todos"],
+                )
+
+    def test_load_context_completeness_coerces_zero_incident_freshness_to_empty(
+        self,
+    ) -> None:
+        for freshness_status in ("current", "stale", "conflicting", "unknown"):
+            with self.subTest(freshness_status=freshness_status):
+                context, warning = (
+                    report_service_module._load_context_completeness_payload(
+                        json.dumps(
+                            ContextCompleteness(
+                                context_score=0.88,
+                                parser_success_rate=1.0,
+                                evidence_success_rate=1.0,
+                                incident_index_size=0,
+                                incident_index_version="incidents:empty",
+                                incident_index_freshness_status=freshness_status,
+                                context_todos=[],
+                            ).model_dump(mode="json")
+                        )
+                    )
+                )
+
+                self.assertIsNone(warning)
+                self.assertEqual(context["incident_index_freshness_status"], "empty")
+                self.assertNotIn(
+                    "Resolve incident history freshness:",
+                    "\n".join(context["context_todos"]),
+                )
+
+    def test_load_context_completeness_preserves_incident_lookup_failure_freshness(
+        self,
+    ) -> None:
+        context, warning = report_service_module._load_context_completeness_payload(
+            json.dumps(
+                ContextCompleteness(
+                    context_score=0.88,
+                    parser_success_rate=1.0,
+                    evidence_success_rate=1.0,
+                    incident_index_size=0,
+                    incident_index_version="incidents:unknown",
+                    incident_index_freshness_status="stale",
+                    context_todos=[],
+                ).model_dump(mode="json")
+            )
+        )
+
+        self.assertIsNone(warning)
+        self.assertEqual(context["incident_index_freshness_status"], "stale")
+        self.assertIn(
+            "Refresh stale incident history for this project/workspace.",
+            context["context_todos"],
+        )
+        self.assertNotIn(
+            "Import relevant incident history for this project/workspace.",
+            context["context_todos"],
+        )
+
+    def test_fetch_analysis_report_preserves_empty_incident_snapshot_on_lookup_failure(
+        self,
+    ) -> None:
+        project = project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=42,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Security group review.",
+            contributors=[],
+            interaction_risks=[],
+            context_completeness=ContextCompleteness(
+                context_score=0.76,
+                confidence_level="medium",
+                incident_index_size=0,
+                incident_index_version="incidents:empty",
+                incident_index_freshness_status="empty",
+                context_sources=[
+                    ContextSourceMetadata(
+                        source_id="incident:index:empty",
+                        source_type="incident",
+                        source_ref="incidents:empty",
+                        scope="project:payments",
+                        freshness_status="empty",
+                        confidence=0.0,
+                        limitations=["empty_incident_index"],
+                    )
+                ],
+            ),
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence="CAUTION: review the security group update.",
+            explanation="Review the ingress change.",
+            guidance=[],
+            degraded=False,
+            warnings=[],
+        )
+        persisted = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+            project_id=project.id,
+            audit_context={"source_interface": "api"},
+        )
+
+        with patch(
+            "services.incident_service.get_incident_index_snapshot",
+            side_effect=RuntimeError("snapshot unavailable"),
+        ):
+            fetched = report_service_module.fetch_analysis_report(persisted["id"])
+
+        self.assertIsNotNone(fetched)
+        assert fetched is not None
+        context = fetched["context_completeness"]
+        self.assertEqual(context["incident_index_freshness_status"], "empty")
+        self.assertEqual(context["incident_index_version"], "incidents:empty")
+        self.assertNotIn(
+            "Refresh stale incident history for this project/workspace.",
+            context["context_todos"],
+        )
+        incident_source = context["context_sources"][0]
+        self.assertEqual(incident_source["freshness_status"], "empty")
+        self.assertEqual(incident_source["confidence"], 0.0)
 
     def test_persist_analysis_report_cleans_up_committed_row_after_artifact_failure(
         self,
@@ -4823,6 +6075,60 @@ class ReportServiceTests(unittest.TestCase):
             "prod/network/plan.json",
             shared_report["evidence_items"][0]["source_ref"],
         )
+
+    def test_shared_report_redaction_rewrites_context_source_metadata(self) -> None:
+        report = self._persist_shareable_report()
+        context_source = ContextSourceMetadata(
+            source_id="artifact:prod/network/plan.json",
+            source_type="artifact",
+            source_ref="prod/network/plan.json",
+            scope="project:prod/network/plan.json",
+            freshness_status="incomplete",
+            confidence=0.5,
+            conflicts=["conflict in prod/network/plan.json"],
+            limitations=["parser_issue: prod/network/plan.json"],
+        ).model_dump(mode="json")
+        context = ContextCompleteness(
+            context_score=0.8,
+            confidence_level="medium",
+            incident_index_size=0,
+            parser_success_rate=1.0,
+            evidence_success_rate=1.0,
+            context_sources=[ContextSourceMetadata.model_validate(context_source)],
+            owner_signals=[],
+            escalation_hints=["Escalate prod/network/plan.json."],
+            ownership_unmapped_subjects=["prod/network/plan.json"],
+        ).model_dump(mode="json")
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE risk_assessments SET context_completeness_json = ? "
+                "WHERE analysis_id = ?",
+                (json.dumps(context), report["id"]),
+            )
+            connection.execute(
+                "UPDATE evidence_items SET context_source_json = ? "
+                "WHERE analysis_id = ?",
+                (json.dumps(context_source), report["id"]),
+            )
+        report_service_module.configure_report_share(
+            report["id"],
+            password="s3cret-pass",
+            redact_filenames=True,
+        )
+
+        shared_report = report_service_module.fetch_shared_analysis_report(
+            report["id"],
+            password="s3cret-pass",
+        )
+
+        self.assertIsNotNone(shared_report)
+        assert shared_report is not None
+        serialized_context = json.dumps(shared_report["context_completeness"])
+        serialized_evidence = json.dumps(shared_report["evidence_items"])
+        self.assertNotIn("prod/network/plan.json", serialized_context)
+        self.assertNotIn("prod/network/plan.json", serialized_evidence)
+        self.assertIn("Artifact 1", serialized_context)
+        self.assertIn("Artifact 1", serialized_evidence)
 
     def test_fetch_analysis_report_builds_confidence_ledger_from_legacy_contributors(
         self,
@@ -6192,6 +7498,138 @@ class ReportServiceTests(unittest.TestCase):
                 report["id"], password="s3cret-pass"
             )
         )
+
+    def test_share_passwords_use_versioned_salted_password_derivation(self) -> None:
+        report = self._persist_shareable_report()
+        report_service_module.configure_report_share(
+            report["id"], password="synthetic-password", redact_filenames=False
+        )
+        first = report_service_module.fetch_analysis_report(report["id"])
+        self.assertTrue(first["share_password_hash"].startswith("pbkdf2$600000$"))
+        self.assertLessEqual(len(first["share_password_hash"]), 64)
+        self.assertEqual(len(first["share_password_salt"]), 32)
+        report_service_module.configure_report_share(
+            report["id"], password="synthetic-password", redact_filenames=False
+        )
+        second = report_service_module.fetch_analysis_report(report["id"])
+        self.assertNotEqual(first["share_password_hash"], second["share_password_hash"])
+
+    def test_legacy_share_password_upgrades_only_after_success(self) -> None:
+        report = self._persist_shareable_report()
+        salt = "synthetic-salt"
+        legacy = hashlib.sha256(f"{salt}:synthetic-password".encode()).hexdigest()
+        with database_module.SessionLocal() as session:
+            analysis_reports_repository_module.update_analysis_report_share_settings(
+                session,
+                report["id"],
+                share_password_hash=legacy,
+                share_password_salt=salt,
+                share_redact_filenames=True,
+            )
+        self.assertIsNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], password="wrong-password"
+            )
+        )
+        self.assertIsNotNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], bypass_password=True
+            )
+        )
+        self.assertEqual(
+            report_service_module.fetch_analysis_report(report["id"])[
+                "share_password_hash"
+            ],
+            legacy,
+        )
+        self.assertIsNotNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], password="synthetic-password"
+            )
+        )
+        upgraded = report_service_module.fetch_analysis_report(report["id"])
+        self.assertTrue(upgraded["share_password_hash"].startswith("pbkdf2$600000$"))
+        self.assertTrue(upgraded["share_redact_filenames"])
+        self.assertIsNotNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], password="synthetic-password"
+            )
+        )
+
+    def test_legacy_password_upgrade_preserves_concurrent_share_settings(self) -> None:
+        report = self._persist_shareable_report()
+        report_service_module.configure_report_share(
+            report["id"], password="new-password", redact_filenames=True
+        )
+        before = report_service_module.fetch_analysis_report(report["id"])
+        report_service_module._upgrade_share_password(
+            report["id"], "old-password", stored="0" * 64, salt="old-salt"
+        )
+        after = report_service_module.fetch_analysis_report(report["id"])
+        self.assertEqual(before["share_password_hash"], after["share_password_hash"])
+        self.assertEqual(before["share_password_salt"], after["share_password_salt"])
+        self.assertTrue(after["share_redact_filenames"])
+
+    def test_legacy_password_read_survives_upgrade_write_failure(self) -> None:
+        report = self._persist_shareable_report()
+        salt = "synthetic-salt"
+        password = "synthetic-password"
+        legacy = hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
+        with database_module.SessionLocal() as session:
+            analysis_reports_repository_module.update_analysis_report_share_settings(
+                session,
+                report["id"],
+                share_password_hash=legacy,
+                share_password_salt=salt,
+                share_redact_filenames=True,
+            )
+        failure = OperationalError(
+            "UPDATE synthetic-sensitive-table",
+            {"password": password},
+            RuntimeError("synthetic-sensitive-database-path is read-only"),
+        )
+        with patch("sqlalchemy.orm.Session.commit", side_effect=failure):
+            with self.assertLogs(
+                report_service_module.logger, level="WARNING"
+            ) as logged:
+                shared = report_service_module.fetch_shared_analysis_report(
+                    report["id"], password=password
+                )
+        self.assertIsNotNone(shared)
+        self.assertEqual(
+            report_service_module.fetch_analysis_report(report["id"])[
+                "share_password_hash"
+            ],
+            legacy,
+        )
+        message = " ".join(logged.output)
+        self.assertNotIn(password, message)
+        self.assertNotIn("synthetic-sensitive", message)
+        self.assertNotIn("Traceback", message)
+
+    def test_malformed_versioned_share_password_hashes_fail_closed(self) -> None:
+        report = self._persist_shareable_report()
+        for stored in (
+            "pbkdf2$invalid$hash",
+            "pbkdf2$999999999$hash",
+            "pbkdf2$600000$invalid",
+            "pbkdf2$600000$é",
+            "unknown$600000$hash",
+        ):
+            with self.subTest(stored=stored):
+                with database_module.SessionLocal() as session:
+                    analysis_reports_repository_module.update_analysis_report_share_settings(
+                        session,
+                        report["id"],
+                        share_password_hash=stored,
+                        share_password_salt="synthetic-salt",
+                        share_redact_filenames=False,
+                    )
+                self.assertIsNone(
+                    report_service_module.fetch_shared_analysis_report(
+                        report["id"], password="synthetic-password"
+                    )
+                )
 
     def test_fetch_report_comparison_returns_findings_and_evidence_deltas(self) -> None:
         previous = self._persist_comparison_report(

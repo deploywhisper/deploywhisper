@@ -24,8 +24,11 @@ export function getReportDetail(reportId: number, scope: ReportScope = {}): Prom
   return requestData<ReportDetail>(reportPath(reportId, scope));
 }
 
-export function unlockSharedReport(reportId: number, password: string): Promise<ReportDetail> {
-  return requestData<ReportDetail>(`/api/v1/analyses/${reportId}/shared/unlock`, {
+export function unlockSharedReport(reportId: number, password: string, scope: ReportScope = {}): Promise<ReportDetail> {
+  const path = scope.comparePrevious
+    ? `/api/v1/analyses/${reportId}/shared/unlock?compare=previous`
+    : `/api/v1/analyses/${reportId}/shared/unlock`;
+  return requestData<ReportDetail>(path, {
     method: "POST",
     body: JSON.stringify({ password }),
     headers: {

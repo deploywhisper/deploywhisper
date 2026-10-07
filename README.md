@@ -12,6 +12,7 @@ DeployWhisper helps platform engineers, DevOps teams, and SREs review deployment
 
 <p>
   <a href="https://github.com/deploywhisper/deploywhisper/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/deploywhisper/deploywhisper/ci.yml?branch=develop&label=CI&style=flat-square" alt="CI"/></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/deploywhisper/deploywhisper"><img src="https://api.scorecard.dev/projects/github.com/deploywhisper/deploywhisper/badge" alt="OpenSSF Scorecard"/></a>
   <a href="https://github.com/deploywhisper/deploywhisper/stargazers"><img src="https://img.shields.io/github/stars/deploywhisper/deploywhisper?style=flat-square" alt="GitHub stars"/></a>
   <a href="https://github.com/deploywhisper/deploywhisper/network/members"><img src="https://img.shields.io/github/forks/deploywhisper/deploywhisper?style=flat-square" alt="GitHub forks"/></a>
   <a href="https://github.com/deploywhisper/deploywhisper/issues"><img src="https://img.shields.io/github/issues/deploywhisper/deploywhisper?style=flat-square" alt="GitHub issues"/></a>
@@ -81,9 +82,15 @@ Artifacts -> Parse -> Normalize -> Score -> Blast Radius -> Rollback -> Narrativ
 - **Day-zero risk patterns**: fresh installs can flag built-in public risk patterns such as wide-open administrative ingress or stateful resource deletion, separately labeled from organization incident memory.
 - **Safe sample incident pack**: optional synthetic incidents for demos, with provenance and limitations documented in `docs/sample-incident-pack.md`.
 - **Incident file import**: project-scoped Markdown, YAML, and JSON incident records with validation for source and redaction metadata, documented in `docs/incident-import.md`.
+- **Scanner imports**: project-scoped SARIF and Semgrep JSON findings are normalized as external scanner evidence, documented in `docs/scanner-imports.md`, with complementary-tool positioning in `docs/comparisons/deploywhisper-alongside-security-tools.md`.
 - Incident-history matching for operational memory
 - API, CLI, and web entrypoints over one shared analysis pipeline
 - Local-first security model that keeps raw IaC local and avoids persisting API keys
+- Prompt-injection trust boundaries and blocking regression gates for untrusted
+  artifact, incident, scanner, pull-request, and docs-like text; see
+  [`docs/ai-safety/prompt-injection-testing.md`](./docs/ai-safety/prompt-injection-testing.md)
+  and the
+  [`docs/security/prompt-injection-threat-model.md`](./docs/security/prompt-injection-threat-model.md)
 - Custom AI Skills for team-specific domain guidance
 - Public Skills Registry for published built-in skills: <https://deploywhisper.github.io/skills-registry/>
 - Analysis history and audit metadata for later review
@@ -111,7 +118,7 @@ DeployWhisper is an open-source project in active development. The current
 released version is useful today for teams that want a local-first, advisory
 review layer before infrastructure changes are shipped.
 
-### Released version `v1.2.0`
+### Released version `v1.4.0`
 
 What users can use today:
 
@@ -120,15 +127,24 @@ What users can use today:
 - **LLM-assisted narrative**: connect deterministic scoring with plain-English deployment guidance using Ollama, OpenAI, Anthropic, Gemini, OpenRouter, Groq, or xAI provider settings.
 - **Local-first safety posture**: keep raw IaC processing local, avoid storing provider API keys in the database, exclude sensitive files from unsafe handling, and keep every verdict advisory rather than automatically blocking a release.
 - **Evidence-backed confidence**: trace the report back to findings, resource-level contributors, uploaded artifact references, confidence factors, why-not-lower/higher reasoning, parser coverage, topology freshness, context TODOs, and warning signals when context is limited.
+- **Context freshness ledger**: inspect context source freshness, confidence, scope, conflicts, limitations, and evidence-to-context provenance across report, API, and CLI output.
+- **External scanner ingestion**: import SARIF 2.1.0 and Semgrep JSON scanner findings as project/workspace-scoped external evidence with normalized tool, rule, severity, location, source identity, and report-safe metadata.
+- **Scanner-aware report context**: view scanner findings as clearly labeled external context without automatically promoting scanner severity into DeployWhisper findings.
+- **Scanner conflict handling**: surface scanner-vs-deterministic disagreements with scanner source, deterministic source, freshness, verification guidance, uncertainty, and confidence impact while keeping severity governed by DeployWhisper scoring and Evidence Law.
 - **Blast-radius and rollback context**: use service-topology input to explain likely downstream impact and generate rollback steps with complexity scoring.
 - **Analysis history**: review saved reports later, filter previous analyses by project, workspace, time range, risk verdict, toolchain, and analysis status, inspect audit metadata, and compare repeated scans of the same artifact set with new, resolved, persistent, severity-changed, and context-changed findings.
 - **Provider and admin settings UI**: configure LLM provider metadata, upload topology context, manage custom AI Skills, and see provider readiness before running analysis.
 - **REST API and CLI access**: run the same analysis pipeline from `/api/v1` endpoints or the headless CLI for local automation and CI workflows.
 - **Shareable reports**: create read-only report links, optionally protect sensitive shared reports with a password, redact filenames, and compare shared reruns when previous scans exist.
+- **Trusted Skills lifecycle**: inspect manifest-backed trust and deterministic test status, install from configured sources, and review contribution, usage, and deprecation signals.
+- **Bounded AI-agent review**: use advisory agent contracts with explicit AI-generated IaC provenance and prompt-injection screening across review outputs.
+- **Optional policy adapters**: configure thresholds, reporting defaults, and integration-level enforcement separately from the advisory report; deployment enforcement remains opt-in.
+- **Credential-safe administration**: keep provider and connector secrets outside persistent settings and screen prompts, reports, and artifacts for credential disclosure.
 - **Published Skills Registry**: browse published built-in skills at <https://deploywhisper.github.io/skills-registry/> and extend guidance with custom skills.
-- **Published GitHub Action path**: use the dedicated `deploywhisper/analyze-action@v1` action to analyze PR artifact changes, post/update an advisory PR comment, and expose report outputs for follow-on workflow steps.
-- **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.2.0` with SQLite-backed persistence for a self-hosted single-container setup.
+- **Published GitHub Action path**: use the dedicated `deploywhisper/analyze-action` pinned to a reviewed full commit SHA to analyze PR artifact changes, post/update an advisory PR comment, and expose report outputs for follow-on workflow steps.
+- **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.4.0` with SQLite-backed persistence for a self-hosted single-container setup.
 - **Project quality baseline**: GitHub Actions CI, Python quality checks, sharded tests, local CI scripts, and optional UI accessibility smoke checks are in place.
+- **Repository supply-chain visibility**: [Scorecard and CodeQL](docs/security/supply-chain-scanning.md) provide maintainer-visible security results and a documented high-priority findings review process.
 
 Why this gives users value:
 
@@ -175,8 +191,7 @@ Provider settings and health surfaces also expose explicit capability metadata f
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
 python app.py
 ```
 
@@ -215,7 +230,7 @@ example: Docker compose file `docker-compose.yml`
 services:
   deploywhisper:
     # If you want to use the already published image, uncomment the "image" section and comment out the build section.
-    image: ghcr.io/deploywhisper/deploywhisper:1.2.0
+    image: ghcr.io/deploywhisper/deploywhisper:1.4.0
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -327,12 +342,21 @@ docker compose up -d --force-recreate
 
 If provider settings were already saved in the DeployWhisper settings page,
 those non-secret database settings take precedence over `LLM_PROVIDER`,
-`LLM_MODEL`, and `LLM_API_BASE`; provider request timeout still comes from
-`LLM_REQUEST_TIMEOUT_SECONDS`; API keys still come only from container
-environment variables or runtime secrets. When you select a provider in the
-settings page, DeployWhisper resolves that provider's environment key
-(`GROQ_API_KEY` for Groq, `OPENAI_API_KEY` for OpenAI, or fallback
-`LLM_API_KEY`) and pre-fills the API key field from the running container.
+`LLM_MODEL`, and `LLM_API_BASE`. The saved request timeout overrides
+`LLM_REQUEST_TIMEOUT_SECONDS`. API keys remain environment-backed; the settings
+screen shows a masked presence hint and accepts a temporary key only for the
+immediate validation request.
+
+Provider profiles are checked through the shared adapter boundary before saving.
+Unknown providers, blank models, malformed endpoints, credential-bearing URLs,
+and external providers with local-only mode enabled are rejected without replacing
+the active profile. API bases must use HTTP or HTTPS and omit URL credentials,
+query parameters, and fragments. A saved profile may still fail its live probe
+(for example, if a key is missing or Ollama is offline); deterministic analysis
+continues and records degraded narrative status. See
+[provider settings administration](docs/security/provider-settings-administration.md)
+for operator guidance.
+
 Saving the settings page activates the selected provider as the single runtime
 provider.
 
@@ -352,7 +376,7 @@ docker run -d \
   -e APP_PORT=8080 \
   -e APP_BASE_URL=https://deploywhisper.example.com \
   -e DEPLOYWHISPER_SHARE_TOKEN=replace-with-a-long-random-secret \
-  ghcr.io/deploywhisper/deploywhisper:1.2.0
+  ghcr.io/deploywhisper/deploywhisper:1.4.0
 ```
 
 ## API Endpoints
@@ -385,7 +409,7 @@ Response shape:
   },
   "meta": {
     "app": "DeployWhisper",
-    "version": "1.2.0"
+    "version": "1.4.0"
   }
 }
 ```
@@ -469,11 +493,39 @@ Returns the existing project list envelope. Project rows now include
 dashboard-friendly `name` and `env_label` aliases alongside the stable
 `id`, `project_key`, `display_name`, and default-branch metadata.
 
+### Import Scanner Evidence
+
+```http
+POST /api/v1/scanner-imports/sarif
+POST /api/v1/scanner-imports/semgrep
+```
+
+Imports SARIF 2.1.0 or Semgrep native JSON scanner findings for a project. The
+endpoints store normalized external evidence with scanner tool, rule, severity,
+location, project scope, and bounded scanner-specific report context.
+Unsupported scanner structures return field-level correction guidance without
+storing partial findings.
+
 ### Fetch One Analysis
 
 ```http
 GET /api/v1/analyses/{report_id}
 ```
+
+### Agent-Callable Review
+
+```http
+POST /api/v1/agent/analyses
+GET /api/v1/agent/reports/{report_id}
+```
+
+The agent interface is the current MCP-equivalent HTTP surface. It reuses the
+shared analysis and persistence path, returns the stable advisory agent
+contract with explicit collection/string limits, and masks inaccessible and
+missing resources for project-scoped callers. It never echoes raw uploaded
+artifacts or grants approval, deployment, or remediation authority. See
+[MCP Server and Agent Interface](docs/ai-safety/mcp-server.md) and
+[Reviewing AI-Generated and AI-Assisted IaC](docs/ai-safety/reviewing-ai-generated-iac.md).
 
 ## CLI Usage
 
@@ -482,7 +534,7 @@ DeployWhisper includes a headless CLI entrypoint for local or CI usage.
 ### Analyze Artifacts
 
 ```bash
-python cli.py analyze path/to/plan.json path/to/deployment.yaml
+deploywhisper analyze --project payments path/to/plan.json path/to/deployment.yaml
 ```
 
 The CLI prints structured JSON containing:
@@ -492,6 +544,24 @@ The CLI prints structured JSON containing:
 - advisory summary
 - share summary
 - persisted report metadata
+
+AI coding agents can request the stable advisory contract:
+
+```bash
+deploywhisper analyze --agent-json --project payments path/to/plan.json
+```
+
+The agent contract is schema-versioned and includes explicit project scope,
+verdict, Evidence Law status, evidence, findings, confidence, uncertainty,
+context TODOs, verification guidance, and immutable fields stating that the
+result is advisory and is not deployment approval. See
+[Agent JSON CLI Output](docs/ai-safety/agent-json-output.md).
+HTTP agent-tool integrations can use the same contract through the
+[MCP Server and Agent Interface](docs/ai-safety/mcp-server.md).
+
+The complete safe workflow, including output interpretation, human review,
+prompt-injection risks, and forbidden auto-approval patterns, is documented in
+[Reviewing AI-Generated and AI-Assisted IaC](docs/ai-safety/reviewing-ai-generated-iac.md).
 
 ### Inspect Skill Status
 
@@ -539,6 +609,12 @@ DeployWhisper is designed so that:
 - provider API keys are not stored in the application database
 - advisory results remain non-blocking in v1
 
+Recognizable credentials are redacted from structured prompts and reports;
+sensitive model responses and artifact snapshots are blocked with visible
+redaction notices. See the [secrets and artifact boundary audit](docs/security/secrets-and-artifact-boundaries.md) and the
+[connector credential boundary audit](docs/security/connector-credential-boundaries.md)
+for coverage, local-only operation, and detection limits.
+
 ## Architecture
 
 DeployWhisper uses one shared analysis core with three access surfaces:
@@ -577,6 +653,8 @@ Project documentation currently lives in a few places:
 - [Implementation Readiness Report](./_bmad-output/planning-artifacts/implementation-readiness-report-2026-05-01.md)
 - [Project Model Guide](./docs/concepts/project-model.md)
 - [Project Workspaces](./docs/project-workspaces.md)
+- [Scanner Imports](./docs/scanner-imports.md)
+- [DeployWhisper Alongside Security Tools](./docs/comparisons/deploywhisper-alongside-security-tools.md)
 - [Kubernetes Live-State Connector](./docs/kubernetes-live-state-connector.md)
 - [Evidence Model Foundation](./docs/evidence-model.md)
 - [CI Guide](./docs/ci.md)
@@ -603,7 +681,7 @@ tests/        API, CLI, parser, service, frontend, and infra tests
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 ```
 
 Run the app:
@@ -691,10 +769,11 @@ jobs:
   deploywhisper:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
-      - uses: deploywhisper/analyze-action@v1
+      - id: deploywhisper
+        uses: deploywhisper/analyze-action@3b37ed72bfb2d201030bef873268f2170794b160
         with:
           api-url: ${{ secrets.DEPLOYWHISPER_API_URL }}
           project-key: payments
@@ -708,7 +787,16 @@ What the action does:
 - submits those artifacts to the existing `POST /api/v1/analyses` endpoint
 - posts a single markdown PR comment and updates that same comment on re-runs
 - compares the latest report with the previous PR scan so reruns show score and severity deltas in the refreshed comment
-- exits `0` when analysis succeeds, regardless of risk verdict
+- A valid non-blocking policy decision does not itself request failure; the enforcement-capable Action exits `0` only when all remaining runtime work also succeeds. A validated policy block and every decision-retrieval, validation, or later operational failure exit nonzero.
+- Older Action refs that do not expose enforcement outputs remain advisory-only
+  and exit `0` after successful analysis. Inspect the resolved setting source
+  and configured enforcement mode before installation. If the project default
+  is already blocking and no existing scope shares that project/integration
+  key, create a `github-action` integration-specific `advisory` override before
+  installing or upgrading, then test the pinned enforcement-capable revision
+  before removing that override. If other scopes share the key, use a
+  separate project for advisory testing or complete the new scope's guardrail
+  review without downgrading existing consumers.
 - exposes outputs for follow-on GitHub steps:
   - `report-id`
   - `report-link` (optional `/reports/{id}` URL; publicly shareable only
@@ -721,6 +809,21 @@ What the action does:
   - `comment-id`
   - `comment-url`
   - `comment-updated`
+
+Enforcement-capable revisions additionally expose `policy-status`,
+`configured-mode`, `effective-status`, `should-block`, and the Action-owned
+`failure-kind` discriminator; the published `@v1`
+ref validated on 2026-09-09 (tag object
+`f2e36cef443129e85c55882b9dafc1f20d409284`) does not expose them.
+
+The moving `@v1` reference follows published Action releases and must not be
+used in a protected workflow. Pin the Action and checkout dependencies to
+reviewed full commit SHAs even for advisory workflows; a server-side advisory
+override cannot make mutable third-party code trustworthy. Before enabling
+blocking against a pinned revision, verify all five enforcement outputs above,
+consumption of the server's enforcement-decision endpoint, and pass, block, and
+decision-error behavior with synthetic smoke cases. Follow the pin-resolution,
+diff-review, and smoke procedure in the Action integration guide.
 
 Optional inputs:
 
@@ -754,8 +857,15 @@ The recommended open-source posture is Action-first. If you want GitHub App
 capabilities, create a private/self-hosted GitHub App in your own account or
 organization and point it at your own DeployWhisper instance. See
 [`docs/github-app-self-hosted-setup.md`](./docs/github-app-self-hosted-setup.md).
-Keep the `DeployWhisper / Risk Analysis` check advisory-only in GitHub branch
-protection; do not add it as a required status check.
+Keep the `DeployWhisper / Risk Analysis` check non-required while its resolved
+configured mode is `advisory` or `warn`. Making the check required is a separate
+operator action for `soft-block` or `hard-block`, but that configured blocking
+mode may be inherited from the project default without an integration-specific
+opt-in. The canonical report remains advisory-only in every mode.
+Before enabling a required blocking check, complete the
+[Enforcement Guardrails](./docs/enforcement-guardrails.md) covering Evidence
+Law, benchmark readiness, false reassurance, human review, and rollback
+ownership.
 
 To scaffold this setup into another repository with a workflow file, README
 update, and optional self-hosted GitHub App notes, run:
@@ -891,7 +1001,7 @@ Near-term directions already visible in the repo and planning artifacts:
 
 ## Status as we’re in full swing
 
-### DeployWhisper is under active development, while release `v1.2.0` is stable.
+### DeployWhisper is under active development, while release `v1.4.0` is stable.
 
 Current implementation state:
 

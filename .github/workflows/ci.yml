@@ -10,7 +10,7 @@
 #   3. test       — sharded pytest with coverage
 #   4. docker     — Dockerfile build + health-check smoke test
 #   5. migration  — Alembic migration head consistency
-#   6. report     — CI summary + coverage comment on PR
+#   6. report     — CI summary
 # =============================================================================
 
 name: CI
@@ -37,7 +37,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write  # needed for coverage comment on PRs
 
 env:
   PYTHON_VERSION: "3.11"
@@ -55,20 +54,21 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff mypy
+          # Ruff and all other tools share the reviewed development hash lock.
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
       - name: Lint with Ruff
         run: ruff check . --output-format=github
@@ -116,7 +116,7 @@ jobs:
 
       - name: Upload quality logs
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: quality-logs
           path: |
@@ -134,20 +134,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pip-audit bandit
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
       - name: Audit dependencies for known vulnerabilities
         run: |
@@ -194,7 +194,7 @@ jobs:
 
       - name: Upload security reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: security-reports
           path: |
@@ -213,10 +213,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: npm
@@ -224,6 +224,11 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
+
+      - name: Audit both npm dependency graphs
+        run: |
+          npm audit --audit-level=low
+          npm audit --prefix frontend --audit-level=low
 
       - name: Type check frontend
         run: npm run ui:typecheck
@@ -244,21 +249,22 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
       - name: Run changed tests
         env:
@@ -277,16 +283,12 @@ jobs:
         env:
           BASE_REF: origin/${{ github.base_ref }}
         run: |
-          if [ -f scripts/test-changed-skills.sh ]; then
-            bash scripts/test-changed-skills.sh 2>&1 | tee changed-skill-harness.log
-            test ${PIPESTATUS[0]} -eq 0
-          else
-            echo "scripts/test-changed-skills.sh not found — skipping changed skill lint and harness checks"
-          fi
+          bash scripts/test-changed-skills.sh 2>&1 | tee changed-skill-harness.log
+          test ${PIPESTATUS[0]} -eq 0
 
       - name: Upload changed-test logs
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: changed-tests-log
           path: |
@@ -318,20 +320,20 @@ jobs:
             targets: tests/test_llm
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest-cov
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
       - name: Run test shard with coverage
         run: |
@@ -360,7 +362,7 @@ jobs:
 
       - name: Upload coverage data
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: coverage-${{ matrix.shard }}
           path: coverage-${{ matrix.shard }}.xml
@@ -368,7 +370,7 @@ jobs:
 
       - name: Upload shard logs
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: shard-log-${{ matrix.shard }}
           path: shard-${{ matrix.shard }}.log
@@ -385,13 +387,13 @@ jobs:
       - quality
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           push: false
@@ -447,19 +449,20 @@ jobs:
       - quality
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
       - name: Verify Alembic migration chain is linear
         run: |
@@ -484,7 +487,7 @@ jobs:
           echo "All migrations applied successfully to a fresh database."
       - name: Upload migration logs
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: migration-logs
           path: |
@@ -528,17 +531,28 @@ jobs:
           echo "Failure logs are attached as workflow artifacts when a job fails." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Determine overall CI result
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          # Fail the report if any required stage failed
-          if [[ "${{ needs.quality.result }}" == "failure" ]] || \
-             [[ "${{ needs.security.result }}" == "failure" ]] || \
-             [[ "${{ needs.frontend.result }}" == "failure" ]] || \
-             [[ "${{ needs.test.result }}" == "failure" ]] || \
-             [[ "${{ needs.docker.result }}" == "failure" ]] || \
-             [[ "${{ needs.migration.result }}" == "failure" ]]; then
-            echo "::error::One or more CI stages failed. See summary above."
-            exit 1
-          fi
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ["NEEDS_JSON"])
+          core = ("quality", "security", "frontend", "test", "docker", "migration")
+          rejected = {
+              name: needs.get(name, {}).get("result", "missing")
+              for name in core
+              if needs.get(name, {}).get("result") != "success"
+          }
+          changed_result = needs.get("changed-tests", {}).get("result", "missing")
+          allowed_changed = {"success"} if os.environ["EVENT_NAME"] == "pull_request" else {"success", "skipped"}
+          if changed_result not in allowed_changed:
+              rejected["changed-tests"] = changed_result
+          if rejected:
+              print("::error::Required CI stages did not succeed: " + json.dumps(rejected, sort_keys=True))
+              sys.exit(1)
+          print("All required CI stages succeeded.")
+          PY
 
   # ===========================================================================
   # STAGE 7 — FAILURE NOTIFICATION

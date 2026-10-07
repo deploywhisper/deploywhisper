@@ -16,6 +16,13 @@ from config import settings
 from models.database import SessionLocal
 from models.repositories.settings import get_setting, upsert_setting
 from models.tables import TopologyVersion
+from services.content_security import (
+    REDACTED,
+    redact_reference,
+    redact_text,
+    redact_value,
+    sensitive_artifact_values,
+)
 from services.project_service import (
     build_project_payload,
     build_workspace_payload,
@@ -49,10 +56,14 @@ class TopologyImportError(ValueError):
         *,
         details: dict[str, Any] | None = None,
     ) -> None:
+        message = redact_text(message)
         super().__init__(message)
         self.code = code
         self.message = message
-        self.details = details or {}
+        self.details = redact_value(details or {})
+        for key in ("path", "source_ref", "resource_ref"):
+            if isinstance(self.details.get(key), str):
+                self.details[key] = redact_reference(self.details[key])
 
 
 class TopologyDriftStatus(BaseModel):
@@ -239,7 +250,7 @@ def _topology_scope_path(project: dict, workspace: dict | None = None) -> Path:
 
 def _invalid_stored_topology_status(path: Path, message: str) -> TopologyStatus:
     return TopologyStatus(
-        path=str(path),
+        path=str(redact_reference(str(path))),
         exists=True,
         blocking_errors=[message],
     )
@@ -249,12 +260,164 @@ def _unique_messages(messages: list[str]) -> list[str]:
     seen: set[str] = set()
     unique: list[str] = []
     for message in messages:
-        normalized = str(message or "").strip()
+        normalized = redact_text(str(message or "").strip())
         if not normalized or normalized in seen:
             continue
         seen.add(normalized)
         unique.append(normalized)
     return unique
+
+
+def _require_safe_topology_reference(
+    value: str, *, sensitive_values: tuple[str, ...] = ()
+) -> None:
+    if (
+        redact_reference(value, sensitive_values=sensitive_values) != value
+        or REDACTED in value
+    ):
+        raise TopologyImportError(
+            "sensitive_topology_reference",
+            "Topology references must not contain credentials or sensitive values.",
+        )
+
+
+def _screen_topology_payload(
+    payload: dict[str, Any], *, sensitive_values: tuple[str, ...] = ()
+) -> dict[str, Any]:
+    """Screen retained context without changing the graph's stable identities."""
+    sensitive_values = tuple(
+        set(sensitive_values) | set(_sensitive_topology_values(payload))
+    )
+    services = payload.get("services", [])
+    if isinstance(services, list):
+        for service in services:
+            if not isinstance(service, dict):
+                continue
+            _require_safe_topology_reference(
+                str(service.get("id", "")).strip(), sensitive_values=sensitive_values
+            )
+            downstream = service.get("downstream", [])
+            if isinstance(downstream, list):
+                for target in downstream:
+                    _require_safe_topology_reference(
+                        str(target).strip(), sensitive_values=sensitive_values
+                    )
+    screened = redact_value(payload, sensitive_values=sensitive_values)
+    import_metadata = _import_metadata(screened)
+    for field in ("source_ref", "requested_source_ref"):
+        if isinstance(import_metadata.get(field), str):
+            import_metadata[field] = redact_reference(
+                import_metadata[field], sensitive_values=sensitive_values
+            )
+    if isinstance(services, list) and isinstance(screened.get("services"), list):
+        for original, safe in zip(services, screened["services"]):
+            if not isinstance(original, dict) or not isinstance(safe, dict):
+                continue
+            if safe.get("id") != original.get("id") or safe.get(
+                "downstream"
+            ) != original.get("downstream"):
+                raise TopologyImportError(
+                    "sensitive_topology_reference",
+                    "Topology graph identities must not contain sensitive values.",
+                )
+            for field in ("label", "owner"):
+                if isinstance(safe.get(field), str):
+                    safe[field] = redact_reference(
+                        safe[field], sensitive_values=sensitive_values
+                    )
+            if isinstance(safe.get("owners"), list):
+                safe["owners"] = [
+                    redact_reference(owner, sensitive_values=sensitive_values)
+                    if isinstance(owner, str)
+                    else owner
+                    for owner in safe["owners"]
+                ]
+            keys = original.get("resource_keys")
+            if isinstance(keys, list):
+                safe["resource_keys"] = [
+                    str(key).strip()
+                    for key in safe.get("resource_keys", [])
+                    if redact_reference(
+                        str(key).strip(), sensitive_values=sensitive_values
+                    )
+                    == str(key).strip()
+                    and REDACTED not in str(key)
+                ]
+    return screened
+
+
+def _sensitive_topology_values(payload: dict[str, Any]) -> tuple[str, ...]:
+    """Collect raw credentials and Terraform sensitivity declarations before projection."""
+    declarations: list[dict[str, Any]] = []
+
+    def visit(item: Any) -> None:
+        if isinstance(item, list):
+            for nested in item:
+                visit(nested)
+        elif isinstance(item, dict):
+            if "index_key" in item and _terraform_identity_is_sensitive(
+                item, "index_key"
+            ):
+                declarations.append({"value": item["index_key"], "sensitive": True})
+            attributes = item.get("attributes", item.get("values"))
+            if isinstance(attributes, (dict, list)):
+                for mask_key in ("sensitive_values", "sensitive_attributes"):
+                    mask = item.get(mask_key)
+                    if isinstance(mask, dict) or mask is True:
+                        masked_value = (
+                            item
+                            if isinstance(mask, dict)
+                            and any(key in mask for key in ("attributes", "values"))
+                            else attributes
+                        )
+                        declarations.append(
+                            {"values": masked_value, "sensitive_values": mask}
+                        )
+                    elif isinstance(mask, list):
+                        for path in mask:
+                            if isinstance(path, str):
+                                path = [path]
+                            if not isinstance(path, list):
+                                continue
+                            selected = (
+                                item
+                                if path[:1] in (["attributes"], ["values"])
+                                else attributes
+                            )
+                            for component in path:
+                                if isinstance(selected, dict):
+                                    selected = selected.get(component)
+                                elif (
+                                    isinstance(selected, list)
+                                    and isinstance(component, int)
+                                    and 0 <= component < len(selected)
+                                ):
+                                    selected = selected[component]
+                                else:
+                                    selected = None
+                                    break
+                            if selected is not None:
+                                declarations.append(
+                                    {"value": selected, "sensitive": True}
+                                )
+            for nested in item.values():
+                visit(nested)
+
+    visit(payload)
+    raw_context = json.dumps(
+        {"raw_context": payload, "sensitivity_declarations": declarations}
+    ).encode("utf-8")
+    return sensitive_artifact_values(raw_context)
+
+
+def _screen_connector_change_set(
+    change_set: TopologyChangeSet, *, sensitive_values: tuple[str, ...]
+) -> TopologyChangeSet:
+    payload = change_set.model_dump()
+    payload["services"] = _screen_topology_payload(
+        {"services": payload["services"]}, sensitive_values=sensitive_values
+    )["services"]
+    return TopologyChangeSet(**redact_value(payload, sensitive_values=sensitive_values))
 
 
 def _import_metadata(payload: dict[str, Any]) -> dict[str, Any]:
@@ -357,7 +520,7 @@ def _save_topology_source_status(
 ) -> None:
     entry = {
         "source_type": source_type,
-        "source_ref": source_ref,
+        "source_ref": redact_reference(source_ref),
         "checked_at": _current_timestamp(),
         "warnings": _unique_messages(warnings),
     }
@@ -379,7 +542,7 @@ def _save_topology_source_status(
         upsert_setting(
             session,
             key=_source_status_setting_key(project, workspace),
-            value=json.dumps(payload),
+            value=json.dumps(redact_value(payload)),
         )
 
 
@@ -396,6 +559,10 @@ def _load_topology_source_status(
         return None
     if not isinstance(payload, dict):
         return None
+    payload = redact_value(payload)
+    for entry in [payload, *_source_status_entries(payload)]:
+        if isinstance(entry.get("source_ref"), str):
+            entry["source_ref"] = redact_reference(entry["source_ref"])
     return payload
 
 
@@ -535,6 +702,8 @@ def _load_cached_topology_drift(
         return None
     if not isinstance(payload, dict):
         return None
+    payload = redact_value(payload)
+    payload["source_ref"] = redact_reference(payload.get("source_ref"))
     return TopologyDriftStatus(**payload)
 
 
@@ -555,6 +724,9 @@ def _save_topology_drift(
     drift_status: TopologyDriftStatus,
     workspace: dict[str, Any] | None = None,
 ) -> TopologyDriftStatus:
+    payload = redact_value(drift_status.model_dump())
+    payload["source_ref"] = redact_reference(payload.get("source_ref"))
+    drift_status = TopologyDriftStatus(**payload)
     with SessionLocal() as session:
         upsert_setting(
             session,
@@ -690,6 +862,17 @@ def _load_latest_topology_payload(
                     "Topology validation failed — stored topology must be a JSON object.",
                 ),
             )
+        try:
+            payload = _screen_topology_payload(payload)
+        except TopologyImportError:
+            return (
+                None,
+                topology_path,
+                _invalid_stored_topology_status(
+                    topology_path,
+                    "Stored topology contains an unsafe sensitive reference.",
+                ),
+            )
         return payload, topology_path, None
 
 
@@ -786,6 +969,14 @@ def _find_cycle(service_graph: dict[str, list[str]]) -> list[str]:
 def _build_topology_status(
     payload: dict[str, Any], *, path: Path, exists: bool
 ) -> TopologyStatus:
+    try:
+        payload = _screen_topology_payload(payload)
+    except TopologyImportError:
+        return TopologyStatus(
+            path=str(redact_reference(str(path))),
+            exists=exists,
+            blocking_errors=["Topology contains an unsafe sensitive graph reference."],
+        )
     warnings = list(_extract_import_warnings(payload))
     blocking_errors: list[str] = []
     services_raw = payload.get("services", [])
@@ -888,7 +1079,7 @@ def _build_topology_status(
 
     return TopologyStatus(
         payload=payload,
-        path=str(path),
+        path=str(redact_reference(str(path))),
         exists=exists,
         updated_at=updated_at,
         service_count=len(seen_ids),
@@ -972,9 +1163,19 @@ def _terraform_state_resource_address(resource: dict[str, Any]) -> str:
 
 
 def _terraform_state_identity_keys(
-    address: str, resource: dict[str, Any], instances: list[Any]
+    address: str,
+    resource: dict[str, Any],
+    instances: list[Any],
+    *,
+    sensitive_values: tuple[str, ...] = (),
 ) -> list[str]:
     keys = [address]
+    sensitive_values = tuple(
+        set(sensitive_values)
+        | set(
+            _sensitive_topology_values({"resource": resource, "instances": instances})
+        )
+    )
     for field in ("provider", "type"):
         value = str(resource.get(field) or "").strip()
         if value:
@@ -983,7 +1184,9 @@ def _terraform_state_identity_keys(
         if not isinstance(instance, dict):
             continue
         index_key = instance.get("index_key")
-        if index_key is not None:
+        if index_key is not None and not _terraform_identity_is_sensitive(
+            instance, "index_key"
+        ):
             if isinstance(index_key, str):
                 keys.append(f"{address}[{json.dumps(index_key)}]")
             else:
@@ -992,17 +1195,55 @@ def _terraform_state_identity_keys(
         if not isinstance(attributes, dict):
             continue
         for field in ("id", "arn", "name", "resource_id", "self_link"):
+            if _terraform_identity_is_sensitive(instance, field):
+                continue
             value = attributes.get(field)
             if isinstance(value, str) and value.strip():
                 keys.append(value.strip())
     seen: set[str] = set()
     unique: list[str] = []
     for key in keys:
-        if key in seen:
+        if (
+            key in seen
+            or redact_reference(key, sensitive_values=sensitive_values) != key
+            or REDACTED in key
+        ):
             continue
         seen.add(key)
         unique.append(key)
     return unique
+
+
+def _terraform_identity_is_sensitive(instance: dict[str, Any], field: str) -> bool:
+    """Honor state attribute paths and JSON value sensitivity masks."""
+    for key in ("sensitive_attributes", "sensitive_values"):
+        mask = instance.get(key)
+        if mask is True:
+            return True
+        if isinstance(mask, dict) and mask.get(field):
+            return True
+        if (
+            isinstance(mask, dict)
+            and isinstance(mask.get("attributes"), dict)
+            and mask["attributes"].get(field)
+        ):
+            return True
+        if isinstance(mask, list) and any(
+            path == []
+            or path == field
+            or (
+                isinstance(path, list)
+                and path
+                and (
+                    path[0] == field
+                    or path == ["attributes"]
+                    or path[:2] == ["attributes", field]
+                )
+            )
+            for path in mask
+        ):
+            return True
+    return False
 
 
 def _terraform_state_dependency_refs(instances: list[Any]) -> list[str]:
@@ -1135,7 +1376,9 @@ def _resolve_kubernetes_import_source_ref(
                 "empty; no topology changes were applied."
             ],
         )
-    return f"context:{context_name}", []
+    resolved = f"context:{context_name}"
+    _require_safe_topology_reference(resolved)
+    return resolved, []
 
 
 def _kubernetes_resource_access_todo_message(source_ref: str, resource: str) -> str:
@@ -1200,6 +1443,7 @@ def _read_kubernetes_live_state(
     *,
     deadline: float | None = None,
 ) -> tuple[str | None, list[str]]:
+    _require_safe_topology_reference(source_ref)
     source_ref_error = _kubernetes_source_ref_error(source_ref)
     if source_ref_error:
         return None, [source_ref_error]
@@ -1462,6 +1706,8 @@ def _parse_kubernetes_live_state_source(
             "Kubernetes live-state context TODO: kubectl output did not include an items list; no topology changes were applied.",
         )
 
+    sensitive_values = _sensitive_topology_values(payload)
+    _require_safe_topology_reference(source_ref, sensitive_values=sensitive_values)
     services_by_id: dict[str, dict[str, Any]] = {}
     accepted_resources: list[TopologyImportResource] = []
     partially_parsed_resources: list[TopologyImportResource] = []
@@ -1530,7 +1776,12 @@ def _parse_kubernetes_live_state_source(
             resource_keys.append(f"{api_version}/{resource_ref}")
         selector = _kubernetes_selector(item, kind)
         if selector:
-            resource_keys.append(_kubernetes_selector_key(namespace, selector))
+            selector_key = _kubernetes_selector_key(namespace, selector)
+            if (
+                redact_reference(selector_key) == selector_key
+                and redact_value(selector) == selector
+            ):
+                resource_keys.append(selector_key)
 
         seen_keys: set[str] = set()
         unique_keys: list[str] = []
@@ -1612,18 +1863,24 @@ def _parse_kubernetes_live_state_source(
             "Kubernetes live-state import did not produce any supported resources to apply."
         )
         if not items and not read_warnings:
-            return TopologyChangeSet(
-                operation="replace",
-                services=[],
+            return _screen_connector_change_set(
+                TopologyChangeSet(
+                    operation="replace",
+                    services=[],
+                    warnings=warnings,
+                    skipped_resources=skipped_resources,
+                    partially_parsed_resources=partially_parsed_resources,
+                ),
+                sensitive_values=sensitive_values,
+            )
+        return _screen_connector_change_set(
+            TopologyChangeSet(
+                operation="noop",
                 warnings=warnings,
                 skipped_resources=skipped_resources,
                 partially_parsed_resources=partially_parsed_resources,
-            )
-        return TopologyChangeSet(
-            operation="noop",
-            warnings=warnings,
-            skipped_resources=skipped_resources,
-            partially_parsed_resources=partially_parsed_resources,
+            ),
+            sensitive_values=sensitive_values,
         )
 
     if not any(
@@ -1632,21 +1889,27 @@ def _parse_kubernetes_live_state_source(
         warnings.append(
             "Kubernetes live-state import did not produce any non-namespace resources to apply."
         )
-        return TopologyChangeSet(
-            operation="noop",
+        return _screen_connector_change_set(
+            TopologyChangeSet(
+                operation="noop",
+                warnings=warnings,
+                accepted_resources=accepted_resources,
+                skipped_resources=skipped_resources,
+                partially_parsed_resources=partially_parsed_resources,
+            ),
+            sensitive_values=sensitive_values,
+        )
+
+    return _screen_connector_change_set(
+        TopologyChangeSet(
+            operation="replace",
+            services=normalized_services,
             warnings=warnings,
             accepted_resources=accepted_resources,
             skipped_resources=skipped_resources,
             partially_parsed_resources=partially_parsed_resources,
-        )
-
-    return TopologyChangeSet(
-        operation="replace",
-        services=normalized_services,
-        warnings=warnings,
-        accepted_resources=accepted_resources,
-        skipped_resources=skipped_resources,
-        partially_parsed_resources=partially_parsed_resources,
+        ),
+        sensitive_values=sensitive_values,
     )
 
 
@@ -1698,6 +1961,8 @@ def _parse_terraform_state_source(source_ref: str) -> TopologyChangeSet:
             "Terraform state context is unavailable because resources are missing or malformed; no topology changes were applied.",
         )
 
+    sensitive_values = _sensitive_topology_values(payload)
+    _require_safe_topology_reference(source_ref, sensitive_values=sensitive_values)
     warnings: list[str] = []
     stale_warning = _terraform_state_staleness_warning(path)
     if stale_warning:
@@ -1755,7 +2020,9 @@ def _parse_terraform_state_source(source_ref: str) -> TopologyChangeSet:
                 )
             )
             instances = []
-        resource_keys = _terraform_state_identity_keys(address, resource, instances)
+        resource_keys = _terraform_state_identity_keys(
+            address, resource, instances, sensitive_values=sensitive_values
+        )
         services_by_id[address] = {
             "id": address,
             "label": address,
@@ -1813,24 +2080,31 @@ def _parse_terraform_state_source(source_ref: str) -> TopologyChangeSet:
         warnings.append(
             "Terraform state import did not produce any valid managed resources to apply."
         )
-        return TopologyChangeSet(
-            operation="noop",
-            warnings=warnings,
-            skipped_resources=skipped_resources,
-            partially_parsed_resources=partially_parsed_resources,
+        return _screen_connector_change_set(
+            TopologyChangeSet(
+                operation="noop",
+                warnings=warnings,
+                skipped_resources=skipped_resources,
+                partially_parsed_resources=partially_parsed_resources,
+            ),
+            sensitive_values=sensitive_values,
         )
 
-    return TopologyChangeSet(
-        operation="replace",
-        services=services,
-        warnings=warnings,
-        accepted_resources=accepted_resources,
-        skipped_resources=skipped_resources,
-        partially_parsed_resources=partially_parsed_resources,
+    return _screen_connector_change_set(
+        TopologyChangeSet(
+            operation="replace",
+            services=services,
+            warnings=warnings,
+            accepted_resources=accepted_resources,
+            skipped_resources=skipped_resources,
+            partially_parsed_resources=partially_parsed_resources,
+        ),
+        sensitive_values=sensitive_values,
     )
 
 
 def _build_custom_change_set(payload: dict[str, Any]) -> TopologyChangeSet:
+    payload = _screen_topology_payload(payload)
     services_raw = payload.get("services", [])
     if not isinstance(services_raw, list):
         raise TopologyImportError(
@@ -2109,6 +2383,7 @@ def _persist_topology_payload(
     workspace: dict[str, Any] | None,
     source_type: str,
 ) -> TopologyStatus:
+    payload = _screen_topology_payload(payload)
     topology_path = _topology_scope_path(project, workspace)
     candidate_status = _build_topology_status(payload, path=topology_path, exists=False)
     if candidate_status.blocking_errors:
@@ -2216,7 +2491,7 @@ def _build_import_result(
     after_payload: dict[str, Any] | None,
     warnings: list[str],
 ) -> TopologyImportResult:
-    return TopologyImportResult(
+    result = TopologyImportResult(
         source_type=source_type,
         source_ref=source_ref,
         applied=applied,
@@ -2227,6 +2502,9 @@ def _build_import_result(
         unsupported_resources=change_set.unsupported_resources,
         diff=_build_topology_diff(before_payload, after_payload),
     )
+    screened = redact_value(result.model_dump())
+    screened["source_ref"] = redact_reference(result.source_ref)
+    return TopologyImportResult(**screened)
 
 
 def check_topology_drift(
@@ -2317,6 +2595,7 @@ def check_topology_drift(
         )
 
     try:
+        _require_safe_topology_reference(source_ref)
         change_set = _lookup_source_handler(source_type)(source_ref)
     except TopologyImportError as exc:
         return _save_topology_drift(
@@ -2475,6 +2754,8 @@ def import_topology_source(
     workspace_key: str | None = None,
 ) -> TopologyImportResult:
     """Import topology through the shared source registry."""
+    _require_safe_topology_reference(source_ref)
+    _require_safe_topology_reference(source_type)
     normalized_source_type = str(source_type or "").strip().lower()
     if not normalized_source_type:
         raise TopologyImportError(
@@ -2717,6 +2998,9 @@ def validate_topology_definition(
         path=_topology_scope_path(project, workspace),
         exists=False,
     )
+
+    if validation_status.payload is None and validation_status.blocking_errors:
+        return validation_status
 
     change_set = _build_custom_change_set(payload)
     if change_set.operation == "noop" and payload.get("services"):

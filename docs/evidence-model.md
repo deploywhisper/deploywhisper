@@ -41,6 +41,10 @@ Story 2.4 extends findings with explicit support context:
 Story 2.5 enforces Evidence Law at report persistence time:
 
 - high and critical findings must link to at least one deterministic evidence item
+- external scanner evidence is labeled `external` and may appear in reports, API
+  output, and PR-comment summaries as review context, but scanner severity alone
+  does not satisfy the deterministic-evidence requirement for high/critical
+  DeployWhisper findings
 - the shared report service downgrades unsupported high/critical findings to medium, caps their confidence at `0.85`, reconciles unsupported report-level severe verdicts to caution, and records an Evidence Law warning
 - the report repository rejects direct persistence payloads that try to save high/critical findings or report-level high/critical verdicts without linked deterministic severe evidence
 

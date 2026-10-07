@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from services.content_security import sensitive_artifact_values
+
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -123,6 +125,7 @@ def score_evidence(
     supplemental_changes: list[UnifiedChange] | None = None,
     completion_client=None,
     allow_llm_assistance: bool = True,
+    sensitive_values: tuple[str, ...] = (),
 ) -> RiskAssessment:
     changes = [
         _evidence_to_change(item, change_metadata_by_id=change_metadata_by_id)
@@ -145,6 +148,12 @@ def score_evidence(
             contributors,
             partial_context=partial_context,
             completion_client=completion_client,
+            sensitive_values=sensitive_values
+            + tuple(
+                value
+                for raw in (raw_files or {}).values()
+                for value in sensitive_artifact_values(raw)
+            ),
         )
     else:
         llm_warning = None

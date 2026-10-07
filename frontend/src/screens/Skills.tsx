@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, GitBranch, PackageCheck, Search, ShieldCheck } from "lucide-react";
+import { Clock3, ExternalLink, GitBranch, PackageCheck, Search, ShieldCheck, UsersRound } from "lucide-react";
 
 import { getSkill, getSkills, getSkillVersions, type SkillRegistryItem } from "../api/phase6";
 import { Button, Card, EvidenceTag, MonoRef, SkeletonCard } from "../components/ui";
@@ -14,7 +14,24 @@ function formatDate(value: string) {
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", year: "numeric" }).format(parsed);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(parsed);
+}
+
+function formatTimestamp(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(parsed);
 }
 
 function passRate(skill: SkillRegistryItem) {
@@ -25,33 +42,89 @@ function passRate(skill: SkillRegistryItem) {
   return `${Math.round(summary.pass_rate * 100)}%`;
 }
 
+export function skillTrustLabel(trustLevel: SkillRegistryItem["trust_level"]) {
+  return `${trustLevel.charAt(0).toUpperCase()}${trustLevel.slice(1)} trust`;
+}
+
+export function skillSourceLabel(source: SkillRegistryItem["source"]) {
+  switch (source) {
+    case "built-in":
+      return "Public registry";
+    case "custom-override":
+      return "Local override";
+    case "custom-new":
+      return "Private local";
+    default: {
+      const unknownSource: never = source;
+      void unknownSource;
+      return "Unknown source";
+    }
+  }
+}
+
+export function skillTestStatusLabel(testResults: SkillRegistryItem["test_results"]) {
+  if (!testResults || testResults.status === "missing") {
+    return "Tests missing";
+  }
+  return testResults.status === "passing" ? "Tests passing" : "Tests failing";
+}
+
 function unique(values: (string | undefined)[]) {
   return Array.from(new Set(values.filter(Boolean) as string[])).sort();
 }
 
-function SkillCard({ skill }: { skill: SkillRegistryItem }) {
+function countLabel(count: number, singular: string) {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+export function SkillCard({ skill }: { skill: SkillRegistryItem }) {
+  const isDeprecated = skill.trust_level === "deprecated";
+  const issueCountLabel = countLabel(skill.active_issue_count, "active issue");
+  const installCountLabel = countLabel(skill.install_count, "install");
+
   return (
     <Link className="dw-phase6-list-item dw-skill-card" to={`/skills/${skill.id}`}>
       <div className="dw-phase6-row">
         <div className="dw-phase6-list-title">{skill.name}</div>
         {skill.is_official && <EvidenceTag>Official</EvidenceTag>}
         {skill.is_featured && <EvidenceTag>Featured</EvidenceTag>}
+        <EvidenceTag>{skillTrustLabel(skill.trust_level)}</EvidenceTag>
+        <EvidenceTag>{skillSourceLabel(skill.source)}</EvidenceTag>
+        <EvidenceTag>{skillTestStatusLabel(skill.test_results)}</EvidenceTag>
       </div>
+      {isDeprecated && (
+        <div className="dw-phase6-note dw-phase6-warning" role="note">
+          This Skill is deprecated.
+        </div>
+      )}
       <div className="dw-phase6-list-copy">{skill.description}</div>
       <div className="dw-skill-tags">
         <EvidenceTag>{skill.tool}</EvidenceTag>
         {skill.tags?.slice(0, 4).map((tag) => <EvidenceTag key={tag}>{tag}</EvidenceTag>)}
+        <span aria-label={issueCountLabel}>
+          <EvidenceTag>{issueCountLabel}</EvidenceTag>
+        </span>
       </div>
       <div className="dw-phase6-stat-grid">
-        <div className="dw-phase6-stat"><strong>{skill.install_count}</strong><span>Installs</span></div>
-        <div className="dw-phase6-stat"><strong>{passRate(skill)}</strong><span>Pass rate</span></div>
+        <div
+          aria-label={installCountLabel}
+          className="dw-phase6-stat"
+        >
+          <strong>{skill.install_count}</strong><span>{skill.install_count === 1 ? "Install" : "Installs"}</span>
+        </div>
+        <div
+          aria-label={`${passRate(skill)} test pass rate`}
+          className="dw-phase6-stat"
+        >
+          <strong>{passRate(skill)}</strong><span>Pass rate</span>
+        </div>
       </div>
-      <MonoRef>{skill.author} / {formatDate(skill.updated_at)}</MonoRef>
+      <MonoRef>{skill.author} / Updated {formatDate(skill.updated_at)}</MonoRef>
     </Link>
   );
 }
 
-function SkillsListContent() {
+export function SkillsListContent() {
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get("search") ?? "";
   const tool = searchParams.get("tool") ?? "";
@@ -104,7 +177,12 @@ function SkillsListContent() {
             <span>Search</span>
             <div className="dw-phase6-row">
               <Search size={15} />
-              <input className="dw-phase6-search" onChange={(event) => updateFilter("search", event.target.value)} value={search} />
+              <input
+                aria-label="Search skills"
+                className="dw-phase6-search"
+                onChange={(event) => updateFilter("search", event.target.value)}
+                value={search}
+              />
             </div>
           </label>
           <label className="dw-field">
@@ -156,7 +234,7 @@ function SkillsListContent() {
   );
 }
 
-function SkillDetailContent({ skillId }: { skillId: string }) {
+export function SkillDetailContent({ skillId }: { skillId: string }) {
   const skillQuery = useQuery({ queryFn: () => getSkill(skillId), queryKey: ["skill", skillId] });
   const versionsQuery = useQuery({ queryFn: () => getSkillVersions(skillId), queryKey: ["skill-versions", skillId] });
   const skill = skillQuery.data;
@@ -188,17 +266,55 @@ function SkillDetailContent({ skillId }: { skillId: string }) {
                 <div className="dw-phase6-row">
                   {skill.is_official && <EvidenceTag>Official</EvidenceTag>}
                   {skill.is_featured && <EvidenceTag>Featured</EvidenceTag>}
-                  <EvidenceTag>{skill.source}</EvidenceTag>
+                  <EvidenceTag>{skillTrustLabel(skill.trust_level)}</EvidenceTag>
+                  <EvidenceTag>{skillSourceLabel(skill.source)}</EvidenceTag>
+                  <EvidenceTag>{skillTestStatusLabel(skill.test_results)}</EvidenceTag>
                 </div>
+                {skill.trust_level === "deprecated" && (
+                  <div className="dw-phase6-note dw-phase6-warning" role="note">
+                    This Skill is deprecated and may no longer be maintained.
+                  </div>
+                )}
                 <div className="dw-skill-command-box">{skill.install_command}</div>
                 <div className="dw-phase6-stat-grid">
                   <div className="dw-phase6-stat"><strong>{skill.author}</strong><span>Author</span></div>
                   <div className="dw-phase6-stat"><strong>{skill.maintainer}</strong><span>Maintainer</span></div>
-                  <div className="dw-phase6-stat"><strong>{skill.install_count}</strong><span>Installs</span></div>
+                  <div className="dw-phase6-stat">
+                    <strong>{skill.install_count}</strong>
+                    <span>{skill.install_count === 1 ? "Install" : "Installs"}</span>
+                  </div>
                   <div className="dw-phase6-stat"><strong>{passRate(skill)}</strong><span>Pass rate</span></div>
                 </div>
+                <section aria-labelledby="skill-contributors-title" className="dw-phase6-stack">
+                  <div className="dw-phase6-row">
+                    <UsersRound size={16} />
+                    <span className="dw-phase6-list-copy" id="skill-contributors-title">Contributors</span>
+                  </div>
+                  <div className="dw-skill-tags">
+                    {skill.contributors.length > 0
+                      ? skill.contributors.map((contributor) => <EvidenceTag key={contributor}>{contributor}</EvidenceTag>)
+                      : <span className="dw-phase6-list-copy">No contributors listed</span>}
+                  </div>
+                </section>
                 <div className="dw-skill-tags">
                   {skill.tags?.map((tag) => <EvidenceTag key={tag}>{tag}</EvidenceTag>)}
+                </div>
+              </div>
+            </Card>
+            <Card eyebrow="Validation" title="Deterministic harness">
+              <div className="dw-phase6-stack">
+                <div className="dw-phase6-row">
+                  <ShieldCheck size={16} />
+                  <span className="dw-phase6-list-copy">
+                    {skill.test_results?.display_text ?? "No deterministic harness result available."}
+                  </span>
+                </div>
+                <div className="dw-phase6-row">
+                  <Clock3 size={16} />
+                  <span className="dw-phase6-list-copy">Harness run</span>
+                  {skill.test_results
+                    ? <MonoRef><time dateTime={skill.test_results.generated_at}>{formatTimestamp(skill.test_results.generated_at)}</time></MonoRef>
+                    : <MonoRef>Not available</MonoRef>}
                 </div>
               </div>
             </Card>
@@ -216,8 +332,14 @@ function SkillDetailContent({ skillId }: { skillId: string }) {
             <Card eyebrow="Readiness" title="Registry snapshot">
               <div className="dw-phase6-stack">
                 <div className="dw-phase6-row"><PackageCheck size={16} /> <span className="dw-phase6-list-copy">{skill.available_versions} tracked versions</span></div>
-                <div className="dw-phase6-row"><ShieldCheck size={16} /> <span className="dw-phase6-list-copy">{skill.active_issue_count} active issues</span></div>
+                <div className="dw-phase6-row"><ShieldCheck size={16} /> <span className="dw-phase6-list-copy">{countLabel(skill.active_issue_count, "active issue")}</span></div>
                 <div className="dw-phase6-row"><GitBranch size={16} /> <span className="dw-phase6-list-copy">Updated {formatDate(skill.updated_at)}</span></div>
+                <div className="dw-phase6-row">
+                  <Clock3 size={16} />
+                  <span className="dw-phase6-list-copy">
+                    Analytics refreshed <time dateTime={skill.analytics_updated_at}>{formatTimestamp(skill.analytics_updated_at)}</time>
+                  </span>
+                </div>
               </div>
             </Card>
             <Card eyebrow="Versions" title="Version history">

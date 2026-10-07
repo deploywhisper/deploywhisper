@@ -21,6 +21,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/analyses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Agent Analysis
+         * @description Run the canonical analysis path and return the bounded agent contract.
+         */
+        post: operations["create_agent_analysis_api_v1_agent_analyses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Report
+         * @description Return one scoped persisted report through the bounded agent contract.
+         */
+        get: operations["get_agent_report_api_v1_agent_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analyses": {
         parameters: {
             query?: never;
@@ -35,6 +75,46 @@ export interface paths {
         post: operations["create_analysis_api_v1_analyses_post"];
         /** Delete Analyses */
         delete: operations["delete_analyses_api_v1_analyses_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analyses/{report_id}/policy-adapter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Policy Adapter Output
+         * @description Generate a configured policy interpretation for one persisted report.
+         */
+        get: operations["get_policy_adapter_output_api_v1_analyses__report_id__policy_adapter_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analyses/{report_id}/enforcement-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Integration Enforcement Decision
+         * @description Return the auditable, integration-capped decision for one report.
+         */
+        get: operations["get_integration_enforcement_decision_api_v1_analyses__report_id__enforcement_decision_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -266,6 +346,34 @@ export interface paths {
         put: operations["update_provider_settings_api_v1_settings_provider_put"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/policy-adapter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Policy Adapter Defaults
+         * @description Return effective project or integration policy-adapter defaults.
+         */
+        get: operations["get_policy_adapter_defaults_api_v1_settings_policy_adapter_get"];
+        /**
+         * Update Policy Adapter Defaults
+         * @description Persist project or integration policy-adapter defaults.
+         */
+        put: operations["update_policy_adapter_defaults_api_v1_settings_policy_adapter_put"];
+        post?: never;
+        /**
+         * Reset Policy Adapter Defaults
+         * @description Remove one override and return the newly inherited defaults.
+         */
+        delete: operations["reset_policy_adapter_defaults_api_v1_settings_policy_adapter_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -514,10 +622,189 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scanner-imports/sarif": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Sarif
+         * @description Import SARIF scanner findings as external evidence.
+         */
+        post: operations["import_sarif_api_v1_scanner_imports_sarif_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner-imports/semgrep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Semgrep
+         * @description Import Semgrep native JSON findings as external evidence.
+         */
+        post: operations["import_semgrep_api_v1_scanner_imports_semgrep_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AdapterCanonicalSummary
+         * @description Immutable canonical report summary consumed by all workflow adapters.
+         */
+        AdapterCanonicalSummary: {
+            /**
+             * Advisory Only
+             * @description Whether the shared summary is advisory rather than blocking
+             */
+            advisory_only: boolean;
+            /**
+             * Should Block
+             * @description Whether DeployWhisper itself should block deployment
+             */
+            should_block: boolean;
+            /**
+             * Severity
+             * @description Risk severity for the shared summary
+             */
+            severity: string;
+            /**
+             * Recommendation
+             * @description Deploy recommendation for the shared summary
+             */
+            recommendation: string;
+            /**
+             * Headline
+             * @description Top narrative line for PR or approval-thread use
+             */
+            headline: string;
+            /**
+             * Blast Radius Summary
+             * @description Concise blast-radius summary
+             */
+            blast_radius_summary: string;
+            /**
+             * Rollback Summary
+             * @description Concise rollback summary
+             */
+            rollback_summary: string;
+            /**
+             * Uncertainty Summary
+             * @description Concise uncertainty and review note
+             */
+            uncertainty_summary: string;
+            /**
+             * Markdown
+             * @description Markdown-ready advisory summary
+             */
+            markdown: string;
+            /**
+             * Plain Text
+             * @description Plain-text advisory summary
+             */
+            plain_text: string;
+            /** @description Machine-friendly share-summary payload */
+            json_payload: components["schemas"]["FrozenShareSummaryJsonPayload"];
+        };
+        /**
+         * AdapterMetadata
+         * @description Workflow adapter identity and delivery context.
+         */
+        AdapterMetadata: {
+            /**
+             * Adapter
+             * @description Adapter family, such as gitlab or jenkins
+             */
+            adapter: string;
+            /**
+             * Format
+             * @description Adapter output format or destination type
+             */
+            format: string;
+            /**
+             * Version
+             * @description Adapter contract version
+             */
+            version?: string | null;
+            /**
+             * Project Key
+             * @description Project key in scope
+             */
+            project_key?: string | null;
+            /**
+             * Project Id
+             * @description Project ID in scope
+             */
+            project_id?: number | null;
+            /**
+             * Workspace Key
+             * @description Workspace key in scope
+             */
+            workspace_key?: string | null;
+            /**
+             * Workspace Id
+             * @description Workspace ID in scope
+             */
+            workspace_id?: number | null;
+            /**
+             * Invocation Id
+             * @description Adapter invocation or workflow run identifier
+             */
+            invocation_id?: string | null;
+            /**
+             * Delivery Target
+             * @description Adapter-specific delivery target
+             */
+            delivery_target?: string | null;
+            /**
+             * Extra
+             * @description Adapter-specific metadata that does not shadow canonical fields
+             */
+            extra?: {
+                [key: string]: string | number | boolean | null;
+            };
+        };
+        /**
+         * AdapterOutputContract
+         * @description One report-output envelope for future delivery adapters.
+         */
+        AdapterOutputContract: {
+            /**
+             * Contract Version
+             * @description Adapter contract version
+             * @default v1
+             */
+            contract_version: string;
+            /** @description Adapter metadata */
+            adapter_metadata: components["schemas"]["AdapterMetadata"];
+            /** @description Immutable canonical summary */
+            canonical_summary: components["schemas"]["AdapterCanonicalSummary"];
+            /**
+             * Adapter Payload
+             * @description Adapter-specific formatting and delivery fields
+             */
+            adapter_payload?: {
+                [key: string]: unknown;
+            };
+        };
         /** AdvisorySummaryData */
         AdvisorySummaryData: {
             /**
@@ -567,6 +854,330 @@ export interface components {
              * @description Machine-readable uncertainty indicators
              */
             uncertainty_flags?: string[];
+        };
+        /** AgentAnalysisData */
+        AgentAnalysisData: {
+            /**
+             * Schema Version
+             * @default v1
+             * @constant
+             */
+            schema_version: "v1";
+            /** Report Schema Version */
+            report_schema_version: string;
+            /** Report Id */
+            report_id: number;
+            scope: components["schemas"]["AgentScopeData"];
+            verdict: components["schemas"]["AgentVerdictData"];
+            /**
+             * Advisory Only
+             * @default true
+             * @constant
+             */
+            advisory_only: true;
+            /**
+             * Deployment Approval
+             * @default false
+             * @constant
+             */
+            deployment_approval: false;
+            /**
+             * Human Decision Required
+             * @default true
+             * @constant
+             */
+            human_decision_required: true;
+            /**
+             * Approval Statement
+             * @default This output is advisory and is not deployment approval. A human must review the evidence before any deployment decision.
+             * @constant
+             */
+            approval_statement: "This output is advisory and is not deployment approval. A human must review the evidence before any deployment decision.";
+            evidence_law: components["schemas"]["AgentEvidenceLawData"];
+            /** Evidence */
+            evidence?: components["schemas"]["AgentEvidenceData"][];
+            /** Findings */
+            findings?: components["schemas"]["AgentFindingData"][];
+            confidence: components["schemas"]["AgentConfidenceData"];
+            uncertainty: components["schemas"]["AgentUncertaintyData"];
+            /** Context Todos */
+            context_todos?: string[];
+            /** Verification Guidance */
+            verification_guidance?: string[];
+        };
+        /** AgentConfidenceData */
+        AgentConfidenceData: {
+            /** Overall */
+            overall: number;
+            ledger: components["schemas"]["AgentConfidenceLedgerData"];
+        };
+        /** AgentConfidenceLedgerData */
+        AgentConfidenceLedgerData: {
+            /** Contributors */
+            contributors?: string[];
+            /** Confidence Factors */
+            confidence_factors?: string[];
+            /** Why Not Lower */
+            why_not_lower?: string[];
+            /** Why Not Higher */
+            why_not_higher?: string[];
+            /** Uncertainty Drivers */
+            uncertainty_drivers?: string[];
+        };
+        /** AgentContextSourceData */
+        AgentContextSourceData: {
+            /** Source Id */
+            source_id: string;
+            /**
+             * Source Type
+             * @enum {string}
+             */
+            source_type: "artifact" | "topology" | "incident" | "parser" | "evidence" | "ownership" | "external_scanner" | "user_context";
+            /** Source Ref */
+            source_ref?: string | null;
+            /** Scope */
+            scope: string;
+            /**
+             * Freshness Status
+             * @default unknown
+             * @enum {string}
+             */
+            freshness_status: "current" | "stale" | "missing" | "incomplete" | "conflicting" | "unknown" | "empty" | "not_applicable";
+            /** Last Observed At */
+            last_observed_at?: string | null;
+            /** Age Days */
+            age_days?: number | null;
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /** Conflicts */
+            conflicts?: string[];
+            /** Limitations */
+            limitations?: string[];
+        };
+        /** AgentEvidenceData */
+        AgentEvidenceData: {
+            /** Evidence Id */
+            evidence_id: string;
+            /** Analysis Id */
+            analysis_id: number;
+            /** Finding Id */
+            finding_id: string;
+            /** Source Type */
+            source_type: string;
+            /** Source Ref */
+            source_ref: string;
+            /**
+             * Artifact
+             * @default
+             */
+            artifact: string;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
+            /**
+             * Resource
+             * @default
+             */
+            resource: string;
+            /**
+             * Operation
+             * @default
+             */
+            operation: string;
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+            /**
+             * Source Kind
+             * @default artifact
+             */
+            source_kind: string;
+            /**
+             * Determinism Level
+             * @default deterministic
+             */
+            determinism_level: string;
+            /**
+             * Redaction Status
+             * @default none
+             */
+            redaction_status: string;
+            /** Summary */
+            summary: string;
+            /**
+             * Severity Hint
+             * @enum {string}
+             */
+            severity_hint: "low" | "medium" | "high" | "critical";
+            /** Deterministic */
+            deterministic: boolean;
+            /** Confidence */
+            confidence: number;
+            /** Evidence Label */
+            evidence_label?: string | null;
+            /** Related Change Ids */
+            related_change_ids?: string[];
+            context_source?: components["schemas"]["AgentContextSourceData"] | null;
+        };
+        /** AgentEvidenceLawData */
+        AgentEvidenceLawData: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Satisfied" | "Needs review" | "Reconciled" | "Detail omitted";
+            /** Detail */
+            detail: string;
+        };
+        /** AgentFindingData */
+        AgentFindingData: {
+            /** Finding Id */
+            finding_id: string;
+            /** Analysis Id */
+            analysis_id: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Explanation
+             * @default
+             */
+            explanation: string;
+            /** Guidance */
+            guidance?: string[];
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "low" | "medium" | "high" | "critical";
+            /** Category */
+            category: string;
+            /** Deterministic */
+            deterministic: boolean;
+            /** Confidence */
+            confidence: number;
+            /** Uncertainty Note */
+            uncertainty_note?: string | null;
+            /**
+             * Evidence Classification
+             * @default deterministic
+             * @enum {string}
+             */
+            evidence_classification: "deterministic" | "derived" | "external" | "model_inferred" | "user_provided";
+            /** Evidence Refs */
+            evidence_refs?: string[];
+            /** Evidence Label */
+            evidence_label?: string | null;
+            /** Skill Id */
+            skill_id?: string | null;
+        };
+        /** AgentInterfaceMeta */
+        AgentInterfaceMeta: {
+            /**
+             * Interface Schema Version
+             * @default v1
+             * @constant
+             */
+            interface_schema_version: "v1";
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "analysis.submit" | "report.read";
+            /**
+             * Advisory Only
+             * @default true
+             * @constant
+             */
+            advisory_only: true;
+            output_limits?: components["schemas"]["AgentOutputLimitsData"];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /** Truncated Fields */
+            truncated_fields?: string[];
+        };
+        /** AgentInterfaceResponse */
+        AgentInterfaceResponse: {
+            data: components["schemas"]["AgentAnalysisData"];
+            meta: components["schemas"]["AgentInterfaceMeta"];
+        };
+        /** AgentOutputLimitsData */
+        AgentOutputLimitsData: {
+            /**
+             * Max String Characters
+             * @default 2048
+             */
+            max_string_characters: number;
+            /**
+             * Max Collection Items
+             * @default 50
+             */
+            max_collection_items: number;
+            /**
+             * Max Findings
+             * @default 50
+             */
+            max_findings: number;
+            /**
+             * Max Evidence
+             * @default 100
+             */
+            max_evidence: number;
+        };
+        /** AgentScopeData */
+        AgentScopeData: {
+            /** Project Id */
+            project_id: number;
+            /** Project Key */
+            project_key: string;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+        };
+        /** AgentUncertaintyData */
+        AgentUncertaintyData: {
+            /** Flags */
+            flags?: string[];
+            /** Summary */
+            summary?: string | null;
+            /** Partial Context */
+            partial_context: boolean;
+            /** Insufficient Context */
+            insufficient_context: boolean;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** AgentVerdictData */
+        AgentVerdictData: {
+            /** Risk Score */
+            risk_score: number;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "low" | "medium" | "high" | "critical";
+            /**
+             * Recommendation
+             * @enum {string}
+             */
+            recommendation: "go" | "caution" | "no-go";
+            /** Top Risk */
+            top_risk: string;
         };
         /** AnalysisBulkDeleteData */
         AnalysisBulkDeleteData: {
@@ -1194,6 +1805,24 @@ export interface components {
              */
             context_limitations?: string[];
         };
+        /** Body_create_agent_analysis_api_v1_agent_analyses_post */
+        Body_create_agent_analysis_api_v1_agent_analyses_post: {
+            /**
+             * Files
+             * @description Supported deployment artifacts to analyze.
+             */
+            files?: string[] | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+            /** Artifact Paths */
+            artifact_paths?: string[] | null;
+        };
         /** Body_create_analysis_api_v1_analyses_post */
         Body_create_analysis_api_v1_analyses_post: {
             /**
@@ -1392,6 +2021,68 @@ export interface components {
              * @description Analyzed files, resources, or services missing ownership data
              */
             ownership_unmapped_subjects?: string[];
+            /**
+             * Context Sources
+             * @description Per-source freshness, confidence, scope, and conflict ledger
+             */
+            context_sources?: components["schemas"]["ContextSourceMetadataData"][];
+        };
+        /** ContextSourceMetadataData */
+        ContextSourceMetadataData: {
+            /**
+             * Source Id
+             * @description Stable context source id
+             */
+            source_id: string;
+            /**
+             * Source Type
+             * @description Context source category
+             * @enum {string}
+             */
+            source_type: "artifact" | "topology" | "incident" | "parser" | "evidence" | "ownership" | "external_scanner" | "user_context";
+            /**
+             * Source Ref
+             * @description Source path, version, or URI
+             */
+            source_ref?: string | null;
+            /**
+             * Scope
+             * @description Project/workspace scope for this source
+             */
+            scope: string;
+            /**
+             * Freshness Status
+             * @description Freshness state for this source
+             * @default unknown
+             * @enum {string}
+             */
+            freshness_status: "current" | "stale" | "missing" | "incomplete" | "conflicting" | "unknown" | "empty" | "not_applicable";
+            /**
+             * Last Observed At
+             * @description ISO timestamp when this source was last observed
+             */
+            last_observed_at?: string | null;
+            /**
+             * Age Days
+             * @description Source age in days when available
+             */
+            age_days?: number | null;
+            /**
+             * Confidence
+             * @description Confidence contribution from this source
+             * @default 0
+             */
+            confidence: number;
+            /**
+             * Conflicts
+             * @description Conflicting sources or signals associated with this source
+             */
+            conflicts?: string[];
+            /**
+             * Limitations
+             * @description Freshness, completeness, or quality limitations
+             */
+            limitations?: string[];
         };
         /** CountMetaPayload */
         CountMetaPayload: {
@@ -1763,10 +2454,67 @@ export interface components {
              */
             confidence: number;
             /**
+             * Evidence Label
+             * @description Reviewer-facing label for external evidence context
+             */
+            evidence_label?: string | null;
+            /**
              * Related Change Ids
              * @description Traceable normalized change identifiers
              */
             related_change_ids?: string[];
+            /** @description Context source metadata that supplied or qualified this evidence */
+            context_source?: components["schemas"]["ContextSourceMetadataData"] | null;
+        };
+        /**
+         * ExternalScannerEvidenceRecord
+         * @description Scanner finding normalized as external evidence.
+         */
+        ExternalScannerEvidenceRecord: {
+            /** Id */
+            id: number;
+            /** Import Id */
+            import_id: number;
+            /** Evidence Id */
+            evidence_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Project Key */
+            project_key: string;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+            /** Source Type */
+            source_type: string;
+            /** Source File */
+            source_file: string;
+            /** Source Ref */
+            source_ref: string;
+            /** Tool Name */
+            tool_name: string;
+            /** Rule Id */
+            rule_id: string;
+            /** Rule Name */
+            rule_name?: string | null;
+            /** Severity */
+            severity: string;
+            /** Level */
+            level?: string | null;
+            /** Message */
+            message: string;
+            /** Location */
+            location: string;
+            /** Artifact Uri */
+            artifact_uri: string;
+            /** Region */
+            region?: {
+                [key: string]: unknown;
+            };
+            /** Properties */
+            properties?: {
+                [key: string]: unknown;
+            };
         };
         /** FeedbackCurrentStateData */
         FeedbackCurrentStateData: {
@@ -1997,6 +2745,11 @@ export interface components {
              */
             evidence_refs?: string[];
             /**
+             * Evidence Label
+             * @description Reviewer-facing label for external or mixed evidence context
+             */
+            evidence_label?: string | null;
+            /**
              * Skill Id
              * @description Skill identifier when a skill contributed the finding
              */
@@ -2026,6 +2779,206 @@ export interface components {
         FindingFeedbackResponse: {
             data: components["schemas"]["FeedbackEventData"];
             meta: components["schemas"]["ResourceMetaPayload"];
+        };
+        /**
+         * FrozenShareSummaryContext
+         * @description Immutable context summary for adapter contracts.
+         */
+        FrozenShareSummaryContext: {
+            /**
+             * Score
+             * @description Context completeness score
+             */
+            score: number;
+            /**
+             * Label
+             * @description Context completeness badge label
+             */
+            label: string;
+            /**
+             * Summary
+             * @description Short context completeness summary
+             */
+            summary: string;
+        };
+        /**
+         * FrozenShareSummaryFinding
+         * @description Immutable share-summary finding for adapter contracts.
+         */
+        FrozenShareSummaryFinding: {
+            /**
+             * Title
+             * @description Short finding title for sharing
+             */
+            title: string;
+            /**
+             * Severity
+             * @description Finding severity
+             */
+            severity: string;
+            /**
+             * Evidence Count
+             * @description Evidence items linked to the finding
+             */
+            evidence_count: number;
+            /**
+             * Confidence
+             * @description Finding confidence score
+             */
+            confidence: number;
+            /**
+             * Evidence Label
+             * @description Reviewer-facing label for external or non-DeployWhisper evidence
+             */
+            evidence_label?: string | null;
+        };
+        /**
+         * FrozenShareSummaryJsonPayload
+         * @description Immutable machine-friendly share-summary payload for adapter contracts.
+         */
+        FrozenShareSummaryJsonPayload: {
+            /**
+             * Version
+             * @description Share-summary payload version
+             * @default v1
+             */
+            version: string;
+            /**
+             * Report Schema Version
+             * @description Report schema version used by the source persisted report
+             * @default v2
+             */
+            report_schema_version: string;
+            /**
+             * Report Id
+             * @description Persisted report ID
+             */
+            report_id?: number | null;
+            /**
+             * Report Link
+             * @description Deep link to the report
+             */
+            report_link?: string | null;
+            /**
+             * Rollback Link
+             * @description Deep link to the report rollback view
+             */
+            rollback_link?: string | null;
+            /**
+             * Verdict Banner
+             * @description Verdict banner for PR comments
+             */
+            verdict_banner: string;
+            /**
+             * Evidence Law Status
+             * @description Evidence Law verification status for severe claims
+             * @enum {string}
+             */
+            evidence_law_status: "Satisfied" | "Needs review" | "Reconciled" | "Detail omitted";
+            /**
+             * Evidence Law Detail
+             * @description Human-readable Evidence Law verification detail
+             */
+            evidence_law_detail: string;
+            /**
+             * Headline
+             * @description Top summary line
+             */
+            headline: string;
+            /**
+             * Top Findings
+             * @description Top findings to surface
+             */
+            top_findings?: components["schemas"]["FrozenShareSummaryFinding"][];
+            /**
+             * Evidence Count
+             * @description Total evidence-item count
+             */
+            evidence_count: number;
+            /**
+             * External Evidence Count
+             * @description External scanner evidence items included as review context
+             * @default 0
+             */
+            external_evidence_count: number;
+            /**
+             * External Evidence Summary
+             * @description How external scanner context should be interpreted
+             */
+            external_evidence_summary?: string | null;
+            /**
+             * Scanner Conflicts
+             * @description Scanner-vs-deterministic/context conflicts requiring review
+             */
+            scanner_conflicts?: components["schemas"]["FrozenShareSummaryScannerConflict"][];
+            /**
+             * Blast Radius Summary
+             * @description Concise blast-radius summary
+             */
+            blast_radius_summary: string;
+            /**
+             * Rollback Summary
+             * @description Concise rollback summary
+             */
+            rollback_summary: string;
+            /** @description Context completeness summary */
+            context_completeness: components["schemas"]["FrozenShareSummaryContext"];
+            /**
+             * Advisory Summary
+             * @description Advisory-only review summary
+             */
+            advisory_summary: string;
+        };
+        /**
+         * FrozenShareSummaryScannerConflict
+         * @description Immutable scanner-conflict summary for adapter contracts.
+         */
+        FrozenShareSummaryScannerConflict: {
+            /**
+             * Finding Id
+             * @description Finding with conflicting scanner context
+             */
+            finding_id: string;
+            /**
+             * Finding Title
+             * @description Reviewer-facing finding title
+             */
+            finding_title: string;
+            /**
+             * Scanner Source
+             * @description Scanner evidence source reference
+             */
+            scanner_source: string;
+            /**
+             * Scanner Freshness
+             * @description Scanner source freshness status
+             */
+            scanner_freshness: string;
+            /**
+             * Deterministic Source
+             * @description DeployWhisper deterministic evidence source
+             */
+            deterministic_source: string;
+            /**
+             * Deterministic Freshness
+             * @description DeployWhisper deterministic source freshness status
+             */
+            deterministic_freshness: string;
+            /**
+             * Conflict Summary
+             * @description Short conflict explanation
+             */
+            conflict_summary: string;
+            /**
+             * Confidence Impact
+             * @description How the conflict affects confidence interpretation
+             */
+            confidence_impact: string;
+            /**
+             * Recommended Verification
+             * @description Reviewer action for resolving the conflict
+             */
+            recommended_verification: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2226,6 +3179,31 @@ export interface components {
             status: "ready" | "unsupported" | "sensitive";
             /** Message */
             message: string;
+        };
+        /**
+         * IntegrationEnforcementDecision
+         * @description Auditable integration decision kept separate from canonical analysis.
+         */
+        IntegrationEnforcementDecision: {
+            /**
+             * Contract Version
+             * @default v1
+             * @constant
+             */
+            contract_version: "v1";
+            configured_mode: components["schemas"]["PolicyAdapterStatus"];
+            effective_status: components["schemas"]["PolicyAdapterStatus"];
+            /** Should Block */
+            should_block: boolean;
+            policy_output: components["schemas"]["PolicyAdapterOutputContract"];
+        };
+        /**
+         * IntegrationEnforcementDecisionResponse
+         * @description API envelope for an integration's capped enforcement decision.
+         */
+        IntegrationEnforcementDecisionResponse: {
+            data: components["schemas"]["IntegrationEnforcementDecision"];
+            meta: components["schemas"]["ResourceMetaPayload"];
         };
         /** InteractionRiskData */
         InteractionRiskData: {
@@ -2653,6 +3631,188 @@ export interface components {
              */
             readonly pr_ref: string | null;
         };
+        /**
+         * PolicyAdapterOutputContract
+         * @description Versioned policy interpretation that leaves canonical output advisory.
+         */
+        PolicyAdapterOutputContract: {
+            /**
+             * Contract Version
+             * @description Policy adapter contract version
+             * @default v1
+             */
+            contract_version: string;
+            /** @description Local workflow decision */
+            status: components["schemas"]["PolicyAdapterStatus"];
+            /**
+             * Reasons
+             * @description Reasons for the policy status
+             */
+            reasons: components["schemas"]["PolicyAdapterReason"][];
+            /**
+             * Canonical Report Advisory
+             * @description Confirms policy status does not alter canonical report semantics
+             * @default true
+             * @constant
+             */
+            canonical_report_advisory: true;
+            /** @description Immutable canonical summary and adapter metadata */
+            adapter_output: components["schemas"]["AdapterOutputContract"];
+            /** @description Resolved threshold and reporting defaults used for interpretation */
+            applied_settings?: components["schemas"]["PolicyAdapterSettings"] | null;
+        };
+        /**
+         * PolicyAdapterOutputResponse
+         * @description API envelope for configured policy interpretation of one report.
+         */
+        PolicyAdapterOutputResponse: {
+            data: components["schemas"]["PolicyAdapterOutputContract"];
+            meta: components["schemas"]["ResourceMetaPayload"];
+        };
+        /**
+         * PolicyAdapterReason
+         * @description Structured explanation for a downstream policy interpretation.
+         */
+        PolicyAdapterReason: {
+            /**
+             * Code
+             * @description Stable adapter-owned reason code
+             */
+            code: string;
+            /**
+             * Message
+             * @description Human-readable policy explanation
+             */
+            message: string;
+        };
+        /**
+         * PolicyAdapterSettings
+         * @description Resolved project or integration defaults for policy interpretation.
+         */
+        PolicyAdapterSettings: {
+            /**
+             * Project Key
+             * @description Project owning these defaults
+             */
+            project_key: string;
+            /**
+             * Integration
+             * @description Optional integration identifier for an overriding default
+             */
+            integration?: string | null;
+            /**
+             * Source
+             * @description Scope from which the effective defaults were resolved
+             * @enum {string}
+             */
+            source: "built-in" | "project" | "integration";
+            /**
+             * @description Minimum canonical severity interpreted as warn
+             * @default medium
+             */
+            warn_at: components["schemas"]["PolicySeverity"] | null;
+            /**
+             * @description Minimum canonical severity interpreted as soft-block
+             * @default high
+             */
+            soft_block_at: components["schemas"]["PolicySeverity"] | null;
+            /**
+             * @description Minimum canonical severity interpreted as hard-block
+             * @default critical
+             */
+            hard_block_at: components["schemas"]["PolicySeverity"] | null;
+            /**
+             * @description Adapter status reported when no severity threshold is met
+             * @default advisory
+             */
+            reporting_default: components["schemas"]["PolicyAdapterStatus"];
+            /**
+             * @description Maximum integration enforcement level explicitly enabled
+             * @default advisory
+             */
+            enforcement_mode: components["schemas"]["PolicyAdapterStatus"];
+        };
+        /** PolicyAdapterSettingsData */
+        PolicyAdapterSettingsData: {
+            /** Project Key */
+            project_key: string;
+            /** Integration */
+            integration?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "built-in" | "project" | "integration";
+            /** Warn At */
+            warn_at?: ("low" | "medium" | "high" | "critical") | null;
+            /** Soft Block At */
+            soft_block_at?: ("low" | "medium" | "high" | "critical") | null;
+            /** Hard Block At */
+            hard_block_at?: ("low" | "medium" | "high" | "critical") | null;
+            /**
+             * Reporting Default
+             * @enum {string}
+             */
+            reporting_default: "advisory" | "warn";
+            /**
+             * Enforcement Mode
+             * @enum {string}
+             */
+            enforcement_mode: "advisory" | "warn" | "soft-block" | "hard-block";
+        };
+        /** PolicyAdapterSettingsRequest */
+        PolicyAdapterSettingsRequest: {
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Integration */
+            integration?: string | null;
+            /**
+             * Warn At
+             * @default medium
+             */
+            warn_at: ("low" | "medium" | "high" | "critical") | null;
+            /**
+             * Soft Block At
+             * @default high
+             */
+            soft_block_at: ("low" | "medium" | "high" | "critical") | null;
+            /**
+             * Hard Block At
+             * @default critical
+             */
+            hard_block_at: ("low" | "medium" | "high" | "critical") | null;
+            /**
+             * Reporting Default
+             * @default advisory
+             * @enum {string}
+             */
+            reporting_default: "advisory" | "warn";
+            /**
+             * Enforcement Mode
+             * @default advisory
+             * @enum {string}
+             */
+            enforcement_mode: "advisory" | "warn" | "soft-block" | "hard-block";
+        };
+        /** PolicyAdapterSettingsResponse */
+        PolicyAdapterSettingsResponse: {
+            data: components["schemas"]["PolicyAdapterSettingsData"];
+            meta: components["schemas"]["MetaPayload"];
+        };
+        /**
+         * PolicyAdapterStatus
+         * @description Supported downstream policy interpretations.
+         * @enum {string}
+         */
+        PolicyAdapterStatus: "advisory" | "warn" | "soft-block" | "hard-block";
+        /**
+         * PolicySeverity
+         * @description Canonical severities policy thresholds may interpret.
+         * @enum {string}
+         */
+        PolicySeverity: "low" | "medium" | "high" | "critical";
         /** PreviousScanDiffData */
         PreviousScanDiffData: {
             /**
@@ -3187,6 +4347,82 @@ export interface components {
              */
             critical: boolean;
         };
+        /**
+         * SarifImportRequest
+         * @description SARIF import API request.
+         */
+        SarifImportRequest: {
+            /** Source File */
+            source_file: string;
+            /** Content */
+            content: string;
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+        };
+        /**
+         * ScannerImportRequest
+         * @description Scanner import API request.
+         */
+        ScannerImportRequest: {
+            /** Source File */
+            source_file: string;
+            /** Content */
+            content: string;
+            /** Project Id */
+            project_id?: number | null;
+            /** Project Key */
+            project_key?: string | null;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+        };
+        /**
+         * ScannerImportResponse
+         * @description Scanner import API response.
+         */
+        ScannerImportResponse: {
+            data: components["schemas"]["ScannerImportResult"];
+            meta: components["schemas"]["ListMetaPayload"];
+        };
+        /**
+         * ScannerImportResult
+         * @description Result of a successful scanner import.
+         */
+        ScannerImportResult: {
+            /** Import Id */
+            import_id: number;
+            /** Project Id */
+            project_id: number;
+            /** Project Key */
+            project_key: string;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Workspace Key */
+            workspace_key?: string | null;
+            /** Source File */
+            source_file: string;
+            /** Tool Names */
+            tool_names?: string[];
+            /**
+             * Imported Count
+             * @default 0
+             */
+            imported_count: number;
+            /**
+             * Rejected Count
+             * @default 0
+             */
+            rejected_count: number;
+            /** Evidence */
+            evidence?: components["schemas"]["ExternalScannerEvidenceRecord"][];
+        };
         /** SettingsSummaryData */
         SettingsSummaryData: {
             provider: components["schemas"]["ProviderSettingsData"];
@@ -3301,6 +4537,11 @@ export interface components {
              * @description Finding confidence score
              */
             confidence: number;
+            /**
+             * Evidence Label
+             * @description Reviewer-facing label for external or non-DeployWhisper evidence
+             */
+            evidence_label?: string | null;
         };
         /** ShareSummaryJsonPayloadData */
         ShareSummaryJsonPayloadData: {
@@ -3361,6 +4602,22 @@ export interface components {
              */
             evidence_count: number;
             /**
+             * External Evidence Count
+             * @description External scanner evidence items included as review context
+             * @default 0
+             */
+            external_evidence_count: number;
+            /**
+             * External Evidence Summary
+             * @description How external scanner context should be interpreted
+             */
+            external_evidence_summary?: string | null;
+            /**
+             * Scanner Conflicts
+             * @description Scanner-vs-deterministic/context conflicts requiring review
+             */
+            scanner_conflicts?: components["schemas"]["ShareSummaryScannerConflictData"][];
+            /**
              * Blast Radius Summary
              * @description Concise blast-radius summary
              */
@@ -3377,6 +4634,54 @@ export interface components {
              * @description Advisory-only review summary
              */
             advisory_summary: string;
+        };
+        /** ShareSummaryScannerConflictData */
+        ShareSummaryScannerConflictData: {
+            /**
+             * Finding Id
+             * @description Finding with conflicting scanner context
+             */
+            finding_id: string;
+            /**
+             * Finding Title
+             * @description Reviewer-facing finding title
+             */
+            finding_title: string;
+            /**
+             * Scanner Source
+             * @description Scanner evidence source reference
+             */
+            scanner_source: string;
+            /**
+             * Scanner Freshness
+             * @description Scanner source freshness status
+             */
+            scanner_freshness: string;
+            /**
+             * Deterministic Source
+             * @description DeployWhisper deterministic evidence source
+             */
+            deterministic_source: string;
+            /**
+             * Deterministic Freshness
+             * @description DeployWhisper deterministic source freshness status
+             */
+            deterministic_freshness: string;
+            /**
+             * Conflict Summary
+             * @description Short conflict explanation
+             */
+            conflict_summary: string;
+            /**
+             * Confidence Impact
+             * @description How the conflict affects confidence interpretation
+             */
+            confidence_impact: string;
+            /**
+             * Recommended Verification
+             * @description Reviewer action for resolving the conflict
+             */
+            recommended_verification: string;
         };
         /** SharedReportAccessResponse */
         SharedReportAccessResponse: {
@@ -3436,6 +4741,12 @@ export interface components {
              * @description Current effective version
              */
             version: string;
+            /**
+             * Trust Level
+             * @description Manifest trust classification for the skill
+             * @enum {string}
+             */
+            trust_level: "experimental" | "verified" | "core" | "deprecated";
             /**
              * Source
              * @description Where the skill definition currently resolves from
@@ -3506,6 +4817,11 @@ export interface components {
              * @description Content markers used for matching
              */
             trigger_content_patterns?: string[];
+            /**
+             * Contributors
+             * @description Visible contributor names for the Skills browser.
+             */
+            contributors: string[];
             /**
              * Install Count
              * @description Current install count from the analytics snapshot
@@ -3643,6 +4959,12 @@ export interface components {
              */
             version: string;
             /**
+             * Trust Level
+             * @description Manifest trust classification for the skill
+             * @enum {string}
+             */
+            trust_level: "experimental" | "verified" | "core" | "deprecated";
+            /**
              * Source
              * @description Where the skill definition currently resolves from
              * @enum {string}
@@ -3713,6 +5035,11 @@ export interface components {
              */
             trigger_content_patterns?: string[];
             /**
+             * Contributors
+             * @description Visible contributor names for the Skills browser.
+             */
+            contributors: string[];
+            /**
              * Install Count
              * @description Current install count from the analytics snapshot
              * @default 0
@@ -3768,6 +5095,34 @@ export interface components {
             data: components["schemas"]["SkillRegistryVersionData"][];
             meta: components["schemas"]["SkillRegistryResourceMetaPayload"];
         };
+        /** SkillTestCoverageData */
+        SkillTestCoverageData: {
+            /**
+             * Expected Triggers
+             * @description Whether deterministic trigger selection is covered.
+             */
+            expected_triggers: boolean;
+            /**
+             * Expected Outputs
+             * @description Whether expected guidance output is covered.
+             */
+            expected_outputs: boolean;
+            /**
+             * Evidence Assumptions
+             * @description Whether scenarios declare deterministic evidence inputs.
+             */
+            evidence_assumptions: boolean;
+            /**
+             * Safety Constraints
+             * @description Whether non-selection safety behavior is covered.
+             */
+            safety_constraints: boolean;
+            /**
+             * Complete
+             * @description Whether all required harness coverage categories are present.
+             */
+            complete: boolean;
+        };
         /** SkillTestResultsData */
         SkillTestResultsData: {
             /**
@@ -3781,6 +5136,8 @@ export interface components {
              */
             version: string;
             summary: components["schemas"]["SkillTestResultsSummaryData"];
+            coverage: components["schemas"]["SkillTestCoverageData"];
+            trust_requirement: components["schemas"]["SkillTrustRequirementData"];
             /** Scenarios */
             scenarios?: components["schemas"]["SkillTestScenarioResultData"][];
         };
@@ -3843,6 +5200,30 @@ export interface components {
             /**
              * Failures
              * @description Failure reasons when the scenario did not pass.
+             */
+            failures?: string[];
+        };
+        /** SkillTrustRequirementData */
+        SkillTrustRequirementData: {
+            /**
+             * Trust Level
+             * @description Manifest trust level evaluated by the harness.
+             * @enum {string}
+             */
+            trust_level: "experimental" | "verified" | "core" | "deprecated";
+            /**
+             * Required
+             * @description Whether this trust level requires a passing complete suite.
+             */
+            required: boolean;
+            /**
+             * Satisfied
+             * @description Whether the suite satisfies its trust-level requirement.
+             */
+            satisfied: boolean;
+            /**
+             * Failures
+             * @description Actionable reasons the trust requirement was not satisfied.
              */
             failures?: string[];
         };
@@ -4495,6 +5876,151 @@ export interface operations {
             };
         };
     };
+    create_agent_analysis_api_v1_agent_analyses_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Trigger-Type"?: string | null;
+                "X-DeployWhisper-Trigger-Id"?: string | null;
+                "X-DeployWhisper-Actor"?: string | null;
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_agent_analysis_api_v1_agent_analyses_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentInterfaceResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_agent_report_api_v1_agent_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentInterfaceResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_analyses_api_v1_analyses_get: {
         parameters: {
             query?: {
@@ -4561,7 +6087,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4645,7 +6171,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request Entity Too Large */
+            /** @description Content Too Large */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4654,7 +6180,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4726,7 +6252,151 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_policy_adapter_output_api_v1_analyses__report_id__policy_adapter_get: {
+        parameters: {
+            query: {
+                integration: string;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyAdapterOutputResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_integration_enforcement_decision_api_v1_analyses__report_id__enforcement_decision_get: {
+        parameters: {
+            query: {
+                integration: string;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationEnforcementDecisionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4810,7 +6480,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4870,7 +6540,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4892,7 +6562,9 @@ export interface operations {
     };
     unlock_shared_analysis_api_v1_analyses__report_id__shared_unlock_post: {
         parameters: {
-            query?: never;
+            query?: {
+                compare?: string | null;
+            };
             header?: never;
             path: {
                 report_id: number;
@@ -4932,7 +6604,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5007,7 +6679,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5082,7 +6754,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5149,7 +6821,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5213,7 +6885,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5558,6 +7230,222 @@ export interface operations {
             };
         };
     };
+    get_policy_adapter_defaults_api_v1_settings_policy_adapter_get: {
+        parameters: {
+            query?: {
+                project_id?: number | null;
+                project_key?: string | null;
+                integration?: string | null;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyAdapterSettingsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_policy_adapter_defaults_api_v1_settings_policy_adapter_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyAdapterSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyAdapterSettingsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reset_policy_adapter_defaults_api_v1_settings_policy_adapter_delete: {
+        parameters: {
+            query?: {
+                project_id?: number | null;
+                project_key?: string | null;
+                integration?: string | null;
+            };
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyAdapterSettingsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     preview_settings_topology_api_v1_settings_topology_preview_post: {
         parameters: {
             query?: never;
@@ -5749,7 +7637,7 @@ export interface operations {
                     "application/json": components["schemas"]["SkillRegistryListResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5798,7 +7686,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5847,7 +7735,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5899,7 +7787,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5948,7 +7836,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6110,6 +7998,168 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_sarif_api_v1_scanner_imports_sarif_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SarifImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScannerImportResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    import_semgrep_api_v1_scanner_imports_semgrep_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-DeployWhisper-Project-Role"?: string | null;
+                "X-DeployWhisper-Project-Keys"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScannerImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScannerImportResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

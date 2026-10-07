@@ -5,15 +5,26 @@ BASE_REF="${BASE_REF:-origin/main}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
 if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
-  echo "Base ref '$BASE_REF' is unavailable. Skipping changed-skill harness feedback."
+  echo "Base ref '$BASE_REF' is unavailable; changed Skill validation cannot run." >&2
+  exit 2
+fi
+
+CHANGED_PATHS=()
+DIFF_OUTPUT="$(git diff --name-only "$BASE_REF"...HEAD)"
+if [ -n "$DIFF_OUTPUT" ]; then
+  while IFS= read -r path; do
+    CHANGED_PATHS+=("$path")
+  done <<< "$DIFF_OUTPUT"
+fi
+
+if [ "${#CHANGED_PATHS[@]}" -eq 0 ]; then
+  echo "No changed built-in skills detected relative to $BASE_REF."
   exit 0
 fi
 
-mapfile -t CHANGED_PATHS < <(git diff --name-only "$BASE_REF"...HEAD || true)
-
 SKILLS=()
 for path in "${CHANGED_PATHS[@]}"; do
-  if [[ "$path" =~ ^skills/([^.]+)\.md$ ]]; then
+  if [[ "$path" =~ ^skills/([^/]+)\.md$ ]]; then
     skill="${BASH_REMATCH[1]}"
   elif [[ "$path" =~ ^tests/skill-tests/([^/]+)/ ]]; then
     skill="${BASH_REMATCH[1]}"
@@ -31,7 +42,10 @@ if [ "${#SKILLS[@]}" -eq 0 ]; then
   exit 0
 fi
 
-mapfile -t UNIQUE_SKILLS < <(printf '%s\n' "${SKILLS[@]}" | sort -u)
+UNIQUE_SKILLS=()
+while IFS= read -r skill; do
+  UNIQUE_SKILLS+=("$skill")
+done < <(printf '%s\n' "${SKILLS[@]}" | sort -u)
 
 echo "Running changed skill lint and harness checks relative to $BASE_REF:"
 printf ' - %s\n' "${UNIQUE_SKILLS[@]}"

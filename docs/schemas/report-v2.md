@@ -123,6 +123,13 @@ Evidence Law status values are `Satisfied`, `Needs review`, `Reconciled`, and
 `Detail omitted`. CLI/API analysis responses include evidence detail and should
 not emit `Detail omitted`; compact report-list style views may use it when
 evidence rows were intentionally excluded.
+When scanner evidence is present, share-summary JSON and PR-comment markdown
+label it as external scanner context. External scanner severity is not
+DeployWhisper severity proof on its own; high/critical DeployWhisper findings
+still require linked DeployWhisper deterministic evidence.
+When scanner output conflicts with deterministic evidence or context,
+`share_summary.json_payload.scanner_conflicts` lists both source references,
+freshness states, the confidence impact, and the recommended verification step.
 
 ```json
 {
@@ -155,10 +162,26 @@ evidence rows were intentionally excluded.
           "title": "HIGH: public ingress exposure",
           "severity": "high",
           "evidence_count": 2,
-          "confidence": 1.0
+          "confidence": 1.0,
+          "evidence_label": "Includes external context"
         }
       ],
       "evidence_count": 4,
+      "external_evidence_count": 1,
+      "external_evidence_summary": "1 external scanner evidence item is included as context, not DeployWhisper severity proof.",
+      "scanner_conflicts": [
+        {
+          "finding_id": "finding-public-ingress",
+          "finding_title": "HIGH: public ingress exposure",
+          "scanner_source": "semgrep://results/sg-1",
+          "scanner_freshness": "current",
+          "deterministic_source": "ev-public-ingress",
+          "deterministic_freshness": "current",
+          "conflict_summary": "Scanner severity critical differs from DeployWhisper severity high.",
+          "confidence_impact": "Scanner confidence impact: scanner signal is critical; DeployWhisper confidence remains 1.00 and severity remains high under Evidence Law.",
+          "recommended_verification": "Review scanner evidence against deterministic evidence before acting."
+        }
+      ],
       "context_completeness": {
         "score": 0.22,
         "label": "LIMITED CONTEXT",
@@ -264,7 +287,33 @@ without storing raw plan internals in a separate contract.
       "Escalate file review for services/payments/plan.json to @payments-sre.",
       "Escalate service review for Payments API to @payments-runtime."
     ],
-    "ownership_unmapped_subjects": []
+    "ownership_unmapped_subjects": [],
+    "context_sources": [
+      {
+        "source_id": "artifact:plan.json",
+        "source_type": "artifact",
+        "source_ref": "plan.json",
+        "scope": "project:payments/workspace:prod",
+        "freshness_status": "current",
+        "last_observed_at": null,
+        "age_days": null,
+        "confidence": 1.0,
+        "conflicts": [],
+        "limitations": []
+      },
+      {
+        "source_id": "incident:index:incidents:empty",
+        "source_type": "incident",
+        "source_ref": "incidents:empty",
+        "scope": "project:payments",
+        "freshness_status": "empty",
+        "last_observed_at": null,
+        "age_days": null,
+        "confidence": 0.0,
+        "conflicts": ["missing_incident_history"],
+        "limitations": ["empty_incident_index"]
+      }
+    ]
   },
   "blast_radius": {
     "affected": [
@@ -411,8 +460,51 @@ without storing raw plan internals in a separate contract.
       "actor": "api-reviewer@example.com"
     }
   ],
-  "findings": [],
-  "evidence_items": [],
+  "findings": [
+    {
+      "finding_id": "finding-public-ingress",
+      "analysis_id": 42,
+      "title": "Public ingress exposure",
+      "description": "Terraform opened SSH ingress from 0.0.0.0/0 on port 22.",
+      "explanation": "Administrative ingress from the public internet has caused common deployment incidents.",
+      "guidance": [
+        "Confirm whether the public CIDR is intentional and time-bound.",
+        "Restrict administrative ingress to trusted networks or a managed access path."
+      ],
+      "severity": "high",
+      "category": "network_exposure",
+      "deterministic": true,
+      "confidence": 1.0,
+      "uncertainty_note": null,
+      "evidence_classification": "deterministic",
+      "evidence_label": null,
+      "evidence_refs": ["ev-plan-json-1"],
+      "skill_id": "terraform"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ev-plan-json-1",
+      "finding_id": "finding-public-ingress",
+      "source_type": "artifact",
+      "source_ref": "plan.json",
+      "artifact": "plan.json",
+      "summary": "Terraform opened SSH ingress from 0.0.0.0/0 on port 22.",
+      "deterministic": true,
+      "evidence_label": null,
+      "confidence": 1.0,
+      "context_source": {
+        "source_id": "artifact:plan.json",
+        "source_type": "artifact",
+        "source_ref": "plan.json",
+        "scope": "project:payments/workspace:prod",
+        "freshness_status": "current",
+        "confidence": 1.0,
+        "conflicts": [],
+        "limitations": []
+      }
+    }
+  ],
   "incident_matches": [
     {
       "incident_id": 0,
@@ -464,6 +556,28 @@ without storing raw plan internals in a separate contract.
   }
 }
 ```
+
+### Context source freshness ledger
+
+`context_completeness.context_sources` is the per-report freshness ledger for
+the context inputs used during analysis. Each row exposes `source_id`,
+`source_type`, optional `source_ref`, `scope`, `freshness_status`,
+`confidence`, `conflicts`, and `limitations` so API, CLI, and UI consumers can
+show whether topology, incident history, artifact, parser, evidence, ownership,
+or external context was current enough to trust.
+
+`freshness_status` uses the same values as the report context state:
+`current`, `stale`, `missing`, `incomplete`, `conflicting`, `unknown`, `empty`,
+or `not_applicable`. Non-current populated incident ledgers should surface
+remediation from `context_todos`; for example stale indexes ask reviewers to
+refresh incident history, while conflicting or incomplete indexes ask reviewers
+to resolve the specific incident freshness state.
+
+Evidence rows may include `context_source` when DeployWhisper can tie that
+evidence item to one ledger source. Consumers should render the relationship as
+provenance, not as a separate finding. Legacy persisted reports can contain
+malformed context-source rows; readers may drop invalid source rows while
+preserving the rest of the context completeness payload.
 
 ### Blast-radius topology context
 

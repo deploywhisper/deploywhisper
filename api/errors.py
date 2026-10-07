@@ -17,6 +17,7 @@ import logging
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.schemas import ErrorResponse
+from services.content_security import redact_value
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +39,13 @@ def is_api_request(request: Request) -> bool:
 
 def build_error(code: str, message: str, details: dict[str, Any] | None = None) -> dict:
     return ErrorResponse(
-        error={
-            "code": code,
-            "message": message,
-            "details": details or {},
-        }
+        error=redact_value(
+            {
+                "code": code,
+                "message": message,
+                "details": details or {},
+            }
+        )
     ).model_dump()
 
 
@@ -75,7 +78,11 @@ async def validation_error_handler(
 
     issues: list[dict[str, Any]] = []
     for error in exc.errors():
-        issue = {key: value for key, value in error.items() if key != "url"}
+        issue = {
+            key: value
+            for key, value in error.items()
+            if key not in {"url", "input", "ctx"}
+        }
         if "loc" in issue:
             issue["loc"] = list(issue["loc"])
         issues.append(issue)
@@ -101,6 +108,18 @@ async def http_error_envelope_handler(
     if not is_api_request(request):
         return await http_exception_handler(request, exc)
 
+    if isinstance(exc.detail, dict) and {
+        "code",
+        "message",
+    }.issubset(exc.detail):
+        details = exc.detail.get("details")
+        return build_error_response(
+            status_code=exc.status_code,
+            code=str(exc.detail["code"]),
+            message=str(exc.detail["message"]),
+            details=details if isinstance(details, dict) else {},
+        )
+
     detail = (
         exc.detail
         if isinstance(exc.detail, str)
@@ -116,7 +135,7 @@ async def http_error_envelope_handler(
 
 
 async def internal_error_handler(_: Request, exc: Exception) -> JSONResponse:
-    logger.exception("Unhandled API exception", exc_info=exc)
+    logger.error("Unhandled API exception (%s)", type(exc).__name__)
     return build_error_response(
         status_code=500,
         code="internal_error",

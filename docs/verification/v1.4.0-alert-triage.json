@@ -1,0 +1,225 @@
+{
+  "date": "2026-10-07",
+  "validated_source": "d2cb917f7f0c0eb4f4db601196ed9bf5fe4a4686",
+  "dispositions": [
+    {
+      "tool": "CodeQL",
+      "number": 110,
+      "rule": "py/weak-sensitive-data-hashing",
+      "state": "dismissed",
+      "reason": "used in tests",
+      "comment": "Explicit synthetic topology/password/log regression fixtures use temp DB/files or StringIO and assert rejection, redaction or legacy migration failure behavior. No production credential. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 109,
+      "rule": "py/weak-sensitive-data-hashing",
+      "state": "dismissed",
+      "reason": "won't fix",
+      "comment": "Legacy verification only; new hashes use PBKDF2/600000 iterations/random salts. Login attempts conditional migration; dormant/write-failed SHA256 rows remain weak. Reconfigure sensitive shares. Accepted compatibility risk; see v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 108,
+      "rule": "py/clear-text-storage-sensitive-data",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Detected raw/structured, configured and sibling secrets block the complete snapshot; sensitive names are skipped. Clean local plaintext storage is intentional; unknown-secret detection is not guaranteed. Boundary regressions pass; see v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 107,
+      "rule": "py/path-injection",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Snapshot/manifest basenames reject separators, dot names, NUL, symlinks and resolved-parent escapes before sinks. Malicious manifest and link regressions pass. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 106,
+      "rule": "py/path-injection",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Snapshot/manifest basenames reject separators, dot names, NUL, symlinks and resolved-parent escapes before sinks. Malicious manifest and link regressions pass. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 105,
+      "rule": "py/path-injection",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Snapshot/manifest basenames reject separators, dot names, NUL, symlinks and resolved-parent escapes before sinks. Malicious manifest and link regressions pass. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 104,
+      "rule": "py/path-injection",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Positive integer report IDs plus symlink and resolved-parent guards constrain storage to trusted configured root. Traversal/symlink regressions pass. See docs/security/v1.4.0-security-triage.md."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 103,
+      "rule": "py/path-injection",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Positive integer report IDs plus symlink and resolved-parent guards constrain storage to trusted configured root. Traversal/symlink regressions pass. See docs/security/v1.4.0-security-triage.md."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 102,
+      "rule": "py/partial-ssrf",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "GitHub download URLs are not fetch destinations; constructed Contents requests use trusted HTTPS API origin. Redirects reject cross-origin/port, HTTP, credentials and writes. Transport regressions pass; Enterprise origin is trusted configuration."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 101,
+      "rule": "py/cookie-injection",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Cookie name contains typed integer report ID; cookie value is a hexadecimal digest, not raw caller-controlled header text. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 99,
+      "rule": "py/unsafe-deserialization",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "CloudFormation loader inherits yaml.SafeLoader, has no Python object constructors and custom tags return inert values. Both object/apply branch regressions prove os.system never executes. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 98,
+      "rule": "py/unsafe-deserialization",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "CloudFormation loader inherits yaml.SafeLoader, has no Python object constructors and custom tags return inert values. Both object/apply branch regressions prove os.system never executes. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 97,
+      "rule": "py/clear-text-logging-sensitive-data",
+      "state": "dismissed",
+      "reason": "used in tests",
+      "comment": "Explicit synthetic topology/password/log regression fixtures use temp DB/files or StringIO and assert rejection, redaction or legacy migration failure behavior. No production credential. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 96,
+      "rule": "py/clear-text-storage-sensitive-data",
+      "state": "dismissed",
+      "reason": "used in tests",
+      "comment": "Explicit synthetic topology/password/log regression fixtures use temp DB/files or StringIO and assert rejection, redaction or legacy migration failure behavior. No production credential. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 95,
+      "rule": "py/clear-text-storage-sensitive-data",
+      "state": "dismissed",
+      "reason": "used in tests",
+      "comment": "Explicit synthetic topology/password/log regression fixtures use temp DB/files or StringIO and assert rejection, redaction or legacy migration failure behavior. No production credential. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 93,
+      "rule": "py/polynomial-redos",
+      "state": "fixed",
+      "reason": null,
+      "comment": null
+    },
+    {
+      "tool": "CodeQL",
+      "number": 92,
+      "rule": "py/polynomial-redos",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Scheme start guard prevents restarts within identifiers and username excludes colon, so separator matches do not overlap. Adversarial URL/identifier benchmarks show linear growth. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 91,
+      "rule": "py/polynomial-redos",
+      "state": "fixed",
+      "reason": null,
+      "comment": null
+    },
+    {
+      "tool": "CodeQL",
+      "number": 90,
+      "rule": "py/polynomial-redos",
+      "state": "fixed",
+      "reason": null,
+      "comment": null
+    },
+    {
+      "tool": "CodeQL",
+      "number": 88,
+      "rule": "py/path-injection",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Snapshot/manifest basenames reject separators, dot names, NUL, symlinks and resolved-parent escapes before sinks. Malicious manifest and link regressions pass. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 87,
+      "rule": "py/path-injection",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Snapshot/manifest basenames reject separators, dot names, NUL, symlinks and resolved-parent escapes before sinks. Malicious manifest and link regressions pass. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 85,
+      "rule": "py/path-injection",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Snapshot/manifest basenames reject separators, dot names, NUL, symlinks and resolved-parent escapes before sinks. Malicious manifest and link regressions pass. See v1.4.0 security triage."
+    },
+    {
+      "tool": "CodeQL",
+      "number": 84,
+      "rule": "py/reflective-xss",
+      "state": "dismissed",
+      "reason": "false positive",
+      "comment": "Artifact title/name and every content line use html.escape; IDs/line numbers are integers and CSS classes static. Direct script/image injection check confirms escaped output. Not claiming a dedicated browser test for this route."
+    },
+    {
+      "tool": "Dependabot",
+      "number": 7,
+      "state": "dismissed",
+      "reason": "inaccurate",
+      "comment": "Obsolete root graph entry: package absent from committed main/develop/release root locks. Clean npm ci removed stale extraneous installs; frontend brace-expansion is patched 2.1.7. All audits clean. Evidence: docs/security/v1.4.0-security-triage.md."
+    },
+    {
+      "tool": "Dependabot",
+      "number": 5,
+      "state": "dismissed",
+      "reason": "inaccurate",
+      "comment": "Obsolete root graph entry: package absent from committed main/develop/release root locks. Clean npm ci removed stale extraneous installs; frontend brace-expansion is patched 2.1.7. All audits clean. Evidence: docs/security/v1.4.0-security-triage.md."
+    },
+    {
+      "tool": "Dependabot",
+      "number": 3,
+      "state": "dismissed",
+      "reason": "inaccurate",
+      "comment": "Obsolete root graph entry: package absent from committed main/develop/release root locks. Clean npm ci removed stale extraneous installs; frontend brace-expansion is patched 2.1.7. All audits clean. Evidence: docs/security/v1.4.0-security-triage.md."
+    },
+    {
+      "tool": "Dependabot",
+      "number": 2,
+      "state": "dismissed",
+      "reason": "inaccurate",
+      "comment": "Obsolete root graph entry: package absent from committed main/develop/release root locks. Clean npm ci removed stale extraneous installs; frontend brace-expansion is patched 2.1.7. All audits clean. Evidence: docs/security/v1.4.0-security-triage.md."
+    },
+    {
+      "tool": "Dependabot",
+      "number": 1,
+      "state": "dismissed",
+      "reason": "inaccurate",
+      "comment": "Obsolete root graph entry: package absent from committed main/develop/release root locks. Clean npm ci removed stale extraneous installs; frontend brace-expansion is patched 2.1.7. All audits clean. Evidence: docs/security/v1.4.0-security-triage.md."
+    }
+  ]
+}

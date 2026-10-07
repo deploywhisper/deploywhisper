@@ -2,20 +2,98 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import Enum
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from textwrap import dedent
 from urllib.parse import urlparse
 
+from services.content_security import redact_reference
+
 DEFAULT_WORKFLOW_PATH = ".github/workflows/deploywhisper.yml"
 DEFAULT_APP_NOTES_PATH = ".github/deploywhisper-self-hosted-github-app.md"
 DEFAULT_BRANCH_NAME = "feature/deploywhisper-github-init"
+# Immutable commit behind deploywhisper/analyze-action v1, reviewed 2026-09-09.
+ANALYZE_ACTION_PINNED_SHA = "3b37ed72bfb2d201030bef873268f2170794b160"
+# Immutable commit resolved from actions/checkout v4, reviewed 2026-09-09.
+CHECKOUT_ACTION_PINNED_SHA = "11d5960a326750d5838078e36cf38b85af677262"
+
+
+class AnalyzeActionCapability(str, Enum):
+    """Runtime capabilities that generated guidance may safely promise."""
+
+    ADVISORY_ONLY = "advisory-only"
+    ENFORCEMENT_CAPABLE = "enforcement-capable"
+
+
+ENFORCEMENT_ACTION_OUTPUTS = (
+    "policy-status",
+    "configured-mode",
+    "effective-status",
+    "should-block",
+    "failure-kind",
+)
+
+
+@dataclass(frozen=True)
+class ReviewedRevision:
+    """Auditable evidence retained for an immutable executable dependency."""
+
+    reviewed_on: str
+    provenance: str
+    manifest_sha256: str
+    contract_version: str
+    evidence_reference: str
+
+
+@dataclass(frozen=True)
+class AnalyzeActionReview(ReviewedRevision):
+    """Reviewed Analyze Action capability bound to immutable evidence."""
+
+    capability: AnalyzeActionCapability
+    required_outputs: tuple[str, ...]
+
+
+ANALYZE_ACTION_REVIEWS = {
+    "3b37ed72bfb2d201030bef873268f2170794b160": AnalyzeActionReview(
+        reviewed_on="2026-09-09",
+        provenance=(
+            "analyze-action v1 tag object f2e36cef443129e85c55882b9dafc1f20d409284"
+        ),
+        manifest_sha256="2d1bc1c6ca5b4bb9d5cb743bdd25c10527d0569e82dcf55ddb09216c50769b53",
+        contract_version="advisory-only; no enforcement-decision contract",
+        evidence_reference=(
+            "https://github.com/deploywhisper/analyze-action/tree/"
+            "3b37ed72bfb2d201030bef873268f2170794b160"
+        ),
+        capability=AnalyzeActionCapability.ADVISORY_ONLY,
+        required_outputs=(),
+    ),
+}
+CHECKOUT_ACTION_REVIEWS = {
+    "11d5960a326750d5838078e36cf38b85af677262": ReviewedRevision(
+        reviewed_on="2026-09-09",
+        provenance="actions/checkout v4 lightweight tag resolved to executed commit",
+        manifest_sha256="6188f6991491ed38977347cdaad0b0cd921a6d6232892363c91f433c22954f4f",
+        contract_version="checkout action.yml",
+        evidence_reference=(
+            "https://github.com/actions/checkout/tree/"
+            "11d5960a326750d5838078e36cf38b85af677262"
+        ),
+    ),
+}
 README_SECTION_START = "<!-- deploywhisper:start -->"
 README_SECTION_END = "<!-- deploywhisper:end -->"
+ENFORCEMENT_GUARDRAILS_URL = (
+    "https://github.com/deploywhisper/deploywhisper/blob/develop/"
+    "docs/enforcement-guardrails.md"
+)
 OPERATOR_DOCS_URL = (
     "https://github.com/deploywhisper/deploywhisper/blob/develop/"
     "docs/github-app-self-hosted-setup.md"
@@ -24,6 +102,70 @@ OPERATOR_DOCS_URL = (
 
 class GitHubInitError(RuntimeError):
     """Raised when the GitHub init wizard cannot complete."""
+
+
+def _analyze_action_capability(revision: str) -> AnalyzeActionCapability:
+    _validate_reviewed_revision(
+        revision,
+        label="DeployWhisper Analyze Action",
+        reviewed_revisions=ANALYZE_ACTION_REVIEWS,
+    )
+    review = ANALYZE_ACTION_REVIEWS[revision]
+    if not isinstance(review, AnalyzeActionReview) or not isinstance(
+        review.capability, AnalyzeActionCapability
+    ):
+        raise GitHubInitError(
+            "Invalid capability classification for DeployWhisper Analyze Action "
+            f"revision {revision}: {review!r}."
+        )
+    if (
+        review.capability is AnalyzeActionCapability.ADVISORY_ONLY
+        and review.required_outputs != ()
+    ):
+        raise GitHubInitError(
+            "Advisory-only revisions must not declare enforcement outputs for "
+            f"DeployWhisper Analyze Action revision {revision}: "
+            f"{review.required_outputs!r}."
+        )
+    if (
+        review.capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+        and review.required_outputs != ENFORCEMENT_ACTION_OUTPUTS
+    ):
+        raise GitHubInitError(
+            "Incomplete enforcement output contract for DeployWhisper Analyze "
+            f"Action revision {revision}: {review.required_outputs!r}."
+        )
+    return review.capability
+
+
+def _validate_reviewed_revision(
+    revision: str,
+    *,
+    label: str,
+    reviewed_revisions: Mapping[str, ReviewedRevision],
+) -> None:
+    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise GitHubInitError(
+            f"{label} must use a reviewed immutable 40-character commit SHA: "
+            f"{revision!r}."
+        )
+    if revision not in reviewed_revisions:
+        raise GitHubInitError(f"Unreviewed {label} revision: {revision}.")
+    review = reviewed_revisions[revision]
+    if (
+        not isinstance(review, ReviewedRevision)
+        or not _is_nonblank_string(review.reviewed_on)
+        or not _is_nonblank_string(review.provenance)
+        or not isinstance(review.manifest_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", review.manifest_sha256) is None
+        or not _is_nonblank_string(review.contract_version)
+        or not _is_nonblank_string(review.evidence_reference)
+    ):
+        raise GitHubInitError(f"Incomplete review evidence for {label}: {revision}.")
+
+
+def _is_nonblank_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
 
 
 @dataclass(frozen=True)
@@ -200,15 +342,17 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
     _ensure_clean_worktree(repo_root)
     _ensure_origin_remote(repo_root)
 
+    workflow_rel_path = options.workflow_path.strip().replace("\\", "/")
+    _ensure_workflow_path_available(repo_root, workflow_rel_path)
+
     base_branch = _checkout_base_branch(repo_root, options.base_branch)
 
     branch_name = _resolve_branch_name(repo_root, options.branch_name)
     _run_command(repo_root, "git", "checkout", "-b", branch_name)
 
-    workflow_rel_path = options.workflow_path.strip().replace("\\", "/")
     workflow_path = repo_root / workflow_rel_path
     workflow_path.parent.mkdir(parents=True, exist_ok=True)
-    workflow_path.write_text(_render_workflow(options), encoding="utf-8")
+    _write_workflow_exclusively(workflow_path, _render_workflow(options))
 
     readme_path = repo_root / "README.md"
     existing_readme = (
@@ -273,7 +417,120 @@ def run_github_init(options: GitHubInitOptions) -> GitHubInitResult:
     )
 
 
+def _ensure_workflow_path_available(repo_root: Path, workflow_path: str) -> None:
+    relative_path = Path(workflow_path)
+    if (
+        not workflow_path
+        or relative_path.is_absolute()
+        or re.match(r"^[A-Za-z]:/", workflow_path)
+        or ".." in relative_path.parts
+    ):
+        raise GitHubInitError(
+            "Workflow path must be a repository-local relative path: "
+            f"{workflow_path!r}."
+        )
+
+    repo_resolved = repo_root.resolve()
+    target = repo_root / relative_path
+    try:
+        target.resolve(strict=False).relative_to(repo_resolved)
+    except ValueError as exc:
+        raise GitHubInitError(
+            f"Workflow path must remain inside the repository: {workflow_path!r}."
+        ) from exc
+
+    if target.is_symlink():
+        raise GitHubInitError(
+            "Workflow path must be a regular repository-local file, not a "
+            f"symbolic link: {workflow_path!r}."
+        )
+    if target.exists():
+        raise GitHubInitError(
+            "Refusing to overwrite existing workflow: "
+            f"{workflow_path}. Choose a new path or merge the generated changes "
+            "manually so operator-owned enforcement controls are preserved."
+        )
+
+
+def _write_workflow_exclusively(workflow_path: Path, content: str) -> None:
+    try:
+        with workflow_path.open("x", encoding="utf-8") as workflow_file:
+            workflow_file.write(content)
+    except FileExistsError as exc:
+        raise GitHubInitError(
+            "Refusing to overwrite existing workflow: "
+            f"{workflow_path}. Choose a new path or merge the generated changes "
+            "manually so operator-owned enforcement controls are preserved."
+        ) from exc
+
+
 def _render_workflow(options: GitHubInitOptions) -> str:
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    _validate_reviewed_revision(
+        CHECKOUT_ACTION_PINNED_SHA,
+        label="actions/checkout",
+        reviewed_revisions=CHECKOUT_ACTION_REVIEWS,
+    )
+    advisory_safeguard = (
+        "                continue-on-error: true\n"
+        if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+        else ""
+    )
+    onboarding_terminal_steps = (
+        "      - name: Validate DeployWhisper onboarding decision\n"
+        "        if: ${{ always() }}\n"
+        "        shell: bash\n"
+        "        env:\n"
+        "          ACTION_OUTCOME: ${{ steps.deploywhisper.outcome }}\n"
+        "          FAILURE_KIND: ${{ steps.deploywhisper.outputs.failure-kind }}\n"
+        "          POLICY_STATUS: ${{ steps.deploywhisper.outputs.policy-status }}\n"
+        "          CONFIGURED_MODE: ${{ steps.deploywhisper.outputs.configured-mode }}\n"
+        "          EFFECTIVE_STATUS: ${{ steps.deploywhisper.outputs.effective-status }}\n"
+        "          SHOULD_BLOCK: ${{ steps.deploywhisper.outputs.should-block }}\n"
+        "        run: |\n"
+        "          set -euo pipefail\n"
+        "          fail() {\n"
+        '            echo "::error::$1"\n'
+        "            exit 1\n"
+        "          }\n"
+        "          rank() {\n"
+        '            case "$1" in\n'
+        "              advisory) echo 0 ;;\n"
+        "              warn) echo 1 ;;\n"
+        "              soft-block) echo 2 ;;\n"
+        "              hard-block) echo 3 ;;\n"
+        "              *) return 1 ;;\n"
+        "            esac\n"
+        "          }\n"
+        '          policy_rank="$(rank "$POLICY_STATUS")" || fail "Unknown policy-status"\n'
+        '          configured_rank="$(rank "$CONFIGURED_MODE")" || fail "Unknown configured-mode"\n'
+        '          rank "$EFFECTIVE_STATUS" >/dev/null || fail "Unknown effective-status"\n'
+        "          if (( policy_rank < configured_rank )); then\n"
+        '            expected_effective="$POLICY_STATUS"\n'
+        "          else\n"
+        '            expected_effective="$CONFIGURED_MODE"\n'
+        "          fi\n"
+        '          [[ "$EFFECTIVE_STATUS" == "$expected_effective" ]] || fail "Effective status violates configured-mode ceiling"\n'
+        '          case "$EFFECTIVE_STATUS" in\n'
+        '            soft-block|hard-block) expected_block="true" ;;\n'
+        '            advisory|warn) expected_block="false" ;;\n'
+        "          esac\n"
+        '          [[ "$SHOULD_BLOCK" == "$expected_block" ]] || fail "should-block contradicts effective-status"\n'
+        '          case "$ACTION_OUTCOME" in\n'
+        "            success)\n"
+        '              [[ "$FAILURE_KIND" == "none" ]] || fail "Successful Action reported a failure kind"\n'
+        '              [[ "$SHOULD_BLOCK" == "false" ]] || fail "Blocking decision returned success"\n'
+        "              ;;\n"
+        "            failure)\n"
+        '              [[ "$FAILURE_KIND" == "validated-policy-block" ]] || fail "Action failure was not a validated policy block"\n'
+        '              [[ "$SHOULD_BLOCK" == "true" ]] || fail "Policy-block failure was not blocking"\n'
+        '              echo "::warning::DeployWhisper reported a validated policy block while the onboarding safeguard is active"\n'
+        "              ;;\n"
+        '            *) fail "DeployWhisper Action did not complete" ;;\n'
+        "          esac\n"
+        if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE
+        else ""
+    )
     api_endpoint = options.api_endpoint.strip()
     scope_lines = _render_action_scope_inputs(options)
     workflow = dedent(
@@ -294,16 +551,18 @@ def _render_workflow(options: GitHubInitOptions) -> str:
             env:
               DEPLOYWHISPER_API_URL: {api_endpoint}
             steps:
-              - uses: actions/checkout@v4
+              - uses: actions/checkout@{CHECKOUT_ACTION_PINNED_SHA}
                 with:
                   fetch-depth: 0
-              - uses: deploywhisper/analyze-action@v1
+              - id: deploywhisper
+{advisory_safeguard}\
+                uses: deploywhisper/analyze-action@{ANALYZE_ACTION_PINNED_SHA}
                 with:
                   api-url: ${{{{ env.DEPLOYWHISPER_API_URL }}}}
                   api-token: ${{{{ secrets.DEPLOYWHISPER_API_TOKEN }}}}
         """
     )
-    return f"{workflow.rstrip()}\n{scope_lines}\n"
+    return f"{workflow.rstrip()}\n{scope_lines}\n{onboarding_terminal_steps}"
 
 
 def _render_readme_section(
@@ -312,10 +571,25 @@ def _render_readme_section(
     workflow_path: str,
     notes_path: str | None,
 ) -> str:
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    if capability is AnalyzeActionCapability.ADVISORY_ONLY:
+        capability_summary = (
+            f"Action revision `{ANALYZE_ACTION_PINNED_SHA}` is advisory-only; "
+            "a later reviewed enforcement-capable revision must follow the resolved "
+            "server settings."
+        )
+    else:
+        capability_summary = (
+            f"Action revision `{ANALYZE_ACTION_PINNED_SHA}` is enforcement-capable; "
+            "the generated step uses `continue-on-error: true` as an advisory "
+            "onboarding safeguard until resolved server settings, synthetic failure "
+            "cases, and the enforcement guardrail review are verified."
+        )
     lines = [
         "## DeployWhisper",
         "",
-        "This repository uses DeployWhisper for advisory-only deployment risk review in pull requests.",
+        "This repository uses DeployWhisper canonical advisory reports. "
+        f"{capability_summary}",
         "",
         "### GitHub workflow",
         "",
@@ -323,7 +597,10 @@ def _render_readme_section(
         f"- Configured API endpoint: `{options.api_endpoint}`",
         "- Optional secret: `DEPLOYWHISPER_API_TOKEN` for protected DeployWhisper APIs",
         *_scope_readme_lines(options),
-        "- The `DeployWhisper / Risk Analysis` check is advisory-only and should not be configured as a required status check",
+        "- The scaffold pins the reviewed Action revision but does not configure server enforcement; inspect the resolved `github-action` setting and keep the check non-required until the guardrail review is complete",
+        "- If the workflow Action pin changes, update this generated capability note in the same change",
+        "- Before upgrading to an enforcement-capable pin, verify all five required outputs (`policy-status`, `configured-mode`, `effective-status`, `should-block`, and `failure-kind`), inspect inherited settings, and use an isolated project/integration identity when another scope shares the current key",
+        f"- Enforcement guardrails: {ENFORCEMENT_GUARDRAILS_URL}",
         "",
         "### Configuration example",
         "",
@@ -333,6 +610,13 @@ def _render_readme_section(
         "- `DEPLOYWHISPER_API_TOKEN=<optional bearer token>`",
         *_scope_configuration_lines(options),
     ]
+    if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE:
+        lines.extend(
+            [
+                "",
+                "Before the first workflow run under an inherited blocking project default, create a narrow `github-action` integration-specific `advisory` override only when no existing scope shares that project/integration key. If another repository or environment already uses the identity, use a separate project or integration identity for advisory onboarding, or complete the new-scope guardrail review before attachment. After the guardrail review and blocking smoke cases pass, remove `continue-on-error: true` and the advisory policy-block warning together, then make the source-bound check required in one reviewed change.",
+            ]
+        )
     if options.enable_github_app:
         lines.extend(
             [
@@ -373,18 +657,28 @@ def _render_github_app_notes(options: GitHubInitOptions) -> str:
         2. Create the self-hosted GitHub App in your own GitHub account or organization.
         3. Point the webhook and callback URLs at `{options.public_base_url}`.
         4. Follow the operator guide: {OPERATOR_DOCS_URL}
-        5. Keep `DeployWhisper / Risk Analysis` advisory-only in branch protection.
+        5. Keep `DeployWhisper / Risk Analysis` non-required in branch protection until the guardrail review is complete.
         """
     )
 
 
 def _render_pr_body(options: GitHubInitOptions, *, workflow_path: str) -> str:
+    capability = _analyze_action_capability(ANALYZE_ACTION_PINNED_SHA)
+    behavior = (
+        "advisory-only"
+        if capability is AnalyzeActionCapability.ADVISORY_ONLY
+        else "enforcement-capable"
+    )
     lines = [
         "## Summary",
         "",
         "- add the DeployWhisper GitHub workflow",
-        "- document the API endpoint and advisory-only check behavior",
+        f"- document the API endpoint and {behavior} check behavior",
     ]
+    if capability is AnalyzeActionCapability.ENFORCEMENT_CAPABLE:
+        lines.append(
+            "- retain the advisory onboarding safeguard until the narrow override and guardrail review are complete"
+        )
     if options.enable_github_app:
         lines.append("- add advanced self-hosted GitHub App setup notes")
     lines.extend(
@@ -566,9 +860,25 @@ def _validate_scope_options(options: GitHubInitOptions) -> None:
 
 
 def _validate_url(value: str, *, field_name: str) -> None:
-    parsed = urlparse(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise GitHubInitError(f"{field_name} must be an absolute http(s) URL.")
+    try:
+        parsed = urlparse(value)
+        valid = (
+            parsed.scheme in {"http", "https"}
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+            and parsed.port != 0
+            and not any(char.isspace() for char in value)
+            and redact_reference(value) == value
+        )
+    except ValueError:
+        valid = False
+    if not valid:
+        raise GitHubInitError(
+            f"{field_name} must be a credential-free HTTP(S) URL without query or fragment."
+        )
 
 
 def _require_binary(name: str) -> None:
@@ -704,16 +1014,20 @@ def _run_command(
     *args: str,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    completed = subprocess.run(
-        args,
-        cwd=repo_root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if check and completed.returncode != 0:
-        stderr = (
-            completed.stderr.strip() or completed.stdout.strip() or "unknown failure"
+    try:
+        completed = subprocess.run(
+            args,
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
         )
-        raise GitHubInitError(f"Command failed ({' '.join(args)}): {stderr}")
+    except OSError as exc:
+        raise GitHubInitError(
+            "GitHub setup command could not start; check local git/gh configuration."
+        ) from exc
+    if check and completed.returncode != 0:
+        raise GitHubInitError(
+            f"GitHub setup command failed (exit {completed.returncode}); check repository access and local git/gh configuration."
+        )
     return completed

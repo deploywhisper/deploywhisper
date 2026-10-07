@@ -13,6 +13,7 @@ from api.schemas import (
     ProviderCapabilityData,
 )
 from config import settings
+from llm.providers import redact_provider_field
 from services.settings_service import get_provider_health_snapshot
 
 router = APIRouter(prefix="/api/v1", tags=["health"], route_class=ApiRoute)
@@ -29,8 +30,8 @@ def health_check() -> HealthResponse:
             llm=LlmHealthData(
                 status="ok" if readiness.ready else "degraded",
                 ready=readiness.ready,
-                provider=readiness.provider,
-                model=readiness.model,
+                provider=redact_provider_field(readiness.provider),
+                model=redact_provider_field(readiness.model),
                 local_mode=readiness.local_mode,
                 requires_api_key=readiness.requires_api_key,
                 has_api_key=readiness.has_api_key,

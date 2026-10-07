@@ -18,6 +18,12 @@ deploywhisper topology import --from terraform --source ./terraform.tfstate --pr
 
 The import stores normalized resource identities and relationships only. Raw Terraform state JSON and full resource attributes are not persisted.
 
+Terraform `sensitive_attributes` paths and `sensitive_values` masks exclude marked identity fields. Recognizable credentials in identity fields or resource keys are omitted; credential-bearing graph identities and source paths are rejected rather than renamed. Keep credentials out of resource names and local snapshot filenames. Source references, import notes, custom topology labels/owners, cached drift, and legacy topology reads are screened before returning context to APIs or analysis.
+
+These controls do not classify every opaque string as a secret. Supply accurate Terraform sensitivity markers and use synthetic state in examples/tests. Historical database rows and operator-owned source files are not rewritten by read-time screening; operators should remove or replace historical sensitive copies under their retention policy.
+
+Credential discovery examines the complete local snapshot before normalization, including discarded attributes and nested Terraform sensitivity paths/masks. Discovered values are screened across all resources, dependency notes, and import results so an identity field cannot reintroduce a credential from another resource. A credential echoed in a graph identity causes a safe rejection.
+
 ### What Is Mapped
 
 - Managed Terraform resources become topology services keyed by Terraform address, such as `aws_db_instance.primary`.

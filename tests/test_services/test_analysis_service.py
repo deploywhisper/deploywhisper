@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import unittest
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 import os
@@ -15,9 +16,9 @@ from analysis.risk_scorer import RiskAssessment, RiskContributor
 from analysis.blast_radius import BlastRadiusResult
 from analysis.rollback_planner import RollbackPlan
 from evidence.extractor import extract_batch_evidence
-from evidence.models import EvidenceItem
+from evidence.models import ContextSourceMetadata, EvidenceItem
 from llm.narrator import NarrativeResult
-from parsers.base import ParseBatchResult, ParsedFileResult, UnifiedChange
+from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 from services.analysis_service import (
     AnalysisArtifacts,
     analyze_uploaded_files,
@@ -41,6 +42,10 @@ def _incident_snapshot(count: int = 0) -> dict:
         "incident_index_last_indexed_at": ("2026-05-20T00:00:00Z" if count else None),
         "incident_index_freshness_status": freshness,
     }
+
+
+def _fresh_context_timestamp() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 class AnalysisServiceTests(unittest.TestCase):
@@ -97,7 +102,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.build_analysis_artifacts",
                 return_value=artifacts,
-            ),
+            ) as build_analysis_artifacts_mock,
             patch(
                 "services.analysis_service.persist_analysis_report",
                 return_value={"id": 99, "analysis_duration_seconds": 7},
@@ -118,6 +123,113 @@ class AnalysisServiceTests(unittest.TestCase):
             persist_analysis_report.call_args.kwargs["analysis_duration_seconds"],
             7,
         )
+        self.assertEqual(
+            build_analysis_artifacts_mock.call_args.kwargs["audit_context"],
+            {"source_interface": "api"},
+        )
+
+    def test_build_analysis_artifacts_labels_ai_assisted_public_ingress_risk(
+        self,
+    ) -> None:
+        artifacts = build_analysis_artifacts(
+            [
+                (
+                    "main.tf",
+                    b"""
+# AI-generated draft; verify before apply
+resource "aws_security_group" "web" {
+  ingress {
+    protocol    = "-1"
+    from_port   = 0
+    to_port     = 0
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+""",
+                )
+            ],
+            include_topology_context=False,
+            include_incident_context=False,
+            include_narrative=False,
+            allow_llm_assistance=False,
+            audit_context={"trigger_type": "agent_request"},
+        )
+
+        self.assertEqual(
+            artifacts.submission_manifest.provenance["authorship"],
+            "ai-assisted",
+        )
+        ai_risk_findings = [
+            finding
+            for finding in artifacts.findings
+            if finding.title.startswith("AI-assisted IaC risk:")
+        ]
+        self.assertEqual(len(ai_risk_findings), 1)
+        self.assertEqual(ai_risk_findings[0].severity, "high")
+        self.assertTrue(ai_risk_findings[0].deterministic)
+        self.assertTrue(ai_risk_findings[0].evidence_refs)
+        self.assertIn(
+            "public ingress",
+            ai_risk_findings[0].description.lower(),
+        )
+
+    def test_build_analysis_artifacts_scopes_ai_signals_to_matching_artifact(
+        self,
+    ) -> None:
+        artifacts = build_analysis_artifacts(
+            [
+                (
+                    "ai.tf",
+                    b"""
+# AI-generated draft; verify before apply
+resource "aws_security_group" "ai_web" {
+  ingress {
+    protocol    = "-1"
+    from_port   = 0
+    to_port     = 0
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+""",
+                ),
+                (
+                    "human.tf",
+                    b"""
+resource "aws_security_group" "human_web" {
+  ingress {
+    protocol    = "-1"
+    from_port   = 0
+    to_port     = 0
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+""",
+                ),
+            ],
+            include_topology_context=False,
+            include_incident_context=False,
+            include_narrative=False,
+            allow_llm_assistance=False,
+        )
+
+        manifest_by_name = {
+            item.name: item for item in artifacts.submission_manifest.items
+        }
+        self.assertEqual(
+            manifest_by_name["ai.tf"].provenance["authorship"],
+            "ai-assisted",
+        )
+        self.assertEqual(
+            manifest_by_name["human.tf"].provenance["authorship"],
+            "unknown",
+        )
+        labeled_titles = [
+            finding.title
+            for finding in artifacts.findings
+            if finding.title.startswith("AI-assisted IaC risk:")
+        ]
+        self.assertEqual(len(labeled_titles), 1)
+        self.assertIn("aws_security_group.ai_web", labeled_titles[0])
 
     def test_analyze_uploaded_files_requires_explicit_project_scope_before_parsing(
         self,
@@ -387,8 +499,9 @@ class AnalysisServiceTests(unittest.TestCase):
             partial_context=False,
             warnings=[],
         )
+        fresh_updated_at = _fresh_context_timestamp()
         topology = {
-            "updated_at": "2026-06-08T12:00:00Z",
+            "updated_at": fresh_updated_at,
             "metadata": {
                 "import": {
                     "source_type": "custom",
@@ -414,7 +527,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.get_topology_status",
                 return_value=SimpleNamespace(
-                    updated_at="2026-06-08T12:00:00Z",
+                    updated_at=fresh_updated_at,
                     payload=topology,
                     warnings=[],
                 ),
@@ -585,8 +698,9 @@ class AnalysisServiceTests(unittest.TestCase):
             partial_context=False,
             warnings=[],
         )
+        fresh_updated_at = _fresh_context_timestamp()
         topology = {
-            "updated_at": "2026-06-08T12:00:00Z",
+            "updated_at": fresh_updated_at,
             "metadata": {
                 "import": {
                     "source_type": "custom",
@@ -612,7 +726,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.get_topology_status",
                 return_value=SimpleNamespace(
-                    updated_at="2026-06-08T12:00:00Z",
+                    updated_at=fresh_updated_at,
                     payload=topology,
                     warnings=[],
                 ),
@@ -675,8 +789,9 @@ class AnalysisServiceTests(unittest.TestCase):
             partial_context=False,
             warnings=[],
         )
+        fresh_updated_at = _fresh_context_timestamp()
         topology = {
-            "updated_at": "2026-06-08T12:00:00Z",
+            "updated_at": fresh_updated_at,
             "metadata": {
                 "import": {
                     "source_type": "custom",
@@ -702,7 +817,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.get_topology_status",
                 return_value=SimpleNamespace(
-                    updated_at="2026-06-08T12:00:00Z",
+                    updated_at=fresh_updated_at,
                     payload=topology,
                     warnings=[],
                 ),
@@ -767,8 +882,9 @@ class AnalysisServiceTests(unittest.TestCase):
             partial_context=False,
             warnings=[],
         )
+        fresh_updated_at = _fresh_context_timestamp()
         topology = {
-            "updated_at": "2026-06-08T12:00:00Z",
+            "updated_at": fresh_updated_at,
             "metadata": {
                 "import": {
                     "source_type": "custom",
@@ -794,7 +910,7 @@ class AnalysisServiceTests(unittest.TestCase):
             patch(
                 "services.analysis_service.get_topology_status",
                 return_value=SimpleNamespace(
-                    updated_at="2026-06-08T12:00:00Z",
+                    updated_at=fresh_updated_at,
                     payload=topology,
                     warnings=[],
                 ),
@@ -1135,7 +1251,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch("services.analysis_service._freshness_score", return_value=0.984),
             patch(
@@ -1173,7 +1289,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 warnings=[
                     "Kubernetes live-state context TODO: cluster access is unavailable."
                 ],
@@ -1209,7 +1325,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "services": [
                         {
@@ -1255,7 +1371,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "services": [
                         {
@@ -1303,7 +1419,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "services": [
                         {
@@ -1347,7 +1463,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "metadata": {
                         "import": {
@@ -1393,7 +1509,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "services": [
                         {
@@ -1437,7 +1553,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with patch(
             "services.analysis_service.get_topology_status",
             return_value=SimpleNamespace(
-                updated_at="2026-06-09T00:00:00Z",
+                updated_at=_fresh_context_timestamp(),
                 payload={
                     "metadata": {
                         "import": {
@@ -1532,7 +1648,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -1569,7 +1685,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -1588,6 +1704,561 @@ class AnalysisServiceTests(unittest.TestCase):
             context.context_todos,
         )
         self.assertIn("incident history", context.uncertainty)
+
+    def test_context_sources_are_artifact_specific_and_match_evidence(self) -> None:
+        change = UnifiedChange(
+            change_id="change-plan-a",
+            source_file="plan-a.json",
+            tool="terraform",
+            resource_id="aws_security_group.main",
+            action="modify",
+            summary="Terraform changed a security group.",
+        )
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan-a.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[change],
+                ),
+                ParsedFileResult(
+                    file_name="plan-b.json",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="plan-b.json",
+                        tool="terraform",
+                        message="invalid plan JSON",
+                    ),
+                ),
+            ]
+        )
+        evidence = EvidenceItem(
+            evidence_id="ev-plan-a",
+            analysis_id=0,
+            finding_id="finding-1",
+            source_type="artifact",
+            source_ref="artifact://plan-a.json#aws_security_group.main?action=modify",
+            artifact="plan-a.json",
+            location="plan-a.json#aws_security_group.main",
+            resource="aws_security_group.main",
+            operation="modify",
+            summary="Security group changed.",
+            severity_hint="medium",
+            deterministic=True,
+            confidence=1.0,
+            related_change_ids=["change-plan-a"],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(1),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](
+                batch,
+                evidence_items=[evidence],
+                project_id=123,
+                codeowners_sources=(
+                    CodeownersSource(
+                        source_ref="CODEOWNERS",
+                        content="plan-a.json @platform\nplan-b.json @platform\n",
+                    ),
+                ),
+            )
+
+        sources_by_id = {source.source_id: source for source in context.context_sources}
+        self.assertIn("artifact:plan-a.json", sources_by_id)
+        self.assertIn("artifact:plan-b.json", sources_by_id)
+        self.assertEqual(
+            sources_by_id["artifact:plan-b.json"].freshness_status, "incomplete"
+        )
+        self.assertIn("parser:terraform", sources_by_id)
+        self.assertEqual(
+            sources_by_id["ownership:CODEOWNERS:CODEOWNERS"].freshness_status,
+            "current",
+        )
+
+        enriched = build_analysis_artifacts.__globals__[
+            "_evidence_items_with_context_sources"
+        ]([evidence], list(context.context_sources))
+        self.assertIsNotNone(enriched[0].context_source)
+        self.assertEqual(enriched[0].context_source.source_type, "artifact")
+        self.assertEqual(enriched[0].context_source.source_ref, "plan-a.json")
+
+    def test_context_sources_split_ownership_by_actual_signal_source(self) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan-a.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            change_id="change-plan-a",
+                            source_file="plan-a.json",
+                            tool="terraform",
+                            resource_id="aws_instance.web",
+                            action="modify",
+                            summary="Terraform changed a web instance.",
+                        )
+                    ],
+                ),
+                ParsedFileResult(
+                    file_name="plan-b.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            change_id="change-plan-b",
+                            source_file="plan-b.json",
+                            tool="terraform",
+                            resource_id="aws_instance.api",
+                            action="modify",
+                            summary="Terraform changed an API instance.",
+                        )
+                    ],
+                ),
+            ]
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(1),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](
+                batch,
+                project_id=123,
+                topology={
+                    "metadata": {"import": {"source_ref": "topology://cluster-a"}},
+                    "services": [
+                        {
+                            "id": "checkout",
+                            "label": "checkout",
+                            "owners": ["@runtime"],
+                            "resource_keys": ["aws_instance.api"],
+                        }
+                    ],
+                },
+                codeowners_sources=(
+                    CodeownersSource(
+                        source_ref="CODEOWNERS",
+                        content="plan-a.json @platform\n",
+                    ),
+                ),
+            )
+
+        ownership_sources = {
+            source.source_id: source
+            for source in context.context_sources
+            if source.source_type == "ownership"
+        }
+        self.assertIn("ownership:CODEOWNERS:CODEOWNERS", ownership_sources)
+        self.assertIn("ownership:topology:topology://cluster-a", ownership_sources)
+        self.assertNotIn("ownership:mapping", ownership_sources)
+
+    def test_topology_ownership_source_inherits_topology_freshness(self) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            change_id="change-plan",
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_instance.api",
+                            action="modify",
+                            summary="Terraform changed an API instance.",
+                        )
+                    ],
+                )
+            ]
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(
+                    updated_at="2026-03-01T00:00:00Z",
+                    payload={
+                        "metadata": {"import": {"source_ref": "topology://cluster-a"}}
+                    },
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(1),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](
+                batch,
+                project_id=123,
+                topology={
+                    "metadata": {"import": {"source_ref": "topology://cluster-a"}},
+                    "services": [
+                        {
+                            "id": "checkout",
+                            "label": "checkout",
+                            "owners": ["@runtime"],
+                            "resource_keys": ["aws_instance.api"],
+                        }
+                    ],
+                },
+            )
+
+        ownership_source = next(
+            source
+            for source in context.context_sources
+            if source.source_id == "ownership:topology:topology://cluster-a"
+        )
+        self.assertEqual(ownership_source.freshness_status, "stale")
+        self.assertLess(ownership_source.confidence, 1.0)
+        self.assertIn(
+            "topology_ownership_source_stale",
+            ownership_source.limitations,
+        )
+
+    def test_blank_artifact_name_degrades_context_source_to_unknown_file(self) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="",
+                        tool="terraform",
+                        message="raw parser error for /private/tmp/secret.tf",
+                    ),
+                )
+            ]
+        )
+
+        context = build_analysis_artifacts.__globals__["_build_context_completeness"](
+            batch,
+            include_topology_context=False,
+            include_incident_context=False,
+        )
+
+        artifact_source = next(
+            source
+            for source in context.context_sources
+            if source.source_type == "artifact"
+        )
+        self.assertEqual(artifact_source.source_ref, "unknown-file")
+        self.assertIn("missing_artifact_name", artifact_source.limitations)
+        self.assertIn("parser_issue", artifact_source.limitations)
+        self.assertNotIn(
+            "/private/tmp/secret.tf",
+            " ".join(artifact_source.limitations),
+        )
+
+    def test_evidence_context_source_matching_rejects_prefix_collisions(
+        self,
+    ) -> None:
+        evidence = EvidenceItem(
+            evidence_id="ev-prod-2",
+            analysis_id=0,
+            finding_id="finding-1",
+            source_type="topology",
+            source_ref="state://prod-2#aws_instance.web",
+            artifact="topology.json",
+            location="state://prod-2#aws_instance.web",
+            resource="aws_instance.web",
+            operation="modify",
+            summary="Topology evidence came from prod-2.",
+            severity_hint="medium",
+            deterministic=True,
+            confidence=1.0,
+        )
+        sources = [
+            ContextSourceMetadata(
+                source_id="topology:terraform-state:state://prod",
+                source_type="topology",
+                source_ref="state://prod",
+                scope="project:payments",
+                freshness_status="current",
+                confidence=1.0,
+            ),
+            ContextSourceMetadata(
+                source_id="topology:terraform-state:state://prod-2",
+                source_type="topology",
+                source_ref="state://prod-2",
+                scope="project:payments",
+                freshness_status="current",
+                confidence=1.0,
+            ),
+        ]
+
+        enriched = build_analysis_artifacts.__globals__[
+            "_evidence_items_with_context_sources"
+        ]([evidence], sources)
+
+        self.assertIsNotNone(enriched[0].context_source)
+        self.assertEqual(enriched[0].context_source.source_ref, "state://prod-2")
+
+    def test_evidence_context_source_matching_does_not_use_type_only_fallback(
+        self,
+    ) -> None:
+        evidence = EvidenceItem(
+            evidence_id="ev-unmatched-topology",
+            analysis_id=0,
+            finding_id="finding-1",
+            source_type="topology",
+            source_ref="state://unseen#aws_instance.web",
+            artifact="topology.json",
+            location="state://unseen#aws_instance.web",
+            resource="aws_instance.web",
+            operation="modify",
+            summary="Topology evidence came from an unseen source.",
+            severity_hint="medium",
+            deterministic=True,
+            confidence=1.0,
+        )
+        sources = [
+            ContextSourceMetadata(
+                source_id="topology:terraform-state:state://prod",
+                source_type="topology",
+                source_ref="state://prod",
+                scope="project:payments",
+                freshness_status="current",
+                confidence=1.0,
+            )
+        ]
+
+        enriched = build_analysis_artifacts.__globals__[
+            "_evidence_items_with_context_sources"
+        ]([evidence], sources)
+
+        self.assertIsNone(enriched[0].context_source)
+
+    def test_stale_incident_index_downgrades_context_source_and_score(self) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            change_id="change-plan",
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_instance.web",
+                            action="modify",
+                            summary="Terraform changed a web instance.",
+                        )
+                    ],
+                )
+            ]
+        )
+        evidence = EvidenceItem(
+            evidence_id="ev-plan",
+            analysis_id=0,
+            finding_id="finding-1",
+            source_type="artifact",
+            source_ref="artifact://plan.json#aws_instance.web?action=modify",
+            artifact="plan.json",
+            location="plan.json#aws_instance.web",
+            resource="aws_instance.web",
+            operation="modify",
+            summary="Web instance changed.",
+            severity_hint="medium",
+            deterministic=True,
+            confidence=1.0,
+            related_change_ids=["change-plan"],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value={
+                    **_incident_snapshot(4),
+                    "incident_index_freshness_status": "stale",
+                },
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, evidence_items=[evidence], project_id=123)
+
+        incident_source = next(
+            source
+            for source in context.context_sources
+            if source.source_type == "incident"
+        )
+        self.assertEqual(incident_source.freshness_status, "stale")
+        self.assertLessEqual(incident_source.confidence, 0.5)
+        self.assertIn("stale_incident_index", incident_source.limitations)
+        self.assertLess(context.context_score, 1.0)
+        self.assertIn("incident history is stale", context.uncertainty or "")
+
+    def test_partial_parser_and_evidence_sources_are_incomplete(self) -> None:
+        covered_change = UnifiedChange(
+            change_id="change-covered",
+            source_file="plan-a.json",
+            tool="terraform",
+            resource_id="aws_instance.web",
+            action="modify",
+            summary="Terraform changed a web instance.",
+        )
+        uncovered_change = UnifiedChange(
+            change_id="change-uncovered",
+            source_file="plan-b.json",
+            tool="terraform",
+            resource_id="aws_instance.api",
+            action="modify",
+            summary="Terraform changed an API instance.",
+        )
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan-a.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[covered_change],
+                ),
+                ParsedFileResult(
+                    file_name="plan-b.json",
+                    tool="terraform",
+                    status="failed",
+                    issue=ParseIssue(
+                        file_name="plan-b.json",
+                        tool="terraform",
+                        message="invalid plan JSON",
+                    ),
+                ),
+                ParsedFileResult(
+                    file_name="plan-c.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[uncovered_change],
+                ),
+            ]
+        )
+        evidence = EvidenceItem(
+            evidence_id="ev-plan-a",
+            analysis_id=0,
+            finding_id="finding-1",
+            source_type="artifact",
+            source_ref="artifact://plan-a.json#aws_instance.web?action=modify",
+            artifact="plan-a.json",
+            location="plan-a.json#aws_instance.web",
+            resource="aws_instance.web",
+            operation="modify",
+            summary="Web instance changed.",
+            severity_hint="medium",
+            deterministic=True,
+            confidence=1.0,
+            related_change_ids=["change-covered"],
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value=_incident_snapshot(1),
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, evidence_items=[evidence], project_id=123)
+
+        sources_by_type = {
+            source.source_type: source for source in context.context_sources
+        }
+        self.assertEqual(sources_by_type["parser"].freshness_status, "incomplete")
+        self.assertIn("partial_parser_coverage", sources_by_type["parser"].limitations)
+        self.assertEqual(sources_by_type["evidence"].freshness_status, "incomplete")
+        self.assertIn(
+            "partial_evidence_coverage", sources_by_type["evidence"].limitations
+        )
+
+    def test_non_stale_incident_freshness_uses_specific_guidance(self) -> None:
+        batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            change_id="change-plan",
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_instance.web",
+                            action="modify",
+                            summary="Terraform changed a web instance.",
+                        )
+                    ],
+                )
+            ]
+        )
+
+        with (
+            patch(
+                "services.analysis_service.get_topology_status",
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
+            ),
+            patch(
+                "services.analysis_service.get_incident_index_snapshot",
+                return_value={
+                    **_incident_snapshot(2),
+                    "incident_index_freshness_status": "conflicting",
+                },
+            ),
+        ):
+            context = build_analysis_artifacts.__globals__[
+                "_build_context_completeness"
+            ](batch, evidence_items=[], project_id=123)
+
+        self.assertIn(
+            "Resolve incident history freshness: conflicting.",
+            context.context_todos,
+        )
+        self.assertNotIn(
+            "Refresh stale incident history for this project/workspace.",
+            context.context_todos,
+        )
+        self.assertIn("incident history freshness is conflicting", context.uncertainty)
+        incident_source = next(
+            source
+            for source in context.context_sources
+            if source.source_type == "incident"
+        )
+        self.assertEqual(incident_source.freshness_status, "conflicting")
+        self.assertIn("incident_index_conflicting", incident_source.limitations)
+        self.assertIn("incident_index_conflicting", incident_source.conflicts)
+        self.assertNotIn("stale_incident_index", incident_source.limitations)
 
     def test_build_context_completeness_uses_raw_parser_rate_for_tiny_gap(
         self,
@@ -1614,7 +2285,7 @@ class AnalysisServiceTests(unittest.TestCase):
         with (
             patch(
                 "services.analysis_service.get_topology_status",
-                return_value=SimpleNamespace(updated_at="2026-05-10T00:00:00Z"),
+                return_value=SimpleNamespace(updated_at=_fresh_context_timestamp()),
             ),
             patch(
                 "services.analysis_service.get_incident_index_snapshot",
@@ -2297,6 +2968,1004 @@ class AnalysisServiceTests(unittest.TestCase):
             summary.json_payload.context_completeness.label, "STRONG CONTEXT"
         )
 
+    def test_build_share_summary_surfaces_scanner_conflicts_without_overriding_severity(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["confidence"] = 0.62
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["findings"][1]["severity"] = "low"
+        report["findings"][2]["severity"] = "low"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "artifact": "semgrep.sarif",
+                "location": "main.tf:12",
+                "resource": "aws_security_group.main",
+                "operation": "scan",
+                "summary": "Semgrep marked public ingress as high severity.",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "confidence": 0.9,
+                "context_source": {
+                    "source_id": "scanner:semgrep:semgrep.sarif",
+                    "source_type": "scanner",
+                    "source_ref": "semgrep.sarif",
+                    "scope": "project:payments",
+                    "freshness_status": "current",
+                    "confidence": 0.9,
+                    "conflicts": ["DeployWhisper finding severity is medium."],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.top_findings[0].severity, "medium")
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 2)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(conflict.finding_id, "finding-001")
+        self.assertEqual(conflict.scanner_source, "semgrep://results/sg-1")
+        self.assertEqual(conflict.scanner_freshness, "current")
+        self.assertEqual(conflict.deterministic_source, "ev-001")
+        self.assertEqual(conflict.deterministic_freshness, "current")
+        self.assertIn("high", conflict.confidence_impact)
+        self.assertIn("medium", conflict.confidence_impact)
+        self.assertIn("Review scanner evidence", conflict.recommended_verification)
+        self.assertIn("Scanner conflict", summary.markdown)
+        self.assertIn("finding-001", summary.markdown)
+        self.assertIn("semgrep://results/sg-1", summary.markdown)
+        self.assertIn("scanner confidence impact", summary.plain_text.lower())
+        self.assertIn("finding-001", summary.plain_text)
+
+    def test_build_share_summary_surfaces_stale_deterministic_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "stale",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(conflict.scanner_freshness, "current")
+        self.assertEqual(conflict.deterministic_freshness, "stale")
+        self.assertIn(
+            "Scanner freshness is current while deterministic evidence freshness is stale.",
+            conflict.conflict_summary,
+        )
+
+    def test_build_share_summary_surfaces_each_conflicting_deterministic_source(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].extend(
+            ["ev-scanner", "ev-deterministic-context"]
+        )
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "stale",
+        }
+        report["evidence_items"].extend(
+            [
+                {
+                    "evidence_id": "ev-deterministic-context",
+                    "finding_id": "finding-001",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": ["topology scope differs from scanner scope"],
+                    },
+                },
+                {
+                    "evidence_id": "ev-scanner",
+                    "finding_id": "finding-001",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "source_ref": "semgrep://results/sg-1",
+                    "severity_hint": "high",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": [],
+                        "limitations": [],
+                    },
+                },
+            ]
+        )
+
+        summary = build_share_summary(report)
+
+        conflicts = summary.json_payload.scanner_conflicts
+        self.assertEqual(
+            {conflict.deterministic_source for conflict in conflicts},
+            {"ev-002", "ev-deterministic-context"},
+        )
+        by_source = {conflict.deterministic_source: conflict for conflict in conflicts}
+        self.assertEqual(by_source["ev-002"].deterministic_freshness, "stale")
+        self.assertIn(
+            "deterministic: topology scope differs from scanner scope",
+            by_source["ev-deterministic-context"].conflict_summary,
+        )
+        self.assertNotIn(
+            "ev-001",
+            {conflict.deterministic_source for conflict in conflicts},
+        )
+
+    def test_build_share_summary_surfaces_deterministic_severity_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        conflicts = summary.json_payload.scanner_conflicts
+        self.assertEqual(len(conflicts), 1)
+        conflict = conflicts[0]
+        self.assertEqual(conflict.deterministic_source, "ev-001")
+        self.assertIn(
+            "Scanner severity high differs from deterministic evidence severity medium.",
+            conflict.conflict_summary,
+        )
+        self.assertEqual(summary.json_payload.top_findings[0].severity, "high")
+
+    def test_build_share_summary_keeps_all_scanner_only_deterministic_sources(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        for item in report["evidence_items"]:
+            item["context_source"] = {"freshness_status": "current"}
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(
+            {
+                conflict.deterministic_source
+                for conflict in summary.json_payload.scanner_conflicts
+            },
+            {"ev-001", "ev-002"},
+        )
+
+    def test_build_share_summary_ignores_string_false_deterministic_signal(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["deterministic"] = "false"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.scanner_conflicts, [])
+
+    def test_build_share_summary_keeps_distinct_scanner_rows_with_same_source(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].extend(["ev-scanner-a", "ev-scanner-b"])
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        for scanner_id, conflict_text in (
+            ("ev-scanner-a", "scanner result A disagrees with deterministic scope"),
+            ("ev-scanner-b", "scanner result B disagrees with deterministic scope"),
+        ):
+            report["evidence_items"].append(
+                {
+                    "evidence_id": scanner_id,
+                    "finding_id": "finding-001",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "source_ref": "semgrep://results/shared-source",
+                    "severity_hint": "high",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": [conflict_text],
+                        "limitations": [],
+                    },
+                }
+            )
+
+        summary = build_share_summary(report)
+
+        conflicts = summary.json_payload.scanner_conflicts
+        self.assertEqual(len(conflicts), 4)
+        self.assertEqual(
+            [conflict.scanner_source for conflict in conflicts],
+            [
+                "semgrep://results/shared-source",
+                "semgrep://results/shared-source",
+                "semgrep://results/shared-source",
+                "semgrep://results/shared-source",
+            ],
+        )
+        self.assertIn("scanner result A", conflicts[0].conflict_summary)
+        self.assertIn("scanner result A", conflicts[1].conflict_summary)
+        self.assertIn("scanner result B", conflicts[2].conflict_summary)
+        self.assertIn("scanner result B", conflicts[3].conflict_summary)
+
+    def test_build_share_summary_ignores_missing_only_scanner_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://missing-freshness",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.scanner_conflicts, [])
+        self.assertNotIn("scanner://missing-freshness", summary.markdown)
+
+    def test_build_share_summary_ignores_equal_degraded_freshness_only_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "Stale",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://same-stale-freshness",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "STALE",
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.scanner_conflicts, [])
+        self.assertNotIn("same-stale-freshness", summary.markdown)
+
+    def test_build_share_summary_reports_unknown_when_only_one_side_has_freshness(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://missing-freshness",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(conflict.scanner_freshness, "unknown")
+        self.assertEqual(conflict.deterministic_freshness, "current")
+        self.assertIn("scanner://missing-freshness", summary.markdown)
+
+    def test_build_share_summary_normalizes_freshness_case_for_conflicts(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "Current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://case-normalized-freshness",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(summary.json_payload.scanner_conflicts, [])
+        self.assertNotIn("case-normalized-freshness", summary.markdown)
+
+    def test_build_share_summary_compact_markdown_prioritizes_severity_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].extend(
+            ["ev-scanner-context", "ev-scanner-priority"]
+        )
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].extend(
+            [
+                {
+                    "evidence_id": "ev-scanner-context",
+                    "finding_id": "finding-001",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "source_ref": "semgrep://results/context-only",
+                    "severity_hint": "medium",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": ["scanner scope needs reviewer reconciliation"],
+                        "limitations": [],
+                    },
+                },
+                {
+                    "evidence_id": "ev-scanner-priority",
+                    "finding_id": "finding-001",
+                    "source_type": "external_scanner",
+                    "source_kind": "external_scanner",
+                    "source_ref": "semgrep://results/priority-severity",
+                    "severity_hint": "high",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "current",
+                        "conflicts": [],
+                        "limitations": [],
+                    },
+                },
+            ]
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("semgrep://results/priority-severity", summary.markdown)
+        self.assertNotIn("semgrep://results/context-only (current)", summary.markdown)
+
+    def test_build_share_summary_escapes_scanner_conflict_markdown(self) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "scanner://[bad](https://example.test)<b>&raw</b>\n@here",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": ["scanner says **override severity** <i>&now</i>"],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertNotIn("[bad](https://example.test)", summary.markdown)
+        self.assertNotIn("scanner says **override severity**", summary.markdown)
+        self.assertNotIn("<b>", summary.markdown)
+        self.assertNotIn("<i>", summary.markdown)
+        self.assertIn(
+            "scanner://\\[bad\\]\\(https://example.test\\)&lt;b&gt;&amp;raw&lt;/b&gt; @here",
+            summary.markdown,
+        )
+        self.assertIn(
+            "scanner says \\*\\*override severity\\*\\* &lt;i&gt;&amp;now&lt;/i&gt;",
+            summary.markdown,
+        )
+        self.assertNotIn("\n@here", summary.plain_text)
+
+    def test_build_share_summary_redacts_scanner_conflicts_without_evidence_detail(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/hidden-when-detail-omitted",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report, evidence_detail_available=False)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(conflict.scanner_source, "scanner evidence detail omitted")
+        self.assertEqual(
+            conflict.deterministic_source, "deterministic evidence detail omitted"
+        )
+        self.assertEqual(conflict.finding_id, "detail omitted")
+        self.assertEqual(conflict.finding_title, "Finding detail omitted")
+        self.assertEqual(conflict.scanner_freshness, "detail omitted")
+        self.assertEqual(conflict.deterministic_freshness, "detail omitted")
+        self.assertIn("source details are omitted", conflict.conflict_summary)
+        self.assertNotIn("hidden-when-detail-omitted", summary.markdown)
+        self.assertNotIn("hidden-when-detail-omitted", summary.plain_text)
+        self.assertIn("scanner evidence detail omitted", summary.markdown)
+        self.assertIn("scanner evidence detail omitted", summary.plain_text)
+
+    def test_build_share_summary_surfaces_context_limitations_as_conflicts(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/limitation-only",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "limitations": ["scanner scope excludes generated manifests"],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertIn(
+            "scanner scope excludes generated manifests", conflict.conflict_summary
+        )
+        self.assertIn("limitation-only", summary.markdown)
+
+    def test_build_share_summary_normalizes_scalar_context_conflict_signals(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["evidence_items"][0]["severity_hint"] = "medium"
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+            "conflicts": "deterministic scalar conflict",
+        }
+        report["evidence_items"][1]["deterministic"] = False
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/scalar-context",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "limitations": "scanner scalar limitation",
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertIn("deterministic scalar conflict", conflict.conflict_summary)
+        self.assertIn("scanner scalar limitation", conflict.conflict_summary)
+        self.assertIn("scalar-context", summary.markdown)
+
+    def test_build_share_summary_isolates_idless_findings_by_evidence_refs(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"] = [
+            {
+                "title": "First idless finding",
+                "severity": "medium",
+                "confidence": 0.7,
+                "evidence_refs": ["det-a", "scan-a"],
+            },
+            {
+                "title": "Second idless finding",
+                "severity": "medium",
+                "confidence": 0.7,
+                "evidence_refs": ["det-b", "scan-b"],
+            },
+        ]
+        report["evidence_items"] = [
+            {
+                "evidence_id": "det-a",
+                "source_ref": "terraform://a",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {"freshness_status": "current"},
+            },
+            {
+                "evidence_id": "scan-a",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/a",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {"freshness_status": "current"},
+            },
+            {
+                "evidence_id": "det-b",
+                "source_ref": "terraform://b",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {"freshness_status": "current"},
+            },
+            {
+                "evidence_id": "scan-b",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/b",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {"freshness_status": "current"},
+            },
+        ]
+
+        summary = build_share_summary(report)
+
+        conflict_pairs = {
+            (
+                conflict.finding_title,
+                conflict.scanner_source,
+                conflict.deterministic_source,
+            )
+            for conflict in summary.json_payload.scanner_conflicts
+        }
+        self.assertEqual(
+            conflict_pairs,
+            {
+                ("First idless finding", "semgrep://results/a", "det-a"),
+                ("Second idless finding", "semgrep://results/b", "det-b"),
+            },
+        )
+
+    def test_build_share_summary_compares_idless_linked_evidence_rows(self) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "medium"
+        report["findings"][0]["evidence_refs"] = ["ev-scanner"]
+        report["evidence_items"] = [
+            {
+                "finding_id": "finding-001",
+                "source_ref": "terraform://plan#aws_security_group.main",
+                "severity_hint": "medium",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                },
+            },
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/idless-linked-row",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            },
+        ]
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 1)
+        conflict = summary.json_payload.scanner_conflicts[0]
+        self.assertEqual(
+            conflict.deterministic_source,
+            "terraform://plan#aws_security_group.main",
+        )
+        self.assertIn("idless-linked-row", conflict.scanner_source)
+
+    def test_build_share_summary_compact_markdown_keeps_conflict_fields(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "stale",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("finding-001", summary.markdown)
+        self.assertIn("semgrep://results/sg-1 (current)", summary.markdown)
+        self.assertIn("ev-001 (stale)", summary.markdown)
+        self.assertIn("Verification: Review scanner evidence", summary.markdown)
+        self.assertIn("Scanner confidence impact", summary.markdown)
+
+    def test_build_share_summary_compact_markdown_preserves_fields_after_long_conflict(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "stale",
+            "conflicts": ["deterministic context " + "very long detail " * 60],
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-1",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": ["scanner context " + "very long detail " * 60],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("finding-001", summary.markdown)
+        self.assertIn("semgrep://results/sg-1 (current)", summary.markdown)
+        self.assertIn("ev-001 (stale)", summary.markdown)
+        self.assertIn("Verification: Review scanner evidence", summary.markdown)
+        self.assertIn("Scanner confidence impact", summary.markdown)
+
+    def test_build_share_summary_compact_markdown_caps_long_sources(self) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0].pop("evidence_id")
+        report["evidence_items"][0]["source_ref"] = "terraform://" + "a" * 1000
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "stale",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://" + "b" * 1000,
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("Scanner source: semgrep://", summary.markdown)
+        self.assertIn("deterministic source: terraform://", summary.markdown)
+
+    def test_build_share_summary_compact_markdown_caps_multiple_conflicts(
+        self,
+    ) -> None:
+        report = self._share_report_payload()
+        self._satisfy_share_payload_evidence_law(report)
+        report["findings"][0]["severity"] = "high"
+        report["findings"][0]["evidence_refs"].append("ev-scanner")
+        report["context_completeness"] = {
+            "context_score": 0.5,
+            "uncertainty": "Reviewer context remains intentionally verbose. " * 80,
+        }
+        report["evidence_items"][0]["context_source"] = {
+            "freshness_status": "current",
+        }
+        report["evidence_items"][1]["context_source"] = {
+            "freshness_status": "current",
+        }
+        for index in range(8):
+            evidence_id = f"ev-conflicting-{index}"
+            report["findings"][0]["evidence_refs"].append(evidence_id)
+            report["evidence_items"].append(
+                {
+                    "evidence_id": evidence_id,
+                    "finding_id": "finding-001",
+                    "deterministic": True,
+                    "determinism_level": "deterministic",
+                    "context_source": {
+                        "freshness_status": "stale",
+                        "conflicts": [
+                            f"scanner scope conflicts with deterministic scope {index}"
+                        ],
+                    },
+                }
+            )
+        report["evidence_items"].append(
+            {
+                "evidence_id": "ev-scanner",
+                "finding_id": "finding-001",
+                "source_type": "external_scanner",
+                "source_kind": "external_scanner",
+                "source_ref": "semgrep://results/sg-many",
+                "severity_hint": "high",
+                "deterministic": True,
+                "determinism_level": "deterministic",
+                "context_source": {
+                    "freshness_status": "current",
+                    "conflicts": [],
+                    "limitations": [],
+                },
+            }
+        )
+
+        summary = build_share_summary(report)
+
+        self.assertEqual(len(summary.json_payload.scanner_conflicts), 8)
+        self.assertLessEqual(len(summary.markdown), 1500)
+        self.assertIn("semgrep://results/sg-many (current)", summary.markdown)
+        self.assertIn("ev-conflicting-0 (stale)", summary.markdown)
+        self.assertIn("additional conflicts are available", summary.markdown)
+        self.assertIn("JSON payload/report", summary.plain_text)
+
     def test_build_share_summary_requires_attention_for_unsatisfied_evidence_law(
         self,
     ) -> None:
@@ -2720,7 +4389,12 @@ class AnalysisServiceTests(unittest.TestCase):
         rollback_plan = RollbackPlan(steps=[], complexity="low", warning=None)
 
         def mutating_narrator(
-            passed_assessment, passed_findings, completion_client=None, raw_files=None
+            passed_assessment,
+            passed_findings,
+            completion_client=None,
+            raw_files=None,
+            *,
+            sensitive_values=(),
         ):
             passed_assessment.score = 1
             passed_assessment.severity = "low"

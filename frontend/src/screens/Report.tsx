@@ -53,6 +53,7 @@ type EvidenceItem = NonNullable<ReportDetail["evidence_items"]>[number];
 type RollbackPlan = NonNullable<ReportDetail["rollback_plan"]>;
 type BlastRadius = NonNullable<ReportDetail["blast_radius"]>;
 type ContextCompleteness = NonNullable<ReportDetail["context_completeness"]>;
+type ContextSourceMetadata = NonNullable<ContextCompleteness["context_sources"]>[number];
 type ConfidenceLedger = NonNullable<ReportDetail["confidence_ledger"]>;
 type FeedbackState = NonNullable<ReportDetail["feedback_state"]>;
 
@@ -112,6 +113,7 @@ function getContextCompleteness(report: ReportDetail): ContextCompleteness {
       incident_index_freshness_status: null,
       evidence_success_rate: 0,
       context_todos: ["Context completeness was not persisted for this report."],
+      context_sources: [],
       partial_context: true,
     }
   );
@@ -181,6 +183,84 @@ function evidenceReference(item: EvidenceItem) {
   return item.location || item.source_ref || item.resource || item.evidence_id;
 }
 
+function evidenceSourceLabel(item: EvidenceItem) {
+  if (item.evidence_label) {
+    return item.evidence_label;
+  }
+  if (isExternalScannerEvidence(item)) {
+    return "External evidence";
+  }
+  return item.source_type;
+}
+
+function isExternalScannerEvidence(item: EvidenceItem) {
+  return [item.source_kind, item.source_type].some((source) => source === "external_scanner");
+}
+
+const nonDeployWhisperEvidenceSources = new Set(["external_scanner", "user_context"]);
+
+function isDeployWhisperEvidence(item: EvidenceItem) {
+  if (isExternalScannerEvidence(item)) {
+    return false;
+  }
+  const sources = [item.source_kind, item.source_type].filter(Boolean);
+  return !sources.some((source) => nonDeployWhisperEvidenceSources.has(source ?? ""));
+}
+
+function fallbackFindingEvidenceLabel(finding: Finding, items: EvidenceItem[]) {
+  const hasExternalScanner = items.some(isExternalScannerEvidence);
+  const hasDeployWhisperEvidence = items.some(isDeployWhisperEvidence);
+  if (hasExternalScanner && hasDeployWhisperEvidence) {
+    return "Includes external context";
+  }
+  if (hasExternalScanner) {
+    return "External evidence";
+  }
+  if (finding.evidence_classification === "external") {
+    return "External evidence";
+  }
+  return null;
+}
+
+function findingEvidenceLabel(finding: Finding, items: EvidenceItem[]) {
+  return finding.evidence_label || fallbackFindingEvidenceLabel(finding, items);
+}
+
+function evidenceItemCountLabel(count: number) {
+  return `${count} evidence ${count === 1 ? "item" : "items"}`;
+}
+
+function evidenceSummaryCounts(report: ReportDetail, items: EvidenceItem[]) {
+  const payloadTotal = report.share_summary.json_payload.evidence_count ?? 0;
+  const payloadCount = report.share_summary.json_payload.external_evidence_count ?? 0;
+  const itemCount = items.filter(isExternalScannerEvidence).length;
+  const visibleDeployWhisperCount = items.filter((item) => !isExternalScannerEvidence(item)).length;
+  const totalCount = Math.max(items.length, payloadTotal);
+  const maxExternalCount = Math.max(itemCount, totalCount - visibleDeployWhisperCount);
+  const externalCount = Math.min(maxExternalCount, Math.max(itemCount, payloadCount));
+  if (externalCount > 0) {
+    return {
+      total: totalCount,
+      external: externalCount,
+    };
+  }
+  return {
+    total: totalCount,
+    external: itemCount,
+  };
+}
+
+function evidenceSummaryLabel(totalCount: number, externalCount: number) {
+  if (externalCount > 0) {
+    return `${evidenceItemCountLabel(totalCount)} - includes ${externalCount} external context ${externalCount === 1 ? "item" : "items"}`;
+  }
+  return evidenceItemCountLabel(totalCount);
+}
+
+function scannerConflicts(report: ReportDetail) {
+  return report.share_summary.json_payload.scanner_conflicts ?? [];
+}
+
 function findingCounts(report: ReportDetail) {
   const findings = getFindings(report);
   const high = findings.filter((finding) => ["high", "critical"].includes(finding.severity)).length;
@@ -210,18 +290,20 @@ function Toast({ message }: { message: string | null }) {
 
 function PasswordGate({
   reportId,
+  comparePrevious,
   onUnlocked,
 }: {
   reportId: number;
-  onUnlocked: () => void;
+  comparePrevious: boolean;
+  onUnlocked: (report: ReportDetail) => void;
 }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mutation = useMutation({
-    mutationFn: () => unlockSharedReport(reportId, password),
-    onSuccess: () => {
+    mutationFn: () => unlockSharedReport(reportId, password, { comparePrevious }),
+    onSuccess: (report) => {
       setError(null);
-      onUnlocked();
+      onUnlocked(report);
     },
     onError: () => setError("Incorrect password. Try again."),
   });
@@ -271,6 +353,8 @@ function ReportHeader({
   const navigate = useNavigate();
   const findings = getFindings(report);
   const evidenceItems = getEvidenceItems(report);
+  const evidenceCounts = evidenceSummaryCounts(report, evidenceItems);
+  const evidenceSummary = evidenceSummaryLabel(evidenceCounts.total, evidenceCounts.external);
   const findingsTab = tabs.map((tab) => (tab.id === "findings" ? { ...tab, count: findings.length } : tab));
   const compareHref = publicView
     ? `/reports/${report.id}?compare=previous#report-comparison`
@@ -294,7 +378,7 @@ function ReportHeader({
               <VerdictChip verdict={normalizeVerdict(report.verdict)} />
               <SeverityBadge level={normalizeSeverity(report.severity)} />
               <ConfidenceBadge level={confidenceLevel(report.confidence)} />
-              <EvidenceTag>{evidenceItems.length} deterministic items</EvidenceTag>
+              <EvidenceTag>{evidenceSummary}</EvidenceTag>
             </div>
             <h1>{reportTitle(report)}</h1>
             <div className="dw-report-meta">
@@ -427,11 +511,15 @@ function OverviewTab({ report, goFindings }: { report: ReportDetail; goFindings:
             <ul className="dw-top-findings">
               {findings.slice(0, 5).map((finding) => {
                 const evidence = evidenceForFinding(report, finding);
+                const evidenceLabel = findingEvidenceLabel(finding, evidence);
                 return (
                   <li key={finding.finding_id}>
                     <SeverityBadge level={normalizeSeverity(finding.severity)} />
                     <span>{finding.title}</span>
-                    <EvidenceTag>{firstEvidenceTag(evidence)}</EvidenceTag>
+                    <span className="dw-finding-tag-group">
+                      {evidenceLabel && <EvidenceTag>{evidenceLabel}</EvidenceTag>}
+                      <EvidenceTag>{firstEvidenceTag(evidence)}</EvidenceTag>
+                    </span>
                   </li>
                 );
               })}
@@ -503,6 +591,7 @@ function FindingsTab({
       {findings.map((finding) => {
         const open = openId === finding.finding_id;
         const evidence = evidenceForFinding(report, finding);
+        const evidenceLabel = findingEvidenceLabel(finding, evidence);
         const selected = getFeedbackState(report).finding_feedback?.[finding.finding_id]?.outcome_label;
         return (
           <article className={`dw-finding-card${open ? " dw-finding-open" : ""}`} key={finding.finding_id}>
@@ -512,6 +601,7 @@ function FindingsTab({
                 <span className="dw-finding-title-row">
                   <strong>{finding.title}</strong>
                   <SeverityBadge level={normalizeSeverity(finding.severity)} />
+                  {evidenceLabel && <EvidenceTag>{evidenceLabel}</EvidenceTag>}
                   {finding.skill_id && <span className="dw-cross-tool"><Layers size={10} /> Cross-tool</span>}
                 </span>
                 <span className="dw-finding-description">{finding.description || finding.explanation}</span>
@@ -554,6 +644,9 @@ function FindingsTab({
 function ConfidenceTab({ report }: { report: ReportDetail }) {
   const ledger = getConfidenceLedger(report);
   const evidenceItems = getEvidenceItems(report);
+  const evidenceCounts = evidenceSummaryCounts(report, evidenceItems);
+  const evidenceRegisterTitle = evidenceSummaryLabel(evidenceCounts.total, evidenceCounts.external);
+  const conflicts = scannerConflicts(report);
   const ledgerCard = (title: string, items: string[], hot = false) => (
     <Card eyebrow="CONFIDENCE LEDGER" title={title}>
       <ol className="dw-ledger-list">
@@ -573,14 +666,38 @@ function ConfidenceTab({ report }: { report: ReportDetail }) {
         {ledgerCard("Why not lower", ledger.why_not_lower ?? [], true)}
         {ledgerCard("Why not higher", ledger.why_not_higher ?? [])}
       </div>
-      <Card eyebrow="EVIDENCE REGISTER" title={`${evidenceItems.length} deterministic items`}>
+      {conflicts.length > 0 && (
+        <Card eyebrow="SCANNER CONFLICTS" title={`${conflicts.length} source ${conflicts.length === 1 ? "conflict" : "conflicts"}`}>
+          <div className="dw-evidence-register">
+            {conflicts.map((conflict, index) => (
+              <div key={`${conflict.finding_id}-${conflict.scanner_source}-${conflict.deterministic_source}-${index}`}>
+                <span>{conflict.finding_title}</span>
+                <MonoRef>{conflict.scanner_source}</MonoRef>
+                <p>{conflict.conflict_summary}</p>
+                <em>
+                  scanner {conflict.scanner_freshness} - deterministic {conflict.deterministic_freshness}
+                </em>
+                <p>{conflict.confidence_impact}</p>
+                <p>{conflict.recommended_verification}</p>
+                <MonoRef>{conflict.deterministic_source}</MonoRef>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+      <Card eyebrow="EVIDENCE REGISTER" title={evidenceRegisterTitle}>
         <div className="dw-evidence-register">
-          {evidenceItems.map((item, index) => (
+          {evidenceItems.length === 0 && evidenceCounts.total > 0 ? (
+            <p className="dw-report-empty">Evidence detail was omitted or redacted for this view.</p>
+          ) : evidenceItems.map((item, index) => (
             <div key={item.evidence_id}>
               <span>{item.evidence_id || `EV-${String(index + 1).padStart(2, "0")}`}</span>
               <MonoRef>{evidenceReference(item)}</MonoRef>
               <p>{item.summary}</p>
-              <em>{item.source_type}</em>
+              <em>
+                {evidenceSourceLabel(item)}
+                {item.context_source ? ` - ${item.context_source.source_id} (${item.context_source.freshness_status})` : ""}
+              </em>
             </div>
           ))}
         </div>
@@ -704,6 +821,61 @@ function BlastRadiusCard({ blastRadius }: { blastRadius: BlastRadius }) {
   );
 }
 
+function ContextSourcesCard({ context }: { context: ContextCompleteness }) {
+  const sources = context.context_sources ?? [];
+  const sourceNotes = (source: ContextSourceMetadata) =>
+    Array.from(new Set([...(source.conflicts ?? []), ...(source.limitations ?? [])])).sort();
+  const rowIdentityPayload = (source: ContextSourceMetadata) => [
+    source.source_id,
+    source.source_type,
+    source.source_ref ?? "",
+    source.scope,
+    source.freshness_status,
+    source.confidence ?? "",
+    source.last_observed_at ?? "",
+    source.age_days ?? "",
+    sourceNotes(source),
+  ];
+  const rowIdentity = (source: ContextSourceMetadata) =>
+    encodeURIComponent(JSON.stringify(rowIdentityPayload(source)));
+  const rowKey = (source: ContextSourceMetadata, index: number) =>
+    [
+      rowIdentity(source),
+      index,
+    ].join("|");
+
+  return (
+    <Card eyebrow="CONTEXT SOURCES" title={`${sources.length} source${sources.length === 1 ? "" : "s"} in freshness ledger`}>
+      {sources.length === 0 ? (
+        <div className="dw-report-empty">No context source metadata was persisted for this report.</div>
+      ) : (
+        <div className="dw-evidence-register">
+          {sources.map((source, index) => {
+            const notes = sourceNotes(source);
+            return (
+              <div
+                data-context-source-identity={rowIdentity(source)}
+                data-testid="context-source-row"
+                key={rowKey(source, index)}
+              >
+                <span>{source.source_type}</span>
+                <MonoRef>{source.source_id}</MonoRef>
+                <p>{source.source_ref || "source reference unavailable"}</p>
+                <em>
+                  {source.freshness_status} - {Math.round((source.confidence ?? 0) * 100)}% - {source.scope}
+                </em>
+                {notes.map((item) => (
+                  <EvidenceTag key={`${source.source_id}-${item}`}>{item}</EvidenceTag>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function ContextTab({ report }: { report: ReportDetail }) {
   const context = getContextCompleteness(report);
   const blastRadius = getBlastRadius(report);
@@ -732,6 +904,7 @@ function ContextTab({ report }: { report: ReportDetail }) {
         </div>
         <Button variant="ghost">+ Resolve open context TODO</Button>
       </Card>
+      <ContextSourcesCard context={context} />
       <BlastRadiusCard blastRadius={blastRadius} />
     </div>
   );
@@ -775,6 +948,7 @@ function AuditTab({ report }: { report: ReportDetail }) {
     ["Model", report.narrative_model || report.audit.llm_model || "none"],
     ["Risk scoring", report.assessment_source || "heuristic-only"],
     ["Narrative source", report.narrative_source || "fallback"],
+    ["Content redaction", report.audit.redaction_status || "unknown"],
     ["Schema", report.report_schema_version],
     ["Files analyzed", String(report.filenames.length)],
     ["Skills applied", skills.join(" - ") || "none"],
@@ -859,10 +1033,12 @@ export function ReportScreen() {
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
   const [toast, setToast] = useState<string | null>(null);
   const comparePrevious = searchParams.get("compare") === "previous";
+  const queryClient = useQueryClient();
+  const reportQueryKey = ["report", reportId, publicView, comparePrevious];
 
   const reportQuery = useQuery({
     enabled: Number.isFinite(reportId),
-    queryKey: ["report", reportId, publicView, comparePrevious],
+    queryKey: reportQueryKey,
     queryFn: () => getReportDetail(reportId, { publicView, comparePrevious }),
     retry: false,
   });
@@ -879,7 +1055,13 @@ export function ReportScreen() {
     return <ReportLoading />;
   }
   if (reportQuery.error instanceof ApiClientError && reportQuery.error.status === 401 && publicView) {
-    return <PasswordGate reportId={reportId} onUnlocked={() => void reportQuery.refetch()} />;
+    return (
+      <PasswordGate
+        comparePrevious={comparePrevious}
+        reportId={reportId}
+        onUnlocked={(report) => queryClient.setQueryData(reportQueryKey, report)}
+      />
+    );
   }
   if (reportQuery.isError || !reportQuery.data) {
     return (

@@ -126,6 +126,14 @@ Minimum expectations:
   - `./.venv/bin/python -m unittest discover -q`
 - For broader local CI coverage, run:
   - `bash scripts/ci-local.sh`
+- Treat root `unittest discover` as a minimum smoke check, not full CI parity:
+  several `tests/test_*` directories are not Python packages and are skipped by
+  recursive discovery. `scripts/ci-local.sh` must exercise every test directory.
+- When changing a Pydantic model, API schema, dataclass, or other constructor
+  contract, search the entire repository for direct instantiations/fixtures and
+  update all of them. Also run the affected GitHub pytest shard exactly as CI
+  does; for API/CLI/infra changes:
+  - `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`
 - If the app behavior changed, run the app locally when possible:
   - `python app.py`
 - If a story changes any React route, UI primitive, rendered report/history/dashboard/settings/skills surface, browser interaction, keyboard behavior, or accessibility semantics, run browser-side Playwright validation against the composed app and record the command/result in the story Dev Agent Record before moving the story to review:

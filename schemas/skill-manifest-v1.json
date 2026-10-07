@@ -5,12 +5,14 @@
     "name": {
       "description": "Stable lowercase skill identifier.",
       "title": "Name",
-      "type": "string"
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
     },
     "version": {
       "description": "Semantic version for the skill.",
       "title": "Version",
-      "type": "string"
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
     },
     "author": {
       "description": "Skill author or owner.",
@@ -38,8 +40,10 @@
     "triggers": {
       "description": "Filename and extension triggers for loading the skill.",
       "items": {
+        "minLength": 1,
         "type": "string"
       },
+      "minItems": 1,
       "title": "Triggers",
       "type": "array"
     },
@@ -52,6 +56,7 @@
     "tags": {
       "description": "Search and categorization tags.",
       "items": {
+        "minLength": 1,
         "type": "string"
       },
       "title": "Tags",
@@ -65,7 +70,61 @@
     "test_suite_path": {
       "description": "Repo-relative path to the skill validation suite.",
       "title": "Test Suite Path",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z][A-Za-z0-9+.-]*:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+"
+    },
+    "supported_toolchains": {
+      "description": "Toolchains, runtimes, or artifact families this skill supports.",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Supported Toolchains",
+      "type": "array"
+    },
+    "trust_level": {
+      "description": "Trust classification for governance and installation surfaces.",
+      "enum": [
+        "experimental",
+        "verified",
+        "core",
+        "deprecated"
+      ],
+      "title": "Trust Level",
       "type": "string"
+    },
+    "scenario_references": {
+      "description": "Repo-relative deterministic scenario paths validating the skill.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?![A-Za-z][A-Za-z0-9+.-]*:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+"
+      },
+      "minItems": 1,
+      "title": "Scenario References",
+      "type": "array"
+    },
+    "documentation_links": {
+      "description": "Repo-relative documentation paths or HTTP(S) links for authors.",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://(?:\\[[0-9A-Fa-f:.]+\\]|[A-Za-z0-9][A-Za-z0-9.-]*)(?::(?:0|[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?(?:[/?#][^\\\\\\s]*)?$"
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?![A-Za-z][A-Za-z0-9+.-]*:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+"
+          }
+        ]
+      },
+      "minItems": 1,
+      "title": "Documentation Links",
+      "type": "array"
     },
     "always_load": {
       "default": false,
@@ -110,7 +169,11 @@
     "token_budget",
     "tags",
     "description",
-    "test_suite_path"
+    "test_suite_path",
+    "supported_toolchains",
+    "trust_level",
+    "scenario_references",
+    "documentation_links"
   ],
   "title": "SkillManifestV1",
   "type": "object",

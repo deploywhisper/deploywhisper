@@ -1,7 +1,8 @@
 # Skills Analytics
 
-Story 4.8 adds a shared analytics layer for the skills marketplace so the same
-per-skill signals are available in the API, browser, and CLI.
+Story 9.7 completes the shared analytics and deprecation signals for the Skills
+marketplace so the same per-Skill evidence is available in the API, browser,
+and CLI.
 
 ## Metrics
 
@@ -12,6 +13,17 @@ Each registry skill now exposes:
 - `updated_at`
 - `active_issue_count`
 - `analytics_updated_at`
+- `trust_level`
+- `source`
+
+The Skills browser shows installs, deterministic test pass rate, active issue
+count, last update, trust level, and source on each catalog card and repeats the
+signals on the detail view. Skills whose `trust_level` is `deprecated` include
+an explicit warning that they may no longer be maintained.
+
+`deploywhisper skill list --catalog` emits the same inspection evidence as
+stable key-value fields, including `trust`, `source`, and the explicit
+`deprecated=true|false` lifecycle marker.
 
 ## Data source
 

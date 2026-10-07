@@ -8,6 +8,8 @@ import os
 import sys
 import tempfile
 import unittest
+
+from tests.snapshot_isolation import isolate_artifact_snapshots
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
@@ -19,7 +21,9 @@ import models.tables as tables_module
 import services.report_service as report_service_module
 import services.analysis_service as analysis_service_module
 import services.project_service as project_service_module
+from analysis.blast_radius import BlastRadiusResult
 from analysis.incident_matcher import IncidentMatch
+from analysis.rollback_planner import RollbackPlan
 from analysis.risk_scorer import RiskAssessment, RiskContributor
 from cli.analyze import _load_artifacts, main
 from importlib import reload
@@ -35,15 +39,18 @@ from services.benchmark_runner_service import BenchmarkRunResult, BenchmarkRunSu
 from services.skill_installer_service import InstalledSkillEntry, SkillInstallResult
 from services.skill_registry_service import SkillRegistryEntry
 from services.skill_test_harness_service import (
+    SkillTestCoverage,
     SkillTestScenarioResult,
     SkillTestSuiteResult,
     SkillTestSummary,
+    SkillTrustRequirement,
 )
 
 
 class AnalyzeCliTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
+        isolate_artifact_snapshots(self, self.tempdir.name)
         self.db_path = Path(self.tempdir.name) / "cli.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
         os.environ["APP_BASE_URL"] = "https://deploywhisper.example.com"
@@ -61,6 +68,201 @@ class AnalyzeCliTests(unittest.TestCase):
         os.environ.pop("APP_BASE_URL", None)
         self.tempdir.cleanup()
 
+    def _persisted_report_with_scanner_conflict(self) -> dict:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        assessment = RiskAssessment(
+            score=56,
+            severity="medium",
+            recommendation="caution",
+            top_risk="Scanner severity disagrees with deterministic proof.",
+            contributors=[
+                RiskContributor(
+                    evidence_id="ev-det",
+                    source_file="plan.json",
+                    tool="terraform",
+                    resource_id="aws_security_group.main",
+                    action="modify",
+                    contribution=20,
+                    summary="Terraform proof marks the finding medium.",
+                    severity="medium",
+                    reasoning="Terraform proof marks the finding medium.",
+                )
+            ],
+            interaction_risks=[],
+            partial_context=False,
+            warnings=[],
+        )
+        narrative = NarrativeResult(
+            opening_sentence=(
+                "CAUTION: scanner output needs deterministic reconciliation."
+            ),
+            explanation="Scanner output disagrees with deterministic proof.",
+            guidance=["Review scanner evidence before acting."],
+            degraded=False,
+            warnings=[],
+        )
+        persisted_report = report_service_module.persist_analysis_report(
+            parse_batch,
+            assessment,
+            narrative,
+        )
+        analysis_id = persisted_report["id"]
+        persisted_report.update(
+            {
+                "findings": [
+                    {
+                        "finding_id": "finding-001",
+                        "analysis_id": analysis_id,
+                        "title": "MEDIUM: aws_security_group.main",
+                        "description": "Security group exposure should be reviewed.",
+                        "explanation": "Scanner severity disagrees with proof.",
+                        "guidance": ["Review scanner evidence before acting."],
+                        "severity": "medium",
+                        "category": "network",
+                        "deterministic": True,
+                        "confidence": 0.62,
+                        "evidence_classification": "deterministic",
+                        "evidence_refs": ["ev-det", "ev-scan"],
+                    }
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "ev-det",
+                        "analysis_id": analysis_id,
+                        "finding_id": "finding-001",
+                        "source_type": "artifact",
+                        "source_ref": "terraform://plan#aws_security_group.main",
+                        "artifact": "plan.json",
+                        "location": "plan.json",
+                        "resource": "aws_security_group.main",
+                        "operation": "modify",
+                        "source_kind": "artifact",
+                        "summary": "Terraform proof marks the finding medium.",
+                        "severity_hint": "medium",
+                        "deterministic": True,
+                        "determinism_level": "deterministic",
+                        "confidence": 0.9,
+                        "context_source": {
+                            "source_id": "evidence:terraform:plan",
+                            "source_type": "artifact",
+                            "source_ref": "plan.json",
+                            "scope": "project:payments",
+                            "freshness_status": "current",
+                            "confidence": 0.9,
+                            "conflicts": [],
+                            "limitations": [],
+                        },
+                    },
+                    {
+                        "evidence_id": "ev-scan",
+                        "analysis_id": analysis_id,
+                        "finding_id": "finding-001",
+                        "source_type": "external_scanner",
+                        "source_ref": "semgrep://results/cli-conflict",
+                        "artifact": "semgrep.sarif",
+                        "location": "main.tf:12",
+                        "resource": "aws_security_group.main",
+                        "operation": "scan",
+                        "source_kind": "external_scanner",
+                        "summary": "Semgrep marks the same exposure high.",
+                        "severity_hint": "high",
+                        "deterministic": True,
+                        "determinism_level": "deterministic",
+                        "confidence": 0.88,
+                        "context_source": {
+                            "source_id": "scanner:semgrep:semgrep.sarif",
+                            "source_type": "external_scanner",
+                            "source_ref": "semgrep.sarif",
+                            "scope": "project:payments",
+                            "freshness_status": "current",
+                            "confidence": 0.88,
+                            "conflicts": [],
+                            "limitations": [],
+                        },
+                    },
+                ],
+                "top_risk_contributors": ["ev-det"],
+                "context_completeness": {"context_score": 0.84},
+            }
+        )
+        return persisted_report
+
+    def _analysis_result_with_persisted_report(
+        self,
+        persisted_report: dict,
+    ) -> analysis_service_module.AnalysisRunResult:
+        parse_batch = ParseBatchResult(
+            files=[
+                ParsedFileResult(
+                    file_name="plan.json",
+                    tool="terraform",
+                    status="parsed",
+                    changes=[
+                        UnifiedChange(
+                            source_file="plan.json",
+                            tool="terraform",
+                            resource_id="aws_security_group.main",
+                            action="modify",
+                            summary="Terraform changed a security group.",
+                        )
+                    ],
+                )
+            ]
+        )
+        return analysis_service_module.AnalysisRunResult(
+            parse_batch=parse_batch,
+            evidence_items=[],
+            findings=[],
+            assessment=RiskAssessment(
+                score=56,
+                severity="medium",
+                recommendation="caution",
+                top_risk="Scanner severity disagrees with deterministic proof.",
+                contributors=[],
+                interaction_risks=[],
+                partial_context=False,
+                warnings=[],
+            ),
+            blast_radius=BlastRadiusResult(
+                affected=[],
+                direct_count=0,
+                transitive_count=0,
+            ),
+            rollback_plan=RollbackPlan(
+                steps=[],
+                complexity="low",
+                complexity_score=1,
+            ),
+            incident_matches=[],
+            narrative=NarrativeResult(
+                opening_sentence=(
+                    "CAUTION: scanner output needs deterministic reconciliation."
+                ),
+                explanation="Scanner output disagrees with deterministic proof.",
+                guidance=[],
+                degraded=False,
+                warnings=[],
+            ),
+            persisted_report=persisted_report,
+        )
+
     def test_load_artifacts_preserves_relative_paths_for_common_parent(self) -> None:
         repo = Path(self.tempdir.name) / "repo"
         codeowners_path = repo / ".github" / "CODEOWNERS"
@@ -77,6 +279,185 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(
             [name for name, _ in artifacts],
             [".github/CODEOWNERS", "services/payments/plan.json"],
+        )
+
+    def test_analyze_command_serializes_scanner_conflict_share_summary_payload(
+        self,
+    ) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        output = io.StringIO()
+        persisted_report = self._persisted_report_with_scanner_conflict()
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                return_value=self._analysis_result_with_persisted_report(
+                    persisted_report
+                ),
+            ),
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        share_summary = json.loads(output.getvalue())["data"]["share_summary"]
+        conflicts = share_summary["json_payload"]["scanner_conflicts"]
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(
+            conflicts[0]["scanner_source"], "semgrep://results/cli-conflict"
+        )
+        self.assertEqual(
+            conflicts[0]["deterministic_source"],
+            "ev-det",
+        )
+        self.assertEqual(conflicts[0]["scanner_freshness"], "current")
+        self.assertEqual(conflicts[0]["deterministic_freshness"], "current")
+        self.assertIn("Evidence Law", conflicts[0]["confidence_impact"])
+        self.assertIn("recommended_verification", conflicts[0])
+        self.assertIn("Scanner conflict", share_summary["markdown"])
+
+    def test_analyze_agent_json_emits_stable_advisory_contract(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        artifact_path = Path(self.tempdir.name) / "plan.json"
+        artifact_path.write_text('{"resource_changes": []}', encoding="utf-8")
+        output = io.StringIO()
+        persisted_report = self._persisted_report_with_scanner_conflict()
+        project = project_service_module.get_project_by_project_key("payments")
+        self.assertIsNotNone(project)
+        persisted_report["project"] = project.model_dump(mode="json")
+        persisted_report["confidence"] = 0.73
+        persisted_report["confidence_ledger"] = {
+            "contributors": ["Deterministic Terraform evidence."],
+            "confidence_factors": ["Parser coverage was complete."],
+            "why_not_lower": ["The scanner conflict remains unresolved."],
+            "why_not_higher": ["Deterministic evidence bounds the severity."],
+            "uncertainty_drivers": ["Scanner severity conflicts with local proof."],
+        }
+        persisted_report["context_completeness"].update(
+            {
+                "uncertainty": "Scanner conflict requires human verification.",
+                "context_todos": ["Confirm the intended ingress policy."],
+                "partial_context": True,
+                "insufficient_context": True,
+            }
+        )
+        result = self._analysis_result_with_persisted_report(persisted_report)
+
+        with (
+            patch(
+                "cli.analyze.analyze_uploaded_files",
+                return_value=result,
+            ) as analyze_mock,
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--agent-json",
+                    "--project",
+                    "payments",
+                    str(artifact_path),
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        analyze_mock.assert_called_once()
+        payload = json.loads(output.getvalue())
+        self.assertEqual(
+            set(payload),
+            {
+                "schema_version",
+                "report_schema_version",
+                "report_id",
+                "scope",
+                "verdict",
+                "advisory_only",
+                "deployment_approval",
+                "human_decision_required",
+                "approval_statement",
+                "evidence_law",
+                "evidence",
+                "findings",
+                "confidence",
+                "uncertainty",
+                "context_todos",
+                "verification_guidance",
+            },
+        )
+        self.assertEqual(payload["schema_version"], "v1")
+        self.assertEqual(payload["report_schema_version"], "v2")
+        self.assertEqual(payload["report_id"], persisted_report["id"])
+        self.assertEqual(payload["scope"]["project_key"], "payments")
+        self.assertIsNone(payload["scope"]["workspace_key"])
+        self.assertEqual(
+            payload["verdict"],
+            {
+                "risk_score": persisted_report["risk_score"],
+                "severity": persisted_report["severity"],
+                "recommendation": persisted_report["recommendation"],
+                "top_risk": persisted_report["top_risk"],
+            },
+        )
+        self.assertTrue(payload["advisory_only"])
+        self.assertFalse(payload["deployment_approval"])
+        self.assertTrue(payload["human_decision_required"])
+        self.assertIn("not deployment approval", payload["approval_statement"].lower())
+        self.assertIn(
+            payload["evidence_law"]["status"],
+            {"Satisfied", "Needs review", "Reconciled"},
+        )
+        self.assertTrue(payload["evidence_law"]["detail"])
+        self.assertEqual(payload["evidence"][0]["evidence_id"], "ev-det")
+        self.assertEqual(payload["findings"][0]["finding_id"], "finding-001")
+        self.assertEqual(payload["findings"][0]["confidence"], 0.62)
+        self.assertEqual(payload["confidence"]["overall"], 0.73)
+        self.assertEqual(
+            payload["confidence"]["ledger"]["uncertainty_drivers"],
+            ["Scanner severity conflicts with local proof."],
+        )
+        self.assertEqual(
+            payload["uncertainty"]["summary"],
+            "Scanner conflict requires human verification.",
+        )
+        self.assertTrue(payload["uncertainty"]["partial_context"])
+        self.assertTrue(payload["uncertainty"]["insufficient_context"])
+        self.assertIn("context_todos", payload["uncertainty"]["flags"])
+        self.assertEqual(
+            payload["context_todos"],
+            ["Confirm the intended ingress policy."],
+        )
+        self.assertIn(
+            "Review scanner evidence before acting.",
+            payload["verification_guidance"],
+        )
+        self.assertTrue(
+            any(
+                "human reviewer" in guidance.lower()
+                for guidance in payload["verification_guidance"]
+            )
         )
 
     def test_load_artifacts_preserves_mixed_relative_codeowners_absolute_artifact(
@@ -348,6 +729,10 @@ class AnalyzeCliTests(unittest.TestCase):
             "tags: [terraform, iac]\n"
             "description: Terraform review guidance.\n"
             "test_suite_path: tests/skill-tests/terraform\n"
+            "supported_toolchains: [terraform]\n"
+            "trust_level: core\n"
+            "scenario_references: [tests/skill-tests/terraform]\n"
+            "documentation_links: [terraform.md]\n"
             "---\n"
             "# Terraform\nGuidance.\n",
             encoding="utf-8",
@@ -408,6 +793,10 @@ class AnalyzeCliTests(unittest.TestCase):
             "tags: [terraform, iac]\n"
             "description: Terraform review guidance.\n"
             "test_suite_path: tests/skill-tests/terraform\n"
+            "supported_toolchains: [terraform]\n"
+            "trust_level: core\n"
+            "scenario_references: [tests/skill-tests/terraform]\n"
+            "documentation_links: [terraform.md]\n"
             "---\n"
             "# Terraform\nGuidance.\n",
             encoding="utf-8",
@@ -445,6 +834,10 @@ class AnalyzeCliTests(unittest.TestCase):
             "tags: [terraform, iac]\n"
             "description: Terraform review guidance.\n"
             "test_suite_path: tests/skill-tests/terraform\n"
+            "supported_toolchains: [terraform]\n"
+            "trust_level: core\n"
+            "scenario_references: [tests/skill-tests/terraform]\n"
+            "documentation_links: [skills/terraform.md]\n"
             "---\n"
             "# Terraform\nGuidance.\n",
             encoding="utf-8",
@@ -820,6 +1213,8 @@ class AnalyzeCliTests(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["data"][0]["skill_id"], "terraform")
         self.assertEqual(payload["data"][0]["summary"]["status"], "passing")
+        self.assertTrue(payload["data"][0]["coverage"]["complete"])
+        self.assertTrue(payload["data"][0]["trust_requirement"]["satisfied"])
 
     def test_skill_test_command_rejects_unknown_skill_id(self) -> None:
         stderr = io.StringIO()
@@ -872,6 +1267,21 @@ class AnalyzeCliTests(unittest.TestCase):
                 display_text="0/0 scenarios passing",
                 generated_at="2026-04-24T00:00:00Z",
             ),
+            coverage=SkillTestCoverage(
+                expected_triggers=False,
+                expected_outputs=False,
+                evidence_assumptions=False,
+                safety_constraints=False,
+                complete=False,
+            ),
+            trust_requirement=SkillTrustRequirement(
+                trust_level="core",
+                required=True,
+                satisfied=False,
+                failures=[
+                    "A verified/core Skill must have at least one passing scenario."
+                ],
+            ),
             scenarios=[SkillTestScenarioResult(name="suite-missing", passed=False)],
         )
 
@@ -885,6 +1295,53 @@ class AnalyzeCliTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, 1)
         self.assertIn("[missing]", output.getvalue())
+
+    def test_skill_test_command_enforces_verified_core_trust_requirement(
+        self,
+    ) -> None:
+        output = io.StringIO()
+        result = SkillTestSuiteResult(
+            skill_id="terraform",
+            version="1.0.0",
+            summary=SkillTestSummary(
+                skill_id="terraform",
+                total_scenarios=1,
+                passed_scenarios=1,
+                failed_scenarios=0,
+                pass_rate=1.0,
+                status="passing",
+                display_text="1/1 scenarios passing",
+                generated_at="2026-07-23T00:00:00Z",
+            ),
+            coverage=SkillTestCoverage(
+                expected_triggers=True,
+                expected_outputs=True,
+                evidence_assumptions=True,
+                safety_constraints=False,
+                complete=False,
+            ),
+            trust_requirement=SkillTrustRequirement(
+                trust_level="core",
+                required=True,
+                satisfied=False,
+                failures=["Verified/core suites must cover safety constraints."],
+            ),
+            scenarios=[SkillTestScenarioResult(name="positive", passed=True)],
+        )
+
+        with (
+            patch("cli.analyze.run_skill_test_suites", return_value=[result]),
+            patch("sys.argv", ["deploywhisper", "skill", "test", "terraform"]),
+            redirect_stdout(output),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn(
+            "Verified/core suites must cover safety constraints.",
+            output.getvalue(),
+        )
 
     def test_skill_install_command_reports_install_location(self) -> None:
         output = io.StringIO()
@@ -912,6 +1369,151 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("Installed helm@1.2.0", output.getvalue())
         self.assertIn("skills/custom/helm.md", output.getvalue())
+
+    def test_skill_install_and_update_commands_use_environment_local_source(
+        self,
+    ) -> None:
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            custom_dir = skills_dir / "custom"
+            source_dir = repo_root / "private-skills"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+
+            def local_content(version: str, guidance: str) -> str:
+                return (
+                    "---\n"
+                    "name: helm\n"
+                    f"version: {version}\n"
+                    "author: Community\n"
+                    "license: MIT\n"
+                    "triggers: [Chart.yaml]\n"
+                    "token_budget: 900\n"
+                    "tags: [helm]\n"
+                    "description: Helm rollout checks.\n"
+                    "test_suite_path: tests/skill-tests/helm\n"
+                    "supported_toolchains: [helm]\n"
+                    "trust_level: verified\n"
+                    "scenario_references: [tests/skill-tests/helm]\n"
+                    "documentation_links: [docs/skills/helm.md]\n"
+                    "---\n"
+                    f"# Helm\n{guidance}\n"
+                )
+
+            source_path = source_dir / "helm.md"
+            source_path.write_text(
+                local_content("1.0.0", "Initial guidance."),
+                encoding="utf-8",
+            )
+            try:
+                with patch.dict(
+                    os.environ,
+                    {"DEPLOYWHISPER_SKILLS_SOURCE_DIR": str(source_dir)},
+                ):
+                    reload(config_module)
+                    with (
+                        patch(
+                            "services.skill_installer_service.SKILLS_DIR",
+                            skills_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.CUSTOM_DIR",
+                            custom_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.settings",
+                            config_module.settings,
+                        ),
+                        patch(
+                            "sys.argv",
+                            ["deploywhisper", "skill", "install", "helm"],
+                        ),
+                        redirect_stdout(output),
+                    ):
+                        with self.assertRaises(SystemExit) as install_ctx:
+                            main()
+
+                    source_path.write_text(
+                        local_content("2.0.0", "Updated guidance."),
+                        encoding="utf-8",
+                    )
+                    with (
+                        patch(
+                            "services.skill_installer_service.SKILLS_DIR",
+                            skills_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.CUSTOM_DIR",
+                            custom_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.settings",
+                            config_module.settings,
+                        ),
+                        patch(
+                            "sys.argv",
+                            ["deploywhisper", "skill", "update", "helm"],
+                        ),
+                        redirect_stdout(output),
+                    ):
+                        with self.assertRaises(SystemExit) as update_ctx:
+                            main()
+            finally:
+                reload(config_module)
+
+            self.assertEqual(install_ctx.exception.code, 0)
+            self.assertEqual(update_ctx.exception.code, 0)
+            installed = (custom_dir / "helm.md").read_text(encoding="utf-8")
+            self.assertIn("version: 2.0.0", installed)
+            self.assertIn("Updated guidance.", installed)
+            self.assertIn("Installed helm@1.0.0", output.getvalue())
+            self.assertIn("Updated helm 1.0.0 -> 2.0.0", output.getvalue())
+
+    def test_skill_install_command_surfaces_local_source_error(self) -> None:
+        error_output = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            skills_dir = repo_root / "skills"
+            source_dir = repo_root / "private-skills"
+            skills_dir.mkdir()
+            source_dir.mkdir()
+            try:
+                with patch.dict(
+                    os.environ,
+                    {"DEPLOYWHISPER_SKILLS_SOURCE_DIR": str(source_dir)},
+                ):
+                    reload(config_module)
+                    with (
+                        patch(
+                            "services.skill_installer_service.SKILLS_DIR",
+                            skills_dir,
+                        ),
+                        patch(
+                            "services.skill_installer_service.CUSTOM_DIR",
+                            skills_dir / "custom",
+                        ),
+                        patch(
+                            "services.skill_installer_service.settings",
+                            config_module.settings,
+                        ),
+                        patch(
+                            "sys.argv",
+                            ["deploywhisper", "skill", "install", "helm"],
+                        ),
+                        redirect_stderr(error_output),
+                    ):
+                        with self.assertRaises(SystemExit) as ctx:
+                            main()
+            finally:
+                reload(config_module)
+
+            self.assertEqual(ctx.exception.code, 2)
+            self.assertIn(
+                "Skill was not found in the configured local source.",
+                error_output.getvalue(),
+            )
 
     def test_skill_list_command_prints_installed_skill_inventory(self) -> None:
         output = io.StringIO()
@@ -954,6 +1556,7 @@ class AnalyzeCliTests(unittest.TestCase):
             id="terraform",
             name="Terraform",
             version="1.0.0",
+            trust_level="deprecated",
             source="built-in",
             author="DeployWhisper",
             maintainer="DeployWhisper",
@@ -1005,6 +1608,9 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertIn("installs=1842", output.getvalue().lower())
         self.assertIn("pass-rate=100%", output.getvalue().lower())
         self.assertIn("active-issues=1", output.getvalue().lower())
+        self.assertIn("trust=deprecated", output.getvalue().lower())
+        self.assertIn("source=built-in", output.getvalue().lower())
+        self.assertIn("deprecated=true", output.getvalue().lower())
 
     def test_skill_list_catalog_command_fetches_all_registry_pages(self) -> None:
         output = io.StringIO()
@@ -1012,6 +1618,7 @@ class AnalyzeCliTests(unittest.TestCase):
             id="terraform",
             name="Terraform",
             version="1.0.0",
+            trust_level="core",
             source="built-in",
             author="DeployWhisper",
             maintainer="DeployWhisper",
@@ -1040,6 +1647,7 @@ class AnalyzeCliTests(unittest.TestCase):
             id="kubernetes",
             name="Kubernetes",
             version="1.0.0",
+            trust_level="core",
             source="built-in",
             author="DeployWhisper",
             maintainer="DeployWhisper",
@@ -1088,6 +1696,7 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIn("terraform", output.getvalue().lower())
         self.assertIn("kubernetes", output.getvalue().lower())
+        self.assertEqual(output.getvalue().lower().count("deprecated=false"), 2)
 
     def test_skill_update_command_reports_noop_when_latest_version_is_installed(
         self,
@@ -1162,6 +1771,18 @@ class AnalyzeCliTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        admin_artifact_path = Path(self.tempdir.name) / "admin-plan.json"
+        admin_artifact_path.write_text(
+            (
+                '{"planned_values": {}, "resource_changes": [{"address": "module.network.aws_security_group.admin", '
+                '"module_address": "module.network", "type": "aws_security_group", '
+                '"name": "admin", "provider_name": "registry.terraform.io/hashicorp/aws", '
+                '"change": {"actions": ["update"], "after_unknown": {"arn": true}, '
+                '"after_sensitive": {"ingress": [{"description": true}]}, '
+                '"replace_paths": [["ingress", 0, "cidr_blocks"]]}}]}'
+            ),
+            encoding="utf-8",
+        )
         narrative = NarrativeResult(
             opening_sentence="CAUTION: review the security group update.",
             explanation="The deployment widens database access and should be reviewed.",
@@ -1205,6 +1826,7 @@ class AnalyzeCliTests(unittest.TestCase):
                     "--project",
                     "payments",
                     str(artifact_path),
+                    str(admin_artifact_path),
                 ],
             ),
             redirect_stdout(output),
@@ -1217,9 +1839,75 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["interface"], "cli")
         self.assertEqual(payload["meta"]["report_schema_version"], "v2")
         self.assertTrue(payload["meta"]["advisory_only"])
-        self.assertEqual(payload["meta"]["accepted_artifact_count"], 1)
+        self.assertEqual(payload["meta"]["accepted_artifact_count"], 2)
         self.assertIn(payload["data"]["assessment"]["severity"], {"high", "critical"})
         self.assertIn("context_completeness", payload["data"]["assessment"])
+        context_sources = payload["data"]["assessment"]["context_completeness"][
+            "context_sources"
+        ]
+        self.assertTrue(context_sources)
+
+        def context_source_identity(source: dict) -> tuple[object, ...]:
+            notes = tuple(
+                sorted(
+                    {
+                        *(source.get("conflicts") or []),
+                        *(source.get("limitations") or []),
+                    }
+                )
+            )
+            return (
+                source.get("source_id"),
+                source.get("source_type"),
+                source.get("source_ref") or "",
+                source.get("scope"),
+                source.get("freshness_status"),
+                source.get("confidence"),
+                notes,
+            )
+
+        def distinct_context_sources(sources: list[dict]) -> list[dict]:
+            seen: set[tuple[object, ...]] = set()
+            distinct_sources: list[dict] = []
+            for source in sources:
+                identity = context_source_identity(source)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                distinct_sources.append(source)
+            return distinct_sources
+
+        def assert_context_source_fields(source: dict) -> None:
+            self.assertIn(
+                source["freshness_status"],
+                {
+                    "current",
+                    "stale",
+                    "missing",
+                    "incomplete",
+                    "conflicting",
+                    "unknown",
+                    "empty",
+                    "not_applicable",
+                },
+            )
+            self.assertIn("confidence", source)
+            self.assertGreaterEqual(source["confidence"], 0.0)
+            self.assertLessEqual(source["confidence"], 1.0)
+            self.assertIn("scope", source)
+            self.assertTrue(source["scope"])
+            self.assertIn("conflicts", source)
+            self.assertIsInstance(source["conflicts"], list)
+
+        distinct_sources = distinct_context_sources(context_sources)
+        self.assertGreater(len(distinct_sources), 1)
+        for source in distinct_sources[:2]:
+            assert_context_source_fields(source)
+        topology_sources = [
+            source for source in context_sources if source["source_type"] == "topology"
+        ]
+        self.assertTrue(topology_sources)
+        assert_context_source_fields(topology_sources[0])
         self.assertEqual(
             payload["data"]["incident_matches"][0]["public_pattern_id"],
             "public-ingress-wide-open",
@@ -1264,6 +1952,49 @@ class AnalyzeCliTests(unittest.TestCase):
             expected_report_link,
         )
         self.assertTrue(payload["data"]["persisted_report"]["findings"])
+        self.assertIn(
+            "context_sources",
+            payload["data"]["persisted_report"]["context_completeness"],
+        )
+        self.assertGreater(
+            len(
+                payload["data"]["persisted_report"]["context_completeness"][
+                    "context_sources"
+                ]
+            ),
+            1,
+        )
+        persisted_context_sources = payload["data"]["persisted_report"][
+            "context_completeness"
+        ]["context_sources"]
+        persisted_distinct_sources = distinct_context_sources(persisted_context_sources)
+        self.assertGreater(len(persisted_distinct_sources), 1)
+        for source in persisted_distinct_sources[:2]:
+            assert_context_source_fields(source)
+        self.assertIn(
+            "context_source",
+            payload["data"]["persisted_report"]["evidence_items"][0],
+        )
+        evidence_context_sources = [
+            item["context_source"]
+            for item in payload["data"]["persisted_report"]["evidence_items"]
+            if item.get("context_source") is not None
+        ]
+        distinct_evidence_context_sources = distinct_context_sources(
+            evidence_context_sources
+        )
+        self.assertGreater(len(distinct_evidence_context_sources), 1)
+        for evidence_context_source in distinct_evidence_context_sources[:2]:
+            self.assertIn("source_id", evidence_context_source)
+            self.assertIn("freshness_status", evidence_context_source)
+            self.assertIn("confidence", evidence_context_source)
+            self.assertGreaterEqual(evidence_context_source["confidence"], 0.0)
+            self.assertLessEqual(evidence_context_source["confidence"], 1.0)
+            self.assertIn("scope", evidence_context_source)
+            self.assertTrue(evidence_context_source["scope"])
+            self.assertIn("source_ref", evidence_context_source)
+            self.assertIn("conflicts", evidence_context_source)
+            self.assertIsInstance(evidence_context_source["conflicts"], list)
         self.assertEqual(
             payload["data"]["persisted_report"]["report_schema_version"], "v2"
         )
@@ -1638,6 +2369,9 @@ class AnalyzeCliTests(unittest.TestCase):
         )
         output = io.StringIO()
 
+        def unavailable_completion_client(**_kwargs):
+            raise RuntimeError("Synthetic completion provider is unavailable")
+
         def passthrough_analyze_uploaded_files(
             files,
             completion_client=None,
@@ -1649,7 +2383,7 @@ class AnalyzeCliTests(unittest.TestCase):
         ):
             return analysis_service_module.analyze_uploaded_files(
                 files,
-                completion_client=completion_client,
+                completion_client=unavailable_completion_client,
                 audit_context=audit_context,
                 project_id=project_id,
                 project_key=project_key,
@@ -2167,6 +2901,39 @@ class AnalyzeCliTests(unittest.TestCase):
                 [
                     "deploywhisper",
                     "analyze",
+                    "--project",
+                    "payments",
+                    str(missing_path),
+                ],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(payload["error"]["code"], "artifact_read_failed")
+        self.assertEqual(payload["error"]["details"]["path"], str(missing_path))
+
+    def test_analyze_agent_json_preserves_structured_operational_errors(self) -> None:
+        project_service_module.create_project(
+            project_key="payments",
+            display_name="Payments",
+        )
+        missing_path = Path(self.tempdir.name) / "missing-agent-plan.json"
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "deploywhisper",
+                    "analyze",
+                    "--agent-json",
                     "--project",
                     "payments",
                     str(missing_path),

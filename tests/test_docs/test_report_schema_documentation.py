@@ -34,6 +34,7 @@ class ReportSchemaDocumentationTests(unittest.TestCase):
             '"report_schema_version"',
             '"findings"',
             '"evidence_items"',
+            '"evidence_label"',
             '"report_schema_versions"',
             '"context_completeness"',
             '"owner_signals"',

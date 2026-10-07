@@ -20,9 +20,13 @@
 - [ ] `deploywhisper skill test <skill>`
 - [ ] Added or updated scenarios under `tests/skill-tests/<skill>/`
 
-## Reviewer Notes
+## Reviewer Assignment
 
-<!-- Call out any areas that need domain review, follow-up stories, or curation attention. -->
+- Additional domain reviewer (if any):
+- Review focus:
+
+<!-- CODEOWNERS requests the Skill maintainer automatically. Name any additional
+domain reviewer and explain the expertise needed for this contribution. -->
 
 ## Checklist
 

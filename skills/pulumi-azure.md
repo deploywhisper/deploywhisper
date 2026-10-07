@@ -8,6 +8,10 @@ token_budget: 1400
 tags: [pulumi, azure, iac]
 description: Pulumi Azure guidance for resource-group blast radius, identities, and recovery settings.
 test_suite_path: tests/skill-tests/pulumi-azure
+supported_toolchains: [pulumi, azure]
+trust_level: core
+scenario_references: [tests/skill-tests/pulumi-azure]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["@pulumi/azure-native", "pulumi_azure_native"]
 ---
 

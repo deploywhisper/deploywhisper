@@ -13,11 +13,38 @@ from config import settings
 from analysis.risk_scorer import RiskAssessment
 from evidence.models import Finding
 from llm.prompts import build_system_prompt, build_user_payload
-from llm.providers import generate_completion_with_settings
+from llm.prompt_security import (
+    contains_deployment_approval_claim,
+    contains_unsafe_instruction,
+    contradicts_deployment_recommendation,
+)
+from llm.providers import (
+    SENSITIVE_RESPONSE_NOTICE,
+    generate_completion_with_settings,
+    redact_provider_field,
+    safe_error_message,
+)
 from llm.skill_context import build_skill_context, resolve_skills
-from services.settings_service import resolve_provider_runtime
+from services.settings_service import (
+    provider_credential_values,
+    resolve_provider_runtime,
+)
+from services.content_security import (
+    redact_text,
+    redact_value,
+    sensitive_artifact_values,
+)
 
 _NON_VISIBLE_TEXT_CATEGORIES = {"Cc", "Cf", "Mc", "Me", "Mn"}
+_VERDICT_PREFIX_PATTERN = re.compile(
+    r"^\s*(?P<verdict>NO[- ]?GO|CAUTION|GO)\s*(?:[:=]|[-—–])",
+    flags=re.IGNORECASE,
+)
+_RECOMMENDATION_PATTERN = re.compile(
+    r"\brecommendation\s*(?:[:=]|[-—–])\s*"
+    r"(?P<verdict>NO[- ]?GO|CAUTION|GO)\b",
+    flags=re.IGNORECASE,
+)
 
 
 class NarrativeResult(BaseModel):
@@ -85,6 +112,41 @@ def _normalize_guidance_items(value: object) -> list[str]:
     return [text] if _has_visible_text(text) else []
 
 
+def _validate_narrative_safety(
+    opening_sentence: str,
+    explanation: str,
+    guidance: list[str],
+    assessment: RiskAssessment,
+) -> None:
+    expected = assessment.recommendation.upper()
+    text_spans = [opening_sentence, explanation, *guidance]
+    visible_spans = [text for text in text_spans if _has_visible_text(text)]
+    if len(visible_spans) > 1:
+        text_spans.append(" ".join(visible_spans))
+    for text in text_spans:
+        verdict_matches = [
+            match
+            for match in (
+                _VERDICT_PREFIX_PATTERN.match(text),
+                _RECOMMENDATION_PATTERN.search(text),
+            )
+            if match is not None
+        ]
+        if (
+            any(
+                match.group("verdict").upper().replace(" ", "-") != expected
+                for match in verdict_matches
+            )
+            or contains_unsafe_instruction(text)
+            or contains_deployment_approval_claim(text)
+            or contradicts_deployment_recommendation(text, expected)
+        ):
+            raise ValueError(
+                "Narrative provider returned unsafe or contradictory deployment "
+                "guidance."
+            )
+
+
 def _fallback_narrative(
     assessment: RiskAssessment,
     findings: list[Finding],
@@ -95,25 +157,38 @@ def _fallback_narrative(
     local_mode: bool | None = None,
     skills_applied: list[str] | None = None,
     failure_prefix: str = "Narrative provider unavailable",
+    sensitive_values: tuple[str, ...] = (),
 ) -> NarrativeResult:
     warnings = list(assessment.warnings)
     failure_notice = None
     if error_message:
         failure_notice = f"{failure_prefix}: {error_message}"
         warnings.append(failure_notice)
+    safe_metadata = redact_value(
+        {
+            "warnings": warnings,
+            "failure_notice": failure_notice,
+            "provider": redact_provider_field(
+                provider, sensitive_values=sensitive_values
+            ),
+            "model": redact_provider_field(model, sensitive_values=sensitive_values),
+            "skills_applied": list(skills_applied or []),
+        },
+        sensitive_values=sensitive_values + provider_credential_values(),
+    )
     return NarrativeResult(
         available=False,
         opening_sentence="",
         explanation="",
         guidance=[],
         degraded=True,
-        warnings=warnings,
-        failure_notice=failure_notice,
+        warnings=safe_metadata["warnings"],
+        failure_notice=safe_metadata["failure_notice"],
         source="fallback",
-        provider=provider,
-        model=model,
+        provider=safe_metadata["provider"],
+        model=safe_metadata["model"],
         local_mode=local_mode,
-        skills_applied=list(skills_applied or []),
+        skills_applied=safe_metadata["skills_applied"],
     )
 
 
@@ -133,51 +208,85 @@ def generate_narrative(
     findings: list[Finding],
     completion_client=None,
     raw_files: dict[str, bytes | None] | None = None,
+    *,
+    sensitive_values: tuple[str, ...] = (),
 ) -> NarrativeResult:
     runtime = resolve_provider_runtime()
+    sensitive_values = sensitive_values + provider_credential_values()
+    metadata = redact_value(
+        {
+            "provider": redact_provider_field(
+                runtime["provider"], sensitive_values=sensitive_values
+            ),
+            "model": redact_provider_field(
+                runtime["model"], sensitive_values=sensitive_values
+            ),
+        },
+        sensitive_values=sensitive_values,
+    )
     if not settings.narrator_enabled:
         applied_skills = _resolve_skill_names_safely(assessment, raw_files=raw_files)
         return _fallback_narrative(
             assessment,
             findings,
             "Narrator disabled by configuration.",
-            provider=runtime["provider"],
-            model=runtime["model"],
+            provider=metadata["provider"],
+            model=metadata["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
             failure_prefix="Narrative unavailable",
+            sensitive_values=sensitive_values,
         )
     if not assessment.contributors:
         applied_skills = _resolve_skill_names_safely(assessment, raw_files=raw_files)
         return _fallback_narrative(
             assessment,
             findings,
-            provider=runtime["provider"],
-            model=runtime["model"],
+            provider=metadata["provider"],
+            model=metadata["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
+            sensitive_values=sensitive_values,
         )
 
     applied_skills: list[str] = []
     try:
+        sensitive_values = (
+            sensitive_values
+            + tuple(
+                value
+                for content in (raw_files or {}).values()
+                for value in sensitive_artifact_values(content)
+            )
+            + ((runtime["api_key"],) if runtime["api_key"] else ())
+        )
         applied_skills = [
             skill.name for skill in resolve_skills(assessment, raw_files=raw_files)
         ]
         skill_context = build_skill_context(assessment, raw_files=raw_files)
         messages = [
-            {"role": "system", "content": build_system_prompt(skill_context)},
-            {"role": "user", "content": build_user_payload(assessment, findings)},
+            {"role": "system", "content": build_system_prompt()},
+            {
+                "role": "user",
+                "content": build_user_payload(
+                    assessment,
+                    findings,
+                    skill_context=skill_context,
+                    sensitive_values=sensitive_values,
+                ),
+            },
         ]
     except Exception as exc:  # noqa: BLE001
         return _fallback_narrative(
             assessment,
             findings,
-            str(exc),
+            safe_error_message(exc),
             provider=runtime["provider"],
             model=runtime["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
             failure_prefix="Narrative setup unavailable",
+            sensitive_values=sensitive_values,
         )
 
     try:
@@ -191,7 +300,11 @@ def generate_narrative(
             request_timeout_seconds=runtime.get("request_timeout_seconds", 30.0),
             completion_client=completion_client,
         )
+        if redact_text(raw_content, sensitive_values=sensitive_values) != raw_content:
+            raise ValueError(SENSITIVE_RESPONSE_NOTICE)
         payload = json.loads(raw_content)
+        if redact_value(payload, sensitive_values=sensitive_values) != payload:
+            raise ValueError(SENSITIVE_RESPONSE_NOTICE)
         known_scopes = {
             contributor.downstream_scope
             for contributor in assessment.contributors
@@ -225,9 +338,15 @@ def generate_narrative(
 
         opening_sentence = sanitize_scope_claims(payload["opening_sentence"])
         explanation = sanitize_scope_claims(payload["explanation"])
+        guidance_payload = _normalize_guidance_items(payload.get("guidance", []))
+        _validate_narrative_safety(
+            opening_sentence,
+            explanation,
+            guidance_payload,
+            assessment,
+        )
         if not (_has_visible_text(opening_sentence) or _has_visible_text(explanation)):
             raise ValueError("Narrative provider returned empty output.")
-        guidance_payload = _normalize_guidance_items(payload.get("guidance", []))
 
         return NarrativeResult(
             available=True,
@@ -238,8 +357,8 @@ def generate_narrative(
             warnings=list(assessment.warnings),
             failure_notice=None,
             source="llm",
-            provider=runtime["provider"],
-            model=runtime["model"],
+            provider=metadata["provider"],
+            model=metadata["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
         )
@@ -247,9 +366,10 @@ def generate_narrative(
         return _fallback_narrative(
             assessment,
             findings,
-            str(exc),
+            safe_error_message(exc),
             provider=runtime["provider"],
             model=runtime["model"],
             local_mode=runtime["local_mode"],
             skills_applied=applied_skills,
+            sensitive_values=sensitive_values,
         )

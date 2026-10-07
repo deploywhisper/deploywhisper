@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import math
 from datetime import UTC, datetime
@@ -23,11 +24,31 @@ from analysis.risk_scorer import (
 from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
 from evidence.extractor import extract_batch_evidence
 from evidence.mappers import build_findings
-from evidence.models import ContextCompleteness, EvidenceItem, Finding
+from evidence.models import (
+    ContextCompleteness,
+    ContextSourceMetadata,
+    EvidenceItem,
+    Finding,
+    OwnerSignal,
+)
 from llm.narrator import NarrativeResult, generate_narrative
-from llm.providers import generate_completion_with_settings
+from services.content_security import (
+    REDACTION_WARNING,
+    redact_value,
+    sensitive_submission_values,
+)
+from llm.prompt_security import (
+    UNTRUSTED_DATA_SYSTEM_INSTRUCTION,
+    build_untrusted_json_payload,
+)
+from llm.providers import generate_completion_with_settings, SENSITIVE_RESPONSE_NOTICE
 from parsers.base import ParseBatchResult, UnifiedChange, is_non_mutating_action
-from services.intake_service import build_parse_batch
+from services.intake_service import (
+    build_parse_batch,
+    artifact_security_aliases,
+    remap_artifact_identities,
+)
+from services.ai_iac_risk_service import label_ai_iac_risk_findings
 from services.project_service import (
     ProjectResolutionError,
     resolve_project_reference,
@@ -65,6 +86,7 @@ def evaluate_evidence(
     supplemental_changes: list[UnifiedChange] | None = None,
     completion_client=None,
     allow_llm_assistance: bool = True,
+    sensitive_values: tuple[str, ...] = (),
 ) -> RiskAssessment:
     """Return a reusable unified risk assessment from evidence inputs."""
     return score_evidence(
@@ -76,6 +98,7 @@ def evaluate_evidence(
         supplemental_changes=supplemental_changes,
         completion_client=completion_client,
         allow_llm_assistance=allow_llm_assistance,
+        sensitive_values=sensitive_values,
     )
 
 
@@ -124,6 +147,7 @@ def evaluate_parse_batch(
     raw_files: dict[str, bytes | None] | None = None,
     completion_client=None,
     allow_llm_assistance: bool = True,
+    sensitive_values: tuple[str, ...] = (),
 ) -> RiskAssessment:
     """Compatibility wrapper that scores extracted evidence for a parse batch."""
     scored_evidence_items = (
@@ -143,6 +167,7 @@ def evaluate_parse_batch(
             raw_files=raw_files,
             completion_client=completion_client,
             allow_llm_assistance=allow_llm_assistance,
+            sensitive_values=sensitive_values,
         )
     if not scored_evidence_items:
         scored_evidence_items = extract_batch_evidence(batch)
@@ -157,6 +182,7 @@ def evaluate_parse_batch(
         ),
         completion_client=completion_client,
         allow_llm_assistance=allow_llm_assistance,
+        sensitive_values=sensitive_values,
     )
 
 
@@ -258,12 +284,36 @@ class ShareSummaryFinding(BaseModel):
     severity: str = Field(..., description="Finding severity")
     evidence_count: int = Field(..., description="Evidence items linked to the finding")
     confidence: float = Field(..., description="Finding confidence score")
+    evidence_label: str | None = Field(
+        default=None,
+        description="Reviewer-facing label for external or non-DeployWhisper evidence",
+    )
 
 
 class ShareSummaryContext(BaseModel):
     score: float = Field(..., description="Context completeness score")
     label: str = Field(..., description="Context completeness badge label")
     summary: str = Field(..., description="Short context completeness summary")
+
+
+class ShareSummaryScannerConflict(BaseModel):
+    finding_id: str = Field(..., description="Finding with conflicting scanner context")
+    finding_title: str = Field(..., description="Reviewer-facing finding title")
+    scanner_source: str = Field(..., description="Scanner evidence source reference")
+    scanner_freshness: str = Field(..., description="Scanner source freshness status")
+    deterministic_source: str = Field(
+        ..., description="DeployWhisper deterministic evidence source"
+    )
+    deterministic_freshness: str = Field(
+        ..., description="DeployWhisper deterministic source freshness status"
+    )
+    conflict_summary: str = Field(..., description="Short conflict explanation")
+    confidence_impact: str = Field(
+        ..., description="How the conflict affects confidence interpretation"
+    )
+    recommended_verification: str = Field(
+        ..., description="Reviewer action for resolving the conflict"
+    )
 
 
 class ShareSummaryJsonPayload(BaseModel):
@@ -289,12 +339,28 @@ class ShareSummaryJsonPayload(BaseModel):
         default_factory=list, description="Top findings to surface"
     )
     evidence_count: int = Field(..., description="Total evidence-item count")
+    external_evidence_count: int = Field(
+        default=0,
+        description="External scanner evidence items included as review context",
+    )
+    external_evidence_summary: str | None = Field(
+        default=None,
+        description="How external scanner context should be interpreted",
+    )
+    scanner_conflicts: list[ShareSummaryScannerConflict] = Field(
+        default_factory=list,
+        description="Scanner-vs-deterministic/context conflicts requiring review",
+    )
     blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
     rollback_summary: str = Field(..., description="Concise rollback summary")
     context_completeness: ShareSummaryContext = Field(
         ..., description="Context completeness summary"
     )
     advisory_summary: str = Field(..., description="Advisory-only review summary")
+
+
+_SHARE_SUMMARY_BASE_FINDING_LIMIT = 3
+_SHARE_SUMMARY_EXTERNAL_CONTEXT_EXTRA_LIMIT = 2
 
 
 def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
@@ -370,6 +436,433 @@ def _context_confidence_level(context_score: float) -> str:
     return "low"
 
 
+def _scope_label(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+) -> str:
+    project = f"project:{project_key or project_id or 'unscoped'}"
+    if workspace_key is not None or workspace_id is not None:
+        return f"{project}/workspace:{workspace_key or workspace_id}"
+    return project
+
+
+def _source_id(source_type: str, source_ref: str | None) -> str:
+    cleaned_ref = str(source_ref or "unknown").strip() or "unknown"
+    return f"{source_type}:{cleaned_ref}"
+
+
+def _warning_conflicts(warnings: list[str] | None) -> list[str]:
+    conflicts: list[str] = []
+    for warning in warnings or []:
+        warning_text = str(warning or "").strip()
+        if not warning_text:
+            continue
+        lower_warning = warning_text.lower()
+        if "conflict" in lower_warning:
+            conflicts.append("topology_conflict")
+        elif "drift" in lower_warning:
+            conflicts.append("topology_drift")
+    return _unique_texts(conflicts)
+
+
+def _topology_warning_limitations(warnings: list[str] | None) -> list[str]:
+    limitations: list[str] = []
+    for warning in warnings or []:
+        warning_text = str(warning or "").strip().lower()
+        if not warning_text:
+            continue
+        if "kubernetes live-state context todo" in warning_text:
+            limitations.append("kubernetes_live_state_context_todo")
+        elif "kubernetes live-state import partially parsed" in warning_text:
+            limitations.append("partial_kubernetes_live_state")
+        elif (
+            "kubernetes live-state import did not produce any supported resources"
+            in warning_text
+        ):
+            limitations.append("empty_kubernetes_live_state")
+        elif (
+            "kubernetes live-state import did not produce any non-namespace resources"
+            in warning_text
+        ):
+            limitations.append("namespace_only_kubernetes_live_state")
+        elif "conflict" in warning_text:
+            limitations.append("topology_conflict")
+        elif "drift" in warning_text:
+            limitations.append("topology_drift")
+        else:
+            limitations.append("topology_warning")
+    return _unique_texts(limitations)
+
+
+def _topology_context_source(
+    *,
+    topology_status: Any | None,
+    topology_freshness_days: int | None,
+    topology_warnings: list[str],
+    topology_score: float,
+    scope: str,
+) -> ContextSourceMetadata:
+    topology_payload = getattr(topology_status, "payload", None)
+    import_metadata = {}
+    if isinstance(topology_payload, dict):
+        metadata = topology_payload.get("metadata")
+        if isinstance(metadata, dict) and isinstance(metadata.get("import"), dict):
+            import_metadata = metadata["import"]
+    source_kind = str(import_metadata.get("source_type") or "topology").strip()
+    source_ref = str(
+        import_metadata.get("source_ref")
+        or getattr(topology_status, "path", None)
+        or "topology:missing"
+    ).strip()
+    if topology_freshness_days is None:
+        freshness_status = "missing"
+    elif _warning_conflicts(topology_warnings):
+        freshness_status = "conflicting"
+    elif _has_kubernetes_live_state_degradation(topology_warnings):
+        freshness_status = "incomplete"
+    elif topology_freshness_days > STALE_AFTER_DAYS:
+        freshness_status = "stale"
+    else:
+        freshness_status = "current"
+    limitations = _unique_texts(
+        [
+            *(["missing_topology"] if topology_freshness_days is None else []),
+            *(
+                ["stale_topology"]
+                if topology_freshness_days
+                and topology_freshness_days > STALE_AFTER_DAYS
+                else []
+            ),
+            *_topology_warning_limitations(topology_warnings),
+        ]
+    )
+    return ContextSourceMetadata(
+        source_id=_source_id(f"topology:{source_kind}", source_ref),
+        source_type="topology",
+        source_ref=source_ref,
+        scope=scope,
+        freshness_status=freshness_status,
+        last_observed_at=getattr(topology_status, "updated_at", None),
+        age_days=topology_freshness_days,
+        confidence=round(topology_score, 2),
+        conflicts=_warning_conflicts(topology_warnings),
+        limitations=limitations,
+    )
+
+
+def _incident_context_source(
+    *,
+    incident_index_snapshot: dict[str, Any],
+    incident_index_size: int,
+    scope: str,
+) -> ContextSourceMetadata:
+    version = str(
+        incident_index_snapshot.get("incident_index_version") or "incidents:unknown"
+    )
+    last_indexed_at = incident_index_snapshot.get("incident_index_last_indexed_at")
+    freshness_status = str(
+        incident_index_snapshot.get("incident_index_freshness_status")
+        or ("current" if incident_index_size else "empty")
+    )
+    limitations = [] if incident_index_size else ["empty_incident_index"]
+    conflicts = [] if incident_index_size else ["missing_incident_history"]
+    if incident_index_size and freshness_status == "stale":
+        limitations.append("stale_incident_index")
+    elif incident_index_size and freshness_status == "conflicting":
+        limitations.append("incident_index_conflicting")
+        conflicts.append("incident_index_conflicting")
+    elif incident_index_size and freshness_status == "incomplete":
+        limitations.append("incident_index_incomplete")
+    elif incident_index_size and freshness_status not in {"current", "empty"}:
+        limitations.append(f"incident_index_{freshness_status}")
+    return ContextSourceMetadata(
+        source_id=_source_id("incident:index", version),
+        source_type="incident",
+        source_ref=version,
+        scope=scope,
+        freshness_status=freshness_status,
+        last_observed_at=last_indexed_at,
+        age_days=_topology_freshness_days(last_indexed_at),
+        confidence=round(
+            _incident_context_confidence(incident_index_size, freshness_status), 2
+        ),
+        conflicts=conflicts,
+        limitations=limitations,
+    )
+
+
+def _incident_context_confidence(
+    incident_index_size: int,
+    incident_freshness_status: str,
+) -> float:
+    score = _incident_score(incident_index_size)
+    if incident_index_size and incident_freshness_status != "current":
+        return min(score, 0.5)
+    return score
+
+
+def _ownership_context_sources(
+    *,
+    owner_signals: list[OwnerSignal],
+    ownership_unmapped_subjects: list[str],
+    scope: str,
+    topology_freshness_status: str = "not_applicable",
+    topology_confidence: float = 0.0,
+) -> list[ContextSourceMetadata]:
+    sources: list[ContextSourceMetadata] = []
+    grouped_signals: dict[tuple[str, str], list[OwnerSignal]] = {}
+    for signal in owner_signals:
+        source_kind = str(signal.source or "ownership").strip() or "ownership"
+        source_ref = str(signal.source_ref or source_kind).strip() or source_kind
+        grouped_signals.setdefault((source_kind, source_ref), []).append(signal)
+    for (source_kind, source_ref), signals in grouped_signals.items():
+        subjects = _unique_texts([signal.subject for signal in signals])
+        owners = _unique_texts(
+            owner for signal in signals for owner in list(signal.owners)
+        )
+        source_is_topology = source_kind == "topology"
+        base_confidence = 1.0 if owners else 0.5
+        freshness_status = (
+            topology_freshness_status if source_is_topology else "current"
+        )
+        confidence = (
+            min(base_confidence, topology_confidence)
+            if source_is_topology
+            else base_confidence
+        )
+        limitations = [] if owners else [f"ownership_source_has_no_owners:{source_ref}"]
+        if source_is_topology and freshness_status not in {
+            "current",
+            "not_applicable",
+        }:
+            limitations.append(f"topology_ownership_source_{freshness_status}")
+        sources.append(
+            ContextSourceMetadata(
+                source_id=_source_id(f"ownership:{source_kind}", source_ref),
+                source_type="ownership",
+                source_ref=source_ref,
+                scope=scope,
+                freshness_status=freshness_status,
+                confidence=confidence,
+                limitations=limitations,
+                conflicts=[],
+            )
+        )
+        if not subjects:
+            sources[-1].limitations.append("ownership_source_has_no_subjects")
+    if ownership_unmapped_subjects:
+        sources.append(
+            ContextSourceMetadata(
+                source_id="ownership:unmapped",
+                source_type="ownership",
+                source_ref="unmapped-subjects",
+                scope=scope,
+                freshness_status="incomplete",
+                confidence=0.5 if sources else 0.0,
+                limitations=list(ownership_unmapped_subjects),
+            )
+        )
+    if not sources:
+        sources.append(
+            ContextSourceMetadata(
+                source_id="ownership:none",
+                source_type="ownership",
+                source_ref="ownership-signals",
+                scope=scope,
+                freshness_status="not_applicable",
+                confidence=0.0,
+                limitations=["no_ownership_signals"],
+            )
+        )
+    return sources
+
+
+def _artifact_context_source_ref(file_name: str) -> tuple[str, list[str]]:
+    source_ref = str(file_name or "").strip() or "unknown-file"
+    limitations = [] if str(file_name or "").strip() else ["missing_artifact_name"]
+    return source_ref, limitations
+
+
+def _build_context_sources(
+    *,
+    parse_batch: ParseBatchResult,
+    scope: str,
+    topology_status: Any | None,
+    topology_freshness_days: int | None,
+    topology_warnings: list[str],
+    topology_score: float | None,
+    include_topology_context: bool,
+    incident_index_snapshot: dict[str, Any],
+    incident_index_size: int,
+    include_incident_context: bool,
+    raw_parser_success_rate: float,
+    evidence_success_rate: float,
+    owner_signals: list[OwnerSignal],
+    ownership_unmapped_subjects: list[str],
+) -> list[ContextSourceMetadata]:
+    sources: list[ContextSourceMetadata] = []
+    for file_result in parse_batch.files:
+        artifact_source_ref, artifact_limitations = _artifact_context_source_ref(
+            file_result.file_name
+        )
+        status = "current" if file_result.status == "parsed" else "incomplete"
+        limitations: list[str] = list(artifact_limitations)
+        if file_result.status != "parsed":
+            limitations.append(f"{file_result.status}_artifact")
+        if file_result.issue is not None:
+            limitations.append("parser_issue")
+        sources.append(
+            ContextSourceMetadata(
+                source_id=_source_id("artifact", artifact_source_ref),
+                source_type="artifact",
+                source_ref=artifact_source_ref,
+                scope=scope,
+                freshness_status=status,
+                confidence=1.0 if file_result.status == "parsed" else 0.0,
+                limitations=_unique_texts(limitations),
+            )
+        )
+    if include_topology_context:
+        topology_context_source = _topology_context_source(
+            topology_status=topology_status,
+            topology_freshness_days=topology_freshness_days,
+            topology_warnings=topology_warnings,
+            topology_score=topology_score if topology_score is not None else 0.0,
+            scope=scope,
+        )
+        sources.append(topology_context_source)
+    else:
+        topology_context_source = None
+    if include_incident_context:
+        sources.append(
+            _incident_context_source(
+                incident_index_snapshot=incident_index_snapshot,
+                incident_index_size=incident_index_size,
+                scope=scope,
+            )
+        )
+    parser_success_by_tool = _parser_success_by_tool(parse_batch)
+    for tool_name, score in parser_success_by_tool.items():
+        sources.append(
+            ContextSourceMetadata(
+                source_id=_source_id("parser", tool_name),
+                source_type="parser",
+                source_ref=tool_name,
+                scope=scope,
+                freshness_status="not_applicable" if score >= 1.0 else "incomplete",
+                confidence=round(score, 2),
+                limitations=[] if score >= 1.0 else ["partial_parser_coverage"],
+            )
+        )
+    if not parser_success_by_tool:
+        sources.append(
+            ContextSourceMetadata(
+                source_id="parser:none",
+                source_type="parser",
+                source_ref="submitted-artifacts",
+                scope=scope,
+                freshness_status="incomplete",
+                confidence=round(raw_parser_success_rate, 2),
+                limitations=["no_parser_results"],
+            )
+        )
+    sources.append(
+        ContextSourceMetadata(
+            source_id="evidence:extractor",
+            source_type="evidence",
+            source_ref="analysis-evidence",
+            scope=scope,
+            freshness_status="not_applicable"
+            if evidence_success_rate >= 1.0
+            else "incomplete",
+            confidence=round(evidence_success_rate, 2),
+            limitations=[]
+            if evidence_success_rate >= 1.0
+            else ["partial_evidence_coverage"],
+        )
+    )
+    sources.extend(
+        _ownership_context_sources(
+            owner_signals=owner_signals,
+            ownership_unmapped_subjects=ownership_unmapped_subjects,
+            scope=scope,
+            topology_freshness_status=(
+                topology_context_source.freshness_status
+                if topology_context_source is not None
+                else "not_applicable"
+            ),
+            topology_confidence=(
+                topology_context_source.confidence
+                if topology_context_source is not None
+                else 0.0
+            ),
+        )
+    )
+    return sources
+
+
+def _context_source_for_evidence(
+    evidence_item: EvidenceItem,
+    context_sources: list[ContextSourceMetadata],
+) -> ContextSourceMetadata | None:
+    if evidence_item.context_source is not None:
+        return evidence_item.context_source
+    if evidence_item.source_type == "artifact":
+        artifact = evidence_item.artifact.strip()
+        source_ref = evidence_item.source_ref.strip()
+        for source in context_sources:
+            if source.source_type != "artifact":
+                continue
+            if artifact and source.source_ref == artifact:
+                return source
+            if source.source_ref and _source_ref_matches(
+                source_ref, f"artifact://{source.source_ref}"
+            ):
+                return source
+    type_matches = [
+        source
+        for source in context_sources
+        if source.source_type == evidence_item.source_type
+    ]
+    if evidence_item.source_ref:
+        for source in type_matches:
+            if source.source_ref and _source_ref_matches(
+                evidence_item.source_ref, source.source_ref
+            ):
+                return source
+    return None
+
+
+def _source_ref_matches(candidate_ref: str, source_ref: str) -> bool:
+    if candidate_ref == source_ref:
+        return True
+    if not candidate_ref.startswith(source_ref):
+        return False
+    suffix = candidate_ref[len(source_ref) :]
+    return suffix == "" or suffix[0] in {"#", "?"}
+
+
+def _evidence_items_with_context_sources(
+    evidence_items: list[EvidenceItem],
+    context_sources: list[ContextSourceMetadata],
+) -> list[EvidenceItem]:
+    if not context_sources:
+        return evidence_items
+    enriched: list[EvidenceItem] = []
+    for evidence_item in evidence_items:
+        matched = _context_source_for_evidence(evidence_item, context_sources)
+        if matched is None:
+            enriched.append(evidence_item)
+        else:
+            enriched.append(
+                evidence_item.model_copy(update={"context_source": matched})
+            )
+    return enriched
+
+
 def _context_todos(
     *,
     evidence_success_rate: float,
@@ -377,6 +870,7 @@ def _context_todos(
     topology_warnings: list[str] | None = None,
     incident_index_size: int,
     parser_success_rate: float,
+    incident_freshness_status: str = "unknown",
     include_topology_context: bool = True,
     include_incident_context: bool = True,
 ) -> list[str]:
@@ -394,6 +888,12 @@ def _context_todos(
             )
     if include_incident_context and incident_index_size == 0:
         todos.append("Import relevant incident history for this project/workspace.")
+    elif include_incident_context and incident_freshness_status == "stale":
+        todos.append("Refresh stale incident history for this project/workspace.")
+    elif include_incident_context and incident_freshness_status != "current":
+        todos.append(
+            f"Resolve incident history freshness: {incident_freshness_status}."
+        )
     if parser_success_rate < 1.0:
         todos.append("Review parser errors and resubmit supported artifacts.")
     if evidence_success_rate < 1.0:
@@ -409,6 +909,7 @@ def _context_uncertainty(
     topology_warnings: list[str] | None = None,
     incident_index_size: int,
     parser_success_rate: float,
+    incident_freshness_status: str = "unknown",
     ownership_unmapped_subjects: list[str] | tuple[str, ...] = (),
     include_topology_context: bool = True,
     include_incident_context: bool = True,
@@ -425,6 +926,12 @@ def _context_uncertainty(
             weak_signals.append("Kubernetes live-state context is degraded")
     if include_incident_context and incident_index_size == 0:
         weak_signals.append("incident history is unavailable")
+    elif include_incident_context and incident_freshness_status == "stale":
+        weak_signals.append("incident history is stale")
+    elif include_incident_context and incident_freshness_status != "current":
+        weak_signals.append(
+            f"incident history freshness is {incident_freshness_status}"
+        )
     if parser_success_rate < 1.0:
         weak_signals.append("parser coverage is partial")
     if evidence_success_rate < 1.0:
@@ -557,6 +1064,8 @@ def _build_context_completeness(
     topology_warnings: list[str] = []
     topology_payload_is_usable = False
     topology_payload_is_kubernetes = False
+    topology_status = None
+    topology_score: float | None = None
     if include_topology_context:
         topology_status = get_topology_status(
             project_id=project_id,
@@ -607,6 +1116,10 @@ def _build_context_completeness(
         incident_index_size = int(
             incident_index_snapshot.get("incident_index_size") or 0
         )
+    incident_freshness_status = str(
+        incident_index_snapshot.get("incident_index_freshness_status")
+        or ("current" if incident_index_size else "empty")
+    )
     raw_parser_success_rate = parse_batch.parsed_count / max(len(parse_batch.files), 1)
     parser_success_rate = round(raw_parser_success_rate, 2)
     evidence_success_rate = _evidence_success_rate(
@@ -626,7 +1139,14 @@ def _build_context_completeness(
             )
         weighted_scores.append((topology_score, 0.25))
     if include_incident_context:
-        weighted_scores.append((_incident_score(incident_index_size), 0.20))
+        weighted_scores.append(
+            (
+                _incident_context_confidence(
+                    incident_index_size, incident_freshness_status
+                ),
+                0.20,
+            )
+        )
     total_weight = sum(weight for _, weight in weighted_scores) or 1.0
     raw_context_score = min(
         1.0,
@@ -644,11 +1164,34 @@ def _build_context_completeness(
         topology_freshness_days=topology_freshness_days,
         topology_warnings=topology_warnings,
         incident_index_size=incident_index_size,
+        incident_freshness_status=incident_freshness_status,
         parser_success_rate=raw_parser_success_rate,
         include_topology_context=include_topology_context,
         include_incident_context=include_incident_context,
     )
     context_todos = _unique_texts(context_todos + list(ownership_context.context_todos))
+    scope = _scope_label(
+        project_id=project_id,
+        project_key=project_key,
+        workspace_id=workspace_id,
+        workspace_key=workspace_key,
+    )
+    context_sources = _build_context_sources(
+        parse_batch=parse_batch,
+        scope=scope,
+        topology_status=topology_status,
+        topology_freshness_days=topology_freshness_days,
+        topology_warnings=topology_warnings,
+        topology_score=topology_score,
+        include_topology_context=include_topology_context,
+        incident_index_snapshot=incident_index_snapshot,
+        incident_index_size=incident_index_size,
+        include_incident_context=include_incident_context,
+        raw_parser_success_rate=raw_parser_success_rate,
+        evidence_success_rate=evidence_success_rate,
+        owner_signals=list(ownership_context.owner_signals),
+        ownership_unmapped_subjects=list(ownership_context.unmapped_subjects),
+    )
     return ContextCompleteness(
         topology_freshness_days=topology_freshness_days,
         topology_last_imported_at=topology_last_imported_at,
@@ -659,9 +1202,7 @@ def _build_context_completeness(
         incident_index_last_indexed_at=incident_index_snapshot.get(
             "incident_index_last_indexed_at"
         ),
-        incident_index_freshness_status=str(
-            incident_index_snapshot.get("incident_index_freshness_status") or "empty"
-        ),
+        incident_index_freshness_status=incident_freshness_status,
         parser_success_rate=parser_success_rate,
         evidence_success_rate=round(evidence_success_rate, 2),
         parser_success_by_tool=_parser_success_by_tool(parse_batch),
@@ -673,6 +1214,7 @@ def _build_context_completeness(
             topology_freshness_days=topology_freshness_days,
             topology_warnings=topology_warnings,
             incident_index_size=incident_index_size,
+            incident_freshness_status=incident_freshness_status,
             parser_success_rate=raw_parser_success_rate,
             ownership_unmapped_subjects=ownership_context.unmapped_subjects,
             include_topology_context=include_topology_context,
@@ -683,6 +1225,7 @@ def _build_context_completeness(
         owner_signals=list(ownership_context.owner_signals),
         escalation_hints=list(ownership_context.escalation_hints),
         ownership_unmapped_subjects=list(ownership_context.unmapped_subjects),
+        context_sources=context_sources,
     )
 
 
@@ -728,7 +1271,9 @@ def _skipped_narrative(reason: str, assessment: RiskAssessment) -> NarrativeResu
     )
 
 
-def _interaction_confidence_prompt_payload(assessment: RiskAssessment) -> str:
+def _interaction_confidence_prompt_payload(
+    assessment: RiskAssessment, *, sensitive_values: tuple[str, ...] = ()
+) -> str:
     payload = {
         "instructions": {
             "format": "Return JSON with key 'confidences' containing objects with keys 'key' and 'confidence'.",
@@ -757,11 +1302,16 @@ def _interaction_confidence_prompt_payload(assessment: RiskAssessment) -> str:
             for contributor in assessment.contributors[:5]
         ],
     }
-    return json.dumps(payload, indent=2)
+    return build_untrusted_json_payload(
+        redact_value(payload, sensitive_values=sensitive_values)
+    )
 
 
 def _interaction_confidence_overrides(
-    assessment: RiskAssessment, *, completion_client=None
+    assessment: RiskAssessment,
+    *,
+    completion_client=None,
+    sensitive_values: tuple[str, ...] = (),
 ) -> dict[str, float]:
     if assessment.source != "heuristic+llm" or not assessment.interaction_risks:
         return {}
@@ -774,12 +1324,15 @@ def _interaction_confidence_overrides(
                     "role": "system",
                     "content": (
                         "You assign confidence scores to inferred deployment findings. "
+                        f"{UNTRUSTED_DATA_SYSTEM_INSTRUCTION} "
                         "Return only JSON with key 'confidences'."
                     ),
                 },
                 {
                     "role": "user",
-                    "content": _interaction_confidence_prompt_payload(assessment),
+                    "content": _interaction_confidence_prompt_payload(
+                        assessment, sensitive_values=sensitive_values
+                    ),
                 },
             ],
             provider=runtime["provider"],
@@ -790,7 +1343,10 @@ def _interaction_confidence_overrides(
             completion_client=completion_client,
         )
         payload = json.loads(raw_response)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        if str(exc) == SENSITIVE_RESPONSE_NOTICE:
+            notice = f"Interaction confidence: {SENSITIVE_RESPONSE_NOTICE}"
+            assessment.warnings = list(dict.fromkeys([*assessment.warnings, notice]))
         return {}
 
     overrides: dict[str, float] = {}
@@ -990,11 +1546,84 @@ def _finding_severity_rank(severity: str) -> int:
 def _finding_evidence_count(
     finding: dict, evidence_items: list[dict[str, object]]
 ) -> int:
-    finding_id = finding.get("finding_id")
-    count = sum(1 for item in evidence_items if item.get("finding_id") == finding_id)
+    count = len(_finding_evidence_items(finding, evidence_items))
     if count:
         return count
     return len(finding.get("evidence_refs") or [])
+
+
+def _finding_evidence_items(
+    finding: dict, evidence_items: list[dict[str, object]]
+) -> list[dict[str, object]]:
+    finding_id = str(finding.get("finding_id") or "").strip()
+    matched = (
+        [
+            item
+            for item in evidence_items
+            if str(item.get("finding_id") or "").strip() == finding_id
+        ]
+        if finding_id
+        else []
+    )
+    refs = {str(ref) for ref in finding.get("evidence_refs") or []}
+    ref_items = [
+        item for item in evidence_items if str(item.get("evidence_id") or "") in refs
+    ]
+    merged: list[dict[str, object]] = []
+    seen: set[tuple[str, str | int]] = set()
+    for item in [*matched, *ref_items]:
+        evidence_id = str(item.get("evidence_id") or "").strip()
+        identity: tuple[str, str | int] = (
+            ("evidence_id", evidence_id) if evidence_id else ("object", id(item))
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        merged.append(item)
+    return merged
+
+
+def _is_external_scanner_evidence(item: dict[str, object]) -> bool:
+    return any(
+        str(item.get(key) or "") == "external_scanner"
+        for key in ("source_kind", "source_type")
+    )
+
+
+_NON_DEPLOYWHISPER_EVIDENCE_SOURCES = frozenset({"external_scanner", "user_context"})
+
+
+def _is_deploywhisper_evidence(item: dict[str, object]) -> bool:
+    if _is_external_scanner_evidence(item):
+        return False
+    sources = {
+        str(item.get(key) or "")
+        for key in ("source_kind", "source_type")
+        if str(item.get(key) or "")
+    }
+    return not (sources & _NON_DEPLOYWHISPER_EVIDENCE_SOURCES)
+
+
+def _finding_evidence_label(
+    finding: dict, evidence_items: list[dict[str, object]]
+) -> str | None:
+    linked_evidence_items = _finding_evidence_items(finding, evidence_items)
+    has_external_scanner = any(
+        _is_external_scanner_evidence(item) for item in linked_evidence_items
+    )
+    has_deploywhisper_evidence = any(
+        _is_deploywhisper_evidence(item) for item in linked_evidence_items
+    )
+    if has_external_scanner and has_deploywhisper_evidence:
+        return "Includes external context"
+    if has_external_scanner:
+        return "External evidence"
+    persisted_label = str(finding.get("evidence_label") or "").strip()
+    if persisted_label in {"External evidence", "Includes external context"}:
+        return persisted_label
+    if str(finding.get("evidence_classification") or "") == "external":
+        return "External evidence"
+    return None
 
 
 def _mapping_items(value: object) -> list[dict]:
@@ -1130,15 +1759,522 @@ def _share_findings(report: dict) -> list[ShareSummaryFinding]:
             str(item.get("title", "")),
         ),
     )
+    selected_findings = list(sorted_findings[:_SHARE_SUMMARY_BASE_FINDING_LIMIT])
+    selected_ids = {
+        str(finding.get("finding_id") or id(finding)) for finding in selected_findings
+    }
+    external_context_extra_count = 0
+    extra_candidates = sorted_findings[_SHARE_SUMMARY_BASE_FINDING_LIMIT:]
+    for preferred_label in ("External evidence", None):
+        for finding in extra_candidates:
+            if (
+                external_context_extra_count
+                >= _SHARE_SUMMARY_EXTERNAL_CONTEXT_EXTRA_LIMIT
+            ):
+                break
+            finding_id = str(finding.get("finding_id") or id(finding))
+            if finding_id in selected_ids:
+                continue
+            evidence_label = _finding_evidence_label(finding, evidence_items)
+            if not evidence_label:
+                continue
+            if preferred_label is not None and evidence_label != preferred_label:
+                continue
+            selected_findings.append(finding)
+            selected_ids.add(finding_id)
+            external_context_extra_count += 1
     return [
         ShareSummaryFinding(
             title=_shorten(str(finding.get("title", "")), 72),
             severity=str(finding.get("severity", "medium")),
             evidence_count=_finding_evidence_count(finding, evidence_items),
             confidence=round(_share_finding_confidence(finding.get("confidence")), 2),
+            evidence_label=_finding_evidence_label(finding, evidence_items),
         )
-        for finding in sorted_findings[:3]
+        for finding in selected_findings
     ]
+
+
+def _external_scanner_evidence_count(report: dict) -> int:
+    evidence_items = _mapping_items(report.get("evidence_items"))
+    row_count = sum(1 for item in evidence_items if _is_external_scanner_evidence(item))
+    visible_deploywhisper_count = len(evidence_items) - row_count
+    total_count = _share_summary_evidence_count(report)
+    existing_count = _existing_share_summary_int(report, "external_evidence_count")
+    candidate_count = max(row_count, existing_count or 0)
+    max_external_count = max(row_count, total_count - visible_deploywhisper_count)
+    return min(candidate_count, max_external_count)
+
+
+def _share_summary_evidence_count(report: dict) -> int:
+    row_count = len(_mapping_items(report.get("evidence_items")))
+    existing_count = _existing_share_summary_int(report, "evidence_count")
+    return max(row_count, existing_count or 0)
+
+
+def _existing_share_summary_int(report: dict, key: str) -> int | None:
+    json_payload = _existing_share_summary_json_payload(report)
+    if json_payload is None:
+        return None
+    value = json_payload.get(key)
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0, count)
+
+
+def _existing_share_summary_json_payload(report: dict) -> dict | None:
+    share_summary = report.get("share_summary")
+    if isinstance(share_summary, BaseModel):
+        share_summary = share_summary.model_dump()
+    if not isinstance(share_summary, dict):
+        return None
+    json_payload = share_summary.get("json_payload")
+    if isinstance(json_payload, BaseModel):
+        json_payload = json_payload.model_dump()
+    if not isinstance(json_payload, dict):
+        return None
+    return json_payload
+
+
+def _external_scanner_evidence_summary(count: int) -> str | None:
+    if count <= 0:
+        return None
+    noun = "item is" if count == 1 else "items are"
+    return (
+        f"{count} external scanner evidence {noun} included as context, "
+        "not DeployWhisper severity proof."
+    )
+
+
+def _evidence_context_source(item: dict[str, object]) -> dict[str, object]:
+    context_source = item.get("context_source")
+    return context_source if isinstance(context_source, dict) else {}
+
+
+def _evidence_freshness(item: dict[str, object]) -> str:
+    context_source = _evidence_context_source(item)
+    freshness = str(context_source.get("freshness_status") or "").strip().lower()
+    return freshness or "unknown"
+
+
+def _evidence_severity_signal(item: dict[str, object]) -> str:
+    for key in ("severity_hint", "severity", "level"):
+        value = str(item.get(key) or "").strip().lower()
+        if value:
+            return value
+    return "unknown"
+
+
+def _evidence_source_detail(item: dict[str, object]) -> str:
+    for key in ("source_ref", "evidence_id", "artifact", "location"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    return "unknown source"
+
+
+def _scanner_identity_detail(item: dict[str, object], index: int) -> str:
+    evidence_id = str(item.get("evidence_id") or "").strip()
+    if evidence_id:
+        return evidence_id
+    artifact = str(item.get("artifact") or "").strip()
+    location = str(item.get("location") or "").strip()
+    if artifact or location:
+        return f"{artifact}:{location}"
+    source_ref = str(item.get("source_ref") or "").strip()
+    if source_ref:
+        return f"{source_ref}#{index}"
+    return f"scanner-evidence-{index}"
+
+
+def _context_conflict_signals(item: dict[str, object]) -> list[str]:
+    context_source = _evidence_context_source(item)
+    signals: list[str] = []
+    for field_name in ("conflicts", "limitations"):
+        values = context_source.get(field_name)
+        if values is None:
+            continue
+        if not isinstance(values, list | tuple):
+            values = [values]
+        signals.extend(str(value).strip() for value in values if str(value).strip())
+    return signals
+
+
+_CONFLICTING_FRESHNESS_STATUSES = frozenset(
+    {"conflicting", "stale", "incomplete", "missing"}
+)
+_COMPACT_SCANNER_CONFLICT_LIMIT = 1
+_PLAIN_SCANNER_CONFLICT_LIMIT = 3
+_MARKDOWN_ESCAPE_CHARS = frozenset("\\`*_{}[]()#+!|")
+
+
+def _clean_inline_text(value: object) -> str:
+    return " ".join(str(value or "").split())
+
+
+def _markdown_escape_inline(value: object) -> str:
+    escaped = html.escape(_clean_inline_text(value), quote=False)
+    return "".join(
+        f"\\{char}" if char in _MARKDOWN_ESCAPE_CHARS else char for char in escaped
+    )
+
+
+def _scanner_conflict_source_summary(
+    *,
+    scanner_conflicts: list[str],
+    deterministic_conflicts: list[str],
+) -> str | None:
+    parts: list[str] = []
+    if scanner_conflicts:
+        parts.append("scanner: " + "; ".join(scanner_conflicts[:2]))
+    if deterministic_conflicts:
+        parts.append("deterministic: " + "; ".join(deterministic_conflicts[:2]))
+    if not parts:
+        return None
+    return "Evidence carries conflicting context (" + " | ".join(parts) + ")."
+
+
+def _freshness_conflict_summary(
+    *, scanner_freshness: str, deterministic_freshness: str
+) -> str:
+    if scanner_freshness == deterministic_freshness:
+        return (
+            "Scanner and deterministic evidence freshness are both "
+            f"{scanner_freshness}."
+        )
+    return (
+        f"Scanner freshness is {scanner_freshness} while deterministic "
+        f"evidence freshness is {deterministic_freshness}."
+    )
+
+
+def _scanner_conflict_summary(
+    *,
+    scanner_severity: str,
+    finding_severity: str,
+    deterministic_severity: str,
+    scanner_freshness: str,
+    deterministic_freshness: str,
+    scanner_context_conflicts: list[str],
+    deterministic_context_conflicts: list[str],
+    has_severity_conflict: bool,
+    has_deterministic_severity_conflict: bool,
+    has_freshness_conflict: bool,
+) -> str:
+    parts: list[str] = []
+    if has_severity_conflict:
+        parts.append(
+            f"Scanner severity {scanner_severity} differs from "
+            f"DeployWhisper severity {finding_severity}."
+        )
+    if has_deterministic_severity_conflict:
+        parts.append(
+            f"Scanner severity {scanner_severity} differs from "
+            f"deterministic evidence severity {deterministic_severity}."
+        )
+    source_summary = _scanner_conflict_source_summary(
+        scanner_conflicts=scanner_context_conflicts,
+        deterministic_conflicts=deterministic_context_conflicts,
+    )
+    if source_summary is not None:
+        parts.append(source_summary)
+    if has_freshness_conflict:
+        parts.append(
+            _freshness_conflict_summary(
+                scanner_freshness=scanner_freshness,
+                deterministic_freshness=deterministic_freshness,
+            )
+        )
+    return " ".join(parts)
+
+
+def _share_scanner_conflict_detail(
+    conflict: ShareSummaryScannerConflict,
+    *,
+    summary_limit: int,
+    source_limit: int | None = None,
+    markdown: bool = False,
+) -> str:
+    format_text = _markdown_escape_inline if markdown else _clean_inline_text
+    finding_label = _clean_inline_text(conflict.finding_title)
+    if conflict.finding_id and conflict.finding_id not in finding_label:
+        finding_label = f"{finding_label} ({conflict.finding_id})"
+    conflict_summary = _shorten(
+        _clean_inline_text(conflict.conflict_summary), summary_limit
+    )
+    scanner_source = _clean_inline_text(conflict.scanner_source)
+    deterministic_source = _clean_inline_text(conflict.deterministic_source)
+    if source_limit is not None:
+        scanner_source = _shorten(scanner_source, source_limit)
+        deterministic_source = _shorten(deterministic_source, source_limit)
+    return (
+        f"Finding: {format_text(finding_label)}. "
+        f"{format_text(conflict_summary)} "
+        f"Scanner source: {format_text(scanner_source)} "
+        f"({format_text(conflict.scanner_freshness)}); deterministic source: "
+        f"{format_text(deterministic_source)} "
+        f"({format_text(conflict.deterministic_freshness)}). "
+        f"Verification: {format_text(conflict.recommended_verification)} "
+        f"{format_text(conflict.confidence_impact)}"
+    )
+
+
+def _scanner_conflict_priority(
+    conflict: ShareSummaryScannerConflict,
+) -> tuple[int, int, int]:
+    summary = conflict.conflict_summary.lower()
+    severity_priority = (
+        2 if "scanner severity" in summary and "differs" in summary else 0
+    )
+    freshness_priority = max(
+        (
+            {
+                "conflicting": 4,
+                "missing": 3,
+                "stale": 2,
+                "incomplete": 2,
+                "unknown": 1,
+            }.get(status, 0)
+            for status in (
+                conflict.scanner_freshness.lower(),
+                conflict.deterministic_freshness.lower(),
+            )
+        ),
+        default=0,
+    )
+    context_priority = 1 if "conflicting context" in summary else 0
+    return severity_priority, freshness_priority, context_priority
+
+
+def _prioritized_scanner_conflicts(
+    scanner_conflicts: list[ShareSummaryScannerConflict],
+) -> list[ShareSummaryScannerConflict]:
+    return [
+        conflict
+        for _, conflict in sorted(
+            enumerate(scanner_conflicts),
+            key=lambda indexed: (
+                *_scanner_conflict_priority(indexed[1]),
+                -indexed[0],
+            ),
+            reverse=True,
+        )
+    ]
+
+
+def _share_scanner_conflict_markdown_lines(
+    scanner_conflicts: list[ShareSummaryScannerConflict],
+    *,
+    compact: bool = False,
+) -> list[str]:
+    if not scanner_conflicts:
+        return []
+    conflict_limit = (
+        _COMPACT_SCANNER_CONFLICT_LIMIT if compact else len(scanner_conflicts)
+    )
+    summary_limit = 120 if compact else 640
+    rendered_conflicts = (
+        _prioritized_scanner_conflicts(scanner_conflicts)
+        if compact
+        else scanner_conflicts
+    )
+    lines = [
+        "- Scanner conflict: "
+        + _share_scanner_conflict_detail(
+            conflict,
+            summary_limit=summary_limit,
+            source_limit=96 if compact else None,
+            markdown=True,
+        )
+        for conflict in rendered_conflicts[:conflict_limit]
+    ]
+    omitted_count = len(scanner_conflicts) - conflict_limit
+    if omitted_count > 0:
+        lines.append(
+            "- Scanner conflicts: "
+            f"{omitted_count} additional conflicts are available in the JSON "
+            "payload/report; review all before acting."
+        )
+    return lines
+
+
+def _share_scanner_conflict_plain_text(
+    scanner_conflicts: list[ShareSummaryScannerConflict],
+) -> str:
+    if not scanner_conflicts:
+        return ""
+    conflict_limit = _PLAIN_SCANNER_CONFLICT_LIMIT
+    rendered_conflicts = _prioritized_scanner_conflicts(scanner_conflicts)
+    parts = [
+        "Scanner conflict: "
+        + _share_scanner_conflict_detail(
+            conflict,
+            summary_limit=180,
+        )
+        for conflict in rendered_conflicts[:conflict_limit]
+    ]
+    omitted_count = len(scanner_conflicts) - conflict_limit
+    if omitted_count > 0:
+        parts.append(
+            f"{omitted_count} additional scanner conflicts are available in "
+            "the JSON payload/report."
+        )
+    return " ".join(parts)
+
+
+def _scanner_conflicts(report: dict) -> list[ShareSummaryScannerConflict]:
+    evidence_items = _mapping_items(report.get("evidence_items"))
+    findings = _mapping_items(report.get("findings"))
+    conflicts: list[ShareSummaryScannerConflict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for finding in findings:
+        linked_items = _finding_evidence_items(finding, evidence_items)
+        scanner_items = [
+            item for item in linked_items if _is_external_scanner_evidence(item)
+        ]
+        deterministic_items = [
+            item
+            for item in linked_items
+            if _is_deploywhisper_evidence(item)
+            and _truthy_bool_signal(item.get("deterministic"))
+            and str(item.get("determinism_level") or "deterministic").lower()
+            == "deterministic"
+        ]
+        if not scanner_items or not deterministic_items:
+            continue
+        finding_severity = str(finding.get("severity") or "unknown").lower()
+        finding_confidence = _share_finding_confidence(finding.get("confidence"))
+        for scanner_index, scanner_item in enumerate(scanner_items):
+            scanner_severity = _evidence_severity_signal(scanner_item)
+            scanner_freshness = _evidence_freshness(scanner_item)
+            scanner_context_conflicts = _context_conflict_signals(scanner_item)
+            has_severity_conflict = (
+                scanner_severity != "unknown"
+                and finding_severity != "unknown"
+                and scanner_severity != finding_severity
+            )
+            scanner_source = _evidence_source_detail(scanner_item)
+            scanner_identity = _scanner_identity_detail(scanner_item, scanner_index)
+            finding_id = str(finding.get("finding_id") or "").strip()
+            finding_identity = finding_id or f"finding-object:{id(finding)}"
+            for deterministic_item in deterministic_items:
+                deterministic_severity = _evidence_severity_signal(deterministic_item)
+                deterministic_freshness = _evidence_freshness(deterministic_item)
+                deterministic_context_conflicts = _context_conflict_signals(
+                    deterministic_item
+                )
+                has_deterministic_severity_conflict = (
+                    scanner_severity != "unknown"
+                    and deterministic_severity != "unknown"
+                    and scanner_severity != deterministic_severity
+                )
+                has_freshness_conflict = scanner_freshness != deterministic_freshness
+                if not (
+                    has_severity_conflict
+                    or has_deterministic_severity_conflict
+                    or has_freshness_conflict
+                    or scanner_context_conflicts
+                    or deterministic_context_conflicts
+                ):
+                    continue
+                deterministic_source = str(
+                    deterministic_item.get("evidence_id")
+                    or _evidence_source_detail(deterministic_item)
+                )
+                conflict_key = (
+                    finding_identity,
+                    scanner_identity,
+                    deterministic_source,
+                )
+                if conflict_key in seen:
+                    continue
+                seen.add(conflict_key)
+                confidence_impact = (
+                    f"Scanner confidence impact: scanner signal is {scanner_severity}; "
+                    f"DeployWhisper confidence remains {finding_confidence:.2f} and "
+                    f"severity remains {finding_severity} under Evidence Law."
+                )
+                conflicts.append(
+                    ShareSummaryScannerConflict(
+                        finding_id=finding_id,
+                        finding_title=_shorten(
+                            str(finding.get("title") or finding_id), 96
+                        ),
+                        scanner_source=scanner_source,
+                        scanner_freshness=scanner_freshness,
+                        deterministic_source=deterministic_source,
+                        deterministic_freshness=deterministic_freshness,
+                        conflict_summary=_scanner_conflict_summary(
+                            scanner_severity=scanner_severity,
+                            finding_severity=finding_severity,
+                            deterministic_severity=deterministic_severity,
+                            scanner_freshness=scanner_freshness,
+                            deterministic_freshness=deterministic_freshness,
+                            scanner_context_conflicts=scanner_context_conflicts,
+                            deterministic_context_conflicts=(
+                                deterministic_context_conflicts
+                            ),
+                            has_severity_conflict=has_severity_conflict,
+                            has_deterministic_severity_conflict=(
+                                has_deterministic_severity_conflict
+                            ),
+                            has_freshness_conflict=has_freshness_conflict,
+                        ),
+                        confidence_impact=confidence_impact,
+                        recommended_verification=(
+                            "Review scanner evidence against deterministic evidence "
+                            "before acting."
+                        ),
+                    )
+                )
+    return conflicts
+
+
+def _redacted_scanner_conflicts(
+    scanner_conflicts: list[ShareSummaryScannerConflict],
+) -> list[ShareSummaryScannerConflict]:
+    return [
+        conflict.model_copy(
+            update={
+                "finding_id": "detail omitted",
+                "finding_title": "Finding detail omitted",
+                "scanner_source": "scanner evidence detail omitted",
+                "scanner_freshness": "detail omitted",
+                "deterministic_source": "deterministic evidence detail omitted",
+                "deterministic_freshness": "detail omitted",
+                "conflict_summary": (
+                    "Scanner evidence conflicts with deterministic evidence; "
+                    "source details are omitted for this view."
+                ),
+                "confidence_impact": (
+                    "Scanner conflict exists, but evidence detail is omitted; "
+                    "DeployWhisper confidence and severity remain evidence-law bounded."
+                ),
+                "recommended_verification": (
+                    "Open the private report or underlying evidence before acting."
+                ),
+            }
+        )
+        for conflict in scanner_conflicts
+    ]
+
+
+def _share_finding_line(finding: ShareSummaryFinding) -> str:
+    label = f"[{finding.evidence_label}] " if finding.evidence_label else ""
+    return (
+        f"  - {_share_finding_plain_title(finding)} "
+        f"{label}({finding.evidence_count} evidence)"
+    )
+
+
+def _share_finding_plain_title(finding: ShareSummaryFinding) -> str:
+    title = finding.title.strip()
+    severity_prefix = f"{finding.severity.upper()}:"
+    if title.upper().startswith(severity_prefix):
+        return title
+    return f"{finding.severity.upper()}: {title}"
 
 
 def build_share_summary(
@@ -1155,7 +2291,14 @@ def build_share_summary(
     )
     verdict_banner = f"DeployWhisper {severity.upper()} · {recommendation.upper()}"
     top_findings = _share_findings(report)
-    evidence_count = len(_mapping_items(report.get("evidence_items")))
+    evidence_count = _share_summary_evidence_count(report)
+    external_evidence_count = _external_scanner_evidence_count(report)
+    external_evidence_summary = _external_scanner_evidence_summary(
+        external_evidence_count
+    )
+    scanner_conflicts = _scanner_conflicts(report)
+    if not evidence_detail_available:
+        scanner_conflicts = _redacted_scanner_conflicts(scanner_conflicts)
     evidence_status, evidence_detail = evidence_law_status(
         report, evidence_detail_available=evidence_detail_available
     )
@@ -1204,6 +2347,9 @@ def build_share_summary(
         headline=headline,
         top_findings=top_findings,
         evidence_count=evidence_count,
+        external_evidence_count=external_evidence_count,
+        external_evidence_summary=external_evidence_summary,
+        scanner_conflicts=scanner_conflicts,
         blast_radius_summary=blast_radius_summary,
         rollback_summary=rollback_summary,
         context_completeness=context_summary,
@@ -1215,9 +2361,13 @@ def build_share_summary(
         f"**Summary:** {headline}",
         f"- Findings: {len(top_findings)} shown / {len(report.get('findings') or [])} total · {evidence_count} evidence items",
     ]
+    if external_evidence_summary is not None:
+        markdown_lines.append(
+            f"- External scanner context: {external_evidence_summary}"
+        )
+    markdown_lines.extend(_share_scanner_conflict_markdown_lines(scanner_conflicts))
     markdown_lines.extend(
-        f"  - {finding.severity.upper()}: {finding.title} ({finding.evidence_count} evidence)"
-        for finding in json_payload.top_findings
+        _share_finding_line(finding) for finding in json_payload.top_findings
     )
     markdown_lines.extend(
         [
@@ -1234,15 +2384,29 @@ def build_share_summary(
     )
     markdown = "\n".join(markdown_lines)
     if len(markdown) > 1500:
-        finding_lines = [
-            f"  - {finding.severity.upper()}: {finding.title} ({finding.evidence_count} evidence)"
-            for finding in json_payload.top_findings[:2]
-        ]
+        compact_findings = list(json_payload.top_findings[:3])
+        for finding in json_payload.top_findings[3:]:
+            if finding.evidence_label:
+                compact_findings.append(finding)
+        finding_lines = [_share_finding_line(finding) for finding in compact_findings]
         markdown = "\n".join(
             [
                 f"### {verdict_banner}",
                 f"**Summary:** {_shorten(headline, 120)}",
                 f"- Findings: {len(report.get('findings') or [])} total · {evidence_count} evidence items",
+                *(
+                    [
+                        f"- External scanner context: {_shorten(external_evidence_summary, 120)}"
+                    ]
+                    if external_evidence_summary is not None
+                    else []
+                ),
+                *(
+                    _share_scanner_conflict_markdown_lines(
+                        scanner_conflicts,
+                        compact=True,
+                    )
+                ),
                 *finding_lines,
                 f"- Blast radius: {_shorten(blast_radius_summary, 120)}",
                 (
@@ -1260,6 +2424,17 @@ def build_share_summary(
             verdict_banner + ".",
             f"Summary: {headline}",
             f"Findings: {len(top_findings)} shown / {len(report.get('findings') or [])} total and {evidence_count} evidence items.",
+            " ".join(
+                f"{_share_finding_plain_title(finding)}: {finding.evidence_label}."
+                for finding in top_findings
+                if finding.evidence_label
+            ),
+            (
+                f"External scanner context: {external_evidence_summary}"
+                if external_evidence_summary is not None
+                else ""
+            ),
+            _share_scanner_conflict_plain_text(scanner_conflicts),
             f"Blast radius: {blast_radius_summary}.",
             f"Rollback: {rollback_summary}.",
             f"Evidence Law: {evidence_status} - {evidence_detail}.",
@@ -1300,10 +2475,16 @@ def build_analysis_artifacts(
     include_incident_context: bool = True,
     include_narrative: bool = True,
     allow_llm_assistance: bool = True,
+    audit_context: dict[str, Any] | None = None,
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
-    submission_manifest = build_submission_manifest(files, parse_batch=parse_batch)
+    sensitive_values = sensitive_submission_values(files)
+    submission_manifest = build_submission_manifest(
+        files,
+        parse_batch=parse_batch,
+        audit_context=audit_context,
+    )
     partial_context = parse_batch.has_partial_context or (
         submission_manifest.partial_analysis
     )
@@ -1315,6 +2496,9 @@ def build_analysis_artifacts(
         project_key=project_key,
         workspace_id=workspace_id,
         workspace_key=workspace_key,
+        redaction_status_by_artifact={
+            item.name: item.redaction_status for item in submission_manifest.items
+        },
     )
     changes = _collect_changes(parse_batch)
     if include_topology_context:
@@ -1334,8 +2518,9 @@ def build_analysis_artifacts(
         raw_files=analysis_raw_files,
         completion_client=completion_client,
         allow_llm_assistance=allow_llm_assistance,
+        sensitive_values=sensitive_values,
     )
-    assessment.context_completeness = _build_context_completeness(
+    context_completeness = _build_context_completeness(
         parse_batch,
         evidence_items=evidence_items,
         project_id=project_id,
@@ -1347,13 +2532,27 @@ def build_analysis_artifacts(
         topology=topology,
         codeowners_sources=codeowners_sources,
     )
+    evidence_items = _evidence_items_with_context_sources(
+        evidence_items, list(context_completeness.context_sources)
+    )
+    assessment.context_completeness = context_completeness
     assessment = apply_context_uncertainty(assessment)
     findings = build_findings(
         assessment=assessment,
         evidence_items=evidence_items,
         interaction_confidence_overrides=_interaction_confidence_overrides(
-            assessment, completion_client=completion_client
+            assessment,
+            completion_client=completion_client,
+            sensitive_values=sensitive_values,
         ),
+    )
+    findings = label_ai_iac_risk_findings(
+        findings,
+        assessment=assessment,
+        evidence_items=evidence_items,
+        provenance_by_artifact={
+            item.name: item.provenance for item in submission_manifest.items
+        },
     )
     blast_radius = compute_blast_radius(changes, topology, topology_warning)
     rollback_plan = generate_rollback_plan(changes, partial_context=partial_context)
@@ -1374,13 +2573,14 @@ def build_analysis_artifacts(
             [finding.model_copy(deep=True) for finding in findings],
             completion_client=completion_client,
             raw_files=analysis_raw_files,
+            sensitive_values=sensitive_values,
         )
     else:
         narrative = _skipped_narrative(
             "Narrative skipped for deterministic benchmark profile.",
             assessment,
         )
-    return AnalysisArtifacts(
+    artifacts = AnalysisArtifacts(
         parse_batch=parse_batch,
         submission_manifest=submission_manifest,
         evidence_items=evidence_items,
@@ -1391,6 +2591,35 @@ def build_analysis_artifacts(
         incident_matches=incident_matches,
         narrative=narrative,
     )
+    payload = artifacts.model_dump(mode="json")
+    aliases = artifact_security_aliases(files, sensitive_values=sensitive_values)
+    identities = remap_artifact_identities(payload, aliases)
+    sanitized = redact_value(identities, sensitive_values=sensitive_values)
+    redacted_names = {
+        item["name"]
+        for original, item in zip(
+            payload["submission_manifest"]["items"],
+            sanitized["submission_manifest"]["items"],
+            strict=True,
+        )
+        if original != item
+    }
+    for original, item in zip(
+        payload["evidence_items"], sanitized["evidence_items"], strict=True
+    ):
+        if original != item and item["redaction_status"] == "none":
+            item["redaction_status"] = "redacted"
+            redacted_names.add(item["artifact"])
+    for item in sanitized["submission_manifest"]["items"]:
+        if item["name"] in redacted_names and item["redaction_status"] == "none":
+            item["redaction_status"] = "redacted"
+    if redacted_names:
+        sanitized["submission_manifest"]["redaction"]["content_redacted"] = True
+    if sanitized != payload or submission_manifest.redaction.get("content_redacted"):
+        sanitized["assessment"]["warnings"] = list(
+            dict.fromkeys([*sanitized["assessment"]["warnings"], REDACTION_WARNING])
+        )
+    return AnalysisArtifacts.model_validate(sanitized)
 
 
 def resolve_analysis_project_scope(
@@ -1454,6 +2683,7 @@ def analyze_uploaded_files(
         workspace_id=workspace_id,
         workspace_key=workspace_key,
         completion_client=completion_client,
+        audit_context=audit_context,
     )
     analysis_duration_seconds = max(1, round(perf_counter() - started_at))
     try:

@@ -8,6 +8,10 @@ token_budget: 1350
 tags: [argocd, gitops, kubernetes]
 description: ArgoCD sync and application-set guidance for GitOps delivery changes across shared clusters.
 test_suite_path: tests/skill-tests/argocd
+supported_toolchains: [argocd, kubernetes]
+trust_level: core
+scenario_references: [tests/skill-tests/argocd]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 trigger_content_patterns: ["argoproj.io/v1alpha1"]
 ---
 

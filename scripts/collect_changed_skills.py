@@ -31,10 +31,15 @@ def _changed_skill_ids(before: str, after: str) -> list[str]:
     skills: set[str] = set()
     for path in diff:
         normalized = path.strip()
-        if normalized.startswith("skills/") and normalized.endswith(".md"):
-            skills.add(Path(normalized).stem.lower())
+        parts = Path(normalized).parts
+        if (
+            len(parts) == 2
+            and parts[0] == "skills"
+            and parts[1].endswith(".md")
+            and parts[1].lower() != "readme.md"
+        ):
+            skills.add(Path(parts[1]).stem.lower())
         elif normalized.startswith("tests/skill-tests/"):
-            parts = Path(normalized).parts
             if len(parts) >= 3:
                 skills.add(parts[2].lower())
     return sorted(skills)

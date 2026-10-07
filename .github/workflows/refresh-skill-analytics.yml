@@ -6,19 +6,22 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: read
+  contents: read
 
 jobs:
   refresh:
+    if: vars.DEPLOYWHISPER_REVIEWED_UPDATES != 'true'
+    permissions:
+      contents: write
+      issues: read
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
 
@@ -32,7 +35,7 @@ jobs:
 
       - name: Commit refreshed analytics
         run: |
-          if git diff --quiet; then
+          if git diff --quiet -- data/skill-analytics.json; then
             echo "No analytics changes to commit."
             exit 0
           fi
@@ -41,3 +44,73 @@ jobs:
           git add data/skill-analytics.json
           git commit -m "Refresh skill analytics snapshot"
           git push
+
+  reviewed-snapshot:
+    if: vars.DEPLOYWHISPER_REVIEWED_UPDATES == 'true'
+    permissions:
+      contents: read
+      issues: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+
+      - name: Refresh analytics with read-only access
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOYWHISPER_SKILL_ANALYTICS_URL: ${{ vars.DEPLOYWHISPER_SKILL_ANALYTICS_URL || 'https://deploywhisper.github.io/skills-registry/skill-popularity.json' }}
+        run: |
+          python -c 'from pathlib import Path; paths = (Path("data"), Path("data/skill-analytics.json")); assert not any(path.is_symlink() for path in paths), "Analytics output must not follow symlinks"'
+          python scripts/refresh_skill_analytics.py --repo "$GITHUB_REPOSITORY"
+
+      - name: Upload generated snapshot
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: reviewed-skill-analytics
+          path: data/skill-analytics.json
+          if-no-files-found: error
+          retention-days: 1
+
+  reviewed-update:
+    needs: reviewed-snapshot
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write # Explicit CI dispatch; token-created PRs do not trigger PR workflows.
+    concurrency:
+      group: reviewed-skill-analytics
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted update code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Download generated snapshot
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: reviewed-skill-analytics
+          path: ${{ runner.temp }}/reviewed-skill-analytics
+
+      - name: Propose analytics update for human review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          SNAPSHOT: ${{ runner.temp }}/reviewed-skill-analytics/skill-analytics.json
+        run: |
+          gh auth setup-git
+          python3 scripts/prepare_analytics_update.py \
+            --repo "$GITHUB_REPOSITORY" --base "$DEFAULT_BRANCH" --snapshot "$SNAPSHOT"

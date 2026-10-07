@@ -1,0 +1,13 @@
+{
+  "name": "terraform-non-match",
+  "description": "Does not load the Terraform skill without Terraform evidence.",
+  "assessment_tool": "unrelated",
+  "contributor_summary": "A documentation-only change with no Terraform artifacts.",
+  "raw_files": {
+    "notes.txt": "Documentation update only.\n"
+  },
+  "expect_selected": false,
+  "expected_absent_substrings": [
+    "Security group or firewall rule with `0.0.0.0/0`"
+  ]
+}

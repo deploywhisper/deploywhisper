@@ -46,7 +46,7 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
 # Copy the example environment file
 cp .env.example .env
@@ -216,15 +216,20 @@ git commit -m "chore(release): bump version to 1.0.0"
 git push origin release/v1.0.0
 # Open PR → main (use merge commit, not squash)
 
-# 4. After merge, tag the release
+# 4. Preserve the main merge commit on default develop before tagging
 git checkout main && git pull origin main
-git tag -a v1.0.0 -m "Release v1.0.0 — Initial platform launch"
-git push origin v1.0.0
+RELEASE_COMMIT=$(git rev-parse HEAD)
+# Open PR main → develop; wait for CI, then use a merge commit (not squash).
+gh pr create --base develop --head main --title "Synchronize v1.0.0 release history" --body "Back-merge the tested main release commit before publication."
+# Merge that PR after its checks pass.
+git fetch origin
+git merge-base --is-ancestor "$RELEASE_COMMIT" origin/develop
 
-# 5. Back-merge into develop so it stays in sync
-git checkout develop && git pull origin develop
-git merge main --no-edit
-git push origin develop
+# 5. Validate and create the immutable tag only after all checks pass
+python -m scripts.release_policy validate --tag v1.0.0
+git tag -a v1.0.0 "$RELEASE_COMMIT" -m "Release v1.0.0 — Initial platform launch"
+git push origin v1.0.0
+# Monitor Release Actions; verify public source assets and OCI provenance.
 
 # 6. Delete the release branch
 git branch -d release/v1.0.0
@@ -245,16 +250,25 @@ git commit -m "fix(api): prevent null pointer on health check"
 git push origin hotfix/v1.0.1-fix-api-crash
 # Open PR → main (fast-track review)
 
-# 4. After merge, tag it
+# 4. Back-merge through a PR before publishing the tag
 git checkout main && git pull origin main
-git tag -a v1.0.1 -m "Hotfix v1.0.1 — Fix API crash on health check"
-git push origin v1.0.1
+RELEASE_COMMIT=$(git rev-parse HEAD)
+gh pr create --base develop --head main --title "Synchronize v1.0.1 hotfix history" --body "Preserve the tested main hotfix commit before publication."
+# Wait for CI and merge the PR with a merge commit, not squash.
+git fetch origin
+git merge-base --is-ancestor "$RELEASE_COMMIT" origin/develop
 
-# 5. Back-merge into develop
-git checkout develop && git pull origin develop
-git merge main --no-edit
-git push origin develop
+# 5. Validate and publish the immutable tag
+python -m scripts.release_policy validate --tag v1.0.1
+git tag -a v1.0.1 "$RELEASE_COMMIT" -m "Hotfix v1.0.1 — Fix API crash on health check"
+git push origin v1.0.1
 ```
+
+The release guard requires the exact tag commit to be reachable from the default
+branch (`develop`). Never push the tag before the back-merge is complete, or move
+an existing version tag. Follow [release integrity](docs/security/release-integrity.md)
+and [consumer verification](docs/security/release-artifacts.md) for signing,
+publication gates, and recovery if registry promotion fails after release creation.
 
 ---
 
@@ -392,7 +406,9 @@ def calculate_risk_score(changes: list[ParsedChange], context: AnalysisContext) 
 ### Project structure rules
 
 - Parsers go in `parsers/`, one file per IaC tool.
-- AI Skills go in `skills/`, one markdown file per tool.
+- AI Skills go in `skills/`, one markdown file per tool. Follow the dedicated
+  workflow in `docs/contributing/skills.md` for the Skill PR template,
+  deterministic harness, reviewer routing, and publication gates.
 - API routes go in `api/routes/`, grouped by domain.
 - All database models live in `models/`.
 - Tests mirror the source structure under `tests/`.

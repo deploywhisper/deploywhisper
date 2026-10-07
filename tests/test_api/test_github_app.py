@@ -9,16 +9,51 @@ import tempfile
 import unittest
 from importlib import reload
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import app as app_module
 import config as config_module
 import models.database as database_module
 import models.tables as tables_module
-from integrations.github.app_service import GitHubAppProjectScopeError
+from integrations.github.app_service import (
+    GitHubAppConfigurationError,
+    GitHubAppProjectScopeError,
+    GitHubAppRequestError,
+)
 from fastapi.testclient import TestClient
 
 
 class GitHubAppRouteTests(unittest.TestCase):
+    def test_webhook_errors_never_expose_exception_details(self) -> None:
+        marker = "opaque-private-exception-detail-123"
+        payload = b'{"action":"opened"}'
+        signature = (
+            "sha256=" + hmac.new(b"webhook-secret", payload, hashlib.sha256).hexdigest()
+        )
+        for exception, status in (
+            (GitHubAppConfigurationError(marker), 405),
+            (GitHubAppRequestError(marker), 502),
+            (GitHubAppProjectScopeError("project_not_found", marker), 200),
+            (GitHubAppProjectScopeError(marker, marker), 200),
+        ):
+            with (
+                self.subTest(exception=type(exception).__name__),
+                patch(
+                    "api.routes.github_app.handle_github_app_webhook",
+                    side_effect=exception,
+                ),
+            ):
+                response = self.client.post(
+                    "/api/v1/github/app/webhook",
+                    headers={
+                        "X-Hub-Signature-256": signature,
+                        "X-GitHub-Event": "pull_request",
+                    },
+                    content=payload,
+                )
+                self.assertEqual(response.status_code, status)
+                self.assertNotIn(marker, response.text)
+
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         os.environ["DATABASE_URL"] = f"sqlite:///{self.tempdir.name}/github_app.db"
@@ -68,6 +103,50 @@ class GitHubAppRouteTests(unittest.TestCase):
         self.assertIn("client_id=client-123", response.headers["location"])
         self.assertIn("state=", response.headers["location"])
 
+    def test_callback_does_not_echo_temporary_or_configured_credentials(self) -> None:
+        secret = "opaque-callback-credential"
+        with (
+            patch.dict(os.environ, {"GH_TOKEN": secret}),
+            patch(
+                "api.routes.github_app.complete_github_app_oauth",
+                return_value=SimpleNamespace(
+                    install_url="https://github.com/apps/example/installations/new",
+                    marketplace_url=None,
+                    state_return_to=f"/settings?code={secret}",
+                    token_type=secret,
+                    scope="scope opaque-access-token",
+                    user_access_token="opaque-access-token",
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/v1/github/app/oauth/callback",
+                params={"code": "opaque-input-code", "state": "opaque-input-state"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(secret, response.text)
+        self.assertNotIn("opaque-access-token", response.text)
+
+    def test_callback_links_reject_executable_schemes(self) -> None:
+        with patch(
+            "api.routes.github_app.complete_github_app_oauth",
+            return_value=SimpleNamespace(
+                install_url="javascript:alert(1)",
+                marketplace_url=None,
+                state_return_to="//untrusted.example/path",
+                token_type="bearer",
+                scope=None,
+                user_access_token="opaque-access-token",
+            ),
+        ):
+            response = self.client.get(
+                "/api/v1/github/app/oauth/callback",
+                params={"code": "safe-code", "state": "safe-state"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("javascript:", response.text)
+        self.assertNotIn("//untrusted.example", response.text)
+
     def test_webhook_rejects_invalid_signature(self) -> None:
         response = self.client.post(
             "/api/v1/github/app/webhook",
@@ -106,6 +185,7 @@ class GitHubAppRouteTests(unittest.TestCase):
                 "note": "ok",
                 "status": "ok",
                 "code": None,
+                "delivery_code": None,
             },
         )()
 
@@ -126,6 +206,7 @@ class GitHubAppRouteTests(unittest.TestCase):
         self.assertEqual(body["data"]["report_id"], 17)
         self.assertEqual(body["data"]["status"], "ok")
         self.assertIsNone(body["data"]["code"])
+        self.assertIsNone(body["data"]["delivery_code"])
 
     @patch("api.routes.github_app.handle_github_app_webhook")
     def test_webhook_returns_persistence_failure_without_report_identifier(

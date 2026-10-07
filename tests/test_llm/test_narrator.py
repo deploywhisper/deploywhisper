@@ -12,6 +12,37 @@ from llm.narrator import generate_narrative
 
 
 class NarrativeTests(unittest.TestCase):
+    def test_fallback_metadata_screens_all_configured_provider_credentials(
+        self,
+    ) -> None:
+        import os
+
+        secret = "synthetic-inactive-provider-credential"
+        runtime = {
+            "provider": "openai",
+            "model": f"legacy-model-{secret}",
+            "api_base": "https://api.openai.com/v1",
+            "api_key": "",
+            "local_mode": True,
+        }
+        encoded = "".join(f"%{ord(character):02X}" for character in secret)
+        for value in (secret, encoded.replace("%", "%2525")):
+            with self.subTest(value=value):
+                runtime["model"] = f"legacy-model-{value}"
+                with (
+                    patch.dict(os.environ, {"ANTHROPIC_API_KEY": secret}),
+                    patch(
+                        "llm.narrator.resolve_provider_runtime", return_value=runtime
+                    ),
+                    patch(
+                        "llm.narrator.settings", SimpleNamespace(narrator_enabled=False)
+                    ),
+                ):
+                    narrative = generate_narrative(self._assessment(), self._findings())
+                self.assertTrue(narrative.degraded)
+                self.assertNotIn(secret, narrative.model_dump_json())
+                self.assertNotIn(value, narrative.model_dump_json())
+
     def _assessment(self) -> RiskAssessment:
         return RiskAssessment(
             score=42,
@@ -91,8 +122,8 @@ class NarrativeTests(unittest.TestCase):
         self.assertEqual(narrative.opening_sentence, "")
         self.assertEqual(narrative.explanation, "")
         self.assertEqual(narrative.guidance, [])
-        self.assertIn("provider offline", narrative.failure_notice or "")
-        self.assertIn("provider offline", narrative.warnings[-1])
+        self.assertIn("Provider operation failed", narrative.failure_notice or "")
+        self.assertNotIn("provider offline", narrative.warnings[-1])
 
     def test_generate_narrative_gracefully_degrades_on_invalid_json(self) -> None:
         class Message:
@@ -115,7 +146,7 @@ class NarrativeTests(unittest.TestCase):
         )
         self.assertTrue(narrative.degraded)
         self.assertTrue(
-            any("Expecting value" in warning for warning in narrative.warnings)
+            any("JSONDecodeError" in warning for warning in narrative.warnings)
         )
 
     def test_generate_narrative_gracefully_degrades_on_missing_keys(self) -> None:
@@ -138,7 +169,7 @@ class NarrativeTests(unittest.TestCase):
             self._assessment(), self._findings(), completion_client=fake_completion
         )
         self.assertTrue(narrative.degraded)
-        self.assertTrue(any("explanation" in warning for warning in narrative.warnings))
+        self.assertTrue(any("KeyError" in warning for warning in narrative.warnings))
 
     def test_generate_narrative_sanitizes_fabricated_scope_claims(self) -> None:
         class Message:
@@ -155,7 +186,7 @@ class NarrativeTests(unittest.TestCase):
 
         def fake_completion(**_: object) -> Response:
             return Response(
-                '{"opening_sentence":"GO: affects 6 downstream services.",'
+                '{"opening_sentence":"CAUTION: affects 6 downstream services.",'
                 '"explanation":"This has high blast radius.",'
                 '"guidance":["Review 6 downstream services."]}'
             )

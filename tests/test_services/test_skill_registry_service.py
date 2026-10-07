@@ -31,6 +31,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "tags: [iac, security]\n"
                 "description: Terraform registry skill.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: core\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "---\n"
@@ -46,6 +50,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "tags: [cluster]\n"
                 "description: Kubernetes rollout checks.\n"
                 "test_suite_path: tests/skill-tests/kubernetes\n"
+                "supported_toolchains: [kubernetes]\n"
+                "trust_level: verified\n"
+                "scenario_references: [tests/skill-tests/kubernetes]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/kubernetes]\n"
                 "token_budget: 900\n"
                 "triggers: [.yaml]\n"
                 "---\n"
@@ -77,6 +85,7 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertEqual(len(page.items), 1)
         self.assertEqual(page.items[0].id, "terraform")
         self.assertEqual(page.items[0].name, "Terraform")
+        self.assertEqual(page.items[0].trust_level, "core")
         self.assertEqual(page.items[0].test_suite_path, "tests/skill-tests/terraform")
         self.assertEqual(
             page.items[0].install_command, "deploywhisper skill install terraform"
@@ -105,6 +114,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: MIT\n"
                 "description: Built-in terraform checks.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: core\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "tags: [iac]\n"
@@ -121,6 +134,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "tags: [private]\n"
                 "description: Team override.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: experimental\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "---\n"
@@ -147,6 +164,7 @@ class SkillRegistryServiceTests(unittest.TestCase):
 
         assert entry is not None
         self.assertEqual(entry.source, "built-in")
+        self.assertEqual(entry.trust_level, "core")
         self.assertEqual(entry.version, "1.0.0")
         self.assertEqual(entry.name, "Terraform")
         self.assertEqual(entry.available_versions, 1)
@@ -159,6 +177,7 @@ class SkillRegistryServiceTests(unittest.TestCase):
         self.assertTrue(versions[0].is_current)
         self.assertEqual(versions[0].author, "DeployWhisper")
         self.assertEqual(versions[0].source, "built-in")
+        self.assertEqual(versions[0].trust_level, "core")
 
     def test_registry_page_ignores_local_custom_cache_for_canonical_results(
         self,
@@ -176,6 +195,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: MIT\n"
                 "description: Built-in terraform checks.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: core\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "tags: [iac]\n"
@@ -191,6 +214,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: Proprietary\n"
                 "description: Local install cache override.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: experimental\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "tags: [private]\n"
@@ -232,6 +259,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: MIT\n"
                 "description: Healthy skill.\n"
                 "test_suite_path: tests/skill-tests/kubernetes\n"
+                "supported_toolchains: [kubernetes]\n"
+                "trust_level: core\n"
+                "scenario_references: [tests/skill-tests/kubernetes]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/kubernetes]\n"
                 "token_budget: 900\n"
                 "triggers: [.yaml]\n"
                 "tags: [cluster]\n"
@@ -270,6 +301,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: MIT\n"
                 "description: Built-in terraform checks.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: core\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "tags: [iac]\n"
@@ -312,6 +347,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: MIT\n"
                 "description: Built-in terraform checks.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: core\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "tags: [iac]\n"
@@ -327,6 +366,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: MIT\n"
                 "description: Built-in kubernetes checks.\n"
                 "test_suite_path: tests/skill-tests/kubernetes\n"
+                "supported_toolchains: [kubernetes]\n"
+                "trust_level: core\n"
+                "scenario_references: [tests/skill-tests/kubernetes]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/kubernetes]\n"
                 "token_budget: 900\n"
                 "triggers: [.yaml]\n"
                 "tags: [cluster]\n"
@@ -373,6 +416,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: MIT\n"
                 "description: Built-in terraform checks.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: core\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "tags: [iac]\n"
@@ -390,6 +437,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: MIT\n"
                 "description: Curated community guidance.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: verified\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/community-skill]\n"
                 "token_budget: 900\n"
                 "triggers: [.yaml]\n"
                 "tags: [community]\n"
@@ -434,6 +485,10 @@ class SkillRegistryServiceTests(unittest.TestCase):
                 "license: MIT\n"
                 "description: Built-in terraform checks.\n"
                 "test_suite_path: tests/skill-tests/terraform\n"
+                "supported_toolchains: [terraform]\n"
+                "trust_level: core\n"
+                "scenario_references: [tests/skill-tests/terraform]\n"
+                "documentation_links: [https://docs.deploywhisper.example/skills/terraform]\n"
                 "token_budget: 1200\n"
                 "triggers: [.tf]\n"
                 "tags: [iac]\n"

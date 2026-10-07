@@ -14,7 +14,11 @@ from api.schemas import (
     CustomSkillUploadData,
     CustomSkillUploadRequest,
     CustomSkillUploadResponse,
+    ErrorResponse,
     FeedbackSummaryData,
+    PolicyAdapterSettingsData,
+    PolicyAdapterSettingsRequest,
+    PolicyAdapterSettingsResponse,
     ProviderCapabilityData,
     ProviderOptionData,
     ProviderSettingsData,
@@ -37,6 +41,7 @@ from api.schemas import (
     TopologyValidationResponse,
     build_meta,
 )
+from llm.providers import redact_provider_field
 from llm.skill_context import get_custom_skill_statuses, save_custom_skill
 from services.feedback_service import fetch_feedback_summary
 from services.project_service import (
@@ -46,15 +51,18 @@ from services.project_service import (
 )
 from services.settings_service import (
     TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS,
-    activate_local_mode,
+    delete_policy_adapter_settings,
     get_provider_settings,
+    get_policy_adapter_settings,
     get_topology_drift_check_interval_hours,
     provider_defaults,
     provider_select_options,
     save_provider_settings,
+    save_policy_adapter_settings,
     save_topology_drift_check_interval_hours,
     validate_provider_settings,
 )
+from services.policy_adapter_settings import PolicyAdapterSettingsIntegrityError
 from services.topology_service import (
     get_topology_status,
     save_topology_definition,
@@ -74,6 +82,24 @@ def _project_api_error(exc: ValueError) -> ApiError:
         status_code=status_code,
         code=code,
         message=str(exc),
+    )
+
+
+def _policy_adapter_api_error(exc: ValueError) -> ApiError:
+    if getattr(exc, "code", None) is not None:
+        return _project_api_error(exc)
+    return ApiError(
+        status_code=400,
+        code="invalid_policy_adapter_settings",
+        message=str(exc),
+    )
+
+
+def _policy_adapter_integrity_api_error() -> ApiError:
+    return ApiError(
+        status_code=500,
+        code="policy_adapter_settings_integrity_error",
+        message="Stored policy adapter settings failed integrity validation.",
     )
 
 
@@ -119,9 +145,9 @@ def _masked_key_preview(api_key: str | None) -> str | None:
 
 def _provider_settings_data(provider_settings) -> ProviderSettingsData:
     return ProviderSettingsData(
-        provider=provider_settings.provider,
-        model=provider_settings.model,
-        api_base=provider_settings.api_base,
+        provider=redact_provider_field(provider_settings.provider),
+        model=redact_provider_field(provider_settings.model),
+        api_base=redact_provider_field(provider_settings.api_base),
         local_mode=provider_settings.local_mode,
         request_timeout_seconds=provider_settings.request_timeout_seconds,
         source=provider_settings.source,
@@ -150,6 +176,10 @@ def _provider_options_data() -> list[ProviderOptionData]:
         _provider_option_data(provider, label)
         for provider, label in provider_select_options().items()
     ]
+
+
+def _policy_adapter_settings_data(settings) -> PolicyAdapterSettingsData:
+    return PolicyAdapterSettingsData(**settings.model_dump(mode="json"))
 
 
 def _topology_status_data(status) -> TopologyStatusData:
@@ -232,6 +262,18 @@ def _reject_unscoped_workspace_id(
         status_code=400,
         code="missing_project_scope",
         message="Project scope is required when resolving workspace_id.",
+    )
+
+
+def _require_explicit_project_reference(
+    *, project_id: int | None, project_key: str | None
+) -> None:
+    if project_id is not None or project_key is not None:
+        return
+    raise ApiError(
+        status_code=400,
+        code="missing_project_scope",
+        message="An explicit project_id or project_key is required.",
     )
 
 
@@ -385,29 +427,169 @@ def update_provider_settings(
     payload: ProviderSettingsRequest,
 ) -> ProviderSettingsResponse:
     """Persist active narrative provider settings and return validation state."""
-    local_mode = bool(payload.local_mode) if payload.provider == "ollama" else False
-    if local_mode:
-        saved = activate_local_mode(
-            model=payload.model.strip(),
-            api_base=payload.api_base.strip(),
-            request_timeout_seconds=payload.request_timeout_seconds,
-        )
-    else:
+    try:
         saved = save_provider_settings(
-            provider=payload.provider.strip(),
-            model=payload.model.strip(),
-            api_base=payload.api_base.strip(),
+            provider=payload.provider,
+            model=payload.model,
+            api_base=payload.api_base,
             api_key=payload.api_key.strip() if payload.api_key else None,
-            local_mode=local_mode,
+            local_mode=payload.local_mode,
             request_timeout_seconds=payload.request_timeout_seconds,
             activate=True,
         )
+    except ValueError as exc:
+        raise ApiError(
+            status_code=400, code="invalid_provider_settings", message=str(exc)
+        ) from exc
     validation = validate_provider_settings(saved)
     return ProviderSettingsResponse(
         data=ProviderSettingsSaveData(
             settings=_provider_settings_data(saved),
             validation=ProviderValidationData(**validation),
         ),
+        meta=build_meta(),
+    )
+
+
+@settings_router.get(
+    "/policy-adapter",
+    response_model=PolicyAdapterSettingsResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def get_policy_adapter_defaults(
+    project_id: int | None = Query(default=None),
+    project_key: str | None = Query(default=None),
+    integration: str | None = Query(default=None, min_length=1),
+    authorization: dict[str, object] = Depends(_authorization_context),
+) -> PolicyAdapterSettingsResponse:
+    """Return effective project or integration policy-adapter defaults."""
+    _require_explicit_project_reference(
+        project_id=project_id,
+        project_key=project_key,
+    )
+    try:
+        project = _resolve_authorized_topology_project(
+            authorization=authorization,
+            capability="settings.manage",
+            project_id=project_id,
+            project_key=project_key,
+        )
+        resolved = get_policy_adapter_settings(
+            project_key=project.project_key,
+            integration=integration,
+        )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
+    except PolicyAdapterSettingsIntegrityError as exc:
+        raise _policy_adapter_integrity_api_error() from exc
+    except ValueError as exc:
+        raise _policy_adapter_api_error(exc) from exc
+    return PolicyAdapterSettingsResponse(
+        data=_policy_adapter_settings_data(resolved),
+        meta=build_meta(),
+    )
+
+
+@settings_router.put(
+    "/policy-adapter",
+    response_model=PolicyAdapterSettingsResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def update_policy_adapter_defaults(
+    payload: PolicyAdapterSettingsRequest,
+    authorization: dict[str, object] = Depends(_authorization_context),
+) -> PolicyAdapterSettingsResponse:
+    """Persist project or integration policy-adapter defaults."""
+    _require_explicit_project_reference(
+        project_id=payload.project_id,
+        project_key=payload.project_key,
+    )
+    try:
+        project = _resolve_authorized_topology_project(
+            authorization=authorization,
+            capability="settings.manage",
+            project_id=payload.project_id,
+            project_key=payload.project_key,
+        )
+        enforcement_mode = (
+            payload.enforcement_mode
+            if "enforcement_mode" in payload.model_fields_set
+            else None
+        )
+        saved = save_policy_adapter_settings(
+            project_key=project.project_key,
+            integration=payload.integration,
+            warn_at=payload.warn_at,
+            soft_block_at=payload.soft_block_at,
+            hard_block_at=payload.hard_block_at,
+            reporting_default=payload.reporting_default,
+            enforcement_mode=enforcement_mode,
+        )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
+    except PolicyAdapterSettingsIntegrityError as exc:
+        raise _policy_adapter_integrity_api_error() from exc
+    except ValueError as exc:
+        raise _policy_adapter_api_error(exc) from exc
+    return PolicyAdapterSettingsResponse(
+        data=_policy_adapter_settings_data(saved),
+        meta=build_meta(),
+    )
+
+
+@settings_router.delete(
+    "/policy-adapter",
+    response_model=PolicyAdapterSettingsResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def reset_policy_adapter_defaults(
+    project_id: int | None = Query(default=None),
+    project_key: str | None = Query(default=None),
+    integration: str | None = Query(default=None, min_length=1),
+    authorization: dict[str, object] = Depends(_authorization_context),
+) -> PolicyAdapterSettingsResponse:
+    """Remove one override and return the newly inherited defaults."""
+    _require_explicit_project_reference(
+        project_id=project_id,
+        project_key=project_key,
+    )
+    try:
+        project = _resolve_authorized_topology_project(
+            authorization=authorization,
+            capability="settings.manage",
+            project_id=project_id,
+            project_key=project_key,
+        )
+        inherited = delete_policy_adapter_settings(
+            project_key=project.project_key,
+            integration=integration,
+        )
+    except PermissionError as exc:
+        _raise_authorization_error(exc)
+    except PolicyAdapterSettingsIntegrityError as exc:
+        raise _policy_adapter_integrity_api_error() from exc
+    except ValueError as exc:
+        raise _policy_adapter_api_error(exc) from exc
+    return PolicyAdapterSettingsResponse(
+        data=_policy_adapter_settings_data(inherited),
         meta=build_meta(),
     )
 

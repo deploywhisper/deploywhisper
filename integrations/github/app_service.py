@@ -18,8 +18,17 @@ from typing import Any
 from urllib import error, parse, request
 
 from config import settings
+from services.content_security import redact_reference
+from services.adapter_output_contract import (
+    AdapterMetadata,
+    build_adapter_output_contract,
+)
 from services.project_service import ProjectResolutionError, resolve_project_reference
-from services.analysis_service import AnalysisPersistenceError, analyze_uploaded_files
+from services.analysis_service import (
+    AnalysisPersistenceError,
+    analyze_uploaded_files,
+    build_share_summary,
+)
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     build_pending_analysis,
@@ -27,11 +36,20 @@ from services.intake_service import (
     uniquify_artifact_names,
 )
 from services.report_service import build_share_report_link
+from services.policy_adapter_service import (
+    IntegrationEnforcementDecision,
+    build_integration_enforcement_decision,
+)
+from services.policy_adapter_settings import (
+    PolicyAdapterSettingsIntegrityError,
+    PolicyAdapterStatus,
+)
 
 DEFAULT_GITHUB_API_BASE_URL = "https://api.github.com"
 DEFAULT_GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 DEFAULT_GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
 DEFAULT_CHECK_RUN_NAME = "DeployWhisper / Risk Analysis"
+CHECK_RUN_DELIVERY_ERROR_CODE = "github_check_run_failed"
 PULL_REQUEST_TRIGGER_ACTIONS = {"opened", "reopened", "synchronize"}
 _STATE_MAX_AGE_SECONDS = 600
 _UPLOAD_LIMIT_MESSAGE = (
@@ -108,6 +126,7 @@ class GitHubWebhookResult:
     note: str
     status: str = "ok"
     code: str | None = None
+    delivery_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -132,7 +151,7 @@ def get_github_app_config() -> GitHubAppConfig:
         or settings.app_base_url
         or ""
     ).strip() or None
-    return GitHubAppConfig(
+    config = GitHubAppConfig(
         enabled=os.getenv("DEPLOYWHISPER_GITHUB_APP_ENABLED", "false").lower()
         == "true",
         app_id=(os.getenv("DEPLOYWHISPER_GITHUB_APP_ID") or "").strip() or None,
@@ -172,6 +191,45 @@ def get_github_app_config() -> GitHubAppConfig:
         ).lower()
         == "true",
     )
+    _validate_config_urls(config)
+    return config
+
+
+def _validate_static_url(url: str, *, label: str, https_only: bool = False) -> None:
+    try:
+        parsed = parse.urlsplit(url)
+        valid = (
+            parsed.scheme in ({"https"} if https_only else {"http", "https"})
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+            and parsed.port != 0
+            and not any(char.isspace() for char in url)
+            and redact_reference(url) == url
+        )
+    except ValueError:
+        valid = False
+    if not valid:
+        raise GitHubAppConfigurationError(
+            f"{label} must be a credential-free {'HTTPS' if https_only else 'HTTP(S)'} URL without query or fragment."
+        )
+
+
+def _validate_config_urls(config: GitHubAppConfig) -> None:
+    for label, url in (
+        ("GitHub API base URL", config.api_base_url),
+        ("GitHub authorize URL", config.authorize_url),
+        ("GitHub access-token URL", config.access_token_url),
+    ):
+        _validate_static_url(url, label=label, https_only=True)
+    if config.app_base_url:
+        _validate_static_url(config.app_base_url, label="DeployWhisper base URL")
+    if config.install_url:
+        _validate_static_url(
+            config.install_url, label="GitHub App installation URL", https_only=True
+        )
 
 
 def _load_private_key_from_path(path_value: str) -> str | None:
@@ -184,6 +242,7 @@ def _load_private_key_from_path(path_value: str) -> str | None:
 
 
 def _require_runtime_config(config: GitHubAppConfig) -> None:
+    _validate_config_urls(config)
     missing: list[str] = []
     if not config.enabled:
         missing.append("DEPLOYWHISPER_GITHUB_APP_ENABLED=true")
@@ -202,6 +261,7 @@ def _require_runtime_config(config: GitHubAppConfig) -> None:
 
 
 def _require_oauth_config(config: GitHubAppConfig) -> None:
+    _validate_config_urls(config)
     missing: list[str] = []
     if not config.client_id:
         missing.append("DEPLOYWHISPER_GITHUB_APP_CLIENT_ID")
@@ -236,6 +296,10 @@ def build_github_app_oauth_url(
 ) -> str:
     config = config or get_github_app_config()
     _require_oauth_config(config)
+    if return_to and redact_reference(return_to) != return_to:
+        raise GitHubAppConfigurationError(
+            "GitHub OAuth return destination must not contain credentials."
+        )
     state = _encode_oauth_state(
         {"return_to": return_to or "", "nonce": secrets.token_urlsafe(12)},
         secret=str(config.client_secret),
@@ -401,23 +465,31 @@ def handle_github_app_webhook(
         if item.status == "ready"
     ]
     if not accepted_files:
-        note = "No supported changed artifacts were available from this pull request."
-        check_run_id = (
-            _create_check_run(
-                owner=owner,
-                repo_name=repo_name,
-                head_sha=head_sha,
-                installation_token=installation_token,
-                conclusion="neutral",
-                title=DEFAULT_CHECK_RUN_NAME,
-                summary=note,
-                details_url=None,
-                text=_check_run_text(details_url=None),
-                api_base_url=config.api_base_url,
-            )
-            if config.checks_enabled
-            else None
-        )
+        note = _skipped_analysis_guidance({item.status for item in pending.items})
+        check_run_id = None
+        status = "ok"
+        code = None
+        if config.checks_enabled:
+            try:
+                check_run_id = _create_check_run(
+                    owner=owner,
+                    repo_name=repo_name,
+                    head_sha=head_sha,
+                    installation_token=installation_token,
+                    conclusion="neutral",
+                    title=DEFAULT_CHECK_RUN_NAME,
+                    summary=note,
+                    details_url=None,
+                    text=_check_run_text(
+                        details_url=None,
+                        fallback_guidance=note,
+                    ),
+                    api_base_url=config.api_base_url,
+                )
+            except GitHubAppRequestError:
+                note = f"{note} Neutral check run could not be created."
+                status = "partial"
+                code = CHECK_RUN_DELIVERY_ERROR_CODE
         return GitHubWebhookResult(
             event=event_name,
             action=action,
@@ -427,6 +499,8 @@ def handle_github_app_webhook(
             report_id=None,
             report_url=None,
             note=note,
+            status=status,
+            code=code,
         )
 
     if config.checks_enabled:
@@ -537,20 +611,82 @@ def handle_github_app_webhook(
     report_id = int(result.persisted_report["id"])
     report_url = build_share_report_link(report_id)
     check_run_id = None
+    note = "GitHub App webhook processed and advisory analysis completed."
+    status = "ok"
+    code = None
     if config.checks_enabled:
         report_url = _check_run_details_url(report_id, config=config)
-        check_run_id = _create_check_run(
-            owner=owner,
-            repo_name=repo_name,
-            head_sha=head_sha,
-            installation_token=installation_token,
-            conclusion=_check_run_conclusion(result.assessment.recommendation),
-            title=DEFAULT_CHECK_RUN_NAME,
-            summary=_check_run_summary(result.persisted_report),
-            details_url=report_url,
-            text=_check_run_text(details_url=report_url),
-            api_base_url=config.api_base_url,
-        )
+        try:
+            enforcement = build_integration_enforcement_decision(
+                build_adapter_output_contract(
+                    build_share_summary(result.persisted_report),
+                    AdapterMetadata(
+                        adapter="github",
+                        format="github_check_run",
+                        project_key=project.project_key,
+                    ),
+                )
+            )
+        except (PolicyAdapterSettingsIntegrityError, ValueError) as exc:
+            code = (
+                "policy_adapter_settings_integrity_error"
+                if isinstance(exc, PolicyAdapterSettingsIntegrityError)
+                else "invalid_policy_adapter_output"
+            )
+            note = (
+                "DeployWhisper analysis completed, but the integration enforcement "
+                "decision could not be validated."
+            )
+            try:
+                check_run_id = _create_check_run(
+                    owner=owner,
+                    repo_name=repo_name,
+                    head_sha=head_sha,
+                    installation_token=installation_token,
+                    conclusion="failure",
+                    title=DEFAULT_CHECK_RUN_NAME,
+                    summary=note,
+                    details_url=report_url,
+                    text=_check_run_text(
+                        details_url=report_url,
+                        fallback_guidance=note,
+                    ),
+                    api_base_url=config.api_base_url,
+                )
+            except GitHubAppRequestError:
+                note = f"{note} Failure check run could not be created."
+            return GitHubWebhookResult(
+                event=event_name,
+                action=action,
+                handled=True,
+                automatic_analysis_triggered=True,
+                check_run_id=check_run_id,
+                report_id=report_id,
+                report_url=report_url,
+                note=note,
+                status="failed",
+                code=code,
+            )
+        try:
+            check_run_id = _create_check_run(
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
+                installation_token=installation_token,
+                conclusion=_check_run_conclusion(
+                    result.assessment.recommendation,
+                    enforcement.effective_status,
+                ),
+                title=DEFAULT_CHECK_RUN_NAME,
+                summary=_check_run_summary(result.persisted_report, enforcement),
+                details_url=report_url,
+                text=_check_run_text(details_url=report_url, enforcement=enforcement),
+                api_base_url=config.api_base_url,
+            )
+        except GitHubAppRequestError:
+            note = f"{note} Check run could not be created."
+            status = "partial"
+            code = CHECK_RUN_DELIVERY_ERROR_CODE
     return GitHubWebhookResult(
         event=event_name,
         action=action,
@@ -559,13 +695,16 @@ def handle_github_app_webhook(
         check_run_id=check_run_id,
         report_id=report_id,
         report_url=report_url,
-        note="GitHub App webhook processed and advisory analysis completed.",
+        note=note,
+        status=status,
+        code=code,
     )
 
 
 def _repository_reference(
     owner: str, repo_name: str, *, config: GitHubAppConfig
 ) -> str:
+    _validate_config_urls(config)
     host = parse.urlparse(config.authorize_url).netloc.strip().lower()
     if not host:
         host = parse.urlparse(config.api_base_url).netloc.strip().lower()
@@ -587,22 +726,27 @@ def _project_scope_failure_result(
     config: GitHubAppConfig,
 ) -> GitHubWebhookResult:
     note = f"{code}: {message}"
-    check_run_id = (
-        _create_check_run(
-            owner=owner,
-            repo_name=repo_name,
-            head_sha=head_sha,
-            installation_token=installation_token,
-            conclusion="neutral",
-            title=DEFAULT_CHECK_RUN_NAME,
-            summary=note,
-            details_url=None,
-            text=_check_run_text(details_url=None),
-            api_base_url=config.api_base_url,
-        )
-        if config.checks_enabled
-        else None
-    )
+    check_run_id = None
+    status = "failed"
+    result_code = code
+    delivery_code = None
+    if config.checks_enabled:
+        try:
+            check_run_id = _create_check_run(
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
+                installation_token=installation_token,
+                conclusion="neutral",
+                title=DEFAULT_CHECK_RUN_NAME,
+                summary=note,
+                details_url=None,
+                text=_check_run_text(details_url=None, fallback_guidance=note),
+                api_base_url=config.api_base_url,
+            )
+        except GitHubAppRequestError:
+            note = f"{note} Check run could not be created."
+            delivery_code = CHECK_RUN_DELIVERY_ERROR_CODE
     return GitHubWebhookResult(
         event=event_name,
         action=action,
@@ -612,6 +756,9 @@ def _project_scope_failure_result(
         report_id=None,
         report_url=None,
         note=note,
+        status=status,
+        code=result_code,
+        delivery_code=delivery_code,
     )
 
 
@@ -669,8 +816,9 @@ def _download_repo_file(
     api_base_url: str,
 ) -> bytes | None:
     quoted_path = parse.quote(path, safe="/")
+    contents_url = f"{api_base_url}/repos/{owner}/{repo_name}/contents/{quoted_path}?ref={parse.quote(ref, safe='')}"
     payload = _github_api_json(
-        f"{api_base_url}/repos/{owner}/{repo_name}/contents/{quoted_path}?ref={parse.quote(ref, safe='')}",
+        contents_url,
         token=installation_token,
     )
     if isinstance(payload, dict):
@@ -678,20 +826,36 @@ def _download_repo_file(
             return base64.b64decode(str(payload["content"]).encode("utf-8"))
         download_url = str(payload.get("download_url") or "").strip()
         if download_url:
-            return _github_api_bytes(download_url, token=installation_token)
+            # GitHub and Enterprise support raw media on the Contents endpoint.
+            # Never forward an installation token to an upstream-supplied URL.
+            return _github_api_request(
+                contents_url,
+                token=installation_token,
+                method="GET",
+                body=None,
+                accept="application/vnd.github.raw+json",
+            )
     return None
 
 
-def _check_run_conclusion(recommendation: str) -> str:
+def _check_run_conclusion(
+    recommendation: str,
+    enforcement_status: PolicyAdapterStatus | str,
+) -> str:
+    status = PolicyAdapterStatus(enforcement_status)
+    if status == PolicyAdapterStatus.SOFT_BLOCK:
+        return "action_required"
+    if status == PolicyAdapterStatus.HARD_BLOCK:
+        return "failure"
     recommendation_value = str(recommendation).strip().lower()
-    if recommendation_value == "go":
+    if status == PolicyAdapterStatus.ADVISORY and recommendation_value == "go":
         return "success"
-    if recommendation_value == "caution":
-        return "neutral"
-    return "failure"
+    return "neutral"
 
 
-def _check_run_summary(report: dict[str, Any]) -> str:
+def _check_run_summary(
+    report: dict[str, Any], enforcement: IntegrationEnforcementDecision
+) -> str:
     headline = str(
         report.get("narrative_opening") or report.get("top_risk") or ""
     ).strip()
@@ -700,24 +864,71 @@ def _check_run_summary(report: dict[str, Any]) -> str:
     recommendation = str(report.get("recommendation") or "unknown").upper()
     severity = str(report.get("severity") or "unknown").upper()
     score = int(report.get("risk_score") or 0)
+    raw_status = enforcement.policy_output.status.value
+    configured_mode = enforcement.configured_mode.value
+    effective_status = enforcement.effective_status.value
     return (
         f"{headline}\n\n"
         f"Severity: {severity}\n"
         f"Recommendation: {recommendation}\n"
         f"Risk score: {score}\n"
-        "DeployWhisper remains advisory-only and never blocks merge on its own.\n"
-        "Do not configure this check as a required status check."
+        f"Policy status: {raw_status}\n"
+        f"Configured enforcement mode: {configured_mode}\n"
+        f"Effective integration status: {effective_status}\n"
+        "The canonical DeployWhisper report remains advisory-only."
     )
 
 
 def _check_run_text(
     *,
     details_url: str | None,
+    enforcement: IntegrationEnforcementDecision | None = None,
+    fallback_guidance: str | None = None,
 ) -> str:
-    lines = ["DeployWhisper is advisory-only. Do not mark this check as required."]
+    if fallback_guidance is not None:
+        guidance = fallback_guidance
+    elif enforcement is None:
+        guidance = "DeployWhisper analysis could not complete; inspect this check before proceeding."
+    elif enforcement.should_block:
+        guidance = (
+            "This integration is explicitly configured to enforce the effective "
+            f"{enforcement.effective_status.value} policy status."
+        )
+    else:
+        guidance = (
+            "This integration is non-blocking at its configured "
+            f"{enforcement.configured_mode.value} enforcement mode."
+        )
+    lines = [guidance]
+    if details_url is not None or enforcement is not None:
+        lines.append("The canonical DeployWhisper report remains advisory-only.")
     if details_url:
         lines.insert(0, f"[Open the full DeployWhisper report]({details_url})")
     return "\n\n".join(lines)
+
+
+def _skipped_analysis_guidance(statuses: set[str]) -> str:
+    if statuses == {"sensitive"}:
+        return (
+            "Changed artifacts were excluded because they may contain sensitive "
+            "data, so no policy decision was evaluated."
+        )
+    if statuses == {"unsupported"}:
+        return (
+            "Changed artifacts use unsupported formats, so no policy decision "
+            "was evaluated."
+        )
+    if statuses == {"sensitive", "unsupported"}:
+        return (
+            "Changed artifacts were excluded because they may contain sensitive "
+            "data or use unsupported formats, so no policy decision was evaluated."
+        )
+    if statuses:
+        return (
+            "Changed artifacts were excluded for an unrecognized intake reason, "
+            "so no policy decision was evaluated."
+        )
+    return "No changed artifacts were available, so no policy decision was evaluated."
 
 
 def _check_run_details_url(
@@ -729,6 +940,7 @@ def _check_run_details_url(
 
 
 def _require_check_run_report_url_config(config: GitHubAppConfig) -> str:
+    _validate_config_urls(config)
     base_url = (config.app_base_url or "").strip().rstrip("/")
     if not base_url:
         raise GitHubAppConfigurationError(
@@ -749,7 +961,7 @@ def _create_check_run(
     details_url: str | None,
     text: str | None,
     api_base_url: str,
-) -> int | None:
+) -> int:
     payload: dict[str, Any] = {
         "name": title,
         "head_sha": head_sha,
@@ -775,7 +987,9 @@ def _create_check_run(
         check_run_id = response.get("id")
         if isinstance(check_run_id, int):
             return check_run_id
-    return None
+    raise GitHubAppRequestError(
+        "GitHub check-runs API did not return a valid check run id."
+    )
 
 
 def _generate_installation_access_token(
@@ -871,6 +1085,45 @@ def _github_api_bytes(url: str, *, token: str) -> bytes:
     return _github_api_request(url, token=token, method="GET", body=None)
 
 
+class _GitHubRedirectHandler(request.HTTPRedirectHandler):
+    """Keep authenticated requests on their original HTTPS origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        original = parse.urlsplit(req.full_url)
+        target = parse.urlsplit(newurl)
+        if (
+            req.get_method() != "GET"
+            or target.scheme != "https"
+            or target.username is not None
+            or target.password is not None
+            or target.fragment
+            or (original.hostname, original.port or 443)
+            != (target.hostname, target.port or 443)
+        ):
+            raise GitHubAppRequestError("GitHub request redirect was rejected.")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _validate_request_url(url: str) -> None:
+    try:
+        parsed = parse.urlsplit(url)
+        valid = (
+            parsed.scheme == "https"
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.fragment
+            and parsed.port != 0
+            and not any(char.isspace() for char in url)
+        )
+    except ValueError:
+        valid = False
+    if not valid:
+        raise GitHubAppConfigurationError(
+            "GitHub authenticated requests require a credential-free HTTPS destination."
+        )
+
+
 def _github_api_request(
     url: str,
     *,
@@ -878,10 +1131,12 @@ def _github_api_request(
     method: str,
     body: dict[str, Any] | None,
     token_scheme: str = "Bearer",
+    accept: str = "application/vnd.github+json",
 ) -> bytes:
+    _validate_request_url(url)
     data = None
     headers = {
-        "Accept": "application/vnd.github+json",
+        "Accept": accept,
         "Authorization": f"{token_scheme} {token}",
         "User-Agent": "DeployWhisper-GitHub-App",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -891,16 +1146,19 @@ def _github_api_request(
         headers["Content-Type"] = "application/json"
     req = request.Request(url, data=data, headers=headers, method=method)
     try:
-        with request.urlopen(req, timeout=15) as response:
+        with request.build_opener(_GitHubRedirectHandler()).open(
+            req, timeout=15
+        ) as response:
             return response.read()
     except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise GitHubAppRequestError(
-            f"GitHub API request failed ({exc.code}) for {url}: {detail}"
-        ) from exc
+        exc.close()
+        raise GitHubAppRequestError(f"GitHub API request failed ({exc.code}).") from exc
+    except (error.URLError, OSError, ValueError) as exc:
+        raise GitHubAppRequestError("GitHub API request could not complete.") from exc
 
 
 def _post_form_json(url: str, form_payload: dict[str, str]) -> dict[str, Any]:
+    _validate_static_url(url, label="GitHub access-token URL", https_only=True)
     data = parse.urlencode(form_payload).encode("utf-8")
     req = request.Request(
         url,
@@ -913,12 +1171,18 @@ def _post_form_json(url: str, form_payload: dict[str, str]) -> dict[str, Any]:
         },
     )
     try:
-        with request.urlopen(req, timeout=15) as response:
+        with request.build_opener(_GitHubRedirectHandler()).open(
+            req, timeout=15
+        ) as response:
             raw = response.read().decode("utf-8")
     except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
+        exc.close()
         raise GitHubAppRequestError(
-            f"GitHub OAuth token exchange failed ({exc.code}): {detail}"
+            f"GitHub OAuth token exchange failed ({exc.code})."
+        ) from exc
+    except (error.URLError, OSError, ValueError) as exc:
+        raise GitHubAppRequestError(
+            "GitHub OAuth token exchange could not complete."
         ) from exc
     return json.loads(raw)
 

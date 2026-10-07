@@ -14,12 +14,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from evidence.models import EvidenceItem as EvidenceItemPayload
 from evidence.models import Finding as FindingPayload
+from services.content_security import REDACTION_WARNING, redact_value
 from models.tables import (
     AnalysisReport,
     DeploymentOutcome,
     EvidenceItem as PersistedEvidenceItem,
     FeedbackEvent,
     Finding as PersistedFinding,
+    Project,
     RiskAssessment as PersistedRiskAssessment,
 )
 
@@ -427,7 +429,9 @@ def _validate_finding_evidence_refs(
                 _evidence_classification(evidence_by_id[evidence_id])
                 for evidence_id in evidence_refs
                 if evidence_id in evidence_by_id
-                and _is_deterministic_evidence(evidence_by_id[evidence_id])
+                and _is_deploywhisper_deterministic_evidence(
+                    evidence_by_id[evidence_id]
+                )
             }
             if not linked_deterministic_classifications:
                 raise ValueError(
@@ -471,7 +475,7 @@ def _validate_finding_evidence_refs(
             for persisted_finding, evidence_refs in finding_rows
             if persisted_finding.severity in {"high", "critical"}
             and any(
-                _is_deterministic_evidence(evidence_by_id[evidence_id])
+                _is_deploywhisper_deterministic_evidence(evidence_by_id[evidence_id])
                 for evidence_id in evidence_refs
                 if evidence_id in evidence_by_id
             )
@@ -518,10 +522,35 @@ def _is_deterministic_evidence(evidence: dict[str, Any]) -> bool:
     )
 
 
+def _is_deploywhisper_deterministic_evidence(evidence: dict[str, Any]) -> bool:
+    return _is_deploywhisper_evidence(evidence) and _is_deterministic_evidence(evidence)
+
+
+def _is_external_scanner_evidence(evidence: dict[str, Any]) -> bool:
+    return any(
+        str(evidence.get(key) or "") == "external_scanner"
+        for key in ("source_kind", "source_type")
+    )
+
+
+_NON_DEPLOYWHISPER_EVIDENCE_SOURCES = frozenset({"external_scanner", "user_context"})
+
+
+def _is_deploywhisper_evidence(evidence: dict[str, Any]) -> bool:
+    if _is_external_scanner_evidence(evidence):
+        return False
+    sources = {
+        str(evidence.get(key) or "")
+        for key in ("source_kind", "source_type")
+        if str(evidence.get(key) or "")
+    }
+    return not (sources & _NON_DEPLOYWHISPER_EVIDENCE_SOURCES)
+
+
 def _evidence_classification(evidence: dict[str, Any]) -> str:
-    source_kind = str(evidence.get("source_kind") or evidence.get("source_type") or "")
-    if source_kind == "external_scanner":
+    if _is_external_scanner_evidence(evidence):
         return "external"
+    source_kind = str(evidence.get("source_kind") or evidence.get("source_type") or "")
     if source_kind == "user_context":
         return "user_provided"
     determinism_level = str(evidence.get("determinism_level") or "deterministic")
@@ -591,6 +620,7 @@ def create_analysis_report(
     analysis_duration_seconds: int | None = None,
     narrative_degraded: bool | None = None,
     narrative_failure_notice: str | None = None,
+    narrative_guidance_json: str = "[]",
     top_risk_contributors_json: str = "[]",
     context_completeness_json: str = "{}",
     incident_matches_json: str = "[]",
@@ -602,7 +632,7 @@ def create_analysis_report(
     evidence_payload = [
         _normalize_evidence_payload(evidence) for evidence in evidence_payload or []
     ]
-    report = AnalysisReport(
+    report_values = dict(
         project_id=project_id,
         workspace_id=workspace_id,
         risk_score=risk_score,
@@ -615,6 +645,7 @@ def create_analysis_report(
         narrative_explanation=narrative_explanation,
         narrative_degraded=narrative_degraded,
         narrative_failure_notice=narrative_failure_notice,
+        narrative_guidance_json=narrative_guidance_json,
         warnings_json=warnings_json,
         contributors_json=contributors_json,
         analyzed_files_json=analyzed_files_json,
@@ -635,6 +666,38 @@ def create_analysis_report(
         dashboard_display_duration_seconds=dashboard_display_duration_seconds,
         analysis_duration_seconds=analysis_duration_seconds,
     )
+    assessment_values = {
+        "top_risk_contributors_json": top_risk_contributors_json,
+        "context_completeness_json": context_completeness_json,
+    }
+    safe_payload = redact_value(
+        {
+            "report": report_values,
+            "assessment": assessment_values,
+            "findings": findings_payload or [],
+            "evidence": evidence_payload,
+        }
+    )
+    safe_report_values = safe_payload["report"]
+    safe_assessment_values = safe_payload["assessment"]
+    safe_findings = safe_payload["findings"]
+    safe_evidence = safe_payload["evidence"]
+    if (
+        safe_report_values != report_values
+        or safe_assessment_values != assessment_values
+        or safe_findings != (findings_payload or [])
+        or safe_evidence != evidence_payload
+    ):
+        warnings = json.loads(safe_report_values["warnings_json"])
+        safe_report_values["warnings_json"] = json.dumps(
+            list(dict.fromkeys([*warnings, REDACTION_WARNING]))
+        )
+    for original, safe in zip(evidence_payload, safe_evidence, strict=True):
+        if original != safe and safe.get("redaction_status", "none") == "none":
+            safe["redaction_status"] = "redacted"
+    report = AnalysisReport(**safe_report_values)
+    findings_payload = safe_findings
+    evidence_payload = safe_evidence
     finding_rows: list[tuple[PersistedFinding, list[str]]] = []
     for finding in findings_payload or []:
         finding_payload = FindingPayload.model_validate(finding)
@@ -670,9 +733,9 @@ def create_analysis_report(
     _validate_report_verdict_text(
         severity,
         recommendation,
-        top_risk,
-        narrative_opening,
-        narrative_explanation,
+        report.top_risk,
+        report.narrative_opening,
+        report.narrative_explanation,
     )
     _validate_top_risk_contributor_refs(
         top_risk_contributors_json,
@@ -685,8 +748,7 @@ def create_analysis_report(
         recommendation=recommendation,
         score=risk_score,
         confidence=risk_confidence,
-        top_risk_contributors_json=top_risk_contributors_json,
-        context_completeness_json=context_completeness_json,
+        **safe_assessment_values,
     )
     report.findings = [persisted_finding for persisted_finding, _ in finding_rows]
     session.add(report)
@@ -752,6 +814,11 @@ def create_analysis_report(
                     related_change_ids_json=json.dumps(
                         evidence.get("related_change_ids", [])
                     ),
+                    context_source_json=(
+                        json.dumps(evidence["context_source"])
+                        if evidence.get("context_source") is not None
+                        else None
+                    ),
                 )
             )
 
@@ -777,6 +844,33 @@ def get_analysis_report(
         stmt = stmt.where(AnalysisReport.project_id == project_id)
     if workspace_id is not None:
         stmt = stmt.where(AnalysisReport.workspace_id == workspace_id)
+    return session.execute(stmt).scalar_one_or_none()
+
+
+def get_analysis_report_for_project_keys(
+    session: Session,
+    report_id: int,
+    *,
+    project_keys: Sequence[str],
+    include_evidence: bool = True,
+) -> AnalysisReport | None:
+    """Fetch a report only when its project is in the caller's allowed scope."""
+    allowed_keys = {
+        str(project_key).strip()
+        for project_key in project_keys
+        if str(project_key).strip()
+    }
+    if not allowed_keys:
+        return None
+    stmt = (
+        select(AnalysisReport)
+        .join(Project, AnalysisReport.project_id == Project.id)
+        .options(*_report_load_options(include_evidence=include_evidence))
+        .where(
+            AnalysisReport.id == report_id,
+            Project.project_key.in_(allowed_keys),
+        )
+    )
     return session.execute(stmt).scalar_one_or_none()
 
 

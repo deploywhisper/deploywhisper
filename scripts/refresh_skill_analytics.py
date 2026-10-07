@@ -109,7 +109,8 @@ def _load_json_source(location: str, *, token: str | None = None) -> dict[str, o
     if parsed.scheme in {"http", "https"}:
         req = request.Request(
             location,
-            headers=_github_headers(token),
+            # Popularity feeds are public and can live outside GitHub's API.
+            headers=_github_headers(None),
         )
         with request.urlopen(req, timeout=15) as response:
             return json.loads(response.read().decode("utf-8"))

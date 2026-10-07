@@ -8,7 +8,13 @@ from pydantic import BaseModel, Field
 
 from api.schemas import PendingAnalysis
 from parsers.base import ParseBatchResult, ParsedFileResult
+from services.ai_iac_risk_service import assess_iac_provenance
 from services.intake_service import build_pending_analysis
+from services.content_security import (
+    redact_text,
+    sensitive_artifact_values,
+    sensitive_submission_values,
+)
 
 ManifestStatus = Literal["accepted", "excluded", "failed", "sensitive"]
 RedactionStatus = Literal["none", "redacted", "sensitive_blocked"]
@@ -158,11 +164,13 @@ def build_submission_manifest(
     pending_analysis: PendingAnalysis | None = None,
     parse_batch: ParseBatchResult,
     audit_context: dict[str, Any] | None = None,
+    sensitive_values: tuple[str, ...] = (),
 ) -> SubmissionManifest:
     """Return a durable manifest for submitted artifacts and coverage outcomes."""
     pending = pending_analysis or build_pending_analysis(files)
     parse_by_name = _parse_results_by_name(parse_batch)
     context = audit_context or {}
+    batch_sensitive_values = sensitive_values or sensitive_submission_values(files)
     provenance = {
         "source_interface": context.get("source_interface"),
         "trigger_type": context.get("trigger_type"),
@@ -209,6 +217,49 @@ def build_submission_manifest(
     sensitive_count = sum(1 for item in items if item.status == "sensitive")
     failed_count = sum(1 for item in items if item.status == "failed")
     partial_count = sum(1 for item in items if item.partial)
+    provenance_eligible_names = {
+        item.name for item in items if item.status in {"accepted", "failed"}
+    }
+    raw_content_by_name = {
+        intake_item.name: raw_content
+        for intake_item, (_, raw_content) in zip(
+            pending.items,
+            files,
+            strict=False,
+        )
+    }
+    provenance_eligible_raw_files = {
+        name: raw_content_by_name.get(name) for name in provenance_eligible_names
+    }
+    provenance.update(
+        assess_iac_provenance(
+            provenance_eligible_raw_files,
+            audit_context=context,
+        )
+    )
+    for item in items:
+        content = raw_content_by_name.get(item.name)
+        text = (content or b"").decode("utf-8", errors="replace")
+        if item.status in {"accepted", "failed"} and (
+            sensitive_artifact_values(content)
+            or redact_text(text, sensitive_values=batch_sensitive_values) != text
+        ):
+            item.redaction_status = "redacted"
+            if item.status == "accepted":
+                item.message += (
+                    " Sensitive content redacted; local artifact snapshot blocked."
+                )
+        item_raw_files = (
+            {item.name: raw_content_by_name.get(item.name)}
+            if item.status in {"accepted", "failed"}
+            else {}
+        )
+        item.provenance.update(
+            assess_iac_provenance(
+                item_raw_files,
+                audit_context=context,
+            )
+        )
     return SubmissionManifest(
         submitted_artifact_count=len(items),
         accepted_artifact_count=accepted_count,
@@ -222,6 +273,9 @@ def build_submission_manifest(
         redaction={
             "filenames_redacted": False,
             "sensitive_content_excluded": sensitive_count > 0,
+            "content_redacted": any(
+                item.redaction_status == "redacted" for item in items
+            ),
         },
         items=items,
     )

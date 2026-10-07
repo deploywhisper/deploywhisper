@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from html import escape
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from api.errors import ApiError, ApiRoute
 from config import settings
+from services.content_security import REDACTED, redact_reference, redact_value
 from integrations.github.app_service import (
     GitHubAppConfigurationError,
     GitHubAppProjectScopeError,
@@ -25,6 +27,27 @@ router = APIRouter(
     tags=["github-app"],
     route_class=ApiRoute,
 )
+
+
+def _safe_callback_link(
+    value: str, fallback: str, *, sensitive_values: tuple[str, ...]
+) -> str:
+    safe = redact_reference(value, sensitive_values=sensitive_values)
+    try:
+        parsed = urlsplit(safe or "")
+    except ValueError:
+        return fallback
+    if (
+        safe == REDACTED
+        or not safe
+        or safe.startswith("//")
+        or parsed.username is not None
+        or parsed.password is not None
+        or (parsed.scheme and parsed.scheme not in {"http", "https"})
+        or (not parsed.scheme and not safe.startswith(("/", "#")))
+    ):
+        return fallback
+    return safe
 
 
 @router.get("/oauth/start", include_in_schema=False)
@@ -55,8 +78,23 @@ def github_app_oauth_callback(
             code="github_app_oauth_failed",
             message=str(exc),
         ) from exc
-    install_url = result.install_url or result.marketplace_url or "#"
-    return_to = result.state_return_to or "/"
+    sensitive_values = tuple(
+        value
+        for value in (code, state, getattr(result, "user_access_token", None))
+        if value
+    )
+    install_url = _safe_callback_link(
+        result.install_url or result.marketplace_url or "#",
+        "#",
+        sensitive_values=sensitive_values,
+    )
+    return_to = _safe_callback_link(
+        result.state_return_to or "/", "/", sensitive_values=sensitive_values
+    )
+    token_type = (
+        redact_reference(result.token_type, sensitive_values=sensitive_values) or ""
+    )
+    scope = redact_reference(result.scope, sensitive_values=sensitive_values)
     return HTMLResponse(
         content=(
             "<!doctype html><html><head><meta charset='utf-8'>"
@@ -71,8 +109,8 @@ def github_app_oauth_callback(
             "</style></head><body><main>"
             "<h1>GitHub App authorization complete</h1>"
             "<p>Your DeployWhisper GitHub App authorization succeeded. Continue to the installation step to connect the app to your team or organization.</p>"
-            f"<p>Token type: {escape(result.token_type)}"
-            + (f" · Scope: {escape(result.scope)}" if result.scope else "")
+            f"<p>Token type: {escape(token_type)}"
+            + (f" · Scope: {escape(scope)}" if scope else "")
             + "</p>"
             f"<a class='button' href='{escape(install_url)}'>Continue to GitHub App installation</a>"
             f"<a class='button secondary' href='{escape(return_to)}'>Return to DeployWhisper</a>"
@@ -109,56 +147,68 @@ async def github_app_webhook(request: Request) -> dict[str, object]:
         )
     except GitHubAppProjectScopeError as exc:
         code = getattr(exc, "code", "invalid_project_reference")
-        return {
+        if code not in {
+            "missing_project_scope",
+            "project_not_found",
+            "conflicting_project_reference",
+            "invalid_project_reference",
+        }:
+            code = "invalid_project_reference"
+        return redact_value(
+            {
+                "data": {
+                    "event": event_name,
+                    "action": str(payload.get("action") or "").strip() or None,
+                    "handled": True,
+                    "automatic_analysis_triggered": False,
+                    "check_run_id": None,
+                    "report_id": None,
+                    "report_url": None,
+                    "marketplace_url": config.marketplace_url,
+                    "install_url": config.install_url,
+                    "advisory_only": True,
+                    "note": f"{code}: GitHub analysis project scope could not be resolved.",
+                },
+                "meta": {
+                    "api_version": "v1",
+                    "app_name": settings.app_name,
+                },
+            }
+        )
+    except GitHubAppConfigurationError as exc:
+        raise ApiError(
+            status_code=405,
+            code="github_app_unconfigured",
+            message="GitHub App configuration is unavailable or invalid.",
+        ) from exc
+    except GitHubAppRequestError as exc:
+        raise ApiError(
+            status_code=502,
+            code="github_app_upstream_failed",
+            message="GitHub App upstream request could not complete.",
+        ) from exc
+
+    return redact_value(
+        {
             "data": {
-                "event": event_name,
-                "action": str(payload.get("action") or "").strip() or None,
-                "handled": True,
-                "automatic_analysis_triggered": False,
-                "check_run_id": None,
-                "report_id": None,
-                "report_url": None,
+                "event": result.event,
+                "action": result.action,
+                "handled": result.handled,
+                "automatic_analysis_triggered": result.automatic_analysis_triggered,
+                "check_run_id": result.check_run_id,
+                "report_id": result.report_id,
+                "report_url": result.report_url,
+                "status": getattr(result, "status", "ok"),
+                "code": getattr(result, "code", None),
+                "delivery_code": getattr(result, "delivery_code", None),
                 "marketplace_url": config.marketplace_url,
                 "install_url": config.install_url,
                 "advisory_only": True,
-                "note": f"{code}: {exc}",
+                "note": result.note,
             },
             "meta": {
                 "api_version": "v1",
                 "app_name": settings.app_name,
             },
         }
-    except GitHubAppConfigurationError as exc:
-        raise ApiError(
-            status_code=405,
-            code="github_app_unconfigured",
-            message=str(exc),
-        ) from exc
-    except GitHubAppRequestError as exc:
-        raise ApiError(
-            status_code=502,
-            code="github_app_upstream_failed",
-            message=str(exc),
-        ) from exc
-
-    return {
-        "data": {
-            "event": result.event,
-            "action": result.action,
-            "handled": result.handled,
-            "automatic_analysis_triggered": result.automatic_analysis_triggered,
-            "check_run_id": result.check_run_id,
-            "report_id": result.report_id,
-            "report_url": result.report_url,
-            "status": getattr(result, "status", "ok"),
-            "code": getattr(result, "code", None),
-            "marketplace_url": config.marketplace_url,
-            "install_url": config.install_url,
-            "advisory_only": True,
-            "note": result.note,
-        },
-        "meta": {
-            "api_version": "v1",
-            "app_name": settings.app_name,
-        },
-    }
+    )

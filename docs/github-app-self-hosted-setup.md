@@ -18,7 +18,7 @@ Use this guide if you want:
 - You create the GitHub App in your own GitHub account or organization
 - GitHub sends webhooks to your own DeployWhisper server
 - Your own DeployWhisper server fetches changed PR artifacts
-- Your own DeployWhisper server creates advisory check runs and report links
+- Your own DeployWhisper server creates policy-aware check runs and advisory report links
 - The app does not need to be public or listed on GitHub Marketplace
 - App creation, account or organization selection, and repository selection happen in GitHub's own Developer Settings and Install App UI
 
@@ -70,7 +70,7 @@ Recommended values:
 - GitHub App name:
   `DeployWhisper`
 - Description:
-  `Advisory-only deployment risk analysis for pull requests using your own DeployWhisper server.`
+  `Policy-aware deployment risk analysis for pull requests using your own DeployWhisper server.`
 - Homepage URL:
   `https://<your-deploywhisper-base-url>`
 - Callback URL:
@@ -131,6 +131,20 @@ Only set `DEPLOYWHISPER_GITHUB_APP_CLIENT_ID` and
 `DEPLOYWHISPER_GITHUB_APP_CLIENT_SECRET` when you intentionally enable the
 optional OAuth helper route. They are not required for the manual setup path.
 
+### 7. Establish advisory onboarding state
+
+Before installation, inspect the setting source and resolved configured
+enforcement mode for the `github` integration. If the project default is
+blocking and no existing scope shares that project/integration key,
+create an integration-specific `advisory` override before granting repository
+access. Keep that override through installation and validation; remove or raise
+it only after this integration and repository scope complete the enforcement
+guardrail review. If existing repositories share the key, do not downgrade them:
+use a separate project for advisory onboarding, or grant staged repository
+access while the check remains non-required, complete the new repository's
+[Enforcement Guardrails](./enforcement-guardrails.md) smoke tests, and enable
+source-bound protection only after approval.
+
 ## Installation steps
 
 1. Open the GitHub App settings page
@@ -147,9 +161,9 @@ optional OAuth helper route. They are not required for the manual setup path.
 4. Confirm DeployWhisper downloads the changed files within the shared 50 MB limit
 5. Confirm DeployWhisper persists a report
 6. Confirm a check run named `DeployWhisper / Risk Analysis` appears on the PR
-7. Confirm the check remains advisory-only and does not block merge on its own
+7. Confirm the check summary reports policy status, configured mode, and effective status
 8. Confirm the report link opens your own DeployWhisper server
-9. Confirm branch protection does not list `DeployWhisper / Risk Analysis` as a required status check
+9. For the default `advisory` mode, confirm branch protection does not list `DeployWhisper / Risk Analysis` as a required status check
 
 ## Troubleshooting
 
@@ -189,10 +203,23 @@ optional OAuth helper route. They are not required for the manual setup path.
 
 ### Branch protection blocks merge on DeployWhisper
 
-DeployWhisper is advisory-only. Remove `DeployWhisper / Risk Analysis` from
-required status checks in GitHub branch protection. Teams can still read the
-check result, but DeployWhisper should not be configured as the component that
-blocks merges.
+The canonical DeployWhisper report is advisory-only, but the GitHub integration
+can explicitly enforce policy. First inspect the setting source and resolved
+configured enforcement mode; an integration without an override may inherit the
+project default. Inspect the effective status for the current report separately;
+it must not decide whether protection remains installed. Remove
+`DeployWhisper / Risk Analysis` from required checks only when the resolved
+configured mode is `advisory` or `warn`. If it is `soft-block` or `hard-block`,
+the required check is an intentional operator control even when one report's
+effective status is non-blocking. Prefer a protection-layer exception. If a mode
+change is authorized and no other scope shares the project/integration key,
+create a narrow integration-specific override rather than changing the project
+default before removing that protection. Otherwise use a separate project or
+integration identity or complete the shared-scope guardrail review without
+downgrading the other consumers.
+Before making the check required, complete the
+[Enforcement Guardrails](./enforcement-guardrails.md), including benchmark,
+human-review, rollback, and break-glass ownership.
 
 ## Action-first recommendation
 
@@ -232,3 +259,28 @@ The repository includes OAuth start/callback endpoints for advanced setups, but 
 5. Verify webhook delivery and advisory check runs
 
 Do not store GitHub client secrets, webhook secrets, private keys, or user access tokens in the application database.
+
+## Credential storage and logging
+
+- Set secrets through your deployment's secret environment mechanism. Prefer
+  `DEPLOYWHISPER_GITHUB_APP_PRIVATE_KEY_PATH` with a read-only private key mount;
+  restrict the file to the runtime user (for example, mode `0600`). Signing creates
+  a restricted temporary key file and removes it after the signing attempt. Keep
+  the host temporary directory and backups within your security boundary.
+- Use only trusted HTTPS GitHub or GitHub Enterprise API/OAuth endpoints. Do not
+  embed credentials in endpoint or public base URLs: userinfo, query strings,
+  fragments, and configured credential values are rejected. Local DeployWhisper
+  HTTP URLs remain usable for development, but protect externally reachable
+  report and callback links with HTTPS.
+- Exclude OAuth callback `code` and `state` parameters from reverse-proxy access
+  logs, traces, error monitoring, and analytics. Apply these controls before
+  enabling the optional OAuth helper; application-side redaction cannot control
+  upstream proxies or external telemetry collectors.
+- Never publish webhook payloads, request authorization headers, OAuth form
+  bodies, tokens, or key files in troubleshooting tickets. GitHub request errors
+  intentionally omit upstream bodies and complete request URLs.
+- After suspected disclosure, revoke or rotate the affected App private key,
+  client secret, webhook secret, or user token through GitHub, replace server
+  configuration, and verify the previous credential no longer works. Rotate
+  webhook secrets on both ends. Limit App installation access to the required
+  repositories and keep the documented repository permissions.

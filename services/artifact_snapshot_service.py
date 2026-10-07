@@ -6,10 +6,17 @@ import hashlib
 import json
 import shutil
 from pathlib import Path
+from typing import Iterable
 
 from pydantic import BaseModel, Field
 
 from config import settings
+from services.content_security import (
+    BLOCKED_CONTENT,
+    redact_text,
+    sensitive_artifact_values,
+)
+from services.intake_service import is_sensitive_file
 
 
 class ArtifactSnapshot(BaseModel):
@@ -28,11 +35,35 @@ def _artifact_root(*, create: bool) -> Path:
 
 
 def _report_dir(report_id: int, *, create: bool) -> Path:
-    return _artifact_root(create=create) / str(report_id)
+    if type(report_id) is not int or report_id < 1:
+        raise ValueError("Artifact snapshots require a positive integer report ID.")
+    root = _artifact_root(create=create).resolve()
+    report_dir = root / str(report_id)
+    if report_dir.is_symlink() or report_dir.resolve().parent != root:
+        raise ValueError("Artifact snapshot report directory is unsafe.")
+    return report_dir
+
+
+def _snapshot_path(report_dir: Path, stored_name: str) -> Path:
+    # Historical manifests may contain ordinary basenames such as old.txt.
+    # Never let manifest contents select a directory or follow a symlink.
+    if (
+        not isinstance(stored_name, str)
+        or not stored_name
+        or stored_name in {".", ".."}
+        or "/" in stored_name
+        or "\\" in stored_name
+        or "\x00" in stored_name
+    ):
+        raise ValueError("Artifact snapshot filename is unsafe.")
+    path = report_dir / stored_name
+    if path.is_symlink() or path.resolve().parent != report_dir:
+        raise ValueError("Artifact snapshot path is unsafe.")
+    return path
 
 
 def _manifest_path(report_id: int) -> Path:
-    return _report_dir(report_id, create=False) / "manifest.json"
+    return _snapshot_path(_report_dir(report_id, create=False), "manifest.json")
 
 
 def _stored_name(artifact_name: str) -> str:
@@ -42,19 +73,33 @@ def _stored_name(artifact_name: str) -> str:
 
 
 def save_report_artifacts(
-    report_id: int, artifact_snapshots: dict[str, bytes | None] | None
+    report_id: int,
+    artifact_snapshots: dict[str, bytes | None] | None,
+    *,
+    sensitive_values: Iterable[str] = (),
 ) -> None:
     """Persist uploaded artifact snapshots for one report."""
     if not artifact_snapshots:
         return
+    if not any(content is not None for content in artifact_snapshots.values()):
+        return
     report_dir = _report_dir(report_id, create=True)
     report_dir.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, str] = {}
+    sensitive_values = tuple(sensitive_values)
     for artifact_name, raw_content in artifact_snapshots.items():
-        if raw_content is None:
+        if raw_content is None or is_sensitive_file(artifact_name):
             continue
         stored_name = _stored_name(artifact_name)
-        (report_dir / stored_name).write_bytes(raw_content)
+        decoded_content = raw_content.decode("utf-8", errors="replace")
+        content = (
+            BLOCKED_CONTENT.encode("utf-8")
+            if sensitive_artifact_values(raw_content)
+            or redact_text(decoded_content, sensitive_values=sensitive_values)
+            != decoded_content
+            else raw_content
+        )
+        _snapshot_path(report_dir, stored_name).write_bytes(content)
         manifest[artifact_name] = stored_name
     _manifest_path(report_id).write_text(
         json.dumps(manifest, indent=2, sort_keys=True),
@@ -64,20 +109,38 @@ def save_report_artifacts(
 
 def load_report_artifact(report_id: int, artifact_name: str) -> ArtifactSnapshot | None:
     """Return one decoded artifact snapshot when available."""
-    manifest_path = _manifest_path(report_id)
+    report_dir = _report_dir(report_id, create=False)
+    try:
+        manifest_path = _snapshot_path(report_dir, "manifest.json")
+    except ValueError:
+        return None
     if not manifest_path.exists():
         return None
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        return None
     stored_name = manifest.get(artifact_name)
     if not stored_name:
         return None
-    artifact_path = _report_dir(report_id, create=False) / stored_name
+    try:
+        artifact_path = _snapshot_path(report_dir, stored_name)
+    except ValueError:
+        return None
     if not artifact_path.exists():
         return None
+    raw_content = artifact_path.read_bytes()
+    sensitive_values = sensitive_artifact_values(raw_content)
+    decoded_content = raw_content.decode("utf-8", errors="replace")
     return ArtifactSnapshot(
         report_id=report_id,
-        artifact_name=artifact_name,
-        content=artifact_path.read_text(encoding="utf-8", errors="replace"),
+        artifact_name=redact_text(artifact_name, sensitive_values=sensitive_values),
+        content=(
+            BLOCKED_CONTENT
+            if is_sensitive_file(artifact_name)
+            or sensitive_values
+            or redact_text(decoded_content) != decoded_content
+            else decoded_content
+        ),
     )
 
 

@@ -95,6 +95,18 @@ const report = {
       severity_hint: "high",
       deterministic: true,
       confidence: 0.9,
+      context_source: {
+        source_id: "topology:kubernetes:current-context",
+        source_type: "topology",
+        source_ref: "current-context",
+        scope: "project:checkout",
+        freshness_status: "current",
+        last_observed_at: "2026-06-14T00:00:00Z",
+        age_days: 2,
+        confidence: 0.9,
+        conflicts: [],
+        limitations: [],
+      },
       related_change_ids: [],
     },
   ],
@@ -130,6 +142,32 @@ const report = {
     incident_index_version: null,
     incident_index_freshness_status: null,
     evidence_success_rate: 1,
+    context_sources: [
+      {
+        source_id: "topology:kubernetes:current-context",
+        source_type: "topology",
+        source_ref: "current-context",
+        scope: "project:checkout",
+        freshness_status: "current",
+        last_observed_at: "2026-06-14T00:00:00Z",
+        age_days: 2,
+        confidence: 0.9,
+        conflicts: [],
+        limitations: [],
+      },
+      {
+        source_id: "incident:index:checkout",
+        source_type: "incident",
+        source_ref: "incidents:empty",
+        scope: "project:checkout",
+        freshness_status: "empty",
+        last_observed_at: null,
+        age_days: null,
+        confidence: 0,
+        conflicts: ["missing_incident_history"],
+        limitations: ["missing_incident_history", "empty_incident_index", "incident_pack_missing", "incident_dates_unknown", "incident_scope_unverified"],
+      },
+    ],
     context_todos: [],
     partial_context: false,
   },
@@ -178,6 +216,7 @@ const report = {
       headline: "Ingress widened",
       top_findings: [],
       evidence_count: 1,
+      external_evidence_count: 0,
       blast_radius_summary: "1 service affected",
       rollback_summary: "1 rollback step",
       context_completeness: { score: 0.72, label: "medium", summary: "Context mostly complete." },
@@ -219,6 +258,15 @@ function renderReport(path = "/reports/77?private=1", detail: ReportDetail = rep
 }
 
 describe("ReportScreen", () => {
+  it("shows content redaction status in the existing audit metadata card", () => {
+    const markup = renderReport("/reports/77?private=1&tab=audit", {
+      ...report,
+      audit: { ...report.audit, redaction_status: "redacted" },
+    });
+    expect(markup).toContain("Content redaction");
+    expect(markup).toContain("redacted");
+  });
+
   it("renders Part B3 header and overview from persisted report data", () => {
     const markup = renderReport();
 
@@ -242,10 +290,450 @@ describe("ReportScreen", () => {
     const markup = renderReport("/reports/77?private=1&tab=context");
 
     expect(markup).toContain("BLAST RADIUS");
+    expect(markup).toContain("CONTEXT SOURCES");
+    expect(markup).toContain("topology:kubernetes:current-context");
+    expect(markup).toContain("current-context");
+    expect(markup).toContain("90%");
+    expect(markup).toContain("missing_incident_history");
+    expect(markup.match(/>missing_incident_history</g)?.length).toBe(1);
+    expect(markup).toContain("incident_pack_missing");
+    expect(markup).toContain("incident_dates_unknown");
+    expect(markup).toContain("incident_scope_unverified");
+    expect(markup).not.toContain("+2 more");
     expect(markup).toContain("Contained radius");
     expect(markup).toContain("checkout");
     expect(markup).toContain("Direct");
     expect(markup).toContain("Transitive");
+  });
+
+  it("renders context sources with duplicate source ids as separate rows", () => {
+    const duplicateSourceReport = {
+      ...report,
+      context_completeness: {
+        ...report.context_completeness,
+        context_sources: [
+          ...report.context_completeness.context_sources,
+          {
+            ...report.context_completeness.context_sources[0],
+            source_ref: "current-context-shadow",
+            scope: "project:checkout/workspace:shadow",
+            freshness_status: "stale",
+            confidence: 0.4,
+          },
+        ],
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport(
+      "/reports/77?private=1&tab=context",
+      duplicateSourceReport,
+    );
+
+    expect(markup.match(/data-testid="context-source-row"/g)?.length).toBe(3);
+    expect(markup).toContain("current-context");
+    expect(markup).toContain("current-context-shadow");
+    expect(markup).toContain("project:checkout/workspace:shadow");
+    expect(markup).toContain("stale - 40%");
+  });
+
+  it("labels scanner findings as external evidence across report surfaces", () => {
+    const scannerReport = {
+      ...report,
+      findings: [
+        {
+          ...report.findings[0],
+          evidence_classification: "external",
+          evidence_label: "External evidence",
+          evidence_refs: ["ev-scanner"],
+        },
+      ],
+      evidence_items: [
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-scanner",
+          source_type: "external_scanner",
+          source_kind: "artifact",
+          source_ref: "semgrep://finding/abc123",
+          summary: "Semgrep flagged a scanner finding.",
+          evidence_label: "External evidence",
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          external_evidence_count: 0,
+          external_evidence_summary: "1 external scanner evidence item is included as context, not DeployWhisper severity proof.",
+        },
+      },
+    } satisfies ReportDetail;
+
+    const overviewMarkup = renderReport("/reports/77?private=1", scannerReport);
+    const findingsMarkup = renderReport("/reports/77?private=1&tab=findings", scannerReport);
+    const confidenceMarkup = renderReport("/reports/77?private=1&tab=confidence", scannerReport);
+
+    expect(overviewMarkup).toContain("External evidence");
+    expect(overviewMarkup).toContain("1 evidence item - includes 1 external context item");
+    expect(overviewMarkup).not.toContain("1 deterministic items");
+    expect(findingsMarkup).toContain("External evidence");
+    expect(confidenceMarkup).toContain("1 evidence item - includes 1 external context item");
+    expect(confidenceMarkup).toContain("External evidence");
+    expect(confidenceMarkup).toContain("Semgrep flagged a scanner finding.");
+    expect(`${overviewMarkup}${findingsMarkup}${confidenceMarkup}`).not.toContain(">external_scanner<");
+  });
+
+  it("labels mixed scanner findings as including external context", () => {
+    const mixedReport = {
+      ...report,
+      findings: [
+        {
+          ...report.findings[0],
+          evidence_label: "Includes external context",
+          evidence_refs: ["ev-ingress", "ev-scanner"],
+        },
+      ],
+      evidence_items: [
+        ...report.evidence_items,
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-scanner",
+          source_type: "external_scanner",
+          source_kind: "external_scanner",
+          source_ref: "semgrep://finding/abc123",
+          summary: "Semgrep flagged supporting scanner context.",
+          evidence_label: "External evidence",
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          external_evidence_count: 1,
+          external_evidence_summary: "1 external scanner evidence item is included as context, not DeployWhisper severity proof.",
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1&tab=findings", mixedReport);
+
+    expect(markup).toContain("Includes external context");
+    expect(markup).toContain("Includes external context</span><span class=\"dw-cross-tool");
+    expect(markup).not.toContain("External evidence</span><span class=\"dw-cross-tool");
+  });
+
+  it("renders scanner conflicts with both sources and verification guidance", () => {
+    const conflictReport = {
+      ...report,
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          scanner_conflicts: [
+            {
+              finding_id: "finding-ingress",
+              finding_title: "Ingress exposes checkout service",
+              scanner_source: "semgrep://results/sg-1",
+              scanner_freshness: "current",
+              deterministic_source: "ev-ingress",
+              deterministic_freshness: "current",
+              conflict_summary: "Scanner severity high differs from DeployWhisper severity medium.",
+              confidence_impact: "Scanner confidence high; DeployWhisper confidence remains medium.",
+              recommended_verification: "Review scanner evidence against deterministic evidence before acting.",
+            },
+            {
+              finding_id: "finding-ingress",
+              finding_title: "Ingress exposes checkout service",
+              scanner_source: "semgrep://results/sg-1",
+              scanner_freshness: "current",
+              deterministic_source: "ev-topology",
+              deterministic_freshness: "stale",
+              conflict_summary: "Scanner freshness is current while deterministic evidence freshness is stale.",
+              confidence_impact: "Scanner confidence high; DeployWhisper confidence remains medium.",
+              recommended_verification: "Review scanner evidence against deterministic evidence before acting.",
+            },
+          ],
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1&tab=confidence", conflictReport);
+
+    expect(markup).toContain("SCANNER CONFLICTS");
+    expect(markup).toContain("Ingress exposes checkout service");
+    expect(markup).toContain("semgrep://results/sg-1");
+    expect(markup).toContain("ev-ingress");
+    expect(markup).toContain("ev-topology");
+    expect(markup).toContain("scanner current - deterministic current");
+    expect(markup).toContain("scanner current - deterministic stale");
+    expect(markup).toContain("Scanner confidence high; DeployWhisper confidence remains medium.");
+    expect(markup).toContain("Review scanner evidence against deterministic evidence before acting.");
+  });
+
+  it("keeps legacy fallback labels aligned with linked evidence provenance", () => {
+    const legacyReport = {
+      ...report,
+      findings: [
+        {
+          ...report.findings[0],
+          evidence_classification: "external",
+          evidence_label: null,
+          evidence_refs: ["ev-ingress", "ev-scanner"],
+        },
+      ],
+      evidence_items: [
+        ...report.evidence_items,
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-scanner",
+          source_type: "external_scanner",
+          source_kind: "external_scanner",
+          source_ref: "semgrep://finding/abc123",
+          summary: "Semgrep flagged supporting scanner context.",
+          evidence_label: null,
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          external_evidence_count: 1,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1&tab=findings", legacyReport);
+
+    expect(markup).toContain("Includes external context");
+    expect(markup).not.toContain("External evidence</span><span class=\"dw-cross-tool");
+  });
+
+  it("uses one evidence-count source for external context summaries", () => {
+    const redactedEvidenceReport = {
+      ...report,
+      findings: [],
+      evidence_items: [],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 2,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", redactedEvidenceReport);
+    const confidenceMarkup = renderReport("/reports/77?private=1&tab=confidence", redactedEvidenceReport);
+
+    expect(markup).toContain("4 evidence items - includes 2 external context items");
+    expect(markup).not.toContain("0 evidence items - includes 2 external context items");
+    expect(confidenceMarkup).toContain("4 evidence items - includes 2 external context items");
+    expect(confidenceMarkup).toContain("Evidence detail was omitted or redacted for this view.");
+  });
+
+  it("uses payload totals for redacted internal-only evidence summaries", () => {
+    const redactedInternalReport = {
+      ...report,
+      findings: [],
+      evidence_items: [],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 0,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", redactedInternalReport);
+
+    expect(markup).toContain("4 evidence items");
+    expect(markup).not.toContain("4 deterministic items");
+    expect(markup).not.toContain("0 evidence items");
+  });
+
+  it("does not undercount rendered evidence rows when summary counts lag", () => {
+    const stalePayloadReport = {
+      ...report,
+      evidence_items: [
+        ...report.evidence_items,
+        ...Array.from({ length: 4 }, (_, index) => ({
+          ...report.evidence_items[0],
+          evidence_id: `ev-extra-${index}`,
+          source_type: index < 3 ? "external_scanner" : "artifact",
+          source_kind: index < 3 ? "external_scanner" : "artifact",
+          source_ref: `scanner://finding/${index}`,
+          summary: `Additional evidence row ${index}.`,
+        })),
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 1,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", stalePayloadReport);
+
+    expect(markup).toContain("5 evidence items - includes 3 external context items");
+    expect(markup).not.toContain("5 evidence items - includes 1 external context item");
+  });
+
+  it("does not let stale external evidence counts exceed total evidence", () => {
+    const staleHighExternalReport = {
+      ...report,
+      evidence_items: [],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 9,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", staleHighExternalReport);
+
+    expect(markup).toContain("4 evidence items - includes 4 external context items");
+    expect(markup).not.toContain("4 evidence items - includes 9 external context items");
+  });
+
+  it("does not count visible internal evidence rows as stale external context", () => {
+    const partiallyRedactedReport = {
+      ...report,
+      evidence_items: [
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-visible-internal-1",
+          source_type: "artifact",
+          source_kind: "artifact",
+          source_ref: "terraform://plan.json#internal-1",
+          summary: "Visible DeployWhisper evidence.",
+        },
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-visible-internal-2",
+          source_type: "parser",
+          source_kind: "parser",
+          source_ref: "parser://plan.json#internal-2",
+          summary: "Visible parser evidence.",
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 4,
+          external_evidence_count: 9,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", partiallyRedactedReport);
+
+    expect(markup).toContain("4 evidence items - includes 2 external context items");
+    expect(markup).not.toContain("4 evidence items - includes 4 external context items");
+  });
+
+  it("does not overcount external context when rendered evidence already matches payload total", () => {
+    const staleHighRenderedReport = {
+      ...report,
+      evidence_items: [
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-internal",
+          source_type: "artifact",
+          source_kind: "artifact",
+          source_ref: "terraform://plan.json#internal",
+          summary: "Internal DeployWhisper evidence.",
+        },
+        {
+          ...report.evidence_items[0],
+          evidence_id: "ev-scanner",
+          source_type: "external_scanner",
+          source_kind: "external_scanner",
+          source_ref: "scanner://finding/1",
+          summary: "External scanner context.",
+        },
+      ],
+      share_summary: {
+        ...report.share_summary,
+        json_payload: {
+          ...report.share_summary.json_payload,
+          evidence_count: 2,
+          external_evidence_count: 4,
+        },
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport("/reports/77?private=1", staleHighRenderedReport);
+
+    expect(markup).toContain("2 evidence items - includes 1 external context item");
+    expect(markup).not.toContain("2 evidence items - includes 2 external context items");
+  });
+
+  it("renders note-only duplicate context sources with distinct row identities", () => {
+    const noteOnlyDuplicateReport = {
+      ...report,
+      context_completeness: {
+        ...report.context_completeness,
+        context_sources: [
+          ...report.context_completeness.context_sources,
+          {
+            ...report.context_completeness.context_sources[0],
+            limitations: ["note_only_shadow"],
+          },
+        ],
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport(
+      "/reports/77?private=1&tab=context",
+      noteOnlyDuplicateReport,
+    );
+
+    expect(markup.match(/data-testid="context-source-row"/g)?.length).toBe(3);
+    expect(markup).toContain("note_only_shadow");
+    expect(markup).toContain("data-context-source-identity");
+  });
+
+  it("encodes selector-sensitive context source row identities", () => {
+    const encodedIdentityReport = {
+      ...report,
+      context_completeness: {
+        ...report.context_completeness,
+        context_sources: [
+          {
+            ...report.context_completeness.context_sources[0],
+            source_ref: "current|context\"]",
+            scope: "project:checkout|workspace:prod]",
+            limitations: ["note|with]delimiter"],
+          },
+        ],
+      },
+    } satisfies ReportDetail;
+
+    const markup = renderReport(
+      "/reports/77?private=1&tab=context",
+      encodedIdentityReport,
+    );
+
+    expect(markup).toContain("current|context&quot;]");
+    expect(markup).toContain("note|with]delimiter");
+    expect(markup).toContain("current%7Ccontext%5C%22%5D");
+    expect(markup).toContain("note%7Cwith%5Ddelimiter");
+  });
+
+  it("renders evidence context source references on the confidence tab", () => {
+    const markup = renderReport("/reports/77?private=1&tab=confidence");
+
+    expect(markup).toContain("EVIDENCE REGISTER");
+    expect(markup).toContain("topology:kubernetes:current-context (current)");
   });
 
   it("renders a green safe state when the blast radius is zero", () => {

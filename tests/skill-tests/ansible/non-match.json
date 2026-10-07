@@ -1,0 +1,13 @@
+{
+  "name": "ansible-non-match",
+  "description": "Does not load the Ansible skill without Ansible evidence.",
+  "assessment_tool": "unrelated",
+  "contributor_summary": "A documentation-only change with no Ansible artifacts.",
+  "raw_files": {
+    "notes.txt": "Documentation update only.\n"
+  },
+  "expect_selected": false,
+  "expected_absent_substrings": [
+    "shell or command module with user-controlled input"
+  ]
+}

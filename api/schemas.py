@@ -6,7 +6,11 @@ import math
 from typing import Any, Literal
 
 from config import settings
-from evidence.models import FindingEvidenceClassification
+from evidence.models import (
+    ContextSourceFreshness,
+    ContextSourceType,
+    FindingEvidenceClassification,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -21,6 +25,7 @@ from services.confidence_ledger import (
     EvidenceLawStatus,
     normalize_confidence_ledger_payload,
 )
+from services.skill_manifest_service import SkillTrustLevel
 
 
 class MetaPayload(BaseModel):
@@ -159,6 +164,41 @@ class ProviderSettingsSaveData(BaseModel):
 
 class ProviderSettingsResponse(BaseModel):
     data: ProviderSettingsSaveData
+    meta: MetaPayload
+
+
+class PolicyAdapterSettingsRequest(BaseModel):
+    project_id: int | None = Field(default=None, gt=0)
+    project_key: str | None = Field(default=None, min_length=1)
+    integration: str | None = Field(default=None, min_length=1)
+    warn_at: Literal["low", "medium", "high", "critical"] | None = Field(
+        default="medium"
+    )
+    soft_block_at: Literal["low", "medium", "high", "critical"] | None = Field(
+        default="high"
+    )
+    hard_block_at: Literal["low", "medium", "high", "critical"] | None = Field(
+        default="critical"
+    )
+    reporting_default: Literal["advisory", "warn"] = Field(default="advisory")
+    enforcement_mode: Literal["advisory", "warn", "soft-block", "hard-block"] = Field(
+        default="advisory"
+    )
+
+
+class PolicyAdapterSettingsData(BaseModel):
+    project_key: str
+    integration: str | None = None
+    source: Literal["built-in", "project", "integration"]
+    warn_at: Literal["low", "medium", "high", "critical"] | None = None
+    soft_block_at: Literal["low", "medium", "high", "critical"] | None = None
+    hard_block_at: Literal["low", "medium", "high", "critical"] | None = None
+    reporting_default: Literal["advisory", "warn"]
+    enforcement_mode: Literal["advisory", "warn", "soft-block", "hard-block"]
+
+
+class PolicyAdapterSettingsResponse(BaseModel):
+    data: PolicyAdapterSettingsData
     meta: MetaPayload
 
 
@@ -1170,10 +1210,58 @@ class FindingData(BaseModel):
     evidence_refs: list[str] = Field(
         default_factory=list, description="Evidence IDs linked to the finding"
     )
+    evidence_label: str | None = Field(
+        default=None,
+        description="Reviewer-facing label for external or mixed evidence context",
+    )
     skill_id: str | None = Field(
         default=None,
         description="Skill identifier when a skill contributed the finding",
     )
+
+
+class ContextSourceMetadataData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = Field(..., min_length=1, description="Stable context source id")
+    source_type: ContextSourceType = Field(..., description="Context source category")
+    source_ref: str | None = Field(
+        default=None, min_length=1, description="Source path, version, or URI"
+    )
+    scope: str = Field(
+        ..., min_length=1, description="Project/workspace scope for this source"
+    )
+    freshness_status: ContextSourceFreshness = Field(
+        default="unknown", description="Freshness state for this source"
+    )
+    last_observed_at: str | None = Field(
+        default=None,
+        min_length=1,
+        description="ISO timestamp when this source was last observed",
+    )
+    age_days: int | None = Field(
+        default=None, ge=0, description="Source age in days when available"
+    )
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        allow_inf_nan=False,
+        description="Confidence contribution from this source",
+    )
+    conflicts: list[str] = Field(
+        default_factory=list,
+        description="Conflicting sources or signals associated with this source",
+    )
+    limitations: list[str] = Field(
+        default_factory=list,
+        description="Freshness, completeness, or quality limitations",
+    )
+
+    @field_validator("conflicts", "limitations")
+    @classmethod
+    def _validate_context_source_strings(cls, value: list[str]) -> list[str]:
+        return _validate_non_empty_strings(value)
 
 
 class EvidenceItemData(BaseModel):
@@ -1214,8 +1302,16 @@ class EvidenceItemData(BaseModel):
         ..., description="Whether the evidence came from deterministic logic"
     )
     confidence: float = Field(..., description="Confidence score between 0 and 1")
+    evidence_label: str | None = Field(
+        default=None,
+        description="Reviewer-facing label for external evidence context",
+    )
     related_change_ids: list[str] = Field(
         default_factory=list, description="Traceable normalized change identifiers"
+    )
+    context_source: ContextSourceMetadataData | None = Field(
+        default=None,
+        description="Context source metadata that supplied or qualified this evidence",
     )
 
 
@@ -1345,6 +1441,10 @@ class ContextCompletenessData(BaseModel):
     ownership_unmapped_subjects: list[str] = Field(
         default_factory=list,
         description="Analyzed files, resources, or services missing ownership data",
+    )
+    context_sources: list[ContextSourceMetadataData] = Field(
+        default_factory=list,
+        description="Per-source freshness, confidence, scope, and conflict ledger",
     )
 
     @field_validator("escalation_hints", "ownership_unmapped_subjects")
@@ -1722,12 +1822,36 @@ class ShareSummaryFindingData(BaseModel):
     severity: RiskSeverity = Field(..., description="Finding severity")
     evidence_count: int = Field(..., description="Evidence count for the finding")
     confidence: float = Field(..., description="Finding confidence score")
+    evidence_label: str | None = Field(
+        default=None,
+        description="Reviewer-facing label for external or non-DeployWhisper evidence",
+    )
 
 
 class ShareSummaryContextData(BaseModel):
     score: float = Field(..., description="Context completeness score")
     label: str = Field(..., description="Context completeness label")
     summary: str = Field(..., description="Short context completeness summary")
+
+
+class ShareSummaryScannerConflictData(BaseModel):
+    finding_id: str = Field(..., description="Finding with conflicting scanner context")
+    finding_title: str = Field(..., description="Reviewer-facing finding title")
+    scanner_source: str = Field(..., description="Scanner evidence source reference")
+    scanner_freshness: str = Field(..., description="Scanner source freshness status")
+    deterministic_source: str = Field(
+        ..., description="DeployWhisper deterministic evidence source"
+    )
+    deterministic_freshness: str = Field(
+        ..., description="DeployWhisper deterministic source freshness status"
+    )
+    conflict_summary: str = Field(..., description="Short conflict explanation")
+    confidence_impact: str = Field(
+        ..., description="How the conflict affects confidence interpretation"
+    )
+    recommended_verification: str = Field(
+        ..., description="Reviewer action for resolving the conflict"
+    )
 
 
 class ShareSummaryJsonPayloadData(BaseModel):
@@ -1753,6 +1877,18 @@ class ShareSummaryJsonPayloadData(BaseModel):
         default_factory=list, description="Top findings to surface"
     )
     evidence_count: int = Field(..., description="Total evidence-item count")
+    external_evidence_count: int = Field(
+        default=0,
+        description="External scanner evidence items included as review context",
+    )
+    external_evidence_summary: str | None = Field(
+        default=None,
+        description="How external scanner context should be interpreted",
+    )
+    scanner_conflicts: list[ShareSummaryScannerConflictData] = Field(
+        default_factory=list,
+        description="Scanner-vs-deterministic/context conflicts requiring review",
+    )
     blast_radius_summary: str = Field(..., description="Concise blast-radius summary")
     rollback_summary: str = Field(..., description="Concise rollback summary")
     context_completeness: ShareSummaryContextData = Field(
@@ -1933,10 +2069,46 @@ class SkillTestScenarioResultData(BaseModel):
     )
 
 
+class SkillTestCoverageData(BaseModel):
+    expected_triggers: bool = Field(
+        ..., description="Whether deterministic trigger selection is covered."
+    )
+    expected_outputs: bool = Field(
+        ..., description="Whether expected guidance output is covered."
+    )
+    evidence_assumptions: bool = Field(
+        ..., description="Whether scenarios declare deterministic evidence inputs."
+    )
+    safety_constraints: bool = Field(
+        ..., description="Whether non-selection safety behavior is covered."
+    )
+    complete: bool = Field(
+        ..., description="Whether all required harness coverage categories are present."
+    )
+
+
+class SkillTrustRequirementData(BaseModel):
+    trust_level: SkillTrustLevel = Field(
+        ..., description="Manifest trust level evaluated by the harness."
+    )
+    required: bool = Field(
+        ..., description="Whether this trust level requires a passing complete suite."
+    )
+    satisfied: bool = Field(
+        ..., description="Whether the suite satisfies its trust-level requirement."
+    )
+    failures: list[str] = Field(
+        default_factory=list,
+        description="Actionable reasons the trust requirement was not satisfied.",
+    )
+
+
 class SkillTestResultsData(BaseModel):
     skill_id: str = Field(..., description="Stable skill identifier.")
     version: str = Field(..., description="Skill version under test.")
     summary: SkillTestResultsSummaryData
+    coverage: SkillTestCoverageData
+    trust_requirement: SkillTrustRequirementData
     scenarios: list[SkillTestScenarioResultData] = Field(default_factory=list)
 
 
@@ -1944,6 +2116,9 @@ class SkillRegistryData(BaseModel):
     id: str = Field(..., description="Stable skill identifier")
     name: str = Field(..., description="Human-readable skill name")
     version: str = Field(..., description="Current effective version")
+    trust_level: SkillTrustLevel = Field(
+        ..., description="Manifest trust classification for the skill"
+    )
     source: SkillRegistrySource = Field(
         ..., description="Where the skill definition currently resolves from"
     )
@@ -1977,6 +2152,10 @@ class SkillRegistryData(BaseModel):
     )
     trigger_content_patterns: list[str] = Field(
         default_factory=list, description="Content markers used for matching"
+    )
+    contributors: list[str] = Field(
+        ...,
+        description="Visible contributor names for the Skills browser.",
     )
     install_count: int = Field(
         default=0, description="Current install count from the analytics snapshot"
@@ -2351,6 +2530,8 @@ def build_analysis_run_data(
     advisory: BaseModel,
     share_summary: BaseModel,
 ) -> AnalysisRunData:
+    from services.content_security import redact_value
+
     parse_batch = result.parse_batch
     assessment = result.assessment
     blast_radius = result.blast_radius
@@ -2368,9 +2549,15 @@ def build_analysis_run_data(
     persisted_report_payload["context_completeness"] = persisted_context.model_dump(
         mode="json"
     )
+    public_intake = redact_value(intake.model_dump())
+    manifest = persisted_report.get("submission_manifest") or {}
+    manifest_items = manifest.get("items") or []
+    if len(manifest_items) == len(public_intake["items"]):
+        for item, artifact in zip(public_intake["items"], manifest_items, strict=True):
+            item["name"] = str(artifact["name"])
 
     return AnalysisRunData(
-        intake=PendingAnalysis.model_validate(intake.model_dump()),
+        intake=PendingAnalysis.model_validate(public_intake),
         parse_batch=ParseBatchData(
             files=[
                 ParsedArtifactData(

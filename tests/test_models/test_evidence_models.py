@@ -52,6 +52,7 @@ class EvidenceModelTests(unittest.TestCase):
                 "owner_signals": [],
                 "escalation_hints": [],
                 "ownership_unmapped_subjects": [],
+                "context_sources": [],
             },
         )
 

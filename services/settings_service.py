@@ -2,19 +2,30 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import OperationalError
 
-from config import settings
+from config import PROVIDER_ENV_API_KEYS, provider_credential_values, settings
 from llm.providers import (
     NarrativeProviderError,
+    safe_error_message,
     get_provider_capabilities,
     validate_provider_configuration,
+    validate_provider_settings_shape,
 )
 from models.database import SessionLocal
 from models.repositories.settings import delete_setting, get_setting, upsert_setting
+from services.policy_adapter_settings import (
+    PolicyAdapterSettings,
+    PolicyAdapterSettingsIntegrityError,
+    PolicyAdapterStatus,
+    PolicySeverity,
+)
+from services.project_service import normalize_project_key
 
 
 class ProviderCapabilitySummary(BaseModel):
@@ -145,15 +156,167 @@ TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS = [6, 12, 24, 168]
 DEFAULT_TOPOLOGY_DRIFT_CHECK_INTERVAL_HOURS = 24
 MIN_PROVIDER_TIMEOUT_SECONDS = 1.0
 MAX_PROVIDER_TIMEOUT_SECONDS = 600.0
-PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
-    "openai": ("OPENAI_API_KEY",),
-    "anthropic": ("ANTHROPIC_API_KEY",),
-    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
-    "openrouter": ("OPENROUTER_API_KEY",),
-    "groq": ("GROQ_API_KEY",),
-    "xai": ("XAI_API_KEY",),
-    "ollama": (),
-}
+
+
+POLICY_ADAPTER_SETTINGS_PREFIX = "policy_adapter_defaults"
+POLICY_ADAPTER_SETTINGS_KEY_MAX_LENGTH = 100
+
+
+def _policy_adapter_settings_key(
+    *, project_key: str, integration: str | None = None
+) -> str:
+    scope = f"integration::{integration}" if integration else "project"
+    key = f"{POLICY_ADAPTER_SETTINGS_PREFIX}::{project_key}::{scope}"
+    if len(key) <= POLICY_ADAPTER_SETTINGS_KEY_MAX_LENGTH:
+        return key
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return f"{POLICY_ADAPTER_SETTINGS_PREFIX}::sha256::{digest}"
+
+
+def normalize_policy_integration_label(value: str) -> str:
+    """Normalize and validate a policy-adapter integration identifier."""
+    normalized = value.strip().lower()
+    if not normalized:
+        raise ValueError("integration must not be blank.")
+    if not all(
+        character.isalnum() or character in {"-", "_", "."} for character in normalized
+    ):
+        raise ValueError("integration may contain letters, numbers, '.', '_', and '-'.")
+    return normalized
+
+
+def _load_policy_adapter_settings(
+    value: str,
+    *,
+    project_key: str,
+    integration: str | None,
+) -> PolicyAdapterSettings:
+    try:
+        loaded = PolicyAdapterSettings.model_validate_json(value)
+    except ValueError as exc:
+        raise PolicyAdapterSettingsIntegrityError(
+            "Stored policy adapter settings could not be validated."
+        ) from exc
+    expected_source = "integration" if integration is not None else "project"
+    if (
+        loaded.project_key != project_key
+        or loaded.integration != integration
+        or loaded.source != expected_source
+    ):
+        raise PolicyAdapterSettingsIntegrityError(
+            "Stored policy adapter settings scope does not match requested scope."
+        )
+    return loaded
+
+
+def save_policy_adapter_settings(
+    *,
+    project_key: str,
+    integration: str | None = None,
+    warn_at: PolicySeverity | str | None = PolicySeverity.MEDIUM,
+    soft_block_at: PolicySeverity | str | None = PolicySeverity.HIGH,
+    hard_block_at: PolicySeverity | str | None = PolicySeverity.CRITICAL,
+    reporting_default: PolicyAdapterStatus | str = PolicyAdapterStatus.ADVISORY,
+    enforcement_mode: PolicyAdapterStatus | str | None = None,
+) -> PolicyAdapterSettings:
+    """Persist project defaults or an integration-specific override."""
+    normalized_project_key = normalize_project_key(project_key)
+    normalized_integration = (
+        normalize_policy_integration_label(integration)
+        if integration is not None
+        else None
+    )
+    if enforcement_mode is None:
+        enforcement_mode = get_policy_adapter_settings(
+            project_key=normalized_project_key,
+            integration=normalized_integration,
+        ).enforcement_mode
+    resolved = PolicyAdapterSettings(
+        project_key=normalized_project_key,
+        integration=normalized_integration,
+        source="integration" if normalized_integration else "project",
+        warn_at=warn_at,
+        soft_block_at=soft_block_at,
+        hard_block_at=hard_block_at,
+        reporting_default=reporting_default,
+        enforcement_mode=enforcement_mode,
+    )
+    with SessionLocal() as session:
+        upsert_setting(
+            session,
+            key=_policy_adapter_settings_key(
+                project_key=normalized_project_key,
+                integration=normalized_integration,
+            ),
+            value=json.dumps(resolved.model_dump(mode="json"), sort_keys=True),
+        )
+    return resolved
+
+
+def get_policy_adapter_settings(
+    *, project_key: str, integration: str | None = None
+) -> PolicyAdapterSettings:
+    """Resolve integration overrides before project and safe built-in defaults."""
+    normalized_project_key = normalize_project_key(project_key)
+    normalized_integration = (
+        normalize_policy_integration_label(integration)
+        if integration is not None
+        else None
+    )
+    with SessionLocal() as session:
+        if normalized_integration is not None:
+            integration_record = get_setting(
+                session,
+                _policy_adapter_settings_key(
+                    project_key=normalized_project_key,
+                    integration=normalized_integration,
+                ),
+            )
+            if integration_record is not None:
+                return _load_policy_adapter_settings(
+                    integration_record.value,
+                    project_key=normalized_project_key,
+                    integration=normalized_integration,
+                )
+        project_record = get_setting(
+            session,
+            _policy_adapter_settings_key(project_key=normalized_project_key),
+        )
+        if project_record is not None:
+            return _load_policy_adapter_settings(
+                project_record.value,
+                project_key=normalized_project_key,
+                integration=None,
+            )
+
+    return PolicyAdapterSettings(
+        project_key=normalized_project_key,
+        source="built-in",
+    )
+
+
+def delete_policy_adapter_settings(
+    *, project_key: str, integration: str | None = None
+) -> PolicyAdapterSettings:
+    """Delete one override and return the newly inherited effective defaults."""
+    normalized_project_key = normalize_project_key(project_key)
+    normalized_integration = (
+        normalize_policy_integration_label(integration)
+        if integration is not None
+        else None
+    )
+    with SessionLocal() as session:
+        delete_setting(
+            session,
+            _policy_adapter_settings_key(
+                project_key=normalized_project_key,
+                integration=normalized_integration,
+            ),
+        )
+    return get_policy_adapter_settings(
+        project_key=normalized_project_key,
+        integration=normalized_integration,
+    )
 
 
 def provider_select_options() -> dict[str, str]:
@@ -219,6 +382,27 @@ def save_provider_settings(
     activate: bool = True,
 ) -> ProviderSettings:
     """Persist provider settings and optionally mark them as active."""
+    provider = provider.strip().lower()
+    model = model.strip()
+    api_base = api_base.strip()
+    environment_key = _provider_env_api_key(provider)
+    # Validate before normalization/persistence, so rejected profiles cannot become active.
+    try:
+        validate_provider_settings_shape(
+            provider=provider,
+            model=model,
+            api_base=api_base,
+            local_mode=local_mode,
+            api_key=api_key,
+            sensitive_values=provider_credential_values(),
+            request_timeout_seconds=(
+                settings.llm_request_timeout_seconds
+                if request_timeout_seconds is None
+                else request_timeout_seconds
+            ),
+        )
+    except NarrativeProviderError as exc:
+        raise ValueError(safe_error_message(exc)) from None
     normalized_timeout = _normalize_request_timeout_seconds(request_timeout_seconds)
     with SessionLocal() as session:
         upsert_setting(session, key=_provider_key(provider, "model"), value=model)
@@ -254,7 +438,7 @@ def save_provider_settings(
         provider=provider,
         model=model,
         api_base=api_base,
-        api_key=api_key,
+        api_key=api_key or environment_key,
         local_mode=local_mode,
         request_timeout_seconds=normalized_timeout,
         capabilities=_provider_capability_summary(provider),
@@ -439,6 +623,29 @@ def get_provider_health_snapshot() -> ProviderReadiness:
     requires_api_key = bool(defaults.get("requires_api_key", False))
     has_api_key = bool(provider_settings.api_key)
 
+    try:
+        validate_provider_settings_shape(
+            provider=provider_settings.provider,
+            model=provider_settings.model,
+            api_base=provider_settings.api_base,
+            local_mode=provider_settings.local_mode,
+            api_key=provider_settings.api_key,
+            request_timeout_seconds=provider_settings.request_timeout_seconds,
+        )
+    except NarrativeProviderError as exc:
+        return ProviderReadiness(
+            provider=provider_settings.provider,
+            model=provider_settings.model,
+            local_mode=provider_settings.local_mode,
+            capabilities=provider_settings.capabilities,
+            ready=False,
+            requires_api_key=requires_api_key,
+            has_api_key=has_api_key,
+            message=safe_error_message(exc)
+            + " Analysis can continue with heuristic-only results.",
+            source=provider_settings.source,
+        )
+
     if requires_api_key and not has_api_key:
         return ProviderReadiness(
             provider=provider_settings.provider,
@@ -493,7 +700,7 @@ def deactivate_local_mode() -> ProviderSettings:
 
 
 def resolve_provider_runtime() -> dict:
-    """Resolve the current provider runtime, including persisted secrets."""
+    """Resolve the current provider runtime with environment-backed credentials."""
     provider_settings = get_provider_settings()
     return {
         "provider": provider_settings.provider,

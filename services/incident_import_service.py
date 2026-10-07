@@ -12,12 +12,22 @@ from pydantic import BaseModel, Field
 
 from models.database import SessionLocal
 from models.repositories.incident_ingestion_sources import (
+    list_incident_ingestion_source_files,
     list_incident_ingestion_sources,
     list_managed_incident_source_files,
 )
 from models.repositories.incident_records import (
     count_incident_records_by_sources,
     delete_incident_records_by_sources,
+    list_incident_source_files,
+)
+from services.content_security import (
+    redact_reference,
+    redact_scope_error_message,
+    redact_text,
+    redact_value,
+    sensitive_artifact_values,
+    sensitive_submission_values,
 )
 from services.backtesting_service import invalidate_backtesting_snapshot
 from services.incident_service import (
@@ -26,6 +36,7 @@ from services.incident_service import (
     create_incident_record_in_session,
     get_incident_ingestion_status,
     record_incident_ingestion_source_status,
+    screen_incident_source_file,
 )
 from services.project_service import (
     ProjectResolutionError,
@@ -88,8 +99,23 @@ class IncidentReindexResult(BaseModel):
 class IncidentImportValidationError(ValueError):
     """Raised when incident import validation fails."""
 
-    def __init__(self, field_errors: list[IncidentImportFieldError]) -> None:
-        self.field_errors = field_errors
+    def __init__(
+        self,
+        field_errors: list[IncidentImportFieldError],
+        *,
+        sensitive_values: tuple[str, ...] = (),
+    ) -> None:
+        self.field_errors = [
+            IncidentImportFieldError.model_validate(
+                redact_value(error.model_dump(), sensitive_values=sensitive_values)
+            )
+            for error in field_errors
+        ]
+        for error in self.field_errors:
+            error.source_file = redact_reference(
+                error.source_file, sensitive_values=sensitive_values
+            )
+        field_errors = self.field_errors
         detail = "; ".join(
             f"{error.source_file}:{error.field}: {error.message}"
             for error in field_errors
@@ -106,6 +132,14 @@ def import_incident_files(
     workspace_key: str | None = None,
 ) -> IncidentImportResult:
     """Validate and import simple Markdown, YAML, and JSON incident files."""
+    raw_files = files
+    sensitive_values = sensitive_submission_values(
+        (item.source_file, item.content.encode("utf-8", errors="replace"))
+        for item in files
+    )
+    files = [
+        _screen_import_file(item, sensitive_values=sensitive_values) for item in files
+    ]
     field_errors: list[IncidentImportFieldError] = []
     if project_id is None and project_key is None:
         field_errors.append(
@@ -115,7 +149,9 @@ def import_incident_files(
                 message="Project scope is required for incident imports.",
             )
         )
-        raise IncidentImportValidationError(field_errors)
+        raise IncidentImportValidationError(
+            field_errors, sensitive_values=sensitive_values
+        )
 
     try:
         project = resolve_project_reference(
@@ -132,16 +168,23 @@ def import_incident_files(
                 IncidentImportFieldError(
                     source_file="batch",
                     field=_scope_error_field(exc),
-                    message=exc.message,
+                    message=redact_scope_error_message(exc.message, sensitive_values),
                 )
             ]
-        ) from exc
+        ) from None
 
     resolved_workspace_id = workspace.id if workspace is not None else None
+    files = _reuse_source_aliases(
+        raw_files, files, project_id=project.id, workspace_id=resolved_workspace_id
+    )
     parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
     for item in files:
         try:
-            parsed = _parse_incident_file(item)
+            parsed = _screen_incident_record(
+                _parse_incident_file(item),
+                item.content,
+                sensitive_values=sensitive_values,
+            )
         except ValueError as exc:
             field_errors.append(
                 IncidentImportFieldError(
@@ -168,7 +211,9 @@ def import_incident_files(
             workspace_id=resolved_workspace_id,
             errors=field_errors,
         )
-        raise IncidentImportValidationError(field_errors)
+        raise IncidentImportValidationError(
+            field_errors, sensitive_values=sensitive_values
+        )
 
     records: list[dict[str, Any]] = []
     with SessionLocal() as session:
@@ -223,6 +268,14 @@ def reindex_incident_files(
     remove_missing_sources: bool = False,
 ) -> IncidentReindexResult:
     """Replace indexed incident entries from source files within one project scope."""
+    raw_files = files
+    sensitive_values = sensitive_submission_values(
+        (item.source_file, item.content.encode("utf-8", errors="replace"))
+        for item in files
+    )
+    files = [
+        _screen_import_file(item, sensitive_values=sensitive_values) for item in files
+    ]
     field_errors: list[IncidentImportFieldError] = []
     if project_id is None and project_key is None:
         field_errors.append(
@@ -232,15 +285,31 @@ def reindex_incident_files(
                 message="Project scope is required for incident reindexing.",
             )
         )
-        raise IncidentImportValidationError(field_errors)
+        raise IncidentImportValidationError(
+            field_errors, sensitive_values=sensitive_values
+        )
 
-    project = resolve_project_reference(project_id=project_id, project_key=project_key)
-    workspace = resolve_workspace_reference(
-        project_id=project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
+    try:
+        project = resolve_project_reference(
+            project_id=project_id, project_key=project_key
+        )
+        workspace = resolve_workspace_reference(
+            project_id=project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+    except ProjectResolutionError as exc:
+        raise ProjectResolutionError(
+            exc.code, redact_scope_error_message(exc.message, sensitive_values)
+        ) from None
     resolved_workspace_id = workspace.id if workspace is not None else None
+    files = _reuse_source_aliases(
+        raw_files,
+        files,
+        project_id=project.id,
+        workspace_id=resolved_workspace_id,
+        project_wide=resolved_workspace_id is None,
+    )
 
     seen_source_files: set[str] = set()
     duplicate_source_files: set[str] = set()
@@ -260,7 +329,11 @@ def reindex_incident_files(
     parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
     for item in files:
         try:
-            parsed = _parse_incident_file(item)
+            parsed = _screen_incident_record(
+                _parse_incident_file(item),
+                item.content,
+                sensitive_values=sensitive_values,
+            )
         except ValueError as exc:
             field_errors.append(
                 IncidentImportFieldError(
@@ -287,7 +360,9 @@ def reindex_incident_files(
             workspace_id=resolved_workspace_id,
             errors=field_errors,
         )
-        raise IncidentImportValidationError(field_errors)
+        raise IncidentImportValidationError(
+            field_errors, sensitive_values=sensitive_values
+        )
 
     source_files = sorted({item.source_file for item, _ in parsed_records})
     with SessionLocal() as session:
@@ -424,9 +499,9 @@ def incident_import_failure_summaries(
     """Convert validation failures into admin-actionable correction paths."""
     return [
         IncidentIngestionFailureSummary(
-            source_file=error.source_file,
+            source_file=redact_reference(error.source_file),
             field=error.field,
-            message=error.message,
+            message=redact_text(error.message),
             correction_path=_correction_path(error.field),
         )
         for error in errors
@@ -463,6 +538,104 @@ def _record_source_failures(
                 )
 
 
+def _reuse_source_aliases(
+    raw_files: list[IncidentImportFile],
+    files: list[IncidentImportFile],
+    *,
+    project_id: int,
+    workspace_id: int | None,
+    project_wide: bool = False,
+) -> list[IncidentImportFile]:
+    with SessionLocal() as session:
+        aliases = set(
+            list_incident_ingestion_source_files(
+                session,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                project_wide=project_wide,
+            )
+        )
+        aliases.update(
+            list_incident_source_files(
+                session,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                project_wide=project_wide,
+            )
+        )
+    screened = []
+    for raw, item in zip(raw_files, files, strict=True):
+        existing = screen_incident_source_file(
+            raw.source_file, existing_aliases=aliases
+        )
+        screened.append(
+            item.model_copy(update={"source_file": existing})
+            if existing != raw.source_file
+            else item
+        )
+    return screened
+
+
+def _screen_import_file(
+    item: IncidentImportFile, *, sensitive_values: tuple[str, ...] = ()
+) -> IncidentImportFile:
+    return item.model_copy(
+        update={
+            "source_file": screen_incident_source_file(
+                item.source_file, sensitive_values=sensitive_values
+            )
+        }
+    )
+
+
+def _screen_incident_record(
+    record: dict[str, Any], raw_content: str, *, sensitive_values: tuple[str, ...] = ()
+) -> dict[str, Any]:
+    values = sensitive_values + sensitive_artifact_values(
+        raw_content.encode("utf-8", errors="replace")
+    )
+    # These retained fields become prose during normalization. Convert them
+    # while submission sensitivity is available, preserving missing-value
+    # validation and the shared severity protocol exemption.
+    record = dict(record)
+    for field in (
+        "title",
+        "severity",
+        "incident_date",
+        "root_cause",
+        "trigger_change",
+        "rollback_path",
+    ):
+        if _has_value(record.get(field)):
+            record[field] = str(record[field])
+    if isinstance(record.get("source"), dict):
+        source = dict(record["source"])
+        for field in ("system", "reference"):
+            if _has_value(source.get(field)):
+                source[field] = str(source[field])
+        record["source"] = source
+    safe = redact_value(record, sensitive_values=values)
+    if safe != record and isinstance(safe.get("redaction"), dict):
+        safe["redaction"]["status"] = "redacted"
+    source = safe.get("source")
+    if isinstance(source, dict) and isinstance(source.get("reference"), str):
+        reference = redact_reference(source["reference"], sensitive_values=values)
+        if reference != source["reference"] and isinstance(safe.get("redaction"), dict):
+            safe["redaction"]["status"] = "redacted"
+        source["reference"] = reference
+    return safe
+
+
+def _syntax_error_notice(label: str, exc: yaml.YAMLError) -> str:
+    mark = getattr(exc, "problem_mark", None)
+    location = (
+        f" at line {mark.line + 1}, column {mark.column + 1}"
+        if mark is not None
+        else ""
+    )
+    return f"{label} is invalid{location}."
+
+
 def _parse_incident_file(item: IncidentImportFile) -> dict[str, Any]:
     suffix = Path(item.source_file).suffix.lower()
     if suffix in MARKDOWN_SUFFIXES:
@@ -471,13 +644,15 @@ def _parse_incident_file(item: IncidentImportFile) -> dict[str, Any]:
         try:
             payload = yaml.safe_load(item.content)
         except yaml.YAMLError as exc:
-            raise ValueError(f"YAML incident is invalid: {exc}") from exc
+            raise ValueError(_syntax_error_notice("YAML incident", exc)) from None
         return _ensure_mapping(payload, "YAML incident")
     if suffix in JSON_SUFFIXES:
         try:
             payload = json.loads(item.content)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"JSON incident is invalid: {exc}") from exc
+            raise ValueError(
+                f"JSON incident is invalid at line {exc.lineno}, column {exc.colno}."
+            ) from exc
         return _ensure_mapping(payload, "JSON incident")
     raise ValueError(
         "Unsupported incident file type. Expected Markdown, YAML, or JSON."
@@ -492,7 +667,9 @@ def _parse_markdown_incident(content: str) -> dict[str, Any]:
         try:
             payload = yaml.safe_load(frontmatter) if frontmatter.strip() else {}
         except yaml.YAMLError as exc:
-            raise ValueError(f"Markdown frontmatter is invalid: {exc}") from exc
+            raise ValueError(
+                _syntax_error_notice("Markdown frontmatter", exc)
+            ) from None
         metadata = _ensure_mapping(
             payload,
             "Markdown frontmatter",

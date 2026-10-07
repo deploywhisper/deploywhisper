@@ -38,6 +38,7 @@ from services.analysis_service import (
     build_share_summary,
     resolve_analysis_project_scope,
 )
+from services.agent_interface_service import build_agent_analysis_data
 from services.benchmark_corpus_service import (
     BenchmarkCorpusValidationError,
     validate_benchmark_corpus,
@@ -407,9 +408,15 @@ def _run_skill_test(skill_ids: list[str], *, emit_json: bool = False) -> int:
                 if scenario.passed:
                     continue
                 print(f"  - {scenario.name}: {'; '.join(scenario.failures)}")
+            for failure in result.trust_requirement.failures:
+                print(f"  - trust requirement: {failure}")
     return (
         0
-        if results and all(result.summary.status == "passing" for result in results)
+        if results
+        and all(
+            result.summary.status == "passing" and result.trust_requirement.satisfied
+            for result in results
+        )
         else 1
     )
 
@@ -466,8 +473,12 @@ def _run_skill_catalog_list() -> int:
             if item.test_results is not None and item.test_results.status != "missing"
             else "n/a"
         )
+        deprecated = item.trust_level == "deprecated"
         print(
-            f"{item.id} installs={item.install_count} "
+            f"{item.id} trust={item.trust_level} "
+            f"source={item.source} "
+            f"deprecated={str(deprecated).lower()} "
+            f"installs={item.install_count} "
             f"pass-rate={pass_rate} "
             f"active-issues={item.active_issue_count} "
             f"updated={item.updated_at[:10]} "
@@ -513,6 +524,7 @@ def _run_analyze(
     project_key: str | None = None,
     workspace_id: int | None = None,
     workspace_key: str | None = None,
+    agent_json: bool = False,
 ) -> int:
     if not paths:
         _emit_json(
@@ -629,22 +641,26 @@ def _run_analyze(
             stream=sys.stderr,
         )
         return 1
-    payload = {
-        "data": build_analysis_run_data(
-            intake=pending_analysis,
-            result=result,
-            advisory=_analysis_run_advisory(result),
-            share_summary=build_share_summary(result.persisted_report),
-        ).model_dump(),
-        "meta": build_meta(
-            api_version="v1",
-            report_schema_version=REPORT_SCHEMA_VERSION,
-            interface="cli",
-            advisory_only=True,
-            submitted_artifact_count=len(raw_files),
-            accepted_artifact_count=pending_analysis.ready_count,
-        ),
-    }
+    analysis_data = build_analysis_run_data(
+        intake=pending_analysis,
+        result=result,
+        advisory=_analysis_run_advisory(result),
+        share_summary=build_share_summary(result.persisted_report),
+    )
+    if agent_json:
+        payload = build_agent_analysis_data(analysis_data).model_dump(mode="json")
+    else:
+        payload = {
+            "data": analysis_data.model_dump(),
+            "meta": build_meta(
+                api_version="v1",
+                report_schema_version=REPORT_SCHEMA_VERSION,
+                interface="cli",
+                advisory_only=True,
+                submitted_artifact_count=len(raw_files),
+                accepted_artifact_count=pending_analysis.ready_count,
+            ),
+        }
     _emit_json(payload, stream=sys.stdout)
     return 0
 
@@ -1096,7 +1112,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     skill_subparsers = skill_parser.add_subparsers(dest="skill_command")
     skill_install_parser = skill_subparsers.add_parser(
-        "install", help="Fetch and install a registry skill into skills/custom."
+        "install", help="Install a Skill from the configured source into skills/custom."
     )
     skill_install_parser.add_argument("skill_id", help="Skill id to install.")
     skill_list_parser = skill_subparsers.add_parser(
@@ -1125,7 +1141,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit machine-readable JSON instead of human-readable output.",
     )
     skill_update_parser = skill_subparsers.add_parser(
-        "update", help="Refresh an installed skill to the latest registry version."
+        "update", help="Refresh an installed Skill from the configured source."
     )
     skill_update_parser.add_argument("skill_id", help="Installed skill id to update.")
     skill_remove_parser = skill_subparsers.add_parser(
@@ -1157,6 +1173,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="workspace_id",
         type=int,
         help="Optional numeric workspace/environment id for the analysis.",
+    )
+    analyze_parser.add_argument(
+        "--agent-json",
+        action="store_true",
+        help="Emit stable advisory JSON for AI-agent consumption.",
     )
     analyze_parser.add_argument(
         "paths", nargs="*", help="Artifact file paths to analyze."
@@ -1522,6 +1543,7 @@ def main() -> None:
                 project_key=getattr(args, "project_key", None),
                 workspace_id=getattr(args, "workspace_id", None),
                 workspace_key=getattr(args, "workspace_key", None),
+                agent_json=getattr(args, "agent_json", False),
             )
         )
     if args.command == "project" and args.project_command == "create":

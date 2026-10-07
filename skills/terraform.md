@@ -8,6 +8,10 @@ token_budget: 1800
 tags: [terraform, iac, infrastructure]
 description: Deep Terraform risk knowledge covering provider-specific patterns, state operations, lifecycle rules, and common failure modes across AWS, GCP, and Azure.
 test_suite_path: tests/skill-tests/terraform
+supported_toolchains: [terraform]
+trust_level: core
+scenario_references: [tests/skill-tests/terraform]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Critical risk patterns

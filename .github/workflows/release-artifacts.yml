@@ -1,0 +1,114 @@
+name: Signed Release Artifacts
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release-label:
+        description: Version tag to package; the source remains the caller's exact SHA/ref.
+        required: true
+        type: string
+    outputs:
+      artifact-name:
+        description: Verified archive, checksums, source manifest and native signed bundle.
+        value: ${{ jobs.artifacts.outputs.artifact-name }}
+      source-sha:
+        description: Exact source commit packaged and attested.
+        value: ${{ jobs.artifacts.outputs.source-sha }}
+
+permissions:
+  contents: read
+
+jobs:
+  artifacts:
+    name: Build and verify signed source assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    outputs:
+      artifact-name: ${{ steps.metadata.outputs.artifact-name }}
+      source-sha: ${{ github.sha }}
+    env:
+      SOURCE_SHA: ${{ github.sha }}
+      SOURCE_REF: ${{ github.ref }}
+      REPOSITORY: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      RELEASE_LABEL: ${{ inputs.release-label }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Require trusted preview or release context
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            test "$DEFAULT_BRANCH" = develop
+            test "$SOURCE_REF" = refs/heads/develop
+            test -z "$RELEASE_LABEL"
+          elif [[ "$EVENT_NAME" == push ]]; then
+            test "$SOURCE_REF" = "refs/tags/$RELEASE_LABEL"
+            [[ "$RELEASE_LABEL" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]
+          else
+            echo "::error::Signing is limited to default-develop previews or pushed release tags."
+            exit 1
+          fi
+
+      - name: Checkout exact source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate source and build deterministic assets
+        id: metadata
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor "$SOURCE_SHA" "origin/$DEFAULT_BRANCH"
+          if [[ -z "$RELEASE_LABEL" ]]; then
+            RELEASE_LABEL="preview-$SOURCE_SHA"
+          fi
+          python3 -m scripts.release_artifacts build \
+            --source-sha "$SOURCE_SHA" --source-ref "$SOURCE_REF" \
+            --release "$RELEASE_LABEL" --repository "$REPOSITORY" \
+            --output-dir dist/release
+          echo "artifact-name=release-artifacts-$SOURCE_SHA-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest exact source assets
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            dist/release/*.tar.gz
+            dist/release/SHA256SUMS
+            dist/release/source-manifest.json
+
+      - name: Preserve native signed bundle and verify identities
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          # The action already emits JSONL. Copy without reserialization.
+          cp "$BUNDLE_PATH" dist/release/artifact.intoto.jsonl
+          cd dist/release
+          sha256sum --check SHA256SUMS
+          for subject in ./*.tar.gz SHA256SUMS source-manifest.json; do
+            gh attestation verify "$subject" \
+              --bundle artifact.intoto.jsonl --repo "$REPOSITORY" \
+              --signer-workflow "$REPOSITORY/.github/workflows/release-artifacts.yml" \
+              --source-ref "$SOURCE_REF" --source-digest "$SOURCE_SHA" \
+              --deny-self-hosted-runners
+          done
+
+      - name: Upload verified signed assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.metadata.outputs.artifact-name }}
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 30

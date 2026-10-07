@@ -1,6 +1,6 @@
 # Skills Authoring Guide
 
-Story 4.2 formalizes the DeployWhisper skill manifest into a versioned v1
+Story 9.1 formalizes the DeployWhisper skill manifest into a versioned v1
 contract. New community or local skills should use the v1 frontmatter shape even
 though the analysis runtime still tolerates older lightweight markdown files for
 backward compatibility.
@@ -22,8 +22,15 @@ Required frontmatter fields:
 - `token_budget`: positive integer budget for narrator context assembly.
 - `tags`: search/filter tags used by the registry and browser experiences.
 - `description`: short summary shown in registry and authoring surfaces.
-- `test_suite_path`: repo-relative path for the skill harness introduced by the
-  next story.
+- `test_suite_path`: repo-relative path for the deterministic Skill harness.
+- `supported_toolchains`: toolchains, runtimes, or artifact families that the
+  skill supports.
+- `trust_level`: governance classification. Accepted values are `experimental`,
+  `verified`, `core`, and `deprecated`.
+- `scenario_references`: repo-relative paths to deterministic scenarios that
+  validate the skill.
+- `documentation_links`: repo-relative documentation paths or HTTP(S) links that
+  help authors maintain and verify the skill.
 
 Optional extension fields supported today:
 
@@ -36,7 +43,7 @@ Optional extension fields supported today:
   the original `author`.
 - `featured`: marks a curated community skill for the marketplace featured
   badge. Featured skills must stay community-authored and community-maintained;
-  DeployWhisper-owned skills should rely on the automatic `Official` badge
+  DeployWhisper-owned skills should rely on the automatic official badge
   instead of `featured: true`.
 
 ## Example
@@ -52,6 +59,10 @@ token_budget: 1800
 tags: [terraform, iac, infrastructure]
 description: Deep Terraform risk knowledge for stateful infrastructure changes.
 test_suite_path: tests/skill-tests/terraform
+supported_toolchains: [terraform]
+trust_level: core
+scenario_references: [tests/skill-tests/terraform]
+documentation_links: [docs/skills/authoring-guide.md, docs/skills/test-harness.md]
 ---
 
 ## Critical risk patterns
@@ -76,6 +87,10 @@ deploywhisper skill test terraform
 ```
 
 Scenario layout and harness behavior are documented in `docs/skills/test-harness.md`.
+Verified and core Skills must include positive trigger/output/evidence scenarios
+and a negative safety scenario, and every declared scenario must pass.
+The complete pull-request, reviewer-routing, CI feedback, and publication
+workflow is documented in `docs/contributing/skills.md`.
 
 Validation fails when:
 
@@ -86,6 +101,13 @@ Validation fails when:
 - `token_budget` is not a positive integer
 - `test_suite_path` is absolute or escapes the repo with `..`
 - `test_suite_path` does not exist under the current repository root
+- `supported_toolchains`, `scenario_references`, or `documentation_links` are
+  empty
+- `trust_level` is not one of the accepted values
+- local `scenario_references` or `documentation_links` are absolute, escape the
+  repo with `..`, use Windows or UNC path forms, or do not exist during strict
+  linting
+- external `documentation_links` are not valid HTTP(S) URLs with a host
 
 ## Authoring rules
 

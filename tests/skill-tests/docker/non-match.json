@@ -1,0 +1,13 @@
+{
+  "name": "docker-non-match",
+  "description": "Does not load the Docker skill without container evidence.",
+  "assessment_tool": "unrelated",
+  "contributor_summary": "A documentation-only change with no container artifacts.",
+  "raw_files": {
+    "notes.txt": "Documentation update only.\n"
+  },
+  "expect_selected": false,
+  "expected_absent_substrings": [
+    "No `USER` instruction in the Dockerfile"
+  ]
+}

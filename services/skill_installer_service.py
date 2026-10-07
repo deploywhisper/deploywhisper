@@ -1,11 +1,16 @@
-"""Registry-backed installer operations for custom skills."""
+"""Configured-source installer operations for custom skills."""
 
 from __future__ import annotations
 
+import errno
 from hashlib import sha256
+import ipaddress
 import json
+import os
 from pathlib import Path
 import re
+import stat
+import tempfile
 from typing import Literal
 from urllib import error, parse, request
 
@@ -14,6 +19,7 @@ from pydantic import BaseModel, Field
 from config import settings
 from services.skill_manifest_service import (
     SkillManifestValidationError,
+    is_missing_manifest_frontmatter_error,
     load_skill_document,
     parse_skill_document,
 )
@@ -22,6 +28,8 @@ SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
 CUSTOM_DIR = SKILLS_DIR / "custom"
 SkillInstallMode = Literal["override", "new"]
 _SKILL_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+MISSING_MANIFEST_WARNING = "Skill manifest frontmatter is required."
+MAX_SKILL_SOURCE_BYTES = 1024 * 1024
 
 
 class SkillInstallerError(ValueError):
@@ -60,13 +68,13 @@ class InstalledSkillEntry(BaseModel):
 
 
 class SkillRemoteContent(BaseModel):
-    """Registry-delivered markdown payload for an installable skill."""
+    """Validated markdown payload from a configured Skill source."""
 
     id: str = Field(..., description="Stable skill identifier.")
-    version: str = Field(..., description="Registry version for the returned skill.")
+    version: str = Field(..., description="Manifest version for the returned skill.")
     content: str = Field(..., description="Raw markdown content including frontmatter.")
-    sha256: str = Field(..., description="SHA-256 checksum of the registry payload.")
-    source_url: str = Field(..., description="Registry endpoint used for retrieval.")
+    sha256: str = Field(..., description="SHA-256 checksum of the source payload.")
+    source_url: str = Field(..., description="Source URI used for retrieval.")
 
 
 class SkillInstallResult(BaseModel):
@@ -87,10 +95,10 @@ class SkillInstallResult(BaseModel):
         ..., description="Whether the installed skill is a new file or override."
     )
     sha256: str | None = Field(
-        default=None, description="Checksum for the written registry payload."
+        default=None, description="Checksum for the written source payload."
     )
     source_url: str | None = Field(
-        default=None, description="Registry URL used for install or update."
+        default=None, description="Source URI used for install or update."
     )
 
 
@@ -140,14 +148,150 @@ def _current_checksum(path: Path) -> str | None:
 def _registry_base_url() -> str:
     configured = (settings.skills_registry_base_url or "").strip()
     if configured:
+        _validate_registry_url(
+            configured,
+            invalid_code="skills_registry_invalid_url",
+            insecure_code="skills_registry_insecure_url",
+            allow_query=False,
+        )
         return configured.rstrip("/")
     raise SkillInstallerError(
-        "skills_registry_unconfigured",
-        "Skill registry URL is not configured. Set DEPLOYWHISPER_SKILLS_REGISTRY_URL or APP_BASE_URL.",
+        "skills_source_unconfigured",
+        "Skill source is not configured. Set DEPLOYWHISPER_SKILLS_SOURCE_DIR, "
+        "DEPLOYWHISPER_SKILLS_REGISTRY_URL, APP_BASE_URL, or PUBLIC_APP_URL.",
     )
 
 
+def _is_local_registry_host(hostname: str | None) -> bool:
+    normalized = (hostname or "").strip().lower()
+    if normalized == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(normalized).is_loopback
+    except ValueError:
+        return False
+
+
+def _redact_registry_url(url: str) -> str:
+    try:
+        parsed = parse.urlparse(url)
+        if not parsed.username and not parsed.password:
+            return url
+        hostname = parsed.hostname or ""
+        if ":" in hostname and not hostname.startswith("["):
+            hostname = f"[{hostname}]"
+        try:
+            port = parsed.port
+        except ValueError:
+            port = None
+        netloc = f"{hostname}:{port}" if port else hostname
+        return parse.urlunparse(
+            (
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+    except ValueError:
+        return url
+
+
+def _validate_registry_url(
+    url: str,
+    *,
+    invalid_code: str,
+    insecure_code: str,
+    allow_query: bool = True,
+    allow_fragment: bool = False,
+) -> parse.ParseResult:
+    parsed = parse.urlparse(url)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must be an HTTP(S) URL with a host.",
+            {"url": _redact_registry_url(url)},
+        )
+    if parsed.username or parsed.password:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must not include embedded credentials.",
+            {"url": _redact_registry_url(url)},
+        )
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must include a valid port when a port is specified.",
+            {"url": _redact_registry_url(url)},
+        ) from exc
+    if parsed.query and not allow_query:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must not include query parameters.",
+            {"url": _redact_registry_url(url)},
+        )
+    if parsed.fragment and not allow_fragment:
+        raise SkillInstallerError(
+            invalid_code,
+            "Skill registry URL must not include a fragment.",
+            {"url": _redact_registry_url(url)},
+        )
+    if parsed.scheme.lower() == "http" and not _is_local_registry_host(parsed.hostname):
+        raise SkillInstallerError(
+            insecure_code,
+            "Skill registry URL must use HTTPS unless it targets a local development host.",
+            {"url": _redact_registry_url(url)},
+        )
+    return parsed
+
+
+def _registry_authority(parsed: parse.ParseResult) -> tuple[str, int | None]:
+    default_port = 443 if parsed.scheme.lower() == "https" else 80
+    return (parsed.hostname or "").lower(), parsed.port or default_port
+
+
+class _RegistryRedirectHandler(request.HTTPRedirectHandler):
+    """Validate registry redirects before urllib follows them."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+        requested = _validate_registry_url(
+            req.full_url,
+            invalid_code="skills_registry_invalid_url",
+            insecure_code="skills_registry_insecure_url",
+        )
+        target_url = parse.urljoin(req.full_url, newurl)
+        target = _validate_registry_url(
+            target_url,
+            invalid_code="skills_registry_invalid_redirect",
+            insecure_code="skills_registry_insecure_redirect",
+        )
+        if _registry_authority(target) != _registry_authority(requested):
+            raise SkillInstallerError(
+                "skills_registry_redirect_host_mismatch",
+                "Skill registry redirects must stay on the configured registry host.",
+                {
+                    "url": _redact_registry_url(req.full_url),
+                    "redirect_url": _redact_registry_url(target_url),
+                },
+            )
+        return super().redirect_request(req, fp, code, msg, headers, target_url)
+
+
+def _open_registry_request(req: request.Request):
+    opener = request.build_opener(_RegistryRedirectHandler)
+    return opener.open(req, timeout=15)
+
+
 def _load_json(url: str) -> dict:
+    requested = _validate_registry_url(
+        url,
+        invalid_code="skills_registry_invalid_url",
+        insecure_code="skills_registry_insecure_url",
+    )
     req = request.Request(
         url,
         headers={
@@ -156,8 +300,33 @@ def _load_json(url: str) -> dict:
         },
     )
     try:
-        with request.urlopen(req, timeout=15) as response:
-            payload = response.read().decode("utf-8")
+        with _open_registry_request(req) as response:
+            try:
+                final_url = response.geturl()
+            except AttributeError:
+                final_url = req.full_url
+            final = _validate_registry_url(
+                final_url,
+                invalid_code="skills_registry_invalid_redirect",
+                insecure_code="skills_registry_insecure_redirect",
+            )
+            if _registry_authority(final) != _registry_authority(requested):
+                raise SkillInstallerError(
+                    "skills_registry_redirect_host_mismatch",
+                    "Skill registry redirects must stay on the configured registry host.",
+                    {
+                        "url": _redact_registry_url(url),
+                        "redirect_url": _redact_registry_url(final_url),
+                    },
+                )
+            try:
+                payload = response.read().decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise SkillInstallerError(
+                    "skills_registry_invalid_response",
+                    "Skill registry returned invalid JSON.",
+                    {"url": url},
+                ) from exc
     except error.HTTPError as exc:
         try:
             payload = json.loads(exc.read().decode("utf-8"))
@@ -182,13 +351,20 @@ def _load_json(url: str) -> dict:
         ) from exc
 
     try:
-        return json.loads(payload)
+        data = json.loads(payload)
     except json.JSONDecodeError as exc:
         raise SkillInstallerError(
             "skills_registry_invalid_response",
             "Skill registry returned invalid JSON.",
             {"url": url},
         ) from exc
+    if not isinstance(data, dict):
+        raise SkillInstallerError(
+            "skills_registry_invalid_response",
+            "Skill registry returned invalid JSON.",
+            {"url": url},
+        )
+    return data
 
 
 def fetch_registry_skill_content(
@@ -216,10 +392,27 @@ def fetch_registry_skill_content(
             {"url": url},
         )
 
+    return _validate_source_content(
+        normalized_id,
+        content,
+        source_url=url,
+        advertised_checksum=str(data.get("sha256") or "").strip(),
+    )
+
+
+def _validate_source_content(
+    skill_id: str,
+    content: str,
+    *,
+    source_url: str,
+    advertised_checksum: str = "",
+) -> SkillRemoteContent:
+    """Validate source markdown without evaluating or executing its body."""
+
     try:
         document = parse_skill_document(
             content,
-            expected_name=normalized_id,
+            expected_name=skill_id,
             strict_manifest=True,
             project_root=None,
         )
@@ -230,23 +423,240 @@ def fetch_registry_skill_content(
             {"issues": "; ".join(exc.issues)},
         ) from exc
 
-    assert document.manifest is not None
+    if document.manifest is None:
+        raise SkillInstallerError(
+            "invalid_skill_manifest",
+            "Fetched skill manifest failed validation.",
+            {"issues": "Skill manifest frontmatter is required."},
+        )
     checksum = sha256(content.encode("utf-8")).hexdigest()
-    advertised_checksum = str(data.get("sha256") or "").strip()
     if advertised_checksum and advertised_checksum != checksum:
         raise SkillInstallerError(
             "skill_checksum_mismatch",
             "Fetched skill checksum did not match the registry metadata.",
-            {"skill_id": normalized_id},
+            {"skill_id": skill_id},
         )
 
     return SkillRemoteContent(
-        id=normalized_id,
+        id=skill_id,
         version=document.manifest.version,
         content=content,
         sha256=checksum,
-        source_url=url,
+        source_url=source_url,
     )
+
+
+def _configured_local_source_dir() -> Path | None:
+    configured = str(getattr(settings, "skills_local_source_dir", "") or "").strip()
+    if not configured:
+        return None
+    source_dir = Path(configured).expanduser()
+    try:
+        resolved = source_dir.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise SkillInstallerError(
+            "skills_local_source_unavailable",
+            "Configured local Skill source directory is unavailable.",
+            {"path": str(source_dir)},
+        ) from exc
+    if not resolved.is_dir():
+        raise SkillInstallerError(
+            "skills_local_source_invalid",
+            "Configured local Skill source must be a directory.",
+            {"path": str(resolved)},
+        )
+    return resolved
+
+
+def fetch_local_skill_content(
+    skill_id: str,
+    source_dir: Path,
+) -> SkillRemoteContent:
+    """Read and validate one Skill from a local self-hosted source directory."""
+
+    normalized_id = _normalize_skill_id(skill_id)
+    filename = f"{normalized_id}.md"
+    candidate = source_dir / filename
+    directory_fd: int | None = None
+    file_fd: int | None = None
+    try:
+        directory_fd = os.open(
+            source_dir,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+        )
+        try:
+            initial_stat = os.stat(
+                filename,
+                dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError as exc:
+            raise SkillInstallerError(
+                "skill_source_not_found",
+                "Skill was not found in the configured local source.",
+                {"skill_id": normalized_id, "path": str(candidate)},
+            ) from exc
+        except OSError as exc:
+            raise SkillInstallerError(
+                "skill_source_unreadable",
+                "Local Skill source could not be inspected.",
+                {"skill_id": normalized_id, "path": str(candidate)},
+            ) from exc
+
+        if not stat.S_ISREG(initial_stat.st_mode):
+            raise SkillInstallerError(
+                "skills_local_source_invalid",
+                "Local Skill source must be a regular file, not a symlink or special file.",
+                {"skill_id": normalized_id, "path": str(candidate)},
+            )
+        if initial_stat.st_size > MAX_SKILL_SOURCE_BYTES:
+            raise SkillInstallerError(
+                "skill_source_too_large",
+                "Local Skill source exceeds the maximum allowed size.",
+                {
+                    "skill_id": normalized_id,
+                    "path": str(candidate),
+                    "size_bytes": str(initial_stat.st_size),
+                    "max_bytes": str(MAX_SKILL_SOURCE_BYTES),
+                },
+            )
+
+        open_flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        open_flags |= getattr(os, "O_NOFOLLOW", 0)
+        try:
+            file_fd = os.open(
+                filename,
+                open_flags,
+                dir_fd=directory_fd,
+            )
+        except FileNotFoundError as exc:
+            raise SkillInstallerError(
+                "skill_source_not_found",
+                "Skill was not found in the configured local source.",
+                {"skill_id": normalized_id, "path": str(candidate)},
+            ) from exc
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                raise SkillInstallerError(
+                    "skills_local_source_invalid",
+                    "Local Skill source must not be a symlink.",
+                    {"skill_id": normalized_id, "path": str(candidate)},
+                ) from exc
+            raise SkillInstallerError(
+                "skill_source_unreadable",
+                "Local Skill source could not be opened.",
+                {"skill_id": normalized_id, "path": str(candidate)},
+            ) from exc
+
+        opened_stat = os.fstat(file_fd)
+        try:
+            current_stat = os.stat(
+                filename,
+                dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
+        except OSError as exc:
+            raise SkillInstallerError(
+                "skills_local_source_invalid",
+                "Local Skill source changed while it was being opened.",
+                {"skill_id": normalized_id, "path": str(candidate)},
+            ) from exc
+        expected_identity = (initial_stat.st_dev, initial_stat.st_ino)
+        if (
+            not stat.S_ISREG(opened_stat.st_mode)
+            or not stat.S_ISREG(current_stat.st_mode)
+            or (opened_stat.st_dev, opened_stat.st_ino) != expected_identity
+            or (current_stat.st_dev, current_stat.st_ino) != expected_identity
+        ):
+            raise SkillInstallerError(
+                "skills_local_source_invalid",
+                "Local Skill source changed while it was being opened.",
+                {"skill_id": normalized_id, "path": str(candidate)},
+            )
+
+        try:
+            with os.fdopen(file_fd, "rb") as source_file:
+                file_fd = None
+                payload = source_file.read(MAX_SKILL_SOURCE_BYTES + 1)
+            if len(payload) > MAX_SKILL_SOURCE_BYTES:
+                raise SkillInstallerError(
+                    "skill_source_too_large",
+                    "Local Skill source exceeds the maximum allowed size.",
+                    {
+                        "skill_id": normalized_id,
+                        "path": str(candidate),
+                        "max_bytes": str(MAX_SKILL_SOURCE_BYTES),
+                    },
+                )
+            content = payload.decode("utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise SkillInstallerError(
+                "skill_source_unreadable",
+                "Local Skill source could not be read as UTF-8.",
+                {"skill_id": normalized_id, "path": str(candidate)},
+            ) from exc
+    except SkillInstallerError:
+        raise
+    except OSError as exc:
+        raise SkillInstallerError(
+            "skills_local_source_unavailable",
+            "Configured local Skill source directory became unavailable.",
+            {"path": str(source_dir)},
+        ) from exc
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+    return _validate_source_content(
+        normalized_id,
+        content,
+        source_url=candidate.as_uri(),
+    )
+
+
+def fetch_configured_skill_content(skill_id: str) -> SkillRemoteContent:
+    """Fetch from the configured local source, falling back to the registry."""
+
+    local_source_dir = _configured_local_source_dir()
+    if local_source_dir is not None:
+        return fetch_local_skill_content(skill_id, local_source_dir)
+    return fetch_registry_skill_content(skill_id)
+
+
+def _replace_skill_content(destination: Path, content: str) -> None:
+    """Atomically replace an installed Skill while preserving the old file on errors."""
+
+    file_descriptor: int | None = None
+    temporary_path: Path | None = None
+    try:
+        file_descriptor, temporary_name = tempfile.mkstemp(
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+        )
+        temporary_path = Path(temporary_name)
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as temporary_file:
+            file_descriptor = None
+            temporary_file.write(content)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        temporary_path.replace(destination)
+    except (OSError, UnicodeEncodeError) as exc:
+        raise SkillInstallerError(
+            "skill_write_failed",
+            "Installed Skill could not be written safely.",
+            {"path": str(destination)},
+        ) from exc
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def list_installed_skills() -> list[InstalledSkillEntry]:
@@ -271,8 +681,9 @@ def list_installed_skills() -> list[InstalledSkillEntry]:
         try:
             document = load_skill_document(
                 path,
-                strict_manifest=False,
-                allow_legacy_name=True,
+                strict_manifest=True,
+                allow_legacy_name=False,
+                project_root=None,
             )
             manifest = document.manifest
             entries.append(
@@ -286,6 +697,19 @@ def list_installed_skills() -> list[InstalledSkillEntry]:
                 )
             )
         except SkillManifestValidationError as exc:
+            if is_missing_manifest_frontmatter_error(exc):
+                entries.append(
+                    InstalledSkillEntry(
+                        id=skill_id,
+                        version=None,
+                        mode=mode,
+                        active=False,
+                        path=str(path),
+                        description=None,
+                        warning=MISSING_MANIFEST_WARNING,
+                    )
+                )
+                continue
             entries.append(
                 InstalledSkillEntry(
                     id=skill_id,
@@ -298,11 +722,22 @@ def list_installed_skills() -> list[InstalledSkillEntry]:
                     else "Skill manifest is invalid.",
                 )
             )
+        except (OSError, UnicodeDecodeError):
+            entries.append(
+                InstalledSkillEntry(
+                    id=skill_id,
+                    version=None,
+                    mode=mode,
+                    active=False,
+                    path=str(path),
+                    warning="Skill file could not be read as UTF-8.",
+                )
+            )
     return entries
 
 
 def install_skill(skill_id: str) -> SkillInstallResult:
-    """Install a skill from the configured registry into skills/custom."""
+    """Install a skill from the configured source into skills/custom."""
 
     normalized_id = _normalize_skill_id(skill_id)
     destination = _skill_destination(normalized_id)
@@ -313,22 +748,22 @@ def install_skill(skill_id: str) -> SkillInstallResult:
             {"skill_id": normalized_id, "path": str(destination)},
         )
 
-    remote = fetch_registry_skill_content(normalized_id)
+    source = fetch_configured_skill_content(normalized_id)
     CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
-    destination.write_text(remote.content, encoding="utf-8")
+    _replace_skill_content(destination, source.content)
     return SkillInstallResult(
         action="installed",
         skill_id=normalized_id,
-        version=remote.version,
+        version=source.version,
         destination=str(destination),
         mode=_install_mode(normalized_id),
-        sha256=remote.sha256,
-        source_url=remote.source_url,
+        sha256=source.sha256,
+        source_url=source.source_url,
     )
 
 
 def update_skill(skill_id: str) -> SkillInstallResult:
-    """Refresh an installed skill to the latest registry version."""
+    """Refresh an installed skill from the configured source."""
 
     normalized_id = _normalize_skill_id(skill_id)
     destination = _skill_destination(normalized_id)
@@ -341,29 +776,29 @@ def update_skill(skill_id: str) -> SkillInstallResult:
 
     previous_version = _current_version(destination)
     previous_checksum = _current_checksum(destination)
-    remote = fetch_registry_skill_content(normalized_id)
-    if previous_version == remote.version and previous_checksum == remote.sha256:
+    source = fetch_configured_skill_content(normalized_id)
+    if previous_version == source.version and previous_checksum == source.sha256:
         return SkillInstallResult(
             action="unchanged",
             skill_id=normalized_id,
-            version=remote.version,
+            version=source.version,
             previous_version=previous_version,
             destination=str(destination),
             mode=_install_mode(normalized_id),
-            sha256=remote.sha256,
-            source_url=remote.source_url,
+            sha256=source.sha256,
+            source_url=source.source_url,
         )
 
-    destination.write_text(remote.content, encoding="utf-8")
+    _replace_skill_content(destination, source.content)
     return SkillInstallResult(
         action="updated",
         skill_id=normalized_id,
-        version=remote.version,
+        version=source.version,
         previous_version=previous_version,
         destination=str(destination),
         mode=_install_mode(normalized_id),
-        sha256=remote.sha256,
-        source_url=remote.source_url,
+        sha256=source.sha256,
+        source_url=source.source_url,
     )
 
 

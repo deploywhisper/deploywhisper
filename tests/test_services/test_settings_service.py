@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -14,6 +15,8 @@ import models.database as database_module
 import models.repositories.settings as settings_repository_module
 import models.tables as tables_module
 import services.settings_service as settings_service_module
+from services.policy_adapter_settings import PolicyAdapterStatus
+from services.policy_adapter_settings import PolicyAdapterSettingsIntegrityError
 
 
 class SettingsServiceTests(unittest.TestCase):
@@ -55,6 +58,398 @@ class SettingsServiceTests(unittest.TestCase):
             }
         self.assertNotIn("llm_api_key", keys)
         self.assertNotIn("llm_provider_config::openai::api_key", keys)
+
+    def test_invalid_provider_settings_do_not_replace_active_profile(self) -> None:
+        settings_service_module.activate_local_mode(
+            model="ollama/test", api_base="http://localhost:11434"
+        )
+        for overrides in (
+            {"provider": "unknown"},
+            {"model": "   "},
+            {"api_base": "file:///tmp/provider"},
+            {"api_base": "https://bad host/v1"},
+            {"api_base": "https://%ZZ/v1"},
+            {"api_base": "https://bad^host/v1"},
+            {"api_base": "https://-invalid.example/v1"},
+            {"api_base": "https://999.999.999.999/v1"},
+            {"api_base": "https://bad\nhost/v1"},
+            {"api_base": "https://example.invalid/\x00"},
+            {"api_base": "https://user:secret@example.invalid/v1"},
+            {"api_base": "https://example.invalid/v1?api_key=secret"},
+            {"local_mode": True},
+            {"request_timeout_seconds": float("nan")},
+        ):
+            with self.subTest(overrides=overrides):
+                values = dict(
+                    provider="openai",
+                    model="test",
+                    api_base="https://example.invalid/v1",
+                )
+                values.update(overrides)
+                with self.assertRaises(ValueError):
+                    settings_service_module.save_provider_settings(**values)
+                self.assertEqual(
+                    settings_service_module.get_provider_settings().provider, "ollama"
+                )
+
+    def test_save_uses_environment_key_when_no_transient_key_is_supplied(self) -> None:
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "synthetic-environment-key"}):
+            saved = settings_service_module.save_provider_settings(
+                provider="openai", model="test", api_base="https://example.invalid/v1"
+            )
+        self.assertEqual(saved.api_key, "synthetic-environment-key")
+
+    def test_health_rejects_invalid_stored_profile_without_network_probe(self) -> None:
+        invalid = settings_service_module.ProviderSettings(
+            provider="openai",
+            model="test",
+            api_base="https://example.invalid",
+            local_mode=True,
+            api_key="synthetic",
+            source="database",
+        )
+        with (
+            patch.object(
+                settings_service_module, "get_provider_settings", return_value=invalid
+            ),
+            patch.object(
+                settings_service_module, "validate_provider_settings"
+            ) as probe,
+        ):
+            readiness = settings_service_module.get_provider_health_snapshot()
+        self.assertFalse(readiness.ready)
+        probe.assert_not_called()
+
+    def test_provider_credentials_cannot_be_hidden_in_persisted_profile_fields(
+        self,
+    ) -> None:
+        token = "sk-syntheticBoundaryToken12345"
+        for overrides in (
+            {"model": token},
+            {"model": "%73k-syntheticBoundaryToken12345"},
+            {"model": "%2573k-syntheticBoundaryToken12345"},
+            {"api_base": "https://example.invalid/%2563ustom%252denv%252dsecret"},
+            {"api_base": "https://example.invalid/%73k-syntheticBoundaryToken12345"},
+            {"api_base": "https://example.invalid/%63ustom%2denv%2dsecret"},
+            {"api_base": f"https://example.invalid/{token}"},
+            {"model": "custom-transient-secret", "api_key": "custom-transient-secret"},
+            {"api_base": "https://example.invalid/custom-env-secret"},
+            {"model": "custom-env-secret", "api_key": "different-transient-key"},
+            {
+                "api_base": "https://example.invalid/custom-env-secret",
+                "api_key": "different-transient-key",
+            },
+        ):
+            values = dict(
+                provider="openai", model="test", api_base="https://example.invalid/v1"
+            )
+            values.update(overrides)
+            with (
+                self.subTest(overrides=overrides),
+                patch.dict(os.environ, {"OPENAI_API_KEY": "custom-env-secret"}),
+            ):
+                with self.assertRaises(ValueError) as caught:
+                    settings_service_module.save_provider_settings(**values)
+                self.assertNotIn(token, str(caught.exception))
+                self.assertNotIn("custom-env-secret", str(caught.exception))
+                self.assertNotIn("custom-transient-secret", str(caught.exception))
+        with database_module.SessionLocal() as session:
+            self.assertFalse(
+                any(
+                    record.key.startswith("llm_") or record.key == "active_llm_provider"
+                    for record in settings_repository_module.list_settings(session)
+                )
+            )
+
+    def test_unselected_fallback_alias_and_provider_credentials_cannot_be_saved(
+        self,
+    ) -> None:
+        credentials = {
+            "OPENAI_API_KEY": "opaque-active-secret-1234",
+            "LLM_API_KEY": "opaque-fallback-secret-5678",
+            "GEMINI_API_KEY": "opaque-gemini-secret-9012",
+            "GOOGLE_API_KEY": "opaque-google-secret-3456",
+            "ANTHROPIC_API_KEY": "opaque-anthropic-secret-7890",
+        }
+        with patch.dict(os.environ, credentials):
+            for provider in ("openai", "gemini", "ollama"):
+                for credential in credentials.values():
+                    for field in ("model", "api_base"):
+                        with self.subTest(
+                            provider=provider, credential=credential, field=field
+                        ):
+                            values = dict(
+                                provider=provider,
+                                model="test",
+                                api_base="http://localhost:1",
+                            )
+                            values[field] = (
+                                credential
+                                if field == "model"
+                                else f"http://localhost:1/{credential}"
+                            )
+                            with self.assertRaises(ValueError):
+                                settings_service_module.save_provider_settings(**values)
+
+    def test_policy_adapter_settings_resolve_integration_then_project_defaults(
+        self,
+    ) -> None:
+        project_settings = settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            warn_at="medium",
+            soft_block_at="high",
+            hard_block_at="critical",
+            reporting_default="advisory",
+            enforcement_mode="warn",
+        )
+        integration_settings = settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+            reporting_default="warn",
+            enforcement_mode="soft-block",
+        )
+
+        resolved_project = settings_service_module.get_policy_adapter_settings(
+            project_key="payments"
+        )
+        resolved_integration = settings_service_module.get_policy_adapter_settings(
+            project_key="payments", integration="jenkins"
+        )
+        unresolved_integration = settings_service_module.get_policy_adapter_settings(
+            project_key="payments", integration="gitlab"
+        )
+
+        self.assertEqual(project_settings.source, "project")
+        self.assertEqual(integration_settings.source, "integration")
+        self.assertEqual(resolved_project.source, "project")
+        self.assertEqual(resolved_integration.source, "integration")
+        self.assertEqual(
+            resolved_integration.reporting_default, PolicyAdapterStatus.WARN
+        )
+        self.assertEqual(
+            resolved_integration.enforcement_mode, PolicyAdapterStatus.SOFT_BLOCK
+        )
+        self.assertEqual(unresolved_integration.source, "project")
+        self.assertIsNone(unresolved_integration.integration)
+        self.assertEqual(
+            unresolved_integration.enforcement_mode, PolicyAdapterStatus.WARN
+        )
+
+    def test_policy_adapter_settings_use_safe_built_in_defaults(self) -> None:
+        settings = settings_service_module.get_policy_adapter_settings(
+            project_key="payments", integration="jenkins"
+        )
+
+        self.assertEqual(settings.source, "built-in")
+        self.assertEqual(settings.reporting_default, PolicyAdapterStatus.ADVISORY)
+        self.assertEqual(settings.enforcement_mode, PolicyAdapterStatus.ADVISORY)
+        self.assertEqual(settings.warn_at.value, "medium")
+        self.assertEqual(settings.soft_block_at.value, "high")
+        self.assertEqual(settings.hard_block_at.value, "critical")
+
+    def test_policy_adapter_service_update_preserves_existing_enforcement_mode(
+        self,
+    ) -> None:
+        settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            enforcement_mode="hard-block",
+        )
+
+        updated = settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+            reporting_default="warn",
+        )
+
+        self.assertEqual(updated.enforcement_mode, PolicyAdapterStatus.HARD_BLOCK)
+
+    def test_policy_adapter_settings_use_canonical_project_keys_for_storage(
+        self,
+    ) -> None:
+        saved = settings_service_module.save_policy_adapter_settings(
+            project_key="Payments_Core",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+        )
+
+        loaded = settings_service_module.get_policy_adapter_settings(
+            project_key="payments-core"
+        )
+
+        self.assertEqual(saved.project_key, "payments-core")
+        self.assertEqual(loaded.source, "project")
+        self.assertEqual(loaded.warn_at.value, "high")
+
+    def test_policy_adapter_settings_can_reset_to_inherited_defaults(self) -> None:
+        settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            warn_at="medium",
+            soft_block_at="high",
+            hard_block_at="critical",
+            reporting_default="advisory",
+        )
+        settings_service_module.save_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+            reporting_default="warn",
+        )
+
+        inherited_project = settings_service_module.delete_policy_adapter_settings(
+            project_key="payments", integration="jenkins"
+        )
+        inherited_builtin = settings_service_module.delete_policy_adapter_settings(
+            project_key="payments"
+        )
+
+        self.assertEqual(inherited_project.source, "project")
+        self.assertEqual(
+            inherited_project.reporting_default, PolicyAdapterStatus.ADVISORY
+        )
+        self.assertEqual(inherited_builtin.source, "built-in")
+
+    def test_policy_adapter_settings_reject_stored_scope_mismatches(self) -> None:
+        mismatches = (
+            (
+                "policy_adapter_defaults::payments::project",
+                {
+                    "project_key": "identity",
+                    "source": "project",
+                },
+                {"project_key": "payments"},
+            ),
+            (
+                "policy_adapter_defaults::payments::integration::jenkins",
+                {
+                    "project_key": "payments",
+                    "integration": "gitlab",
+                    "source": "integration",
+                },
+                {"project_key": "payments", "integration": "jenkins"},
+            ),
+        )
+
+        for key, stored, requested in mismatches:
+            with self.subTest(key=key):
+                with database_module.SessionLocal() as session:
+                    settings_repository_module.upsert_setting(
+                        session,
+                        key=key,
+                        value=json.dumps(stored),
+                    )
+
+                with self.assertRaisesRegex(
+                    PolicyAdapterSettingsIntegrityError, "scope does not match"
+                ):
+                    settings_service_module.get_policy_adapter_settings(**requested)
+
+    def test_policy_adapter_settings_support_scopes_exceeding_plain_key_limit(
+        self,
+    ) -> None:
+        long_scope = {"project_key": "p" * 80, "integration": "jenkins"}
+
+        inherited = settings_service_module.get_policy_adapter_settings(**long_scope)
+        saved = settings_service_module.save_policy_adapter_settings(
+            **long_scope,
+            warn_at="high",
+            soft_block_at="critical",
+            hard_block_at=None,
+        )
+        loaded = settings_service_module.get_policy_adapter_settings(**long_scope)
+        with database_module.SessionLocal() as session:
+            keys = [
+                record.key
+                for record in settings_repository_module.list_settings(session)
+                if record.key.startswith("policy_adapter_defaults::")
+            ]
+        reset = settings_service_module.delete_policy_adapter_settings(**long_scope)
+
+        self.assertEqual(inherited.source, "built-in")
+        self.assertEqual(saved.source, "integration")
+        self.assertEqual(loaded.source, "integration")
+        self.assertEqual(len(keys), 1)
+        self.assertIn("::sha256::", keys[0])
+        self.assertLessEqual(len(keys[0]), 100)
+        self.assertEqual(reset.source, "built-in")
+
+    def test_policy_adapter_settings_classify_malformed_storage_as_integrity_error(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key="policy_adapter_defaults::payments::project",
+                value="not-json",
+            )
+
+        with self.assertRaisesRegex(
+            PolicyAdapterSettingsIntegrityError,
+            "could not be validated",
+        ):
+            settings_service_module.get_policy_adapter_settings(project_key="payments")
+
+    def test_policy_adapter_settings_default_legacy_storage_to_advisory_enforcement(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key="policy_adapter_defaults::payments::project",
+                value=json.dumps(
+                    {
+                        "project_key": "payments",
+                        "source": "project",
+                        "warn_at": "medium",
+                        "soft_block_at": "high",
+                        "hard_block_at": "critical",
+                        "reporting_default": "advisory",
+                    }
+                ),
+            )
+
+        loaded = settings_service_module.get_policy_adapter_settings(
+            project_key="payments"
+        )
+
+        self.assertEqual(loaded.enforcement_mode, PolicyAdapterStatus.ADVISORY)
+
+    def test_integration_policy_settings_default_legacy_storage_to_advisory_enforcement(
+        self,
+    ) -> None:
+        with database_module.SessionLocal() as session:
+            settings_repository_module.upsert_setting(
+                session,
+                key="policy_adapter_defaults::payments::integration::jenkins",
+                value=json.dumps(
+                    {
+                        "project_key": "payments",
+                        "integration": "jenkins",
+                        "source": "integration",
+                        "warn_at": "medium",
+                        "soft_block_at": "high",
+                        "hard_block_at": "critical",
+                        "reporting_default": "advisory",
+                    }
+                ),
+            )
+
+        loaded = settings_service_module.get_policy_adapter_settings(
+            project_key="payments",
+            integration="jenkins",
+        )
+
+        self.assertEqual(loaded.source, "integration")
+        self.assertEqual(loaded.enforcement_mode, PolicyAdapterStatus.ADVISORY)
 
     def test_provider_profiles_can_be_saved_per_provider_and_switched(self) -> None:
         settings_service_module.save_provider_settings(
@@ -258,7 +653,8 @@ class SettingsServiceTests(unittest.TestCase):
             config, completion_client=broken_completion
         )
         self.assertFalse(result["valid"])
-        self.assertIn("provider offline", result["message"])
+        self.assertIn("RuntimeError", result["message"])
+        self.assertNotIn("provider offline", result["message"])
 
     def test_check_provider_readiness_reports_missing_api_key(self) -> None:
         with patch.dict(
@@ -311,7 +707,8 @@ class SettingsServiceTests(unittest.TestCase):
 
         self.assertFalse(readiness.ready)
         self.assertTrue(readiness.has_api_key)
-        self.assertIn("provider offline", readiness.message)
+        self.assertIn("RuntimeError", readiness.message)
+        self.assertNotIn("provider offline", readiness.message)
         os.environ.pop("OPENAI_API_KEY", None)
 
     def test_check_provider_readiness_validates_local_mode_without_api_key(
