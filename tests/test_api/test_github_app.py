@@ -15,11 +15,45 @@ import app as app_module
 import config as config_module
 import models.database as database_module
 import models.tables as tables_module
-from integrations.github.app_service import GitHubAppProjectScopeError
+from integrations.github.app_service import (
+    GitHubAppConfigurationError,
+    GitHubAppProjectScopeError,
+    GitHubAppRequestError,
+)
 from fastapi.testclient import TestClient
 
 
 class GitHubAppRouteTests(unittest.TestCase):
+    def test_webhook_errors_never_expose_exception_details(self) -> None:
+        marker = "opaque-private-exception-detail-123"
+        payload = b'{"action":"opened"}'
+        signature = (
+            "sha256=" + hmac.new(b"webhook-secret", payload, hashlib.sha256).hexdigest()
+        )
+        for exception, status in (
+            (GitHubAppConfigurationError(marker), 405),
+            (GitHubAppRequestError(marker), 502),
+            (GitHubAppProjectScopeError("project_not_found", marker), 200),
+            (GitHubAppProjectScopeError(marker, marker), 200),
+        ):
+            with (
+                self.subTest(exception=type(exception).__name__),
+                patch(
+                    "api.routes.github_app.handle_github_app_webhook",
+                    side_effect=exception,
+                ),
+            ):
+                response = self.client.post(
+                    "/api/v1/github/app/webhook",
+                    headers={
+                        "X-Hub-Signature-256": signature,
+                        "X-GitHub-Event": "pull_request",
+                    },
+                    content=payload,
+                )
+                self.assertEqual(response.status_code, status)
+                self.assertNotIn(marker, response.text)
+
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         os.environ["DATABASE_URL"] = f"sqlite:///{self.tempdir.name}/github_app.db"

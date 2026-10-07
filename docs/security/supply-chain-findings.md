@@ -66,3 +66,7 @@ scope; decisions expire on the next review date or when that scope changes.
   enabled only in the separate restricted default-branch publishing workflow;
   first publication and badge population are pending integration, not inferred
   from PR-local or CLI baseline success.
+
+## Remediation work — 2026-10-07
+
+See [the advisory and source-disposition record](remediation-2026-10-07.md) for all 21 advisory mappings, confirmed source fixes, supported false positives, dependency updates and minimum workflow permissions. The user authorized direct `develop` work. Local dependency audits are clean after compatible updates. Full local/end-to-end validation and publication state are recorded in the remediation spec; no refreshed public score or automatic alert closure is inferred from local success. Owner remains @pramodksahoo under [#131](https://github.com/deploywhisper/deploywhisper/issues/131); branch/review policy and signing follow-ups remain open.

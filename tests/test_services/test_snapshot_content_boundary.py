@@ -93,3 +93,71 @@ class SnapshotContentBoundaryTests(unittest.TestCase):
             snapshot_service.load_report_artifact(1, "playbook.yaml").content,
             raw.decode(),
         )
+
+    def test_manifest_cannot_read_paths_outside_report_directory(self) -> None:
+        report_dir = self.snapshot_dir / "1"
+        report_dir.mkdir(parents=True)
+        outside = self.root / "outside.txt"
+        outside.write_text("opaque private content")
+        for stored_name in (str(outside), "../../outside.txt", "..\\outside.txt"):
+            with self.subTest(stored_name=stored_name):
+                (report_dir / "manifest.json").write_text(
+                    json.dumps({"playbook.yaml": stored_name})
+                )
+                self.assertIsNone(
+                    snapshot_service.load_report_artifact(1, "playbook.yaml")
+                )
+
+    def test_manifest_and_artifact_symlinks_are_rejected(self) -> None:
+        report_dir = self.snapshot_dir / "1"
+        report_dir.mkdir(parents=True)
+        outside = self.root / "outside.txt"
+        outside.write_text("opaque private content")
+        (report_dir / "old.txt").symlink_to(outside)
+        manifest = report_dir / "manifest.json"
+        manifest.write_text(json.dumps({"playbook.yaml": "old.txt"}))
+        self.assertIsNone(snapshot_service.load_report_artifact(1, "playbook.yaml"))
+        manifest.unlink()
+        outside_manifest = self.root / "outside.json"
+        outside_manifest.write_text(json.dumps({"playbook.yaml": "old.txt"}))
+        manifest.symlink_to(outside_manifest)
+        self.assertIsNone(snapshot_service.load_report_artifact(1, "playbook.yaml"))
+
+    def test_report_symlink_cannot_read_write_or_delete_external_files(self) -> None:
+        self.snapshot_dir.mkdir()
+        outside = self.root / "outside"
+        outside.mkdir()
+        sentinel = outside / "sentinel.txt"
+        sentinel.write_text("preserved")
+        (self.snapshot_dir / "1").symlink_to(outside, target_is_directory=True)
+        for operation in (
+            lambda: snapshot_service.load_report_artifact(1, "playbook.yaml"),
+            lambda: snapshot_service.save_report_artifacts(
+                1, {"playbook.yaml": b"safe"}
+            ),
+            lambda: snapshot_service.delete_report_artifacts(1),
+        ):
+            with self.assertRaises(ValueError):
+                operation()
+        self.assertEqual(sentinel.read_text(), "preserved")
+
+    def test_save_cannot_overwrite_artifact_or_manifest_symlinks(self) -> None:
+        report_dir = self.snapshot_dir / "1"
+        report_dir.mkdir(parents=True)
+        outside = self.root / "outside.txt"
+        outside.write_text("preserved")
+        for name in (snapshot_service._stored_name("playbook.yaml"), "manifest.json"):
+            with self.subTest(name=name):
+                target = report_dir / name
+                target.symlink_to(outside)
+                with self.assertRaises(ValueError):
+                    snapshot_service.save_report_artifacts(
+                        1, {"playbook.yaml": b"safe"}
+                    )
+                self.assertEqual(outside.read_text(), "preserved")
+                target.unlink()
+
+    def test_report_ids_cannot_form_paths(self) -> None:
+        for report_id in ("../outside", 0, -1, True):
+            with self.subTest(report_id=report_id), self.assertRaises(ValueError):
+                snapshot_service.delete_report_artifacts(report_id)

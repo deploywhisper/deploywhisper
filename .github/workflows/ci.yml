@@ -10,7 +10,7 @@
 #   3. test       — sharded pytest with coverage
 #   4. docker     — Dockerfile build + health-check smoke test
 #   5. migration  — Alembic migration head consistency
-#   6. report     — CI summary + coverage comment on PR
+#   6. report     — CI summary
 # =============================================================================
 
 name: CI
@@ -37,7 +37,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write  # needed for coverage comment on PRs
 
 env:
   PYTHON_VERSION: "3.11"
@@ -56,10 +55,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -119,7 +118,7 @@ jobs:
 
       - name: Upload quality logs
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: quality-logs
           path: |
@@ -137,10 +136,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -197,7 +196,7 @@ jobs:
 
       - name: Upload security reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: security-reports
           path: |
@@ -216,10 +215,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: npm
@@ -227,6 +226,11 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
+
+      - name: Audit both npm dependency graphs
+        run: |
+          npm audit --audit-level=low
+          npm audit --prefix frontend --audit-level=low
 
       - name: Type check frontend
         run: npm run ui:typecheck
@@ -247,12 +251,12 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -285,7 +289,7 @@ jobs:
 
       - name: Upload changed-test logs
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: changed-tests-log
           path: |
@@ -317,10 +321,10 @@ jobs:
             targets: tests/test_llm
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -359,7 +363,7 @@ jobs:
 
       - name: Upload coverage data
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: coverage-${{ matrix.shard }}
           path: coverage-${{ matrix.shard }}.xml
@@ -367,7 +371,7 @@ jobs:
 
       - name: Upload shard logs
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: shard-log-${{ matrix.shard }}
           path: shard-${{ matrix.shard }}.log
@@ -384,13 +388,13 @@ jobs:
       - quality
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           push: false
@@ -446,10 +450,10 @@ jobs:
       - quality
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -483,7 +487,7 @@ jobs:
           echo "All migrations applied successfully to a fresh database."
       - name: Upload migration logs
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: migration-logs
           path: |

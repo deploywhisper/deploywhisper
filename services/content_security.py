@@ -41,7 +41,9 @@ _ASSIGNMENT = re.compile(
 _BLOCK_ASSIGNMENT = re.compile(
     _ASSIGNMENT_PREFIX
     + r"[|>](?:[+-][1-9]?|[1-9][+-]?)?[ \t]*(?:\#[^\r\n]*)?\r?\n"
-    + r"(?P<value>(?:(?:[ \t]+[^\r\n]*|[ \t]*)\r?\n|[ \t]+[^\r\n]*$)+)",
+    # Separate indentation from nonblank content to avoid repartitioning long
+    # whitespace runs during backtracking on malformed block bodies.
+    + r"(?P<value>(?:[ \t]+[^ \t\r\n][^\r\n]*(?:\r?\n|$)|[ \t]*\r?\n|[ \t]+$)+)",
     re.IGNORECASE,
 )
 _HEREDOC_ASSIGNMENT = re.compile(
@@ -66,7 +68,9 @@ _AUTHORIZATION = re.compile(
     r"\b(?:bearer|basic)\s+)(?P<credential>[A-Za-z0-9._~+/=-]+)"
 )
 _URL_CREDENTIAL = re.compile(
-    r"((?<![\w+.-])[a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/@]+:(?P<credential>[^\s/@]+)@"
+    # The first colon separates username and password; password colons remain
+    # valid without letting the engine retry every possible separator.
+    r"((?<![\w+.-])[a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/:@]+:(?P<credential>[^\s/@]+)@"
 )
 _QUERY_PARAMETER = re.compile(
     r"(?P<prefix>[?&])(?P<name>[^=&\s\"'<>#]+)=(?P<credential>[^&#\s\"'<>]*)"

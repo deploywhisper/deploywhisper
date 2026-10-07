@@ -82,6 +82,25 @@ class ContentSecurityTests(unittest.TestCase):
         self.assertEqual(values, tuple(sorted(set(values))))
         self.assertEqual(sensitive_submission_values([]), ())
 
+    def test_url_password_colons_and_block_whitespace_remain_screened(self):
+        raw = "https://reader:synthetic:password@db.example.com"
+        self.assertEqual(redact_text(raw), f"https://{REDACTED}@db.example.com")
+        self.assertIn("synthetic:password", sensitive_artifact_values(raw.encode()))
+        for body in (
+            "  synthetic-value\n\n \t\n  continuation",
+            " \t",
+            "  synthetic-value\r\n \t\r\n",
+        ):
+            with self.subTest(body=body):
+                block = "password: |\n" + body
+                self.assertEqual(redact_text(block), f"password: {REDACTED}\n")
+
+    def test_yaml_python_object_tags_never_execute(self):
+        raw = b'!!python/object/apply:os.system ["echo synthetic-value"]'
+        with patch("os.system") as execute:
+            self.assertEqual(sensitive_artifact_values(raw), ())
+        execute.assert_not_called()
+
     def test_escaped_hcl_credentials_keep_literal_and_decoded_variants(self):
         for literal, decoded in (
             (r"\u0073ynthetic-value", "synthetic-value"),

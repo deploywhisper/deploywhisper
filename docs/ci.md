@@ -170,3 +170,7 @@ These logs are retained for 14 days.
 - Python version is pinned to `3.11` to match the Docker runtime.
 - No CI secrets are required for the base pipeline.
 - Slack notifications are optional and only activate when `SLACK_WEBHOOK_URL` is present.
+
+### Dependency freshness and delivery permissions
+
+Dependabot proposes weekly Python, root/frontend npm and GitHub Actions updates targeting `develop`; updates must pass normal review/CI. Frontend CI audits both npm graphs at all severities. Runtime Python audit remains enabled. Workflow defaults are read-only; container pushes, release creation and committed analytics snapshots receive only their required job-scoped writes. Public analytics feeds receive no GitHub bearer credential. Third-party workflow actions are SHA-pinned and included in automated update coverage. See [the remediation record](security/remediation-2026-10-07.md) for advisory dispositions and validation limits.

@@ -147,6 +147,13 @@ async def github_app_webhook(request: Request) -> dict[str, object]:
         )
     except GitHubAppProjectScopeError as exc:
         code = getattr(exc, "code", "invalid_project_reference")
+        if code not in {
+            "missing_project_scope",
+            "project_not_found",
+            "conflicting_project_reference",
+            "invalid_project_reference",
+        }:
+            code = "invalid_project_reference"
         return redact_value(
             {
                 "data": {
@@ -160,7 +167,7 @@ async def github_app_webhook(request: Request) -> dict[str, object]:
                     "marketplace_url": config.marketplace_url,
                     "install_url": config.install_url,
                     "advisory_only": True,
-                    "note": f"{code}: {exc}",
+                    "note": f"{code}: GitHub analysis project scope could not be resolved.",
                 },
                 "meta": {
                     "api_version": "v1",
@@ -172,13 +179,13 @@ async def github_app_webhook(request: Request) -> dict[str, object]:
         raise ApiError(
             status_code=405,
             code="github_app_unconfigured",
-            message=str(exc),
+            message="GitHub App configuration is unavailable or invalid.",
         ) from exc
     except GitHubAppRequestError as exc:
         raise ApiError(
             status_code=502,
             code="github_app_upstream_failed",
-            message=str(exc),
+            message="GitHub App upstream request could not complete.",
         ) from exc
 
     return redact_value(

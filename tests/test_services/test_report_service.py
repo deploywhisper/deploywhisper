@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import os
 import sqlite3
@@ -36,6 +37,7 @@ from llm.narrator import NarrativeResult
 from parsers.base import ParseBatchResult, ParseIssue, ParsedFileResult, UnifiedChange
 from parsers.terraform_parser import parse_terraform
 from pydantic import ValidationError
+from sqlalchemy.exc import OperationalError
 
 
 class ReportServiceTests(unittest.TestCase):
@@ -7496,6 +7498,138 @@ class ReportServiceTests(unittest.TestCase):
                 report["id"], password="s3cret-pass"
             )
         )
+
+    def test_share_passwords_use_versioned_salted_password_derivation(self) -> None:
+        report = self._persist_shareable_report()
+        report_service_module.configure_report_share(
+            report["id"], password="synthetic-password", redact_filenames=False
+        )
+        first = report_service_module.fetch_analysis_report(report["id"])
+        self.assertTrue(first["share_password_hash"].startswith("pbkdf2$600000$"))
+        self.assertLessEqual(len(first["share_password_hash"]), 64)
+        self.assertEqual(len(first["share_password_salt"]), 32)
+        report_service_module.configure_report_share(
+            report["id"], password="synthetic-password", redact_filenames=False
+        )
+        second = report_service_module.fetch_analysis_report(report["id"])
+        self.assertNotEqual(first["share_password_hash"], second["share_password_hash"])
+
+    def test_legacy_share_password_upgrades_only_after_success(self) -> None:
+        report = self._persist_shareable_report()
+        salt = "synthetic-salt"
+        legacy = hashlib.sha256(f"{salt}:synthetic-password".encode()).hexdigest()
+        with database_module.SessionLocal() as session:
+            analysis_reports_repository_module.update_analysis_report_share_settings(
+                session,
+                report["id"],
+                share_password_hash=legacy,
+                share_password_salt=salt,
+                share_redact_filenames=True,
+            )
+        self.assertIsNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], password="wrong-password"
+            )
+        )
+        self.assertIsNotNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], bypass_password=True
+            )
+        )
+        self.assertEqual(
+            report_service_module.fetch_analysis_report(report["id"])[
+                "share_password_hash"
+            ],
+            legacy,
+        )
+        self.assertIsNotNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], password="synthetic-password"
+            )
+        )
+        upgraded = report_service_module.fetch_analysis_report(report["id"])
+        self.assertTrue(upgraded["share_password_hash"].startswith("pbkdf2$600000$"))
+        self.assertTrue(upgraded["share_redact_filenames"])
+        self.assertIsNotNone(
+            report_service_module.fetch_shared_analysis_report(
+                report["id"], password="synthetic-password"
+            )
+        )
+
+    def test_legacy_password_upgrade_preserves_concurrent_share_settings(self) -> None:
+        report = self._persist_shareable_report()
+        report_service_module.configure_report_share(
+            report["id"], password="new-password", redact_filenames=True
+        )
+        before = report_service_module.fetch_analysis_report(report["id"])
+        report_service_module._upgrade_share_password(
+            report["id"], "old-password", stored="0" * 64, salt="old-salt"
+        )
+        after = report_service_module.fetch_analysis_report(report["id"])
+        self.assertEqual(before["share_password_hash"], after["share_password_hash"])
+        self.assertEqual(before["share_password_salt"], after["share_password_salt"])
+        self.assertTrue(after["share_redact_filenames"])
+
+    def test_legacy_password_read_survives_upgrade_write_failure(self) -> None:
+        report = self._persist_shareable_report()
+        salt = "synthetic-salt"
+        password = "synthetic-password"
+        legacy = hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
+        with database_module.SessionLocal() as session:
+            analysis_reports_repository_module.update_analysis_report_share_settings(
+                session,
+                report["id"],
+                share_password_hash=legacy,
+                share_password_salt=salt,
+                share_redact_filenames=True,
+            )
+        failure = OperationalError(
+            "UPDATE synthetic-sensitive-table",
+            {"password": password},
+            RuntimeError("synthetic-sensitive-database-path is read-only"),
+        )
+        with patch("sqlalchemy.orm.Session.commit", side_effect=failure):
+            with self.assertLogs(
+                report_service_module.logger, level="WARNING"
+            ) as logged:
+                shared = report_service_module.fetch_shared_analysis_report(
+                    report["id"], password=password
+                )
+        self.assertIsNotNone(shared)
+        self.assertEqual(
+            report_service_module.fetch_analysis_report(report["id"])[
+                "share_password_hash"
+            ],
+            legacy,
+        )
+        message = " ".join(logged.output)
+        self.assertNotIn(password, message)
+        self.assertNotIn("synthetic-sensitive", message)
+        self.assertNotIn("Traceback", message)
+
+    def test_malformed_versioned_share_password_hashes_fail_closed(self) -> None:
+        report = self._persist_shareable_report()
+        for stored in (
+            "pbkdf2$invalid$hash",
+            "pbkdf2$999999999$hash",
+            "pbkdf2$600000$invalid",
+            "pbkdf2$600000$é",
+            "unknown$600000$hash",
+        ):
+            with self.subTest(stored=stored):
+                with database_module.SessionLocal() as session:
+                    analysis_reports_repository_module.update_analysis_report_share_settings(
+                        session,
+                        report["id"],
+                        share_password_hash=stored,
+                        share_password_salt="synthetic-salt",
+                        share_redact_filenames=False,
+                    )
+                self.assertIsNone(
+                    report_service_module.fetch_shared_analysis_report(
+                        report["id"], password="synthetic-password"
+                    )
+                )
 
     def test_fetch_report_comparison_returns_findings_and_evidence_deltas(self) -> None:
         previous = self._persist_comparison_report(

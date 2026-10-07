@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import base64
 import hmac
 import ipaddress
 import json
@@ -20,6 +21,8 @@ from typing import Any, get_args
 from urllib.parse import urlsplit
 
 from pydantic import ValidationError
+from sqlalchemy import update
+from sqlalchemy.exc import DBAPIError
 
 from analysis.blast_radius import BlastRadiusResult
 from analysis.incident_matcher import IncidentMatch
@@ -463,8 +466,65 @@ def _narrative_degraded_from_state(
     )
 
 
+_SHARE_PASSWORD_ITERATIONS = 600_000
+
+
 def _hash_share_password(password: str, *, salt: str) -> str:
-    return hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+    # The compact versioned encoding fits the existing 64-character column.
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        _SHARE_PASSWORD_ITERATIONS,
+    )
+    return f"pbkdf2${_SHARE_PASSWORD_ITERATIONS}${base64.b64encode(digest).decode('ascii')}"
+
+
+def _verify_share_password(password: str, *, salt: str, stored: str) -> bool:
+    if stored.startswith("pbkdf2$"):
+        # Accept only the supported work factor; corrupt database values cannot
+        # trigger an unbounded derivation or silently weaken password protection.
+        if not re.fullmatch(
+            rf"pbkdf2\${_SHARE_PASSWORD_ITERATIONS}\$[A-Za-z0-9+/]{{43}}=", stored
+        ):
+            return False
+        return hmac.compare_digest(stored, _hash_share_password(password, salt=salt))
+    if not re.fullmatch(r"[0-9a-f]{64}", stored):
+        return False
+    legacy = hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+    return hmac.compare_digest(stored, legacy)
+
+
+def _upgrade_share_password(
+    report_id: int, password: str, *, stored: str, salt: str
+) -> None:
+    new_salt = secrets.token_hex(16)
+    new_hash = _hash_share_password(password, salt=new_salt)
+
+    def operation():
+        with SessionLocal() as session:
+            current = get_analysis_report(session, report_id)
+            if current is None:
+                return
+            report_type = type(current)
+            # Upgrade only the verified password; preserve concurrent settings.
+            session.execute(
+                update(report_type)
+                .where(
+                    report_type.id == report_id,
+                    report_type.share_password_hash == stored,
+                    report_type.share_password_salt == salt,
+                )
+                .values(share_password_hash=new_hash, share_password_salt=new_salt)
+            )
+            session.commit()
+
+    try:
+        _run_with_schema_retry(operation)
+    except DBAPIError:
+        # Authentication already succeeded. A best-effort password migration
+        # must not prevent read access when persistence is unavailable.
+        logger.warning("Shared report password upgrade could not be persisted.")
 
 
 def _share_settings(report: dict[str, Any]) -> dict[str, Any]:
@@ -4982,7 +5042,7 @@ def configure_report_share(
     redact_filenames: bool,
 ) -> dict | None:
     password_value = (password or "").strip()
-    password_salt = secrets.token_hex(8) if password_value else None
+    password_salt = secrets.token_hex(16) if password_value else None
     password_hash = (
         _hash_share_password(password_value, salt=password_salt)
         if password_salt is not None
@@ -5023,11 +5083,14 @@ def fetch_shared_analysis_report(
         candidate = (password or "").strip()
         if not candidate or not password_salt:
             return None
-        if not hmac.compare_digest(
-            password_hash,
-            _hash_share_password(candidate, salt=password_salt),
+        if not _verify_share_password(
+            candidate, salt=password_salt, stored=password_hash
         ):
             return None
+        if not password_hash.startswith("pbkdf2$"):
+            _upgrade_share_password(
+                report_id, candidate, stored=password_hash, salt=password_salt
+            )
     shared = {
         **report,
         "share": _share_settings(report),

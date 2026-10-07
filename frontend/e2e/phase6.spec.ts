@@ -1,8 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
 
 const runId = Date.now();
 const projectKey = `phase-6-${runId}`;
@@ -119,9 +116,11 @@ test.describe("Phase 6 settings, incidents, and skills", () => {
     await expect(page.getByRole("heading", { name: "Reviewer feedback" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Custom AI skills" })).toBeVisible();
 
-    const tempTopology = path.join(os.tmpdir(), `phase6-topology-${runId}.json`);
-    fs.writeFileSync(tempTopology, JSON.stringify({ services: [] }), "utf-8");
-    await page.locator('input[type="file"]').first().setInputFiles(tempTopology);
+    await page.locator('input[type="file"]').first().setInputFiles({
+      name: "topology.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify({ services: [] })),
+    });
     await expect(page.getByText(/Topology validation passed|Topology validation failed/)).toBeVisible();
     await page.keyboard.press("Tab");
     await expect(page.locator(":focus")).toBeVisible();

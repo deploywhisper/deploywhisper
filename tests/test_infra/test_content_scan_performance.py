@@ -21,6 +21,9 @@ for unit in ('a.', 'a-'):
     text = unit * 8192
     assert redact_text(text) == text
     assert sensitive_artifact_values(text.encode()) == ()
+for text in ('https://' + ':' * 32768 + 'x', 'password: |\\n' + ' ' * 32768 + 'x'):
+    redact_text(text)
+    sensitive_artifact_values(text.encode())
 """
         # A subprocess bounds a regression without leaving a stuck test worker.
         # The allowance is generous for 16KB; the old restarting scans exceed it.
