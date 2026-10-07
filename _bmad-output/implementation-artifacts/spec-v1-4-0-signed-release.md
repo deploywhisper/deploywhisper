@@ -47,10 +47,10 @@ context: ['_bmad-output/project-context.md', 'docs/security/release-integrity.md
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Audit v1.3.0 comparison and scope; write professional notes and changelog.
-- [ ] Synchronize version defaults, generated API header and existing version fixtures.
-- [ ] Run lint, full local CI, smoke, affected shard, full release coverage, dependency audits and composed browser tests.
-- [ ] Review release preparation with independent adversarial/edge/acceptance checks and fix findings.
+- [x] Audit v1.3.0 comparison and scope; write professional notes and changelog.
+- [x] Synchronize version defaults, generated API header and existing version fixtures.
+- [x] Run lint, full local CI, smoke, affected shard, full release coverage, dependency audits and composed browser tests.
+- [x] Review release preparation with independent adversarial/edge/acceptance checks and fix findings.
 - [ ] Commit using Lore, push release branch, PR and merge into main; back-merge main into develop through PR.
 - [ ] Validate exact source/metadata/ancestry then push immutable annotated v1.4.0 tag; monitor release gates.
 - [ ] Download public assets, independently verify provenance/checksums/negative case and signed OCI digest/aliases; record publication evidence.
@@ -85,3 +85,7 @@ Back-merge main to default develop before tag push so tag-triggered ancestry pol
 - Resolved conditional old-image-label concern against actual registry latest: OCI version1.3.0, source4f2f51ef4ef4829f8c7a391c73dae18271d47576. The publication guard is checked against actual remote state.
 - Partial release creation/alias promotion recovery remains the documented operator path: verify public signed assets and exact candidate digest, then recover only aliases. Never rebuild/overwrite immutable source or move its tag. Automated rerun refusal is intentional.
 - Generated OpenAPI JSON was stale; refreshed from current create_app().openapi() and regenerated types with no type diff. Browser build first failed during a temporary stale-schema generation and is rerun after correction.
+
+## Local verification evidence
+
+2026-10-07: all blocking local commands passed. Full local CI1,841; smoke555(one optional skip); affected shard492+257subtests; complete release suite1,840passed+one optional skip+1,295subtests,95.18%coverage; frontend56/typecheck/build;17/17composed browser tests; migration, lint/format, audits and real publication guard passed. Generatedschema drift was resolved before the successful composed build. Original compose service is restored healthy, original volume preserved. Hosted PR/source/publication checks follow before closure.

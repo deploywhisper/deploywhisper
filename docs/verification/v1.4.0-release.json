@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-07",
+  "release": "v1.4.0",
+  "baseline_tag": "v1.3.0",
+  "product_scope": "Accepted work through Story12.4, plus vulnerability remediation and signed release infrastructure",
+  "local_ci_tests": 1841,
+  "smoke_tests": 555,
+  "release_pytest": {
+    "passed": 1840,
+    "skipped": 1,
+    "subtests_passed": 1295,
+    "coverage_percent": 95.18
+  },
+  "api_cli_infra": {
+    "passed": 492,
+    "subtests_passed": 257
+  },
+  "frontend_unit_tests": 56,
+  "composed_browser_tests": {
+    "passed": 17,
+    "skipped": 0,
+    "base_url": "http://localhost:8080",
+    "disposable_data": true,
+    "original_app_restored_healthy": true
+  },
+  "audits": {
+    "python": "no known vulnerabilities",
+    "root_npm": "zero",
+    "frontend_npm": "zero"
+  },
+  "openapi": "Refreshed actual current runtime schema; regenerated TS types unchanged",
+  "review": "Three independent preparation reviews; contributor release/back-merge ordering patched; existing partial-promotion recovery documented",
+  "known_limitations": [
+    "One optional test skip",
+    "Pre-existing nonblocking mypy backlog; no new application logic in release preparation",
+    "Code-Review governance still requires a legitimate independent human reviewer",
+    "GitHub open Dependabot alerts reference dependencies absent from committed manifests; follow-up state checked after merge"
+  ],
+  "publication": "pending authorized tag workflow"
+}
