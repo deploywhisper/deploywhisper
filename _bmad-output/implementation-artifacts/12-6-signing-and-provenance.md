@@ -1,6 +1,6 @@
 # Story 12.6: Signing and Provenance
 
-Status: in-progress
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -23,11 +23,11 @@ So that I can verify artifact origin before self-hosted deployment.
 
 ## Tasks / Subtasks
 
-- [ ] Implement and verify acceptance criterion 1. (AC: 1)
-- [ ] Reuse existing services, repositories, schemas, and UI/CLI/API helpers before adding new abstractions. (AC: all)
-- [ ] Add or update deterministic regression coverage for the changed behavior. (AC: all)
-- [ ] Update relevant docs or examples if the story changes user-visible, operator, API, CLI, integration, or contribution behavior. (AC: all)
-- [ ] Run required validation and record commands/results in the Dev Agent Record. (AC: all)
+- [x] Implement and verify acceptance criterion 1. (AC: 1)
+- [x] Reuse existing services, repositories, schemas, and UI/CLI/API helpers before adding new abstractions. (AC: all)
+- [x] Add or update deterministic regression coverage for the changed behavior. (AC: all)
+- [x] Update relevant docs or examples if the story changes user-visible, operator, API, CLI, integration, or contribution behavior. (AC: all)
+- [x] Run required validation and record commands/results in the Dev Agent Record. (AC: all)
 
 ## Dev Notes
 
@@ -107,3 +107,11 @@ Signing implementation tracked by `spec-gh-131-review-and-signed-releases.md`; a
 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-10-07: Began real artifact signing/provenance and safe release-pipeline implementation under the user-requested Scorecard remediation.
+
+## Verified delivery completion — 2026-10-07
+
+Owner authorized stable v1.4.0. The actual tagged run 37623485869 passed all application release gates, uploaded three signed subjects plus native bundle, and promoted the signed OCI index 07fff3ca after exact-digest smoke. Independent public verification accepted archive/checksums/manifest and OCI under exact repo/workflow/source/tag/hosted policy and rejected five altered-byte/identity/ref/digest cases. Public ARM64 health/SPA/OpenAPI/runtime version/revision passed; hosted AMD64 smoke passed. Full local CI1,845; release pytest1,844+one optional skip+1,318 subtests at 95.18%; browser 17/17; exact changed selection 1,314 and service 1,093fixture correction passed. Original app/data preserved. UI validation applies to final release acceptance, not a new signing UI feature.
+
+Code Review: prior independent release-integrity blind/edge/acceptance reviews plus release preparation layers and targeted security/differential reviews passed after fixes; actual publication and consumer checks satisfy AC1. No SBOM or other later product feature is claimed. Historical unsigned distributions and legacy security/host/admin trust boundaries remain documented. Optional registry credential synchronization and human review-policy activation are separate follow-ups.
+
+Evidence: docs/verification/v1.4.0-release.json, docs/verification/v1.4.0-scorecard.json, docs/security/release-integrity.md, docs/security/release-artifacts.md. Signed-Releases now 10; overall 8.3.

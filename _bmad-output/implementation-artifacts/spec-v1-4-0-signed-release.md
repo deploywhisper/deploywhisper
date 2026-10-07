@@ -2,7 +2,7 @@
 title: 'Publish the approved DeployWhisper v1.4.0 stable release'
 type: 'chore'
 created: '2026-10-07'
-status: 'in-review'
+status: 'done'
 baseline_commit: '1b2062f286b8d54a8ec5d35643d6c529948a1a90'
 context: ['_bmad-output/project-context.md', 'docs/security/release-integrity.md', 'CONTRIBUTING.md']
 ---
@@ -51,9 +51,9 @@ context: ['_bmad-output/project-context.md', 'docs/security/release-integrity.md
 - [x] Synchronize version defaults, generated API header and existing version fixtures.
 - [x] Run lint, full local CI, smoke, affected shard, full release coverage, dependency audits and composed browser tests.
 - [x] Review release preparation with independent adversarial/edge/acceptance checks and fix findings.
-- [ ] Commit using Lore, push release branch, PR and merge into main; back-merge main into develop through PR.
-- [ ] Validate exact source/metadata/ancestry then push immutable annotated v1.4.0 tag; monitor release gates.
-- [ ] Download public assets, independently verify provenance/checksums/negative case and signed OCI digest/aliases; record publication evidence.
+- [x] Commit using Lore, push release branch, PR and merge into main; back-merge main into develop through PR.
+- [x] Validate exact source/metadata/ancestry then push immutable annotated v1.4.0 tag; monitor release gates.
+- [x] Download public assets, independently verify provenance/checksums/negative case and signed OCI digest/aliases; record publication evidence.
 
 **Acceptance Criteria:**
 - Given v1.3.0 baseline, when reading notes, then each claimed new feature maps to accepted code through 12.4 and supported compatibility guidance.
@@ -96,8 +96,35 @@ PR#151 CodeQL alert aggregation failed despite analysis-job success. Independent
 
 ## Corrected-source final local verification
 
-Source d2cb917 passed all blocking local checks: fullCI1,845tests; full release suite1,844passed+one optional skip+1,318subtests at95.18%coverage; smoke555; affected shard492+257subtests;43focusedsecuritytests+142subtests;17/17disposable composed browser tests. Original app restored healthy. PRCodeQL alert check reports no open findings; three repaired alerts verified by rescan,15guarded paths individually false-positive, four synthetic fixtures, one explicitly accepted legacy-verification compatibility risk. Five obsolete root dependency graph alerts classified inaccurate with clean locks/install/audits. No query exclusions or human approval fabrication.
+Source d2cb917 passed all blocking local checks: fullCI1,845 tests; full release suite1,844 passed+one optional skip+1,318subtests at95.18%coverage; smoke555; affected shard492+257subtests;43focusedsecuritytests+142subtests;17/17disposable composed browser tests. Original app restored healthy. PRCodeQL alert check reports no open findings; three repaired alerts verified by rescan,15guarded paths individually false-positive, four synthetic fixtures, one explicitly accepted legacy-verification compatibility risk. Five obsolete root dependency graph alerts classified inaccurate with clean locks/install/audits. No query exclusions or human approval fabrication.
 
 ## Hosted changed-selection fixture correction
 
 Final hosted service/API shards and fuzz passed, but changed-test feedback failed normalized incident-scope error screening. A two-test reproduction proved an earlier GitHub fixture reloads project_service, replacing its exception class while incident imports retain the old binding. Full service discovery normally refreshes these imports, hiding the selection-order mismatch. The submission regression fixture now temporarily binds the handler to the current resolver exception class through ExitStack, restoring it afterward. No production code or credential assertions changed. The reproducing GitHub case plus all submission regressions pass eight tests. Exact1,314-test changed selection and1,093-test service discovery are replayed before final merge; hosted checks rerun on this correction.
+
+## Publication completion
+
+Stable v1.4.0 was published through actual tagged run 37623485869 from main commit 935f3bb, after checked PR #151 and ancestry-preserving PR #152. Three source subjects and OCI index signature independently verified; five negative cases rejected; all aliases match signed index 07fff3ca. Native public ARM64 smoke passed in addition to hosted AMD64. Full application release gates succeeded. Scorecard 8.3, Signed-Releases 10, Code-Review 0 requiring real human approvals. Registry publisher is a separate malformed credential follow-up, owner informed; no success or role promotion fabricated. See the committed publication verification record.
+
+## Suggested Review Order
+
+- Read the scoped release features, upgrades and validation.
+  [v1.4.0.md:1](../../docs/releases/v1.4.0.md#L1)
+
+- Review actual fixes and qualified security dispositions.
+  [v1.4.0-security-triage.md:1](../../docs/security/v1.4.0-security-triage.md#L1)
+
+- Inspect linear credential scans that preserve screening semantics.
+  [content_security.py:66](../../services/content_security.py#L66)
+
+- Check immutable source, signatures, aliases and public runtime evidence.
+  [v1.4.0-release.json:1](../../docs/verification/v1.4.0-release.json#L1)
+
+- Follow checked back-merge before immutable tagging.
+  [CONTRIBUTING.md:203](../../CONTRIBUTING.md#L203)
+
+- Inspect regressions that failed before redaction repair.
+  [test_content_security.py:28](../../tests/test_services/test_content_security.py#L28)
+
+- Check reload-safe fixture binding without weakened assertions.
+  [test_incident_submission_review_regressions.py:24](../../tests/test_services/test_incident_submission_review_regressions.py#L24)

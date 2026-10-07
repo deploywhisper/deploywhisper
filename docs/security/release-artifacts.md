@@ -70,3 +70,9 @@ archive with a different repository, signer workflow, source ref and source
 digest individually; each must fail. These checks need a real hosted signed
 bundle. Offline unit tests prove deterministic packaging and version/source
 guards, not signature verification.
+
+## Published v1.4.0 consumer policy
+
+The verified stable release source is `935f3bbc88907948de8ae25bd2a361d04044ebc6`, ref `refs/tags/v1.4.0`. Download the four uploaded assets from [v1.4.0](https://github.com/deploywhisper/deploywhisper/releases/tag/v1.4.0); automatic GitHub source ZIP/tar links are separate unsigned distributions. Add `--signer-digest "$SOURCE_SHA"` to the verification loop above. The archive, checksum file and manifest all passed this strict policy and five independent negative cases.
+
+The verified image index is `ghcr.io/deploywhisper/deploywhisper@sha256:07fff3cafcb05829ae82303553d3584cccc0cf91a92877ebb798568ce1989c84`. Verify it with `gh attestation verify oci://IMAGE@DIGEST --bundle-from-oci --repo deploywhisper/deploywhisper --signer-workflow deploywhisper/deploywhisper/.github/workflows/release.yml --signer-digest "$SOURCE_SHA" --source-digest "$SOURCE_SHA" --source-ref refs/tags/v1.4.0 --deny-self-hosted-runners`, substituting the image/digest and trusted SHA above. Pin this digest for deployment instead of relying only on a floating alias. [Publication evidence](../verification/v1.4.0-release.json) includes checks for both image platforms and all promoted aliases.

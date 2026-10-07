@@ -36,7 +36,46 @@
     "Code-Review governance still requires a legitimate independent human reviewer",
     "Obsolete root Dependabot graph alerts individually classified inaccurate with current lock/install/audit evidence; actual frontend advisories repaired"
   ],
-  "publication": "pending authorized tag workflow",
+  "publication": {
+    "status": "published-and-consumer-verified",
+    "release_url": "https://github.com/deploywhisper/deploywhisper/releases/tag/v1.4.0",
+    "version": "1.4.0",
+    "prerelease": false,
+    "source_sha": "935f3bbc88907948de8ae25bd2a361d04044ebc6",
+    "source_ref": "refs/tags/v1.4.0",
+    "release_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37623485869",
+    "main_pr": 151,
+    "backmerge_pr": 152,
+    "backmerge_sha": "d634bca886636c57bc74f6c5e54db42971407935",
+    "source_assets": [
+      "deploywhisper-v1.4.0.tar.gz",
+      "SHA256SUMS",
+      "source-manifest.json",
+      "artifact.intoto.jsonl"
+    ],
+    "source_archive_sha256": "b1dc527f9823d46b9a25e364604832604b586405db0d5e654a32bab1d57bf69f",
+    "source_signatures_verified": 3,
+    "negative_verification_cases_passed": 5,
+    "oci_digest": "sha256:07fff3cafcb05829ae82303553d3584cccc0cf91a92877ebb798568ce1989c84",
+    "oci_signature_verified": true,
+    "aliases_verified": [
+      "1.4.0",
+      "1.4",
+      "1",
+      "latest"
+    ],
+    "amd64_smoke": "tagged workflow passed",
+    "arm64_smoke": "public digest: health, SPA, OpenAPI, runtime version/revision passed",
+    "changed_test_selection_passed": 1314,
+    "fixture_service_suite_passed": 1093,
+    "tagged_suite": {
+      "passed": 1844,
+      "skipped": 1,
+      "subtests_passed": 1318,
+      "coverage_percent": 95.18,
+      "duration_seconds": 714.1
+    }
+  },
   "validated_security_source": "d2cb917f7f0c0eb4f4db601196ed9bf5fe4a4686",
   "security_regressions": {
     "passed": 43,
@@ -56,5 +95,18 @@
     "accepted_legacy_compatibility": 1,
     "legacy_risk": "Dormant or write-failed legacy SHA256 shares remain weak; reconfigure passwords proactively",
     "individual_dispositions": "v1.4.0-alert-triage.json"
-  }
+  },
+  "scorecard": {
+    "score": 8.3,
+    "signed_releases": 10,
+    "code_review": 0,
+    "run": 37626192002,
+    "date": "2026-10-07T13:08:46Z",
+    "commit": "d634bca886636c57bc74f6c5e54db42971407935"
+  },
+  "remaining_followups": [
+    "Independent human GitHub review-policy prerequisites remain owner-controlled",
+    "Optional Skills Registry publisher run37622015221 failed from malformed existing credential URL; owner asked to update scoped token. App source/container release gates all passed.",
+    "Reconfigure older sensitive shared-report passwords to remove dormant legacy SHA256 hashes"
+  ]
 }
