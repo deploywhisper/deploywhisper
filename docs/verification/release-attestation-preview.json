@@ -1,0 +1,46 @@
+{
+  "source_sha": "25fcb6ded3737fc02358e94dc3fa6d48bbe35079",
+  "run": 37603120228,
+  "checks": [
+    {
+      "test": "deploywhisper-preview-25fcb6ded3737fc02358e94dc3fa6d48bbe35079.tar.gz",
+      "expected": "valid",
+      "returncode": 0
+    },
+    {
+      "test": "SHA256SUMS",
+      "expected": "valid",
+      "returncode": 0
+    },
+    {
+      "test": "source-manifest.json",
+      "expected": "valid",
+      "returncode": 0
+    },
+    {
+      "test": "tampered bytes",
+      "expected": "rejected",
+      "returncode": 1
+    },
+    {
+      "test": "wrong repository",
+      "expected": "rejected",
+      "returncode": 1
+    },
+    {
+      "test": "wrong signer",
+      "expected": "rejected",
+      "returncode": 1
+    },
+    {
+      "test": "wrong source ref",
+      "expected": "rejected",
+      "returncode": 1
+    },
+    {
+      "test": "wrong source digest",
+      "expected": "rejected",
+      "returncode": 1
+    }
+  ]
+}

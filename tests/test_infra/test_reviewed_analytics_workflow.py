@@ -130,10 +130,18 @@ class ReviewedAnalyticsTests(unittest.TestCase):
                     "--ref",
                     update.CI_BRANCH_PREFIX + proposed,
                 )
-                for workflow in ("ci.yml", "codeql.yml")
+                for workflow in ("ci.yml", "codeql.yml", "clusterfuzzlite.yml")
             ],
         )
-        self.assertEqual(self.gh_calls[-3][1:3], ("pr", "create"))
+        created = next(
+            i for i, call in enumerate(self.gh_calls) if call[1:3] == ("pr", "create")
+        )
+        dispatched = [
+            i
+            for i, call in enumerate(self.gh_calls)
+            if call[1:3] == ("workflow", "run")
+        ]
+        self.assertTrue(all(i > created for i in dispatched))
         self.assertEqual(
             self.remote_commit(update.CI_BRANCH_PREFIX + proposed), proposed
         )
@@ -244,7 +252,7 @@ class ReviewedAnalyticsTests(unittest.TestCase):
         dispatched = [
             call[-1] for call in self.gh_calls if call[1:3] == ("workflow", "run")
         ]
-        self.assertEqual(dispatched, [update.CI_BRANCH_PREFIX + validated] * 2)
+        self.assertEqual(dispatched, [update.CI_BRANCH_PREFIX + validated] * 3)
         self.assertEqual(self.remote_commit(dispatched[0]), validated)
 
     def test_unchanged_and_invalid_snapshots_never_create_pr(self):

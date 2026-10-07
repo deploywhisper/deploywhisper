@@ -49,6 +49,10 @@
           {
             "context": "CodeQL (python)",
             "integration_id": 15368
+          },
+          {
+            "context": "Production redaction fuzzing",
+            "integration_id": 15368
           }
         ]
       }

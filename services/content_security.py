@@ -346,6 +346,17 @@ def _redact_lexical_text(value: str, *, sensitive_values: Iterable[str] = ()) ->
     }
     for secret in sorted(variants, key=len, reverse=True):
         if secret and secret != REDACTED:
+            if secret in REDACTED:
+                # A credential may equal part of our public marker. Consume
+                # whole markers first so earlier replacements remain intact,
+                # while still screening the actual credential elsewhere.
+                pattern = re.escape(secret)
+                if len(secret) < 4:
+                    pattern = rf"(?<!\w){pattern}(?!\w)"
+                text = re.sub(
+                    rf"{re.escape(REDACTED)}|{pattern}", lambda _: REDACTED, text
+                )
+                continue
             text = (
                 re.sub(rf"(?<!\w){re.escape(secret)}(?!\w)", lambda _: REDACTED, text)
                 if len(secret) < 4

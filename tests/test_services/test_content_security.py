@@ -23,6 +23,30 @@ from services.content_security import (
 
 
 class ContentSecurityTests(unittest.TestCase):
+    def test_marker_fragments_do_not_corrupt_redacted_sibling_values(self):
+        for fragment in ("[REDAC", "REDA", "DACT", "CTED]", "[", "]"):
+            with self.subTest(fragment=fragment):
+                payload = {
+                    "api_key": "synthetic-value",
+                    "echo": "synthetic-value",
+                    "description": f"password={fragment}",
+                    "db_password": fragment,
+                    "fragment_echo": fragment,
+                }
+                screened = redact_value(payload)
+                self.assertEqual(screened["echo"], REDACTED)
+                self.assertEqual(screened["fragment_echo"], REDACTED)
+                self.assertEqual(redact_value(screened), screened)
+
+    def test_credentials_containing_redaction_markers_are_still_screened(self):
+        for secret in ("[REDACTED]synthetic", "synthetic[REDACTED]", "synthetic[REDAC"):
+            with self.subTest(secret=secret):
+                screened = redact_value({"api_key": secret, "echo": secret})
+                self.assertEqual(screened["echo"], REDACTED)
+                self.assertEqual(
+                    redact_text(secret, sensitive_values=(secret,)), REDACTED
+                )
+
     def test_plural_credential_assignments_are_screened_in_text(self):
         for raw in (
             "CREDENTIALS=synthetic-value",

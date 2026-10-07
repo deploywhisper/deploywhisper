@@ -171,7 +171,7 @@ def propose(repository: str, base: str, snapshot: Path) -> bool:
             "--body",
             BODY,
         )
-    for workflow in ("ci.yml", "codeql.yml"):
+    for workflow in ("ci.yml", "codeql.yml", "clusterfuzzlite.yml"):
         ci_remote = git("ls-remote", "--heads", "origin", "refs/heads/" + ci_branch)
         if not ci_remote or ci_remote.split()[0] != commit:
             raise ValueError("Analytics CI ref no longer matches the validated commit")
