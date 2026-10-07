@@ -24,6 +24,12 @@ class IncidentSubmissionReviewRegressionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
+        # Other fixtures reload projects, replacing the exception class used by resolvers.
+        self.stack.enter_context(
+            patch.object(
+                imports, "ProjectResolutionError", projects.ProjectResolutionError
+            )
+        )
         directory = self.stack.enter_context(tempfile.TemporaryDirectory())
         engine = create_engine(f"sqlite:///{Path(directory) / 'submission.db'}")
         self.stack.callback(engine.dispose)
