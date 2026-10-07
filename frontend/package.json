@@ -19,7 +19,7 @@
     "@tanstack/react-table": "^8.21.3",
     "lucide-react": "^1.18.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.4",
     "tailwindcss": "^4.3.1"
   },
@@ -27,7 +27,7 @@
     "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.61.0",
     "@types/react": "^18.3.31",
-    "@types/react-dom": "^18.3.7",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.0.2",
     "axe-core": "^4.12.1",
     "openapi-typescript": "^7.13.0",
