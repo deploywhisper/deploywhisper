@@ -118,7 +118,7 @@ DeployWhisper is an open-source project in active development. The current
 released version is useful today for teams that want a local-first, advisory
 review layer before infrastructure changes are shipped.
 
-### Released version `v1.3.0`
+### Released version `v1.4.0`
 
 What users can use today:
 
@@ -136,9 +136,13 @@ What users can use today:
 - **Provider and admin settings UI**: configure LLM provider metadata, upload topology context, manage custom AI Skills, and see provider readiness before running analysis.
 - **REST API and CLI access**: run the same analysis pipeline from `/api/v1` endpoints or the headless CLI for local automation and CI workflows.
 - **Shareable reports**: create read-only report links, optionally protect sensitive shared reports with a password, redact filenames, and compare shared reruns when previous scans exist.
+- **Trusted Skills lifecycle**: inspect manifest-backed trust and deterministic test status, install from configured sources, and review contribution, usage, and deprecation signals.
+- **Bounded AI-agent review**: use advisory agent contracts with explicit AI-generated IaC provenance and prompt-injection screening across review outputs.
+- **Optional policy adapters**: configure thresholds, reporting defaults, and integration-level enforcement separately from the advisory report; deployment enforcement remains opt-in.
+- **Credential-safe administration**: keep provider and connector secrets outside persistent settings and screen prompts, reports, and artifacts for credential disclosure.
 - **Published Skills Registry**: browse published built-in skills at <https://deploywhisper.github.io/skills-registry/> and extend guidance with custom skills.
 - **Published GitHub Action path**: use the dedicated `deploywhisper/analyze-action` pinned to a reviewed full commit SHA to analyze PR artifact changes, post/update an advisory PR comment, and expose report outputs for follow-on workflow steps.
-- **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.3.0` with SQLite-backed persistence for a self-hosted single-container setup.
+- **Published container path**: run the released container image `ghcr.io/deploywhisper/deploywhisper:1.4.0` with SQLite-backed persistence for a self-hosted single-container setup.
 - **Project quality baseline**: GitHub Actions CI, Python quality checks, sharded tests, local CI scripts, and optional UI accessibility smoke checks are in place.
 - **Repository supply-chain visibility**: [Scorecard and CodeQL](docs/security/supply-chain-scanning.md) provide maintainer-visible security results and a documented high-priority findings review process.
 
@@ -226,7 +230,7 @@ example: Docker compose file `docker-compose.yml`
 services:
   deploywhisper:
     # If you want to use the already published image, uncomment the "image" section and comment out the build section.
-    image: ghcr.io/deploywhisper/deploywhisper:1.3.0
+    image: ghcr.io/deploywhisper/deploywhisper:1.4.0
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -372,7 +376,7 @@ docker run -d \
   -e APP_PORT=8080 \
   -e APP_BASE_URL=https://deploywhisper.example.com \
   -e DEPLOYWHISPER_SHARE_TOKEN=replace-with-a-long-random-secret \
-  ghcr.io/deploywhisper/deploywhisper:1.3.0
+  ghcr.io/deploywhisper/deploywhisper:1.4.0
 ```
 
 ## API Endpoints
@@ -405,7 +409,7 @@ Response shape:
   },
   "meta": {
     "app": "DeployWhisper",
-    "version": "1.3.0"
+    "version": "1.4.0"
   }
 }
 ```
@@ -997,7 +1001,7 @@ Near-term directions already visible in the repo and planning artifacts:
 
 ## Status as we’re in full swing
 
-### DeployWhisper is under active development, while release `v1.3.0` is stable.
+### DeployWhisper is under active development, while release `v1.4.0` is stable.
 
 Current implementation state:
 

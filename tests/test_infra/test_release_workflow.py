@@ -315,6 +315,6 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_docker_runtime_metadata_has_safe_existing_default(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
-        self.assertIn("ARG BUILD_VERSION=1.3.0", dockerfile)
+        self.assertIn("ARG BUILD_VERSION=1.4.0", dockerfile)
         self.assertIn('APP_VERSION="${BUILD_VERSION}"', dockerfile)
         self.assertIn('org.opencontainers.image.revision="${BUILD_SHA}"', dockerfile)
