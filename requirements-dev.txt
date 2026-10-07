@@ -1292,9 +1292,9 @@ mypy-extensions==1.1.0 \
     --hash=sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505 \
     --hash=sha256:52e68efc3284861e772bbcd66823fde5ae21fd2fdb51c62a211403730b916558
     # via mypy
-openai==2.32.0 \
-    --hash=sha256:4dcc9badeb4bf54ad0d187453742f290226d30150890b7890711bda4f32f192f \
-    --hash=sha256:c54b27a9e4cb8d51f0dd94972ffd1a04437efeb259a9e60d8922b8bd26fe55e0
+openai==3.24.0 \
+    --hash=sha256:1e7463f7d78773ab2ce4fe85710481aa5bd5ffefd54c8de4b067506cd2d42895 \
+    --hash=sha256:b59703a3e3b5df78b269e90049d383a1dda58c90104cc4be59db21078db4b7a4
     # via
     #   -c requirements.txt
     #   -r requirements-runtime.txt
