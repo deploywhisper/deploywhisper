@@ -1,0 +1,29 @@
+{
+  "head_commit": "df01ebdaa6bc24ebd83b11bdd4f3d5a83075ad03",
+  "analyzed_merge_commit": "0e33ca432c03c5246553b9aa5b7f8db3ad7c1494",
+  "ref": "refs/pull/132/merge",
+  "scorecard_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37489620101",
+  "codeql_run": "https://github.com/deploywhisper/deploywhisper/actions/runs/37489620206",
+  "scorecard_mode": "PR-local",
+  "scorecard_results": 70,
+  "scorecard_rule_counts": {
+    "DependencyUpdateToolID": 1,
+    "SecurityPolicyID": 1,
+    "TokenPermissionsID": 3,
+    "FuzzingID": 1,
+    "PinnedDependenciesID": 63,
+    "VulnerabilitiesID": 1
+  },
+  "codeql_results": {
+    "python": 0,
+    "javascript-typescript": 0,
+    "actions": 0
+  },
+  "codeql_categories": [
+    "/language:python",
+    "/language:javascript-typescript",
+    "/language:actions"
+  ],
+  "sarif_processing_errors": [],
+  "high_priority_followup": "https://github.com/deploywhisper/deploywhisper/issues/131"
+}
