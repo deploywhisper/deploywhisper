@@ -93,3 +93,7 @@ Back-merge main to default develop before tag push so tag-triggered ancestry pol
 ## Security gate iteration
 
 PR#151 CodeQL alert aggregation failed despite analysis-job success. Independent triage identified actual quadratic query/authorization scans(90/91/93), repaired with failing-before-fix subprocess regressions and preserved question-mark/quoted credential behavior. URL/YAML/path/HTML/cookie/transport guards and synthetic fixtures were verified separately; legacy password verification is an explicit compatibility risk, not a false positive. An independent edge review compared30,000generated old/new pattern cases with identical semantics and confirmed linear full-boundary growth. Complete local/hosted suites and composed tests are rerun after this security source change. See docs/security/v1.4.0-security-triage.md for individual dispositions.
+
+## Corrected-source final local verification
+
+Source d2cb917 passed all blocking local checks: fullCI1,845tests; full release suite1,844passed+one optional skip+1,318subtests at95.18%coverage; smoke555; affected shard492+257subtests;43focusedsecuritytests+142subtests;17/17disposable composed browser tests. Original app restored healthy. PRCodeQL alert check reports no open findings; three repaired alerts verified by rescan,15guarded paths individually false-positive, four synthetic fixtures, one explicitly accepted legacy-verification compatibility risk. Five obsolete root dependency graph alerts classified inaccurate with clean locks/install/audits. No query exclusions or human approval fabrication.
