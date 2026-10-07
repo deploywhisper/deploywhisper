@@ -43,12 +43,12 @@ jobs:
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           category: /language:${{ matrix.language }}
-          output: codeql-results
+          output: codeql-results-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Preserve available SARIF even after a failed upload
-        if: always() && hashFiles('codeql-results/*.sarif') != ''
+        if: always() && hashFiles(format('codeql-results-{0}-{1}-{2}/*.sarif', github.sha, github.run_id, github.run_attempt)) != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: codeql-sarif-${{ matrix.language }}
-          path: codeql-results/*.sarif
+          path: codeql-results-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}/*.sarif
           if-no-files-found: error
           retention-days: 30

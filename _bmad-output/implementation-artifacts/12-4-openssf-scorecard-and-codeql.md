@@ -1,6 +1,6 @@
 # Story 12.4: OpenSSF Scorecard and CodeQL
 
-Status: review
+Status: in-progress
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -34,6 +34,8 @@ So that supply-chain posture is visible.
 
 - [x] [Review][Patch][P2] Require fresh Scorecard report provenance before artifact/code-scanning upload [.github/workflows/scorecard.yml:37; .github/workflows/scorecard-publish.yml:41]. Both workflows select checkout-relative `results.sarif` and upload with `always()` plus file existence alone. The pinned scanner exits before formatting on option/scan errors without clearing a pre-existing file. A repository-supplied valid SARIF therefore passes the upload guard when scanning fails before output, creating misleading scanner evidence or fabricated findings/clean results. Isolate fresh outputs or add a scan-outcome/provenance guard and failure regressions for both workflows; preserve legitimate report retention after publication failure without adding forbidden shell steps to the publishing job.
 - [x] [Review][Patch][P3] Include Critical checks in the baseline disposition regression [tests/test_infra/test_supply_chain_workflows.py:185]. The fixed set includes High checks but excludes `Dangerous-Workflow`/`Webhooks`, which the guide prioritizes as Critical. An in-memory mutation making retained `Dangerous-Workflow` score 0 with no corresponding ledger disposition still passes the real test. Extend the priority set/classification and add a negative ownership/disposition case so Critical failures cannot silently escape this guard.
+
+- [ ] [Review][Patch][P2] Bind retained CodeQL SARIF to fresh analysis output [.github/workflows/codeql.yml:46]. If checkout supplies `codeql-results/*.sarif` and CodeQL initialization fails, analysis is skipped and its output-directory cleanup never runs. The artifact step still runs under `always()` plus file existence, retaining checkout-supplied SARIF as CodeQL evidence. This affects artifacts only; automatic code-scanning upload is skipped. Bind output and artifact consumers to the immutable checkout SHA/run/attempt or establish an equivalent fresh-output guard, and add a pre-seeded SARIF initialization-failure regression while preserving fresh reports after upload failure.
 
 ## Dev Notes
 
@@ -171,6 +173,22 @@ Codex with native subagents for official-source research and bounded workflow/te
 - Definition of Done: PASS for these fixes. Story/sprint returned to `review`; fixes and evidence included in existing draft PR #132. `bmad-help` next step: rerun `bmad-code-review` before final Git Flow closeout. The baseline's high-priority follow-ups remain assigned/open under #131.
 
 
+### Code Review Rerun — 2026-10-07
+
+- Full frozen scope: `495f845..972d043`, **14 files, 1,026 added / 3 removed lines**; original working tree clean. Diff: `/private/tmp/story12-4-rereview.diff`. All three independent BMad layers completed; blind received only the diff, edge received repository read access, acceptance received story/project/planning context.
+- Triage: **one P2 patch, zero decisions, zero new deferrals, zero dismissed findings**. Blind and edge independently identified the same CodeQL artifact-only initialization-failure boundary. Acceptance found no AC/spec violation. The previous Scorecard provenance and Critical disposition findings remain resolved.
+- Evidence: an isolated temporary directory containing valid checkout-seeded `codeql-results/python.sarif` matches the actual artifact path and `always() && hashFiles('codeql-results/*.sarif') != ''` guard when initialization fails and analysis is skipped. The pinned CodeQL `runFinalize` clears the output directory only when analysis executes; that cleanup cannot protect skipped analysis. No live malicious upload was performed, and no fabricated automatic code-scanning upload is established. The suggested fix must retain legitimate fresh SARIF when analysis finishes but upload fails.
+- Fresh validation: `./.venv/bin/python -m pytest tests/test_infra/test_supply_chain_workflows.py tests/test_infra/test_supply_chain_report_provenance.py -q`: **14 passed +29 subtests**. Ruff lint and format check passed (**296 files**); actionlint passed all three security workflows; `git diff --check` passed. These passing tests currently omit the newly identified CodeQL initialization-failure case. UI validation not applicable.
+- Exact reviewed head `972d043`: [CodeQL](https://github.com/deploywhisper/deploywhisper/actions/runs/37575965964) and [Scorecard](https://github.com/deploywhisper/deploywhisper/actions/runs/37575965952) completed successfully. [PR CI](https://github.com/deploywhisper/deploywhisper/actions/runs/37575965953) has passed quality/type checks, security, Docker, migration and completed test shards; services shard is still running at review recording. Prior full local validation remains recorded above; unchanged production source was not rerun broadly for this documentation-only review.
+- Story/sprint reopened to `in-progress`; the actionable patch is recorded above. No production fix, commit or remote push was performed because review follow-up work remains open. Existing draft PR #132 remains open. The official badge targets the correct repository; first numeric score still requires integrated default-branch publication. Existing posture follow-ups remain assigned under #131.
+- `bmad-help` next step: implement the CodeQL artifact provenance finding via `bmad-dev-story`, run the regression and required validation, then rerun `bmad-code-review` before Git Flow closeout. Story 12.5 is still ready-for-dev but is not started by this review.
+
+### CodeQL Artifact Provenance Fix — 2026-10-07
+
+- Implementation plan: reproduce initialization failure with checkout-seeded SARIF, bind CodeQL output/guard/artifact path to the immutable checkout SHA and run/attempt, preserve fresh output after upload failure, then run full local and live PR verification.
+- Added three temporary-filesystem/configuration regressions covering producer/consumer binding, skipped-analysis rejection of checkout/prior commit/run/attempt SARIF, and fresh successful/failed-upload retention. Before the fix, four failing cases reproduced the issue; focused suite now passes **17 tests +31 subtests**. The existing bounded predicate helper now supports the CodeQL glob rather than adding a report abstraction or dependency.
+- Changed only the CodeQL output directory and its two artifact consumers; action pins, permissions and scan categories remain unchanged. Security guide explains the failure behavior. Independent read-only verifier found no residual defect; Ruff lint/format (**296 files**), actionlint on all three workflows and diff checks passed. Smoke: **503 tests**, one optional skip. Full CI and affected pytest shard are running; final evidence and review status follow after they pass. UI validation not applicable.
+
 ## Change Log
 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
@@ -180,3 +198,5 @@ Codex with native subagents for official-source research and bounded workflow/te
 - 2026-10-07: Three-layer code review found two actionable report-provenance/critical-triage regression gaps; recorded findings and reopened story/sprint to in-progress.
 - 2026-10-07: Implemented commit/run/attempt-bound report uploads and Critical ownership regressions; full/local and live PR validation underway.
 - 2026-10-07: Both review fixes verified by full local tests, live fresh-report upload, CodeQL and PR CI; story/sprint returned to review.
+- 2026-10-07: Review rerun identified one remaining CodeQL artifact provenance gap on initialization failure; story/sprint reopened to in-progress with an action item.
+- 2026-10-07: Bound CodeQL SARIF artifacts to checkout/run/attempt and added initialization/upload-failure regressions; broad/live verification in progress.

@@ -18,6 +18,11 @@ REPORT = (
 )
 FRESH = "scorecard-{sha}-{run_id}-{run_attempt}.sarif".format(**CONTEXT)
 HASH = "hashFiles(format('scorecard-{0}-{1}-{2}.sarif', github.sha, github.run_id, github.run_attempt)) != ''"
+CODEQL_OUTPUT = (
+    "codeql-results-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}"
+)
+CODEQL_FRESH = "codeql-results-{sha}-{run_id}-{run_attempt}".format(**CONTEXT)
+CODEQL_HASH = "hashFiles(format('codeql-results-{0}-{1}-{2}/*.sarif', github.sha, github.run_id, github.run_attempt)) != ''"
 SARIF = json.dumps(
     {
         "version": "2.1.0",
@@ -40,12 +45,14 @@ def permits_upload(condition, workspace, outcome):
             continue
         if term == HASH:
             filename = FRESH
+        elif term == CODEQL_HASH:
+            filename = f"{CODEQL_FRESH}/*.sarif"
         else:
             legacy = re.fullmatch(r"hashFiles\('([^']+)'\) != ''", term)
             if not legacy:
                 raise AssertionError(f"Unsupported guard: {term}")
             filename = legacy.group(1)
-        allowed = allowed and (workspace / filename).is_file()
+        allowed = allowed and any(path.is_file() for path in workspace.glob(filename))
     return allowed
 
 
@@ -134,6 +141,46 @@ class SupplyChainReportProvenanceTests(unittest.TestCase):
                     self.assertTrue(
                         permits_upload(consumer["if"], workspace, "success")
                     )
+
+    def test_codeql_output_binds_analysis_and_artifacts_to_checkout_and_run(self):
+        steps = self.steps("codeql")
+        checkout = next(s for s in steps if s["uses"].startswith("actions/checkout@"))
+        self.assertNotIn("ref", checkout.get("with", {}))
+        self.assertNotIn("repository", checkout.get("with", {}))
+        analyze = next(s for s in steps if "codeql-action/analyze@" in s["uses"])
+        self.assertEqual(analyze["with"]["output"], CODEQL_OUTPUT)
+        for consumer in self.consumers("codeql"):
+            self.assertEqual(consumer["with"]["path"], f"{CODEQL_OUTPUT}/*.sarif")
+            self.assertEqual(consumer["if"], f"always() && {CODEQL_HASH}")
+
+    def test_codeql_init_failure_rejects_checkout_and_previous_reports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            for output in (
+                "codeql-results",
+                CODEQL_FRESH.replace("-2", "-1"),
+                CODEQL_FRESH.replace("-12345-", "-12344-"),
+                CODEQL_FRESH.replace("a" * 40, "b" * 40),
+            ):
+                target = workspace / output / "python.sarif"
+                target.parent.mkdir()
+                target.write_text(SARIF.replace('"Scorecard"', '"CodeQL"'))
+            for consumer in self.consumers("codeql"):
+                # Initialization failed; analyze is skipped and never clears output.
+                self.assertFalse(permits_upload(consumer["if"], workspace, "skipped"))
+
+    def test_codeql_retains_fresh_report_after_upload_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            target = workspace / CODEQL_FRESH / "python.sarif"
+            target.parent.mkdir()
+            target.write_text(SARIF.replace('"Scorecard"', '"CodeQL"'))
+            for consumer in self.consumers("codeql"):
+                for outcome in ("success", "failure"):
+                    with self.subTest(outcome=outcome):
+                        self.assertTrue(
+                            permits_upload(consumer["if"], workspace, outcome)
+                        )
 
 
 if __name__ == "__main__":

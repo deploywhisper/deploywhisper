@@ -76,6 +76,10 @@ cannot masquerade as fresh evidence. PR artifact/code-scanning uploads also
 require a successful scanner step. The restricted publisher can retain a fresh
 report after publication fails, without repository cleanup scripts or accepting
 old checkout data. Workflow regressions exercise both failure phases.
+CodeQL likewise binds its output directory and artifact guard to the checkout
+SHA, run ID and attempt. A failed initialization cannot retain checkout-supplied
+or previous-run SARIF when analysis is skipped; fresh output remains available
+after a code-scanning upload failure.
 Download them from the run's Artifacts section when troubleshooting or reviewing
 details absent from annotations. Missing artifacts on a failed analysis are not
 evidence that no vulnerabilities exist. Code-scanning upload failures must be
