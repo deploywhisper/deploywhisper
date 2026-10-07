@@ -49,7 +49,7 @@ context: ['_bmad-output/project-context.md']
 ## Tasks & Acceptance
 
 - [x] Implement exact-source artifacts, metadata validation/checksums and tests; preserve existing unsigned historical releases.
-- [ ] Add pinned native GitHub attestations with real JSONL bundles and repository/workflow/ref/SHA verification; run hosted signed preview and reject tamper/wrong identity.
+- [x] Add pinned native GitHub attestations with real JSONL bundles and repository/workflow/ref/SHA verification; run hosted signed preview and reject tamper/wrong identity.
 - [x] Repair release tag/version mismatch, unused build metadata, pre-smoke aliases and downgrade/rerun hazards; no alias publication after failed prerequisite.
 - [x] Document concrete release candidate, limitations and the reason old releases are unassessed; prepare review policy and currently valid check names.
 - [x] Run actionlint, focused/full applicable tests, clean production image behavior where changed, and independent comprehensive review.
@@ -108,3 +108,9 @@ Final pre-preview verification:full local CI1839tests across9dirs, all suites pa
 Source commit25fcb6d successfully ran native signed-preview37603120228; independent strictverification succeeded for all three subjects. Five negative policy/tamper cases rejected as expected. Full hosted CI/CodeQL on that source succeeded. Fuzz run37603119351 found a real redaction-marker corruption invariant failure; no secret disclosure was observed. Preserved the full synthetic337-byte crash, fixed production placeholder handling without altering harness assertions, and added stable-marker/actual-secret regressions. Associated53tests+147subtests and read-only review passed. Mandatory-review proposal and analytics CI dispatch now include real fuzzing. Final updated source/application verification and re-signed preview follow.
 
 Final fuzz-fix source validation:full localCI1841tests(all9dirs, oneoptional skip), smoke555(oneoptional skip), exactshard492+257subtests, all17rebuiltbrowsertests(no browser skips), production marker53securitytests+147subtests, unchangedharness/corpus crashreplay, cleanreview. Existingapprestoredhealthy; onlydisposabletestvolume removed. Requiresfreshhostedfuzz/signing/CI onthisfixedsource beforeownerdecisionhandoff.
+
+Corrected source509d723 ran signed-preview37605206305 successfully; independent verification confirmed all three assets and rejected altered bytes plus four wrong-policy identities. Final localCI1841all9dirs, smoke555(oneoptional skip), shard492+257subtests, all17rebuiltbrowsertests(no skips), independent markerfixreview passed; original app restored healthy. CodeQL success on corrected source, fresh hosted fuzz/CI pending at this recording. Last task(public approval policy/approved release/rescore) remains unchecked because both owner decisions are still missing.
+
+## Owner-decision handoff
+
+All independent preparation and verification complete on509d723: hostedCI37605204825, CodeQL37605204721, signedpreview37605206305 and retained-crash fuzz37605204817 success. Fuzz36,044executions/coverage1,063/features4,624/no crashes. Exact signed archive/checksum/manifest verify and five negative integrity/identity cases reject. Public release/required-review activation task stays unchecked and Story12.6 in-progress because no reviewer-role or public-version authorization has arrived. Rootcode/evidence committed/pushed; final evidence change docs/tracking only. Next owner inputs: independent username/write-access/PR-only human-codeowner policy and concrete public release version.

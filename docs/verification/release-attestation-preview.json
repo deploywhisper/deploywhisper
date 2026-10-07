@@ -42,5 +42,60 @@
       "expected": "rejected",
       "returncode": 1
     }
-  ]
+  ],
+  "final_preview": {
+    "run": 37605206305,
+    "source_sha": "509d723afc62fbd975229af05eb10a22f099afda",
+    "checks": [
+      {
+        "test": "deploywhisper-preview-509d723afc62fbd975229af05eb10a22f099afda.tar.gz",
+        "expected": "valid",
+        "exit_code": 0
+      },
+      {
+        "test": "SHA256SUMS",
+        "expected": "valid",
+        "exit_code": 0
+      },
+      {
+        "test": "source-manifest.json",
+        "expected": "valid",
+        "exit_code": 0
+      },
+      {
+        "test": "tampered bytes",
+        "expected": "rejected",
+        "exit_code": 1
+      },
+      {
+        "test": "wrong repository",
+        "expected": "rejected",
+        "exit_code": 1
+      },
+      {
+        "test": "wrong signer",
+        "expected": "rejected",
+        "exit_code": 1
+      },
+      {
+        "test": "wrong source ref",
+        "expected": "rejected",
+        "exit_code": 1
+      },
+      {
+        "test": "wrong source digest",
+        "expected": "rejected",
+        "exit_code": 1
+      }
+    ],
+    "ci_run": 37605204825,
+    "ci_conclusion": "success",
+    "codeql_run": 37605204721,
+    "codeql_conclusion": "success",
+    "fuzz_run": 37605204817,
+    "fuzz_conclusion": "success",
+    "fuzz_executions": 36044,
+    "fuzz_coverage": 1063,
+    "fuzz_features": 4624
+  }
 }
