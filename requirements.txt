@@ -960,9 +960,9 @@ python-dotenv==1.2.2 \
     --hash=sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a \
     --hash=sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3
     # via -r requirements-runtime.txt
-python-hcl2==8.1.2 \
-    --hash=sha256:ac3d16dc6501d4f24db348b3a634afdfb5c10a6715b27cd105a5b77071b84ee3 \
-    --hash=sha256:ae809c7e6e39e8c3c3555e7b7f389082207929591fcba062c9f76afb1abe972d
+python-hcl2==8.1.4 \
+    --hash=sha256:75738bd95717d692a683495babf4d00063f1b211e2eca04b156c6d79b9a0feae \
+    --hash=sha256:b4145c930540e99e3e9b4f7de297775bdf856df29782a7abdb0916cbfcab7865
     # via -r requirements-runtime.txt
 python-multipart==0.0.31 \
     --hash=sha256:8408153d68a9773291fc1da39a8b85a50044bddbabd2dd72e9229776b7b15e28 \
