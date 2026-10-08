@@ -1,6 +1,6 @@
 # Story 6.4: Outcome Calibration Metrics
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -198,3 +198,7 @@ Codex GPT-5
 - 2026-06-03: Re-ran code review and moved story back to in-progress for four cache-shape, confidence-bucket, ordering, and empty-seed patch findings.
 - 2026-06-03: Fixed fifth rerun review findings, expanded regressions, and moved story back to review.
 - 2026-06-03: Fixed final closeout review findings and kept Story 6.4 in review for closeout.
+
+## Course Correction — 2026-10-07
+
+Status reconciled to `done` against merged delivery [PR #82](https://github.com/deploywhisper/deploywhisper/pull/82), the completed task/review-fix records above, and the accepted v1.4.0 baseline in `docs/verification/v1.4.0-release.json`. This is administrative closeout of existing delivery, not a claim that a new implementation review or application test run occurred today. Historical review attempts remain intact. See `../planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md`.

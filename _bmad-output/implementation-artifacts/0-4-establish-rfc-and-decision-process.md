@@ -116,3 +116,7 @@ GPT-5
 
 - 2026-05-01: Story created/aligned from updated PRD, architecture, epics, sprint status, and readiness report.
 - 2026-05-04: Implemented the public RFC process, RFC template, governance cross-link, and deterministic RFC guardrail tests.
+
+## Course Correction — 2026-10-07
+
+Status reconciled to `done` against merged delivery [PR #40](https://github.com/deploywhisper/deploywhisper/pull/40), the completed task/review-fix records above, and the accepted v1.4.0 baseline in `docs/verification/v1.4.0-release.json`. This is administrative closeout of existing delivery, not a claim that a new implementation review or application test run occurred today. Historical review attempts remain intact. See `../planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md`.

@@ -17,8 +17,8 @@
 #   - in-progress -> done: Manually when all stories reach done status
 #
 # Story Status:
-#   - backlog: Story only exists in epic file
-#   - ready-for-dev: Story file created in implementation-artifacts
+#   - backlog: Story planned, or a prepared context held by unresolved execution gates
+#   - ready-for-dev: Prepared story eligible to begin only its declared execution scope
 #   - in-progress: Developer actively working on implementation
 #   - review: Ready for code review
 #   - done: Story completed
@@ -27,6 +27,10 @@
 #   - optional: Can be completed but not required
 #   - done: Retrospective has been completed
 #
+# RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
+# NEXT PLANNING: 16-0-adopt-and-qualify-infra-automation-contract; public RFC and feasibility gates pending
+# RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
+# EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md
 # WORKFLOW NOTES:
 # ===============
 # - Epic transitions to in-progress automatically when first story is created
@@ -41,36 +45,50 @@ project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
+release_priorities:
+  v1.5.0:
+    highest_priority_feature: epic-16
+    next_planning_story: 16-0-adopt-and-qualify-infra-automation-contract
+    release_enablers:
+      - 12-5-sbom-and-release-checksums
+      - 12-7-backup-restore-upgrade-and-retention-docs
+      - 12-8-air-gapped-and-restricted-network-guide
+    implementation_gate: RFC acceptance, Story 16.0 feasibility, final contracts and bounded story refinement
+    readiness: not-ready-for-feature-implementation
+    first_story_ready_scope: governance-and-synthetic-qualification-only
+    story_preparation_report: _bmad-output/implementation-artifacts/epic-16-story-preparation-report.md
+    readiness_report: _bmad-output/planning-artifacts/implementation-readiness-report-2026-10-07-infra-automation-v1.5.0.md
+
 development_status:
-  epic-0: in-progress
+  epic-0: done
   0-1-publish-core-governance-files: done
   0-2-define-maintainer-ownership-and-codeowners: done
   0-3-create-requirements-traceability-matrix: done
-  0-4-establish-rfc-and-decision-process: ready-for-dev
+  0-4-establish-rfc-and-decision-process: done
   epic-0-retrospective: optional
 
-  epic-1: in-progress
+  epic-1: done
   1-1-project-and-workspace-records: done
-  1-2-project-aware-analysis-submission: review
+  1-2-project-aware-analysis-submission: done
   1-3-project-scoped-report-persistence: done
   1-4-project-scoped-learning-and-context-records: done
   1-5-lightweight-rbac-role-model: done
   1-6-project-model-documentation: done
   epic-1-retrospective: optional
 
-  epic-2: in-progress
+  epic-2: done
   2-1-submission-manifest-and-provenance: done
-  2-2-terraform-plan-json-intake: review
+  2-2-terraform-plan-json-intake: done
   2-3-evidence-item-model-and-extraction: done
   2-4-finding-model-and-evidence-links: done
-  2-5-evidence-law-runtime-gate: review
+  2-5-evidence-law-runtime-gate: done
   2-6-confidence-uncertainty-and-insufficient-context: done
   2-7-narrative-after-scoring-and-degraded-fallback: done
   2-8-report-schema-versioning: done
   2-9-durable-report-persistence-and-audit-metadata: done
   epic-2-retrospective: optional
 
-  epic-3: in-progress
+  epic-3: done
   3-1-verdict-first-report-header: done
   3-2-findings-table-with-evidence-badges: done
   3-3-evidence-inspector-panel: done
@@ -81,43 +99,43 @@ development_status:
   3-8-historical-report-search-and-filtering: done
   epic-3-retrospective: optional
 
-  epic-4: in-progress
+  epic-4: done
   4-1-public-risk-pattern-library-v1: done
   4-2-safe-sample-incident-pack: done
   4-3-incident-import-for-markdown-yaml-and-json: done
   4-4-incident-similarity-with-match-explanation: done
   4-5-reviewer-feedback-capture: done
-  4-6-deployment-outcome-capture: review
+  4-6-deployment-outcome-capture: done
   4-7-incident-ingestion-management-and-indexing: done
   epic-4-retrospective: optional
 
-  epic-5: in-progress
+  epic-5: done
   5-1-versioned-api-report-contract: done
   5-2-cli-project-aware-advisory-output: done
   5-3-github-action-integration-contract: done
   5-4-pr-comment-formatter: done
-  5-5-rerun-on-commit-and-report-comparison: review
-  5-6-future-adapter-output-contract: ready-for-dev
+  5-5-rerun-on-commit-and-report-comparison: done
+  5-6-future-adapter-output-contract: done
   epic-5-retrospective: optional
 
-  epic-6: in-progress
-  6-1-benchmark-corpus-v1: review
-  6-2-benchmark-runner: review
+  epic-6: done
+  6-1-benchmark-corpus-v1: done
+  6-2-benchmark-runner: done
   6-3-honest-failure-report-generator: done
-  6-4-outcome-calibration-metrics: review
+  6-4-outcome-calibration-metrics: done
   6-5-incident-backtesting: done
   6-6-risk-trend-review: done
   epic-6-retrospective: optional
 
-  epic-7: in-progress
-  7-1-project-scoped-topology-context: review
+  epic-7: done
+  7-1-project-scoped-topology-context: done
   7-2-terraform-state-connector: done
   7-3-kubernetes-live-state-connector: done
   7-4-codeowners-and-ownership-mapping: done
   7-5-context-graph-and-freshness-ledger: done
   epic-7-retrospective: optional
 
-  epic-8: in-progress
+  epic-8: done
   8-1-sarif-ingestion: done
   8-2-scanner-json-adapter-v1: done
   8-3-external-evidence-report-context: done
@@ -125,7 +143,7 @@ development_status:
   8-5-existing-security-tools-comparison-guide: done
   epic-8-retrospective: optional
 
-  epic-9: in-progress
+  epic-9: done
   9-1-skill-manifest-spec-v1: done
   9-2-skills-registry-api: done
   9-3-skill-test-harness: done
@@ -135,7 +153,7 @@ development_status:
   9-7-skill-analytics-and-deprecation-signals: done
   epic-9-retrospective: optional
 
-  epic-10: in-progress
+  epic-10: done
   10-1-agent-json-cli-mode: done
   10-2-mcp-compatible-or-equivalent-agent-interface: done
   10-3-ai-generated-iac-provenance-and-risk-patterns: done
@@ -169,7 +187,7 @@ development_status:
   13-5-connector-guides: ready-for-dev
   13-6-workflow-integration-guides: ready-for-dev
   13-7-docs-ci-and-drift-checks: ready-for-dev
-  13-8-release-notes-and-upgrade-notes: ready-for-dev
+  13-8-release-notes-and-upgrade-notes: done
   epic-13-retrospective: optional
 
   epic-14: in-progress
@@ -179,3 +197,37 @@ development_status:
   14-4-community-health-metrics: ready-for-dev
   14-5-cncf-application-package: ready-for-dev
   epic-14-retrospective: optional
+
+  epic-15: in-progress
+  15-0-scaffold-frontend-and-migration-documentation: done
+  15-1-spa-serving: done
+  15-2-design-system-foundation-and-parity-audit: done
+  15-3-dashboard: done
+  15-4-report-detail-and-shared-report: done
+  15-5-history: done
+  15-6-settings-incidents-and-skills: review
+  15-7-cutover-and-retired-ui-removal: review
+  epic-15-retrospective: optional
+
+  epic-16: in-progress
+  16-0-adopt-and-qualify-infra-automation-contract: ready-for-dev
+  16-1-verified-human-principal-and-session-lifecycle: backlog
+  16-2-trusted-project-memberships-and-automation-permissions: backlog
+  16-3-closed-workflow-schema-and-validator: backlog
+  16-4-scoped-workflows-and-immutable-revisions: backlog
+  16-5-durable-engine-and-fenced-recovery: backlog
+  16-6-uploaded-artifact-preflight-and-report-linkage: backlog
+  16-7-workflow-editor-and-run-history-ui: backlog
+  16-8-evidence-bound-decisions-and-freshness: backlog
+  16-9-human-approval-inbox-and-decision-ux: backlog
+  16-10-registered-targets-outbox-grants-and-locks: backlog
+  16-11-github-receiver-and-outcome-reconciliation: backlog
+  16-12-runner-enrollment-and-attempt-protocol: backlog
+  16-13-isolated-runner-execution-profile: backlog
+  16-14-opentofu-terraform-collection-and-provenance: backlog
+  16-15-runner-health-and-collection-ux: backlog
+  16-16-declared-multi-unit-preflight-planning: backlog
+  16-17-signed-trigger-intake-and-cli: backlog
+  16-18-operator-recovery-retention-and-network-readiness: backlog
+  16-19-production-qualification-and-v1-5-0-release: backlog
+  epic-16-retrospective: optional

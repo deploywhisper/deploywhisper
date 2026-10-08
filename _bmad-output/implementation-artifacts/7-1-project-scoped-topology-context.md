@@ -1,6 +1,6 @@
 # Story 7.1: Project-Scoped Topology Context
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -163,3 +163,7 @@ GPT-5.4 Codex
 - 2026-06-09: Fixed final Story 7.1 review findings and moved story back to review after targeted regression, impacted-suite, full unittest, lint, static-analysis, and UI validation.
 - 2026-06-09: Fixed latest Story 7.1 review findings and moved story back to review after targeted regression, impacted-suite, full unittest, lint, static-analysis, and UI validation.
 - 2026-06-09: Fixed rerun Story 7.1 review finding and moved story back to review after targeted regression, impacted-suite, full unittest, lint, static-analysis, and UI validation.
+
+## Course Correction — 2026-10-07
+
+Status reconciled to `done` against merged delivery [PR #87](https://github.com/deploywhisper/deploywhisper/pull/87), the completed task/review-fix records above, and the accepted v1.4.0 baseline in `docs/verification/v1.4.0-release.json`. This is administrative closeout of existing delivery, not a claim that a new implementation review or application test run occurred today. Historical review attempts remain intact. See `../planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md`.

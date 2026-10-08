@@ -289,6 +289,8 @@ Rule: a phase PR that changes behavior or structure without its row's doc update
 
 # PART G — INITIATIVE COMPLETION CHECKLIST
 
+**Reconciliation (2026-10-07):** The runtime migration shipped in PR #102 and is included in v1.4.0. These initiative acceptance boxes remain unchecked because `docs/design/ui-parity-audit.md` still records 12 historical parity labels without a current disposition crosswalk. Epic 15 phase delivery is now tracked in `sprint-status.yaml`: 15.0–15.5 done; 15.6/15.7 review pending approved parity/disposition and checklist closure. Shipped cutover evidence does not settle those product decisions.
+
 - [ ] All screens shipped per Part B/C; parity audit (D1) fully resolved — zero unresolved `stop-and-ask` rows.
 - [ ] Part D2 removal checklist complete; grep gates pass.
 - [ ] Part E documentation table complete.

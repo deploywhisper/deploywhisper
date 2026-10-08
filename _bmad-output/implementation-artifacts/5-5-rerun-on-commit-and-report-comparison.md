@@ -1,6 +1,6 @@
 # Story 5.5: Rerun-on-Commit and Report Comparison
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -176,3 +176,7 @@ GPT-5 Codex
 - 2026-05-26: Re-run code review found 4 remaining patch issues and moved story back to in-progress.
 - 2026-05-26: Fixed all 4 latest review patch findings in the external analyze-action runtime, passed action and smoke-consumer validation, and moved story back to review.
 - 2026-05-26: Merged the latest action code to `deploywhisper/analyze-action` main, updated `v1`/`v1.0.0` marketplace tags and release notes, updated smoke-consumer docs, and passed published `v1`/`v1.0.0` smoke validation.
+
+## Course Correction — 2026-10-07
+
+Status reconciled to `done` against merged delivery [PR #77](https://github.com/deploywhisper/deploywhisper/pull/77), the completed task/review-fix records above, and the accepted v1.4.0 baseline in `docs/verification/v1.4.0-release.json`. This is administrative closeout of existing delivery, not a claim that a new implementation review or application test run occurred today. Historical review attempts remain intact. See `../planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md`.
