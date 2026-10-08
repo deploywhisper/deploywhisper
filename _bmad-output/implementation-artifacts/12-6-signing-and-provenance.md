@@ -84,9 +84,9 @@ Codex; signed-release workflow implementation and independent read-only review.
 
 ### Debug Log References
 
-Signing implementation tracked by `spec-gh-131-review-and-signed-releases.md`; actual release publication and reviewer policy require the pending user decisions.
+Signing implementation tracked by `spec-gh-131-review-and-signed-releases.md`; publication was subsequently authorized and verified for v1.4.0. Independent-human reviewer policy remains a separate owner-controlled follow-up.
 
-### Completion Notes List
+### Historical Preparation Notes (superseded by Verified v1.4.0 Delivery below)
 
 - Started user-requested real source/image provenance, strict verification and safe release delivery. Existing releases have no uploaded assets and are not retroactively altered.
 - Hosted signed preview will establish cryptographic evidence before choosing a new public version. Story remains in-progress until published delivery is verified.

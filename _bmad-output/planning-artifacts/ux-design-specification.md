@@ -35,6 +35,35 @@ completedAt: '2026-04-16'
 
 ## Executive Summary
 
+### v1.5.0 Infrastructure Automation planning authority — 2026-10-07
+
+The accepted course-correction scope introduces project-scoped preflight,
+authenticated human decisions and verified external-pipeline handoff as Epic 16.
+Its canonical screen/flow contract is
+[`docs/design/infra-automation-ux.md`](../../docs/design/infra-automation-ux.md),
+aligned with the
+[`v1.5.0 release plan`](infra-automation-v1.5.0-release-plan.md).
+That contract is **planning-adopted, rendering-unverified**: final identity,
+API/state, receiver, isolated-collector and saved-plan custody contracts remain
+Story 16.0 readiness gates. It does not mark any automation story implemented.
+
+For this feature, the v3 React mockup and implemented theme/primitives below
+supersede historical visual values elsewhere in this document. The Dashboard
+information budget stays unchanged. Dedicated automation views support workflows,
+runs, evidence-bound decisions, runner health and explicitly declared unit tables;
+AI assistant, package inventory, visual DAG builder and deployment controls are
+deferred. Shared approval requires verified membership and separation of duties;
+single-operator acknowledgement is labeled honestly. Existing advisory report
+verdicts cannot serve as workflow authorization or external delivery success.
+
+Automation also supersedes the historical suggestion that project isolation needs
+no identity/authorization model: existing lightweight project navigation is reused,
+while production automation requires server-verified principals and project
+permissions, including linked sensitive report/settings/policy paths. Untrusted
+caller role/actor headers are not approval identity. The detailed contract maps
+acceptance to Stories 16.7, 16.9, 16.11, 16.15–16.19 and requires composed-app
+Playwright, keyboard/a11y and screenshot evidence before UI acceptance.
+
 ### 2026 UI Migration Design Authority
 
 The approved React migration design system is now defined by

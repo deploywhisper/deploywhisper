@@ -1,8 +1,18 @@
+---
+workflowType: prd
+workflow: edit
+lastEdited: '2026-10-07'
+stepsCompleted: [step-e-01-discovery, step-e-02-review, step-e-03-edit]
+editHistory:
+  - date: '2026-10-07'
+    changes: Adopt bounded v1.5.0 Infra Automation planning addendum, amend optional collection boundary, preserve original requirement IDs.
+---
+
 # DeployWhisper Product Requirements Document
 
 **Product:** DeployWhisper  
 **Document type:** Product Requirements Document  
-**Version:** 1.0 Final - Self-Hosted, Evidence-Law First, AI-Safety, Documentation-First, Benchmark-Honest, and CNCF-Ready  
+**Version:** 1.0 Final + v1.5.0 Infra Automation planning amendment - Self-Hosted, Evidence-Law First, AI-Safety, Documentation-First, Benchmark-Honest, and CNCF-Ready
 **Date:** May 1, 2026  
 **Owner:** Pramod Kumar Sahoo   
 **License posture:** Fully open-source (MIT). Self-hosted only. No SaaS product. No hosted control plane. No open-core split. No paid enterprise-only features.  
@@ -309,7 +319,7 @@ DeployWhisper is not:
 
 - A SaaS platform.
 - A hosted control plane.
-- A Terraform runner.
+- An infrastructure apply/destroy/provisioning runner. An optional operator-controlled collection runner may produce approved-source preflight artifacts in a qualified isolated environment; it cannot apply, destroy or remediate infrastructure.
 - A CI/CD system.
 - A generic chatbot.
 - A replacement for Snyk, Checkov, Wiz, OPA, Sentinel, CSPM, SAST, SCA, container scanning, or observability tools.
@@ -320,6 +330,8 @@ DeployWhisper is not:
 - A tool that sends user IaC to a vendor-owned service by default.
 
 DeployWhisper works **alongside** existing tools and adds the missing deployment-risk briefing layer.
+
+The [canonical Infra Automation v0.3 addendum](prd-infra-automation.md) adopts bounded Tier 0 collection and Tier 1 verified-human handoff as the highest-priority feature for v1.5.0. Collection is privileged execution and requires authorization/isolation; a command named `plan` is not inherently safe. Canonical reports remain advisory and governed by the Evidence Law. Separate workflow gate decisions may stop automation; external operator-owned delivery systems remain responsible for deployment execution. AIA-09, human-only decisions, no autonomous apply/remediation and the CI/CD replacement exclusion remain in force. This planning amendment does not claim public RFC approval or permit implementation before Story 16.0's scope, spike and readiness gates pass.
 
 ---
 
@@ -2504,6 +2516,8 @@ A CNCF reviewer can inspect governance, maintainers, CODEOWNERS, release process
 
 ## 32. V1 Delivery Milestones
 
+**v1.5.0 sequencing amendment (2026-10-07):** The accepted v1.4.0 baseline has 101 stories (84 done, 15 ready-for-dev, 2 review). The original milestones below remain product maturity goals, not statements that every goal shipped. Deliver Epic 16 Infra Automation as the highest feature priority using the [bounded release plan](infra-automation-v1.5.0-release-plan.md) and [canonical feature requirements](prd-infra-automation.md). Preserve existing story IDs and shipped status; keep 12.5 SBOM and Release Checksums as a runner-distribution/release prerequisite, reuse delivered 12.6 signing/provenance and create v1.5.0 notes in 16.19 rather than reopening delivered 13.8. Pull forward automation-relevant 12.7/12.8 acceptance and feature-blocking UI parity follow-ups; remaining docs/CNCF work retains its visible status and follows release blockers. Epic 16's 20 stories (16.0–16.19) are planning work, not implemented or ready-for-dev by this amendment.
+
 All milestones in this section are part of DeployWhisper V1 scope. The milestone labels describe implementation order and maturity gates, not separate product versions. No item in this section should be interpreted as V2, paid, post-V1, or SaaS-only scope.
 
 ### 32.1 V1 Foundation - Open-source and execution foundation
@@ -2618,6 +2632,7 @@ Focus:
 | Epic 12: Security and Supply Chain Hardening | Phase 0-4 | Build trust as infrastructure software | NFR-SEC, NFR-OPS, GOV |
 | Epic 13: Documentation and User Enablement | Phase 0-4 | Make the product self-service, installable, operable, extensible, and contributor-friendly | DOC, NFR-DOC, OSS, GOV |
 | Epic 14: CNCF Readiness | Phase 4 | Prepare for foundation-scale community | GOV, OSS, adoption, DOC, NFR-DOC |
+| Epic 16: Infra Automation | Highest feature priority for v1.5.0 | Evidence-gated preflight, verified human decisions and qualified external handoff; planning scope pending 16.0 gates | IAU15-FR, IAU15-NFR; canonical feature addendum |
 
 ---
 

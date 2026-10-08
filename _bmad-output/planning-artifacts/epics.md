@@ -5,12 +5,22 @@ stepsCompleted:
   - step-03-create-stories
   - step-04-final-validation
 inputDocuments:
+  - _bmad-output/planning-artifacts/prd-infra-automation.md
+  - _bmad-output/planning-artifacts/implementation-readiness-report-2026-10-07-infra-automation-v1.5.0.md
+  - docs/design/infra-automation-ux.md
   - _bmad-output/planning-artifacts/prd.md
   - _bmad-output/planning-artifacts/architecture.md
   - _bmad-output/planning-artifacts/ux-design-specification.md
   - _bmad-output/project-context.md
-sourceOfTruth: finalized-prd-2026-05-01
-status: ready-for-implementation-readiness-review
+sourceOfTruth: finalized-prd-2026-05-01-plus-infra-automation-v1.5.0
+featureAddendum: _bmad-output/planning-artifacts/prd-infra-automation.md
+releasePriority: Epic 16 v1.5.0
+implementationReadiness: not-ready-rfc-feasibility-and-contract-gates
+storyPreparation: complete-20-dedicated-contexts
+firstStoryReadyScope: 16.0-governance-and-synthetic-qualification-only
+status: implementation-in-progress
+lastReconciled: 2026-10-07
+releaseBaseline: v1.4.0
 ---
 
 # DeployWhisper - Epic Breakdown
@@ -19,7 +29,7 @@ status: ready-for-implementation-readiness-review
 
 This document regenerates the DeployWhisper epic and story plan from the finalized PRD and the aligned architecture.
 
-The previous six-epic roadmap is superseded. Existing implementation stories should be treated as historical until they are reconciled against this new plan.
+The previous six-epic roadmap and archived story sets are superseded. The 101-story accepted baseline was reconciled against v1.4.0 delivery on 2026-10-07; 20 unimplemented Epic 16 backlog stories extend the adopted roadmap to 121 stories across 17 epics; use `sprint-status.yaml` and `story-implementation-status-map.md` for current execution status.
 
 This plan follows the finalized PRD's structure:
 
@@ -28,6 +38,32 @@ This plan follows the finalized PRD's structure:
 - Project/workspace/RBAC foundation before broad context hardening.
 - Advisory-first core with optional enforcement adapters.
 - Day-zero incident memory, benchmark honesty, external scanner ingestion, AI-agent safety, documentation, governance, and CNCF readiness as first-class scope.
+
+## Delivery Status — 2026-10-07
+
+Accepted baseline: v1.4.0, implementation through Story 12.4 plus signing/provenance (12.6) and release/upgrade documentation (13.8). PRD milestone maturity gates are distinct from package version numbers. Epic and story acceptance criteria remain unchanged.
+
+| Epic | Status | Stories done | Stories remaining |
+| --- | --- | --- | --- |
+| 0 | done | 4/4 | 0 |
+| 1 | done | 6/6 | 0 |
+| 2 | done | 9/9 | 0 |
+| 3 | done | 8/8 | 0 |
+| 4 | done | 7/7 | 0 |
+| 5 | done | 6/6 | 0 |
+| 6 | done | 6/6 | 0 |
+| 7 | done | 5/5 | 0 |
+| 8 | done | 5/5 | 0 |
+| 9 | done | 7/7 | 0 |
+| 10 | done | 5/5 | 0 |
+| 11 | done | 4/4 | 0 |
+| 12 | in-progress | 5/8 | 3 |
+| 13 | in-progress | 1/8 | 7 |
+| 14 | in-progress | 0/5 | 5 |
+| 15 | in-progress | 6/8 | 2 (review) |
+| 16 | in-progress (preparation/qualification) | 0/20 | 20; 16.0 ready for qualification |
+
+Next planning/qualification: Story 16.0 and public RFC review. Epic 16 is the highest-priority v1.5.0 feature; Story 12.5 remains the parallel SBOM release enabler, with scoped 12.7/12.8 recovery/network qualification. Other Epic 13/14 work follows the P0 release lane. Retrospectives remain optional. See [status map](../implementation-artifacts/story-implementation-status-map.md) and [course correction](sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md).
 
 ## Requirements Inventory
 
@@ -353,6 +389,123 @@ This plan follows the finalized PRD's structure:
 | `AIA-*`, `RSK-11`, `DOC-24` | Epic 10 |
 | `ADM-01..02`, `NFR-OPS-*`, `NFR-SEC-*`, supply-chain requirements | Epic 12 |
 | `DOC-*`, `NFR-DOC-*` | Epic 13 |
+| `ADM-06` | Epic 11, Story 11.2 (threshold/reporting configuration) |
+| `ADM-08` | Epic 1, Story 1.1 (project/workspace records) |
+| `NFR-PERF-01` | Epic 6, Stories 6.1/6.2 (reference workload and measurement ownership; not a claim the target is measured) |
+| `NFR-PERF-02` | Epic 2, Stories 2.1/2.6 (partial intake/context and skipped-scope behavior) |
+| `NFR-PERF-03` | Epic 2, Story 2.7 (narrative timeout/failure fallback) |
+| `NFR-PERF-05` | Epic 7, Stories 7.2/7.3 and Epic 2 Story 2.6 (connector deadline/unavailable context) |
+
+### v1.5.0 Infra Automation Requirements Inventory
+
+The owner selected Epic 16 as the first-priority v1.5.0 workstream. These are the complete active addendum requirements, distinct from the original parent inventory and from the 179 historical draft dispositions. IDs/text remain authoritative in `prd-infra-automation.md` and its JSON inventory; story preparation does not claim fulfillment.
+
+#### Active functional requirements (60)
+
+- **IAU15-FR-001:** Support only Tier 0 preflight and Tier 1 human-approved external handoff in v1.5.0; reject apply/destroy, remediation, unattended approvals and unsupported execution profiles.
+- **IAU15-FR-002:** Resolve each human decision from a verified human principal; caller actor/role headers cannot establish identity.
+- **IAU15-FR-003:** Bootstrap the first local operator through an operator-held one-use setup credential with no default account/password; provide a documented secured account-recovery procedure.
+- **IAU15-FR-004:** Enforce human session expiry, logout and revocation with protected cookies and CSRF defenses for browser mutations.
+- **IAU15-FR-005:** Distinguish human, service, agent and runner credentials; nonhuman credentials cannot obtain human sessions, publish workflows or decide approvals.
+- **IAU15-FR-006:** Derive project/workspace capabilities from server-owned memberships, denying absent membership and cross-scope access by default.
+- **IAU15-FR-007:** Protect automation-linked report, policy, settings and artifact paths against bypass through legacy caller-controlled scope or role inputs.
+- **IAU15-FR-008:** Enforce distinct requester/approver identities in shared mode; label authenticated single-operator decisions as acknowledgement with no separation-of-duties claim.
+- **IAU15-FR-009:** Publish a versioned workflow schema with typed, bounded inputs and explicit supported step input/output contracts.
+- **IAU15-FR-010:** Validate definitions without side effects using bounded YAML bytes/depth/aliases, duplicate-key rejection and an acyclic graph capped at 50 steps.
+- **IAU15-FR-011:** Accept only the closed P0 registry: supported artifact intake, OpenTofu/Terraform collection, analyze, policy gate, approval and GitHub handoff; reject arbitrary scripts/plugins, loops and generic failure/finally execution.
+- **IAU15-FR-012:** Resolve only typed substitution references to inputs, declared step outputs and run/project metadata; reject unknown references, functions and code evaluation.
+- **IAU15-FR-013:** Require every executable path to a handoff to pass its mandatory successful evidence analysis, policy gate and matching approval; skipped/failed or unrelated ancestors do not qualify.
+- **IAU15-FR-014:** Scope workflow drafts and revisions to one project and optional workspace.
+- **IAU15-FR-015:** Keep published revisions immutable; restore creates a new draft, and drafts cannot execute.
+- **IAU15-FR-016:** Snapshot the published definition, validated inputs, scope and source identity immutably when a run starts; require a repository commit for collected/exact-plan paths and explicitly mark unavailable source for upload-only advisory review.
+- **IAU15-FR-017:** Disable, revoke or restore epoch changes must invalidate unconsumed grants and prevent new run starts, collection claims, dispatch or grant consumption while preserving read and reconciliation for accepted external work.
+- **IAU15-FR-018:** Persist run/step transitions and explicit `stopped_by_gate`, `expired`, `timed_out`, `cancelled`, `failed`, `succeeded` and `delivery_unknown` outcomes across restart.
+- **IAU15-FR-019:** Fence leader/task attempts so only the current owner may heartbeat, log, upload or complete a task.
+- **IAU15-FR-020:** Retry only declared safe/idempotent local work within finite deadlines; persist idempotent outputs and reconcile uncertain external work instead of blind resend.
+- **IAU15-FR-021:** Record cancellation durably and terminate the owned runner process tree; explain that cancellation cannot undo accepted external work.
+- **IAU15-FR-022:** Bound per-workflow/project concurrency, backlog, analysis workers and storage usage with explicit quota/backpressure errors.
+- **IAU15-FR-023:** Allow runner-less upload of currently supported artifact formats through existing scoped intake protections.
+- **IAU15-FR-024:** Screen inputs, metadata, streamed logs, errors and artifacts before persistence or analysis; reject state/credential/key/binary-plan uploads and inline secret-looking values.
+- **IAU15-FR-025:** Record authenticated collection provenance with runner/task attempt, command/argv digest, source SHA, exit code, time, raw-local digest, sanitized digest and redaction version; recompute received digests.
+- **IAU15-FR-026:** Invoke the existing shared analysis core without duplicating risk logic; provenance alone cannot turn inferred output into deterministic evidence.
+- **IAU15-FR-027:** Link runs to immutable reports through a compatible versioned optional provenance contract; retain permanent report URLs and existing report consumers.
+- **IAU15-FR-028:** Expose missing/partial/stale collection as confidence limitations and context TODOs; failed or incomplete mandatory collection cannot make approval eligible.
+- **IAU15-FR-029:** Keep deterministic automation usable with AI disabled or narrative failure, and preserve existing structured-summary/local-only provider boundaries without new AI composition.
+- **IAU15-FR-030:** Pause for a human decision durably with a finite deadline and never auto-approve on restart, expiry or missing reviewer.
+- **IAU15-FR-031:** Bind approval to authorization kind, revision, source identity and required exact-plan commit, project/workspace/environment, reports, artifact and unit-plan digests, policy version, exact target and payload digest.
+- **IAU15-FR-032:** Enforce evidence freshness at decision, dispatch and receiver consumption; default collection TTL is 60 minutes unless an audited stricter policy applies.
+- **IAU15-FR-033:** Evaluate explicit workflow policy separately from advisory report semantics, preserving canonical should_block=False and using existing policy-adapter field meanings where compatible.
+- **IAU15-FR-034:** Require an explicit authenticated approve/reject decision and reason when the canonical recommendation is `no-go`, severity is high/critical or the separate typed `insufficient_context` flag is true, with typed confirmation for high/critical.
+- **IAU15-FR-035:** Invalidate eligibility when evidence, revision, source, scope, target, policy, membership or custody changes, expires or is superseded; no emergency bypass or delegated approval in P0.
+- **IAU15-FR-036:** Register outbound GitHub destinations with administrator-controlled host policy; revalidate DNS/connection addresses and redirects, blocking metadata/loopback/private targets except explicit audited internal-host exceptions.
+- **IAU15-FR-037:** Atomically persist the approved outbound intent and exact payload before network effects, with a stable receiver operation identity.
+- **IAU15-FR-038:** Issue one-use scoped receiver grants bound to the decision tuple, operation, expiry and live epoch; reject duplicate/replayed or altered consumption.
+- **IAU15-FR-039:** Consume grants into a durable receiver operation record before external action so a consume-before-action crash resumes the same operation without a second action.
+- **IAU15-FR-040:** Distinguish dispatch acceptance, externally observed completion and delivery_unknown; reconcile unknown outcomes through receiver receipts and never report dispatch acceptance as successful deployment.
+- **IAU15-FR-041:** Authorize exact-plan handoff only when the qualified self-hosted receiver can verify the original immutable saved-plan bytes in protected local custody by opaque handle, raw digest and expiry; no server/public-artifact plan storage, and replanning requires fresh evidence/approval. Upload-only advisory receipts never authorize apply or require invented repository provenance.
+- **IAU15-FR-042:** Canonicalize target lock identities across aliases and retain locks during unknown external work until verified resolution or an audited operator break that does not mint a new authorization.
+- **IAU15-FR-043:** Verify receiver callback signatures, operation/run/source identity and replay protection using the pinned GitHub adapter version and protected branch/tag dispatch ref.
+- **IAU15-FR-044:** Enroll runners using one-use tokens and project-scoped expiring credentials with rotation/revocation and outbound HTTPS protocol-version negotiation.
+- **IAU15-FR-045:** Bind every task claim, heartbeat, log, upload and completion to the authorized runner, project, current attempt and live lease.
+- **IAU15-FR-046:** Route collection to eligible runner tags with no silent fallback; fail clearly when none qualify or enforce an explicit finite wait, and expose last-seen/version/task health.
+- **IAU15-FR-047:** Collect only from admitted trusted immutable sources in disposable isolated workspaces with canonical-root/symlink containment and controlled tool/provider installation; reject untrusted PR sources and inherited Git/hooks/config.
+- **IAU15-FR-048:** Execute only operator-protected fixed catalog commands with validated parameters; reject arbitrary shell, server-defined commands and app Docker-socket access.
+- **IAU15-FR-049:** Qualify OpenTofu/Terraform plan and JSON extraction for declared pinned versions, distinguishing exit 0/no-change, 2/change and error; retain the sensitive binary plan locally and transport screened JSON only.
+- **IAU15-FR-050:** Resolve infrastructure credentials only in the operator-owned runner/receiver execution identities under an environment allow-list and least privilege; never send or persist their values in DeployWhisper.
+- **IAU15-FR-051:** Enforce task CPU/time/disk/output/egress caps and atomic bounded uploads with cleanup after failure; cancellation must terminate the entire owned process tree.
+- **IAU15-FR-052:** Provide sanctioned React navigation, validated templates/YAML draft/publish controls and scoped workflow/run lists using actual APIs and existing design primitives without changing Dashboard information budget.
+- **IAU15-FR-053:** Show immutable run timeline, screened logs, artifact digests, linked briefing, uncertainty and permanent report provenance links with loading/empty/error/disabled/degraded states.
+- **IAU15-FR-054:** Provide a scoped approval inbox and keyboard-operable decision screen showing exact evidence, target/payload, freshness, policy, confidence, blast radius and rollback context with acknowledgement labeling.
+- **IAU15-FR-055:** Expose runner health, collection/cancel progress and unknown/reconciliation state with advisory copy that never claims Tier 0/1 deploys infrastructure.
+- **IAU15-FR-056:** Accept only human-declared unit inventory and dependencies; validate exact unit coverage/cycles/unknown identities, persist deterministic preflight waves and combined evidence digest, and show accessible scope/lock tables without claiming deployment ordering.
+- **IAU15-FR-057:** Start scoped runs manually or through signed timestamped replay-resistant webhook intake with typed inputs, idempotency, source pinning and bounded errors/quotas; record trigger origin and principal.
+- **IAU15-FR-058:** Expose versioned automation API and CLI validation/run/status/list/decision commands over the same authority, envelopes and generated SPA types; agent read/request mode cannot decide or publish.
+- **IAU15-FR-059:** Record append-only application audit events with verified principal/type, role, scope, target, reason, time and before/after digests; expose scoped UI/JSON export without raw artifacts/secrets and document DB-admin trust limits.
+- **IAU15-FR-060:** Let authorized operators configure feature enablement, targets, quotas, retention, TTL and credential lifetimes; reject unsafe reductions, protect pending evidence or invalidate its decision before deletion, and audit each change.
+
+#### Active nonfunctional requirements (12)
+
+- **IAU15-NFR-001:** The declared crash/race corpus must lose no committed run/decision state and produce no unauthorized or duplicate receiver action, including stale attempts, unknown delivery and restore epochs.
+- **IAU15-NFR-002:** The declared principal × role × project/workspace × object/action matrix must produce zero cross-scope reads or unauthorized mutations.
+- **IAU15-NFR-003:** The versioned sensitive-data corpus must yield zero known secret patterns in stored artifacts/logs/metadata/errors/audit or transmitted narrative summaries; no universal-redaction claim follows.
+- **IAU15-NFR-004:** Automation-originated fixture reports must produce zero Evidence Law violations and preserve deterministic/inferred labels and advisory report semantics.
+- **IAU15-NFR-005:** Ready-step server orchestration overhead must have p95 <1 second, excluding collection/network/analysis duration, under the reproducible reference workload.
+- **IAU15-NFR-006:** Enqueue-to-claim latency must have p95 <2 seconds with 20 online compatible runners under the reference workload.
+- **IAU15-NFR-007:** The singleton SQLite profile must sustain 10 active runs with at most 2 concurrent analysis jobs and 20 online runners, with bounded queue/storage and no corrupted transitions.
+- **IAU15-NFR-008:** Workflow validation must have p95 <500 milliseconds for the declared 50-step workflow corpus under the reference workload.
+- **IAU15-NFR-009:** All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots.
+- **IAU15-NFR-010:** Upgrade from a v1.4.0 database copy, interrupted upgrade, coordinated DB/artifact backup/restore, token rotation and restricted-network recovery must preserve auditable state while invalidating outstanding authorization/leases until reconciled.
+- **IAU15-NFR-011:** Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks.
+- **IAU15-NFR-012:** Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile pilot with no unresolved introduced critical/high defect.
+
+#### Architecture obligations extracted for story preparation
+
+- Brownfield extension: retain FastAPI/Python/SQLAlchemy/SQLite and static React; no greenfield starter, new framework or unapproved dependency. Source pins win over stale documentation (Pydantic is 2.13.3).
+- Instantiate only current-slice entities and constraints. Fenced leader/attempt claims, immutable snapshots, atomic outbox/grants and protected target locks are qualified in bounded packets rather than one upfront schema migration.
+- Verified local identity/membership is a new boundary; caller role/actor headers and missing-role-to-admin behavior are not approval authority.
+- Uploaded advisory review may lack repository provenance; exact-plan collection/handoff requires the admitted immutable source and the protected original local plan. Receiver admission checks authorization kind and does not convert advisory receipt to mutation permission.
+- Each earlier slice proves its contract using earlier capabilities or narrowly scoped fixtures/ports. Full collector/custody/receiver and operational integration is owned by later slices and 16.19, not implicit future acceptance prerequisites.
+- RFC outcome and real recorded identity/fencing/isolation/custody/receiver evidence remain Story 16.0 completion gates; no story preparation bypasses them.
+
+#### UX obligations extracted for story preparation
+
+These derived checklist IDs organize the authoritative feature UX; they add no separate release scope beyond the active PRD requirements.
+
+| UX checklist | Required interaction/acceptance | Story owners | Canonical coverage |
+| --- | --- | --- | --- |
+| IAU15-UX-01 | Scoped `/infra-automation` navigation and feature-off/direct-entry/denied behavior; Dashboard information budget unchanged | 16.7 | FR-052, NFR-009 |
+| IAU15-UX-02 | Template/textarea draft validation, field errors, immutable revision history, distinct save/publish/run actions | 16.7 | FR-009..015, FR-052 |
+| IAU15-UX-03 | ProjectSwitcher clears stale scoped forms, caches and decision eligibility; no cross-project names/data | 16.7, 16.9 | FR-006..007, NFR-002 |
+| IAU15-UX-04 | Actual run timeline, screened bounded logs, digest/report links and partial/degraded/loading/empty/error states | 16.7, 16.15 | FR-027..029, FR-053, FR-055 |
+| IAU15-UX-05 | Exact source/evidence/policy/target/payload/custody packet, freshness/effective deadline and authorization-kind distinction | 16.9 | FR-030..035, FR-041, FR-054 |
+| IAU15-UX-06 | Accessible approve/reject with reason/confirmation, shared self-approval denial and honest single-operator acknowledgement | 16.9 | FR-008, FR-034, FR-054 |
+| IAU15-UX-07 | Lost decision response reloads durable receipt; stale/network-lost eligibility prevents a consequential cached action | 16.9 | FR-030..035, NFR-001 |
+| IAU15-UX-08 | Separate handoff acceptance/external completion/unknown, no blind resend, cancel-request versus confirmed stop and reconciliation | 16.11, 16.15 | FR-021, FR-040, FR-055 |
+| IAU15-UX-09 | Scoped runner health/version/trust/task details, transient enrollment token reveal with no URL/persistence/automatic clipboard | 16.15 | FR-044..046, FR-055 |
+| IAU15-UX-10 | Explicit unit/dependency editing and confirmation, cycle/unknown errors and accessible deterministic wave/lock tables | 16.16 | FR-056, NFR-009 |
+| IAU15-UX-11 | Semantic tables/forms/dialog focus/keyboard, meaningful state announcements, non-color-only status, zoom/reduced motion | 16.7, 16.9, 16.15, 16.16 | NFR-009 |
+| IAU15-UX-12 | Real API-backed seeded data, approved v3 primitives/local assets, new primitive gallery coverage and composed root-SPA screenshots | 16.7, 16.9, 16.15, 16.16, 16.19 | FR-052..055, NFR-009 |
+| IAU15-UX-13 | Named-account browser entry/logout/expiry/recovery guidance plus admin settings enablement/targets/quotas/retention/TTL; permission/CSRF/cache/conflict and disable behavior tested | 16.7, 16.18 | FR-002..004, FR-007..008, FR-060, NFR-009 |
 
 ## Epic List
 
@@ -1950,11 +2103,681 @@ The following existing stories were written for the retired UI-era UI. Their UI 
 | Story 9.5: Skills Browser UI | retired UI skills browser UI | Story 15.6 |
 | Story 12.2: Provider Settings Administration | retired UI provider settings UI | Story 15.6 |
 
+## Epic 16: Evidence-Gated Infrastructure Automation
+
+**Release priority:** Highest feature priority for v1.5.0. **Delivery status:** in-progress for story preparation/qualification; production feature implementation not started.
+
+A self-hosted operator can collect or upload approved preflight evidence, inspect the shared-core briefing, record a verified human decision and hand the exact approved request to a qualified external GitHub delivery system. The feature supports explicit multi-unit collection/review without taking ownership of apply, provisioning or rollback.
+
+**Requirements:** IAU15-FR-001..060 and IAU15-NFR-001..012 from [the canonical feature PRD](prd-infra-automation.md); [all 179 original draft requirement dispositions](infra-automation-requirement-dispositions.json). Every proof below describes required future acceptance, not a test result from this planning update. **Slice responsibility:** each story proves its owned contract through existing earlier capabilities or explicitly seeded test-double ports; the full requirement text/proof remains the release-wide obligation. A mapping to multiple stories does not require an earlier slice to implement a later component. Real integrated proof is owned by the later integration story and 16.19. Test doubles do not qualify a production profile.
+
+**Gates:** [RFC 0001](../../docs/rfcs/0001-infra-automation-preflight-and-handoff.md) remains Proposed. Story 16.0 owns public RFC outcome and identity, fencing, isolation, saved-plan custody and receiver recovery proof. No downstream feature story is ready for implementation until those gates close. Story 12.5 remains the parallel SBOM release enabler; 12.7/12.8 contribute scoped operations acceptance without automatically closing their broader original obligations.
+
+**Supported release boundary:** singleton SQLite application, uploaded supported formats, one isolated Linux OpenTofu/Terraform collection profile, verified human accounts/memberships, durable approvals/outbox/locks, qualified self-hosted GitHub receiver with protected exact-plan custody, explicit unit maps, signed starts and CLI. Deferred vision includes generalized collectors/adapters, package governance, AI authoring/planning, schedules, promotion and PostgreSQL/HA automation. Existing report narrative remains optional; findings/severity remain in the one shared analysis core.
+
+### Story 16.0: Adopt and Qualify the Infra Automation Contract
+
+As a maintainer,
+I want to settle the supported preflight and handoff contract with governance and executable feasibility evidence,
+So that implementation starts with tested trust boundaries rather than assumptions.
+
+**Status:** ready-for-dev (governance-and-synthetic-qualification-only).
+
+**Dedicated context:** [16-0-adopt-and-qualify-infra-automation-contract.md](../implementation-artifacts/16-0-adopt-and-qualify-infra-automation-contract.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** Current v1.4.0 baseline. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** parent PRD and feature scope agree; executable spike evidence resolves principal, claim, saved-plan custody and receiver contracts; readiness report has no blocking gap.
+2. **Given a missing public RFC decision or feasibility result, when release implementation readiness is evaluated, then the gate remains NOT READY and no downstream feature story is promoted.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Slice acceptance boundary:** This is governance/feasibility qualification, not a production implementation story. Isolated prototypes demonstrate the selected contracts without depending on future product APIs or marking those product stories done. Public RFC acceptance remains required before downstream feature implementation.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-001 | Support only Tier 0 preflight and Tier 1 human-approved external handoff in v1.5.0; reject apply/destroy, remediation, unattended approvals and unsupported execution profiles. | Scope/RFC review and unsupported-mode rejection corpus |
+| IAU15-FR-041 | Authorize exact-plan handoff only when the qualified self-hosted receiver can verify the original immutable saved-plan bytes in protected local custody by opaque handle, raw digest and expiry; no server/public-artifact plan storage, and replanning requires fresh evidence/approval. Upload-only advisory receipts never authorize apply or require invented repository provenance. | Real custody access/restart/overwrite/symlink/expiry/replan spike and receiver tests |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.1: Verified Human Principal and Session Lifecycle
+
+As a operator,
+I want to authenticate with a revocable named account and secured session,
+So that my decisions can be attributed to a verified principal.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-1-verified-human-principal-and-session-lifecycle.md](../implementation-artifacts/16-1-verified-human-principal-and-session-lifecycle.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.0. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** supported identity profile authenticates; secure bootstrap, logout/expiry/revocation and cookie/CSRF controls; service/runner credentials cannot acquire human sessions.
+2. **Given expired, revoked, forged or CSRF-invalid credentials, when a protected request is made, then it is denied without accepting caller-supplied role/actor identity.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Slice acceptance boundary:** Prove credential audience/permission contracts with synthetic machine/runner credentials; actual enrollment is 16.12. Do not expose unavailable production runner flows.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-002 | Resolve each human decision from a verified human principal; caller actor/role headers cannot establish identity. | Authenticated-session and malicious-header tests |
+| IAU15-FR-003 | Bootstrap the first local operator through an operator-held one-use setup credential with no default account/password; provide a documented secured account-recovery procedure. | Bootstrap replay/default-credential tests and recovery exercise |
+| IAU15-FR-004 | Enforce human session expiry, logout and revocation with protected cookies and CSRF defenses for browser mutations. | Session lifecycle, cookie and CSRF test matrix |
+| IAU15-FR-005 | Distinguish human, service, agent and runner credentials; nonhuman credentials cannot obtain human sessions, publish workflows or decide approvals. | Principal-type privilege matrix |
+| IAU15-NFR-002 | The declared principal × role × project/workspace × object/action matrix must produce zero cross-scope reads or unauthorized mutations. | Published complete authorization matrix results |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.2: Trusted Project Memberships and Automation Permissions
+
+As a project administrator,
+I want to assign server-owned project permissions and protect reused data paths,
+So that callers cannot impersonate reviewers or bypass scope.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-2-trusted-project-memberships-and-automation-permissions.md](../implementation-artifacts/16-2-trusted-project-memberships-and-automation-permissions.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.1. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** server-owned roles/capabilities; denial/default/cross-project matrix; reused linked-report/settings/policy paths cannot bypass automation authority with old headers.
+2. **Given a caller without the required membership or a legacy bypass route, when it targets an automation object or linked protected data, then access is denied and no cross-project existence details are exposed.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Slice acceptance boundary:** Prove membership/capability and separation semantics against scoped seeded reports/decision contexts. Full collection-linked route and browser proof is integrated in 16.6/16.9.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-002 | Resolve each human decision from a verified human principal; caller actor/role headers cannot establish identity. | Authenticated-session and malicious-header tests |
+| IAU15-FR-005 | Distinguish human, service, agent and runner credentials; nonhuman credentials cannot obtain human sessions, publish workflows or decide approvals. | Principal-type privilege matrix |
+| IAU15-FR-006 | Derive project/workspace capabilities from server-owned memberships, denying absent membership and cross-scope access by default. | Role × project × workspace authorization matrix |
+| IAU15-FR-007 | Protect automation-linked report, policy, settings and artifact paths against bypass through legacy caller-controlled scope or role inputs. | Legacy-route and linked-object bypass regression tests |
+| IAU15-FR-008 | Enforce distinct requester/approver identities in shared mode; label authenticated single-operator decisions as acknowledgement with no separation-of-duties claim. | Self-approval denial and acknowledgement-mode E2E |
+| IAU15-NFR-002 | The declared principal × role × project/workspace × object/action matrix must produce zero cross-scope reads or unauthorized mutations. | Published complete authorization matrix results |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.3: Closed Workflow Schema and Validator
+
+As a workflow author,
+I want to validate a bounded typed preflight definition before any action,
+So that unsupported steps and unsafe paths cannot reach a handoff.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-3-closed-workflow-schema-and-validator.md](../implementation-artifacts/16-3-closed-workflow-schema-and-validator.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.0. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** yAML size/depth/alias/duplicate-key limits, typed references, acyclic bounded graph, all-path approval coverage; unknown step/enum/unsupported mode rejected.
+2. **Given malformed, oversized, cyclic, unknown or code-evaluating input, when validation runs, then it returns bounded field-level errors and performs no side effect.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-001 | Support only Tier 0 preflight and Tier 1 human-approved external handoff in v1.5.0; reject apply/destroy, remediation, unattended approvals and unsupported execution profiles. | Scope/RFC review and unsupported-mode rejection corpus |
+| IAU15-FR-009 | Publish a versioned workflow schema with typed, bounded inputs and explicit supported step input/output contracts. | Schema valid/invalid fixture corpus |
+| IAU15-FR-010 | Validate definitions without side effects using bounded YAML bytes/depth/aliases, duplicate-key rejection and an acyclic graph capped at 50 steps. | Parser resource-abuse and cycle/step-limit corpus |
+| IAU15-FR-011 | Accept only the closed P0 registry: supported artifact intake, OpenTofu/Terraform collection, analyze, policy gate, approval and GitHub handoff; reject arbitrary scripts/plugins, loops and generic failure/finally execution. | Registry and unsupported-handler denial corpus |
+| IAU15-FR-012 | Resolve only typed substitution references to inputs, declared step outputs and run/project metadata; reject unknown references, functions and code evaluation. | Typed-reference and injection fixture corpus |
+| IAU15-FR-013 | Require every executable path to a handoff to pass its mandatory successful evidence analysis, policy gate and matching approval; skipped/failed or unrelated ancestors do not qualify. | Wrong-branch, skipped-ancestor and alternate-path tests |
+| IAU15-NFR-008 | Workflow validation must have p95 <500 milliseconds for the declared 50-step workflow corpus under the reference workload. | 1,000-validation timing/correctness benchmark |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.4: Scoped Workflows and Immutable Revisions
+
+As a maintainer,
+I want to save drafts and publish immutable scoped workflow revisions,
+So that unfinished changes cannot alter an active run.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-4-scoped-workflows-and-immutable-revisions.md](../implementation-artifacts/16-4-scoped-workflows-and-immutable-revisions.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.2, 16.3. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** additive migration from v1.4.0; save/validate/publish/archive/restore; no draft execution; snapshots and settings audited; disable-after-approval revokes unconsumed grants while preserving reconciliation.
+2. **Given a draft, wrong scope or attempted published-row mutation, when execution or edit is requested, then it is denied; disabled features preserve permitted history and reconciliation.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Slice acceptance boundary:** Use a grant-consumer test-double port to prove feature/epoch invalidation policy; production grant/outbox integration is owned by 16.10/16.11. No unavailable execution handler is enabled by revision persistence.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-014 | Scope workflow drafts and revisions to one project and optional workspace. | Workflow cross-scope CRUD tests |
+| IAU15-FR-015 | Keep published revisions immutable; restore creates a new draft, and drafts cannot execute. | Publish/edit/restore/draft-run lifecycle tests |
+| IAU15-FR-016 | Snapshot the published definition, validated inputs, scope and source identity immutably when a run starts; require a repository commit for collected/exact-plan paths and explicitly mark unavailable source for upload-only advisory review. | Post-start mutation and rerun snapshot tests |
+| IAU15-FR-017 | Disable, revoke or restore epoch changes must invalidate unconsumed grants and prevent new run starts, collection claims, dispatch or grant consumption while preserving read and reconciliation for accepted external work. | Disable/revoke/restore-before-dispatch-or-consume race matrix |
+| IAU15-FR-059 | Record append-only application audit events with verified principal/type, role, scope, target, reason, time and before/after digests; expose scoped UI/JSON export without raw artifacts/secrets and document DB-admin trust limits. | Audit event coverage/export authorization and secret corpus |
+| IAU15-FR-060 | Let authorized operators configure feature enablement, targets, quotas, retention, TTL and credential lifetimes; reject unsafe reductions, protect pending evidence or invalidate its decision before deletion, and audit each change. | Configuration permissions, pending-retention and floor-change tests |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.5: Durable Engine and Fenced Recovery
+
+As a operator,
+I want to retain progress, ownership and deadlines across restarts,
+So that a crash does not lose a decision or release duplicate work.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-5-durable-engine-and-fenced-recovery.md](../implementation-artifacts/16-5-durable-engine-and-fenced-recovery.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.4. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** claims/transitions survive forced restart; stale leader/attempt rejected; finite deadlines, idempotent step outputs, quotas/backpressure and cancellation races tested.
+2. **Given stale claim ownership, overloaded capacity or a cancellation race, when a worker reports or requests more work, then the newer attempt is protected and the persisted state explains the outcome.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Slice acceptance boundary:** Use an owned local worker/process double for cancellation and synthetic claim attempts; the real runner process/isolation protocol is qualified in 16.12–16.14. Keep synchronous analysis off the coordinator tick.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-016 | Snapshot the published definition, validated inputs, scope and source identity immutably when a run starts; require a repository commit for collected/exact-plan paths and explicitly mark unavailable source for upload-only advisory review. | Post-start mutation and rerun snapshot tests |
+| IAU15-FR-018 | Persist run/step transitions and explicit `stopped_by_gate`, `expired`, `timed_out`, `cancelled`, `failed`, `succeeded` and `delivery_unknown` outcomes across restart. | Crash at each transition with state recovery assertions |
+| IAU15-FR-019 | Fence leader/task attempts so only the current owner may heartbeat, log, upload or complete a task. | Overlapping leader and stale-attempt rejection tests |
+| IAU15-FR-020 | Retry only declared safe/idempotent local work within finite deadlines; persist idempotent outputs and reconcile uncertain external work instead of blind resend. | Retry/deadline/duplicate-completion and dropped-response tests |
+| IAU15-FR-021 | Record cancellation durably and terminate the owned runner process tree; explain that cancellation cannot undo accepted external work. | Cancellation/dispatch races and process-tree termination tests |
+| IAU15-FR-022 | Bound per-workflow/project concurrency, backlog, analysis workers and storage usage with explicit quota/backpressure errors. | Saturation, queue-cap and storage-exhaustion tests |
+| IAU15-NFR-001 | The declared crash/race corpus must lose no committed run/decision state and produce no unauthorized or duplicate receiver action, including stale attempts, unknown delivery and restore epochs. | Published fault-injection results at every persisted boundary |
+| IAU15-NFR-005 | Ready-step server orchestration overhead must have p95 <1 second, excluding collection/network/analysis duration, under the reproducible reference workload. | Timestamped 1,000-transition overhead benchmark |
+| IAU15-NFR-007 | The singleton SQLite profile must sustain 10 active runs with at most 2 concurrent analysis jobs and 20 online runners, with bounded queue/storage and no corrupted transitions. | 30-minute capacity/saturation run with resource and error report |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.6: Uploaded Artifact Preflight and Report Linkage
+
+As a reviewer,
+I want to start a scoped preflight from supported uploaded artifacts,
+So that I receive the same evidence-backed report as other analysis surfaces.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-6-uploaded-artifact-preflight-and-report-linkage.md](../implementation-artifacts/16-6-uploaded-artifact-preflight-and-report-linkage.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.5. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** supported synthetic artifact creates an immutable linked report; intake/security/Evidence Law hold; partial/failed analysis does not produce approval eligibility.
+2. **Given unsupported, sensitive, partial or failed mandatory artifacts, when intake/analysis runs, then visible limitations or denial are recorded and approval eligibility is not created.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Slice acceptance boundary:** Use authenticated synthetic provenance envelopes for storage/intake contracts; actual OpenTofu/Terraform collection and custody integrity are qualified in 16.14. No synthetic envelope is labeled independently trusted collection.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-007 | Protect automation-linked report, policy, settings and artifact paths against bypass through legacy caller-controlled scope or role inputs. | Legacy-route and linked-object bypass regression tests |
+| IAU15-FR-023 | Allow runner-less upload of currently supported artifact formats through existing scoped intake protections. | Uploaded-artifact vertical slice and size/type/traversal tests |
+| IAU15-FR-024 | Screen inputs, metadata, streamed logs, errors and artifacts before persistence or analysis; reject state/credential/key/binary-plan uploads and inline secret-looking values. | Secret corpus including chunk boundaries and blocked-file tests |
+| IAU15-FR-025 | Record authenticated collection provenance with runner/task attempt, command/argv digest, source SHA, exit code, time, raw-local digest, sanitized digest and redaction version; recompute received digests. | Tampered digest, stale attempt and redaction-provenance tests |
+| IAU15-FR-026 | Invoke the existing shared analysis core without duplicating risk logic; provenance alone cannot turn inferred output into deterministic evidence. | Cross-surface report parity and Evidence Law fixtures |
+| IAU15-FR-027 | Link runs to immutable reports through a compatible versioned optional provenance contract; retain permanent report URLs and existing report consumers. | Serializer/constructor/legacy-consumer contract tests |
+| IAU15-FR-028 | Expose missing/partial/stale collection as confidence limitations and context TODOs; failed or incomplete mandatory collection cannot make approval eligible. | Partial/error/stale collection eligibility tests |
+| IAU15-FR-029 | Keep deterministic automation usable with AI disabled or narrative failure, and preserve existing structured-summary/local-only provider boundaries without new AI composition. | AI-off and narrative-failure vertical slice |
+| IAU15-NFR-003 | The versioned sensitive-data corpus must yield zero known secret patterns in stored artifacts/logs/metadata/errors/audit or transmitted narrative summaries; no universal-redaction claim follows. | Stored/output corpus scans including chunk boundaries |
+| IAU15-NFR-004 | Automation-originated fixture reports must produce zero Evidence Law violations and preserve deterministic/inferred labels and advisory report semantics. | Evidence Law and cross-surface contract CI results |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.7: Workflow Editor and Run History UI
+
+As a workflow author,
+I want to create a validated workflow and inspect runs in the React app,
+So that I can understand the real state and open its permanent briefing.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-7-workflow-editor-and-run-history-ui.md](../implementation-artifacts/16-7-workflow-editor-and-run-history-ui.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.4, 16.6. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** template → validated draft → publish → uploaded run → briefing on composed app; keyboard/a11y/error/disabled states; no hard-coded metrics or Dashboard budget changes.
+2. **Given disabled, denied, empty, loading or failed states, when the user opens a screen, then actual state and permitted next action are accessible without demo data or consequential stale controls.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Explicit derived UX ownership:** Browser identity-entry ownership is Packet 5 in the dedicated context: sign-in/logout/expired-session and recovery guidance use earlier 16.1/16.2 APIs. No production bootstrap secrets, new identity provider or future approval handler is required.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-027 | Link runs to immutable reports through a compatible versioned optional provenance contract; retain permanent report URLs and existing report consumers. | Serializer/constructor/legacy-consumer contract tests |
+| IAU15-FR-052 | Provide sanctioned React navigation, validated templates/YAML draft/publish controls and scoped workflow/run lists using actual APIs and existing design primitives without changing Dashboard information budget. | Compose-built workflow creation and scoped-list keyboard/a11y E2E |
+| IAU15-FR-053 | Show immutable run timeline, screened logs, artifact digests, linked briefing, uncertainty and permanent report provenance links with loading/empty/error/disabled/degraded states. | Compose-built run/history/report states and real-data E2E |
+| IAU15-NFR-009 | All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots. | Compose production build, Playwright/axe/keyboard results and screenshots |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.8: Evidence Bound Decisions and Freshness
+
+As a reviewer,
+I want to decide only against the current immutable evidence and policy packet,
+So that stale or unrelated approval cannot authorize an action.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-8-evidence-bound-decisions-and-freshness.md](../implementation-artifacts/16-8-evidence-bound-decisions-and-freshness.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.2, 16.6. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** exact decision tuple and policy version persisted; expiry/change/supersession/role revocation invalidate eligibility; wrong-branch and failed-gate approval rejected.
+2. **Given mutated source/evidence/policy or expired deadlines, when decision eligibility is evaluated, then it is invalidated and recollection/reanalysis/reapproval is required.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Slice acceptance boundary:** Use scoped seeded target/custody bindings to prove decision matching and freshness; production registry/grants/receiver integration is owned by 16.10/16.11. Ineligible or unavailable targets remain blocked.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-013 | Require every executable path to a handoff to pass its mandatory successful evidence analysis, policy gate and matching approval; skipped/failed or unrelated ancestors do not qualify. | Wrong-branch, skipped-ancestor and alternate-path tests |
+| IAU15-FR-028 | Expose missing/partial/stale collection as confidence limitations and context TODOs; failed or incomplete mandatory collection cannot make approval eligible. | Partial/error/stale collection eligibility tests |
+| IAU15-FR-030 | Pause for a human decision durably with a finite deadline and never auto-approve on restart, expiry or missing reviewer. | Restart/expiry/missing-reviewer decision tests |
+| IAU15-FR-031 | Bind approval to authorization kind, revision, source identity and required exact-plan commit, project/workspace/environment, reports, artifact and unit-plan digests, policy version, exact target and payload digest. | Independent mutation of every decision-tuple field |
+| IAU15-FR-032 | Enforce evidence freshness at decision, dispatch and receiver consumption; default collection TTL is 60 minutes unless an audited stricter policy applies. | Clock/TTL boundary and delayed-consume tests |
+| IAU15-FR-033 | Evaluate explicit workflow policy separately from advisory report semantics, preserving canonical should_block=False and using existing policy-adapter field meanings where compatible. | Gate decision versus advisory report contract tests |
+| IAU15-FR-035 | Invalidate eligibility when evidence, revision, source, scope, target, policy, membership or custody changes, expires or is superseded; no emergency bypass or delegated approval in P0. | Revocation/supersession/custody-loss and bypass-denial matrix |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.9: Human Approval Inbox and Decision UX
+
+As a human approver,
+I want to review the exact target and evidence in an accessible decision inbox,
+So that my approval or rejection is deliberate and durably recorded.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-9-human-approval-inbox-and-decision-ux.md](../implementation-artifacts/16-9-human-approval-inbox-and-decision-ux.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.7, 16.8. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** exact target/evidence/expiry shown; approve/reject with enforced permission/reason; separation of duties or honest acknowledgement label; keyboard-only decision E2E.
+2. **Given a requester self-approval, nonhuman principal or stale packet, when a decision is submitted, then the server rejects it; a lost response reloads the durable receipt before resubmission.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Slice acceptance boundary:** Use the existing decision API with seeded typed targets; actual remote dispatch is not required for the approval UX slice and cannot be enabled without 16.10/16.11.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-008 | Enforce distinct requester/approver identities in shared mode; label authenticated single-operator decisions as acknowledgement with no separation-of-duties claim. | Self-approval denial and acknowledgement-mode E2E |
+| IAU15-FR-034 | Require an explicit authenticated approve/reject decision and reason when the canonical recommendation is `no-go`, severity is high/critical or the separate typed `insufficient_context` flag is true, with typed confirmation for high/critical. | Reason/confirmation API denial and keyboard decision E2E |
+| IAU15-FR-054 | Provide a scoped approval inbox and keyboard-operable decision screen showing exact evidence, target/payload, freshness, policy, confidence, blast radius and rollback context with acknowledgement labeling. | Compose-built approve/reject/self-approval/freshness E2E |
+| IAU15-FR-059 | Record append-only application audit events with verified principal/type, role, scope, target, reason, time and before/after digests; expose scoped UI/JSON export without raw artifacts/secrets and document DB-admin trust limits. | Audit event coverage/export authorization and secret corpus |
+| IAU15-NFR-009 | All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots. | Compose production build, Playwright/axe/keyboard results and screenshots |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.10: Registered Targets, Outbox, Grants and Locks
+
+As a platform administrator,
+I want to register exact targets and retain a durable locked handoff intent,
+So that destination changes, replay and uncertain work cannot silently release another action.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-10-registered-targets-outbox-grants-and-locks.md](../implementation-artifacts/16-10-registered-targets-outbox-grants-and-locks.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.8. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** atomic authorization and intent; DNS/redirect/metadata SSRF corpus; payload tamper/replay rejected; lock aliases and uncertain remote work fail safely; disable/revoke/restore prevents outstanding grant dispatch/consumption.
+2. **Given payload tamper, replay, alias collision, disable, revocation or uncertain external work, when dispatch/consumption/unlock is attempted, then it fails safely and the operation remains auditable.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-017 | Disable, revoke or restore epoch changes must invalidate unconsumed grants and prevent new run starts, collection claims, dispatch or grant consumption while preserving read and reconciliation for accepted external work. | Disable/revoke/restore-before-dispatch-or-consume race matrix |
+| IAU15-FR-031 | Bind approval to authorization kind, revision, source identity and required exact-plan commit, project/workspace/environment, reports, artifact and unit-plan digests, policy version, exact target and payload digest. | Independent mutation of every decision-tuple field |
+| IAU15-FR-035 | Invalidate eligibility when evidence, revision, source, scope, target, policy, membership or custody changes, expires or is superseded; no emergency bypass or delegated approval in P0. | Revocation/supersession/custody-loss and bypass-denial matrix |
+| IAU15-FR-036 | Register outbound GitHub destinations with administrator-controlled host policy; revalidate DNS/connection addresses and redirects, blocking metadata/loopback/private targets except explicit audited internal-host exceptions. | IPv4/IPv6/DNS/redirect SSRF corpus |
+| IAU15-FR-037 | Atomically persist the approved outbound intent and exact payload before network effects, with a stable receiver operation identity. | Transaction/crash-before-send and payload-tamper tests |
+| IAU15-FR-038 | Issue one-use scoped receiver grants bound to the decision tuple, operation, expiry and live epoch; reject duplicate/replayed or altered consumption. | Grant replay/expiry/epoch/source/digest tests |
+| IAU15-FR-042 | Canonicalize target lock identities across aliases and retain locks during unknown external work until verified resolution or an audited operator break that does not mint a new authorization. | Alias collision/lock expiry/unknown-work/break tests |
+| IAU15-NFR-001 | The declared crash/race corpus must lose no committed run/decision state and produce no unauthorized or duplicate receiver action, including stale attempts, unknown delivery and restore epochs. | Published fault-injection results at every persisted boundary |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.11: GitHub Receiver and Outcome Reconciliation
+
+As a operator,
+I want to hand an approved plan to the qualified GitHub receiver and reconcile its outcome,
+So that remote acceptance is not mistaken for a completed deployment or blindly retried.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-11-github-receiver-and-outcome-reconciliation.md](../implementation-artifacts/16-11-github-receiver-and-outcome-reconciliation.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.9, 16.10. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** protected self-hosted consumer accesses and verifies seeded exact saved-plan bytes in this slice; durable consume/operation record survives consume-before-action crash; dropped-response recovery avoids duplicate action; run-ID/callback/source/disable checks; no dispatch-success-as-deploy-success claim.
+2. **Given consume-before-action crash, dropped response, duplicate callback or changed plan, when delivery resumes, then the same operation is reconciled without a blind second execution or replacement grant.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Slice acceptance boundary:** Use seeded immutable synthetic plan bytes in a protected custody fixture to prove receiver admission/digest checks and consume-before-action crash recovery. This slice does not depend on the future 16.14 collector. Real collected-plan and custody integration is required in 16.14 and final 16.19 qualification.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-017 | Disable, revoke or restore epoch changes must invalidate unconsumed grants and prevent new run starts, collection claims, dispatch or grant consumption while preserving read and reconciliation for accepted external work. | Disable/revoke/restore-before-dispatch-or-consume race matrix |
+| IAU15-FR-018 | Persist run/step transitions and explicit `stopped_by_gate`, `expired`, `timed_out`, `cancelled`, `failed`, `succeeded` and `delivery_unknown` outcomes across restart. | Crash at each transition with state recovery assertions |
+| IAU15-FR-020 | Retry only declared safe/idempotent local work within finite deadlines; persist idempotent outputs and reconcile uncertain external work instead of blind resend. | Retry/deadline/duplicate-completion and dropped-response tests |
+| IAU15-FR-032 | Enforce evidence freshness at decision, dispatch and receiver consumption; default collection TTL is 60 minutes unless an audited stricter policy applies. | Clock/TTL boundary and delayed-consume tests |
+| IAU15-FR-035 | Invalidate eligibility when evidence, revision, source, scope, target, policy, membership or custody changes, expires or is superseded; no emergency bypass or delegated approval in P0. | Revocation/supersession/custody-loss and bypass-denial matrix |
+| IAU15-FR-038 | Issue one-use scoped receiver grants bound to the decision tuple, operation, expiry and live epoch; reject duplicate/replayed or altered consumption. | Grant replay/expiry/epoch/source/digest tests |
+| IAU15-FR-039 | Consume grants into a durable receiver operation record before external action so a consume-before-action crash resumes the same operation without a second action. | Receiver crash at consume/start/completion boundaries |
+| IAU15-FR-040 | Distinguish dispatch acceptance, externally observed completion and delivery_unknown; reconcile unknown outcomes through receiver receipts and never report dispatch acceptance as successful deployment. | Lost-response/poll/receipt fault matrix and UI semantic tests |
+| IAU15-FR-041 | Authorize exact-plan handoff only when the qualified self-hosted receiver can verify the original immutable saved-plan bytes in protected local custody by opaque handle, raw digest and expiry; no server/public-artifact plan storage, and replanning requires fresh evidence/approval. Upload-only advisory receipts never authorize apply or require invented repository provenance. | Real custody access/restart/overwrite/symlink/expiry/replan spike and receiver tests |
+| IAU15-FR-043 | Verify receiver callback signatures, operation/run/source identity and replay protection using the pinned GitHub adapter version and protected branch/tag dispatch ref. | API-version, callback replay and mutable-ref substitution contract tests |
+| IAU15-NFR-001 | The declared crash/race corpus must lose no committed run/decision state and produce no unauthorized or duplicate receiver action, including stale attempts, unknown delivery and restore epochs. | Published fault-injection results at every persisted boundary |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.12: Runner Enrollment and Attempt Protocol
+
+As a runner operator,
+I want to enroll and revoke an attempt-scoped collection agent,
+So that only the current authorized agent can act on its task.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-12-runner-enrollment-and-attempt-protocol.md](../implementation-artifacts/16-12-runner-enrollment-and-attempt-protocol.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.2, 16.5. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** enrollment tokens single use; rotation/revocation; HTTPS/version compatibility; wrong runner/project/expired attempt cannot claim or complete.
+2. **Given a replayed enrollment token, incompatible protocol, wrong project/runner or expired task attempt, when claim/heartbeat/upload/complete is requested, then it is denied and cannot advance current work.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-019 | Fence leader/task attempts so only the current owner may heartbeat, log, upload or complete a task. | Overlapping leader and stale-attempt rejection tests |
+| IAU15-FR-044 | Enroll runners using one-use tokens and project-scoped expiring credentials with rotation/revocation and outbound HTTPS protocol-version negotiation. | Enrollment replay/rotation/revocation/TLS/version tests |
+| IAU15-FR-045 | Bind every task claim, heartbeat, log, upload and completion to the authorized runner, project, current attempt and live lease. | Wrong-runner/project/expired-lease matrix |
+| IAU15-FR-046 | Route collection to eligible runner tags with no silent fallback; fail clearly when none qualify or enforce an explicit finite wait, and expose last-seen/version/task health. | No-runner/tag-mismatch/wait-timeout and health tests |
+| IAU15-FR-059 | Record append-only application audit events with verified principal/type, role, scope, target, reason, time and before/after digests; expose scoped UI/JSON export without raw artifacts/secrets and document DB-admin trust limits. | Audit event coverage/export authorization and secret corpus |
+| IAU15-NFR-002 | The declared principal × role × project/workspace × object/action matrix must produce zero cross-scope reads or unauthorized mutations. | Published complete authorization matrix results |
+| IAU15-NFR-006 | Enqueue-to-claim latency must have p95 <2 seconds with 20 online compatible runners under the reference workload. | Timestamped 1,000-claim runner benchmark |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.13: Isolated Runner Execution Profile
+
+As a runner operator,
+I want to collect in a qualified isolated trusted-source execution profile,
+So that repository/provider code is constrained at the actual execution boundary.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-13-isolated-runner-execution-profile.md](../implementation-artifacts/16-13-isolated-runner-execution-profile.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.12. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** canonical checkout containment, protected catalog/tool allow-list, credential/egress isolation, output caps and whole-process-tree termination; no app Docker socket or arbitrary commands.
+2. **Given path traversal, symlink escape, hostile tool/provider code, unexpected credentials or untrusted source, when collection is requested, then the qualified profile denies/contains it and protects the host boundary.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-021 | Record cancellation durably and terminate the owned runner process tree; explain that cancellation cannot undo accepted external work. | Cancellation/dispatch races and process-tree termination tests |
+| IAU15-FR-047 | Collect only from admitted trusted immutable sources in disposable isolated workspaces with canonical-root/symlink containment and controlled tool/provider installation; reject untrusted PR sources and inherited Git/hooks/config. | Hostile checkout/provider/config and isolation spike |
+| IAU15-FR-048 | Execute only operator-protected fixed catalog commands with validated parameters; reject arbitrary shell, server-defined commands and app Docker-socket access. | Catalog tampering/option injection/arbitrary-command denial tests |
+| IAU15-FR-050 | Resolve infrastructure credentials only in the operator-owned runner/receiver execution identities under an environment allow-list and least privilege; never send or persist their values in DeployWhisper. | Credential inheritance/transport/persistence corpus and separated-identity spike |
+| IAU15-FR-051 | Enforce task CPU/time/disk/output/egress caps and atomic bounded uploads with cleanup after failure; cancellation must terminate the entire owned process tree. | Limit, partial-upload, disk-full, egress and descendant-process tests |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.14: OpenTofu/Terraform Collection and Provenance
+
+As a reviewer,
+I want to receive screened plan evidence tied to the exact protected local saved plan,
+So that the external pipeline can verify the approved bytes without exposing secrets.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-14-opentofu-terraform-collection-and-provenance.md](../implementation-artifacts/16-14-opentofu-terraform-collection-and-provenance.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.6, 16.11, 16.13; 12.5 before runner distribution. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** real supported tool smoke plus hostile/sensitive fixtures; exit 0/2/error meanings; untrusted sources denied; raw-local/sanitized digests and custody handle verified; receiver verifies exact locally retained binary plan; no state/binary-plan upload to DeployWhisper.
+2. **Given exit-code error, sensitive values, tampered hashes, stale custody or attempted binary-plan/state upload, when collection is ingested or verified, then it is rejected or explicitly limited without exact-plan authorization.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-024 | Screen inputs, metadata, streamed logs, errors and artifacts before persistence or analysis; reject state/credential/key/binary-plan uploads and inline secret-looking values. | Secret corpus including chunk boundaries and blocked-file tests |
+| IAU15-FR-025 | Record authenticated collection provenance with runner/task attempt, command/argv digest, source SHA, exit code, time, raw-local digest, sanitized digest and redaction version; recompute received digests. | Tampered digest, stale attempt and redaction-provenance tests |
+| IAU15-FR-026 | Invoke the existing shared analysis core without duplicating risk logic; provenance alone cannot turn inferred output into deterministic evidence. | Cross-surface report parity and Evidence Law fixtures |
+| IAU15-FR-028 | Expose missing/partial/stale collection as confidence limitations and context TODOs; failed or incomplete mandatory collection cannot make approval eligible. | Partial/error/stale collection eligibility tests |
+| IAU15-FR-041 | Authorize exact-plan handoff only when the qualified self-hosted receiver can verify the original immutable saved-plan bytes in protected local custody by opaque handle, raw digest and expiry; no server/public-artifact plan storage, and replanning requires fresh evidence/approval. Upload-only advisory receipts never authorize apply or require invented repository provenance. | Real custody access/restart/overwrite/symlink/expiry/replan spike and receiver tests |
+| IAU15-FR-049 | Qualify OpenTofu/Terraform plan and JSON extraction for declared pinned versions, distinguishing exit 0/no-change, 2/change and error; retain the sensitive binary plan locally and transport screened JSON only. | Real-tool compatibility smoke and hostile/sensitive plan fixtures |
+| IAU15-FR-050 | Resolve infrastructure credentials only in the operator-owned runner/receiver execution identities under an environment allow-list and least privilege; never send or persist their values in DeployWhisper. | Credential inheritance/transport/persistence corpus and separated-identity spike |
+| IAU15-FR-051 | Enforce task CPU/time/disk/output/egress caps and atomic bounded uploads with cleanup after failure; cancellation must terminate the entire owned process tree. | Limit, partial-upload, disk-full, egress and descendant-process tests |
+| IAU15-NFR-003 | The versioned sensitive-data corpus must yield zero known secret patterns in stored artifacts/logs/metadata/errors/audit or transmitted narrative summaries; no universal-redaction claim follows. | Stored/output corpus scans including chunk boundaries |
+| IAU15-NFR-004 | Automation-originated fixture reports must produce zero Evidence Law violations and preserve deterministic/inferred labels and advisory report semantics. | Evidence Law and cross-surface contract CI results |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.15: Runner Health and Collection UX
+
+As a operator,
+I want to inspect runner health, collection state and bounded redacted logs,
+So that I can recover from unavailable, expired or cancelled collection without guessing.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-15-runner-health-and-collection-ux.md](../implementation-artifacts/16-15-runner-health-and-collection-ux.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.7, 16.14. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** online/stale/offline states, bounded logs and clear unsupported/cancel/lease-failure messages; composed run-to-report flow with a real isolated runner.
+2. **Given stale/offline runner, log truncation, lease loss or cancellation after handoff, when the timeline refreshes, then the UI shows the real limitation and never claims remote execution stopped.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-021 | Record cancellation durably and terminate the owned runner process tree; explain that cancellation cannot undo accepted external work. | Cancellation/dispatch races and process-tree termination tests |
+| IAU15-FR-046 | Route collection to eligible runner tags with no silent fallback; fail clearly when none qualify or enforce an explicit finite wait, and expose last-seen/version/task health. | No-runner/tag-mismatch/wait-timeout and health tests |
+| IAU15-FR-055 | Expose runner health, collection/cancel progress and unknown/reconciliation state with advisory copy that never claims Tier 0/1 deploys infrastructure. | Real-runner composed E2E and unknown-state copy checks |
+| IAU15-NFR-009 | All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots. | Compose production build, Playwright/axe/keyboard results and screenshots |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.16: Declared Multi Unit Preflight Planning
+
+As a platform engineer,
+I want to confirm explicit unit dependencies and deterministic preflight waves,
+So that I can review combined evidence without confusing collection with provisioning.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-16-declared-multi-unit-preflight-planning.md](../implementation-artifacts/16-16-declared-multi-unit-preflight-planning.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.3, 16.10, 16.14. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** confirmed unit set/dependencies, deterministic waves and plan digest; cycles/unknown identities rejected; impacted/prerequisite scope explicit; collection order is not deployment-order completion.
+2. **Given a cycle, unresolved target, changed map or downstream infrastructure change, when a plan is built/used, then invalid scope is rejected and new downstream plans require fresh evidence/decision.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-042 | Canonicalize target lock identities across aliases and retain locks during unknown external work until verified resolution or an audited operator break that does not mint a new authorization. | Alias collision/lock expiry/unknown-work/break tests |
+| IAU15-FR-056 | Accept only human-declared unit inventory and dependencies; validate exact unit coverage/cycles/unknown identities, persist deterministic preflight waves and combined evidence digest, and show accessible scope/lock tables without claiming deployment ordering. | Multi-unit exact-cover/cycle/digest tests and accessible table E2E |
+| IAU15-NFR-009 | All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots. | Compose production build, Playwright/axe/keyboard results and screenshots |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.17: Signed Trigger Intake and CLI
+
+As a CI or CLI operator,
+I want to request scoped runs through signed typed intake,
+So that automation starts remain replay-resistant and cannot become human approval.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-17-signed-trigger-intake-and-cli.md](../implementation-artifacts/16-17-signed-trigger-intake-and-cli.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** 16.4, 16.11, 16.15. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** replay-resistant signed requests, quotas/idempotency, typed scope/input validation; CLI uses the same API authority; manual/webhook/PR-origin records and denied agent approval tested.
+2. **Given forged/replayed signed intake, changed idempotent payload or service/agent approval request, when the API/CLI calls it, then bounded denial/conflict occurs with no human authority minted.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-005 | Distinguish human, service, agent and runner credentials; nonhuman credentials cannot obtain human sessions, publish workflows or decide approvals. | Principal-type privilege matrix |
+| IAU15-FR-057 | Start scoped runs manually or through signed timestamped replay-resistant webhook intake with typed inputs, idempotency, source pinning and bounded errors/quotas; record trigger origin and principal. | Raw-byte HMAC/replay/idempotency/invalid-input/source tests |
+| IAU15-FR-058 | Expose versioned automation API and CLI validation/run/status/list/decision commands over the same authority, envelopes and generated SPA types; agent read/request mode cannot decide or publish. | API/CLI/OpenAPI parity and nonhuman-mutation denial tests |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.18: Operator Recovery, Retention and Network Readiness
+
+As a self-hosted operator,
+I want to upgrade, back up, restore and run within documented network and retention limits,
+So that old authorizations cannot revive and uncertainty remains recoverable.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-18-operator-recovery-retention-and-network-readiness.md](../implementation-artifacts/16-18-operator-recovery-retention-and-network-readiness.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** Incremental from 16.5; final after 16.16/16.17. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** backup/restore/upgrade/reconciliation exercise; offline tool/cache setup; receiver configuration, credential rotation, incident procedure and size/concurrency results; relevant 12.7/12.8 coverage explicit.
+2. **Given restore, content expiry, network restriction or storage exhaustion, when operation resumes, then grants/leases remain invalidated until reconciliation and missing evidence cannot authorize another action.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Explicit derived UX ownership:** Integrated operator `/settings` controls are owned by Packet 18.6 in the dedicated context using earlier 16.4/16.10 APIs; admin enablement/target/quotas/retention/TTL validation, denial/disable/reconciliation and composed browser proof are explicit.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-FR-003 | Bootstrap the first local operator through an operator-held one-use setup credential with no default account/password; provide a documented secured account-recovery procedure. | Bootstrap replay/default-credential tests and recovery exercise |
+| IAU15-FR-017 | Disable, revoke or restore epoch changes must invalidate unconsumed grants and prevent new run starts, collection claims, dispatch or grant consumption while preserving read and reconciliation for accepted external work. | Disable/revoke/restore-before-dispatch-or-consume race matrix |
+| IAU15-FR-022 | Bound per-workflow/project concurrency, backlog, analysis workers and storage usage with explicit quota/backpressure errors. | Saturation, queue-cap and storage-exhaustion tests |
+| IAU15-FR-059 | Record append-only application audit events with verified principal/type, role, scope, target, reason, time and before/after digests; expose scoped UI/JSON export without raw artifacts/secrets and document DB-admin trust limits. | Audit event coverage/export authorization and secret corpus |
+| IAU15-FR-060 | Let authorized operators configure feature enablement, targets, quotas, retention, TTL and credential lifetimes; reject unsafe reductions, protect pending evidence or invalidate its decision before deletion, and audit each change. | Configuration permissions, pending-retention and floor-change tests |
+| IAU15-NFR-007 | The singleton SQLite profile must sustain 10 active runs with at most 2 concurrent analysis jobs and 20 online runners, with bounded queue/storage and no corrupted transitions. | 30-minute capacity/saturation run with resource and error report |
+| IAU15-NFR-010 | Upgrade from a v1.4.0 database copy, interrupted upgrade, coordinated DB/artifact backup/restore, token rotation and restricted-network recovery must preserve auditable state while invalidating outstanding authorization/leases until reconciled. | Recorded upgrade/restore/rotation/offline exercises |
+| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks. | Docs CI and operator self-service installation/recovery pilot |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
+### Story 16.19: Production Qualification and v1.5.0 Release
+
+As a maintainer,
+I want to qualify and publish the complete supported v1.5.0 profile,
+So that operators receive honest safety, compatibility and release-integrity evidence.
+
+**Status:** backlog (refined context; execution gates unmet).
+
+**Dedicated context:** [16-19-production-qualification-and-v1-5-0-release.md](../implementation-artifacts/16-19-production-qualification-and-v1-5-0-release.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+
+**Dependencies:** All P0 stories; 12.5; applicable 12.7/12.8 acceptance. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
+
+**Acceptance Criteria:**
+
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** full CI/security/contract/fault/E2E/a11y gates; supported-profile pilot; signed app/runner artifacts and SBOM; upgrade evidence; no unresolved introduced critical/high defect.
+2. **Given an unmet mandatory profile/recovery/security/operations gate or introduced critical/high defect, when release publication is considered, then release stays blocked and the limitation is reported honestly.**
+3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| IAU15-NFR-001 | The declared crash/race corpus must lose no committed run/decision state and produce no unauthorized or duplicate receiver action, including stale attempts, unknown delivery and restore epochs. | Published fault-injection results at every persisted boundary |
+| IAU15-NFR-002 | The declared principal × role × project/workspace × object/action matrix must produce zero cross-scope reads or unauthorized mutations. | Published complete authorization matrix results |
+| IAU15-NFR-003 | The versioned sensitive-data corpus must yield zero known secret patterns in stored artifacts/logs/metadata/errors/audit or transmitted narrative summaries; no universal-redaction claim follows. | Stored/output corpus scans including chunk boundaries |
+| IAU15-NFR-004 | Automation-originated fixture reports must produce zero Evidence Law violations and preserve deterministic/inferred labels and advisory report semantics. | Evidence Law and cross-surface contract CI results |
+| IAU15-NFR-005 | Ready-step server orchestration overhead must have p95 <1 second, excluding collection/network/analysis duration, under the reproducible reference workload. | Timestamped 1,000-transition overhead benchmark |
+| IAU15-NFR-006 | Enqueue-to-claim latency must have p95 <2 seconds with 20 online compatible runners under the reference workload. | Timestamped 1,000-claim runner benchmark |
+| IAU15-NFR-007 | The singleton SQLite profile must sustain 10 active runs with at most 2 concurrent analysis jobs and 20 online runners, with bounded queue/storage and no corrupted transitions. | 30-minute capacity/saturation run with resource and error report |
+| IAU15-NFR-008 | Workflow validation must have p95 <500 milliseconds for the declared 50-step workflow corpus under the reference workload. | 1,000-validation timing/correctness benchmark |
+| IAU15-NFR-009 | All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots. | Compose production build, Playwright/axe/keyboard results and screenshots |
+| IAU15-NFR-010 | Upgrade from a v1.4.0 database copy, interrupted upgrade, coordinated DB/artifact backup/restore, token rotation and restricted-network recovery must preserve auditable state while invalidating outstanding authorization/leases until reconciled. | Recorded upgrade/restore/rotation/offline exercises |
+| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks. | Docs CI and operator self-service installation/recovery pilot |
+| IAU15-NFR-012 | Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile pilot with no unresolved introduced critical/high defect. | Signed release manifest, CI/security/review/pilot evidence |
+
+Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
+
 ## Final Validation Notes
 
 - All finalized PRD requirement families are represented in the Requirements Inventory.
 - Every functional requirement family maps to at least one epic.
 - Cross-cutting NFRs are assigned to the epics where they are enforced.
 - Stories are sequenced so each story depends only on prior baseline capabilities or earlier stories in the same epic.
-- Existing story files should be reconciled against this plan before sprint planning resumes.
-- Next recommended workflow: `bmad-check-implementation-readiness`.
+- Current execution metadata was reconciled on 2026-10-07, including the previously omitted Epic 15 migration track.
+- Next planning task: prepare Story 16.0 and public RFC review; implementation readiness must close before feature coding. Story 12.5 is the parallel release enabler; resolve relevant Epic 15 parity acceptance separately.
+
+## v1.5.0 Dedicated Story Preparation — 2026-10-07
+
+The owner requested refinement of all readiness work and preparation of Story 16.0. [The complete context index](../implementation-artifacts/epic-16-story-preparation-report.md) now links all 20 files. IR-04 document refinement is complete; real spike-based sizing and named implementer assignment remain execution obligations. Story 16.0 alone is ready to begin governance/disposable qualification. 16.1–16.19 remain backlog. Public RFC acceptance, actual feasibility results and frozen contracts remain open; no production readiness or completed story is claimed.

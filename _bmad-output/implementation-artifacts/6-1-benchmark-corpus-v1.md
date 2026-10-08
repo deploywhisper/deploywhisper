@@ -1,6 +1,6 @@
 # Story 6.1: Benchmark Corpus v1
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -157,3 +157,7 @@ GPT-5.4 Codex
 - 2026-06-01: Implemented public benchmark corpus v1, deterministic corpus validation, CLI validation command, docs, and regression coverage.
 - 2026-06-01: Fixed review findings for nested unsafe/non-public scenario text scanning and whitespace-only nested metadata validation.
 - 2026-06-01: Fixed review finding for expected evidence selectors that were not verified against referenced artifacts.
+
+## Course Correction — 2026-10-07
+
+Status reconciled to `done` against merged delivery [PR #79](https://github.com/deploywhisper/deploywhisper/pull/79), the completed task/review-fix records above, and the accepted v1.4.0 baseline in `docs/verification/v1.4.0-release.json`. This is administrative closeout of existing delivery, not a claim that a new implementation review or application test run occurred today. Historical review attempts remain intact. See `../planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md`.

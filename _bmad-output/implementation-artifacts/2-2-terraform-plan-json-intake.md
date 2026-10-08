@@ -1,6 +1,6 @@
 # Story 2.2: Terraform Plan JSON Intake
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -282,3 +282,7 @@ GPT-5 Codex
 - 2026-05-08: Re-ran code review and moved story back to in-progress for unresolved explicit empty-evidence scoring and malformed Terraform plan JSON root parser-error findings.
 - 2026-05-08: Fixed latest explicit empty-evidence scoring and malformed Terraform plan root parser-error review findings; moved story back to review.
 - 2026-05-08: Re-ran code review and moved story back to in-progress for unresolved mixed-plan metadata persistence, generated-config reporting, security validation evidence, and story file-list reconciliation findings.
+
+## Course Correction — 2026-10-07
+
+Status reconciled to `done` against merged delivery [PR #49](https://github.com/deploywhisper/deploywhisper/pull/49), the completed task/review-fix records above, and the accepted v1.4.0 baseline in `docs/verification/v1.4.0-release.json`. This is administrative closeout of existing delivery, not a claim that a new implementation review or application test run occurred today. Historical review attempts remain intact. See `../planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md`.

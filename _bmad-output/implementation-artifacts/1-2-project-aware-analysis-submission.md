@@ -1,6 +1,6 @@
 # Story 1.2: Project-Aware Analysis Submission
 
-Status: review
+Status: done
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -275,3 +275,7 @@ GPT-5
 - 2026-05-05: Re-ran code review; unresolved GitHub project-scope fast-fail and repository collision findings moved story back to in-progress.
 - 2026-05-05: Fixed latest reviewer findings for manual repository-key collisions, explicit GitHub scope fast-fail ordering, and non-project analysis ValueError handling; moved story back to review.
 - 2026-05-06: Fixed latest reviewer finding for SCM host-aware repository identity; moved story back to review.
+
+## Course Correction — 2026-10-07
+
+Status reconciled to `done` against merged delivery [PR #42](https://github.com/deploywhisper/deploywhisper/pull/42), the completed task/review-fix records above, and the accepted v1.4.0 baseline in `docs/verification/v1.4.0-release.json`. This is administrative closeout of existing delivery, not a claim that a new implementation review or application test run occurred today. Historical review attempts remain intact. See `../planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md`.

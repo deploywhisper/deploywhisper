@@ -1,0 +1,3115 @@
+{
+  "schema_version": 1,
+  "status": "adopted-for-planning-not-implemented",
+  "release": "v1.5.0",
+  "source_document": "docs/deploywhisper-infra-automation-prd.md",
+  "source_sha256": "4a6d15bb278c54fcd75dd7dec9605291e4c9ca4f387585dcc988b2ea7c85b0c7",
+  "canonical_document": "_bmad-output/planning-artifacts/prd-infra-automation.md",
+  "active_requirements": [
+    {
+      "id": "IAU15-FR-001",
+      "group": "Scope and identity",
+      "text": "Support only Tier 0 preflight and Tier 1 human-approved external handoff in v1.5.0; reject apply/destroy, remediation, unattended approvals and unsupported execution profiles.",
+      "stories": [
+        "16.0",
+        "16.3"
+      ],
+      "proof": "Scope/RFC review and unsupported-mode rejection corpus"
+    },
+    {
+      "id": "IAU15-FR-002",
+      "group": "Scope and identity",
+      "text": "Resolve each human decision from a verified human principal; caller actor/role headers cannot establish identity.",
+      "stories": [
+        "16.1",
+        "16.2"
+      ],
+      "proof": "Authenticated-session and malicious-header tests"
+    },
+    {
+      "id": "IAU15-FR-003",
+      "group": "Scope and identity",
+      "text": "Bootstrap the first local operator through an operator-held one-use setup credential with no default account/password; provide a documented secured account-recovery procedure.",
+      "stories": [
+        "16.1",
+        "16.18"
+      ],
+      "proof": "Bootstrap replay/default-credential tests and recovery exercise"
+    },
+    {
+      "id": "IAU15-FR-004",
+      "group": "Scope and identity",
+      "text": "Enforce human session expiry, logout and revocation with protected cookies and CSRF defenses for browser mutations.",
+      "stories": [
+        "16.1"
+      ],
+      "proof": "Session lifecycle, cookie and CSRF test matrix"
+    },
+    {
+      "id": "IAU15-FR-005",
+      "group": "Scope and identity",
+      "text": "Distinguish human, service, agent and runner credentials; nonhuman credentials cannot obtain human sessions, publish workflows or decide approvals.",
+      "stories": [
+        "16.1",
+        "16.2",
+        "16.17"
+      ],
+      "proof": "Principal-type privilege matrix"
+    },
+    {
+      "id": "IAU15-FR-006",
+      "group": "Scope and identity",
+      "text": "Derive project/workspace capabilities from server-owned memberships, denying absent membership and cross-scope access by default.",
+      "stories": [
+        "16.2"
+      ],
+      "proof": "Role × project × workspace authorization matrix"
+    },
+    {
+      "id": "IAU15-FR-007",
+      "group": "Scope and identity",
+      "text": "Protect automation-linked report, policy, settings and artifact paths against bypass through legacy caller-controlled scope or role inputs.",
+      "stories": [
+        "16.2",
+        "16.6"
+      ],
+      "proof": "Legacy-route and linked-object bypass regression tests"
+    },
+    {
+      "id": "IAU15-FR-008",
+      "group": "Scope and identity",
+      "text": "Enforce distinct requester/approver identities in shared mode; label authenticated single-operator decisions as acknowledgement with no separation-of-duties claim.",
+      "stories": [
+        "16.2",
+        "16.9"
+      ],
+      "proof": "Self-approval denial and acknowledgement-mode E2E"
+    },
+    {
+      "id": "IAU15-FR-009",
+      "group": "Workflows and lifecycle",
+      "text": "Publish a versioned workflow schema with typed, bounded inputs and explicit supported step input/output contracts.",
+      "stories": [
+        "16.3"
+      ],
+      "proof": "Schema valid/invalid fixture corpus"
+    },
+    {
+      "id": "IAU15-FR-010",
+      "group": "Workflows and lifecycle",
+      "text": "Validate definitions without side effects using bounded YAML bytes/depth/aliases, duplicate-key rejection and an acyclic graph capped at 50 steps.",
+      "stories": [
+        "16.3"
+      ],
+      "proof": "Parser resource-abuse and cycle/step-limit corpus"
+    },
+    {
+      "id": "IAU15-FR-011",
+      "group": "Workflows and lifecycle",
+      "text": "Accept only the closed P0 registry: supported artifact intake, OpenTofu/Terraform collection, analyze, policy gate, approval and GitHub handoff; reject arbitrary scripts/plugins, loops and generic failure/finally execution.",
+      "stories": [
+        "16.3"
+      ],
+      "proof": "Registry and unsupported-handler denial corpus"
+    },
+    {
+      "id": "IAU15-FR-012",
+      "group": "Workflows and lifecycle",
+      "text": "Resolve only typed substitution references to inputs, declared step outputs and run/project metadata; reject unknown references, functions and code evaluation.",
+      "stories": [
+        "16.3"
+      ],
+      "proof": "Typed-reference and injection fixture corpus"
+    },
+    {
+      "id": "IAU15-FR-013",
+      "group": "Workflows and lifecycle",
+      "text": "Require every executable path to a handoff to pass its mandatory successful evidence analysis, policy gate and matching approval; skipped/failed or unrelated ancestors do not qualify.",
+      "stories": [
+        "16.3",
+        "16.8"
+      ],
+      "proof": "Wrong-branch, skipped-ancestor and alternate-path tests"
+    },
+    {
+      "id": "IAU15-FR-014",
+      "group": "Workflows and lifecycle",
+      "text": "Scope workflow drafts and revisions to one project and optional workspace.",
+      "stories": [
+        "16.4"
+      ],
+      "proof": "Workflow cross-scope CRUD tests"
+    },
+    {
+      "id": "IAU15-FR-015",
+      "group": "Workflows and lifecycle",
+      "text": "Keep published revisions immutable; restore creates a new draft, and drafts cannot execute.",
+      "stories": [
+        "16.4"
+      ],
+      "proof": "Publish/edit/restore/draft-run lifecycle tests"
+    },
+    {
+      "id": "IAU15-FR-016",
+      "group": "Workflows and lifecycle",
+      "text": "Snapshot the published definition, validated inputs, scope and source identity immutably when a run starts; require a repository commit for collected/exact-plan paths and explicitly mark unavailable source for upload-only advisory review.",
+      "stories": [
+        "16.4",
+        "16.5"
+      ],
+      "proof": "Post-start mutation and rerun snapshot tests"
+    },
+    {
+      "id": "IAU15-FR-017",
+      "group": "Workflows and lifecycle",
+      "text": "Disable, revoke or restore epoch changes must invalidate unconsumed grants and prevent new run starts, collection claims, dispatch or grant consumption while preserving read and reconciliation for accepted external work.",
+      "stories": [
+        "16.4",
+        "16.10",
+        "16.11",
+        "16.18"
+      ],
+      "proof": "Disable/revoke/restore-before-dispatch-or-consume race matrix"
+    },
+    {
+      "id": "IAU15-FR-018",
+      "group": "Engine",
+      "text": "Persist run/step transitions and explicit `stopped_by_gate`, `expired`, `timed_out`, `cancelled`, `failed`, `succeeded` and `delivery_unknown` outcomes across restart.",
+      "stories": [
+        "16.5",
+        "16.11"
+      ],
+      "proof": "Crash at each transition with state recovery assertions"
+    },
+    {
+      "id": "IAU15-FR-019",
+      "group": "Engine",
+      "text": "Fence leader/task attempts so only the current owner may heartbeat, log, upload or complete a task.",
+      "stories": [
+        "16.5",
+        "16.12"
+      ],
+      "proof": "Overlapping leader and stale-attempt rejection tests"
+    },
+    {
+      "id": "IAU15-FR-020",
+      "group": "Engine",
+      "text": "Retry only declared safe/idempotent local work within finite deadlines; persist idempotent outputs and reconcile uncertain external work instead of blind resend.",
+      "stories": [
+        "16.5",
+        "16.11"
+      ],
+      "proof": "Retry/deadline/duplicate-completion and dropped-response tests"
+    },
+    {
+      "id": "IAU15-FR-021",
+      "group": "Engine",
+      "text": "Record cancellation durably and terminate the owned runner process tree; explain that cancellation cannot undo accepted external work.",
+      "stories": [
+        "16.5",
+        "16.13",
+        "16.15"
+      ],
+      "proof": "Cancellation/dispatch races and process-tree termination tests"
+    },
+    {
+      "id": "IAU15-FR-022",
+      "group": "Engine",
+      "text": "Bound per-workflow/project concurrency, backlog, analysis workers and storage usage with explicit quota/backpressure errors.",
+      "stories": [
+        "16.5",
+        "16.18"
+      ],
+      "proof": "Saturation, queue-cap and storage-exhaustion tests"
+    },
+    {
+      "id": "IAU15-FR-023",
+      "group": "Evidence and analysis",
+      "text": "Allow runner-less upload of currently supported artifact formats through existing scoped intake protections.",
+      "stories": [
+        "16.6"
+      ],
+      "proof": "Uploaded-artifact vertical slice and size/type/traversal tests"
+    },
+    {
+      "id": "IAU15-FR-024",
+      "group": "Evidence and analysis",
+      "text": "Screen inputs, metadata, streamed logs, errors and artifacts before persistence or analysis; reject state/credential/key/binary-plan uploads and inline secret-looking values.",
+      "stories": [
+        "16.6",
+        "16.14"
+      ],
+      "proof": "Secret corpus including chunk boundaries and blocked-file tests"
+    },
+    {
+      "id": "IAU15-FR-025",
+      "group": "Evidence and analysis",
+      "text": "Record authenticated collection provenance with runner/task attempt, command/argv digest, source SHA, exit code, time, raw-local digest, sanitized digest and redaction version; recompute received digests.",
+      "stories": [
+        "16.6",
+        "16.14"
+      ],
+      "proof": "Tampered digest, stale attempt and redaction-provenance tests"
+    },
+    {
+      "id": "IAU15-FR-026",
+      "group": "Evidence and analysis",
+      "text": "Invoke the existing shared analysis core without duplicating risk logic; provenance alone cannot turn inferred output into deterministic evidence.",
+      "stories": [
+        "16.6",
+        "16.14"
+      ],
+      "proof": "Cross-surface report parity and Evidence Law fixtures"
+    },
+    {
+      "id": "IAU15-FR-027",
+      "group": "Evidence and analysis",
+      "text": "Link runs to immutable reports through a compatible versioned optional provenance contract; retain permanent report URLs and existing report consumers.",
+      "stories": [
+        "16.6",
+        "16.7"
+      ],
+      "proof": "Serializer/constructor/legacy-consumer contract tests"
+    },
+    {
+      "id": "IAU15-FR-028",
+      "group": "Evidence and analysis",
+      "text": "Expose missing/partial/stale collection as confidence limitations and context TODOs; failed or incomplete mandatory collection cannot make approval eligible.",
+      "stories": [
+        "16.6",
+        "16.8",
+        "16.14"
+      ],
+      "proof": "Partial/error/stale collection eligibility tests"
+    },
+    {
+      "id": "IAU15-FR-029",
+      "group": "Evidence and analysis",
+      "text": "Keep deterministic automation usable with AI disabled or narrative failure, and preserve existing structured-summary/local-only provider boundaries without new AI composition.",
+      "stories": [
+        "16.6"
+      ],
+      "proof": "AI-off and narrative-failure vertical slice"
+    },
+    {
+      "id": "IAU15-FR-030",
+      "group": "Decisions",
+      "text": "Pause for a human decision durably with a finite deadline and never auto-approve on restart, expiry or missing reviewer.",
+      "stories": [
+        "16.8"
+      ],
+      "proof": "Restart/expiry/missing-reviewer decision tests"
+    },
+    {
+      "id": "IAU15-FR-031",
+      "group": "Decisions",
+      "text": "Bind approval to authorization kind, revision, source identity and required exact-plan commit, project/workspace/environment, reports, artifact and unit-plan digests, policy version, exact target and payload digest.",
+      "stories": [
+        "16.8",
+        "16.10"
+      ],
+      "proof": "Independent mutation of every decision-tuple field"
+    },
+    {
+      "id": "IAU15-FR-032",
+      "group": "Decisions",
+      "text": "Enforce evidence freshness at decision, dispatch and receiver consumption; default collection TTL is 60 minutes unless an audited stricter policy applies.",
+      "stories": [
+        "16.8",
+        "16.11"
+      ],
+      "proof": "Clock/TTL boundary and delayed-consume tests"
+    },
+    {
+      "id": "IAU15-FR-033",
+      "group": "Decisions",
+      "text": "Evaluate explicit workflow policy separately from advisory report semantics, preserving canonical should_block=False and using existing policy-adapter field meanings where compatible.",
+      "stories": [
+        "16.8"
+      ],
+      "proof": "Gate decision versus advisory report contract tests"
+    },
+    {
+      "id": "IAU15-FR-034",
+      "group": "Decisions",
+      "text": "Require an explicit authenticated approve/reject decision and reason when the canonical recommendation is `no-go`, severity is high/critical or the separate typed `insufficient_context` flag is true, with typed confirmation for high/critical.",
+      "stories": [
+        "16.9"
+      ],
+      "proof": "Reason/confirmation API denial and keyboard decision E2E"
+    },
+    {
+      "id": "IAU15-FR-035",
+      "group": "Decisions",
+      "text": "Invalidate eligibility when evidence, revision, source, scope, target, policy, membership or custody changes, expires or is superseded; no emergency bypass or delegated approval in P0.",
+      "stories": [
+        "16.8",
+        "16.10",
+        "16.11"
+      ],
+      "proof": "Revocation/supersession/custody-loss and bypass-denial matrix"
+    },
+    {
+      "id": "IAU15-FR-036",
+      "group": "Handoff and custody",
+      "text": "Register outbound GitHub destinations with administrator-controlled host policy; revalidate DNS/connection addresses and redirects, blocking metadata/loopback/private targets except explicit audited internal-host exceptions.",
+      "stories": [
+        "16.10"
+      ],
+      "proof": "IPv4/IPv6/DNS/redirect SSRF corpus"
+    },
+    {
+      "id": "IAU15-FR-037",
+      "group": "Handoff and custody",
+      "text": "Atomically persist the approved outbound intent and exact payload before network effects, with a stable receiver operation identity.",
+      "stories": [
+        "16.10"
+      ],
+      "proof": "Transaction/crash-before-send and payload-tamper tests"
+    },
+    {
+      "id": "IAU15-FR-038",
+      "group": "Handoff and custody",
+      "text": "Issue one-use scoped receiver grants bound to the decision tuple, operation, expiry and live epoch; reject duplicate/replayed or altered consumption.",
+      "stories": [
+        "16.10",
+        "16.11"
+      ],
+      "proof": "Grant replay/expiry/epoch/source/digest tests"
+    },
+    {
+      "id": "IAU15-FR-039",
+      "group": "Handoff and custody",
+      "text": "Consume grants into a durable receiver operation record before external action so a consume-before-action crash resumes the same operation without a second action.",
+      "stories": [
+        "16.11"
+      ],
+      "proof": "Receiver crash at consume/start/completion boundaries"
+    },
+    {
+      "id": "IAU15-FR-040",
+      "group": "Handoff and custody",
+      "text": "Distinguish dispatch acceptance, externally observed completion and delivery_unknown; reconcile unknown outcomes through receiver receipts and never report dispatch acceptance as successful deployment.",
+      "stories": [
+        "16.11"
+      ],
+      "proof": "Lost-response/poll/receipt fault matrix and UI semantic tests"
+    },
+    {
+      "id": "IAU15-FR-041",
+      "group": "Handoff and custody",
+      "text": "Authorize exact-plan handoff only when the qualified self-hosted receiver can verify the original immutable saved-plan bytes in protected local custody by opaque handle, raw digest and expiry; no server/public-artifact plan storage, and replanning requires fresh evidence/approval. Upload-only advisory receipts never authorize apply or require invented repository provenance.",
+      "stories": [
+        "16.0",
+        "16.11",
+        "16.14"
+      ],
+      "proof": "Real custody access/restart/overwrite/symlink/expiry/replan spike and receiver tests"
+    },
+    {
+      "id": "IAU15-FR-042",
+      "group": "Handoff and custody",
+      "text": "Canonicalize target lock identities across aliases and retain locks during unknown external work until verified resolution or an audited operator break that does not mint a new authorization.",
+      "stories": [
+        "16.10",
+        "16.16"
+      ],
+      "proof": "Alias collision/lock expiry/unknown-work/break tests"
+    },
+    {
+      "id": "IAU15-FR-043",
+      "group": "Handoff and custody",
+      "text": "Verify receiver callback signatures, operation/run/source identity and replay protection using the pinned GitHub adapter version and protected branch/tag dispatch ref.",
+      "stories": [
+        "16.11"
+      ],
+      "proof": "API-version, callback replay and mutable-ref substitution contract tests"
+    },
+    {
+      "id": "IAU15-FR-044",
+      "group": "Runners",
+      "text": "Enroll runners using one-use tokens and project-scoped expiring credentials with rotation/revocation and outbound HTTPS protocol-version negotiation.",
+      "stories": [
+        "16.12"
+      ],
+      "proof": "Enrollment replay/rotation/revocation/TLS/version tests"
+    },
+    {
+      "id": "IAU15-FR-045",
+      "group": "Runners",
+      "text": "Bind every task claim, heartbeat, log, upload and completion to the authorized runner, project, current attempt and live lease.",
+      "stories": [
+        "16.12"
+      ],
+      "proof": "Wrong-runner/project/expired-lease matrix"
+    },
+    {
+      "id": "IAU15-FR-046",
+      "group": "Runners",
+      "text": "Route collection to eligible runner tags with no silent fallback; fail clearly when none qualify or enforce an explicit finite wait, and expose last-seen/version/task health.",
+      "stories": [
+        "16.12",
+        "16.15"
+      ],
+      "proof": "No-runner/tag-mismatch/wait-timeout and health tests"
+    },
+    {
+      "id": "IAU15-FR-047",
+      "group": "Runners",
+      "text": "Collect only from admitted trusted immutable sources in disposable isolated workspaces with canonical-root/symlink containment and controlled tool/provider installation; reject untrusted PR sources and inherited Git/hooks/config.",
+      "stories": [
+        "16.13"
+      ],
+      "proof": "Hostile checkout/provider/config and isolation spike"
+    },
+    {
+      "id": "IAU15-FR-048",
+      "group": "Runners",
+      "text": "Execute only operator-protected fixed catalog commands with validated parameters; reject arbitrary shell, server-defined commands and app Docker-socket access.",
+      "stories": [
+        "16.13"
+      ],
+      "proof": "Catalog tampering/option injection/arbitrary-command denial tests"
+    },
+    {
+      "id": "IAU15-FR-049",
+      "group": "Runners",
+      "text": "Qualify OpenTofu/Terraform plan and JSON extraction for declared pinned versions, distinguishing exit 0/no-change, 2/change and error; retain the sensitive binary plan locally and transport screened JSON only.",
+      "stories": [
+        "16.14"
+      ],
+      "proof": "Real-tool compatibility smoke and hostile/sensitive plan fixtures"
+    },
+    {
+      "id": "IAU15-FR-050",
+      "group": "Runners",
+      "text": "Resolve infrastructure credentials only in the operator-owned runner/receiver execution identities under an environment allow-list and least privilege; never send or persist their values in DeployWhisper.",
+      "stories": [
+        "16.13",
+        "16.14"
+      ],
+      "proof": "Credential inheritance/transport/persistence corpus and separated-identity spike"
+    },
+    {
+      "id": "IAU15-FR-051",
+      "group": "Runners",
+      "text": "Enforce task CPU/time/disk/output/egress caps and atomic bounded uploads with cleanup after failure; cancellation must terminate the entire owned process tree.",
+      "stories": [
+        "16.13",
+        "16.14"
+      ],
+      "proof": "Limit, partial-upload, disk-full, egress and descendant-process tests"
+    },
+    {
+      "id": "IAU15-FR-052",
+      "group": "UX and interfaces",
+      "text": "Provide sanctioned React navigation, validated templates/YAML draft/publish controls and scoped workflow/run lists using actual APIs and existing design primitives without changing Dashboard information budget.",
+      "stories": [
+        "16.7"
+      ],
+      "proof": "Compose-built workflow creation and scoped-list keyboard/a11y E2E"
+    },
+    {
+      "id": "IAU15-FR-053",
+      "group": "UX and interfaces",
+      "text": "Show immutable run timeline, screened logs, artifact digests, linked briefing, uncertainty and permanent report provenance links with loading/empty/error/disabled/degraded states.",
+      "stories": [
+        "16.7"
+      ],
+      "proof": "Compose-built run/history/report states and real-data E2E"
+    },
+    {
+      "id": "IAU15-FR-054",
+      "group": "UX and interfaces",
+      "text": "Provide a scoped approval inbox and keyboard-operable decision screen showing exact evidence, target/payload, freshness, policy, confidence, blast radius and rollback context with acknowledgement labeling.",
+      "stories": [
+        "16.9"
+      ],
+      "proof": "Compose-built approve/reject/self-approval/freshness E2E"
+    },
+    {
+      "id": "IAU15-FR-055",
+      "group": "UX and interfaces",
+      "text": "Expose runner health, collection/cancel progress and unknown/reconciliation state with advisory copy that never claims Tier 0/1 deploys infrastructure.",
+      "stories": [
+        "16.15"
+      ],
+      "proof": "Real-runner composed E2E and unknown-state copy checks"
+    },
+    {
+      "id": "IAU15-FR-056",
+      "group": "UX and interfaces",
+      "text": "Accept only human-declared unit inventory and dependencies; validate exact unit coverage/cycles/unknown identities, persist deterministic preflight waves and combined evidence digest, and show accessible scope/lock tables without claiming deployment ordering.",
+      "stories": [
+        "16.16"
+      ],
+      "proof": "Multi-unit exact-cover/cycle/digest tests and accessible table E2E"
+    },
+    {
+      "id": "IAU15-FR-057",
+      "group": "UX and interfaces",
+      "text": "Start scoped runs manually or through signed timestamped replay-resistant webhook intake with typed inputs, idempotency, source pinning and bounded errors/quotas; record trigger origin and principal.",
+      "stories": [
+        "16.17"
+      ],
+      "proof": "Raw-byte HMAC/replay/idempotency/invalid-input/source tests"
+    },
+    {
+      "id": "IAU15-FR-058",
+      "group": "UX and interfaces",
+      "text": "Expose versioned automation API and CLI validation/run/status/list/decision commands over the same authority, envelopes and generated SPA types; agent read/request mode cannot decide or publish.",
+      "stories": [
+        "16.17"
+      ],
+      "proof": "API/CLI/OpenAPI parity and nonhuman-mutation denial tests"
+    },
+    {
+      "id": "IAU15-FR-059",
+      "group": "Administration",
+      "text": "Record append-only application audit events with verified principal/type, role, scope, target, reason, time and before/after digests; expose scoped UI/JSON export without raw artifacts/secrets and document DB-admin trust limits.",
+      "stories": [
+        "16.4",
+        "16.9",
+        "16.12",
+        "16.18"
+      ],
+      "proof": "Audit event coverage/export authorization and secret corpus"
+    },
+    {
+      "id": "IAU15-FR-060",
+      "group": "Administration",
+      "text": "Let authorized operators configure feature enablement, targets, quotas, retention, TTL and credential lifetimes; reject unsafe reductions, protect pending evidence or invalidate its decision before deletion, and audit each change.",
+      "stories": [
+        "16.4",
+        "16.18"
+      ],
+      "proof": "Configuration permissions, pending-retention and floor-change tests"
+    },
+    {
+      "id": "IAU15-NFR-001",
+      "text": "The declared crash/race corpus must lose no committed run/decision state and produce no unauthorized or duplicate receiver action, including stale attempts, unknown delivery and restore epochs.",
+      "stories": [
+        "16.5",
+        "16.10",
+        "16.11",
+        "16.19"
+      ],
+      "proof": "Published fault-injection results at every persisted boundary"
+    },
+    {
+      "id": "IAU15-NFR-002",
+      "text": "The declared principal × role × project/workspace × object/action matrix must produce zero cross-scope reads or unauthorized mutations.",
+      "stories": [
+        "16.1",
+        "16.2",
+        "16.12",
+        "16.19"
+      ],
+      "proof": "Published complete authorization matrix results"
+    },
+    {
+      "id": "IAU15-NFR-003",
+      "text": "The versioned sensitive-data corpus must yield zero known secret patterns in stored artifacts/logs/metadata/errors/audit or transmitted narrative summaries; no universal-redaction claim follows.",
+      "stories": [
+        "16.6",
+        "16.14",
+        "16.19"
+      ],
+      "proof": "Stored/output corpus scans including chunk boundaries"
+    },
+    {
+      "id": "IAU15-NFR-004",
+      "text": "Automation-originated fixture reports must produce zero Evidence Law violations and preserve deterministic/inferred labels and advisory report semantics.",
+      "stories": [
+        "16.6",
+        "16.14",
+        "16.19"
+      ],
+      "proof": "Evidence Law and cross-surface contract CI results"
+    },
+    {
+      "id": "IAU15-NFR-005",
+      "text": "Ready-step server orchestration overhead must have p95 <1 second, excluding collection/network/analysis duration, under the reproducible reference workload.",
+      "stories": [
+        "16.5",
+        "16.19"
+      ],
+      "proof": "Timestamped 1,000-transition overhead benchmark"
+    },
+    {
+      "id": "IAU15-NFR-006",
+      "text": "Enqueue-to-claim latency must have p95 <2 seconds with 20 online compatible runners under the reference workload.",
+      "stories": [
+        "16.12",
+        "16.19"
+      ],
+      "proof": "Timestamped 1,000-claim runner benchmark"
+    },
+    {
+      "id": "IAU15-NFR-007",
+      "text": "The singleton SQLite profile must sustain 10 active runs with at most 2 concurrent analysis jobs and 20 online runners, with bounded queue/storage and no corrupted transitions.",
+      "stories": [
+        "16.5",
+        "16.18",
+        "16.19"
+      ],
+      "proof": "30-minute capacity/saturation run with resource and error report"
+    },
+    {
+      "id": "IAU15-NFR-008",
+      "text": "Workflow validation must have p95 <500 milliseconds for the declared 50-step workflow corpus under the reference workload.",
+      "stories": [
+        "16.3",
+        "16.19"
+      ],
+      "proof": "1,000-validation timing/correctness benchmark"
+    },
+    {
+      "id": "IAU15-NFR-009",
+      "text": "All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots.",
+      "stories": [
+        "16.7",
+        "16.9",
+        "16.15",
+        "16.16",
+        "16.19"
+      ],
+      "proof": "Compose production build, Playwright/axe/keyboard results and screenshots"
+    },
+    {
+      "id": "IAU15-NFR-010",
+      "text": "Upgrade from a v1.4.0 database copy, interrupted upgrade, coordinated DB/artifact backup/restore, token rotation and restricted-network recovery must preserve auditable state while invalidating outstanding authorization/leases until reconciled.",
+      "stories": [
+        "16.18",
+        "16.19"
+      ],
+      "proof": "Recorded upgrade/restore/rotation/offline exercises"
+    },
+    {
+      "id": "IAU15-NFR-011",
+      "text": "Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks.",
+      "stories": [
+        "16.18",
+        "16.19"
+      ],
+      "proof": "Docs CI and operator self-service installation/recovery pilot"
+    },
+    {
+      "id": "IAU15-NFR-012",
+      "text": "Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile pilot with no unresolved introduced critical/high defect.",
+      "stories": [
+        "16.19",
+        "12.5"
+      ],
+      "proof": "Signed release manifest, CI/security/review/pilot evidence"
+    }
+  ],
+  "original_dispositions": [
+    {
+      "id": "IAU-WF-01",
+      "original_text": "Workflows are declarative YAML with `schema: deploywhisper.workflow/v1` and a published JSON Schema in `schemas/`.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-009"
+      ],
+      "story_ids": [
+        "16.3"
+      ],
+      "rationale": "Versioned bounded workflow contract retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-02",
+      "original_text": "Validation (API, CLI, UI) checks syntax, schema, references, DAG acyclicity, tier rules, approval-ancestor rule, and guardrail floors with no side effects.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-010",
+        "IAU15-FR-013"
+      ],
+      "story_ids": [
+        "16.3",
+        "16.8"
+      ],
+      "rationale": "Validation strengthened to all-path evidence/action binding.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-03",
+      "original_text": "Only step types in the closed registry are accepted; unknown types are rejected with field-level errors.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-011"
+      ],
+      "story_ids": [
+        "16.3"
+      ],
+      "rationale": "Closed P0 registry replaces broad catalog.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-04",
+      "original_text": "Templating is substitution-only (`${{ inputs.x }}`, `${{ steps.id.outputs.y }}`, `${{ run.id }}`, `${{ project.key }}`); no function calls, loops, or code evaluation.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-012"
+      ],
+      "story_ids": [
+        "16.3"
+      ],
+      "rationale": "Substitution-only typed references retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-05",
+      "original_text": "Typed inputs (`string`, `integer`, `boolean`, `select`, `artifact`) with pattern/enum/min/max validation; webhook inputs validated identically. `artifact` lets a user upload a file for a run, enabling runner-less workflows.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-009",
+        "IAU15-FR-057"
+      ],
+      "story_ids": [
+        "16.3",
+        "16.17"
+      ],
+      "rationale": "Typed inputs validated identically at intake.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-06",
+      "original_text": "Secrets are referenced by name (`*_ref`); inline secret-looking values are rejected.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-024",
+        "IAU15-FR-050"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.13",
+        "16.14"
+      ],
+      "rationale": "Reject inline secrets; runner references remain local.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-07",
+      "original_text": "Revisions: draft, publish, history, restore as new draft. Drafts are never executed. Published revisions are immutable.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-015"
+      ],
+      "story_ids": [
+        "16.4"
+      ],
+      "rationale": "Immutable published revision and restore-as-draft retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-08",
+      "original_text": "Every workflow is scoped to a project and optional workspace.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-014"
+      ],
+      "story_ids": [
+        "16.4"
+      ],
+      "rationale": "Project/workspace scope retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-09",
+      "original_text": "Steps declare `needs` forming a DAG; independent branches may run in parallel; default maximum of 50 steps.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-010",
+        "IAU15-FR-016"
+      ],
+      "story_ids": [
+        "16.3",
+        "16.4",
+        "16.5"
+      ],
+      "rationale": "Bounded acyclic graph and immutable snapshot retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-10",
+      "original_text": "Per-step `retries` and `timeout`; workflow-level `on_failure` and `finally`.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-020"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.11"
+      ],
+      "rationale": "Finite safe retries/timeouts adopted; generic on_failure/finally deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-11",
+      "original_text": "Per-workflow concurrency limit and per-project run quota.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-022"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.18"
+      ],
+      "rationale": "Quotas moved into P0 safety boundary.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-12",
+      "original_text": "Starter templates in `examples/infra-automation/` (non-executable YAML), each validated in CI.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-052"
+      ],
+      "story_ids": [
+        "16.7"
+      ],
+      "rationale": "Validated templates ship with supported profile.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-WF-13",
+      "original_text": "Git-based read-only import of workflow YAML and promotion between workspaces with a diff.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Git import/promotion deferred beyond 1.5.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-WF-14",
+      "original_text": "Visual (no-code) builder synchronized with YAML.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Visual builder deferred; YAML/templates are P0.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-WF-15",
+      "original_text": "`orchestrate` block that expands a stage plan into explicit per-stage steps at run start (Section 10.3).",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Dynamic stage expansion deferred; explicit manual preflight waves replace it.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-TRG-01",
+      "original_text": "Manual start from UI, API, CLI with typed input validation.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-057",
+        "IAU15-FR-058"
+      ],
+      "story_ids": [
+        "16.17"
+      ],
+      "rationale": "Authenticated manual/API/CLI starts retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-TRG-02",
+      "original_text": "Inbound webhook with per-trigger token (hashed at rest), constant-time compare, optional HMAC-SHA256, timestamp tolerance, replay protection.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-057"
+      ],
+      "story_ids": [
+        "16.17"
+      ],
+      "rationale": "Mandatory raw-byte HMAC plus replay/timestamp controls replaces optional signature.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-TRG-03",
+      "original_text": "Webhook idempotency key prevents duplicate runs.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-057"
+      ],
+      "story_ids": [
+        "16.17"
+      ],
+      "rationale": "Idempotent intake promoted to P0.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-TRG-04",
+      "original_text": "Every run records trigger type, actor, surface, and reference.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-057"
+      ],
+      "story_ids": [
+        "16.17"
+      ],
+      "rationale": "Typed verified actor/origin replaces caller identity.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-TRG-05",
+      "original_text": "Runs started by agent or automation tokens cannot skip approvals or start workflows containing `execute.*` steps.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-005",
+        "IAU15-FR-001"
+      ],
+      "story_ids": [
+        "16.0",
+        "16.1",
+        "16.2",
+        "16.3",
+        "16.17"
+      ],
+      "rationale": "Nonhuman decision/publish denial; all execute steps excluded.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-TRG-06",
+      "original_text": "Schedule trigger (cron, timezone, optional calendar skip) including drift-detection templates.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Cron/timezone/drift engine deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-TRG-07",
+      "original_text": "Event triggers: `analysis.completed` (internal) and GitHub pull-request events through the existing integration.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-057"
+      ],
+      "story_ids": [
+        "16.17"
+      ],
+      "rationale": "PR context may use signed intake; native internal/GitHub event orchestration deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RUN-01",
+      "original_text": "Run and step state is persisted as a state machine; in-flight runs resume after restart.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-018"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.11"
+      ],
+      "rationale": "Durable explicit state and restart recovery retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RUN-02",
+      "original_text": "The engine runs inside the existing FastAPI process with no new infrastructure dependency (ADR-14); a DB lease prevents two engine leaders.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-019"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.12"
+      ],
+      "rationale": "Singleton engine requires fenced ownership, not an unfenced lease.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RUN-03",
+      "original_text": "Transitions are persisted before side effects; at-least-once delivery with idempotency keys.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-020",
+        "IAU15-FR-037",
+        "IAU15-FR-040"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.10",
+        "16.11"
+      ],
+      "rationale": "Persist-before-effect strengthened with receiver reconciliation.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RUN-04",
+      "original_text": "Cancel a run; runner tasks cancelled best-effort; final state recorded.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-021"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.13",
+        "16.15"
+      ],
+      "rationale": "Cancellation qualified with process tree and external-action caveat.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RUN-05",
+      "original_text": "Explicit terminal states: `succeeded`, `failed`, `cancelled`, `stopped_by_gate`, `expired`, `timed_out`.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-018"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.11"
+      ],
+      "rationale": "Delivery_unknown added to explicit state semantics.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RUN-06",
+      "original_text": "Inputs, outputs, and logs persisted only after redaction (extends 12.1/12.3).",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-024"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Screen every persisted output/metadata path.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RUN-07",
+      "original_text": "Runs link to the report(s) from their `analyze` steps; reruns compare using the existing report diff.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-027",
+        "IAU15-FR-053"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.7"
+      ],
+      "rationale": "Immutable report linkage adopted; new automation rerun comparison UX deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RUN-08",
+      "original_text": "Configurable retention (defaults: runs 90 days, artifacts 30 days).",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-060"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.18"
+      ],
+      "rationale": "Retention protects pending decisions and bounded storage.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RUN-09",
+      "original_text": "Multi-instance-safe claiming for PostgreSQL (`SKIP LOCKED` or equivalent).",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "PostgreSQL multi-instance claims require later ADR and qualification.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-RNR-01",
+      "original_text": "Runner is a subcommand of the existing package and connects **outbound** over HTTPS only.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-044"
+      ],
+      "story_ids": [
+        "16.12"
+      ],
+      "rationale": "Outbound HTTPS runner and negotiated protocol retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-02",
+      "original_text": "Enrollment via one-time token; runner token is project-scoped, hashed server-side, revocable, expiring, shown once.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-044"
+      ],
+      "story_ids": [
+        "16.12"
+      ],
+      "rationale": "One-use enrollment and credential lifecycle retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-03",
+      "original_text": "Tag routing (`runner.tags`, all-of by default). No eligible runner -> fail fast; `fallback: wait` needs `max_wait`.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-046"
+      ],
+      "story_ids": [
+        "16.12",
+        "16.15"
+      ],
+      "rationale": "Strict routing and finite wait retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-04",
+      "original_text": "Heartbeats and leases; lost tasks re-queued only for steps declared `idempotent`.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-019",
+        "IAU15-FR-020",
+        "IAU15-FR-045"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.11",
+        "16.12"
+      ],
+      "rationale": "Fenced attempts and safe-only requeue strengthen lease semantics.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-05",
+      "original_text": "Runner-side **command catalog**: fixed argv templates plus parameter schemas; the server sends only `command_id` and validated parameters.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-048"
+      ],
+      "story_ids": [
+        "16.13"
+      ],
+      "rationale": "Operator-protected fixed catalog retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-06",
+      "original_text": "Secrets and cloud credentials are resolved on the runner; the server never stores or receives them.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-050"
+      ],
+      "story_ids": [
+        "16.13",
+        "16.14"
+      ],
+      "rationale": "Local credentials and distinct receiver identity required.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-07",
+      "original_text": "Per-task working directory, environment allow-list, output caps, timeouts; optional container profile documented.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-047",
+        "IAU15-FR-051"
+      ],
+      "story_ids": [
+        "16.13",
+        "16.14"
+      ],
+      "rationale": "Isolation promoted from optional container suggestion to required qualified profile.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-08",
+      "original_text": "Protocol version negotiation; incompatible runners refused with an actionable message.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-044"
+      ],
+      "story_ids": [
+        "16.12"
+      ],
+      "rationale": "Protocol compatibility promoted to P0.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-09",
+      "original_text": "Runner health (last seen, version, tags, current task) in UI and API.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-046",
+        "IAU15-FR-055"
+      ],
+      "story_ids": [
+        "16.12",
+        "16.15"
+      ],
+      "rationale": "Runner health retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-10",
+      "original_text": "Server-side steps run in-process and need no runner.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-023",
+        "IAU15-FR-026"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Runner-less server analysis path retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-RNR-11",
+      "original_text": "Runner-side custom commands only via a local allow-list file owned by the runner operator.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Custom command extensibility deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-RNR-12",
+      "original_text": "Mutual TLS and signed task envelopes.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Alternative mTLS/signed-envelope profiles deferred; authenticated scoped HTTPS is P0.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-RNR-13",
+      "original_text": "Optional runner setting `require_ephemeral_credentials`: refuse tasks when only long-lived static cloud keys are detected; documentation for workload identity/OIDC.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-050"
+      ],
+      "story_ids": [
+        "16.13",
+        "16.14"
+      ],
+      "rationale": "Least-privilege credential separation adopted; automatic static-key detection flag deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-STP-01",
+      "original_text": "`collect.terraform_plan` (OpenTofu or Terraform binary chosen by the runner catalog)",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-049"
+      ],
+      "story_ids": [
+        "16.14"
+      ],
+      "rationale": "Only qualified OpenTofu/Terraform automated collector adopted.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-STP-02",
+      "original_text": "`collect.ansible_check`",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Ansible check collector needs separate parser/isolation qualification.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-STP-03",
+      "original_text": "`collect.kubectl_diff`",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "kubectl diff collector deferred; supported uploads still available.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-STP-04",
+      "original_text": "`collect.helm_template`",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Helm collector deferred; supported uploads still available.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-STP-05",
+      "original_text": "`collect.git_diff`",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Git diff collector deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-STP-06",
+      "original_text": "`analyze` (shared orchestrator)",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-026"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Shared-core analyze retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-STP-07",
+      "original_text": "`scanner.import` (Epic 8)",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-023",
+        "IAU15-FR-026"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Existing supported scanner intake reused; dedicated workflow scanner.import deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-STP-08",
+      "original_text": "`gate.verdict`",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-033"
+      ],
+      "story_ids": [
+        "16.8"
+      ],
+      "rationale": "Separate policy gate retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-STP-09",
+      "original_text": "`approval`",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-030",
+        "IAU15-FR-034"
+      ],
+      "story_ids": [
+        "16.8",
+        "16.9"
+      ],
+      "rationale": "Durable verified-human decision retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-STP-10",
+      "original_text": "`notify.slack_webhook`, `notify.github_pr_comment`",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Slack/PR notification steps deferred; in-app inbox P0.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-STP-11",
+      "original_text": "`handoff.webhook`, `handoff.github_dispatch`",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-036",
+        "IAU15-FR-037",
+        "IAU15-FR-038",
+        "IAU15-FR-039",
+        "IAU15-FR-040",
+        "IAU15-FR-043"
+      ],
+      "story_ids": [
+        "16.10",
+        "16.11"
+      ],
+      "rationale": "GitHub receiver contract adopted; arbitrary webhook adapter deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-STP-12",
+      "original_text": "`collect.kustomize_build`, `collect.terragrunt_plan`, `collect.cloudformation_changeset`",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Additional collector adapters deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-STP-13",
+      "original_text": "`handoff.jenkins`, `handoff.gitlab_pipeline`, `itsm.callback`",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Jenkins/GitLab/ITSM adapters deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-STP-14",
+      "original_text": "`packages.inspect` (build/refresh the package inventory for selected units)",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Package inventory step deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-STP-15",
+      "original_text": "`wait` (delay or until callback)",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Generic wait/callback orchestration step deferred; receiver reconciliation is domain-specific.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-STP-16",
+      "original_text": "`execute.*`",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Tier2 execute excluded pending separate RFC/product decision.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-APR-01",
+      "original_text": "`approval` pauses the run durably; the pause survives restarts and never auto-approves.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-030"
+      ],
+      "story_ids": [
+        "16.8"
+      ],
+      "rationale": "Durable finite pause with no auto-approval retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-02",
+      "original_text": "Assignment by users and/or project roles with `min_approvals`.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-006",
+        "IAU15-FR-008",
+        "IAU15-FR-030"
+      ],
+      "story_ids": [
+        "16.2",
+        "16.8",
+        "16.9"
+      ],
+      "rationale": "Assignments derive from verified membership; no caller-provided role authority.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-03",
+      "original_text": "Optional `separation_of_duties` (requester cannot approve); unavailable and labeled in single-operator mode.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-008"
+      ],
+      "story_ids": [
+        "16.2",
+        "16.9"
+      ],
+      "rationale": "Separation of duties and acknowledgement-only labeling retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-04",
+      "original_text": "Typed decision payload (`approved`, `reason`, declared fields) becomes step output.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-034",
+        "IAU15-FR-059"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.9",
+        "16.12",
+        "16.18"
+      ],
+      "rationale": "Explicit typed decision and audit retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-05",
+      "original_text": "**Evidence pinning**: records `report_id`, artifact sha256 digests, and (Phase B) plan-snapshot digest; any change or supersession invalidates the approval.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-031",
+        "IAU15-FR-035"
+      ],
+      "story_ids": [
+        "16.8",
+        "16.10",
+        "16.11"
+      ],
+      "rationale": "Full immutable evidence/action tuple replaces report digest alone.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-06",
+      "original_text": "Approval card shows verdict, score, Evidence Law status, confidence, top findings, blast radius, rollback summary, context TODOs, plan age, AI-involvement indicator, and the exact handoff target.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-054"
+      ],
+      "story_ids": [
+        "16.9"
+      ],
+      "rationale": "Exact briefing/target/freshness decision context retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-07",
+      "original_text": "Stale-evidence warning when pinned collection exceeds the TTL (default 60 min).",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-032"
+      ],
+      "story_ids": [
+        "16.8",
+        "16.11"
+      ],
+      "rationale": "TTL enforcement promoted to P0 at decision/dispatch/consume.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-08",
+      "original_text": "Reason required for `no_go`, `severity >= high`, `insufficient_context`; high/critical additionally requires typed confirmation. Thresholds follow GRD-8.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-034"
+      ],
+      "story_ids": [
+        "16.9"
+      ],
+      "rationale": "Required reason and confirmation retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-09",
+      "original_text": "Expiry ends in `expired` (run fails), never approval.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-030"
+      ],
+      "story_ids": [
+        "16.8"
+      ],
+      "rationale": "Expiry cannot authorize action.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-10",
+      "original_text": "Agent and automation tokens cannot approve or reject; attempts are denied and audited.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-005"
+      ],
+      "story_ids": [
+        "16.1",
+        "16.2",
+        "16.17"
+      ],
+      "rationale": "Typed nonhuman credentials cannot decide.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-11",
+      "original_text": "Approvals inbox with filters, sidebar badge, and deep links from notifications.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-054"
+      ],
+      "story_ids": [
+        "16.9"
+      ],
+      "rationale": "Scoped inbox retained; notification deep links deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-APR-12",
+      "original_text": "Emergency bypass per PRD 19.2 (reason, actor, timestamp, audit); disabled by default.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Emergency bypass excluded P0.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-APR-13",
+      "original_text": "Reassign or delegate an approval.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Delegation/reassignment deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-APR-14",
+      "original_text": "Per-stage approvals with the stage plan digest pinned.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-031",
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.8",
+        "16.10",
+        "16.16"
+      ],
+      "rationale": "Declared whole-preflight plan digest adopted; per-deployment-stage approvals deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AEV-01",
+      "original_text": "Collected artifacts enter normal intake: classification, sensitive-file handling (`*.tfstate`, keys, credentials never ingested), project/workspace scoping.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-023",
+        "IAU15-FR-024"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Normal sensitive-file scoped intake retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AEV-02",
+      "original_text": "Provenance per artifact: run, step, runner id, `command_id`, argv digest, exit code, `collected_at`, sha256.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-025"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Provenance includes separate raw/sanitized digests and current attempt.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AEV-03",
+      "original_text": "New evidence `source_type` `automation_collection` is `deterministic` only with complete provenance; otherwise downgraded to `user_provided`.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-025",
+        "IAU15-FR-026"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Metadata authenticity adopted; automatic deterministic source_type promotion rejected.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AEV-04",
+      "original_text": "Infra Automation never creates or changes findings, severity, or Evidence Law status.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-026",
+        "IAU15-FR-033"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.8",
+        "16.14"
+      ],
+      "rationale": "Automation cannot rewrite scoring/Evidence Law/advisory semantics.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AEV-05",
+      "original_text": "Collection limitations become confidence factors and context TODOs (check-mode gaps, plan age, plan-apply drift, partial collection).",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-028"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.8",
+        "16.14"
+      ],
+      "rationale": "Coverage/freshness limitations retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AEV-06",
+      "original_text": "Terraform plan `sensitive` values are redacted before storage or analysis.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-024",
+        "IAU15-FR-049"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Screened JSON transported; raw plan remains local.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AEV-07",
+      "original_text": "Report schema gains an additive optional `automation` block; `report_schema_version` increments; docs updated.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-027"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.7"
+      ],
+      "rationale": "Versioned additive contract adopted; automatic minor-version bump not assumed.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AEV-08",
+      "original_text": "Step logs/outputs are untrusted text for narrative generation; prompt-injection tests cover them.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-024",
+        "IAU15-FR-029"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Untrusted output screening and existing narrative boundaries retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AEV-09",
+      "original_text": "CI fixtures verify automation-originated reports satisfy the Evidence Law (EVD-12 extended).",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-004"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14",
+        "16.19"
+      ],
+      "rationale": "Bounded Evidence Law regression corpus required.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ORC-01",
+      "original_text": "Infra map schema `deploywhisper.infra-map/v1` (units, layers, runner tags, owners, depends_on, package allow-lists) with JSON Schema and validator.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.16"
+      ],
+      "rationale": "Human-declared unit/dependency map adopted; package fields deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ORC-02",
+      "original_text": "Deterministic unit detection from repository content and changed paths (file patterns) with evidence for each detected unit.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Automatic unit detection deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-ORC-03",
+      "original_text": "Dependency graph with per-edge `basis` (Section 7.4) and confidence; only enforcing bases constrain order.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.16"
+      ],
+      "rationale": "Explicit dependency evidence adopted; inferred graph edges deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ORC-04",
+      "original_text": "A stage plan is valid only if it respects all enforcing edges and covers exactly the change set; invalid plans are rejected with reasons.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.16"
+      ],
+      "rationale": "Exact-cover preflight waves adopted; deployment stage plan excluded.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ORC-05",
+      "original_text": "Limitations are surfaced: missing map, stale map, undeterminable edges, AI-inferred edges - as context TODOs, never silent.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-028",
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.8",
+        "16.14",
+        "16.16"
+      ],
+      "rationale": "Missing/stale map limitations explicit.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ORC-06",
+      "original_text": "Plan snapshot (units, edges, waves, rationale, digest) persisted with the run and pinned by approvals.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-031",
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.8",
+        "16.10",
+        "16.16"
+      ],
+      "rationale": "Immutable declared unit-plan digest retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ORC-07",
+      "original_text": "`orchestrate` expansion generates explicit per-stage *collect, analyze, gate, approval, handoff* steps at run start; the expanded definition is stored and validated by the same validator.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Dynamic per-stage deployment orchestration excluded P0.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-ORC-08",
+      "original_text": "Environment promotion `dev -> stage -> prod` with per-environment approvals and a promotion diff (report and package versions).",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Environment promotion engine deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-ORC-09",
+      "original_text": "Cross-unit bundle analysis plus per-stage analyses; cross-unit interaction findings reference all contributing units.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-026",
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14",
+        "16.16"
+      ],
+      "rationale": "Combined supported-artifact analysis adopted; stage-specific deployment analyses deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ORC-10",
+      "original_text": "Target locks keyed `<unit_id>:<workspace>`, held until handoff completion/cancel/expiry; audited admin break.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-042"
+      ],
+      "story_ids": [
+        "16.10",
+        "16.16"
+      ],
+      "rationale": "Canonical locks elevated to P0 with unknown-outcome retention.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ORC-11",
+      "original_text": "Change windows and freeze periods per workspace; out-of-window approvals need an audited exception reason.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Change windows/freeze exceptions deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-ORC-12",
+      "original_text": "Lock and window state visible in UI and API; conflicts produce explicit messages.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-042",
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.10",
+        "16.16"
+      ],
+      "rationale": "Lock visibility/conflicts adopted; window state deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-PKG-01",
+      "original_text": "Parsers for `.terraform.lock.hcl` and module calls (plan JSON `module_calls` / HCL), `Chart.yaml`/`Chart.lock`, Ansible `requirements.yml`, Kubernetes image references, Kustomize remote bases, registered through the parser registry.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Cross-ecosystem package parsers/governance deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-PKG-02",
+      "original_text": "Package inventory per unit and per run using the package reference schema (Section 7.2).",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Package inventory domain deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-PKG-03",
+      "original_text": "Per-project, per-workspace **package ledger** supporting first-seen, version-changed, and hash-changed-without-version-change detection.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Package ledger and baseline semantics deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-PKG-04",
+      "original_text": "Deterministic package signals (Section 7.2) feed the existing risk engine as evidence and public risk patterns; severity remains governed by Evidence Law.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "New package risk signals require separate benchmarks.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-PKG-05",
+      "original_text": "Admin-managed package allow-list (registries, namespaces, images); non-allow-listed sources are flagged; GRD-5 enforces for workflows.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-047",
+        "IAU15-FR-048"
+      ],
+      "story_ids": [
+        "16.13"
+      ],
+      "rationale": "Protected tool/provider source admission adopted for runner; package-wide allow-list governance deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-PKG-06",
+      "original_text": "First-seen packages require explicit human acknowledgement in the approval card.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "First-seen package acknowledgement deferred with ledger.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-PKG-07",
+      "original_text": "Registry lookups are off by default; an opt-in, user-owned connector (including MCP-based registry access) may add `external` evidence with freshness and source labels.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Registry connector remains absent/off; future opt-in only.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-PKG-08",
+      "original_text": "AI cannot add, upgrade, or approve packages (IAU-AI-11).",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-001",
+        "IAU15-FR-005"
+      ],
+      "story_ids": [
+        "16.0",
+        "16.1",
+        "16.2",
+        "16.3",
+        "16.17"
+      ],
+      "rationale": "AI authority prohibition retained; package-specific advisor/domain deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-PKG-09",
+      "original_text": "New public risk patterns for package signals ship with benchmark scenarios and false-positive notes.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Package public patterns and false-positive qualification deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-01",
+      "original_text": "AI is optional; each capability has a deterministic fallback; the feature is fully usable with AI off.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-029"
+      ],
+      "story_ids": [
+        "16.6"
+      ],
+      "rationale": "Existing deterministic AI-off narrative path adopted; new capability fallbacks deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AI-02",
+      "original_text": "AI output is schema-constrained IR; strict parse; unknown fields rejected.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "New schema-constrained AI IR subsystem deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-03",
+      "original_text": "All AI output passes the validator, guardrail floors, registry checks, and package allow-list; failures are never shown as usable results.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "AI workflow validation pipeline deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-04",
+      "original_text": "Repair loop of at most two attempts using validator errors only.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "AI repair loop deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-05",
+      "original_text": "Deterministic renderer converts IR to YAML/map/plan; the model never emits YAML, shell, or executable commands.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "AI IR renderer deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-06",
+      "original_text": "Results are proposals shown as diffs; **Apply to draft**, **Publish**, **Run**, **Approve** are separate explicit human actions.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-005",
+        "IAU15-FR-015",
+        "IAU15-FR-034"
+      ],
+      "story_ids": [
+        "16.1",
+        "16.2",
+        "16.4",
+        "16.9",
+        "16.17"
+      ],
+      "rationale": "Explicit human publish/decision boundaries adopted; AI diff proposals deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AI-07",
+      "original_text": "Origin labels on items; revisions record `authored_by` and `ai_run_id`s.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-059"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.9",
+        "16.12",
+        "16.18"
+      ],
+      "rationale": "Verified authorship/audit retained; AI-run provenance for new capabilities deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AI-08",
+      "original_text": "Untrusted-input handling: prompt isolation, structured inputs, size caps; injection test suite extended with infra-automation fixtures.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-024",
+        "IAU15-FR-029"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14"
+      ],
+      "rationale": "Existing untrusted narrative protections retained; new Composer/Mapper corpus deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AI-09",
+      "original_text": "Provider unavailable/invalid/timeout falls back to the deterministic path with a clear message.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-029"
+      ],
+      "story_ids": [
+        "16.6"
+      ],
+      "rationale": "Existing narrative failure fallback retained; new structured AI capabilities deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AI-10",
+      "original_text": "Local-only mode honored; data-minimization rules (Section 8.5) enforced; external providers receive structured summaries only.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-029"
+      ],
+      "story_ids": [
+        "16.6"
+      ],
+      "rationale": "Existing local-only/structured-summary boundary retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AI-11",
+      "original_text": "AI cannot add steps outside the registry, units outside the change set, packages outside the allow-list, or lower/disable floors.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-001",
+        "IAU15-FR-005",
+        "IAU15-FR-011"
+      ],
+      "story_ids": [
+        "16.0",
+        "16.1",
+        "16.2",
+        "16.3",
+        "16.17"
+      ],
+      "rationale": "AI cannot create authority or lower registry floors; package-specific controls deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AI-12",
+      "original_text": "AI interaction audit records (Section 8.7), included in audit export.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-059"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.9",
+        "16.12",
+        "16.18"
+      ],
+      "rationale": "Existing principal audit retained; new AI orchestration records deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AI-13",
+      "original_text": "AI evaluation corpus, metrics, and release gate; zero-tolerance metrics as listed in Section 8.9.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "New AI evaluation corpus belongs with later AI feature.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-14",
+      "original_text": "Rate limits, size caps, timeouts, per-user budgets; no background AI calls without a user action unless an admin enables optional auto-diagnosis (off by default).",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "New AI budgets/auto-diagnosis controls deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-15",
+      "original_text": "AI requests originating from agent/automation tokens are treated as untrusted and cannot trigger publish or approval paths.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-005",
+        "IAU15-FR-058"
+      ],
+      "story_ids": [
+        "16.1",
+        "16.2",
+        "16.17"
+      ],
+      "rationale": "Nonhuman publish/approval denial adopted; new AI request surface deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AI-16",
+      "original_text": "Workflow Composer (Draft, Explain, Review).",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Workflow Composer deferred beyond 1.5.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-17",
+      "original_text": "Infra Mapper.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Infra Mapper deferred beyond 1.5.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-18",
+      "original_text": "Orchestration Planner (suggestions marked `ai_inferred` until accepted).",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "AI Orchestration Planner deferred beyond 1.5.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-19",
+      "original_text": "Run Diagnostician with rule-based failure signatures as the baseline.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "AI Diagnostician deferred; actionable deterministic errors required.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-AI-20",
+      "original_text": "Package Advisor using only local inputs by default.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Package Advisor deferred.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "IAU-GRD-01",
+      "original_text": "Floors GRD-1..GRD-10 (Section 8.6) enforced at save, publish, and run time.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-001",
+        "IAU15-FR-013",
+        "IAU15-FR-024",
+        "IAU15-FR-031",
+        "IAU15-FR-035"
+      ],
+      "story_ids": [
+        "16.0",
+        "16.3",
+        "16.6",
+        "16.8",
+        "16.10",
+        "16.11",
+        "16.14"
+      ],
+      "rationale": "Applicable P0 guardrails adopted; original package/AI/promotion floors not implied.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-GRD-02",
+      "original_text": "Floors cannot be created, edited, or lowered by AI, by agent tokens, or by workflow content.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-005",
+        "IAU15-FR-011",
+        "IAU15-FR-060"
+      ],
+      "story_ids": [
+        "16.1",
+        "16.2",
+        "16.3",
+        "16.4",
+        "16.17",
+        "16.18"
+      ],
+      "rationale": "Workflow/nonhuman inputs cannot lower authority floors.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-GRD-03",
+      "original_text": "Project Admins may raise floors where marked configurable; every change is audited.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-060"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.18"
+      ],
+      "rationale": "Operator tightening adopted; future package/promotion configuration deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-GRD-04",
+      "original_text": "Blast-radius thresholds (severity, `no_go`, `insufficient_context`, services affected, environment tier) drive mandatory approval and reason requirements.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-033",
+        "IAU15-FR-034"
+      ],
+      "story_ids": [
+        "16.8",
+        "16.9"
+      ],
+      "rationale": "Explicit policy and elevated-decision requirements retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-GRD-05",
+      "original_text": "Floors reuse the Epic 11 policy-adapter field names and semantics where they exist.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-033"
+      ],
+      "story_ids": [
+        "16.8"
+      ],
+      "rationale": "Existing policy-adapter semantics reused where compatible.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AUD-01",
+      "original_text": "Append-only events for workflow create/edit/publish/archive, run start/cancel, approval requested/decided/expired, runner enroll/revoke, token create/rotate, setting and floor changes, AI interactions, lock breaks, and denied actions.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-059"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.9",
+        "16.12",
+        "16.18"
+      ],
+      "rationale": "All supported P0 lifecycle/denial events retained; deferred AI/window domains not invented.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AUD-02",
+      "original_text": "Each event records actor, role, surface, project, workspace, target, timestamp, reason, and before/after digest.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-059"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.9",
+        "16.12",
+        "16.18"
+      ],
+      "rationale": "Verified typed principal and before/after digests required.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AUD-03",
+      "original_text": "Viewable in UI, exportable as JSON, retention configurable.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-059",
+        "IAU15-FR-060"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.9",
+        "16.12",
+        "16.18"
+      ],
+      "rationale": "Scoped UI/export and retention retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-AUD-04",
+      "original_text": "No secrets or raw artifact content in audit (tested).",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-024",
+        "IAU15-FR-059"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.6",
+        "16.9",
+        "16.12",
+        "16.14",
+        "16.18"
+      ],
+      "rationale": "Secret/raw-content audit exclusion tested.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-API-01",
+      "original_text": "REST endpoints under `/api/v1/infra-automation/` for workflows, revisions, validation, runs, approvals, runners, audit, stats, AI, and (Phase B) inventory, packages, plans, locks. Use the existing `{data, meta}` and error envelopes and Pydantic models.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-058"
+      ],
+      "story_ids": [
+        "16.17"
+      ],
+      "rationale": "Supported automation endpoints retained; AI/packages/planner catalogs deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-API-02",
+      "original_text": "Endpoints enforce project scope and role checks; unauthorized access returns bounded errors that do not reveal existence.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-006",
+        "IAU15-FR-007",
+        "IAU15-FR-058"
+      ],
+      "story_ids": [
+        "16.2",
+        "16.6",
+        "16.17"
+      ],
+      "rationale": "Trusted scope and existence-bounded errors retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-API-03",
+      "original_text": "`GET /api/v1/infra-automation/stats/summary` for page KPIs and sparklines with the same optional scope filters as `/stats/summary`.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-052",
+        "IAU15-FR-055"
+      ],
+      "story_ids": [
+        "16.7",
+        "16.15"
+      ],
+      "rationale": "Real scoped status/health UI data adopted; optional sparklines not mandatory.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-API-04",
+      "original_text": "CLI under `deploywhisper infra-automation`: `validate`, `run`, `status`, `approve`, `list`, `compose` (AI draft to stdout); and `deploywhisper runner`: `enroll`, `start`, `status`.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-044",
+        "IAU15-FR-058"
+      ],
+      "story_ids": [
+        "16.12",
+        "16.17"
+      ],
+      "rationale": "Supported CLI/runner commands adopted; compose command deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-API-05",
+      "original_text": "`--agent-json` read/request-only equivalents; no approve or publish.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-005",
+        "IAU15-FR-058"
+      ],
+      "story_ids": [
+        "16.1",
+        "16.2",
+        "16.17"
+      ],
+      "rationale": "Agent read/request boundary retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-API-06",
+      "original_text": "OpenAPI types for the SPA regenerated through the existing generation step.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-058"
+      ],
+      "story_ids": [
+        "16.17"
+      ],
+      "rationale": "Generated SPA types and OpenAPI parity retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ADM-01",
+      "original_text": "Enable/disable per instance and per project.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-017",
+        "IAU15-FR-060"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.10",
+        "16.11",
+        "16.18"
+      ],
+      "rationale": "Disable semantics strengthened to outstanding grants and reconciliation.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ADM-02",
+      "original_text": "Configure allowed outbound hosts, quotas, retention, approval TTL defaults, runner token lifetime, AI enablement and budgets.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-036",
+        "IAU15-FR-060"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.10",
+        "16.18"
+      ],
+      "rationale": "P0 target/quota/retention/TTL settings retained; new AI budgets deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ADM-03",
+      "original_text": "Manage runners and webhook trigger tokens (enroll, rotate, revoke).",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-044",
+        "IAU15-FR-057",
+        "IAU15-FR-060"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.12",
+        "16.17",
+        "16.18"
+      ],
+      "rationale": "Scoped runner/trigger credential lifecycle retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "IAU-ADM-04",
+      "original_text": "Manage the infra map, layers, package allow-lists, change windows, and guardrail raises.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-056",
+        "IAU15-FR-060"
+      ],
+      "story_ids": [
+        "16.4",
+        "16.16",
+        "16.18"
+      ],
+      "rationale": "Declared maps and P0 policy tightening retained; packages/windows deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR11",
+      "original_text": "**Infra Automation** nav item after Incidents and before History, reusing the existing nav component, a `lucide-react` icon, and a pending-approvals badge.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-052",
+        "IAU15-FR-054"
+      ],
+      "story_ids": [
+        "16.7",
+        "16.9"
+      ],
+      "rationale": "Sanctioned navigation and pending decision state retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR12",
+      "original_text": "Landing page follows its own information budget (Section 13.3); Dashboard budget unchanged.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-052"
+      ],
+      "story_ids": [
+        "16.7"
+      ],
+      "rationale": "Feature information budget and Dashboard preservation retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR13",
+      "original_text": "Run detail with step timeline, redacted logs, artifacts with digests, linked briefing.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-053"
+      ],
+      "story_ids": [
+        "16.7"
+      ],
+      "rationale": "Immutable timeline/log/artifact/report UX retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR14",
+      "original_text": "Approval card embeds the briefing; fully keyboard operable.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-054"
+      ],
+      "story_ids": [
+        "16.9"
+      ],
+      "rationale": "Keyboard decision UX retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR15",
+      "original_text": "Loading, empty, error, disabled, and degraded states follow Part B4 patterns.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-053",
+        "IAU15-FR-055"
+      ],
+      "story_ids": [
+        "16.7",
+        "16.15"
+      ],
+      "rationale": "Explicit loading/empty/error/disabled/degraded states retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR16",
+      "original_text": "Calm, advisory copy; no \"deploy\" verbs for Tier 0/1; AI never claims safety.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-055"
+      ],
+      "story_ids": [
+        "16.15"
+      ],
+      "rationale": "Advisory preflight/handoff copy retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR17",
+      "original_text": "New primitives live in `src/components/ui/`, appear in `/dev/components`, and have Vitest snapshots.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-052"
+      ],
+      "story_ids": [
+        "16.7"
+      ],
+      "rationale": "Existing component catalog and tests retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR18",
+      "original_text": "Accessibility smoke (axe and keyboard) for all new routes.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-009"
+      ],
+      "story_ids": [
+        "16.7",
+        "16.9",
+        "16.15",
+        "16.16",
+        "16.19"
+      ],
+      "rationale": "Composed-app axe/keyboard qualification retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR19",
+      "original_text": "Assistant panel (Draft/Explain/Review) with AI chip, validator status, diff, and audit link.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Assistant panel deferred with Composer.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "UX-DR20",
+      "original_text": "Provenance chip and \"Collected by run\" link on the report screen's Audit tab.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-FR-027",
+        "IAU15-FR-053"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.7"
+      ],
+      "rationale": "Report provenance links retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR21",
+      "original_text": "Inventory view (units, packages, edges with basis) and Plan view (waves, rationale, open questions).",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.16"
+      ],
+      "rationale": "Declared unit/preflight tables adopted; packages/inferred inventory deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "UX-DR22",
+      "original_text": "Graph view with an equivalent accessible table alternative.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.16"
+      ],
+      "rationale": "Accessible ordered tables adopted; graph rendering deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "DOC-28",
+      "original_text": "Maintain `docs/infra-automation/` (Section 15.2).",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-011"
+      ],
+      "story_ids": [
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "Supported-feature docs directory/versioned references retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "DOC-29",
+      "original_text": "Capability-tiers, autonomy-levels, and guardrail-floors concept pages.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-001",
+        "IAU15-NFR-011"
+      ],
+      "story_ids": [
+        "16.0",
+        "16.3",
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "Supported tiers/guardrails documented; deferred autonomy modes are limitations.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "DOC-30",
+      "original_text": "Runner installation guides (Docker, Kubernetes, systemd) and restricted-network guide, with the Terraform/OpenTofu licensing note.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-NFR-010",
+        "IAU15-NFR-011"
+      ],
+      "story_ids": [
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "Qualified runner/restricted-network setup and licensing documented; unqualified installation profiles deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "DOC-31",
+      "original_text": "Workflow schema, infra-map schema, step catalog, API, CLI references generated from source where practical, with docs-CI drift checks.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-009",
+        "IAU15-FR-056",
+        "IAU15-FR-058",
+        "IAU15-NFR-011"
+      ],
+      "story_ids": [
+        "16.3",
+        "16.16",
+        "16.17",
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "Supported schema/catalog/API/CLI generated references retained; broader map/domain references deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "DOC-32",
+      "original_text": "Comparison page: Infra Automation alongside Kestra, Rundeck, Atlantis, Argo CD, GitHub Actions, Terraform Stacks, and AI-agent platforms.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-NFR-011"
+      ],
+      "story_ids": [
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "Evidence-backed fit/ownership comparison retained; exhaustive marketing matrix deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "DOC-33",
+      "original_text": "AI guide: capabilities, data sent to providers, local-only setup, limitations, and evaluation results.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-029",
+        "IAU15-NFR-011"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "Existing narrative/local-only limits documented; new AI/evaluation guide deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "DOC-34",
+      "original_text": "Package governance guide and failure-signature contribution guide.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Package governance/contribution guide deferred with its capability.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "NFR-IAU-01",
+      "original_text": "**Durability:** no loss of run or approval state across restart or crash; fault injection covers crash after every transition.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-001"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.10",
+        "16.11",
+        "16.19"
+      ],
+      "rationale": "Committed-state fault corpus retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-02",
+      "original_text": "**Delivery semantics:** at-least-once with idempotency keys; duplicate completions are harmless.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-001",
+        "IAU15-FR-020",
+        "IAU15-FR-039",
+        "IAU15-FR-040"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.10",
+        "16.11",
+        "16.19"
+      ],
+      "rationale": "Duplicate delivery safety strengthened with durable receiver operation.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-03",
+      "original_text": "**Orchestration overhead (T):** p95 under 1 s between a step finishing and the next server-side step starting, excluding runner time.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-005"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.19"
+      ],
+      "rationale": "Reference workload makes target reproducible.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-04",
+      "original_text": "**Claim latency (T):** p95 under 2 s from enqueue to claim with 20 online runners.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-006"
+      ],
+      "story_ids": [
+        "16.12",
+        "16.19"
+      ],
+      "rationale": "Reference runner workload makes target reproducible.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-05",
+      "original_text": "**Capacity (T):** SQLite single node: at least 10 concurrent runs. PostgreSQL: at least 100.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-NFR-007"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "SQLite singleton 10-run target adopted; PostgreSQL 100-run target deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-06",
+      "original_text": "**Validation latency (T):** p95 under 500 ms for a 50-step workflow.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-008"
+      ],
+      "story_ids": [
+        "16.3",
+        "16.19"
+      ],
+      "rationale": "50-step corpus and reference workload defined.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-07",
+      "original_text": "**Isolation:** no cross-project access to any object (tested matrix).",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-002"
+      ],
+      "story_ids": [
+        "16.1",
+        "16.2",
+        "16.12",
+        "16.19"
+      ],
+      "rationale": "Authorization corpus covers trusted identity.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-08",
+      "original_text": "**Redaction:** zero known secret patterns in persisted logs, outputs, artifacts, audit, or stored AI summaries.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-003"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14",
+        "16.19"
+      ],
+      "rationale": "Known corpus scoped; universal secrecy claim avoided.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-09",
+      "original_text": "**Graceful degradation:** runner outage, AI failure, narrative failure, or notification failure never corrupts run state or blocks deterministic analysis.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-020",
+        "IAU15-FR-029",
+        "IAU15-FR-040"
+      ],
+      "story_ids": [
+        "16.5",
+        "16.6",
+        "16.11"
+      ],
+      "rationale": "Supported runner/narrative/receiver degradation retained; notification subsystem deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-10",
+      "original_text": "**Evidence Law:** zero violations from automation-originated reports in CI fixtures.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-004"
+      ],
+      "story_ids": [
+        "16.6",
+        "16.14",
+        "16.19"
+      ],
+      "rationale": "Bounded Evidence Law gate retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-11",
+      "original_text": "**Operability:** structured logs without secrets; metrics for runs, step durations, queue depth, runner health, approval wait, AI calls and outcomes (extends NFR-OPS-06).",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-NFR-011"
+      ],
+      "story_ids": [
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "Supported runtime metrics retained; new AI metrics deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-12",
+      "original_text": "**Portability:** SQLite and PostgreSQL; additive reversible migrations where practical.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-NFR-010"
+      ],
+      "story_ids": [
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "Additive SQLite upgrade/recovery adopted; PostgreSQL automation qualification deferred.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-13",
+      "original_text": "**Accessibility:** per Section 13.9.",
+      "disposition": "adopted-revised",
+      "active_ids": [
+        "IAU15-NFR-009"
+      ],
+      "story_ids": [
+        "16.7",
+        "16.9",
+        "16.15",
+        "16.16",
+        "16.19"
+      ],
+      "rationale": "Composed-app accessibility gate retained.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-14",
+      "original_text": "**Documentation:** not done without Section 15.2 docs.",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-NFR-011"
+      ],
+      "story_ids": [
+        "16.18",
+        "16.19"
+      ],
+      "rationale": "Complete supported-profile docs required; deferred capability docs not claimed.",
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "NFR-IAU-15",
+      "original_text": "**AI latency (T):** Composer draft p95 under 20 s with a hosted provider; local model results reported, no hard target in v1.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "Composer latency applies only after AI feature adoption.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "NFR-IAU-16",
+      "original_text": "**AI safety invariants:** unsafe-acceptance, injection-success, order-violation, coverage-error, and unsafe-suggestion rates are **zero** on the corpus; any regression blocks release.",
+      "disposition": "deferred",
+      "active_ids": [],
+      "story_ids": [],
+      "rationale": "New AI orchestration safety corpus deferred with those capabilities.",
+      "delivery_status": "not-in-v1.5.0-scope"
+    },
+    {
+      "id": "NFR-IAU-17",
+      "original_text": "**Planner scale (T):** deterministic plan for up to 200 units and 500 edges in under 2 s; larger inputs degrade with explicit skipped-scope output (NFR-PERF-02).",
+      "disposition": "partial-revised",
+      "active_ids": [
+        "IAU15-FR-056"
+      ],
+      "story_ids": [
+        "16.16"
+      ],
+      "rationale": "Bounded declared-unit planning adopted;200 units/500 edges scale target deferred to later qualification.",
+      "delivery_status": "not-implemented"
+    }
+  ],
+  "original_source_sha256": "d1b417c84f4e07338b9f2e9547ef60b8331034cbd5ed982a339a880ab2e367d3",
+  "source_normalization": {
+    "date": "2026-10-08",
+    "change": "Removed trailing padding on ASCII-diagram line1205 for publication; requirement text and scope unchanged."
+  }
+}
