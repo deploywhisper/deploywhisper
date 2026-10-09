@@ -1,6 +1,6 @@
 # Story 16.0: Adopt and Qualify the Infra Automation Contract
 
-Status: ready-for-dev
+Status: in-progress
 
 execution_scope: governance-and-synthetic-qualification-only
 release: v1.5.0
@@ -53,9 +53,9 @@ Requirement text and proof ownership follow the [72-row active inventory](../pla
 Each numbered packet is independently reviewable. Assign a named responsible contributor before execution; role labels below define responsibility, not invented staffing. Start with a story branch from `develop` under CONTRIBUTING Git Flow. Keep each packet's changes bounded and identify its acceptance evidence in the PR. No production automation tables, app routes, migrations or React screens are authorized by this story.
 
 - [ ] **WP1 — Scope, threat model and public governance preparation (AC 1–2).** Responsible: maintainer/architecture with security reviewer.
-  - [ ] Preconditions: read all References; compare parent exclusions, active requirement inventory and architecture §25; inspect current CODEOWNERS. Writes: RFC/planning corrections and `docs/verification/infra-automation/16-0/` review packet only.
+  - [x] Preconditions: read all References; compare parent exclusions, active requirement inventory and architecture §25; inspect current CODEOWNERS. Writes: RFC/planning corrections and `docs/verification/infra-automation/16-0/` review packet only.
   - [ ] Describe assets/actors/trust boundaries and abuse cases for identity, SQL claims, hostile sources, local custody, grants, restore and remote outcomes. Record host/DB-admin/compromised-runner limits; classify IA-ADR-01–08 accepted/revised/rejected with reasons after review.
-  - [ ] Prepare public RFC PR text, references, reviewer-area requests and an empty outcome record. Publication and review requests follow the actual scope authorized in the session; if already explicitly authorized, proceed without asking again. This preparation itself publishes nothing.
+  - [x] Prepare public RFC PR text, references, reviewer-area requests and an empty outcome record. Publication and review requests follow the actual scope authorized in the session; if already explicitly authorized, proceed without asking again. This preparation itself publishes nothing.
   - [ ] On authorized publication, record actual PR URL/open timestamp and requested @pramodksahoo area reviews, security/governance review and independent-review coverage gaps. Observe at least seven calendar days, longer if contested; record actual maintainer decision, not an inferred timeout acceptance.
   - [ ] Output: scope/unsupported corpus, threat model, review links/dates/outcome. Failure: missing outcome or rejected unresolved contract retains IR-01 and downstream NOT READY; no emergency exception is assumed.
 
@@ -142,7 +142,7 @@ This story permits local reversible synthetic qualification; no infrastructure m
 
 ### Agent Model Used
 
-Story preparation: Codex; implementation agent/version to be recorded when execution begins.
+Story preparation: Codex. WP1 execution (2026-10-09): GPT-6-based Codex with an independent native read-only agent for technical review inputs; no public maintainer approval claimed.
 
 ### Debug Log References
 
@@ -152,9 +152,32 @@ Story preparation (2026-10-07) executed no spikes, public publication, applicati
 
 Context specification prepared for governance and synthetic qualification only. Acceptance tasks remain unchecked. RFC 0001 remains Proposed; IR-01–04 evidence and downstream production implementation remain outstanding. Story status denotes permission to begin this bounded work, not completed governance or production readiness.
 
+### WP1 execution — 2026-10-09
+
+- Started from clean `develop` on `feature/16-0-infra-automation-qualification`. Responsible preparation contributor: Codex; accountable public maintainer remains @pramodksahoo. Independent human review and future contributor assignments are not fabricated.
+- Loaded project context and story References; BMad Help catalog confirms the bounded Dev Story lane. Prepared scope/threat-model inputs, 34 planned admission/rejection scenarios, conditional IA-ADR-01–08 recommendations, area-review continuation text and an empty public outcome record under `docs/verification/infra-automation/16-0/`.
+- Read-only `gh pr view 154 --json url,state,createdAt,headRefName,baseRefName,author,reviewRequests,reviews,comments,mergedAt` returned exit 0: opened 2026-10-08T08:06:23Z; merged 2026-10-08T08:37:29Z; no reviews/comments/outstanding requests. Corrected RFC/readiness publication history. Merge is not qualifying acceptance; original minimum decision time remains 2026-10-15T08:06:23Z, with actual continuation/window and maintainer outcome still required.
+- WP1 remains incomplete. No final ADR disposition, public review request or acceptance is claimed. WP2–7 and runtime qualification remain unrun; ordered Dev Story task completion stops at unresolved WP1 governance. All downstream statuses remain backlog. UI validation not applicable: no rendered surface or browser behavior changed.
+- Validation: documentation discovery 51 passed; RFC guardrails 6 passed; root unittest smoke 555 run, OK with 1 skip; Ruff lint passed and repo-wide format check reports 306 files formatted; whitespace and packet digest/link/status checks passed. Full local CI and runtime spikes were not run for this documentation-only packet. Exact commands, versions, exit codes and input digests are in the manifest. Internal technical review passed after epic-status and explicit bypass-case corrections; it supplies no public human approval.
+
 ### File List
 
-- `_bmad-output/implementation-artifacts/16-0-adopt-and-qualify-infra-automation-contract.md` — prepared context specification only.
+- `_bmad-output/implementation-artifacts/16-0-adopt-and-qualify-infra-automation-contract.md` — WP1 preparation progress, evidence links and unresolved acceptance.
+
+- `_bmad-output/planning-artifacts/epics.md` — aligned Story 16.0 status and WP1 packet link.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Story 16.0 in-progress; later stories retain backlog.
+- `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-07-infra-automation-v1.5.0.md` — corrected IR-01 publication facts; gate remains open.
+- `docs/rfcs/0001-infra-automation-preflight-and-handoff.md` — actual early-merge observation; RFC remains Proposed.
+- `docs/verification/infra-automation/16-0/README.md` — packet index, custody and reproduction/handoff instructions.
+- `docs/verification/infra-automation/16-0/threat-model.md` — scope/trust boundaries and conditional ADR review inputs.
+- `docs/verification/infra-automation/16-0/scope-corpus.json` — 34 planned scope scenarios; no observed runtime results.
+- `docs/verification/infra-automation/16-0/governance.json` — sanitized observation, prepared requests and empty outcome.
+- `docs/verification/infra-automation/16-0/public-review-text.md` — prepared continuation text; no publication.
+- `docs/verification/infra-automation/16-0/manifest.json` — evidence status, commands, digests and remaining gates.
+
+### Change Log
+
+- 2026-10-09: Began WP1 preparation; recorded early merge without qualifying review, kept mandatory gates open and Story 16.0 in-progress. No production automation or executable spike delivered.
 
 ### Publication record — 2026-10-08
 

@@ -2121,9 +2121,9 @@ As a maintainer,
 I want to settle the supported preflight and handoff contract with governance and executable feasibility evidence,
 So that implementation starts with tested trust boundaries rather than assumptions.
 
-**Status:** ready-for-dev (governance-and-synthetic-qualification-only).
+**Status:** in-progress (governance-and-synthetic-qualification-only; WP1 acceptance blocked).
 
-**Dedicated context:** [16-0-adopt-and-qualify-infra-automation-contract.md](../implementation-artifacts/16-0-adopt-and-qualify-infra-automation-contract.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+**Dedicated context:** [16-0-adopt-and-qualify-infra-automation-contract.md](../implementation-artifacts/16-0-adopt-and-qualify-infra-automation-contract.md). This file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification. WP1 review inputs are prepared in the [evidence packet](../../docs/verification/infra-automation/16-0/README.md); no acceptance packet or runtime qualification is complete.
 
 **Dependencies:** Current v1.4.0 baseline. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
 

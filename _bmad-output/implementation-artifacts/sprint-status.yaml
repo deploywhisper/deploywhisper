@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-10-07
+# last_updated: 2026-10-09
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -39,7 +39,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-10-07
+last_updated: 2026-10-09
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -210,7 +210,7 @@ development_status:
   epic-15-retrospective: optional
 
   epic-16: in-progress
-  16-0-adopt-and-qualify-infra-automation-contract: ready-for-dev
+  16-0-adopt-and-qualify-infra-automation-contract: in-progress
   16-1-verified-human-principal-and-session-lifecycle: backlog
   16-2-trusted-project-memberships-and-automation-permissions: backlog
   16-3-closed-workflow-schema-and-validator: backlog
