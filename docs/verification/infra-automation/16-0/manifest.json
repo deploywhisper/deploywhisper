@@ -1,11 +1,11 @@
 {
   "manifest_version": 1,
   "story": "16.0",
-  "phase": "WP1",
+  "phase": "synthetic-qualification-and-open-gates",
   "status": "blocked",
-  "timestamp": "2026-10-09T14:53:04.881777+00:00",
+  "timestamp": "2026-10-09T15:29:29.136117+00:00",
   "responsible_contributor": "Codex (owner-requested preparation)",
-  "reviewer": "Codex native agent /root/wp1_independent_review (internal technical review only)",
+  "reviewer": "Codex native blind/edge/acceptance reviewers; root integration; no public human outcome",
   "review_kind": "Internal technical review only; public maintainer outcome absent",
   "tool_versions": {
     "python": "3.14.3 local; not a Python 3.11 runtime qualification",
@@ -38,7 +38,7 @@
     },
     {
       "path": "_bmad-output/planning-artifacts/epics.md",
-      "sha256": "f6ce750949e15890380e627f47e4c30485d1f246f508948b52bbfe55e2e1808f"
+      "sha256": "953d572bfb23d62462c97a115fa1fcf67e612e2eb5d1ee3d9c4847940f2fa745"
     },
     {
       "path": "_bmad-output/planning-artifacts/infra-automation-v1.5.0-release-plan.md",
@@ -46,7 +46,7 @@
     },
     {
       "path": "_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-07-infra-automation-v1.5.0.md",
-      "sha256": "784c409a2b89c69ef6277d89c90360ee0f2903f230470a6b556e5d68a9100ee1"
+      "sha256": "3c604a23f2a42c7c4108a52501c69674d5635a155372c9ba6bc830c959c37b06"
     },
     {
       "path": "_bmad-output/planning-artifacts/research/technical-infra-automation-research-2026-10-07.md",
@@ -84,113 +84,129 @@
   "sanitized_log_path": "governance.json",
   "cases": [
     {
-      "case_id": "WP1-reference-and-scope-preparation",
-      "status": "passed",
-      "result": "Canonical References available and compared; scope matches bounded planning authority, not runtime evidence"
-    },
-    {
       "case_id": "WP1-public-governance-acceptance",
       "status": "blocked",
-      "result": "PR154 merged early without recorded reviews/discussion; original minimum Oct15 and actual maintainer outcome pending"
+      "result": "PR154 early merge, no reviews/discussion/requests; original minimum Oct15 and actual outcome absent"
     },
     {
       "case_id": "WP1-final-ADR-dispositions",
       "status": "blocked",
-      "result": "Conditional recommendations only; public review and WP2\u20136 proof pending"
+      "result": "Conditional recommendations; actual public and real qualification evidence pending"
     },
     {
-      "case_id": "WP2-qualification",
-      "status": "planned",
-      "result": null
+      "case_id": "WP2-disposable-identity",
+      "status": "passed",
+      "result": "18 tests; 2000 matrix assertions; 1946 unauthorized denials; bounded crypto/HTTP/session evidence",
+      "evidence": "wp2-identity-results.json"
     },
     {
-      "case_id": "WP3-qualification",
-      "status": "planned",
-      "result": null
+      "case_id": "WP3-disposable-sqlite",
+      "status": "passed",
+      "result": "11 tests; independent process race, fencing, bounded lock retries and abrupt crash/restart corpus",
+      "evidence": "wp3-sqlite-results.json"
     },
     {
-      "case_id": "WP4-qualification",
-      "status": "planned",
-      "result": null
+      "case_id": "WP4-real-containment",
+      "status": "blocked",
+      "result": "Daemon unavailable; no installed IaC tool or supplied pinned Linux/provider profile",
+      "evidence": "wp4-containment-results.json"
     },
     {
-      "case_id": "WP5-qualification",
-      "status": "planned",
-      "result": null
+      "case_id": "WP5-synthetic-receiver-faults",
+      "status": "passed",
+      "result": "12 tests; 30 tuple mutations; five real child crash points; no repeated counted effect",
+      "evidence": "wp5-receiver-results.json"
     },
     {
-      "case_id": "WP6-qualification",
-      "status": "planned",
-      "result": null
+      "case_id": "WP5-real-plan-and-separated-custody",
+      "status": "blocked",
+      "result": "Actual saved binary plan, Linux containment, OS identity separation/encryption and integrated authority unavailable"
     },
     {
-      "case_id": "WP7-qualification",
+      "case_id": "WP6-contract-freeze",
       "status": "planned",
-      "result": null
+      "result": "20 draft coverage cases and consumer/UX inspection; no frozen wire/hash/permission/UX contract",
+      "evidence": "wp6-contract-assessment.md"
+    },
+    {
+      "case_id": "WP7-readiness-and-sizing",
+      "status": "blocked",
+      "result": "20 contexts and 42 earlier-only references checked; real gates/independent public outcome and final spike-based sizing pending"
     }
   ],
   "validation": [
     {
-      "command": "./.venv/bin/python -m unittest discover -s tests/test_docs -q",
-      "purpose": "documentation regressions",
+      "command": "./.venv/bin/python -m unittest tests.test_infra.test_infra_automation_identity_qualification tests.test_infra.test_infra_automation_sqlite_qualification tests.test_infra.test_infra_automation_receiver_qualification -q",
       "status": "passed",
       "exit_code": 0,
-      "result": "51 passed"
-    },
-    {
-      "command": "./.venv/bin/python -m unittest tests.test_infra.test_rfc_decision_process -q",
-      "purpose": "RFC process guardrails",
-      "status": "passed",
-      "exit_code": 0,
-      "result": "6 passed"
+      "result": "41 passed"
     },
     {
       "command": "./.venv/bin/python -m unittest discover -q",
-      "purpose": "minimum smoke check; not full CI parity",
       "status": "passed",
       "exit_code": 0,
-      "result": "555 run; OK; 1 skipped; smoke only, not full CI parity"
+      "result": "596 run; OK; 1 skipped; minimum smoke only"
+    },
+    {
+      "command": "./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
+      "status": "passed",
+      "exit_code": 0,
+      "result": "533 passed; 832 subtests passed"
+    },
+    {
+      "command": "bash scripts/ci-local.sh",
+      "status": "passed",
+      "exit_code": 0,
+      "result": "exit 0; all registered test directories, Ruff/format, pip check, production Bandit, compile and skill checks passed"
     },
     {
       "command": "./.venv/bin/ruff check .",
-      "purpose": "repo lint",
       "status": "passed",
       "exit_code": 0,
       "result": "All checks passed"
     },
     {
       "command": "./.venv/bin/ruff format --check .",
-      "purpose": "repo formatting",
       "status": "passed",
       "exit_code": 0,
-      "result": "306 files already formatted"
+      "result": "313 files already formatted"
+    },
+    {
+      "command": "./.venv/bin/bandit -q -r tests/fixtures/infra_automation/qualification/16_0",
+      "status": "passed",
+      "exit_code": 0,
+      "result": "No findings; exit 0"
     },
     {
       "command": "git diff --check",
-      "purpose": "whitespace",
       "status": "passed",
       "exit_code": 0,
-      "result": "No whitespace diagnostics"
+      "result": "Tracked changed lines and all new files checked; no new whitespace diagnostics"
     }
   ],
-  "runtime_evidence_claimed": false,
+  "runtime_evidence_claimed": true,
   "open_issues": [
     "IR-01 public review continuation/requests/independent human coverage/outcome absent",
-    "IR-02 identity/fencing/real containment/custody/receiver spikes unrun",
-    "IR-03 versioned wire/hash/permission/UX contracts unfrozen",
-    "IR-04 named downstream assignments and spike-based sizing pending"
+    "IR-02 real containment/saved-plan/separate custody identities/storage policy and integrated receiver proof absent",
+    "IR-03 final wire/hash/permission/UX contracts and executable consumer compatibility unfrozen",
+    "IR-04 named downstream assignments and completed-spike-based sizing pending"
   ],
   "ui_validation": "not applicable; no rendered surfaces or browser behavior changed",
   "publication_actions_performed": false,
   "technical_review": {
     "status": "passed-after-corrections",
-    "scope": "WP1 preparation only; relevant reference sections and final packet",
+    "scope": "WP2/WP3 and partial WP5 retained harnesses/evidence; three layers",
+    "findings": 5,
     "resolved_findings": [
-      "Aligned canonical epic story status with in-progress story/tracker",
-      "Added explicit FR-035 emergency/delegated-approval rejection scenarios"
+      "Preserve absolute authentication deadline across rotation",
+      "Deny unencodable credentials",
+      "Refuse passing evidence after tests or actual measured verification fail",
+      "Bound and validate HTTP JSON/scoped inputs",
+      "Bind terminal receipts to configured and authorized receiver"
     ],
     "public_governance_approval": false,
-    "runtime_qualification": false
+    "production_qualification": false,
+    "evidence": "technical-review.md"
   },
   "packet_consistency": {
     "status": "passed",
@@ -201,12 +217,110 @@
       "Source digests match current reference bytes",
       "Scenario IDs unique; all runtime observed results null",
       "RFC outcome empty; no runtime evidence or approval claimed"
-    ]
+    ],
+    "qualification_methods": 41,
+    "downstream_contexts": 20,
+    "earlier_only_references": 42,
+    "validated_changed_files": 24,
+    "complete_story_file_list": true
   },
   "not_run": [
-    "WP2\u20137 executable qualification and contract freeze",
-    "Full scripts/ci-local.sh; bounded docs/tracker-only changes use documentation/governance tests and smoke",
+    "WP4 real pinned Linux containment/provider probes",
+    "WP5 actual saved plan, OS identity/encryption and remote integration",
+    "WP6 frozen contract validators/consumer round-trips/composed UX",
+    "WP7 complete evidence-dependent readiness/sizing",
     "Compose/browser; UI validation not applicable",
-    "Public review requests/continuation/decision; no external writes performed"
-  ]
+    "Public continuation/review requests/maintainer decision; no external writes performed"
+  ],
+  "runtime_evidence_scope": "Disposable synthetic prototypes only; no real containment, saved-plan or production support",
+  "production_runtime_evidence_claimed": false,
+  "screened_execution_summaries": {
+    "qualification": "41 tests in 6.693s; OK",
+    "smoke": "596 tests in 109.588s; OK(skipped=1)",
+    "ci_shard": "533 passed, 832 subtests passed in 127.66s",
+    "full_ci": "final run exit 0; full registered directory coverage"
+  },
+  "artifact_digests": [
+    {
+      "path": "docs/verification/infra-automation/16-0/technical-review.md",
+      "sha256": "a79db5b86133715b8f03be305e35e39e4de75535a03e15cdf170acb6636de746"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp2-identity-results.json",
+      "sha256": "512a004fdb1c99f1b3e22a15578fcaa3da48f831700181f1b50b570787e568b3"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp2-identity.md",
+      "sha256": "326a170558bbacb9abb3f70838bbb302c8e937d5c99e5def099096291766cc48"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp3-sqlite-results.json",
+      "sha256": "51cfe55d3dd24f5476b19a787bd431eab18cf08a502dbeb1a55797dcfad0f7c6"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp3-sqlite.md",
+      "sha256": "63d4153cba89c51bccf0387fad8e74d762d34fa09e7546fbd3ba92c0eacfb146"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp4-containment-results.json",
+      "sha256": "014c55b19b15686cc166babcec1b240da5d6f3a79d7669525967ce85a3f39ac2"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp4-containment.md",
+      "sha256": "6f265459e42ca0892be79a874f12d69e85e39cbcb07ffcf9eb9894a5c835499e"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp5-receiver-results.json",
+      "sha256": "d61fb184a467a8dc12c51f85139f8fdcd1407380740392383026b79e623569f6"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp5-receiver.md",
+      "sha256": "7d4b296e068fbaa7e86fbac1dc30f928ca7f13e9cd94a438a2a69da07c35defc"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp6-contract-assessment.md",
+      "sha256": "300f860d7f516fd107ac3338d7c337dff590945d007a41ddd2e381dd370d2fba"
+    },
+    {
+      "path": "schemas/infra-automation/qualification-16-0-draft.json",
+      "sha256": "09c08935f776dec2fa8e3afdd30ef047c99a267c1452b5cb2a8ab54c8181a8d9"
+    }
+  ],
+  "harness_digests": [
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/identity/measure.py",
+      "sha256": "475ed912db0087ac3479ea6ade0178e6ed02d7f2bdbbc4c5d1f25ac83cc8249d"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/identity/prototype.py",
+      "sha256": "1129d834e105075b9675905187087d3c93684b20c98583bf15cfdff69ae69f44"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/receiver/prototype.py",
+      "sha256": "8480510e799b1c95f11685e934361f131eb7bad49f7e03fda4fbe3216dbd660d"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/sqlite/prototype.py",
+      "sha256": "03f8013e4361aed0d74690636cbbe1d8c533ec28a86d01b0f44539aaaae53f01"
+    },
+    {
+      "path": "tests/test_infra/test_infra_automation_identity_qualification.py",
+      "sha256": "44f670cf066858e82fc1e5299544a2f8109160478ff5bbea47ca73f3643111ea"
+    },
+    {
+      "path": "tests/test_infra/test_infra_automation_receiver_qualification.py",
+      "sha256": "f9a6eabbbbcb5d028e30a1c600d1de9d71dbe333097bb2f0e145f51f78e135ba"
+    },
+    {
+      "path": "tests/test_infra/test_infra_automation_sqlite_qualification.py",
+      "sha256": "dc5a8389fe19767764dcb2d948ba7e1875c4d4023238312bb5fa99a8a403fd1d"
+    }
+  ],
+  "bmad_help_handoff": {
+    "current_lane": "Story16.0 bounded disposable qualification; in-progress",
+    "next_required": "Resolve real WP4 profile and full WP5 custody prerequisites; complete public RFC outcome, final WP6 contracts and WP7 readiness",
+    "downstream_promotion": "none; 16.1\u201316.19 backlog",
+    "separate_release_enabler": "12.5 SBOM remains separate",
+    "completion": "not claimed"
+  }
 }

@@ -1,7 +1,7 @@
 # Story 16.0 qualification evidence
 
 Execution scope: **governance and disposable synthetic qualification only**.
-Current packet: **WP1 preparation; mandatory acceptance blocked**.
+Current packets: **WP2/WP3 prototype qualification, partial WP5 fault evidence; WP1 governance and WP4 real containment blocked; WP6 draft, not frozen**.
 Responsible contributor for this preparation: **Codex, acting on the owner's Story 16.0 request**.
 Accountable public maintainer: **@pramodksahoo**. This does not assert a reviewer assignment or approval.
 
@@ -22,6 +22,12 @@ IR-04's prepared-context work does not close its execution-sizing gap.
   area requests ready for authorized publication, with no external write.
 - [Evidence manifest](manifest.json): provenance, source digests, status and
   commands. A `planned` or `blocked` case is not passed evidence.
+- [WP2 identity](wp2-identity.md) and [results](wp2-identity-results.json): disposable session/HTTP/capability checks and measured cryptographic bounds.
+- [WP3 SQLite](wp3-sqlite.md) and [results](wp3-sqlite-results.json): independent-process claims, fencing, abrupt restart and uncertainty checks.
+- [WP4 containment](wp4-containment.md) and [results](wp4-containment-results.json): unavailable real-tool/profile prerequisites; no containment proof.
+- [WP5 receiver](wp5-receiver.md) and [results](wp5-receiver-results.json): synthetic-byte fault/custody tests; full real-plan qualification blocked.
+- [WP6 assessment](wp6-contract-assessment.md) and [draft inventory](../../../../schemas/infra-automation/qualification-16-0-draft.json): proposed contracts and consumer/UX inspection; no frozen validator or route.
+- [Technical review](technical-review.md): layered findings and regression fixes, separate from public maintainer acceptance.
 
 PR [#154](https://github.com/deploywhisper/deploywhisper/pull/154) opened at
 2026-10-08T08:06:23Z and merged at 2026-10-08T08:37:29Z. The retrieved PR has
@@ -40,6 +46,9 @@ Read the mandatory project context, all story References and current
 gh pr view 154 --json url,state,createdAt,headRefName,baseRefName,author,reviewRequests,reviews,comments,mergedAt
 ./.venv/bin/python -m unittest discover -s tests/test_docs -q
 ./.venv/bin/python -m unittest tests.test_infra.test_rfc_decision_process -q
+./.venv/bin/python -m unittest tests.test_infra.test_infra_automation_identity_qualification tests.test_infra.test_infra_automation_sqlite_qualification tests.test_infra.test_infra_automation_receiver_qualification -q
+./.venv/bin/python tests/fixtures/infra_automation/qualification/16_0/identity/measure.py
+./.venv/bin/python tests/fixtures/infra_automation/qualification/16_0/sqlite/prototype.py
 git diff --check
 ```
 
@@ -52,17 +61,14 @@ Future spike reviewers run the specified harnesses using private temporary
 directories and synthetic inputs. Keep accounts/tokens, databases, raw logs,
 saved binary plans/state and generated tool output out of the repository,
 application storage and public artifacts. Commit only screened summaries and
-harmless source/harnesses. No such harness or private spike output exists yet
-in this packet. WP4 must use its declared real pinned Linux profile; substitute
+harmless source/harnesses. Retained harnesses exercise private temporary synthetic data and clean it up; no private database, credential, raw log or binary-plan output is committed. WP4 must use its declared real pinned Linux profile; substitute
 processes cannot qualify it. WP5's protocol doubles cannot qualify binary-plan
 custody without the actual WP4 plan and separated identities.
 
 ## Handoff
 
 Finish WP1 public governance evidence before claiming that packet complete.
-The development workflow requires ordered task completion; WP2–7 are unrun
-in this execution. Their scoped dependencies still permit future disposable
-qualification without granting downstream product implementation authority.
+The resumed execution follows each packet’s explicit prerequisites: WP2 needs WP1 threat-model inputs, not public acceptance; WP3 needs its failure model; WP5 permits synthetic protocol faults before real saved-plan proof. The previous blanket WP1 halt was too restrictive. Prototype qualification does not grant downstream product implementation authority. WP4/full WP5, public governance and WP6 final freeze remain blocked or pending.
 After real gates and independent review pass, rerun implementation readiness
 and `bmad-help`. Promote individual stories only against their dependencies;
 keep 12.5 as a separate release enabler and retain the 16.19 release gate.

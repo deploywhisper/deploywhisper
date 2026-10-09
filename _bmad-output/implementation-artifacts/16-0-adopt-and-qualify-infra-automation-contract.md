@@ -59,18 +59,18 @@ Each numbered packet is independently reviewable. Assign a named responsible con
   - [ ] On authorized publication, record actual PR URL/open timestamp and requested @pramodksahoo area reviews, security/governance review and independent-review coverage gaps. Observe at least seven calendar days, longer if contested; record actual maintainer decision, not an inferred timeout acceptance.
   - [ ] Output: scope/unsupported corpus, threat model, review links/dates/outcome. Failure: missing outcome or rejected unresolved contract retains IR-01 and downstream NOT READY; no emergency exception is assumed.
 
-- [ ] **WP2 — Verified identity/session and route-scope qualification (AC 3).** Responsible: backend/security. Depends: WP1 threat-model inputs, not public acceptance of untested assumptions.
-  - [ ] Preconditions: isolated temp database, synthetic accounts/tokens and no app database import side effects. Writes: disposable prototype plus safe harness/fixtures under proposed `tests/fixtures/infra_automation/qualification/16_0/identity/`; sanitized evidence only in verification directory.
-  - [ ] Exercise one-use/expiry bootstrap with no default password; salted password verifier and high-entropy opaque session storage as hashes; compare existing crypto suitability, cost parameters and login abuse/resource bounds. Pin a supported choice with reviewer rationale; if inadequate, document a dependency request and leave that gate open rather than install a package.
-  - [ ] Test secure HttpOnly/SameSite cookie scope, supported HTTPS Secure policy, login/privilege-change rotation, absolute/idle expiry, logout, reset and revocation; deny missing/incorrect CSRF and Origin on cookie mutations, session fixation and header spoofing.
-  - [ ] Matrix: human/service/agent/runner/receiver × admin/maintainer/reviewer/contributor/read-only × project/workspace × workflow/publish/run/decision/target/enrollment/report/artifact/policy/settings. Deny absent memberships, cross-project object IDs and legacy share/header bypass. Shared-mode requester cannot approve; authenticated single operator is an acknowledgement.
-  - [ ] Output: parameter/version decision, route/permission fixture matrix and measured failures. Failure: any unauthorized access, reusable token persistence or unaudited compatibility bypass keeps IR-02 open; prototype is not 16.1/16.2 delivery.
+- [x] **WP2 — Verified identity/session and route-scope qualification (AC 3).** Responsible: backend/security. Depends: WP1 threat-model inputs, not public acceptance of untested assumptions.
+  - [x] Preconditions: isolated temp database, synthetic accounts/tokens and no app database import side effects. Writes: disposable prototype plus safe harness/fixtures under proposed `tests/fixtures/infra_automation/qualification/16_0/identity/`; sanitized evidence only in verification directory.
+  - [x] Exercise one-use/expiry bootstrap with no default password; salted password verifier and high-entropy opaque session storage as hashes; compare existing crypto suitability, cost parameters and login abuse/resource bounds. Pin a supported choice with reviewer rationale; if inadequate, document a dependency request and leave that gate open rather than install a package.
+  - [x] Test secure HttpOnly/SameSite cookie scope, supported HTTPS Secure policy, login/privilege-change rotation, absolute/idle expiry, logout, reset and revocation; deny missing/incorrect CSRF and Origin on cookie mutations, session fixation and header spoofing.
+  - [x] Matrix: human/service/agent/runner/receiver × admin/maintainer/reviewer/contributor/read-only × project/workspace × workflow/publish/run/decision/target/enrollment/report/artifact/policy/settings. Deny absent memberships, cross-project object IDs and legacy share/header bypass. Shared-mode requester cannot approve; authenticated single operator is an acknowledgement.
+  - [x] Output: parameter/version decision, route/permission fixture matrix and measured failures. Failure: any unauthorized access, reusable token persistence or unaudited compatibility bypass keeps IR-02 open; prototype is not 16.1/16.2 delivery.
 
-- [ ] **WP3 — SQLite ownership, fencing and restart qualification (AC 4).** Responsible: backend/persistence. Depends: WP1 failure model.
-  - [ ] Preconditions: temp file-backed SQLite, two genuinely independent connections (not one mocked session or `:memory:` database). Writes: disposable minimal rows/harness plus synthetic fixtures under `.../qualification/16_0/sqlite/`; no application Alembic migration.
-  - [ ] Fix transaction/CAS/unique-constraint semantics with state version, coordinator generation, monotonic attempt/fence, lease and authorization/restore epoch. Synchronize contenders at claim/commit and assert one accepted owner; inspect lock/busy handling with bounded retries.
-  - [ ] Kill/restart at precommit/postcommit/output-before-success, overlap old/new coordinator and expire/reclaim leases; submit old heartbeat/log/upload/completion against the new fence. Assert committed state remains and stale mutations deny. Retry only declared local idempotent work; unknown external effects remain reconciliation work.
-  - [ ] Output: runnable crash/race corpus with timelines/DB digests, selected SQLite parameters and unresolved limits. Failure: lost committed transition, multiple current owners or stale writes retains IR-02; no 10-run capacity claim from this microspike.
+- [x] **WP3 — SQLite ownership, fencing and restart qualification (AC 4).** Responsible: backend/persistence. Depends: WP1 failure model.
+  - [x] Preconditions: temp file-backed SQLite, two genuinely independent connections (not one mocked session or `:memory:` database). Writes: disposable minimal rows/harness plus synthetic fixtures under `.../qualification/16_0/sqlite/`; no application Alembic migration.
+  - [x] Fix transaction/CAS/unique-constraint semantics with state version, coordinator generation, monotonic attempt/fence, lease and authorization/restore epoch. Synchronize contenders at claim/commit and assert one accepted owner; inspect lock/busy handling with bounded retries.
+  - [x] Kill/restart at precommit/postcommit/output-before-success, overlap old/new coordinator and expire/reclaim leases; submit old heartbeat/log/upload/completion against the new fence. Assert committed state remains and stale mutations deny. Retry only declared local idempotent work; unknown external effects remain reconciliation work.
+  - [x] Output: runnable crash/race corpus with timelines/DB digests, selected SQLite parameters and unresolved limits. Failure: lost committed transition, multiple current owners or stale writes retains IR-02; no 10-run capacity claim from this microspike.
 
 - [ ] **WP4 — Real hostile-source Linux containment qualification (AC 5).** Responsible: runner/security. Depends: WP1 threat model and explicit operator tool/profile availability.
   - [ ] Preconditions: qualified disposable Linux non-root container sandbox, preinstalled pinned tool/provider catalog, synthetic no-cloud source, no real credentials and controlled offline/local dependencies. If absent, record exact blocker; do not install tools or choose a less isolated profile silently.
@@ -81,11 +81,11 @@ Each numbered packet is independently reviewable. Assign a named responsible con
 
 - [ ] **WP5 — Exact-plan local custody and receiver recovery qualification (AC 6–7).** Responsible: receiver/security. Depends: WP3 durable concepts; WP4 real saved-plan fixture for full custody proof.
   - [ ] Preconditions: protected temp custody store with separate collector/receiver identities; actual synthetic saved binary plan, screened JSON and raw/sanitized digests. Synthetic byte fixtures may exercise protocol faults first but do not replace real saved-plan verification.
-  - [ ] Writes: private temp custody/receiver SQLite state and prototype; safe grant/receipt fixtures and harness under `.../qualification/16_0/receiver/`. No real GitHub/cloud mutation. A counted harmless local action models the receiver action boundary.
+  - [x] Writes: private temp custody/receiver SQLite state and prototype; safe grant/receipt fixtures and harness under `.../qualification/16_0/receiver/`. No real GitHub/cloud mutation. A counted harmless local action models the receiver action boundary.
   - [ ] Verify owner-restricted access, atomic immutable finalization, opaque handle, no-follow descriptor-based digest verification, restart persistence, encryption/storage policy and bounded expiry/cleanup. Attack overwrite/symlink swap/TOCTOU/tamper/unauthorized identity/expiry; changes deny. Never persist raw plan/state in app, logs or public artifact locations.
   - [ ] Freeze advisory_request versus exact_plan tuple, canonical serialization/hash and shortest deadline (default collection TTL 60 minutes unless stricter). Mutate each source/revision/input/scope/report/policy/unit/target/payload/custody/digest/epoch field independently; require new evidence/approval and reject advisory mutation or replan under an old grant.
-  - [ ] Persist one-use consume and receiver operation before counted action. Crash before/after consume, before/after start and completion; lose response and replay request; prove operation deduplication and explicit uncertainty where start outcome cannot be established. Recheck membership/target/feature/restore epochs before starting/resuming action; unavailable authority fails closed.
-  - [ ] Preserve canonical target locks through delivery_unknown, cancellation and lease expiry; reconcile signed sequenced receipt/outcome without a second action. Audited lock break must not mint new authorization. Record accepted versus observed-terminal semantics explicitly.
+  - [x] Persist one-use consume and receiver operation before counted action. Crash before/after consume, before/after start and completion; lose response and replay request; prove operation deduplication and explicit uncertainty where start outcome cannot be established. Recheck membership/target/feature/restore epochs before starting/resuming action; unavailable authority fails closed.
+  - [x] Preserve canonical target locks through delivery_unknown, cancellation and lease expiry; reconcile signed sequenced receipt/outcome without a second action. Audited lock break must not mint new authorization. Record accepted versus observed-terminal semantics explicitly.
   - [ ] Output: real custody evidence, fault matrix and chosen receiver recovery contract. Failure: duplicate counted action, plan substitution, stale authority or automatic unlock retains IR-02; no exactly-once deployment claim or production receiver integration credit.
 
 - [ ] **WP6 — Versioned contracts, report compatibility and UX freeze (AC 8).** Responsible: architecture/API with UI reviewer. Depends: WP2–5 evidence; draft fixtures may precede final freeze.
@@ -105,7 +105,7 @@ Each numbered packet is independently reviewable. Assign a named responsible con
 
 - [ ] **Validation record (AC 1–9).** Record exact executed commands, versions, exit codes and acceptance findings; all qualification tasks above are currently unexecuted.
   - [ ] Run relevant documentation checks and `git diff --check`. For any retained Python harness/fixture change run `./.venv/bin/ruff check .`, **repo-wide** `./.venv/bin/ruff format --check .`, `./.venv/bin/python -m unittest discover -q` and affected registered discovery/CI shard; root discovery alone is insufficient. Use `bash scripts/ci-local.sh` for broad retained changes.
-  - [ ] Production UI remains unchanged: record **UI validation not applicable** for this scope. If scope is explicitly widened to real React changes, use a separate sanctioned UI story/PR and Compose production build, seed actual APIs, root-SPA Playwright/axe/keyboard/screenshots at `http://localhost:8080`, then Compose down; Vite cannot prove acceptance.
+  - [x] Production UI remains unchanged: record **UI validation not applicable** for this scope. If scope is explicitly widened to real React changes, use a separate sanctioned UI story/PR and Compose production build, seed actual APIs, root-SPA Playwright/axe/keyboard/screenshots at `http://localhost:8080`, then Compose down; Vite cannot prove acceptance.
 
 ## Dev Notes
 
@@ -160,6 +160,28 @@ Context specification prepared for governance and synthetic qualification only. 
 - WP1 remains incomplete. No final ADR disposition, public review request or acceptance is claimed. WP2–7 and runtime qualification remain unrun; ordered Dev Story task completion stops at unresolved WP1 governance. All downstream statuses remain backlog. UI validation not applicable: no rendered surface or browser behavior changed.
 - Validation: documentation discovery 51 passed; RFC guardrails 6 passed; root unittest smoke 555 run, OK with 1 skip; Ruff lint passed and repo-wide format check reports 306 files formatted; whitespace and packet digest/link/status checks passed. Full local CI and runtime spikes were not run for this documentation-only packet. Exact commands, versions, exit codes and input digests are in the manifest. Internal technical review passed after epic-status and explicit bypass-case corrections; it supplies no public human approval.
 
+### Synthetic qualification resume — 2026-10-09
+
+- Corrected the earlier blanket WP1 halt: WP2 explicitly depends on threat-model inputs, not public acceptance; WP3 needs the failure model, and WP5 permits synthetic faults before real saved-plan proof. Public RFC acceptance remains open and no downstream story is promoted.
+- Named responsible contributors: Codex native `identity_spike` for WP2, `sqlite_spike` for WP3, `receiver_spike` for partial WP5, `contract_assessment` for WP6 drafts; root Codex integrates and owns WP4 prerequisite/readiness/verification records. Internal reviewers `blind_hunter`, `edge_hunter` and `acceptance_auditor` supply technical input, not public human approval.
+- WP2: disposable account/session/HTTPS TestClient prototype, 18 tests and 2,000 permission outcomes (1,946 unauthorized denials). Selected existing PBKDF2-HMAC-SHA256 at 600,000 iterations with bounded parsing/concurrency/abuse windows, 128-bit salts and 256-bit session/bootstrap/CSRF material; actual median 79.190 ms on local ARM64. Existing primitives are adequate for this bounded experiment; production hardware/abuse persistence and public adequacy acceptance remain pending. No new dependency or application authentication is delivered.
+- WP3: 11 tests against private file-backed SQLite, including synchronized independent-process ownership, state versions/unique constraints, fences/generations/epochs, bounded busy retries, stale heartbeat/log/upload/completion and abrupt precommit/postcommit/output-before-success restart. Unknown external work retains locks and never retries. Local SQLite version/PRAGMAs/timelines/digests are recorded; no capacity, power-loss or HA claim.
+- WP4 blocked: Docker CLI is present but daemon image enumeration exited 1; OpenTofu/Terraform are absent on PATH and no approved pinned preinstalled Linux tool/provider profile is supplied. No tools/images were installed and no fallback profile was selected. No actual saved plan or containment probe exists.
+- WP5 partial: 12 tests, 30 tuple mutation denials, five real abrupt child crash points, hashed one-use consumption, live authority checks, custody descriptor integrity doubles, unknown-outcome locks and authenticated sequenced receipts. Reconciliation requires independently observed exact durable synthetic effect evidence, never dispatch acceptance or signature alone. Real saved-plan custody, separate OS identities, encryption policy and network integration remain blocked. Checked WP5 subtasks apply only to the explicitly permitted synthetic counted-action/protocol slice.
+- WP6: draft contract inventory with 20 planned cases and source-linked report/API/UI/CLI/agent/external-action compatibility and UX composition assessment. Several consumers drop undeclared provenance; no established report-byte hash is claimed. Relational-first recommendation, final wire/permission/hash and reviewed compositions remain unfrozen. External action was inspected read-only at commit `3b37ed72bfb2d201030bef873268f2170794b160`; no runtime copied into this repository.
+- Verified all 20 stable context links and 42 earlier-only dependency references across the 19 downstream contexts; backlog remains unchanged. Real spikes are insufficient for a complete re-estimate, so IR-04 execution sizing/named downstream assignments remain open.
+- Final integrated qualification: 41 tests passed. Relevant full CI, smoke/shard/security/format results are recorded in the manifest after execution. UI validation not applicable: no production rendered surface or browser behavior changed. Story remains in-progress; mandatory WP1/WP4/full WP5/WP6/WP7 gates cannot be marked complete.
+
+### Review Findings
+
+The BMad layered review found five deduplicated patch items; automatic fixes are authorized by the implementation request. All are covered by passing regressions. No decision-needed finding was waived and no public governance outcome is inferred.
+
+- [x] [Review][Patch] Preserve the original authentication deadline through session rotation — identity prototype and rotation-boundary regression.
+- [x] [Review][Patch] Deny unencodable UTF-8 credentials instead of raising — verifier/bootstrap/reset and HTTP lone-surrogate regression.
+- [x] [Review][Patch] Fail closed when tests or measured password verification fail — measurement preserves prior evidence and derives totals from completed assertions; both failure triggers tested.
+- [x] [Review][Patch] Deny malformed/non-object/oversized JSON and non-scalar scope IDs — bounded 4,096-byte HTTP parsing and request regressions.
+- [x] [Review][Patch] Bind signed terminal receipts to the configured and authorized receiver — nondefault receiver and malformed-receipt regressions retain locks on denial.
+
 ### File List
 
 - `_bmad-output/implementation-artifacts/16-0-adopt-and-qualify-infra-automation-contract.md` — WP1 preparation progress, evidence links and unresolved acceptance.
@@ -175,8 +197,28 @@ Context specification prepared for governance and synthetic qualification only. 
 - `docs/verification/infra-automation/16-0/public-review-text.md` — prepared continuation text; no publication.
 - `docs/verification/infra-automation/16-0/manifest.json` — evidence status, commands, digests and remaining gates.
 
+- `docs/verification/infra-automation/16-0/technical-review.md` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `docs/verification/infra-automation/16-0/wp2-identity-results.json` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `docs/verification/infra-automation/16-0/wp2-identity.md` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `docs/verification/infra-automation/16-0/wp3-sqlite-results.json` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `docs/verification/infra-automation/16-0/wp3-sqlite.md` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `docs/verification/infra-automation/16-0/wp4-containment-results.json` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `docs/verification/infra-automation/16-0/wp4-containment.md` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `docs/verification/infra-automation/16-0/wp5-receiver-results.json` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `docs/verification/infra-automation/16-0/wp5-receiver.md` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `docs/verification/infra-automation/16-0/wp6-contract-assessment.md` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `schemas/infra-automation/qualification-16-0-draft.json` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `tests/fixtures/infra_automation/qualification/16_0/identity/measure.py` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `tests/fixtures/infra_automation/qualification/16_0/identity/prototype.py` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `tests/fixtures/infra_automation/qualification/16_0/receiver/prototype.py` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `tests/fixtures/infra_automation/qualification/16_0/sqlite/prototype.py` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `tests/test_infra/test_infra_automation_identity_qualification.py` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `tests/test_infra/test_infra_automation_receiver_qualification.py` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+- `tests/test_infra/test_infra_automation_sqlite_qualification.py` — bounded synthetic qualification or screened/draft evidence; no production implementation.
+
 ### Change Log
 
+- 2026-10-09: Resumed explicit packet prerequisites; qualified WP2/WP3 and partial WP5 with 41 tests, resolved layered review findings and prepared WP6 drafts. WP4 and public/real-custody/freeze/readiness gates remain unresolved.
 - 2026-10-09: Began WP1 preparation; recorded early merge without qualifying review, kept mandatory gates open and Story 16.0 in-progress. No production automation or executable spike delivered.
 
 ### Publication record — 2026-10-08

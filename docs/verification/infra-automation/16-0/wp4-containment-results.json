@@ -1,0 +1,45 @@
+{
+  "manifest_version": 1,
+  "phase": "WP4",
+  "status": "blocked",
+  "timestamp": "2026-10-09T15:02:24.949304+00:00",
+  "responsible_contributor": "Codex",
+  "commands": [
+    {
+      "command": "/usr/local/bin/docker --version",
+      "exit_code": 0,
+      "result": "Docker 29.1.3, build f52814d"
+    },
+    {
+      "command": "docker image ls --format '{{.Repository}}:{{.Tag}} {{.ID}}' > /private/tmp/story16-docker-inventory.txt 2>&1",
+      "exit_code": 1,
+      "result": "daemon_unavailable"
+    },
+    {
+      "command": "Python platform.system() and shutil.which(\"tofu\"/\"terraform\"/\"docker\")",
+      "exit_code": 0,
+      "result": {
+        "host_os": "Darwin",
+        "tofu_available": false,
+        "terraform_available": false,
+        "docker_cli_available": true
+      }
+    }
+  ],
+  "image_versions": null,
+  "tool_provider_pins": null,
+  "synthetic_input_digests": [],
+  "cases": [],
+  "runtime_evidence_claimed": false,
+  "sanitized_log_path": null,
+  "reviewer": null,
+  "open_issues": [
+    "Docker daemon unavailable for image/profile inspection",
+    "No installed OpenTofu/Terraform executable on host PATH",
+    "No supplied approved preinstalled pinned Linux image/tool/provider catalog",
+    "Real containment probes unrun; no actual saved plan available for WP5"
+  ],
+  "raw_log_custody": "private temporary diagnostic file; not published",
+  "profile_substituted": false,
+  "tools_installed": false
+}

@@ -2,7 +2,7 @@
   "record_version": 1,
   "phase": "WP1",
   "status": "blocked",
-  "observed_at": "2026-10-09T14:45:36.736013Z",
+  "observed_at": "2026-10-09T15:29:29.136117+00:00",
   "observation_command": "gh pr view 154 --json url,state,createdAt,headRefName,baseRefName,author,reviewRequests,reviews,comments,mergedAt",
   "exit_code": 0,
   "public_pr": {
@@ -40,7 +40,7 @@
     "No public review discussion or reviewer requests observed",
     "No independent human architecture/security/governance reviewer identified",
     "PR merged before minimum review window; public review continuation must be established by maintainer",
-    "WP2\u20136 executable and contract evidence absent"
+    "WP2/WP3 prototypes and partial WP5 executed; real containment/custody and final contracts remain absent"
   ],
   "acceptance_outcome": {
     "decision": null,
