@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "phase": "WP5",
+  "status": "blocked",
+  "synthetic_fault_status": "passed",
+  "observed_date": "2026-10-09",
+  "reviewer": null,
+  "runtime": {
+    "python": "3.14.3",
+    "sqlite": "3.53.1",
+    "ruff": "0.15.11",
+    "bandit": "1.9.4"
+  },
+  "results": {
+    "test_methods": 12,
+    "tuple_field_mutations_denied": 30,
+    "live_authority_mutations_denied_at_admission_and_start": 6,
+    "abrupt_child_crash_points": 5,
+    "child_exit_code": 73,
+    "signed_receipt_mismatch_cases_denied": 5,
+    "registered_receiver_identity_regression": "passed; nondefault configured identity and signed wrong identity cannot unlock",
+    "malformed_receipt_cases_denied": 6
+  },
+  "crash_cases": [
+    {
+      "point": "before_consume",
+      "count_at_restart": 0,
+      "recovered_action_count": 1
+    },
+    {
+      "point": "after_consume",
+      "count_at_restart": 0,
+      "recovered_action_count": 1
+    },
+    {
+      "point": "after_start",
+      "count_at_restart": 0,
+      "state": "delivery_unknown",
+      "retry": "denied",
+      "lock": "retained",
+      "reconciliation": "signed success denied without independent observed marker"
+    },
+    {
+      "point": "after_action",
+      "count_at_restart": 1,
+      "state": "delivery_unknown",
+      "retry": "denied",
+      "lock": "retained",
+      "reconciliation": "succeeded only after observing exact fsynced synthetic operation marker; no repeated action"
+    },
+    {
+      "point": "after_completion",
+      "count_at_restart": 1,
+      "state": "action_completed"
+    }
+  ],
+  "commands": [
+    {
+      "command": "./.venv/bin/python -m unittest discover -s tests/test_infra -p test_infra_automation_receiver_qualification.py -q",
+      "exit_code": 0,
+      "result": "12 tests passed"
+    },
+    {
+      "command": "./.venv/bin/ruff check tests/test_infra/test_infra_automation_receiver_qualification.py tests/fixtures/infra_automation/qualification/16_0/receiver/prototype.py",
+      "exit_code": 0
+    },
+    {
+      "command": "./.venv/bin/ruff format --check .",
+      "exit_code": 0,
+      "result": "313 files already formatted"
+    },
+    {
+      "command": "./.venv/bin/bandit -q tests/test_infra/test_infra_automation_receiver_qualification.py tests/fixtures/infra_automation/qualification/16_0/receiver/prototype.py",
+      "exit_code": 0,
+      "scoped_annotations": [
+        "B404 local subprocess import",
+        "B603 fixed local child crash harness"
+      ]
+    }
+  ],
+  "red_green": {
+    "tests_written_first": true,
+    "red": "Missing intentionally unimplemented prototype during import; execution wrapper returned setup error without retained numeric unittest summary",
+    "green": "12 test methods passed in 0.357s; exit 0",
+    "review_regression_red": "12 methods: 1 failure (unregistered receiver admitted), 2 errors (malformed receipts); exit 1"
+  },
+  "blocked_gates": [
+    "real pinned-tool saved binary plan",
+    "qualified Linux containment profile",
+    "separate OS collector/receiver execution identities",
+    "configured encryption/storage policy",
+    "integrated authenticated remote admission and receiver recovery"
+  ],
+  "custody": "private temporary files only; no raw plans, DBs, keys or logs committed",
+  "ui_validation": "not applicable",
+  "deployment_exactly_once_claim": false,
+  "production_routes_or_migrations": false
+}
