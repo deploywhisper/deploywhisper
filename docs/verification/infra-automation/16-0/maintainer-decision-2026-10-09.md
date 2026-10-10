@@ -26,3 +26,5 @@ Current reviewer coverage is one human maintainer plus independent Codex technic
 - Preserve all stable IDs, separately tracked 12.5 release prerequisites and later integrated collector/browser/upgrade/pilot/release qualification.
 
 The committed decision and final qualification PR provide the public repository record of this authorized outcome. No past public discussion or review-request event is invented.
+
+Publication: [qualification PR155](https://github.com/deploywhisper/deploywhisper/pull/155), opened2026-10-10T03:57:23Z against `develop`, carries this decision and the completed evidence. It does not invent a platform approval or duplicate RFC0001.

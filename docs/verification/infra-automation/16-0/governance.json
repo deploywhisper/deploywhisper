@@ -49,13 +49,20 @@
     "discussion_url": null,
     "source": "direct maintainer statement in this session; committed repository decision record"
   },
-  "follow_up": "Publish committed decision and qualification evidence through story Git Flow; preserve honest platform review history and complete actual mandatory qualification.",
-  "external_writes_performed": false,
+  "follow_up": "Qualification/decision published in PR155; production work follows prepared16.1/16.3 and later dependencies.",
+  "external_writes_performed": true,
   "minimum_review_satisfied": false,
   "maintainer_exception": {
     "scope": "RFC0001 immediate acceptance only",
     "source": "direct current user statement as repository maintainer",
     "record": "maintainer-decision-2026-10-09.md",
     "independent_human_review_claimed": false
+  },
+  "qualification_pr": {
+    "url": "https://github.com/deploywhisper/deploywhisper/pull/155",
+    "opened_at": "2026-10-10T03:57:23Z",
+    "base": "develop",
+    "head": "feature/16-0-infra-automation-qualification",
+    "purpose": "qualified Story16.0 delivery; not a duplicate RFC"
   }
 }

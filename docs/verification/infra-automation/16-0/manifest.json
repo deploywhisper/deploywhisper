@@ -253,12 +253,18 @@
       "status": "passed",
       "exit_code": 0,
       "result": "No changed-line whitespace diagnostics"
+    },
+    {
+      "command": "./.venv/bin/python -m unittest discover -s tests/test_docs -q; ./.venv/bin/python -m unittest tests.test_infra.test_rfc_decision_process tests.test_infra.test_requirements_traceability_matrix tests.test_infra.test_maintainer_ownership -q",
+      "status": "passed",
+      "exit_code": 0,
+      "result": "51 documentation tests and13 governance/traceability/ownership tests passed after final metadata updates"
     }
   ],
   "runtime_evidence_claimed": true,
   "open_issues": [],
   "ui_validation": "not applicable; no rendered surfaces or browser behavior changed",
-  "publication_actions_performed": false,
+  "publication_actions_performed": true,
   "technical_review": {
     "status": "passed-after-corrections",
     "scope": "All retained qualification and frozen contracts; independent real Linux rerun and readiness assessment",
@@ -272,7 +278,7 @@
       "Strict enrollment boolean before coercion",
       "Order-independent graph reference validation"
     ],
-    "public_governance_approval": true,
+    "public_governance_approval": false,
     "production_qualification": false,
     "evidence": "technical-review.md",
     "additional_documentation_corrections": [
@@ -316,7 +322,7 @@
     },
     {
       "path": "docs/verification/infra-automation/16-0/maintainer-decision-2026-10-09.md",
-      "sha256": "baea255153e853a36abe994f43672ce5a3b8fa094256617d8a49a8bfccb67b58"
+      "sha256": "5080311ac0bfc4a819596244c874f1b10b3c6fa4e7fc485da5d2365c5c4b1155"
     },
     {
       "path": "docs/verification/infra-automation/16-0/technical-review.md",
@@ -541,5 +547,12 @@
   "qualified_profile": {
     "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
     "sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49"
-  }
+  },
+  "publication": {
+    "pr": "https://github.com/deploywhisper/deploywhisper/pull/155",
+    "base": "develop",
+    "branch": "feature/16-0-infra-automation-qualification",
+    "opened_at": "2026-10-10T03:57:23Z"
+  },
+  "maintainer_decision_record": "maintainer-decision-2026-10-09.md"
 }

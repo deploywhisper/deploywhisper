@@ -184,6 +184,8 @@ The BMad layered review found five deduplicated patch items; automatic fixes are
 
 ### Final qualification and closure — 2026-10-10
 
+Publication: [PR155](https://github.com/deploywhisper/deploywhisper/pull/155) targets `develop` from `feature/16-0-infra-automation-qualification`; completed work is pushed for review.
+
 - Maintainer @pramodksahoo directly accepted RFC0001 on2026-10-09 and reaffirmed on2026-10-10. The current authenticated GitHub account matches CODEOWNERS. The specific early-window exception is recorded in the decision/course-correction artifacts; seven days did not elapse and no GitHub approval or second human review is fabricated. This updates AC2/WP1 governance only; technical gates were executed.
 - Named final owners: root Codex integrates; native `real_linux_qualification` executed WP4/real WP5, `freeze_contracts` completed WP6, `final_readiness` completed WP7. Independent `real_qualification_review` reran actual Linux qualification; `contract_review` reran contracts and adversarial permutations. The maintainer is accountable for all later stories, with Codex-assisted execution and independent review as recorded in WP7.
 - WP4/full WP5: actual OpenTofu1.13.1 and external2.3.5 under Linux ARM64, immutable image/catalog/source, UID10001 collector and UID10002 receiver. Egress/environment/capability/seccomp/mount, CPU/memory/pids/disk/output/time and descendant probes passed. AES256GCM custody verified the original saved binary plan through a sealed memfd after actual receiver restart; seven attacks, five crash boundaries, 30 tuple mutations and changed-plan rejection passed. Both stores are bounded8MiB anchored tmpfs; host power-loss durability remains downstream.
