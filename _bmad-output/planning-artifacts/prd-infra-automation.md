@@ -224,3 +224,7 @@ This documentation update contains no application changes, production support cl
 ## Story preparation follow-up — 2026-10-07
 
 All 20dedicated Epic 16contexts are prepared under [the story-preparation report](../implementation-artifacts/epic-16-story-preparation-report.md). Story 16.0 is ready-for-dev only for governance and disposable synthetic qualification;16.1–16.19 remain backlog while real RFC/spike/interface/dependency evidence is missing. This changes preparation metadata, not the 60 FR/12 NFR contract, original 179 dispositions or released history.
+
+## Story 16.0 finalization — 2026-10-10
+
+RFC0001 is accepted by the direct maintainer decision, with its specific early-review-window exception recorded honestly. The [final readiness assessment](implementation-readiness-report-2026-10-10-infra-automation-v1.5.0.md) and [WP7 sizing/ownership](../../docs/verification/infra-automation/16-0/wp7-readiness.md) supersede the earlier planning-only blocker snapshot and coarse estimate for foundation execution. Frozen contracts are in [contract-v1](../../docs/infra-automation/contract-v1.md); qualification applies only to its declared disposable profile. Scope, requirement IDs and separate12.5 release prerequisite are preserved. Story16.0 final repository verification precedes promotion of only16.1/16.3; later production/browser/recovery/pilot/release evidence remains mandatory.

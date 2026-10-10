@@ -35,3 +35,13 @@ binary-plan custody, separate OS identities, encryption policy, integrated
 network/browser/production runtime, final contract freeze and readiness remain
 open. A clean review of this bounded slice cannot complete Story 16.0 or promote
 downstream stories. No public message or approval was sent by this review.
+
+## Final contract and real-profile review — 2026-10-10
+
+Independent contract review found two additional defects: integer1 was coerced into the enrollment boolean, and unordered graph references could raise KeyError before local validation. Both received failing regressions and fixes. The reviewer reran 15 tests, accepted 240 valid workflow permutations and denied 725 mutated negative boundaries with controlled ValueError outcomes. No finding remains.
+
+Independent real-profile verification executed `DW16_REAL_LINUX=1 ./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_real_linux_qualification.py -q`: 3 passed, 6 subtests passed in 13.74s, exit 0. It checked actual image/catalog/source identities, separated UIDs, containment/resource/process controls, real saved-plan custody, seven attacks, five crashes, 30 tuple mutations and changed-plan rejection. A wording finding was corrected: the harness checks image/schema/catalog/source/control values; it does not claim to verify the complete profile checksum at runtime.
+
+The qualified profile SHA is `1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49`. Anchored tmpfs establishes process/receiver-container restart with bounded stores; host power-loss durability, production integration, capacity and universal redaction remain assigned downstream. These limits were reviewed and do not represent those broader capabilities as delivered.
+
+The maintainer's direct RFC decision, reaffirmed on 2026-10-10, is recorded separately. Independent technical agents supply no second human approval. Final readiness and repository validation close the bounded Story 16.0 scope.

@@ -1,76 +1,35 @@
 # Story 16.0 qualification evidence
 
-Execution scope: **governance and disposable synthetic qualification only**.
-Current packets: **WP2/WP3 prototype qualification, partial WP5 fault evidence; WP1 governance and WP4 real containment blocked; WP6 draft, not frozen**.
-Responsible contributor for this preparation: **Codex, acting on the owner's Story 16.0 request**.
-Accountable public maintainer: **@pramodksahoo**. This does not assert a reviewer assignment or approval.
+Scope: governance and disposable synthetic qualification. The maintainer accepted RFC 0001, real Linux/tool/custody qualification passed, and version 1 contracts are frozen. Story16.0 is done; final repository checks and closure are recorded in [manifest.json](manifest.json).
 
-The [story](../../../../_bmad-output/implementation-artifacts/16-0-adopt-and-qualify-infra-automation-contract.md)
-remains in progress. No production automation route, table, migration, runner,
-receiver or React screen is delivered by this packet. IR-01–03 remain open;
-IR-04's prepared-context work does not close its execution-sizing gap.
+## Evidence by packet
 
-## Review packet
+- [Maintainer decision](maintainer-decision-2026-10-09.md) and [governance record](governance.json): direct approval, actual PR154 chronology and explicit RFC-specific early-window exception. No second human review or GitHub approval event is fabricated.
+- [Threat model and accepted ADRs](threat-model.md), [scope review corpus](scope-corpus.json): bounded Tier 0/1, trust limits and rejected modes. The scope corpus is a review inventory; executed negative vectors live in the qualification tests.
+- [WP2 identity](wp2-identity.md): 18 methods, 2,000 permission outcomes and measured cryptographic/resource bounds.
+- [WP3 SQLite](wp3-sqlite.md): 11 methods covering independent claims, fencing, epochs and abrupt restart.
+- [WP4 real containment](wp4-containment.md): pinned OpenTofu1.13.1/external2.3.5 on non-root Linux ARM64, real hostile-source/resource/network/process probes.
+- [WP5 synthetic receiver](wp5-receiver.md) and [actual saved-plan custody](wp5-real-custody.md): 12 fault methods plus real encrypted custody/separated identities/restart/tamper/replan evidence. The real Linux command shared by WP4/WP5 passed 3 methods and 6 subtests.
+- [WP6 frozen contracts](wp6-contract-assessment.md), [normative v1 reference](../../../infra-automation/contract-v1.md), [content manifest](../../../../schemas/infra-automation/frozen-v1.json): 15 methods/185 subtests, 25 valid/28 invalid vectors, actual consumer probes and reviewed future compositions.
+- [Technical review](technical-review.md), [WP7 readiness and sizing](wp7-readiness.md), [final readiness report](../../../../_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-10-infra-automation-v1.5.0.md): independent reruns, resolved findings, owners, estimates and dependency-qualified handoff.
 
-- [Scope and threat model](threat-model.md): assets, actors, boundaries,
-  negative cases, trust limits and conditional IA-ADR recommendations.
-- [Scope corpus](scope-corpus.json): review inputs and expected admission
-  decisions, **not executed validator tests or a frozen workflow schema**.
-- [Governance observation](governance.json): sanitized read-only GitHub
-  observation, review-area plan and empty acceptance outcome.
-- [Prepared public review text](public-review-text.md): continuation text and
-  area requests ready for authorized publication, with no external write.
-- [Evidence manifest](manifest.json): provenance, source digests, status and
-  commands. A `planned` or `blocked` case is not passed evidence.
-- [WP2 identity](wp2-identity.md) and [results](wp2-identity-results.json): disposable session/HTTP/capability checks and measured cryptographic bounds.
-- [WP3 SQLite](wp3-sqlite.md) and [results](wp3-sqlite-results.json): independent-process claims, fencing, abrupt restart and uncertainty checks.
-- [WP4 containment](wp4-containment.md) and [results](wp4-containment-results.json): unavailable real-tool/profile prerequisites; no containment proof.
-- [WP5 receiver](wp5-receiver.md) and [results](wp5-receiver-results.json): synthetic-byte fault/custody tests; full real-plan qualification blocked.
-- [WP6 assessment](wp6-contract-assessment.md) and [draft inventory](../../../../schemas/infra-automation/qualification-16-0-draft.json): proposed contracts and consumer/UX inspection; no frozen validator or route.
-- [Technical review](technical-review.md): layered findings and regression fixes, separate from public maintainer acceptance.
-
-PR [#154](https://github.com/deploywhisper/deploywhisper/pull/154) opened at
-2026-10-08T08:06:23Z and merged at 2026-10-08T08:37:29Z. The retrieved PR has
-no comments, reviews or outstanding review requests. Its merge records planning
-publication, not acceptance under the seven-calendar-day process. The minimum
-decision time remains **2026-10-15T08:06:23Z**, subject to a longer contested
-review. A maintainer must establish an actual public review continuation and
-decision record; elapsed time alone will never accept this RFC.
-
-## Reproduction and custody
-
-Read the mandatory project context, all story References and current
-[RFC process](../../../rfcs/README.md). Refresh the public observation with:
+## Reproduction
 
 ```sh
-gh pr view 154 --json url,state,createdAt,headRefName,baseRefName,author,reviewRequests,reviews,comments,mergedAt
-./.venv/bin/python -m unittest discover -s tests/test_docs -q
-./.venv/bin/python -m unittest tests.test_infra.test_rfc_decision_process -q
-./.venv/bin/python -m unittest tests.test_infra.test_infra_automation_identity_qualification tests.test_infra.test_infra_automation_sqlite_qualification tests.test_infra.test_infra_automation_receiver_qualification -q
-./.venv/bin/python tests/fixtures/infra_automation/qualification/16_0/identity/measure.py
-./.venv/bin/python tests/fixtures/infra_automation/qualification/16_0/sqlite/prototype.py
-git diff --check
+./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_contract_qualification.py -q
+DW16_REAL_LINUX=1 ./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_real_linux_qualification.py -q
+./.venv/bin/python -m unittest discover -q
+./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short
+bash scripts/ci-local.sh
+./.venv/bin/ruff format --check .
 ```
 
-Observe actual public reviews and dates; do not convert a merged PR or a local
-agent review into maintainer approval. The named CODEOWNER is also the author,
-so self-review cannot supply independent review. No public comment, request,
-new PR or invitation was sent by this preparation.
+The real run requires the exact local image/profile recorded in WP4. Ordinary CI opts out of Docker qualification; the separately executed real suite must pass before this evidence is accepted. Rebuilding to a new image identity requires review and requalification, not a silent fallback.
 
-Future spike reviewers run the specified harnesses using private temporary
-directories and synthetic inputs. Keep accounts/tokens, databases, raw logs,
-saved binary plans/state and generated tool output out of the repository,
-application storage and public artifacts. Commit only screened summaries and
-harmless source/harnesses. Retained harnesses exercise private temporary synthetic data and clean it up; no private database, credential, raw log or binary-plan output is committed. WP4 must use its declared real pinned Linux profile; substitute
-processes cannot qualify it. WP5's protocol doubles cannot qualify binary-plan
-custody without the actual WP4 plan and separated identities.
+Keep generated accounts/tokens, databases, raw logs, binary plans/state and keys in private disposable stores. Commit only harmless sources/harnesses and screened summaries. Run-owned containers/volumes/network are cleaned; the qualified local image is retained for reproduction.
 
-## Handoff
+## Acceptance limits and handoff
 
-Finish WP1 public governance evidence before claiming that packet complete.
-The resumed execution follows each packet’s explicit prerequisites: WP2 needs WP1 threat-model inputs, not public acceptance; WP3 needs its failure model; WP5 permits synthetic protocol faults before real saved-plan proof. The previous blanket WP1 halt was too restrictive. Prototype qualification does not grant downstream product implementation authority. WP4/full WP5, public governance and WP6 final freeze remain blocked or pending.
-After real gates and independent review pass, rerun implementation readiness
-and `bmad-help`. Promote individual stories only against their dependencies;
-keep 12.5 as a separate release enabler and retain the 16.19 release gate.
+This work qualifies the design and contracts, not production automation handlers or a v1.5.0 release. Anchored tmpfs proves process/receiver-container restart, not host power-loss persistence. Host/daemon/DB administrators and receiver-identity compromise remain trust limits. Capacity, universal redaction, production key/retention/network integration, composed browser proof and signed release/pilot remain assigned to later stories.
 
-UI validation not applicable: no rendered surface or browser behavior changed.
+After final checks, only prepared dependency-satisfied foundations 16.1 and16.3 may advance. Other stories retain their dependencies;12.5 stays a separate release enabler. UI validation not applicable: no rendered surface changed. The raw React client probe is not browser/pixel proof.

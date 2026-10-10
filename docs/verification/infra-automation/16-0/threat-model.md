@@ -1,8 +1,7 @@
 # WP1 scope and threat-model review inputs
 
 Prepared 2026-10-09 by Codex for Story 16.0. All controls below are requirements
-to qualify, not implemented protections. Public maintainer approval and WP2–6
-evidence are absent. Canonical authority is the parent PRD §4.4, feature PRD,
+to qualify, not implemented protections. The later maintainer decision and WP2–6 evidence are indexed in the final dispositions below. Canonical authority is the parent PRD §4.4, feature PRD,
 72-row active inventory, architecture §25, Epic 16 and RFC 0001; the original
 179-row vision remains historical input.
 
@@ -55,7 +54,7 @@ operator records acknowledgement without a four-eyes claim.
 ## Boundaries and abuse cases
 
 Each row names the acceptance packet and downstream implementation owner.
-All executable outcomes remain **planned**.
+Executable outcomes are recorded in the linked qualification packets; the table maps required boundaries to their owners.
 
 | Boundary | Abuse case and required denial/recovery | Proof owner |
 | --- | --- | --- |
@@ -95,23 +94,19 @@ All executable outcomes remain **planned**.
   canonical tuple/hash, schema/error/permission fixtures, report consumers and
   final UX composition remain unresolved WP2–6 evidence, not draft defaults.
 
-## Conditional IA-ADR dispositions
+## Final IA-ADR dispositions — 2026-10-10
 
-These are proposed review recommendations, **not final accepted dispositions**.
-The canonical eight records remain Proposed. Public decision, named human
-review and required executable/compatibility evidence are prerequisites.
+All eight bounded design choices are **Accepted** under the [maintainer decision](maintainer-decision-2026-10-09.md). The qualification below establishes their feasibility for the declared profile; production delivery remains in the owning stories.
 
-| Record | Recommendation | Rationale and evidence needed before acceptance |
+| Record | Disposition | Rationale and acceptance evidence |
 | --- | --- | --- |
-| IA-ADR-01 | Retain proposed bounded scope | Parent exclusion, Tier 0/1 and shared-core posture agree; scope corpus and real public scope decision still required |
-| IA-ADR-02 | Retain conditionally | Header-based authority is inadequate; WP2 must measure verifier costs, resource bounds and lifecycle/cross-scope denial; no implicit dependency addition |
-| IA-ADR-03 | Retain conditionally | CAS/fences/outbox fit singleton SQLite; WP3 must prove independent connection races, crashes and stale-denial before selecting parameters |
-| IA-ADR-04 | Retain conditionally | Disposable non-root Linux is the selected profile; WP4 must prove real pinned execution, egress/resource/descendant boundaries; unavailable profile blocks |
-| IA-ADR-05 | Retain conditionally | Full tuple plus durable consumption and reconciliation address response loss; WP5 must prove no duplicate counted action, live authority and exact custody |
-| IA-ADR-06 | Retain conditionally | Relational linkage and separate digests preserve advisory reports; WP6 must inspect API/UI/CLI/agent/action/hash consumers; incompatible change requires explicit reviewed major migration |
-| IA-ADR-07 | Retain conditionally | Epoch invalidation and conservative locks avoid uncertain-effect retries; WP3/5 crash and restore evidence plus later integrated operations/load qualification required |
-| IA-ADR-08 | Retain proposed AI boundary | Existing narrative stays downstream with AI off supported; no model commands or new AI subsystem; WP6 contract and later AI-off integration proof required |
+| IA-ADR-01 | Accepted | Tier0/1 and shared-core posture retained; scope corpus plus closed-registry negative vectors reject excluded modes |
+| IA-ADR-02 | Accepted | WP2 proves verified session/audience/scope denials and bounded existing PBKDF2 primitives; application auth remains16.1/16.2 |
+| IA-ADR-03 | Accepted | WP3 proves independent SQLite ownership, fencing, epochs, committed output and abrupt restart; no HA/capacity claim |
+| IA-ADR-04 | Accepted | WP4 real pinned OpenTofu/provider proves the named non-root Linux ARM64 profile; other tools/platforms need their own qualification |
+| IA-ADR-05 | Accepted | Synthetic and actual saved-plan receiver tests prove bound grants, original bytes, crash/replay and conservative unknown locks |
+| IA-ADR-06 | Accepted with concrete selection | Relational run/report linkage preserves reportv2; separate provenancev1 and exact-byte report snapshot digest; WP6 API/agent/CLI/raw-client/action consumer probes passed |
+| IA-ADR-07 | Accepted within recorded limits | Epoch invalidation/unknown locks and bounded resources tested; disposable anchored custody covers process/container restart, with production persistent storage/recovery/load owned later |
+| IA-ADR-08 | Accepted | Narrative remains downstream and optional; no new AI subsystem or model-issued authority is admitted |
 
-No decision is silently revised or rejected to make a gate pass. Reviewer
-dissent, design changes and final dispositions must link their public outcome
-and actual acceptance evidence. Agent review is technical input only.
+Evidence: [WP2](wp2-identity.md), [WP3](wp3-sqlite.md), [WP4](wp4-containment.md), [real WP5](wp5-real-custody.md), [WP6](wp6-contract-assessment.md), [WP7](wp7-readiness.md). Independent technical reviews resolved recorded defects. The maintainer's direct approval is distinct from that agent review; a second human reviewer is not claimed.

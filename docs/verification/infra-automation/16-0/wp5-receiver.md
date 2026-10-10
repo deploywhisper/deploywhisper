@@ -1,5 +1,7 @@
 # WP5 receiver and custody synthetic fault evidence
 
+Current overall WP5 qualification is recorded in [actual saved-plan custody](wp5-real-custody.md). The partial/blocked statements below preserve the earlier synthetic-only run before real qualification.
+
 2026-10-09: **Partial PASS; full WP5 BLOCKED.** This disposable prototype
 exercises receiver state transitions and harmless synthetic byte custody only.
 It does not execute Terraform/OpenTofu, apply infrastructure, expose application

@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-10-09
+# last_updated: 2026-10-10
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -28,7 +28,7 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT PLANNING: 16-0-adopt-and-qualify-infra-automation-contract; public RFC and feasibility gates pending
+# NEXT IMPLEMENTATION: 16.1 / 16.3; Story16.0 qualified and closed; later dependencies remain gated
 # RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
 # EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md
 # WORKFLOW NOTES:
@@ -39,7 +39,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-10-09
+last_updated: 2026-10-10
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -48,16 +48,16 @@ story_location: _bmad-output/implementation-artifacts
 release_priorities:
   v1.5.0:
     highest_priority_feature: epic-16
-    next_planning_story: 16-0-adopt-and-qualify-infra-automation-contract
+    next_planning_story: 16-1-verified-human-principal-and-session-lifecycle
     release_enablers:
       - 12-5-sbom-and-release-checksums
       - 12-7-backup-restore-upgrade-and-retention-docs
       - 12-8-air-gapped-and-restricted-network-guide
     implementation_gate: RFC acceptance, Story 16.0 feasibility, final contracts and bounded story refinement
-    readiness: not-ready-for-feature-implementation
+    readiness: ready-for-qualified-foundation-stories
     first_story_ready_scope: governance-and-synthetic-qualification-only
     story_preparation_report: _bmad-output/implementation-artifacts/epic-16-story-preparation-report.md
-    readiness_report: _bmad-output/planning-artifacts/implementation-readiness-report-2026-10-07-infra-automation-v1.5.0.md
+    readiness_report: _bmad-output/planning-artifacts/implementation-readiness-report-2026-10-10-infra-automation-v1.5.0.md
 
 development_status:
   epic-0: done
@@ -210,10 +210,10 @@ development_status:
   epic-15-retrospective: optional
 
   epic-16: in-progress
-  16-0-adopt-and-qualify-infra-automation-contract: in-progress
-  16-1-verified-human-principal-and-session-lifecycle: backlog
+  16-0-adopt-and-qualify-infra-automation-contract: done
+  16-1-verified-human-principal-and-session-lifecycle: ready-for-dev
   16-2-trusted-project-memberships-and-automation-permissions: backlog
-  16-3-closed-workflow-schema-and-validator: backlog
+  16-3-closed-workflow-schema-and-validator: ready-for-dev
   16-4-scoped-workflows-and-immutable-revisions: backlog
   16-5-durable-engine-and-fenced-recovery: backlog
   16-6-uploaded-artifact-preflight-and-report-linkage: backlog

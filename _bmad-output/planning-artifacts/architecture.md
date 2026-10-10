@@ -1225,7 +1225,7 @@ The immediate planning sequence is:
 
 ### 25.1 Authority, baseline and supported boundary
 
-The user authorized course correction, PRD/architecture updates and implementation-readiness review on **2026-10-07**, using the [release plan](infra-automation-v1.5.0-release-plan.md). This authorizes planning adoption; it does not substitute for the public RFC decision or feasibility results. [RFC 0001](../../docs/rfcs/0001-infra-automation-preflight-and-handoff.md) remains **Proposed** under the [RFC process](../../docs/rfcs/README.md). Story **16.0** owns its acceptance, threat-model review, executable feasibility spikes and readiness closure. None of the design below is represented as implemented.
+The user authorized course correction, PRD/architecture updates and implementation-readiness review on **2026-10-07**, using the [release plan](infra-automation-v1.5.0-release-plan.md). This authorizes planning adoption; it does not substitute for the public RFC decision or feasibility results. [RFC 0001](../../docs/rfcs/0001-infra-automation-preflight-and-handoff.md) is **Accepted** by direct maintainer decision dated 2026-10-09, reaffirmed 2026-10-10, with its explicit RFC-specific review-window exception. See the [decision record](../../docs/verification/infra-automation/16-0/maintainer-decision-2026-10-09.md). Story **16.0** owns its acceptance, threat-model review, executable feasibility spikes and readiness closure. None of the design below is represented as implemented.
 
 Baseline: released v1.4.0; preserve Story 12.5 SBOM and Release Checksums, done 12.6/13.8 and all other accepted identities/statuses. Epic **16**, stories **16.0–16.19**, is the highest-priority feature for v1.5.0; delivery order is independent of numeric history. Story 12.5 is a runner-distribution/release prerequisite; automation-specific recovery/network qualification contributes to 12.7/12.8 without closing their full acceptance automatically.
 
@@ -1233,9 +1233,9 @@ Supported first release: a bounded, declarative preflight workflow, uploaded art
 
 Excluded: Tier 2 apply/destroy/remediation, unattended approval/handoff, arbitrary scripts/plugins, generic failure/finally handoffs, broad collector/integration catalogs, native cron/drift, environment promotion, package-ledger governance and new AI composition/mapping/planning/diagnosis. Existing downstream narrative remains optional. Unsupported modes fail clearly. PostgreSQL/HA/multi-worker automation and alternate runner platforms require subsequent qualification; existing roadmap scale paths are not v1.5.0 support promises.
 
-### 25.2 Proposed architectural decisions
+### 25.2 Accepted architectural decisions
 
-The following eight **IA-ADR** records extend the existing ADRs without colliding with original draft ADR-15–20 numbering. Status for each: **proposed design selected for planning; RFC review and 16.0 qualification pending**.
+The following eight **IA-ADR** records extend the existing ADRs without colliding with original draft ADR-15–20 numbering. Disposition for each: **accepted bounded design**, backed by the maintainer decision and Story 16.0 qualification. The [frozen v1 contracts](../../docs/infra-automation/contract-v1.md) and [evidence packet](../../docs/verification/infra-automation/16-0/README.md) define exact scope and limits; acceptance does not claim the later production components are delivered.
 
 | Record | Selected design and rationale | Rejected alternative / consequences | Owning stories |
 | --- | --- | --- | --- |

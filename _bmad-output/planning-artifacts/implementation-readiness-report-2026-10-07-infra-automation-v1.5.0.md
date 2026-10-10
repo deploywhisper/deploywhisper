@@ -27,6 +27,9 @@ inputDocuments:
 
 # Infrastructure Automation v1.5.0 implementation readiness
 
+> Historical assessment: its original open-gate snapshot is superseded for Story16.0 foundation readiness by the [2026-10-10 assessment](implementation-readiness-report-2026-10-10-infra-automation-v1.5.0.md). Production/release obligations remain with their owning stories.
+
+
 **Story-preparation follow-up:** All 20 dedicated contexts now exist. Story 16.0 is ready to begin governance/disposable qualification only; 16.1–16.19 remain backlog. The initial assessment below preserves its original evidence snapshot. IR-04 document refinement is resolved by prepared bounded packets, while execution sizing/named assignment awaits real 16.0 results. Public governance, feasibility and interface gates remain open. [Preparation report](../implementation-artifacts/epic-16-story-preparation-report.md).
 
 **Overall: NOT READY for downstream feature implementation or production release.** The planning change is adopted, the bounded scope is appropriate, and Epic 16 has a traceable implementation path. Public RFC acceptance and Story 16.0 executable trust-boundary qualification are outstanding. Preparing 16.0 and its review/spike evidence is the appropriate next work; these blockers do not mean the requested documentation reconciliation is unfinished.

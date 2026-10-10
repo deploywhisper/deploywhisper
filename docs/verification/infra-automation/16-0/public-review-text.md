@@ -1,5 +1,7 @@
 # Prepared public review continuation text
 
+Historical unpublished draft. Superseded by the [actual maintainer decision](maintainer-decision-2026-10-09.md) and completed qualification; its pending-status language must not be published as current.
+
 **Draft only. No comment, review request or new PR has been published.**
 Prepared for the existing RFC thread and a maintainer-selected public review
 continuation. PR #154 is already merged; this packet creates no duplicate.

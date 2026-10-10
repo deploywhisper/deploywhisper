@@ -94,5 +94,10 @@
   "custody": "private temporary files only; no raw plans, DBs, keys or logs committed",
   "ui_validation": "not applicable",
   "deployment_exactly_once_claim": false,
-  "production_routes_or_migrations": false
+  "production_routes_or_migrations": false,
+  "superseded_overall_gate": {
+    "status": "passed_for_declared_profile",
+    "evidence": "wp5-real-custody-results.json",
+    "note": "Original synthetic-only result retained; subsequent real custody qualification closes the overall packet for its bounded scope."
+  }
 }

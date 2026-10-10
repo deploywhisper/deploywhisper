@@ -1,24 +1,89 @@
 {
   "manifest_version": 1,
   "story": "16.0",
-  "phase": "synthetic-qualification-and-open-gates",
-  "status": "blocked",
-  "timestamp": "2026-10-09T15:29:29.136117+00:00",
+  "phase": "complete-bounded-qualification",
+  "status": "passed",
+  "timestamp": "2026-10-10T03:21:13.441960+00:00",
   "responsible_contributor": "Codex (owner-requested preparation)",
-  "reviewer": "Codex native blind/edge/acceptance reviewers; root integration; no public human outcome",
-  "review_kind": "Internal technical review only; public maintainer outcome absent",
+  "reviewer": "Independent Codex contract/real-profile/readiness lanes; root integration; direct maintainer adoption separately recorded",
+  "review_kind": "Executed independent technical review plus explicit maintainer decision; no second human claim",
   "tool_versions": {
     "python": "3.14.3 local; not a Python 3.11 runtime qualification",
     "ruff": "0.15.11",
     "gh": "2.96.0",
     "git": "2.54.0 (Apple Git-157)"
   },
-  "image_versions": null,
-  "synthetic_input_digests": [],
+  "image_versions": {
+    "base_image": "python@sha256:0a310eeecf4e1f5a0743f9a6520c90c88d089c903ca5fd283f501e3a805f5f89",
+    "catalog_digests": {
+      "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/terraform-provider-external": "f9994ee228b86d34c289d858af46f758921f34393a27a1bb5677761c08228f50",
+      "/opt/qualification/source/main.tf": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3",
+      "/usr/local/bin/tofu": "d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f"
+    },
+    "collector_uid": 10001,
+    "command_timeout_seconds": 60,
+    "controls": {
+      "cap_drop": [
+        "ALL"
+      ],
+      "default_seccomp": true,
+      "memory": 536870912,
+      "mount_destinations": [
+        "/staging",
+        "/custody"
+      ],
+      "nano_cpus": 500000000,
+      "network": "none",
+      "pids_limit": 64,
+      "read_only": true,
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "uid": "10001:10001"
+    },
+    "cryptography_version": "50.0.2",
+    "custody_policy": "AES-256-GCM; random 96-bit nonce; 256-bit key; handle AAD; directory0700 receiverUID10002; files0400; original rawSHA256 verified before sealed memfd show; maximumTTL3600s",
+    "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+    "network_policy": "none default; additional unique internal-only network allows controlled local sink; no internet/metadata",
+    "observed_output_cutoff_bytes": 65536,
+    "private_tmpfs_size_bytes": 8388608,
+    "profile": "linux-arm64-docker-nonroot-offline-v1",
+    "protected_store_limits": {
+      "custody_bytes": 8388608,
+      "driver": "local",
+      "lifecycle_anchor_uid": 10002,
+      "restart_scope": "receiver process/container restart while bounded store is mounted; no host power-loss persistence claim",
+      "staging_bytes": 8388608,
+      "type": "tmpfs"
+    },
+    "provider_version": "hashicorp/external 2.3.5",
+    "receiver_uid": 10002,
+    "schema_version": 1,
+    "source_content_sha256": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3",
+    "source_sha": "cbc55062de7730dd19694c418b5f9e9ff03ee223",
+    "supported_architecture": "arm64",
+    "supported_os": "Linux",
+    "tool_image": "ghcr.io/opentofu/opentofu@sha256:dfbc3f0a8bed0adfa2cf49ff418f158afe24080eea6d6e748db8799fc4553db6",
+    "tool_version": "OpenTofu 1.13.1",
+    "unsupported_profiles": "all other OS/architecture/tool/provider/image combinations require new reviewed qualification",
+    "upstream_verification": "OpenTofu online init reported signed provider key0C0AF313E5FD9F80 and mirror authenticated signed package; no independent out-of-band signer authentication claimed. Runtime binary hashes checked against qualified manifest.",
+    "work_tmpfs": {
+      "nodev": true,
+      "noexec": true,
+      "nosuid": true,
+      "size_bytes": 67108864
+    }
+  },
+  "synthetic_input_digests": [
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
+      "sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49"
+    }
+  ],
   "source_documents": [
     {
       "path": "_bmad-output/project-context.md",
-      "sha256": "4c5c4b2789405dbaf48005e42031bc6d40e8a1f47fa8ed75845134080017bb70"
+      "sha256": "f7a9f75ff65d8e5e795055adb02da635892b4413781adf2be17bdcfa37ac9dc2"
     },
     {
       "path": "_bmad-output/planning-artifacts/prd.md",
@@ -26,7 +91,7 @@
     },
     {
       "path": "_bmad-output/planning-artifacts/prd-infra-automation.md",
-      "sha256": "85c954ae167c24c71f87cd2e5eccd55e397bd0620fc086acccb6a136d5db5985"
+      "sha256": "a8c0d814f92ad743fa125a42662e81b5c6e357af04a0ca1bdf744d06ef8d9171"
     },
     {
       "path": "_bmad-output/planning-artifacts/infra-automation-requirement-dispositions.json",
@@ -34,19 +99,19 @@
     },
     {
       "path": "_bmad-output/planning-artifacts/architecture.md",
-      "sha256": "f646adfe88b9562745669db8be0842d2ad97809b53df210e2fb28604c0883641"
+      "sha256": "056c6e9367a4e7754b05617537056d2258b27da02ff64dca1331a76a93e57bd9"
     },
     {
       "path": "_bmad-output/planning-artifacts/epics.md",
-      "sha256": "953d572bfb23d62462c97a115fa1fcf67e612e2eb5d1ee3d9c4847940f2fa745"
+      "sha256": "6f6a77657fbf7b9c089401a133e5291fa9a15cf4117c249cb16fb09b2bcdf872"
     },
     {
       "path": "_bmad-output/planning-artifacts/infra-automation-v1.5.0-release-plan.md",
-      "sha256": "d838c81a048fa4337dff192698a0d58aa97c3dfa30a0d15706311d1047927f6c"
+      "sha256": "e35669a8a11028bbd5c50973ff9c897cf29b7ce61cb20a024a93e628c90fdc22"
     },
     {
       "path": "_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-07-infra-automation-v1.5.0.md",
-      "sha256": "3c604a23f2a42c7c4108a52501c69674d5635a155372c9ba6bc830c959c37b06"
+      "sha256": "7dbf00c5749bdf61556c55fd5f4a17770e838cab0511227f3cfe7462e155026b"
     },
     {
       "path": "_bmad-output/planning-artifacts/research/technical-infra-automation-research-2026-10-07.md",
@@ -54,7 +119,7 @@
     },
     {
       "path": "docs/rfcs/0001-infra-automation-preflight-and-handoff.md",
-      "sha256": "47b7a117a3c92fbaa13cf7cff43fc5ef9f39d72acf817f4c8184b813817e5175"
+      "sha256": "4c88a21fc243c057d02ec0e9f51c464760eff39741a1db72d1831384c575ee06"
     },
     {
       "path": "docs/rfcs/README.md",
@@ -79,85 +144,91 @@
     {
       "path": "docs/design/deploywhisper-redesign-v3.jsx",
       "sha256": "7b841d85d24a3238eae81a8125939672a89d915241c1661b5784567020eec5cc"
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-10-infra-automation-v1.5.0.md",
+      "sha256": "39269ebe2e7d5dcd88dd5a3ddb855dd95d63006ac6c74ba34e19c08cd4c21032"
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-09-rfc-0001-maintainer-adoption.md",
+      "sha256": "c1da732b5e19f8f74e470257972e050e53400dbb1594a5ea4dc2b5f8a5758ab9"
     }
   ],
   "sanitized_log_path": "governance.json",
   "cases": [
     {
-      "case_id": "WP1-public-governance-acceptance",
-      "status": "blocked",
-      "result": "PR154 early merge, no reviews/discussion/requests; original minimum Oct15 and actual outcome absent"
-    },
-    {
-      "case_id": "WP1-final-ADR-dispositions",
-      "status": "blocked",
-      "result": "Conditional recommendations; actual public and real qualification evidence pending"
-    },
-    {
-      "case_id": "WP2-disposable-identity",
+      "case_id": "WP1-governance-scope-ADRs",
       "status": "passed",
-      "result": "18 tests; 2000 matrix assertions; 1946 unauthorized denials; bounded crypto/HTTP/session evidence",
-      "evidence": "wp2-identity-results.json"
+      "evidence": "maintainer-decision-2026-10-09.md",
+      "result": "Direct maintainer acceptance with explicit early-window exception; actual public chronology retained; eight bounded ADRs accepted"
     },
     {
-      "case_id": "WP3-disposable-sqlite",
+      "case_id": "WP2-identity",
       "status": "passed",
-      "result": "11 tests; independent process race, fencing, bounded lock retries and abrupt crash/restart corpus",
-      "evidence": "wp3-sqlite-results.json"
+      "evidence": "wp2-identity-results.json",
+      "result": "18 methods;2000 permission outcomes;bounded existing crypto/session/HTTP checks"
+    },
+    {
+      "case_id": "WP3-fenced-sqlite",
+      "status": "passed",
+      "evidence": "wp3-sqlite-results.json",
+      "result": "11 methods;independent claims and crash/restart corpus"
     },
     {
       "case_id": "WP4-real-containment",
-      "status": "blocked",
-      "result": "Daemon unavailable; no installed IaC tool or supplied pinned Linux/provider profile",
-      "evidence": "wp4-containment-results.json"
-    },
-    {
-      "case_id": "WP5-synthetic-receiver-faults",
       "status": "passed",
-      "result": "12 tests; 30 tuple mutations; five real child crash points; no repeated counted effect",
-      "evidence": "wp5-receiver-results.json"
+      "evidence": "wp4-containment-results.json",
+      "result": "Actual pinned Linux ARM64 tool/provider and declared containment/resource/process probes"
     },
     {
-      "case_id": "WP5-real-plan-and-separated-custody",
-      "status": "blocked",
-      "result": "Actual saved binary plan, Linux containment, OS identity separation/encryption and integrated authority unavailable"
+      "case_id": "WP5-real-plan-and-receiver",
+      "status": "passed",
+      "evidence": "wp5-real-custody-results.json",
+      "result": "Actual saved-plan custody, separated UIDs, seven attacks, five crashes,30 mutations and changed-plan rejection; controlled restart scope"
     },
     {
-      "case_id": "WP6-contract-freeze",
-      "status": "planned",
-      "result": "20 draft coverage cases and consumer/UX inspection; no frozen wire/hash/permission/UX contract",
-      "evidence": "wp6-contract-assessment.md"
+      "case_id": "WP6-frozen-contracts",
+      "status": "passed",
+      "evidence": "wp6-contract-results.json",
+      "result": "15 methods185subtests;25valid28invalid;CLI6React3action3;exact hashes/qualified profile bound"
     },
     {
-      "case_id": "WP7-readiness-and-sizing",
-      "status": "blocked",
-      "result": "20 contexts and 42 earlier-only references checked; real gates/independent public outcome and final spike-based sizing pending"
+      "case_id": "WP7-readiness",
+      "status": "passed",
+      "evidence": "wp7-readiness.md",
+      "result": "20contexts,72active requirements, owners/re-estimates and earlier-only dependencies;IR01\u201304 resolved for foundation only"
     }
   ],
   "validation": [
     {
-      "command": "./.venv/bin/python -m unittest tests.test_infra.test_infra_automation_identity_qualification tests.test_infra.test_infra_automation_sqlite_qualification tests.test_infra.test_infra_automation_receiver_qualification -q",
-      "status": "passed",
-      "exit_code": 0,
-      "result": "41 passed"
-    },
-    {
       "command": "./.venv/bin/python -m unittest discover -q",
       "status": "passed",
       "exit_code": 0,
-      "result": "596 run; OK; 1 skipped; minimum smoke only"
+      "result": "614 run;OK;2 skips including ordinary-CI realDocker opt-out"
     },
     {
       "command": "./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
       "status": "passed",
       "exit_code": 0,
-      "result": "533 passed; 832 subtests passed"
+      "result": "550passed;1skipped;1023subtests"
     },
     {
       "command": "bash scripts/ci-local.sh",
       "status": "passed",
       "exit_code": 0,
-      "result": "exit 0; all registered test directories, Ruff/format, pip check, production Bandit, compile and skill checks passed"
+      "result": "exit0; every registered test directory and configured quality/security checks; daemon-interrupted prior run was replaced"
+    },
+    {
+      "command": "DW16_REAL_LINUX=1 ./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_real_linux_qualification.py -q",
+      "status": "passed",
+      "exit_code": 0,
+      "result": "3passed;6subtests; independent rerun13.74s"
+    },
+    {
+      "command": "./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_contract_qualification.py -q --tb=short",
+      "status": "passed",
+      "exit_code": 0,
+      "result": "15passed;185subtests"
     },
     {
       "command": "./.venv/bin/ruff check .",
@@ -169,81 +240,87 @@
       "command": "./.venv/bin/ruff format --check .",
       "status": "passed",
       "exit_code": 0,
-      "result": "313 files already formatted"
+      "result": "322 files already formatted"
     },
     {
       "command": "./.venv/bin/bandit -q -r tests/fixtures/infra_automation/qualification/16_0",
       "status": "passed",
       "exit_code": 0,
-      "result": "No findings; exit 0"
+      "result": "exit0; no findings; unused B108 annotation warning is not a finding"
     },
     {
       "command": "git diff --check",
       "status": "passed",
       "exit_code": 0,
-      "result": "Tracked changed lines and all new files checked; no new whitespace diagnostics"
+      "result": "No changed-line whitespace diagnostics"
     }
   ],
   "runtime_evidence_claimed": true,
-  "open_issues": [
-    "IR-01 public review continuation/requests/independent human coverage/outcome absent",
-    "IR-02 real containment/saved-plan/separate custody identities/storage policy and integrated receiver proof absent",
-    "IR-03 final wire/hash/permission/UX contracts and executable consumer compatibility unfrozen",
-    "IR-04 named downstream assignments and completed-spike-based sizing pending"
-  ],
+  "open_issues": [],
   "ui_validation": "not applicable; no rendered surfaces or browser behavior changed",
   "publication_actions_performed": false,
   "technical_review": {
     "status": "passed-after-corrections",
-    "scope": "WP2/WP3 and partial WP5 retained harnesses/evidence; three layers",
-    "findings": 5,
+    "scope": "All retained qualification and frozen contracts; independent real Linux rerun and readiness assessment",
+    "findings": 7,
     "resolved_findings": [
       "Preserve absolute authentication deadline across rotation",
       "Deny unencodable credentials",
       "Refuse passing evidence after tests or actual measured verification fail",
       "Bound and validate HTTP JSON/scoped inputs",
-      "Bind terminal receipts to configured and authorized receiver"
+      "Bind terminal receipts to configured and authorized receiver",
+      "Strict enrollment boolean before coercion",
+      "Order-independent graph reference validation"
     ],
-    "public_governance_approval": false,
+    "public_governance_approval": true,
     "production_qualification": false,
-    "evidence": "technical-review.md"
+    "evidence": "technical-review.md",
+    "additional_documentation_corrections": [
+      "Narrowed whole-manifest runtime claim to actual image/schema/catalog/source/control checks",
+      "Canonical /infra-automation browser route and16.7 account-entry ownership"
+    ]
   },
   "packet_consistency": {
     "status": "passed",
-    "source_digests": 16,
+    "source_digests": 18,
     "scope_scenarios": 34,
     "checks": [
+      "All source/artifact/harness digests checked",
       "Local packet Markdown links resolve",
-      "Source digests match current reference bytes",
-      "Scenario IDs unique; all runtime observed results null",
-      "RFC outcome empty; no runtime evidence or approval claimed"
+      "Scope inventory remains identified as review scenarios; executed vectors identified separately",
+      "Direct RFC approval and exception preserved without fake platform review",
+      "All story tasks complete; only16.1/16.3promoted; production delivery not claimed"
     ],
-    "qualification_methods": 41,
+    "qualification_methods": 59,
     "downstream_contexts": 20,
     "earlier_only_references": 42,
-    "validated_changed_files": 24,
+    "validated_changed_files": 71,
     "complete_story_file_list": true
   },
   "not_run": [
-    "WP4 real pinned Linux containment/provider probes",
-    "WP5 actual saved plan, OS identity/encryption and remote integration",
-    "WP6 frozen contract validators/consumer round-trips/composed UX",
-    "WP7 complete evidence-dependent readiness/sizing",
-    "Compose/browser; UI validation not applicable",
-    "Public continuation/review requests/maintainer decision; no external writes performed"
+    "Production feature implementation/integrated network/browser/upgrade/capacity/release qualification; see WP7 owners"
   ],
   "runtime_evidence_scope": "Disposable synthetic prototypes only; no real containment, saved-plan or production support",
   "production_runtime_evidence_claimed": false,
   "screened_execution_summaries": {
-    "qualification": "41 tests in 6.693s; OK",
-    "smoke": "596 tests in 109.588s; OK(skipped=1)",
-    "ci_shard": "533 passed, 832 subtests passed in 127.66s",
-    "full_ci": "final run exit 0; full registered directory coverage"
+    "smoke": "614tests119.982s;OK2skips",
+    "ci_shard": "550passed1skipped1023subtests134.11s",
+    "full_ci": "exit0; final services shard1093tests181.953s",
+    "real_linux": "3passed6subtests13.74s independent",
+    "contracts": "15passed185subtests; independent240validorders725negativeboundaries"
   },
   "artifact_digests": [
     {
+      "path": "docs/infra-automation/contract-v1.md",
+      "sha256": "4711ad2b6ea9dee49ea67f8490531b611ca0d5d2d05ccf13a58f543471ba7a17"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/maintainer-decision-2026-10-09.md",
+      "sha256": "baea255153e853a36abe994f43672ce5a3b8fa094256617d8a49a8bfccb67b58"
+    },
+    {
       "path": "docs/verification/infra-automation/16-0/technical-review.md",
-      "sha256": "a79db5b86133715b8f03be305e35e39e4de75535a03e15cdf170acb6636de746"
+      "sha256": "709624dc0cad1fbf7e59ac98951b5f7d33d2284dfb6e9859c8b674cf0394d856"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp2-identity-results.json",
@@ -263,30 +340,114 @@
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp4-containment-results.json",
-      "sha256": "014c55b19b15686cc166babcec1b240da5d6f3a79d7669525967ce85a3f39ac2"
+      "sha256": "3a746c78dcb854da1a77f76c07b82e45107e3611f473aefb18dfd13627bcd636"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp4-containment.md",
-      "sha256": "6f265459e42ca0892be79a874f12d69e85e39cbcb07ffcf9eb9894a5c835499e"
+      "sha256": "9bb7e99d7402e0ca8bbfa5b1a6b1437d59c572e525927f513c4ef5e6e6374913"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp5-real-custody-results.json",
+      "sha256": "0e89d55e7f375a7445bf2a746b22293592d491b63702f5d31963113a4818dae3"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp5-real-custody.md",
+      "sha256": "1c79bb48c0d0e22cca0d577f6e8c31bb5bc351586bb20cbebeafd0680b4c56dd"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp5-receiver-results.json",
-      "sha256": "d61fb184a467a8dc12c51f85139f8fdcd1407380740392383026b79e623569f6"
+      "sha256": "9f8e80b5d6ee8251764c1f74cce64afa1151fa57b269105d88548902d10dc744"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp5-receiver.md",
-      "sha256": "7d4b296e068fbaa7e86fbac1dc30f928ca7f13e9cd94a438a2a69da07c35defc"
+      "sha256": "51813c7a4f47f728c541761f1ade5c7a09d77d423267035fa0ae5c408c8ef8bc"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp6-contract-assessment.md",
-      "sha256": "300f860d7f516fd107ac3338d7c337dff590945d007a41ddd2e381dd370d2fba"
+      "sha256": "6a40967652853de300cba06abba8bce5880fb5cc4ea26311c64dd41556f3dd7a"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp6-contract-results.json",
+      "sha256": "ca272d94e1d3d97dfe711b44b04b56d8679a1833c1b13011d7293a4bd7a39965"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-0/wp7-readiness.md",
+      "sha256": "aac88cdb34174f1ae236b0e567db32483cb703089ab976ca056547009546e8ec"
+    },
+    {
+      "path": "schemas/infra-automation/cursor-v1.json",
+      "sha256": "925c1a23a163ccb22204227eb84d078b1bb089c068b1802c2578cd43ef9fe068"
+    },
+    {
+      "path": "schemas/infra-automation/enrollment-v1.json",
+      "sha256": "7737c0c0eef6984cdc8e9c0dcf91fe83c3d4099c11b48179bb53c99234c8df24"
+    },
+    {
+      "path": "schemas/infra-automation/error-v1.json",
+      "sha256": "a673f54569b52b726b42b941d5da6a6e248d466aa1562107b8486af61be1af34"
+    },
+    {
+      "path": "schemas/infra-automation/frozen-v1.json",
+      "sha256": "e6a1d03df0f47ee8324856ae8c71649b0cf61aee172c60d51746687a9b9a6be1"
+    },
+    {
+      "path": "schemas/infra-automation/provenance-v1.json",
+      "sha256": "d9e22a4087918d0be6f71686b70c5e4c21a642a3f01deb194ad89cd5eb0f01df"
     },
     {
       "path": "schemas/infra-automation/qualification-16-0-draft.json",
       "sha256": "09c08935f776dec2fa8e3afdd30ef047c99a267c1452b5cb2a8ab54c8181a8d9"
+    },
+    {
+      "path": "schemas/infra-automation/receiver-v1.json",
+      "sha256": "72b4c66484ca12f25a4e5e426e4cdac0c5462171203712fe3a3f1eba86feff54"
+    },
+    {
+      "path": "schemas/infra-automation/runner-v1.json",
+      "sha256": "2a8df21e7ef798ede3e3d54ab6674e5d881443f4b38f273a89f47c95685390fa"
+    },
+    {
+      "path": "schemas/infra-automation/state-v1.json",
+      "sha256": "e0da4bc28e64b2f198ed4f36ee5a007f74e5484be7b48064671cac3da533ea2e"
+    },
+    {
+      "path": "schemas/infra-automation/workflow-v1.json",
+      "sha256": "7e3760323ae765a59050fb905d8f9710be4a20ae93f698333bcd9aff86c6a631"
     }
   ],
   "harness_digests": [
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/contracts/action_consumer_probe.py",
+      "sha256": "6cb0c0eeb0791141d528e1360105d2be659a7cf72fae9b624ed5156de9ba9c73"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/contracts/cli_consumer_probe.py",
+      "sha256": "76f1f4d30f559a3f7f7f69de9db16704b5ed463227e6774370bf65e07c3bea58"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/contracts/invalid.json",
+      "sha256": "aa3c379a53c98a81839f5ee29e132f0874c76d5d356ee7386ca5545888200d60"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/contracts/permissions.json",
+      "sha256": "0ce304afa6cfb18075e2ce2ca38bb4f1b719a7766bd919fcf0afe69a3fee76b4"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/contracts/prototype.py",
+      "sha256": "12b6584aebf682471d95e6c8f1d341b6276ae743057449657cfcb1ad2c41ce9d"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/contracts/react_consumer_probe.cjs",
+      "sha256": "df6d0efb6376319451f577156743ac851add2eef74c85ec7997ed99f291b603a"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/contracts/routes.json",
+      "sha256": "c03bba72d7faeb8a1a689bf835d4165d048a5179486277399600e915189b8866"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/contracts/valid.json",
+      "sha256": "1709ce0f10579d545144d3bd847f5f9d5fa6f47f15795f3bd9eef9b9ef8fa503"
+    },
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/identity/measure.py",
       "sha256": "475ed912db0087ac3479ea6ade0178e6ed02d7f2bdbbc4c5d1f25ac83cc8249d"
@@ -294,6 +455,38 @@
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/identity/prototype.py",
       "sha256": "1129d834e105075b9675905187087d3c93684b20c98583bf15cfdff69ae69f44"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/Dockerfile",
+      "sha256": "16a0803339a619d3ef8c0e78aee97cd32f98bef10646bcdea4d18cd41cc0174d"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/harness.py",
+      "sha256": "dc1b9b80ddab240748d60c8c3c9894cca2cfcdb6f3a2e682582f7862587a6255"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/probe.py",
+      "sha256": "74d4406f5e3a403c69dae17d6fed146ec05e68e784527439f135b8407a5901b5"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
+      "sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/provider_probe.py",
+      "sha256": "95ddacb0c0a42168cabca85b9d9e9302eb2513a60c44cc184e481f7c2f278ebc"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/source/main.tf",
+      "sha256": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/tofurc",
+      "sha256": "6ca5b0f7e983ec1862a5779209b6477ba1e7431d9f3a57cdfc23e4e720287dcb"
+    },
+    {
+      "path": "tests/fixtures/infra_automation/qualification/16_0/real_custody/probe.py",
+      "sha256": "106ad5a6ba1f785c458e8c2fef7d52bda0e46ed33e5388d211f3269aa2baa17b"
     },
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/receiver/prototype.py",
@@ -304,8 +497,16 @@
       "sha256": "03f8013e4361aed0d74690636cbbe1d8c533ec28a86d01b0f44539aaaae53f01"
     },
     {
+      "path": "tests/test_infra/test_infra_automation_contract_qualification.py",
+      "sha256": "a98a5f0ad0c67f424923d5bd274afb160e8d3210a40cd14c67bbc1dd4f63571c"
+    },
+    {
       "path": "tests/test_infra/test_infra_automation_identity_qualification.py",
       "sha256": "44f670cf066858e82fc1e5299544a2f8109160478ff5bbea47ca73f3643111ea"
+    },
+    {
+      "path": "tests/test_infra/test_infra_automation_real_linux_qualification.py",
+      "sha256": "43cc573e41e78f736c2ee363bee33aa01298db41bb608bcadfeee3d8a12d09ca"
     },
     {
       "path": "tests/test_infra/test_infra_automation_receiver_qualification.py",
@@ -317,10 +518,28 @@
     }
   ],
   "bmad_help_handoff": {
-    "current_lane": "Story16.0 bounded disposable qualification; in-progress",
-    "next_required": "Resolve real WP4 profile and full WP5 custody prerequisites; complete public RFC outcome, final WP6 contracts and WP7 readiness",
-    "downstream_promotion": "none; 16.1\u201316.19 backlog",
-    "separate_release_enabler": "12.5 SBOM remains separate",
-    "completion": "not claimed"
+    "current_lane": "Story16.0 complete",
+    "next_required": "bmad-dev-story16.1 or16.3 using prepared contexts and frozen contracts",
+    "downstream_promotion": [
+      "16.1",
+      "16.3"
+    ],
+    "remaining_downstream": "16.2 and16.4\u201316.19 backlog",
+    "separate_release_enabler": "12.5 remains separate",
+    "completion": "bounded governance/disposable qualification complete"
+  },
+  "story_status": "done",
+  "retained_limits": [
+    "Qualification is disposable profile/design proof, not production automation delivery",
+    "Anchored tmpfs covers process/receiver-container restart; host-power-loss persistence and production keys/retention require later qualification",
+    "Only LinuxARM64/OpenTofu1.13.1/external2.3.5 qualified; alternate profiles/tools need evidence",
+    "Output termination threshold has disclosed transient private buffer overshoot; retained readback capped",
+    "Host/daemon/DB administrators and receiver identity compromise remain trust limits",
+    "One human maintainer; native technical review is not second human/four-eyes governance",
+    "Capacity, universal redaction, browser, live delivery, upgrade/pilot and signed-release evidence remain later stories"
+  ],
+  "qualified_profile": {
+    "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
+    "sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49"
   }
 }
