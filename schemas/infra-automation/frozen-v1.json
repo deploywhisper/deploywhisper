@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "status": "frozen-qualified-prototype",
+  "responsible_contributor": "Codex",
+  "accountable_public_maintainer": "@pramodksahoo",
+  "selected_architecture": "relational-run-report-linkage-preserve-report-v2",
+  "canonicalization": "tuple-json-utf8-v1",
+  "owners": {
+    "workflow": "16.3/16.4",
+    "runner": "16.12/16.14",
+    "receiver": "16.10/16.11/16.15",
+    "provenance": "16.6/16.14/16.17",
+    "state": "16.5",
+    "error": "16.5",
+    "cursor": "16.5",
+    "permissions": "16.2",
+    "ux": "16.7/16.9/16.15/16.16/16.18"
+  },
+  "files": {
+    "schemas/infra-automation/cursor-v1.json": "sha256:925c1a23a163ccb22204227eb84d078b1bb089c068b1802c2578cd43ef9fe068",
+    "schemas/infra-automation/enrollment-v1.json": "sha256:7737c0c0eef6984cdc8e9c0dcf91fe83c3d4099c11b48179bb53c99234c8df24",
+    "schemas/infra-automation/error-v1.json": "sha256:a673f54569b52b726b42b941d5da6a6e248d466aa1562107b8486af61be1af34",
+    "schemas/infra-automation/provenance-v1.json": "sha256:d9e22a4087918d0be6f71686b70c5e4c21a642a3f01deb194ad89cd5eb0f01df",
+    "schemas/infra-automation/receiver-v1.json": "sha256:72b4c66484ca12f25a4e5e426e4cdac0c5462171203712fe3a3f1eba86feff54",
+    "schemas/infra-automation/runner-v1.json": "sha256:2a8df21e7ef798ede3e3d54ab6674e5d881443f4b38f273a89f47c95685390fa",
+    "schemas/infra-automation/state-v1.json": "sha256:e0da4bc28e64b2f198ed4f36ee5a007f74e5484be7b48064671cac3da533ea2e",
+    "schemas/infra-automation/workflow-v1.json": "sha256:7e3760323ae765a59050fb905d8f9710be4a20ae93f698333bcd9aff86c6a631",
+    "tests/fixtures/infra_automation/qualification/16_0/contracts/invalid.json": "sha256:aa3c379a53c98a81839f5ee29e132f0874c76d5d356ee7386ca5545888200d60",
+    "tests/fixtures/infra_automation/qualification/16_0/contracts/permissions.json": "sha256:0ce304afa6cfb18075e2ce2ca38bb4f1b719a7766bd919fcf0afe69a3fee76b4",
+    "tests/fixtures/infra_automation/qualification/16_0/contracts/routes.json": "sha256:c03bba72d7faeb8a1a689bf835d4165d048a5179486277399600e915189b8866",
+    "tests/fixtures/infra_automation/qualification/16_0/contracts/valid.json": "sha256:1709ce0f10579d545144d3bd847f5f9d5fa6f47f15795f3bd9eef9b9ef8fa503",
+    "tests/fixtures/infra_automation/qualification/16_0/contracts/prototype.py": "sha256:12b6584aebf682471d95e6c8f1d341b6276ae743057449657cfcb1ad2c41ce9d",
+    "tests/fixtures/infra_automation/qualification/16_0/contracts/action_consumer_probe.py": "sha256:6cb0c0eeb0791141d528e1360105d2be659a7cf72fae9b624ed5156de9ba9c73",
+    "tests/fixtures/infra_automation/qualification/16_0/contracts/cli_consumer_probe.py": "sha256:76f1f4d30f559a3f7f7f69de9db16704b5ed463227e6774370bf65e07c3bea58",
+    "tests/fixtures/infra_automation/qualification/16_0/contracts/react_consumer_probe.cjs": "sha256:df6d0efb6376319451f577156743ac851add2eef74c85ec7997ed99f291b603a"
+  },
+  "version_rules": {
+    "breaking": "new major: incompatible fields, meaning, canonical bytes, state, or weaker safety",
+    "additive": "closed v1 rejects new fields; capability addition requires explicit reviewed negotiation and new content digest",
+    "editorial": "no wire change; regenerate documentation manifest digest only"
+  },
+  "qualified_profile": {
+    "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
+    "digest": "sha256:1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+    "scope": "disposable Linux ARM64 OpenTofu1.13.1/external2.3.5; process/container restart; production delivery remains later"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "default": 1,
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "run_state": {
+      "enum": [
+        "queued",
+        "running",
+        "waiting_approval",
+        "ready_handoff",
+        "handing_off",
+        "external_running",
+        "succeeded",
+        "failed",
+        "stopped_by_gate",
+        "rejected",
+        "expired",
+        "timed_out",
+        "cancelled",
+        "delivery_unknown"
+      ],
+      "title": "Run State",
+      "type": "string"
+    },
+    "attempt_state": {
+      "enum": [
+        "pending",
+        "claimed",
+        "running",
+        "succeeded",
+        "failed",
+        "timed_out",
+        "cancelled"
+      ],
+      "title": "Attempt State",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_state",
+    "attempt_state"
+  ],
+  "title": "State",
+  "type": "object"
+}
