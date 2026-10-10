@@ -1,0 +1,61 @@
+{
+  "base_image": "python@sha256:0a310eeecf4e1f5a0743f9a6520c90c88d089c903ca5fd283f501e3a805f5f89",
+  "catalog_digests": {
+    "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/terraform-provider-external": "f9994ee228b86d34c289d858af46f758921f34393a27a1bb5677761c08228f50",
+    "/opt/qualification/source/main.tf": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3",
+    "/usr/local/bin/tofu": "d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f"
+  },
+  "collector_uid": 10001,
+  "command_timeout_seconds": 60,
+  "controls": {
+    "cap_drop": [
+      "ALL"
+    ],
+    "default_seccomp": true,
+    "memory": 536870912,
+    "mount_destinations": [
+      "/staging",
+      "/custody"
+    ],
+    "nano_cpus": 500000000,
+    "network": "none",
+    "pids_limit": 64,
+    "read_only": true,
+    "security_opt": [
+      "no-new-privileges:true"
+    ],
+    "uid": "10001:10001"
+  },
+  "cryptography_version": "50.0.2",
+  "custody_policy": "AES-256-GCM; random 96-bit nonce; 256-bit key; handle AAD; directory0700 receiverUID10002; files0400; original rawSHA256 verified before sealed memfd show; maximumTTL3600s",
+  "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+  "network_policy": "none default; additional unique internal-only network allows controlled local sink; no internet/metadata",
+  "observed_output_cutoff_bytes": 65536,
+  "private_tmpfs_size_bytes": 8388608,
+  "profile": "linux-arm64-docker-nonroot-offline-v1",
+  "protected_store_limits": {
+    "custody_bytes": 8388608,
+    "driver": "local",
+    "lifecycle_anchor_uid": 10002,
+    "restart_scope": "receiver process/container restart while bounded store is mounted; no host power-loss persistence claim",
+    "staging_bytes": 8388608,
+    "type": "tmpfs"
+  },
+  "provider_version": "hashicorp/external 2.3.5",
+  "receiver_uid": 10002,
+  "schema_version": 1,
+  "source_content_sha256": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3",
+  "source_sha": "cbc55062de7730dd19694c418b5f9e9ff03ee223",
+  "supported_architecture": "arm64",
+  "supported_os": "Linux",
+  "tool_image": "ghcr.io/opentofu/opentofu@sha256:dfbc3f0a8bed0adfa2cf49ff418f158afe24080eea6d6e748db8799fc4553db6",
+  "tool_version": "OpenTofu 1.13.1",
+  "unsupported_profiles": "all other OS/architecture/tool/provider/image combinations require new reviewed qualification",
+  "upstream_verification": "OpenTofu online init reported signed provider key0C0AF313E5FD9F80 and mirror authenticated signed package; no independent out-of-band signer authentication claimed. Runtime binary hashes checked against qualified manifest.",
+  "work_tmpfs": {
+    "nodev": true,
+    "noexec": true,
+    "nosuid": true,
+    "size_bytes": 67108864
+  }
+}

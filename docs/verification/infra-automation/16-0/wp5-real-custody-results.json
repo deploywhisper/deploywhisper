@@ -1,0 +1,116 @@
+{
+  "status": "passed",
+  "profile": "linux-arm64-docker-nonroot-offline-v1",
+  "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+  "source_sha": "cbc55062de7730dd19694c418b5f9e9ff03ee223",
+  "source_content_sha256": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3",
+  "restart": {
+    "restart_verified": true,
+    "raw_digest": "1fb662cd72e2bbf6f3b6db635d66d2299096fb910e08574b76e2aa2668219bff"
+  },
+  "collector": {
+    "custody_denied": true
+  },
+  "custody_attacks": {
+    "expiry": true,
+    "changed_plan": true,
+    "path": true,
+    "overwrite": true,
+    "tamper": true,
+    "symlink": true,
+    "descriptor_toctou": true
+  },
+  "receiver_faults": {
+    "faults": {
+      "before_consume": {
+        "crash_exit": 73,
+        "action_count": 1,
+        "state": "action_completed",
+        "same_operation": true,
+        "repeat_action_denied": true,
+        "lock_retained": true
+      },
+      "after_consume": {
+        "crash_exit": 73,
+        "action_count": 1,
+        "state": "action_completed",
+        "same_operation": true,
+        "repeat_action_denied": true,
+        "lock_retained": true
+      },
+      "after_start": {
+        "crash_exit": 73,
+        "action_count": 0,
+        "state": "delivery_unknown",
+        "same_operation": true,
+        "repeat_action_denied": true,
+        "lock_retained": true
+      },
+      "after_action": {
+        "crash_exit": 73,
+        "action_count": 1,
+        "state": "delivery_unknown",
+        "same_operation": true,
+        "repeat_action_denied": true,
+        "lock_retained": true
+      },
+      "after_completion": {
+        "crash_exit": 73,
+        "action_count": 1,
+        "state": "action_completed",
+        "same_operation": true,
+        "repeat_action_denied": true,
+        "lock_retained": true
+      }
+    },
+    "tuple_mutations_denied": 30
+  },
+  "replan": {
+    "replan_requires_new_tuple": true,
+    "actual_plan_changed": true,
+    "action_count": 0
+  },
+  "custody": {
+    "raw_digest": "1fb662cd72e2bbf6f3b6db635d66d2299096fb910e08574b76e2aa2668219bff",
+    "expiry": 1791568244,
+    "uid": 10002,
+    "tool": "1.13.1"
+  },
+  "plan_digests": {
+    "raw_digest": "1fb662cd72e2bbf6f3b6db635d66d2299096fb910e08574b76e2aa2668219bff",
+    "sanitized_digest": "9c747e4b68bbaa5bca556b8161fe856ccedc282396faf183fb1027e238ccf8ce"
+  },
+  "manifest_version": 1,
+  "phase": "WP5-real-custody",
+  "timestamp": "2026-10-09T16:51:13.042058+00:00",
+  "responsible_contributor": "Codex real_linux_qualification",
+  "profile_manifest": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
+  "profile_manifest_sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+  "storage_policy": "AES-256-GCM; random 96-bit nonce; 256-bit key; handle AAD; directory0700 receiverUID10002; files0400; original rawSHA256 verified before sealed memfd show; maximumTTL3600s",
+  "real_saved_binary_plan": true,
+  "only_counted_harmless_action": true,
+  "no_apply": true,
+  "open_issues": [],
+  "limits": [
+    "Original saved binary/state never published or placed in application artifacts; temporary custody volumes removed after evidence capture.",
+    "Receiver UID and privileged host admin remain trusted; same-UID compromise is outside boundary.",
+    "Real saved-plan integration uses existing disposable receiver prototype, not production receiver/app routes.",
+    "Dispatch acceptance is not deployment success; delivery_unknown remains locked; no exactly-once infrastructure claim.",
+    "Protected staging and custody stores are each bounded8MiB tmpfs; non-root lifecycle anchor keeps them mounted across receiver process/container restart. Hostpower loss persistence is not qualified."
+  ],
+  "real_tuple_source_sha": "cbc55062de7730dd19694c418b5f9e9ff03ee223",
+  "real_tuple_deadline": 1791568244,
+  "real_tuple_clock": "current wall-clock UTC, bounded by original custody expiry",
+  "store_disk": {
+    "staging": {
+      "disk_denied": true,
+      "partial_removed": true,
+      "capacity_bytes": 8388608
+    },
+    "custody": {
+      "disk_denied": true,
+      "partial_removed": true,
+      "capacity_bytes": 8388608
+    }
+  }
+}
