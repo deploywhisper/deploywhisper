@@ -1,6 +1,6 @@
 # Story 16.3: Closed Workflow Schema And Validator
 
-Status: backlog
+Status: ready-for-dev
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.0; public RFC and 16.0 qualification required
@@ -114,3 +114,7 @@ Prepared implementation context and owned acceptance matrix on 2026-10-07. Gover
 ### File List
 
 This story file only. Planned write scopes above are prospective, not an implemented file list.
+
+### Foundation readiness — 2026-10-10
+
+Story16.0 qualification and final validation are complete. Its maintainer decision, frozen contracts and final readiness report satisfy this story's earlier dependency. This context is ready for its own implementation workflow; all implementation tasks remain unchecked. Use `docs/infra-automation/contract-v1.md` and the qualified evidence boundaries; no production work in this story is claimed by promotion.

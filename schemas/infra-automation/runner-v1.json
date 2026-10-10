@@ -1,0 +1,218 @@
+{
+  "$defs": {
+    "TaskScope": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "runner_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Runner Id",
+          "type": "string"
+        },
+        "project_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Workspace Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "step_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "fence": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Fence",
+          "type": "integer"
+        },
+        "coordinator_generation": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Coordinator Generation",
+          "type": "integer"
+        },
+        "authorization_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Authorization Epoch",
+          "type": "integer"
+        },
+        "restore_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Restore Epoch",
+          "type": "integer"
+        },
+        "lease_deadline": {
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+          "title": "Lease Deadline",
+          "type": "string"
+        },
+        "audience": {
+          "const": "runner-task-v1",
+          "title": "Audience",
+          "type": "string"
+        }
+      },
+      "required": [
+        "runner_id",
+        "project_id",
+        "workspace_id",
+        "run_id",
+        "step_id",
+        "attempt",
+        "fence",
+        "coordinator_generation",
+        "authorization_epoch",
+        "restore_epoch",
+        "lease_deadline",
+        "audience"
+      ],
+      "title": "TaskScope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "default": 1,
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "operation": {
+      "enum": [
+        "claim",
+        "heartbeat",
+        "log",
+        "upload",
+        "complete"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/TaskScope"
+    },
+    "capabilities": {
+      "items": {
+        "const": "screened-collection-v1",
+        "type": "string"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "profile_digest": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "title": "Profile Digest",
+      "type": "string"
+    },
+    "sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "log": {
+      "anyOf": [
+        {
+          "maxLength": 16384,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Log"
+    },
+    "upload_digest": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Upload Digest"
+    },
+    "atomic_upload_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Atomic Upload Id"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "enum": [
+            "succeeded",
+            "failed"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "State"
+    }
+  },
+  "required": [
+    "operation",
+    "scope",
+    "capabilities",
+    "profile_digest",
+    "sequence"
+  ],
+  "title": "Runner",
+  "type": "object"
+}

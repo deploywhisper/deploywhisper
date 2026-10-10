@@ -1,0 +1,89 @@
+{
+  "fixture_inventory_version": 1,
+  "status": "draft-not-frozen",
+  "purpose": "Proposed secret-free contract examples and coverage inventory; not an implemented JSON Schema or executed validation",
+  "validation_executed": false,
+  "unknown_version_policy": "deny",
+  "unknown_state_policy": "deny",
+  "unknown_capability_policy": "deny-without-safety-downgrade",
+  "frozen_content_digest": null,
+  "protocol_versions": {
+    "workflow_version": 1,
+    "runner_protocol_version": 1,
+    "receiver_protocol_version": 1,
+    "provenance_version": 1
+  },
+  "source_examples": {
+    "upload_advisory": {
+      "authorization_kind": "advisory_request",
+      "source": {"kind": "uploaded", "repository_source": "unavailable", "limitations": ["Repository and immutable commit were not verified for these uploaded artifacts"]},
+      "exact_plan_authorized": false
+    },
+    "collected_exact_plan_proposal": {
+      "authorization_kind": "exact_plan",
+      "source": {"kind": "collected", "repository_id": "synthetic-repository", "commit_sha": "1111111111111111111111111111111111111111", "origin": "approved-repository"},
+      "custody": {"handle": "synthetic-opaque-handle", "raw_local_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "expires_at": "2026-10-09T12:00:00Z"},
+      "screened_transport_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "prerequisite": "Actual protected immutable saved-plan bytes and separate identities must be qualified; example alone authorizes nothing"
+    }
+  },
+  "workflow_example": {
+    "workflow_version": 1,
+    "project_id": "synthetic-project",
+    "workspace_id": "synthetic-workspace",
+    "steps": [
+      {"id": "intake", "kind": "uploaded_intake", "depends_on": []},
+      {"id": "analysis", "kind": "shared_analysis", "depends_on": ["intake"], "artifact_ref": {"step_id": "intake", "output": "screened_artifacts"}},
+      {"id": "gate", "kind": "policy_evaluation", "depends_on": ["analysis"], "report_ref": {"step_id": "analysis", "output": "report"}},
+      {"id": "decision", "kind": "human_decision", "depends_on": ["gate"], "binding_ref": {"step_id": "gate", "output": "action_binding"}},
+      {"id": "handoff", "kind": "registered_github_handoff", "depends_on": ["decision"], "authorization_kind": "advisory_request", "target_id": "synthetic-registered-target", "binding_ref": {"step_id": "gate", "output": "action_binding"}, "decision_ref": {"step_id": "decision", "output": "decision_receipt"}}
+    ],
+    "note": "Kind/reference spellings are proposed; validator ownership 16.3 must settle and execute this example"
+  },
+  "run_states": ["queued", "running", "waiting_approval", "ready_handoff", "handing_off", "external_running", "succeeded", "failed", "stopped_by_gate", "rejected", "expired", "timed_out", "cancelled", "delivery_unknown"],
+  "attempt_states": ["pending", "claimed", "running", "succeeded", "failed", "timed_out", "cancelled"],
+  "runner_operation_requirements": {
+    "owner_story": "16.12",
+    "operations": ["enroll", "claim", "heartbeat", "log", "upload", "complete"],
+    "task_binding": ["runner_id", "project_id", "workspace_id", "run_id", "step_id", "attempt_number", "fence", "coordinator_generation", "lease_deadline", "authorization_epoch", "restore_epoch", "credential_audience"],
+    "upload_checks": ["bounded_atomic_upload", "server_recomputed_transport_digest", "screened_content_only"]
+  },
+  "receiver_operation_requirements": {
+    "owner_stories": ["16.10", "16.11", "16.15"],
+    "operations": ["consume", "receipt", "status", "outcome", "reconcile"],
+    "binding": ["operation_id", "authorization_kind", "workflow_revision_digest", "input_digest", "source", "project_id", "workspace_id", "environment", "canonical_target", "receiver_id", "report_bytes_digest", "report_schema_version", "policy_version", "policy_digest", "policy_result", "unit_waves_digest", "screened_artifact_digests", "redaction_version", "raw_local_digest_when_exact_plan", "custody_handle_when_exact_plan", "payload_digest", "shortest_deadline", "authorization_epoch", "restore_epoch"],
+    "accepted_is_success": false,
+    "unknown_outcome_releases_lock": false
+  },
+  "coverage": [
+    {"id": "workflow-valid-bound-matching-path", "owner": "16.3", "expected": "admit-if-all-validation-and-binding-checks-pass", "executed": false},
+    {"id": "workflow-invalid-unknown-field-kind-version-or-expression", "owner": "16.3", "expected": "deny", "executed": false},
+    {"id": "workflow-invalid-duplicate-yaml-alias-depth-size-or-51-steps", "owner": "16.3", "expected": "deny", "executed": false},
+    {"id": "workflow-invalid-cycle-missing-dependency-or-typed-ref", "owner": "16.3", "expected": "deny", "executed": false},
+    {"id": "workflow-invalid-gate-decision-target-evidence-mismatch", "owner": "16.3", "expected": "deny", "executed": false},
+    {"id": "runner-valid-current-attempt-and-capabilities", "owner": "16.12", "expected": "admit-current-scoped-operation-only", "executed": false},
+    {"id": "runner-invalid-audience-scope-replay-lease-fence-generation-epoch", "owner": "16.12", "expected": "deny", "executed": false},
+    {"id": "runner-invalid-raw-plan-digest-sequence-size-or-premature-complete", "owner": "16.14", "expected": "deny", "executed": false},
+    {"id": "receiver-valid-durable-consume-and-same-operation-recovery", "owner": "16.11", "expected": "return-recorded-operation-without-second-action", "executed": false},
+    {"id": "receiver-invalid-tuple-mutation-replay-sequence-or-offline-authority", "owner": "16.11", "expected": "deny-new-action", "executed": false},
+    {"id": "receiver-unknown-after-possible-start", "owner": "16.11", "expected": "delivery_unknown-with-lock-and-reconciliation-only", "executed": false},
+    {"id": "provenance-valid-upload-unavailable-no-invented-sha", "owner": "16.6", "expected": "advisory-only", "executed": false},
+    {"id": "provenance-invalid-upload-exact-plan-or-invented-sha", "owner": "16.6", "expected": "deny", "executed": false},
+    {"id": "provenance-valid-collected-immutable-screened-and-exact-custody", "owner": "16.14", "expected": "eligible-only-after-real-custody-and-authority-proof", "executed": false},
+    {"id": "provenance-invalid-mutable-source-digest-confusion-or-version", "owner": "16.14", "expected": "deny", "executed": false},
+    {"id": "report-absent-known-and-unknown-optional-block-all-consumers", "owner": "16.6", "expected": "observe-retain-drop-and-unchanged-advisory-fields-no-authority", "executed": false},
+    {"id": "report-byte-snapshot-and-canonical-hash-mutation-vectors", "owner": "16.8", "expected": "algorithm-choice-open-no-authoritative-rehash-from-lossy-model", "executed": false},
+    {"id": "permissions-human-machine-role-project-workspace-negative-matrix", "owner": "16.2", "expected": "deny-cross-scope-spoofed-or-missing-authority", "executed": false},
+    {"id": "api-errors-pagination-and-log-cursors", "owner": "16.5", "expected": "closed-bounded-envelope-semantics-to-be-frozen", "executed": false},
+    {"id": "ux-1440-760-keyboard-focus-denied-stale-unknown-recovery", "owner": "16.9", "expected": "future-composed-app-browser-proof", "executed": false}
+  ],
+  "error_examples": [
+    {"http_status": 401, "error": {"code": "authentication_required", "message": "Authentication required.", "details": {"retryable": false, "correlation_id": "synthetic-correlation"}}},
+    {"http_status": 403, "error": {"code": "permission_denied", "message": "Operation unavailable.", "details": {"retryable": false, "correlation_id": "synthetic-correlation"}}},
+    {"http_status": 409, "error": {"code": "binding_conflict", "message": "Review current evidence again.", "details": {"retryable": false, "correlation_id": "synthetic-correlation"}}},
+    {"http_status": 422, "error": {"code": "request_validation_failed", "message": "Request validation failed.", "details": {"retryable": false, "correlation_id": "synthetic-correlation"}}},
+    {"http_status": 429, "error": {"code": "quota_exceeded", "message": "Request limit reached.", "details": {"retryable": true, "correlation_id": "synthetic-correlation"}}},
+    {"http_status": 503, "error": {"code": "authority_unavailable", "message": "Current authority could not be verified.", "details": {"retryable": true, "correlation_id": "synthetic-correlation"}}}
+  ],
+  "open_choices": ["exact-wire-field-names-and-schema", "yaml-parser-bounds", "capability-registry-and-audiences", "canonical-report-snapshot-bytes-and-hash-version", "provenance-digest-inclusion-versus-relational-only", "object-nondisclosure-and-authority-error-status", "pagination-and-log-cursor-consistency", "browser-entry-route", "v3-parity-and-reviewed-screen-composition", "real-wp4-wp5-qualified-evidence", "public-maintainer-outcome-and-independent-review"]
+}

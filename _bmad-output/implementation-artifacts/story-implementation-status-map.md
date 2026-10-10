@@ -1,10 +1,10 @@
 # Story Implementation Status Map
 
-Reconciled: 2026-10-07. Canonical machine-readable tracker: `sprint-status.yaml`.
+Reconciled: 2026-10-10. Canonical machine-readable tracker: `sprint-status.yaml`.
 
 ## Accepted baseline and evidence policy
 
-v1.4.0 was published on 2026-10-07 from `935f3bbc88907948de8ae25bd2a361d04044ebc6`. Integration evidence was merged in PR #153. The release accepts implementation through Story 12.4, with out-of-order signing/provenance (12.6) and release/upgrade documentation (13.8). The 101-story delivery baseline was reconciled. The adopted v1.5.0 roadmap adds 20 unimplemented Epic 16 backlog stories: **121 total; 84 done, 16 ready-for-dev, 2 review, 19 backlog; 12 done epics, 5 in-progress (including Epic 16 preparation)**. Retrospectives remain optional because no completed retrospective is evidenced.
+v1.4.0 was published on 2026-10-07 from `935f3bbc88907948de8ae25bd2a361d04044ebc6`. Integration evidence was merged in PR #153. The release accepts implementation through Story 12.4, with out-of-order signing/provenance (12.6) and release/upgrade documentation (13.8). The 101-story delivery baseline was reconciled. The adopted v1.5.0 roadmap adds20 Epic16 stories. Story16.0 has completed bounded qualification: **121total;85done,17ready-for-dev,2review,17backlog;12done epics,5in-progress**. Production delivery for later Epic16 stories is not credited by qualification. Retrospectives remain optional because no completed retrospective is evidenced.
 
 Closeout uses completed story tasks/review-fix records, merged delivery, and the accepted release evidence. It does not claim every historical review attempt passed, a new code review was performed, or tests were rerun for this administrative update. `done` records accepted delivery; separately tracked legacy/deferred risks remain visible.
 
@@ -33,7 +33,7 @@ Closeout uses completed story tasks/review-fix records, merged delivery, and the
 | 13 | in-progress | 1/8 | 7 |
 | 14 | in-progress | 0/5 | 5 |
 | 15 | in-progress | 6/8 | 2 (review) |
-| 16 | in-progress | 0/20 | 20; 16.0 qualification ready |
+| 16 | in-progress | 1/20 | 19; 16.1/16.3 ready-for-dev,17 backlog |
 
 ## Story inventory
 
@@ -147,10 +147,10 @@ Story 16.0 is ready only for governance/synthetic qualification. Other context f
 
 | Story | Status | Dedicated context |
 | --- | --- | --- |
-| 16.0 | `ready-for-dev` | [16-0-adopt-and-qualify-infra-automation-contract.md](16-0-adopt-and-qualify-infra-automation-contract.md) |
-| 16.1 | `backlog` | [16-1-verified-human-principal-and-session-lifecycle.md](16-1-verified-human-principal-and-session-lifecycle.md) |
+| 16.0 | `done` | [16-0-adopt-and-qualify-infra-automation-contract.md](16-0-adopt-and-qualify-infra-automation-contract.md) |
+| 16.1 | `ready-for-dev` | [16-1-verified-human-principal-and-session-lifecycle.md](16-1-verified-human-principal-and-session-lifecycle.md) |
 | 16.2 | `backlog` | [16-2-trusted-project-memberships-and-automation-permissions.md](16-2-trusted-project-memberships-and-automation-permissions.md) |
-| 16.3 | `backlog` | [16-3-closed-workflow-schema-and-validator.md](16-3-closed-workflow-schema-and-validator.md) |
+| 16.3 | `ready-for-dev` | [16-3-closed-workflow-schema-and-validator.md](16-3-closed-workflow-schema-and-validator.md) |
 | 16.4 | `backlog` | [16-4-scoped-workflows-and-immutable-revisions.md](16-4-scoped-workflows-and-immutable-revisions.md) |
 | 16.5 | `backlog` | [16-5-durable-engine-and-fenced-recovery.md](16-5-durable-engine-and-fenced-recovery.md) |
 | 16.6 | `backlog` | [16-6-uploaded-artifact-preflight-and-report-linkage.md](16-6-uploaded-artifact-preflight-and-report-linkage.md) |
@@ -179,3 +179,5 @@ The optional public Skills Registry publisher credential failure, legitimate ind
 Current planning authority: [feature PRD](../planning-artifacts/prd-infra-automation.md), [course correction](../planning-artifacts/sprint-change-proposal-2026-10-07-infra-automation-v1.5.0.md), [readiness report](../planning-artifacts/implementation-readiness-report-2026-10-07-infra-automation-v1.5.0.md). Historical 101-story release evidence and archived sets remain intact.
 
 Story preparation: [complete report](epic-16-story-preparation-report.md). Current feature readiness remains NOT READY until RFC/16.0 experiment/contract gates close; ready-for-dev on 16.0 is a bounded qualification scope, not a production implementation approval.
+
+Story16.0 closure on2026-10-10 qualifies only the prepared16.1/16.3 foundations; see the final readiness report and evidence manifest. Later16.2/16.4–16.19 retain backlog.

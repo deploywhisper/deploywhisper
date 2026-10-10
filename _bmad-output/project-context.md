@@ -1,7 +1,7 @@
 ---
 project_name: 'deploywhisper'
 user_name: 'psaho01'
-date: '2026-10-07'
+date: '2026-10-10'
 sections_completed:
   ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
 status: 'complete'
@@ -19,7 +19,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 - Python: code targets Python 3.11 runtime in CI/Docker; `pyproject.toml` currently allows `>=3.10`, so do not introduce syntax that would break 3.10 without intentionally raising the floor.
 - Web runtime: React SPA in `frontend/`, built with Vite and served by FastAPI from `app.py`.
-- Persistence: SQLAlchemy `2.0.49`, Alembic `1.18.4`, default SQLite database at `data/deploywhisper.db`.
+- Persistence: SQLAlchemy `2.0.54`, Alembic `1.18.4`, default SQLite database at `data/deploywhisper.db`.
 - Data contracts: Pydantic `2.13.3` models and `Field(...)` metadata.
 - LLM layer: repo-owned provider boundary in `llm/providers.py`; OpenAI, Anthropic, Gemini, and Ollama run through direct adapters under `llm/adapters/`, while OpenRouter, Groq, and xAI use one explicit OpenAI-compatible adapter. The old meta-provider runtime dependency has been removed.
 - Infra parsing: `python-hcl2`, `ruamel.yaml`, `pyyaml`, `deepdiff`; supported tools are Terraform, Kubernetes, Ansible, Jenkins, and CloudFormation.
@@ -102,8 +102,8 @@ _This file contains critical rules and patterns that AI agents must follow when 
 The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is future implementation guidance, not a claim these subsystems exist in v1.4.0.
 
 - Read `_bmad-output/planning-artifacts/prd-infra-automation.md`, architecture Section 25, Epic 16, the feature UX contract and current implementation-readiness report before automation work. The original `docs/deploywhisper-infra-automation-prd.md` is historical vision; its v1.4.0 phases and draft story sequence are superseded.
-- Preserve existing IDs and completed history. Epic 16 is the highest-priority v1.5.0 feature; 12.5 SBOM remains a separate release enabler. All 20 contexts are prepared. Story 16.0 is ready-for-dev only for governance/disposable qualification; 16.1–16.19 remain backlog until gate/dependency evidence permits advancement.
-- RFC 0001 is Proposed. Public RFC/CODEOWNERS acceptance and Story 16.0 identity, fencing, isolation, local saved-plan custody and receiver-recovery evidence are required before downstream feature implementation; document alignment is not executable proof.
+- Preserve existing IDs and completed history. Epic 16 is the highest-priority v1.5.0 feature; 12.5 SBOM remains a separate release enabler. All 20 contexts are prepared. Story16.0 is complete for governance/disposable qualification;16.1 and16.3 are ready-for-dev, while16.2 and16.4–16.19 remain backlog until their own dependencies pass.
+- RFC 0001 is Accepted by direct maintainer decision with a documented RFC-specific early-window exception. Use the final Story 16.0 evidence/readiness record and frozen `docs/infra-automation/contract-v1.md`; production implementation remains in the owning dependent stories. Qualification applies to the declared disposable Linux ARM64/OpenTofu profile and controlled process/container restart, not host-power-loss or universal production support.
 - Automation authority must resolve verified sessions/memberships and separate credential audiences. Never reuse caller role/actor headers or missing-role-to-admin behavior as authenticated approval. New local accounts/session design is selected for planning, not already implemented.
 - Findings/severity stay in the shared analysis core; workflow gates/decisions are separate from canonical advisory reports. Direct apply/destroy/remediation, generalized commands, autonomous approval and new AI workflow composition are outside the adopted P0 release.
 - Approved handoff binds source/evidence/policy/target/payload/deadlines. Fence attempts, persist outbound intent, reconcile uncertain remote work and retain locks; disable/revoke/restore invalidates pending authority without claiming an already-started external action stopped.
@@ -127,4 +127,4 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 - Update it when tooling, validation commands, or architecture boundaries materially change.
 - Remove rules that become obsolete or are contradicted by the current codebase.
 
-Last Updated: 2026-10-07
+Last Updated: 2026-10-10

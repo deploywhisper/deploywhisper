@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "phase": "WP6",
+  "status": "passed",
+  "qualification_scope": "closed disposable wire/semantic prototypes and bounded brownfield consumer probes; no production handlers or rendered UI",
+  "observed_date": "2026-10-09",
+  "responsible_contributor": "Codex",
+  "accountable_public_maintainer": "@pramodksahoo",
+  "independent_review": "parent Story16.0 records actual independent architecture/security review; not claimed by this contributor",
+  "runtime": {
+    "python": "3.14.3",
+    "pydantic": "2.13.3",
+    "ruff": "0.15.11",
+    "bandit": "1.9.4",
+    "node": "24.7.0"
+  },
+  "results": {
+    "test_methods": 15,
+    "pytest_subtests_passed": 185,
+    "committed_valid_vectors": 25,
+    "committed_invalid_vectors": 28,
+    "permission_vectors": 12,
+    "tuple_binding_mutation_fields": 28,
+    "json_schema_contracts": 8,
+    "consumer_cases": {
+      "existing_api_pydantic_and_agent": "absent/known/unknown metadata; unchanged known output; descriptive block dropped",
+      "actual_cli_main": 6,
+      "actual_raw_react_client": 3,
+      "pinned_external_action_summary": 3
+    },
+    "resource_probe": {
+      "workflow_steps": 50,
+      "meaningful_bytes": 5158,
+      "admitted_exact_limit_bytes": 131072,
+      "elapsed_seconds": 0.3388,
+      "peak_traced_bytes": 827185,
+      "capacity_claim": false
+    }
+  },
+  "selected_contracts": {
+    "max_wire_bytes": 131072,
+    "max_yaml_depth": 16,
+    "yaml_aliases_anchors_duplicatekeys": "denied",
+    "max_steps": 50,
+    "max_log_chunk_utf8_bytes": 16384,
+    "list_default": 25,
+    "list_max": 100,
+    "cursor_max_seconds": 900,
+    "collection_ttl_max_seconds": 3600,
+    "max_report_snapshot_bytes": 8388608,
+    "canonical_tuple": "tuple-json-utf8-v1 safe integers only; sorted keys; compact UTF8; no normalization/NaN/floats",
+    "report_snapshot": "report-export-bytes-sha256-v1 capture report-only existing serializer output once in future16.8 boundary; hash exact stored immutable export bytes; no Pydantic redump",
+    "report_compatibility": "relational first; report v2 unchanged; provenance descriptive separate",
+    "unavailable_authority": 503,
+    "nondisclosure": "generic403 Operation unavailable",
+    "composition": "existing shell/primitives and exactv3 values; future /infra-automation entry and Settings accountentry; no rendered proof"
+  },
+  "frozen_manifest_digest": "sha256:e6a1d03df0f47ee8324856ae8c71649b0cf61aee172c60d51746687a9b9a6be1",
+  "commands": [
+    {
+      "command": "./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_contract_qualification.py -q --tb=short",
+      "exit_code": 0,
+      "result": "15 passed, 185 subtests passed in 0.82s"
+    },
+    {
+      "command": "./.venv/bin/python -m unittest discover -s tests/test_infra -p test_infra_automation_contract_qualification.py -q",
+      "exit_code": 0,
+      "result": "15 tests passed in 0.644s"
+    },
+    {
+      "command": "./.venv/bin/ruff check tests/fixtures/infra_automation/qualification/16_0/contracts tests/test_infra/test_infra_automation_contract_qualification.py",
+      "exit_code": 0
+    },
+    {
+      "command": "./.venv/bin/bandit -q -r tests/fixtures/infra_automation/qualification/16_0/contracts tests/test_infra/test_infra_automation_contract_qualification.py",
+      "exit_code": 0
+    },
+    {
+      "command": "node tests/fixtures/infra_automation/qualification/16_0/contracts/react_consumer_probe.cjs",
+      "exit_code": 0,
+      "result": "3 rawclient vectors passed; not rendering"
+    },
+    {
+      "command": "./.venv/bin/python tests/fixtures/infra_automation/qualification/16_0/contracts/action_consumer_probe.py",
+      "exit_code": 0,
+      "result": "3 pinned _success_summary vectors passed; not full external action network integration"
+    },
+    {
+      "command": "./.venv/bin/python tests/fixtures/infra_automation/qualification/16_0/contracts/cli_consumer_probe.py",
+      "exit_code": 0,
+      "result": "6 actual CLI tests with augmented reportmetadata passed; isolated testDB"
+    },
+    {
+      "command": "./.venv/bin/python -m pytest tests/test_cli/test_analyze.py -k agent_json_emits_stable_advisory_contract -q --tb=short",
+      "exit_code": 0,
+      "result": "1passed84deselected; Alembic existing path_separator deprecation warning"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "red_green": {
+    "tests_written_first": true,
+    "red": "initial import failed because intentionally missing prototype; wrapper returned setup failure without retained numeric unittest summary",
+    "green": "final13tests+171subtests passed; no fabricated resource/runtime passes"
+  },
+  "external_action": {
+    "commit": "3b37ed72bfb2d201030bef873268f2170794b160",
+    "runtime_digest": "sha256:98433dc82dbfd9b4b3d12a5f268d01ca504525ae0bc2c1aed8c7107b293edb0d",
+    "runtime_path": "/private/tmp/16-0-action-runtime-pinned-readonly.py",
+    "reproduce_prerequisite": "retrieve action_runtime.py read-only from exact commit and verify digest; runtime intentionally not copied into app repo"
+  },
+  "remaining_limits": [
+    "Schemas represent closed shapes; graph/date/hash/current-authority semantic validators also mandatory.",
+    "Production identity/table/transition/atomic upload/cursor/lease/snapshot/receiver enforcement belongs to later stories.",
+    "Fixture profile/hash/custody examples are synthetic syntax; real selected Linux profile and protected saved-plan evidence are separately WP4/WP5.",
+    "Future Compose browser pixel/keyboard/a11y1440/760 proof required per rendered story; UI validation not applicable here.",
+    "Raw React client probe does not prove rendered screens; external summary probe does not prove full action/PR/network paths.",
+    "Repo-wide validation and final profile evidence/hash binding owned by parent integration; no production capacity/secret-redaction certification."
+  ],
+  "review_regressions": {
+    "literal_boolean": "integer1 rejected before LiteralTrue coercion; no other Literal bool fields in prototype",
+    "step_order": "two-pass validate local shapes/types before cross-step decision/gate/report dereferences; reversed valid workflow accepted; missing refs fail ValueError",
+    "red": "5 subtest failures reproduced including KeyError binding/report/artifact and accepted one_use integer1",
+    "green": "15 methods and 185 subtests passed, unittest15 passed; owned Ruff/Bandit/diff passed",
+    "consumer_probes": "not repeated: corrections affect enrollment and graph validation only; existing consumer results unchanged"
+  },
+  "qualified_profile_digest": "sha256:1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+  "review_resolution": {
+    "status": "passed",
+    "workflow_permutations": 240,
+    "negative_boundaries": 725,
+    "findings_fixed": [
+      "strict enrollment boolean",
+      "order-independent graph reference validation"
+    ],
+    "ui_route_correction": "canonical /infra-automation; account browser owner16.7 using16.1/16.2 APIs"
+  }
+}

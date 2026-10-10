@@ -1,0 +1,146 @@
+{
+  "status": "passed",
+  "profile": "linux-arm64-docker-nonroot-offline-v1",
+  "source_sha": "cbc55062de7730dd19694c418b5f9e9ff03ee223",
+  "source_content_sha256": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3",
+  "controls": {
+    "uid": "10001:10001",
+    "read_only": true,
+    "cap_drop": [
+      "ALL"
+    ],
+    "security_opt": [
+      "no-new-privileges:true"
+    ],
+    "network": "none",
+    "memory": 536870912,
+    "nano_cpus": 500000000,
+    "pids_limit": 64,
+    "mount_destinations": [
+      "/staging",
+      "/custody"
+    ],
+    "default_seccomp": true
+  },
+  "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+  "catalog_digests": {
+    "/usr/local/bin/tofu": "d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f",
+    "/opt/qualification/source/main.tf": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3",
+    "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/terraform-provider-external": "f9994ee228b86d34c289d858af46f758921f34393a27a1bb5677761c08228f50"
+  },
+  "plan": {
+    "raw_digest": "1fb662cd72e2bbf6f3b6db635d66d2299096fb910e08574b76e2aa2668219bff",
+    "sanitized_digest": "9c747e4b68bbaa5bca556b8161fe856ccedc282396faf183fb1027e238ccf8ce",
+    "provider_probe": {
+      "capabilities_dropped": "True",
+      "catalog_immutable": "True",
+      "egress_denied": "True",
+      "metadata_denied": "True",
+      "no_new_privileges": "True",
+      "seccomp_enforced": "True",
+      "sentinel_absent": "True",
+      "uid": "10001"
+    },
+    "uid": 10001
+  },
+  "disk": {
+    "disk_denied": true,
+    "partial_removed": true,
+    "exit_code": 0
+  },
+  "pids": {
+    "pids_denied": true,
+    "exit_code": 0
+  },
+  "memory": {
+    "exit_code": 137,
+    "oom_killed": true
+  },
+  "cpu": {
+    "cpu_max": "50000 100000",
+    "cpu_stat": "usage_usec 1036572\nuser_usec 1026614\nsystem_usec 9957\nnice_usec 0\nnr_periods 21\nnr_throttled 20\nthrottled_usec 998218\nnr_bursts 0\nburst_usec 0\n",
+    "exit_code": 0
+  },
+  "output_cap": {
+    "exit_code": 124,
+    "stopped": true
+  },
+  "time_cap": {
+    "exit_code": 124,
+    "stopped": true
+  },
+  "descendants": {
+    "cancel": {
+      "processes_before": 2,
+      "stopped": true,
+      "exit_code": 137
+    },
+    "timeout": {
+      "processes_before": 2,
+      "stopped": true,
+      "exit_code": 137
+    },
+    "lease_loss": {
+      "processes_before": 2,
+      "stopped": true,
+      "exit_code": 137
+    }
+  },
+  "local_traffic": {
+    "approved_local_allowed": "True",
+    "capabilities_dropped": "True",
+    "catalog_immutable": "True",
+    "egress_denied": "True",
+    "metadata_denied": "True",
+    "no_new_privileges": "True",
+    "seccomp_enforced": "True",
+    "sentinel_absent": "True",
+    "uid": "10001"
+  },
+  "manifest_version": 1,
+  "phase": "WP4",
+  "timestamp": "2026-10-09T16:51:13.041322+00:00",
+  "responsible_contributor": "Codex real_linux_qualification",
+  "profile_manifest": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
+  "profile_manifest_sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+  "runtime_evidence_claimed": true,
+  "tools_installed": true,
+  "profile_substituted": false,
+  "raw_log_custody": "unique private temporary diagnostics; binary plan/state only owned disposable Docker volumes; resources cleaned after each run",
+  "commands": [
+    {
+      "command": "docker build -f tests/fixtures/infra_automation/qualification/16_0/isolation/Dockerfile -t dw16-qualification:1 tests/fixtures/infra_automation/qualification/16_0",
+      "exit_code": 0
+    },
+    {
+      "command": "QUALIFICATION_SECRET=synthetic-sentinel DW16_PRIVATE_RESULTS=/private/tmp/dw16-real-results.json ./.venv/bin/python tests/fixtures/infra_automation/qualification/16_0/isolation/harness.py",
+      "exit_code": 0
+    },
+    {
+      "command": "DW16_REAL_LINUX=1 ./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_real_linux_qualification.py -q",
+      "exit_code": 0,
+      "result": "3 passed, 6 subtests passed in 12.91s"
+    }
+  ],
+  "repaired_qualification_failure": "Initial runtime init produced executable provider in noexec tmpfs and actual plan failed. Preinstalled unpacked provider in immutable image; kept noexec tmpfs. Retest passed.",
+  "open_issues": [],
+  "limits": [
+    "One disposable Linux ARM64 Docker Desktop profile, not universal containment or production certification.",
+    "Host/daemon/DB administrator and compromised receiver identity remain trusted/out of scope.",
+    "Bounded synthetic child/process/resource probes do not prove integrated production lease cancellation or workload capacity.",
+    "Output is monitored every20ms with retained readback limited64KiB; transient private buffered output can overshoot cutoff before container kill.",
+    "Protected staging and custody stores are each bounded8MiB tmpfs; non-root lifecycle anchor keeps them mounted across receiver process/container restart. Hostpower loss persistence is not qualified."
+  ],
+  "store_disk": {
+    "staging": {
+      "disk_denied": true,
+      "partial_removed": true,
+      "capacity_bytes": 8388608
+    },
+    "custody": {
+      "disk_denied": true,
+      "partial_removed": true,
+      "capacity_bytes": 8388608
+    }
+  }
+}
