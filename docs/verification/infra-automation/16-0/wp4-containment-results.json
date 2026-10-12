@@ -22,14 +22,14 @@
     ],
     "default_seccomp": true
   },
-  "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+  "image_id": "sha256:62cff87604f8769279bb710ce473161ded504c6ef45fefedbe2fe99ff13d20cd",
   "catalog_digests": {
     "/usr/local/bin/tofu": "d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f",
     "/opt/qualification/source/main.tf": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3",
     "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/terraform-provider-external": "f9994ee228b86d34c289d858af46f758921f34393a27a1bb5677761c08228f50"
   },
   "plan": {
-    "raw_digest": "1fb662cd72e2bbf6f3b6db635d66d2299096fb910e08574b76e2aa2668219bff",
+    "raw_digest": "b2848801b008d84675cc6a4ef3f5440175ef9d211900d4b382778ee144a42997",
     "sanitized_digest": "9c747e4b68bbaa5bca556b8161fe856ccedc282396faf183fb1027e238ccf8ce",
     "provider_probe": {
       "capabilities_dropped": "True",
@@ -58,7 +58,7 @@
   },
   "cpu": {
     "cpu_max": "50000 100000",
-    "cpu_stat": "usage_usec 1036572\nuser_usec 1026614\nsystem_usec 9957\nnice_usec 0\nnr_periods 21\nnr_throttled 20\nthrottled_usec 998218\nnr_bursts 0\nburst_usec 0\n",
+    "cpu_stat": "usage_usec 1042943\nuser_usec 1028997\nsystem_usec 13945\nnice_usec 0\nnr_periods 21\nnr_throttled 20\nthrottled_usec 999161\nnr_bursts 0\nburst_usec 0\n",
     "exit_code": 0
   },
   "output_cap": {
@@ -99,10 +99,10 @@
   },
   "manifest_version": 1,
   "phase": "WP4",
-  "timestamp": "2026-10-09T16:51:13.041322+00:00",
-  "responsible_contributor": "Codex real_linux_qualification",
+  "timestamp": "2026-10-12T11:49:43.014309+00:00",
+  "responsible_contributor": "Codex review-fix integration",
   "profile_manifest": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
-  "profile_manifest_sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+  "profile_manifest_sha256": "b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772",
   "runtime_evidence_claimed": true,
   "tools_installed": true,
   "profile_substituted": false,
@@ -142,5 +142,16 @@
       "partial_removed": true,
       "capacity_bytes": 8388608
     }
+  },
+  "supersedes": {
+    "timestamp": "2026-10-09T16:51:13.041322+00:00",
+    "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+    "profile_manifest_sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+    "commit": "f7e33abbb8244222e67b1370989d2ba8aea08e4e"
+  },
+  "review_fix_verification": {
+    "command": "QUALIFICATION_SECRET=synthetic-sentinel DW16_PRIVATE_RESULTS=<private-path> ./.venv/bin/python tests/fixtures/infra_automation/qualification/16_0/isolation/harness.py",
+    "exit_code": 0,
+    "result": "strict complete evidence; actual disk-full/short-write/three publication crashes; real pinned tool/provider/custody/receiver probes passed"
   }
 }

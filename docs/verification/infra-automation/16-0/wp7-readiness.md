@@ -90,3 +90,9 @@ This lane verified requirement-ID coverage, all 20context references/dependency 
 The root completed final validation: full local CI exit0; root smoke614tests with2skips; exact API/CLI/infra shard550passed/1skipped/1023subtests; explicit actual Linux suite3passed/6subtests; contract15tests/185subtests and independent240-order/725-negative review; Ruff lint, repo-wide format322files and scoped Bandit passed. The ordinary-CI Docker opt-out was covered by the independent actual run. Final hashes and review corrections are reconciled in the evidence manifest.
 
 The pending integration-verification condition is satisfied. **Story16.0 is done for its bounded governance/qualification scope;16.1 and16.3 are ready-for-dev.** Later stories and stable release retain their own acceptance. This addendum completes the earlier conditional assessment without rewriting its chronology.
+
+## Qualification review amendment — 2026-10-12
+
+The follow-up review found gaps in executable qualification checks and interrupted custody finalization. The revised gate requires complete typed proof sets and exact fault outcomes; completed processes are checked for output overflow. Custody uses recoverable private staging and atomic publication. Real Linux requalification and an independent repeat passed, including kernel ENOSPC, short writes and three publication crash points.
+
+Current image: `sha256:62cff87604f8769279bb710ce473161ded504c6ef45fefedbe2fe99ff13d20cd`; current profile SHA-256: `b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772`. Earlier image/profile references in this dated report describe the initial qualification. Current results and superseded identities are in the WP4/WP5 records. The four review actions and repository validation are closed in Story16.0; dependent16.1/16.3 promotion is restored. No production or host-power-loss claim is added.

@@ -5,6 +5,8 @@ Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.0; public RFC and 16.0 qualification required
 
+Review gate (2026-10-12): Story 16.0's findings are resolved and requalified; foundation readiness is restored.
+
 ## Story
 
 As an operator, I want to authenticate through a named, revocable local account, so that future decisions carry a verified human identity rather than caller-provided headers.

@@ -7,7 +7,7 @@ release: v1.5.0
 priority: highest-feature-priority
 dependencies: released-v1.4.0-baseline
 
-**Completion boundary:** The bounded governance and disposable qualification work is complete. RFC0001 is accepted under the recorded maintainer-specific exception; IR-01–04 are resolved for foundation readiness. Only dependency-satisfied prepared stories16.1 and16.3 advance. Production implementation, broader support, browser/operations and stable-release qualification remain with later stories.
+**Completion boundary:** The four 2026-10-12 review findings are resolved with regression tests, actual Linux requalification and independent technical review. RFC0001 acceptance remains recorded; the bounded governance/disposable qualification is complete and prepared 16.1/16.3 may advance. Production implementation, broader support, browser/operations and stable-release qualification remain with later stories.
 
 ## Story
 
@@ -107,6 +107,13 @@ Each numbered packet is independently reviewable. Assign a named responsible con
   - [x] Run relevant documentation checks and `git diff --check`. For any retained Python harness/fixture change run `./.venv/bin/ruff check .`, **repo-wide** `./.venv/bin/ruff format --check .`, `./.venv/bin/python -m unittest discover -q` and affected registered discovery/CI shard; root discovery alone is insufficient. Use `bash scripts/ci-local.sh` for broad retained changes.
   - [x] Production UI remains unchanged: record **UI validation not applicable** for this scope. If scope is explicitly widened to real React changes, use a separate sanctioned UI story/PR and Compose production build, seed actual APIs, root-SPA Playwright/axe/keyboard/screenshots at `http://localhost:8080`, then Compose down; Vite cannot prove acceptance.
 
+### Review Findings — 2026-10-12
+
+- [x] [Review][Patch][P1] Require complete, typed mandatory evidence and exact crash outcomes in the qualification gate — `tests/fixtures/infra_automation/qualification/16_0/isolation/harness.py:409`. Empty provider, local-traffic, custody-attack, descendant, receiver-fault and store-quota maps each pass because only supplied values are checked. Crash records also pass with incorrect state/count pairs because only `action_count <= 1` is required. Enforce the declared case sets and expected state/count for every crash point; add missing, partial, wrong-type and contradictory-outcome regressions. AC5–7 and AC9. Existing recorded cases are present; this is an executable gate defect, not a claim the prior run was absent.
+- [x] [Review][Patch][P2] Check final output sizes after process exit — `tests/fixtures/infra_automation/qualification/16_0/isolation/harness.py:226`. A process that completes between polls can exceed the combined 65,536-byte stdout/stderr cap and return exit 0 after truncation. A completed 100,000-byte writer reproduced exit 0 with only 65,536 bytes retained; the later length check cannot detect discarded bytes. Check the final untruncated sizes and deny over-limit completion, with stdout/stderr boundary regressions. AC5/WP4.
+- [x] [Review][Patch][P2] Make custody finalization recoverable before publication — `tests/fixtures/infra_automation/qualification/16_0/real_custody/probe.py:59`. Injecting ENOSPC on the ciphertext creation leaves the final `key` path behind; retry fails with EEXIST even though no record was published. Use private pending objects, complete-write checks and atomic publication with recovery/cleanup of interrupted attempts. Exercise actual finalization failures, not only the unrelated `partial-upload` disk probe. AC6/WP5 atomic finalization and partial cleanup; no host-power-loss guarantee is requested.
+- [x] [Review][Patch][P2] Correct the final manifest's stale runtime scope — `docs/verification/infra-automation/16-0/manifest.json:309`. `runtime_evidence_scope` still says no real containment or saved-plan evidence, contradicting the executed WP4/WP5 records and final readiness. Describe the bounded Linux ARM64/OpenTofu and process/container restart evidence accurately while retaining production and host-power-loss limitations. AC9.
+
 ## Dev Notes
 
 ### Evidence custody and execution limits
@@ -194,8 +201,33 @@ Publication: [PR155](https://github.com/deploywhisper/deploywhisper/pull/155) ta
 - Final commands/results: `bash scripts/ci-local.sh` exit0 after rerun of a daemon-interrupted attempt; `./.venv/bin/python -m unittest discover -q`614 tests, OK with2skips; `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`550passed/1skipped/1023subtests; separate `DW16_REAL_LINUX=1 ./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_real_linux_qualification.py -q`3passed/6subtests, independently repeated; repo Ruff lint, repo-wide format322files, qualification Bandit and whitespace passed. Ordinary CI intentionally skips realDocker execution, covered by the explicit actual run. UI validation not applicable; no rendered surface changed.
 - All seven packets are complete for this story's declared scope. Retained limitations include one-human governance coverage, host/daemon/receiver trust, ephemeral process/container restart scope, unqualified alternate tools/platforms, production integration/capacity/redaction/browser/release obligations. They are assigned to later owning stories rather than counted as delivered here. Evidence and exact hashes are indexed in the final manifest.
 
+### Code review — 2026-10-12
+
+- Outcome: changes requested. Reviewed `9d9f7f8c8ee5b72dc15c549298322bee78262e18...f7e33abbb8244222e67b1370989d2ba8aea08e4e` on `feature/16-0-infra-automation-qualification` against this story and its qualification boundary: 71 files, 11,945 insertions and 97 deletions.
+- All three independent BMad layers completed: Blind Hunter (diff only), Edge Case Hunter (diff plus repository) and Acceptance Auditor (diff/spec/context). Unavailable-model/capacity attempts were replaced or resumed; no missing layer is counted as a clean review. Eight layer findings were consolidated into four patch items above; no decision-needed or deferred finding remains.
+- Root reproduced the empty-map admission against the merged committed WP4/WP5 evidence, the completed 100,000-byte writer returning exit 0 after truncation, and ENOSPC finalization leaving `key` followed by EEXIST on retry. These targeted fault experiments expose gaps not covered by the existing passing suites.
+- Baseline verification earlier in this same session at the reviewed HEAD: qualification suite 58 passed / 1 Docker opt-out skip / 766 subtests passed; root unittest smoke 614 tests, OK with 2 skips; Ruff lint and repo-wide format (322 files), qualification Bandit and whitespace checks passed. All 70 evidence digest entries matched. Real Linux qualification was not rerun during this review; its recorded prior evidence is retained.
+- Only review findings and execution tracking were edited. No implementation fix or code simplification is claimed. Story 16.0 returns to in-progress; prepared 16.1/16.3 return to backlog while the prerequisite review gate is open. Prior RFC acceptance is not revoked. UI validation not applicable.
+- Review-artifact validation: `./.venv/bin/python -m unittest discover -s tests/test_docs -q` passed 51 tests; `git diff --check` passed; four unchecked findings and all three affected story/sprint status pairs were verified.
+- Git Flow branch is compliant. The user authorized add/commit/push/PR only if the review passed; that condition is unmet. No staging, commit, remote push or PR mutation was performed. Existing PR155 remains the publication reference for later closeout; do not create a duplicate.
+- BMad Help handoff: resume `bmad-dev-story` on 16.0's four review action items, refresh affected qualification evidence and hashes, then rerun `bmad-code-review` before dependent promotion and the authorized Git Flow closeout.
+
+### Review-fix completion — 2026-10-12
+
+- Executed the BMad Dev Story follow-up in the existing story branch. Root owned integration/evidence/closeout; native `fix_gate_output` owned mandatory-proof/output and changed-test regressions; `fix_custody_finalize` owned recoverable finalization. Regression-first runs reproduced missing/partial/malformed proof acceptance, completed-output overflow and orphan-key/EEXIST failures before corrections.
+- Mandatory proof maps now require exact case sets/types and crash-specific state/count outcomes. Final combined stdout/stderr size is checked before truncation even after process exit. Custody uses an owner-checked lock, complete writes, private pending objects, atomic directory publication and cleanup/recovery of interrupted unpublished attempts. The final manifest scope accurately includes actual Linux/saved-plan qualification and retained production limits.
+- Rebuilt the same pinned Linux ARM64/OpenTofu1.13.1/external2.3.5 profile with only custody source changes; the Dockerfile now copies the source file explicitly instead of generated caches. Actual kernel ENOSPC after key creation, 519 short-write calls and three abrupt publication crash boundaries passed with original saved-plan bytes verified, cleanup and immutable publication. WP4/WP5 preserve the superseded image/profile identities and bind the replacement profile.
+- All three follow-up BMad review layers completed cleanly. Independent actual Linux rerun: 3 passed/6 subtests in15.27seconds. Edge review additionally synchronized two finalizers and observed exactly one publication, one refusal, unchanged original bytes and no pending staging. Native technical review does not add human governance approval.
+- During closeout, PR155's older changed-test job revealed fixture scripts were imported as test modules and attempted a private local action-probe path. Fixed `scripts/test-changed.sh` to select actual `test_*.py` modules and exclude fixtures/helpers, using a Bash3-compatible reader. Four regression-first behavior tests and independent review passed; documentation updated. No external action runtime was copied or modified.
+- Validation: `bash scripts/ci-local.sh` exited0, covering1,926 unittest tests across all nine registered directories plus8 prompt-injection tests; `./.venv/bin/python -m unittest discover -q` ran636, OK/2skips; `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` passed572/1skip/2,111subtests. After the final discovery-script fix, infrastructure unittest was rerun:253, OK/1skip; all three new regression modules passed26tests/1,092subtests. Repo Ruff lint/format325files, fixture Bandit and `bash -n scripts/test-changed.sh` passed. Ordinary CI intentionally skips real Docker; the explicit independent real run covers it. UI validation not applicable.
+- The gate reuses one strict recursive evidence matcher; finalization replaces separately published files with one immutable directory. No new dependencies or application behavior. Retained limits remain the declared disposable profile, process/container restart, trusted receiver/host, and downstream production/browser/host-power-loss qualification.
+- Restored Story16.0 done and only dependency-satisfied16.1/16.3 ready-for-dev. The final Git Flow closeout reuses PR155 targeting develop; publication details are recorded after the final branch checks and push.
+
 ### File List
 
+- `tests/test_infra/test_changed_test_discovery.py`
+- `scripts/test-changed.sh`
+- `docs/ci.md`
 - `_bmad-output/implementation-artifacts/16-0-adopt-and-qualify-infra-automation-contract.md`
 - `_bmad-output/implementation-artifacts/16-1-verified-human-principal-and-session-lifecycle.md`
 - `_bmad-output/implementation-artifacts/16-3-closed-workflow-schema-and-validator.md`
@@ -263,6 +295,8 @@ Publication: [PR155](https://github.com/deploywhisper/deploywhisper/pull/155) ta
 - `tests/fixtures/infra_automation/qualification/16_0/receiver/prototype.py`
 - `tests/fixtures/infra_automation/qualification/16_0/sqlite/prototype.py`
 - `tests/test_infra/test_infra_automation_contract_qualification.py`
+- `tests/test_infra/test_infra_automation_custody_finalization.py`
+- `tests/test_infra/test_infra_automation_qualification_gate.py`
 - `tests/test_infra/test_infra_automation_identity_qualification.py`
 - `tests/test_infra/test_infra_automation_real_linux_qualification.py`
 - `tests/test_infra/test_infra_automation_receiver_qualification.py`
@@ -270,6 +304,8 @@ Publication: [PR155](https://github.com/deploywhisper/deploywhisper/pull/155) ta
 
 ### Change Log
 
+- 2026-10-12: Resolved all four review findings plus the fixture-import CI regression; requalified the updated Linux profile, refreshed evidence and restored foundation readiness after independent review.
+- 2026-10-12: Reopened qualification after code review; recorded four actionable findings and suspended dependent 16.1/16.3 promotion pending fixes and renewed verification. Conditional Git Flow closeout was not performed.
 - 2026-10-10: Completed actual Linux/custody and contract qualification, recorded maintainer adoption, resolved final review findings, reran readiness/validation and closed the bounded story.
 - 2026-10-09: Resumed explicit packet prerequisites; qualified WP2/WP3 and partial WP5 with 41 tests, resolved layered review findings and prepared WP6 drafts. WP4 and public/real-custody/freeze/readiness gates remain unresolved.
 - 2026-10-09: Began WP1 preparation; recorded early merge without qualifying review, kept mandatory gates open and Story 16.0 in-progress. No production automation or executable spike delivered.

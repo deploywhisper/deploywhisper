@@ -1,12 +1,12 @@
 {
   "status": "passed",
   "profile": "linux-arm64-docker-nonroot-offline-v1",
-  "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+  "image_id": "sha256:62cff87604f8769279bb710ce473161ded504c6ef45fefedbe2fe99ff13d20cd",
   "source_sha": "cbc55062de7730dd19694c418b5f9e9ff03ee223",
   "source_content_sha256": "4a57babadc96e3681aa1b3e6f65d9a6debb734c066041fa384a3a536e359a7b3",
   "restart": {
     "restart_verified": true,
-    "raw_digest": "1fb662cd72e2bbf6f3b6db635d66d2299096fb910e08574b76e2aa2668219bff"
+    "raw_digest": "b2848801b008d84675cc6a4ef3f5440175ef9d211900d4b382778ee144a42997"
   },
   "collector": {
     "custody_denied": true
@@ -71,22 +71,22 @@
     "action_count": 0
   },
   "custody": {
-    "raw_digest": "1fb662cd72e2bbf6f3b6db635d66d2299096fb910e08574b76e2aa2668219bff",
-    "expiry": 1791568244,
+    "raw_digest": "b2848801b008d84675cc6a4ef3f5440175ef9d211900d4b382778ee144a42997",
+    "expiry": 1791809327,
     "uid": 10002,
     "tool": "1.13.1"
   },
   "plan_digests": {
-    "raw_digest": "1fb662cd72e2bbf6f3b6db635d66d2299096fb910e08574b76e2aa2668219bff",
+    "raw_digest": "b2848801b008d84675cc6a4ef3f5440175ef9d211900d4b382778ee144a42997",
     "sanitized_digest": "9c747e4b68bbaa5bca556b8161fe856ccedc282396faf183fb1027e238ccf8ce"
   },
   "manifest_version": 1,
   "phase": "WP5-real-custody",
-  "timestamp": "2026-10-09T16:51:13.042058+00:00",
-  "responsible_contributor": "Codex real_linux_qualification",
+  "timestamp": "2026-10-12T11:49:43.014309+00:00",
+  "responsible_contributor": "Codex review-fix integration",
   "profile_manifest": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
-  "profile_manifest_sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
-  "storage_policy": "AES-256-GCM; random 96-bit nonce; 256-bit key; handle AAD; directory0700 receiverUID10002; files0400; original rawSHA256 verified before sealed memfd show; maximumTTL3600s",
+  "profile_manifest_sha256": "b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772",
+  "storage_policy": "AES-256-GCM; random 96-bit nonce; 256-bit key; handle AAD; directory0700 receiverUID10002; files0400; original rawSHA256 verified before sealed memfd show; maximumTTL3600s; serialized private staging and atomic finalized-directory publication; interrupted prepublication attempts recovered without overwriting a published bundle",
   "real_saved_binary_plan": true,
   "only_counted_harmless_action": true,
   "no_apply": true,
@@ -99,7 +99,7 @@
     "Protected staging and custody stores are each bounded8MiB tmpfs; non-root lifecycle anchor keeps them mounted across receiver process/container restart. Hostpower loss persistence is not qualified."
   ],
   "real_tuple_source_sha": "cbc55062de7730dd19694c418b5f9e9ff03ee223",
-  "real_tuple_deadline": 1791568244,
+  "real_tuple_deadline": 1791809327,
   "real_tuple_clock": "current wall-clock UTC, bounded by original custody expiry",
   "store_disk": {
     "staging": {
@@ -111,6 +111,70 @@
       "disk_denied": true,
       "partial_removed": true,
       "capacity_bytes": 8388608
+    }
+  },
+  "supersedes": {
+    "timestamp": "2026-10-09T16:51:13.042058+00:00",
+    "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+    "profile_manifest_sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+    "commit": "f7e33abbb8244222e67b1370989d2ba8aea08e4e"
+  },
+  "review_fix_verification": {
+    "command": "QUALIFICATION_SECRET=synthetic-sentinel DW16_PRIVATE_RESULTS=<private-path> ./.venv/bin/python tests/fixtures/infra_automation/qualification/16_0/isolation/harness.py",
+    "exit_code": 0,
+    "result": "strict complete evidence; actual disk-full/short-write/three publication crashes; real pinned tool/provider/custody/receiver probes passed"
+  },
+  "finalization_faults": {
+    "uid": 10002,
+    "raw_digest": "b2848801b008d84675cc6a4ef3f5440175ef9d211900d4b382778ee144a42997",
+    "crashes": {
+      "after_key": {
+        "crash_exit": 73,
+        "published_before_retry": false,
+        "pending_before_retry": true,
+        "retry_denied": false,
+        "retry_verified": true,
+        "second_finalize_denied": true,
+        "original_unchanged": true,
+        "pending_removed": true
+      },
+      "before_publish": {
+        "crash_exit": 73,
+        "published_before_retry": false,
+        "pending_before_retry": true,
+        "retry_denied": false,
+        "retry_verified": true,
+        "second_finalize_denied": true,
+        "original_unchanged": true,
+        "pending_removed": true
+      },
+      "after_publish": {
+        "crash_exit": 73,
+        "published_before_retry": true,
+        "pending_before_retry": false,
+        "retry_denied": true,
+        "retry_verified": true,
+        "second_finalize_denied": true,
+        "original_unchanged": true,
+        "pending_removed": true
+      }
+    },
+    "short_write": {
+      "write_calls": 519,
+      "retry_verified": true,
+      "second_finalize_denied": true,
+      "original_unchanged": true,
+      "pending_removed": true
+    },
+    "enospc": {
+      "errno": 28,
+      "key_created": true,
+      "unpublished": true,
+      "clean_after_failure": true,
+      "retry_verified": true,
+      "second_finalize_denied": true,
+      "original_unchanged": true,
+      "pending_removed": true
     }
   }
 }

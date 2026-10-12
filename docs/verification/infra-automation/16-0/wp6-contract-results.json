@@ -126,7 +126,7 @@
     "green": "15 methods and 185 subtests passed, unittest15 passed; owned Ruff/Bandit/diff passed",
     "consumer_probes": "not repeated: corrections affect enrollment and graph validation only; existing consumer results unchanged"
   },
-  "qualified_profile_digest": "sha256:1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+  "qualified_profile_digest": "sha256:b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772",
   "review_resolution": {
     "status": "passed",
     "workflow_permutations": 240,
@@ -136,5 +136,6 @@
       "order-independent graph reference validation"
     ],
     "ui_route_correction": "canonical /infra-automation; account browser owner16.7 using16.1/16.2 APIs"
-  }
+  },
+  "profile_requalification": "2026-10-12: qualification harness/custody review fixes; unchanged wire schemas and consumer contracts"
 }

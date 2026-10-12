@@ -9,9 +9,13 @@ if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   exit 0
 fi
 
-mapfile -t CHANGED_TESTS < <(
+CHANGED_TESTS=()
+while IFS= read -r path; do
+  CHANGED_TESTS+=("$path")
+done < <(
   git diff --name-only --diff-filter=ACMR "$BASE_REF"...HEAD \
-    | grep -E '^tests/.+\.py$' || true
+    | grep -E '^tests/(.*/)?test_[^/]*\.py$' \
+    | grep -v '^tests/fixtures/' || true
 )
 
 if [ "${#CHANGED_TESTS[@]}" -eq 0 ]; then

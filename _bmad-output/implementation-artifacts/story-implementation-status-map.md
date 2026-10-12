@@ -143,7 +143,7 @@ Closeout uses completed story tasks/review-fix records, merged delivery, and the
 
 ## Prepared Epic 16 Contexts
 
-Story 16.0 is ready only for governance/synthetic qualification. Other context files are prepared but held backlog by their execution gates.
+Story 16.0's four follow-up review findings were resolved and requalified on 2026-10-12, restoring only dependency-satisfied 16.1/16.3 to ready-for-dev. Other contexts remain prepared and held by their execution gates.
 
 | Story | Status | Dedicated context |
 | --- | --- | --- |
@@ -172,12 +172,12 @@ Story 16.0 is ready only for governance/synthetic qualification. Other context f
 
 Epic 15 was omitted from tracking: its eight existing planned phases now have reconstructed delivery records. Six are accepted done; 15.6/15.7 remain review because 12 historical parity labels awaiting a current disposition crosswalk and initiative checklist closure lack accepted dispositions. Resolve that acceptance work in a separate task; no UI changes were made here.
 
-Next planning/qualification is Story 16.0 and public RFC review. Epic 16 has highest v1.5.0 feature priority; it is not ready for runtime implementation until the readiness gates close. Story 12.5 remains the parallel release-enabler lane. Checksums and provenance already shipped; deliver and verify the missing SBOM against actual published artifacts without replacing immutable v1.4.0 assets. Then complete 12.7/12.8, Epic 13's remaining documentation acceptance, and Epic 14's governance/adoption readiness. Do not rebuild completed 12.6 or 13.8.
+Next implementation is the prepared 16.1/16.3 foundation stories after the requalified Story16.0 gate. Epic16 has highest v1.5.0 feature priority; later stories remain gated by their own dependencies. Story 12.5 remains the parallel release-enabler lane. Checksums and provenance already shipped; deliver and verify the missing SBOM against actual published artifacts without replacing immutable v1.4.0 assets. Then complete 12.7/12.8, Epic 13's remaining documentation acceptance, and Epic 14's governance/adoption readiness. Do not rebuild completed 12.6 or 13.8.
 
 The optional public Skills Registry publisher credential failure, legitimate independent-human review-policy prerequisites, legacy share-password remediation, and the existing deferred-work register remain separate follow-ups. v1.4.0 publication does not prove full GA/CNCF readiness or all documentation requirements.
 
 Current planning authority: [feature PRD](../planning-artifacts/prd-infra-automation.md), [course correction](../planning-artifacts/sprint-change-proposal-2026-10-07-infra-automation-v1.5.0.md), [readiness report](../planning-artifacts/implementation-readiness-report-2026-10-07-infra-automation-v1.5.0.md). Historical 101-story release evidence and archived sets remain intact.
 
-Story preparation: [complete report](epic-16-story-preparation-report.md). Current feature readiness remains NOT READY until RFC/16.0 experiment/contract gates close; ready-for-dev on 16.0 is a bounded qualification scope, not a production implementation approval.
+Story preparation: [complete report](epic-16-story-preparation-report.md). Current foundation readiness is restored after the 2026-10-12 review fixes; this qualification is not production or release readiness.
 
 Story16.0 closure on2026-10-10 qualifies only the prepared16.1/16.3 foundations; see the final readiness report and evidence manifest. Later16.2/16.4–16.19 retain backlog.

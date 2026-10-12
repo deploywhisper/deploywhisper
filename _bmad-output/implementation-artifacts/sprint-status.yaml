@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-10-10
+# last_updated: 2026-10-12
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -28,7 +28,7 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT IMPLEMENTATION: 16.1 / 16.3; Story16.0 qualified and closed; later dependencies remain gated
+# NEXT IMPLEMENTATION: 16.1 / 16.3; Story16.0 review fixes requalified on 2026-10-12
 # RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
 # EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md
 # WORKFLOW NOTES:
@@ -39,7 +39,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-10-10
+last_updated: 2026-10-12
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system

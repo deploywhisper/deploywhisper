@@ -45,3 +45,15 @@ Independent real-profile verification executed `DW16_REAL_LINUX=1 ./.venv/bin/py
 The qualified profile SHA is `1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49`. Anchored tmpfs establishes process/receiver-container restart with bounded stores; host power-loss durability, production integration, capacity and universal redaction remain assigned downstream. These limits were reviewed and do not represent those broader capabilities as delivered.
 
 The maintainer's direct RFC decision, reaffirmed on 2026-10-10, is recorded separately. Independent technical agents supply no second human approval. Final readiness and repository validation close the bounded Story 16.0 scope.
+
+## Follow-up review and fixes — 2026-10-12
+
+The repeat BMad review identified four actionable items: incomplete evidence could pass the qualification gate; fast completed processes could escape output limits; interrupted custody finalization left an orphan key; and the manifest's scope summary contradicted actual saved-plan evidence. Story16.0 and dependent promotion were reopened while these were resolved.
+
+Regression-first tests reproduced each executable defect before implementation. The gate now checks complete, typed case sets and exact crash outcomes. It denies final combined output overflow before truncating readback. Custody writes complete objects to private staging, serializes finalizers, publishes one directory atomically and recovers abandoned unpublished work. Published bundles remain immutable. The scope summary now accurately distinguishes real disposable Linux/saved-plan proof from downstream production support.
+
+Independent follow-up layers completed: diff-only Blind Hunter found no actionable executable defect; Edge Case Hunter passed 22 tests/1,088 subtests and independently synchronized two finalizers, observing exactly one publication and one refusal with original bytes intact and no pending staging; Acceptance Auditor repeated both the regression suite and actual Linux suite (3 passed/6 subtests in15.27seconds), finding no remaining acceptance defect. This is technical review, not additional human governance approval.
+
+The new actual evidence includes 519 short-write calls, kernel ENOSPC after key creation, and abrupt receiver exit73 after key creation, before publication and after publication. Unpublished cases recover; the published case denies replacement and verifies the original saved plan. New image/profile identity and superseded identities are recorded in WP4/WP5. Final repository validation and digest synchronization are recorded in the manifest and story closeout, rather than inferred from the narrower targeted checks.
+
+The additional changed-test discovery regression found in the existing PR check was fixed with four failing-first behavior tests. A separate bounded review confirmed actual test selection, fixture exclusion, failure propagation and execution under macOS Bash3.2. The final infrastructure rerun passed253tests/1skip, and the three new regression modules passed26tests/1,092subtests.

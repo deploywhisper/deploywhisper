@@ -27,8 +27,8 @@
     "uid": "10001:10001"
   },
   "cryptography_version": "50.0.2",
-  "custody_policy": "AES-256-GCM; random 96-bit nonce; 256-bit key; handle AAD; directory0700 receiverUID10002; files0400; original rawSHA256 verified before sealed memfd show; maximumTTL3600s",
-  "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+  "custody_policy": "AES-256-GCM; random 96-bit nonce; 256-bit key; handle AAD; directory0700 receiverUID10002; files0400; original rawSHA256 verified before sealed memfd show; maximumTTL3600s; serialized private staging and atomic finalized-directory publication; interrupted prepublication attempts recovered without overwriting a published bundle",
+  "image_id": "sha256:62cff87604f8769279bb710ce473161ded504c6ef45fefedbe2fe99ff13d20cd",
   "network_policy": "none default; additional unique internal-only network allows controlled local sink; no internet/metadata",
   "observed_output_cutoff_bytes": 65536,
   "private_tmpfs_size_bytes": 8388608,

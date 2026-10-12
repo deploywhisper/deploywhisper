@@ -235,6 +235,12 @@ class Qualification:
                     break
                 time.sleep(0.02)
             process.wait(timeout=10)
+            # A fast process can finish before the first poll or between polls.
+            # Inspect the complete streams before bounded readback discards bytes.
+            capped = capped or (
+                os.fstat(stdout.fileno()).st_size + os.fstat(stderr.fileno()).st_size
+                > 65536
+            )
             stdout.seek(0)
             stderr.seek(0)
             result = subprocess.CompletedProcess(
@@ -247,8 +253,6 @@ class Qualification:
         descriptor = os.open(diagnostic, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(descriptor, "wb") as output:
             output.write(result.stderr)
-        if len(result.stdout) > 65536:
-            raise RuntimeError("output cap")
         return name, result.returncode, result.stdout
 
     def cleanup(self):
@@ -307,10 +311,17 @@ def qualify():
         if code:
             raise RuntimeError(f"receiver finalize failed ({code})")
         result["custody"] = json.loads(output)
+        # The receiver retains this private lookup capability in its record.
+        # Qualification evidence needs the digest and policy, not the handle.
+        result["custody"].pop("handle", None)
         _, code, output = experiment.task("restart", receiver=True)
         if code:
             raise RuntimeError(f"receiver restart failed ({code})")
         result["restart"] = json.loads(output)
+        _, code, output = experiment.task("finalization_faults", receiver=True)
+        if code:
+            raise RuntimeError(f"custody finalization fault probe failed ({code})")
+        result["finalization_faults"] = json.loads(output)
         _, code, output = experiment.task("collector_denied")
         if code:
             raise RuntimeError("collector denial probe failed")
@@ -407,89 +418,184 @@ def qualify():
 
 
 def validate(result):
-    flags = [
-        result["collector"]["custody_denied"],
-        result["restart"]["restart_verified"],
-        result["memory"]["oom_killed"],
-        result["disk"]["disk_denied"],
-        result["disk"]["partial_removed"],
-        result["pids"]["pids_denied"],
-        result["output_cap"]["stopped"],
-        result["time_cap"]["stopped"],
-        *result["custody_attacks"].values(),
-    ]
-    flags.extend(
-        value == "True"
-        for key, value in result["plan"]["provider_probe"].items()
-        if key != "uid"
-    )
-    flags.extend(
-        value == "True"
-        for key, value in result["local_traffic"].items()
-        if key != "uid"
-    )
-    flags.extend(
-        item["stopped"] and item["processes_before"] >= 2
-        for item in result["descendants"].values()
-    )
-    flags.extend(
-        item["same_operation"]
-        and item["repeat_action_denied"]
-        and item["lock_retained"]
-        and item["action_count"] <= 1
-        and item["crash_exit"] == 73
-        for item in result["receiver_faults"]["faults"].values()
-    )
-    flags.extend(
-        [
-            result["receiver_faults"]["tuple_mutations_denied"] == 30,
-            result["plan"]["raw_digest"] == result["restart"]["raw_digest"],
-            result["plan"]["raw_digest"] != result["plan"]["sanitized_digest"],
-            result["plan"]["uid"] == 10001,
-            result["custody"]["uid"] == 10002,
-            result["cpu"]["cpu_max"] == "50000 100000",
-            result["output_cap"]["exit_code"] == 124,
-            result["time_cap"]["exit_code"] == 124,
-        ]
-    )
-    if not all(flags):
-        raise ValueError("mandatory qualification assertion failed")
-    if not all(
-        item["disk_denied"]
-        and item["partial_removed"]
-        and item["capacity_bytes"] == 8 * 1024 * 1024
-        for item in result["store_disk"].values()
-    ):
-        raise ValueError("local store quota/cleanup failed")
-    if (
-        result["catalog_digests"]["/opt/qualification/source/main.tf"]
-        != result["source_content_sha256"]
-    ):
-        raise ValueError("admitted source differs from executed image source")
-    expected_catalog = {
-        "/usr/local/bin/tofu": "d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f",
-        "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/terraform-provider-external": "f9994ee228b86d34c289d858af46f758921f34393a27a1bb5677761c08228f50",
+    """Require every declared proof, with exact types and crash outcomes."""
+
+    def matches(value, expected):
+        if isinstance(expected, type):
+            return type(value) is expected
+        if type(expected) is dict:
+            return (
+                type(value) is dict
+                and value.keys() == expected.keys()
+                and all(matches(value[key], item) for key, item in expected.items())
+            )
+        return type(value) is type(expected) and value == expected
+
+    provider = {
+        "capabilities_dropped": "True",
+        "catalog_immutable": "True",
+        "egress_denied": "True",
+        "metadata_denied": "True",
+        "no_new_privileges": "True",
+        "seccomp_enforced": "True",
+        "sentinel_absent": "True",
+        "uid": "10001",
     }
-    if any(
-        result["catalog_digests"].get(path) != digest
-        for path, digest in expected_catalog.items()
-    ):
-        raise ValueError("unsupported tool/provider catalog")
+    fault_outcomes = {
+        "before_consume": ("action_completed", 1),
+        "after_consume": ("action_completed", 1),
+        "after_start": ("delivery_unknown", 0),
+        "after_action": ("delivery_unknown", 1),
+        "after_completion": ("action_completed", 1),
+    }
+    finalized = {
+        "retry_verified": True,
+        "second_finalize_denied": True,
+        "original_unchanged": True,
+        "pending_removed": True,
+    }
+    expected = {
+        "finalization_faults": {
+            "uid": 10002,
+            "raw_digest": str,
+            "short_write": {"write_calls": int, **finalized},
+            "enospc": {
+                "errno": 28,
+                "key_created": True,
+                "unpublished": True,
+                "clean_after_failure": True,
+                **finalized,
+            },
+            "crashes": {
+                point: {
+                    "crash_exit": 73,
+                    "published_before_retry": published,
+                    "pending_before_retry": not published,
+                    "retry_denied": published,
+                    **finalized,
+                }
+                for point, published in (
+                    ("after_key", False),
+                    ("before_publish", False),
+                    ("after_publish", True),
+                )
+            },
+        },
+        "plan": {
+            "raw_digest": str,
+            "sanitized_digest": str,
+            "provider_probe": provider,
+            "uid": 10001,
+        },
+        "local_traffic": {**provider, "approved_local_allowed": "True"},
+        "custody": {"raw_digest": str, "expiry": int, "uid": 10002, "tool": "1.13.1"},
+        "restart": {"restart_verified": True, "raw_digest": str},
+        "collector": {"custody_denied": True},
+        "custody_attacks": {
+            key: True
+            for key in (
+                "expiry",
+                "changed_plan",
+                "path",
+                "overwrite",
+                "tamper",
+                "symlink",
+                "descriptor_toctou",
+            )
+        },
+        "receiver_faults": {
+            "tuple_mutations_denied": 30,
+            "faults": {
+                point: {
+                    "crash_exit": 73,
+                    "action_count": count,
+                    "state": state,
+                    "same_operation": True,
+                    "repeat_action_denied": True,
+                    "lock_retained": True,
+                }
+                for point, (state, count) in fault_outcomes.items()
+            },
+        },
+        "replan": {
+            "replan_requires_new_tuple": True,
+            "actual_plan_changed": True,
+            "action_count": 0,
+        },
+        "disk": {"disk_denied": True, "partial_removed": True, "exit_code": 0},
+        "pids": {"pids_denied": True, "exit_code": 0},
+        "memory": {"oom_killed": True, "exit_code": 137},
+        "cpu": {"cpu_max": "50000 100000", "exit_code": 0},
+        "output_cap": {"stopped": True, "exit_code": 124},
+        "time_cap": {"stopped": True, "exit_code": 124},
+        "descendants": {
+            cause: {"stopped": True, "processes_before": int, "exit_code": 137}
+            for cause in ("cancel", "timeout", "lease_loss")
+        },
+        "store_disk": {
+            store: {
+                "disk_denied": True,
+                "partial_removed": True,
+                "capacity_bytes": 8388608,
+            }
+            for store in ("staging", "custody")
+        },
+        "controls": {
+            "uid": "10001:10001",
+            "read_only": True,
+            "cap_drop": ["ALL"],
+            "security_opt": ["no-new-privileges:true"],
+            "network": "none",
+            "memory": 536870912,
+            "nano_cpus": 500000000,
+            "pids_limit": 64,
+            "mount_destinations": list,
+            "default_seccomp": True,
+        },
+        "catalog_digests": {
+            "/opt/qualification/source/main.tf": str,
+            "/usr/local/bin/tofu": "d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f",
+            "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/terraform-provider-external": "f9994ee228b86d34c289d858af46f758921f34393a27a1bb5677761c08228f50",
+        },
+        "source_content_sha256": str,
+    }
+    if type(result) is not dict:
+        raise ValueError("qualification evidence must be an object")
+    # CPU counters are diagnostics; validate their type when supplied.
+    if type(result.get("cpu")) is dict and "cpu_stat" in result["cpu"]:
+        expected["cpu"]["cpu_stat"] = str
+    for key, proof in expected.items():
+        if key not in result or not matches(result[key], proof):
+            raise ValueError(f"missing, malformed or failed qualification proof: {key}")
+    raw_digest = result["plan"]["raw_digest"]
+    sanitized_digest = result["plan"]["sanitized_digest"]
+    source_digest = result["source_content_sha256"]
     if (
-        not result["replan"]["replan_requires_new_tuple"]
-        or not result["replan"]["actual_plan_changed"]
-        or result["replan"]["action_count"] != 0
+        not all(
+            re.fullmatch("[0-9a-f]{64}", value)
+            for value in (raw_digest, sanitized_digest, source_digest)
+        )
+        or raw_digest != result["custody"]["raw_digest"]
+        or raw_digest != result["restart"]["raw_digest"]
+        or raw_digest != result["finalization_faults"]["raw_digest"]
+        or raw_digest == sanitized_digest
+        or source_digest
+        != result["catalog_digests"]["/opt/qualification/source/main.tf"]
     ):
-        raise ValueError("changed-plan old grant did not deny")
-    controls = result["controls"]
+        raise ValueError("qualification digest evidence mismatch")
+    if result["custody"]["expiry"] <= 0:
+        raise ValueError("invalid custody expiry")
+    if result["finalization_faults"]["short_write"]["write_calls"] <= 3:
+        raise ValueError("short-write probe did not split object writes")
+    if any(item["processes_before"] < 2 for item in result["descendants"].values()):
+        raise ValueError("descendant probe did not observe parent and child")
+    mounts = result["controls"]["mount_destinations"]
     if (
-        controls["network"] != "none"
-        or not controls["read_only"]
-        or controls["cap_drop"] != ["ALL"]
-        or controls["security_opt"] != ["no-new-privileges:true"]
-        or set(controls["mount_destinations"]) != {"/staging", "/custody"}
+        len(mounts) != 2
+        or any(type(item) is not str for item in mounts)
+        or set(mounts) != {"/staging", "/custody"}
     ):
-        raise ValueError("actual profile control mismatch")
+        raise ValueError("actual profile mount mismatch")
 
 
 if __name__ == "__main__":

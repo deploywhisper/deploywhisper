@@ -41,7 +41,7 @@
   },
   "qualified_profile": {
     "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
-    "digest": "sha256:1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+    "digest": "sha256:b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772",
     "scope": "disposable Linux ARM64 OpenTofu1.13.1/external2.3.5; process/container restart; production delivery remains later"
   }
 }

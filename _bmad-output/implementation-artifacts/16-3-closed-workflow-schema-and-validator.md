@@ -5,6 +5,8 @@ Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.0; public RFC and 16.0 qualification required
 
+Review gate (2026-10-12): Story 16.0's findings are resolved and requalified; foundation readiness is restored.
+
 ## Story
 
 As a workflow author, I want to validate a closed, bounded typed workflow definition, so that unsupported commands or unmatched approvals cannot become a handoff path.

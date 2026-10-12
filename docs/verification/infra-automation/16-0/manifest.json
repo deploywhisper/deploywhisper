@@ -3,7 +3,7 @@
   "story": "16.0",
   "phase": "complete-bounded-qualification",
   "status": "passed",
-  "timestamp": "2026-10-10T03:21:13.441960+00:00",
+  "timestamp": "2026-10-12T12:12:57.520362+00:00",
   "responsible_contributor": "Codex (owner-requested preparation)",
   "reviewer": "Independent Codex contract/real-profile/readiness lanes; root integration; direct maintainer adoption separately recorded",
   "review_kind": "Executed independent technical review plus explicit maintainer decision; no second human claim",
@@ -42,8 +42,8 @@
       "uid": "10001:10001"
     },
     "cryptography_version": "50.0.2",
-    "custody_policy": "AES-256-GCM; random 96-bit nonce; 256-bit key; handle AAD; directory0700 receiverUID10002; files0400; original rawSHA256 verified before sealed memfd show; maximumTTL3600s",
-    "image_id": "sha256:b8fa3e7b352fbc56a53d027c5c2ca25ffa82b5021891e6efcc6580e64f9d1d04",
+    "custody_policy": "AES-256-GCM; random 96-bit nonce; 256-bit key; handle AAD; directory0700 receiverUID10002; files0400; original rawSHA256 verified before sealed memfd show; maximumTTL3600s; serialized private staging and atomic finalized-directory publication; interrupted prepublication attempts recovered without overwriting a published bundle",
+    "image_id": "sha256:62cff87604f8769279bb710ce473161ded504c6ef45fefedbe2fe99ff13d20cd",
     "network_policy": "none default; additional unique internal-only network allows controlled local sink; no internet/metadata",
     "observed_output_cutoff_bytes": 65536,
     "private_tmpfs_size_bytes": 8388608,
@@ -77,7 +77,7 @@
   "synthetic_input_digests": [
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
-      "sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49"
+      "sha256": "b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772"
     }
   ],
   "source_documents": [
@@ -147,7 +147,7 @@
     },
     {
       "path": "_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-10-infra-automation-v1.5.0.md",
-      "sha256": "39269ebe2e7d5dcd88dd5a3ddb855dd95d63006ac6c74ba34e19c08cd4c21032"
+      "sha256": "29b809c2e5db0d6c170a203263ace8e9c7c7f8ce7d6e25e006262f171aae1161"
     },
     {
       "path": "_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-09-rfc-0001-maintainer-adoption.md",
@@ -204,25 +204,29 @@
       "command": "./.venv/bin/python -m unittest discover -q",
       "status": "passed",
       "exit_code": 0,
-      "result": "614 run;OK;2 skips including ordinary-CI realDocker opt-out"
+      "result": "636 run; OK; 2 skips (before four isolated discovery regressions were added)",
+      "date": "2026-10-12"
     },
     {
       "command": "./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
       "status": "passed",
       "exit_code": 0,
-      "result": "550passed;1skipped;1023subtests"
+      "result": "572 passed; 1 skipped; 2111 subtests (before four isolated discovery regressions were added)",
+      "date": "2026-10-12"
     },
     {
       "command": "bash scripts/ci-local.sh",
       "status": "passed",
       "exit_code": 0,
-      "result": "exit0; every registered test directory and configured quality/security checks; daemon-interrupted prior run was replaced"
+      "result": "exit0; 1926 unittest tests across all nine registered targets plus8 prompt-injection tests; final discovery-only fix subsequently verified by4 behavior tests and253-test infra rerun",
+      "date": "2026-10-12"
     },
     {
       "command": "DW16_REAL_LINUX=1 ./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_real_linux_qualification.py -q",
       "status": "passed",
       "exit_code": 0,
-      "result": "3passed;6subtests; independent rerun13.74s"
+      "result": "3 passed; 6 subtests; independent rerun15.27s with actual ENOSPC/short-write/3 publication crashes",
+      "date": "2026-10-12"
     },
     {
       "command": "./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_contract_qualification.py -q --tb=short",
@@ -240,7 +244,8 @@
       "command": "./.venv/bin/ruff format --check .",
       "status": "passed",
       "exit_code": 0,
-      "result": "322 files already formatted"
+      "result": "325 files already formatted",
+      "date": "2026-10-12"
     },
     {
       "command": "./.venv/bin/bandit -q -r tests/fixtures/infra_automation/qualification/16_0",
@@ -259,6 +264,26 @@
       "status": "passed",
       "exit_code": 0,
       "result": "51 documentation tests and13 governance/traceability/ownership tests passed after final metadata updates"
+    },
+    {
+      "command": "./.venv/bin/python -m pytest tests/test_infra/test_changed_test_discovery.py tests/test_infra/test_infra_automation_qualification_gate.py tests/test_infra/test_infra_automation_custody_finalization.py -q",
+      "status": "passed",
+      "exit_code": 0,
+      "result": "26 passed; 1092 subtests",
+      "date": "2026-10-12"
+    },
+    {
+      "command": "./.venv/bin/python -m unittest discover -s tests/test_infra -q",
+      "status": "passed",
+      "exit_code": 0,
+      "result": "253 run; OK;1 Docker opt-in skip; after final discovery-script fix",
+      "date": "2026-10-12"
+    },
+    {
+      "command": "bash -n scripts/test-changed.sh",
+      "status": "passed",
+      "exit_code": 0,
+      "date": "2026-10-12"
     }
   ],
   "runtime_evidence_claimed": true,
@@ -297,23 +322,24 @@
       "Direct RFC approval and exception preserved without fake platform review",
       "All story tasks complete; only16.1/16.3promoted; production delivery not claimed"
     ],
-    "qualification_methods": 59,
+    "qualification_methods": 81,
     "downstream_contexts": 20,
     "earlier_only_references": 42,
-    "validated_changed_files": 71,
+    "validated_changed_files": 76,
     "complete_story_file_list": true
   },
   "not_run": [
     "Production feature implementation/integrated network/browser/upgrade/capacity/release qualification; see WP7 owners"
   ],
-  "runtime_evidence_scope": "Disposable synthetic prototypes only; no real containment, saved-plan or production support",
+  "runtime_evidence_scope": "Disposable identity, SQLite and receiver prototypes plus actual Linux ARM64 OpenTofu saved-plan containment and encrypted local custody under separated identities; bounded process/container restart only, no host-power-loss or production support qualification",
   "production_runtime_evidence_claimed": false,
   "screened_execution_summaries": {
-    "smoke": "614tests119.982s;OK2skips",
-    "ci_shard": "550passed1skipped1023subtests134.11s",
-    "full_ci": "exit0; final services shard1093tests181.953s",
-    "real_linux": "3passed6subtests13.74s independent",
-    "contracts": "15passed185subtests; independent240validorders725negativeboundaries"
+    "smoke": "636 tests;OK2skips",
+    "ci_shard": "572 passed1skipped2111subtests",
+    "full_ci": "exit0;1926 unittest tests; final infra rerun253tests after discovery fix",
+    "real_linux": "3passed6subtests15.27s independent",
+    "contracts": "15passed185subtests; independent240validorders725negativeboundaries",
+    "review_regressions": "26passed1092subtests"
   },
   "artifact_digests": [
     {
@@ -326,7 +352,7 @@
     },
     {
       "path": "docs/verification/infra-automation/16-0/technical-review.md",
-      "sha256": "709624dc0cad1fbf7e59ac98951b5f7d33d2284dfb6e9859c8b674cf0394d856"
+      "sha256": "31a227229e147cce402dc3a3e7078bc1953dfb7bcf441d3185adafa0a211b841"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp2-identity-results.json",
@@ -346,19 +372,19 @@
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp4-containment-results.json",
-      "sha256": "3a746c78dcb854da1a77f76c07b82e45107e3611f473aefb18dfd13627bcd636"
+      "sha256": "cc1e5e30dc5a0c1ea1e511276be3ee918958579471521d2b29a7f1cf0fb9bbae"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp4-containment.md",
-      "sha256": "9bb7e99d7402e0ca8bbfa5b1a6b1437d59c572e525927f513c4ef5e6e6374913"
+      "sha256": "91f35d474bd2bd4fae9421bd86c4957dd0595f0aaceae2cb1f23edcd6f17e8dd"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp5-real-custody-results.json",
-      "sha256": "0e89d55e7f375a7445bf2a746b22293592d491b63702f5d31963113a4818dae3"
+      "sha256": "0dbd86da13b6bea93a440446c4aeda7df827670b43dd67905f8377ec2e51d313"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp5-real-custody.md",
-      "sha256": "1c79bb48c0d0e22cca0d577f6e8c31bb5bc351586bb20cbebeafd0680b4c56dd"
+      "sha256": "78939ee0984e2194d874aa10e3280871c250d06eaab08e630db8198124fb1f52"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp5-receiver-results.json",
@@ -374,11 +400,11 @@
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp6-contract-results.json",
-      "sha256": "ca272d94e1d3d97dfe711b44b04b56d8679a1833c1b13011d7293a4bd7a39965"
+      "sha256": "03ad95e7ccf9925b6d8ff7f4eee76a07e9106b47a48bea3f986958c017a0a5f3"
     },
     {
       "path": "docs/verification/infra-automation/16-0/wp7-readiness.md",
-      "sha256": "aac88cdb34174f1ae236b0e567db32483cb703089ab976ca056547009546e8ec"
+      "sha256": "a76301ce9fce48bac10665ada9e82305362a91acf637d455784dcf8c39421d1a"
     },
     {
       "path": "schemas/infra-automation/cursor-v1.json",
@@ -394,7 +420,7 @@
     },
     {
       "path": "schemas/infra-automation/frozen-v1.json",
-      "sha256": "e6a1d03df0f47ee8324856ae8c71649b0cf61aee172c60d51746687a9b9a6be1"
+      "sha256": "c833be7385dd410b04561f581c8747b211ff1b071818302037fa64a0b1a44332"
     },
     {
       "path": "schemas/infra-automation/provenance-v1.json",
@@ -419,6 +445,10 @@
     {
       "path": "schemas/infra-automation/workflow-v1.json",
       "sha256": "7e3760323ae765a59050fb905d8f9710be4a20ae93f698333bcd9aff86c6a631"
+    },
+    {
+      "path": "docs/ci.md",
+      "sha256": "35ac61059c117e1be529594bf2fbd7513b4d154cac8f99ea08b1576a4c4d5e94"
     }
   ],
   "harness_digests": [
@@ -464,11 +494,11 @@
     },
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/Dockerfile",
-      "sha256": "16a0803339a619d3ef8c0e78aee97cd32f98bef10646bcdea4d18cd41cc0174d"
+      "sha256": "5d4db48708a50f032df244baeacaea63456b77bf00e9e8684a93336b793804ed"
     },
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/harness.py",
-      "sha256": "dc1b9b80ddab240748d60c8c3c9894cca2cfcdb6f3a2e682582f7862587a6255"
+      "sha256": "c1276d467228edfeca3e2e14b7df95637e8be431b70c4df945b865ef22fd6859"
     },
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/probe.py",
@@ -476,7 +506,7 @@
     },
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
-      "sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49"
+      "sha256": "b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772"
     },
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/provider_probe.py",
@@ -492,7 +522,7 @@
     },
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/real_custody/probe.py",
-      "sha256": "106ad5a6ba1f785c458e8c2fef7d52bda0e46ed33e5388d211f3269aa2baa17b"
+      "sha256": "b418869d311ab2686c0d768e21688726a072934eba759df671d7d9374a9bbf6c"
     },
     {
       "path": "tests/fixtures/infra_automation/qualification/16_0/receiver/prototype.py",
@@ -521,6 +551,22 @@
     {
       "path": "tests/test_infra/test_infra_automation_sqlite_qualification.py",
       "sha256": "dc5a8389fe19767764dcb2d948ba7e1875c4d4023238312bb5fa99a8a403fd1d"
+    },
+    {
+      "path": "tests/test_infra/test_infra_automation_qualification_gate.py",
+      "sha256": "3c27da46da38f2a31bfa4597263ec5fe9f3128bbbfa63e43151c12c325d81fcb"
+    },
+    {
+      "path": "tests/test_infra/test_infra_automation_custody_finalization.py",
+      "sha256": "550ceb489f6d26686dede0ecc5f1f61b15302d9b47c2635aab2232a31b583a76"
+    },
+    {
+      "path": "tests/test_infra/test_changed_test_discovery.py",
+      "sha256": "7ccfb9d17ac42f0e1539508d7cd7c1dd89ee80e8344e62f0854063eac8abc3f0"
+    },
+    {
+      "path": "scripts/test-changed.sh",
+      "sha256": "ae75d8a54fa44452ef4c2bfc1dfaeab1a5376e94e7909970d7f76abad30acc9e"
     }
   ],
   "bmad_help_handoff": {
@@ -546,7 +592,7 @@
   ],
   "qualified_profile": {
     "path": "tests/fixtures/infra_automation/qualification/16_0/isolation/profile.json",
-    "sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49"
+    "sha256": "b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772"
   },
   "publication": {
     "pr": "https://github.com/deploywhisper/deploywhisper/pull/155",
@@ -554,5 +600,20 @@
     "branch": "feature/16-0-infra-automation-qualification",
     "opened_at": "2026-10-10T03:57:23Z"
   },
-  "maintainer_decision_record": "maintainer-decision-2026-10-09.md"
+  "maintainer_decision_record": "maintainer-decision-2026-10-09.md",
+  "review_fix_requalification": {
+    "date": "2026-10-12",
+    "supersedes_commit": "f7e33abbb8244222e67b1370989d2ba8aea08e4e",
+    "status": "passed",
+    "findings_fixed": [
+      "mandatory typed proof sets and exact crash states/counts",
+      "completed combined output cap",
+      "recoverable atomic custody finalization",
+      "accurate runtime evidence scope"
+    ],
+    "ci_followup": "exclude fixtures/helpers from changed-test module selection; Bash3-compatible reader",
+    "independent_review": "blind, edge and acceptance layers clean; real Linux independently repeated; concurrent finalizers one publication/one refusal",
+    "limits": "same bounded Linux ARM64 tools; process/container restart, not host-power-loss or production readiness",
+    "previous_profile_sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49"
+  }
 }

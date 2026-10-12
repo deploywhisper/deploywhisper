@@ -33,3 +33,9 @@ Keep generated accounts/tokens, databases, raw logs, binary plans/state and keys
 This work qualifies the design and contracts, not production automation handlers or a v1.5.0 release. Anchored tmpfs proves process/receiver-container restart, not host power-loss persistence. Host/daemon/DB administrators and receiver-identity compromise remain trust limits. Capacity, universal redaction, production key/retention/network integration, composed browser proof and signed release/pilot remain assigned to later stories.
 
 After final checks, only prepared dependency-satisfied foundations 16.1 and16.3 may advance. Other stories retain their dependencies;12.5 stays a separate release enabler. UI validation not applicable: no rendered surface changed. The raw React client probe is not browser/pixel proof.
+
+## Review fixes and requalification — 2026-10-12
+
+The follow-up fixes require complete typed qualification evidence, enforce output limits after process exit, and recover interrupted custody publication through private staging and atomic directory publication. WP4/WP5 results now identify the rebuilt image and preserve the superseded qualification identity. The manifest scope accurately includes the actual Linux/saved-plan proof while retaining production limitations.
+
+Run the added regressions with `./.venv/bin/python -m pytest tests/test_infra/test_infra_automation_qualification_gate.py tests/test_infra/test_infra_automation_custody_finalization.py -q`. The opt-in real Linux command above also requires actual kernel ENOSPC, short writes and three publication crash points. Current repository validation and independent review are recorded in the story and manifest.
