@@ -1,0 +1,136 @@
+{
+  "story": "16.0",
+  "packet": "WP2",
+  "scope": "disposable-qualification-only",
+  "production_routes_tables_or_dependencies_added": false,
+  "qualification_disposition": "prototype checks pass; production integration and independent adequacy review pending",
+  "crypto_adequacy": {
+    "decision": "existing primitives adequate for bounded disposable experiment; no dependency request",
+    "rationale": "supported PBKDF2-SHA256 600000 work factor, random salts, fixed verifier parser, constant-time digest comparison and bounded authentication work",
+    "public_maintainer_security_approval": "pending",
+    "production_hardware_cost_review": "pending",
+    "primary_sources": [
+      "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2",
+      "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#session-id-entropy",
+      "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    ]
+  },
+  "generated_at_utc": "2026-10-09T15:16:24Z",
+  "platform": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "python": "3.14.3",
+    "openssl": "OpenSSL 3.6.2 7 Apr 2026",
+    "sqlite": "3.53.1"
+  },
+  "installed_versions": {
+    "fastapi": "0.136.1",
+    "starlette": "1.7.0",
+    "httpx": "0.28.1",
+    "cryptography": "50.0.2",
+    "ruff": "0.15.11",
+    "bandit": "1.9.4"
+  },
+  "crypto": {
+    "algorithm": "PBKDF2-HMAC-SHA256",
+    "iterations": 600000,
+    "salt_bits": 128,
+    "derived_key_bits": 256,
+    "session_bootstrap_csrf_bits": 256,
+    "persisted_authentication": "SHA-256 hashes only",
+    "fixed_parameter_parser": true,
+    "verification_succeeded": true,
+    "hash_sample_count": 7,
+    "hash_ms_min": 78.997,
+    "hash_ms_median": 79.19,
+    "hash_ms_max": 79.839,
+    "verify_ms": 79.765
+  },
+  "bounds": {
+    "credential_utf8_bytes_max": 1024,
+    "credential_utf8_bytes_min_for_creation": 15,
+    "principal_characters_max": 128,
+    "auth_derivations_in_flight_max": 1,
+    "account_attempts_per_60_seconds": 5,
+    "global_attempts_per_60_seconds": 20,
+    "auth_queue": "no-wait-denial",
+    "bootstrap_ttl_seconds": 300,
+    "session_idle_seconds": 300,
+    "session_absolute_seconds": 3600,
+    "http_json_body_bytes_max": 4096
+  },
+  "test_cases": 18,
+  "matrix": {
+    "audiences": [
+      "human",
+      "service",
+      "agent",
+      "runner",
+      "receiver"
+    ],
+    "roles": [
+      "admin",
+      "maintainer",
+      "reviewer",
+      "contributor",
+      "read-only"
+    ],
+    "scopes": [
+      "project",
+      "workspace"
+    ],
+    "capabilities": [
+      "workflow",
+      "publish",
+      "run",
+      "decision",
+      "target",
+      "enrollment",
+      "report",
+      "artifact",
+      "policy",
+      "settings"
+    ],
+    "matching_cells": 500,
+    "cross_project_cells": 500,
+    "cross_workspace_cells": 500,
+    "absent_membership_cells": 500,
+    "total_asserted_outcomes": 2000,
+    "allowed_matching_cells": 54,
+    "denied_matching_cells": 446,
+    "unauthorized_expected_denials": 1946
+  },
+  "checks": [
+    {
+      "command": "./.venv/bin/python -m unittest tests.test_infra.test_infra_automation_identity_qualification -v",
+      "exit_code": 0,
+      "tests_run": 18,
+      "failures": 0,
+      "errors": 0
+    }
+  ],
+  "red_phase": {
+    "command": "./.venv/bin/python -m unittest tests.test_infra.test_infra_automation_identity_qualification -v",
+    "exit_code": 1,
+    "reason": "prototype absent; expected FileNotFoundError before implementation"
+  },
+  "review_regressions": {
+    "tests_first": true,
+    "red_cases": [
+      "rotation past original one-hour authentication deadline incorrectly allowed",
+      "lone-surrogate credential raised UnicodeEncodeError",
+      "measurement failure-artifact regression lacked guarded destination interface",
+      "measured crypto verification failure incorrectly published accepted artifact",
+      "malformed/non-object/oversized JSON and non-scalar scope requests raised errors"
+    ],
+    "final_outcome": "all regression assertions pass"
+  },
+  "limitations": [
+    "Disposable harness only; no Story 16.1/16.2 implementation or independent human security approval",
+    "No browser TLS/proxy integration, production concurrency/load, capacity or password-reset delivery proof",
+    "Global rate limiter is single-process and resets on restart; production persistent abuse controls remain downstream",
+    "Machine protocol capabilities/enrollment attempt binding remain WP3/WP5/WP6 and owning stories; generic human routes deny every machine audience",
+    "Host/root/DB administrators remain trusted; no memory zeroization claim",
+    "Installed Starlette warns about httpx TestClient deprecation; no dependency changes authorized"
+  ]
+}

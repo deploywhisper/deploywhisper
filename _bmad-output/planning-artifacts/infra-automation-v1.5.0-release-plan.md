@@ -280,3 +280,7 @@ The owner requested create-epics-and-stories for all readiness work plus 16.0. A
 ### Publication normalization — 2026-10-08
 
 The original supplied draft checksum above records the unedited research input. Closeout removed trailing padding from one ASCII-diagram line without changing requirement content. The [disposition inventory](infra-automation-requirement-dispositions.json) retains that original checksum and records the current normalized source checksum and exact change. All 179 original requirement IDs/text are unchanged.
+
+## Story 16.0 finalization — 2026-10-10
+
+RFC0001 is accepted by the direct maintainer decision, with its specific early-review-window exception recorded honestly. The [final readiness assessment](implementation-readiness-report-2026-10-10-infra-automation-v1.5.0.md) and [WP7 sizing/ownership](../../docs/verification/infra-automation/16-0/wp7-readiness.md) supersede the earlier planning-only blocker snapshot and coarse estimate for foundation execution. Frozen contracts are in [contract-v1](../../docs/infra-automation/contract-v1.md); qualification applies only to its declared disposable profile. Scope, requirement IDs and separate12.5 release prerequisite are preserved. Story16.0 final repository verification precedes promotion of only16.1/16.3; later production/browser/recovery/pilot/release evidence remains mandatory.

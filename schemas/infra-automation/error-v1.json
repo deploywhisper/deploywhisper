@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "default": 1,
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "http_status": {
+      "enum": [
+        401,
+        403,
+        409,
+        422,
+        429,
+        503
+      ],
+      "title": "Http Status",
+      "type": "integer"
+    },
+    "code": {
+      "enum": [
+        "authentication_required",
+        "permission_denied",
+        "binding_conflict",
+        "request_validation_failed",
+        "quota_exceeded",
+        "authority_unavailable"
+      ],
+      "title": "Code",
+      "type": "string"
+    },
+    "message": {
+      "enum": [
+        "Authentication required.",
+        "Operation unavailable.",
+        "Review current evidence again.",
+        "Request validation failed.",
+        "Request limit reached.",
+        "Current authority could not be verified."
+      ],
+      "title": "Message",
+      "type": "string"
+    },
+    "retryable": {
+      "title": "Retryable",
+      "type": "boolean"
+    },
+    "correlation_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+      "title": "Correlation Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "http_status",
+    "code",
+    "message",
+    "retryable",
+    "correlation_id"
+  ],
+  "title": "Error",
+  "type": "object"
+}

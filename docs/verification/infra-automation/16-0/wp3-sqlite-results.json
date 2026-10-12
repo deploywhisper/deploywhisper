@@ -1,0 +1,115 @@
+{
+  "sqlite_version": "3.53.1",
+  "pragmas": {
+    "journal_mode": "wal",
+    "synchronous": 2,
+    "busy_timeout": 0
+  },
+  "cases": [
+    {
+      "case": "synchronized-independent-process-race",
+      "winners": 1,
+      "state": "running",
+      "attempt": 1,
+      "fence": 1,
+      "target_lock": 1,
+      "output_count": 0,
+      "screened_timeline": [
+        "claim"
+      ],
+      "database_sha256": "1e5884f55fa0e5f7fa36b2c227ab681258efb5290948525ca5436c50851ebf5a"
+    },
+    {
+      "case": "precommit",
+      "abrupt_exit_code": 73,
+      "state": "queued",
+      "attempt": 0,
+      "fence": 0,
+      "target_lock": 0,
+      "output_count": 0,
+      "screened_timeline": [],
+      "database_sha256": "fa3cfde872dd7e633bef4f9ccd2936e286fb7dc9594a7dbbdf0dded5335dcd33"
+    },
+    {
+      "case": "postcommit",
+      "abrupt_exit_code": 73,
+      "state": "running",
+      "attempt": 1,
+      "fence": 1,
+      "target_lock": 1,
+      "output_count": 0,
+      "screened_timeline": [
+        "claim"
+      ],
+      "database_sha256": "4d1ece2f83fbe89d83fa9b0a55f785955a71611bdc592226c5f45ad0ceef462f"
+    },
+    {
+      "case": "output-before-success",
+      "abrupt_exit_code": 73,
+      "state": "running",
+      "attempt": 1,
+      "fence": 1,
+      "target_lock": 1,
+      "output_count": 1,
+      "screened_timeline": [
+        "claim",
+        "upload"
+      ],
+      "database_sha256": "b3b009ff49fa6a3355b7b9feb8b2e53e10972397b90411da5ddafbfe455aead0"
+    },
+    {
+      "case": "generation-overlap-lease-reclaim",
+      "stale_mutations_denied": {
+        "heartbeat": true,
+        "log": true,
+        "upload": true,
+        "complete": true
+      },
+      "state": "running",
+      "attempt": 2,
+      "fence": 2,
+      "target_lock": 1,
+      "output_count": 0,
+      "screened_timeline": [
+        "claim",
+        "claim"
+      ],
+      "database_sha256": "31f031f1bf54746b22f3bc82fbbd7d9cf49985c27263835dee638f603533c6dc"
+    },
+    {
+      "case": "restore-invalidation",
+      "stale_mutation_denied": true,
+      "state": "running",
+      "attempt": 2,
+      "fence": 2,
+      "target_lock": 1,
+      "output_count": 0,
+      "screened_timeline": [
+        "claim",
+        "claim"
+      ],
+      "database_sha256": "b8584ba5a05c413679ed424d948244fc1240596a269f417708b59e93b0719d1c"
+    },
+    {
+      "case": "external-uncertainty",
+      "retry_denied": true,
+      "state": "delivery_unknown",
+      "attempt": 1,
+      "fence": 1,
+      "target_lock": 1,
+      "output_count": 0,
+      "screened_timeline": [
+        "claim",
+        "reconcile_only"
+      ],
+      "database_sha256": "930e74e1b38a49cbb6933ab12965cd64c44a7f8a55dda36e74a9e8090b3750e1"
+    }
+  ],
+  "limits": [
+    "single local host; disposable synthetic rows only",
+    "not a capacity, power-loss or HA qualification",
+    "host/root/DB administrators can bypass the model",
+    "logical injected lease clock; production monotonic clock policy remains downstream",
+    "external reconciliation uses a separate receiver contract; no exactly-once effect claim"
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "default": 1,
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    },
+    "limit": {
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "last_sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Last Sequence",
+      "type": "integer"
+    },
+    "truncated": {
+      "title": "Truncated",
+      "type": "boolean"
+    },
+    "gap": {
+      "title": "Gap",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "snapshot_id",
+    "next_cursor",
+    "limit",
+    "last_sequence",
+    "truncated",
+    "gap"
+  ],
+  "title": "Cursor",
+  "type": "object"
+}

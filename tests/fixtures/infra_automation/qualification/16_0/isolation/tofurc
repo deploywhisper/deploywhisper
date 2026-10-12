@@ -1,0 +1,6 @@
+provider_installation {
+  filesystem_mirror {
+    path = "/opt/mirror"
+    include = ["registry.opentofu.org/hashicorp/external"]
+  }
+}

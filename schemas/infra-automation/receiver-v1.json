@@ -1,0 +1,480 @@
+{
+  "$defs": {
+    "Binding": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "authorization_kind": {
+          "enum": [
+            "advisory_request",
+            "exact_plan"
+          ],
+          "title": "Authorization Kind",
+          "type": "string"
+        },
+        "workflow_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Workflow Id",
+          "type": "string"
+        },
+        "workflow_revision_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Workflow Revision Digest",
+          "type": "string"
+        },
+        "input_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "project_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Workspace Id",
+          "type": "string"
+        },
+        "environment": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Environment",
+          "type": "string"
+        },
+        "canonical_target": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Canonical Target",
+          "type": "string"
+        },
+        "receiver_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Receiver Id",
+          "type": "string"
+        },
+        "pipeline_repository_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Pipeline Repository Id",
+          "type": "string"
+        },
+        "pipeline_workflow_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Pipeline Workflow Id",
+          "type": "string"
+        },
+        "pipeline_workflow_revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Pipeline Workflow Revision",
+          "type": "string"
+        },
+        "report_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Report Id",
+          "type": "integer"
+        },
+        "report_schema_version": {
+          "const": "v2",
+          "title": "Report Schema Version",
+          "type": "string"
+        },
+        "report_bytes_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Report Bytes Digest",
+          "type": "string"
+        },
+        "policy_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Policy Version",
+          "type": "integer"
+        },
+        "policy_result": {
+          "const": "passed",
+          "title": "Policy Result",
+          "type": "string"
+        },
+        "policy_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Policy Digest",
+          "type": "string"
+        },
+        "unit_waves_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Unit Waves Digest",
+          "type": "string"
+        },
+        "screened_artifact_digests": {
+          "items": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "title": "Screened Artifact Digests",
+          "type": "array"
+        },
+        "redaction_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Redaction Version",
+          "type": "integer"
+        },
+        "payload_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Payload Digest",
+          "type": "string"
+        },
+        "evidence_deadline": {
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+          "title": "Evidence Deadline",
+          "type": "string"
+        },
+        "approval_deadline": {
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+          "title": "Approval Deadline",
+          "type": "string"
+        },
+        "authorization_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Authorization Epoch",
+          "type": "integer"
+        },
+        "restore_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Restore Epoch",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "authorization_kind",
+        "workflow_id",
+        "workflow_revision_digest",
+        "input_digest",
+        "provenance",
+        "project_id",
+        "workspace_id",
+        "environment",
+        "canonical_target",
+        "receiver_id",
+        "pipeline_repository_id",
+        "pipeline_workflow_id",
+        "pipeline_workflow_revision",
+        "report_id",
+        "report_schema_version",
+        "report_bytes_digest",
+        "policy_version",
+        "policy_result",
+        "policy_digest",
+        "unit_waves_digest",
+        "screened_artifact_digests",
+        "redaction_version",
+        "payload_digest",
+        "evidence_deadline",
+        "approval_deadline",
+        "authorization_epoch",
+        "restore_epoch"
+      ],
+      "title": "Binding",
+      "type": "object"
+    },
+    "Collected": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "collected",
+          "title": "Kind",
+          "type": "string"
+        },
+        "repository_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "commit_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "collector_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Collector Id",
+          "type": "string"
+        },
+        "profile_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Profile Digest",
+          "type": "string"
+        },
+        "screened_transport_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Screened Transport Digest",
+          "type": "string"
+        },
+        "redaction_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Redaction Version",
+          "type": "integer"
+        },
+        "collected_at": {
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+          "title": "Collected At",
+          "type": "string"
+        },
+        "source_deadline": {
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+          "title": "Source Deadline",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "repository_id",
+        "commit_sha",
+        "collector_id",
+        "profile_digest",
+        "screened_transport_digest",
+        "redaction_version",
+        "collected_at",
+        "source_deadline"
+      ],
+      "title": "Collected",
+      "type": "object"
+    },
+    "Custody": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "handle": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Handle",
+          "type": "string"
+        },
+        "raw_local_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Raw Local Digest",
+          "type": "string"
+        },
+        "expires_at": {
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "handle",
+        "raw_local_digest",
+        "expires_at"
+      ],
+      "title": "Custody",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "authorization_kind": {
+          "enum": [
+            "advisory_request",
+            "exact_plan"
+          ],
+          "title": "Authorization Kind",
+          "type": "string"
+        },
+        "source": {
+          "discriminator": {
+            "mapping": {
+              "collected": "#/$defs/Collected",
+              "uploaded": "#/$defs/Uploaded"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Uploaded"
+            },
+            {
+              "$ref": "#/$defs/Collected"
+            }
+          ],
+          "title": "Source"
+        },
+        "custody": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Custody"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "authorization_kind",
+        "source"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "Uploaded": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "uploaded",
+          "title": "Kind",
+          "type": "string"
+        },
+        "repository_source": {
+          "const": "unavailable",
+          "title": "Repository Source",
+          "type": "string"
+        },
+        "limitation": {
+          "const": "Repository and immutable commit were not verified for uploaded evidence.",
+          "title": "Limitation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "repository_source",
+        "limitation"
+      ],
+      "title": "Uploaded",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "default": 1,
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "operation": {
+      "enum": [
+        "consume",
+        "receipt",
+        "status",
+        "outcome",
+        "reconcile"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "operation_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "audience": {
+      "const": "receiver-operation-v1",
+      "title": "Audience",
+      "type": "string"
+    },
+    "binding": {
+      "$ref": "#/$defs/Binding"
+    },
+    "binding_digest": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "title": "Binding Digest",
+      "type": "string"
+    },
+    "sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "state": {
+      "enum": [
+        "consumed",
+        "accepted",
+        "running",
+        "succeeded",
+        "failed",
+        "delivery_unknown",
+        "cancel_requested"
+      ],
+      "title": "State",
+      "type": "string"
+    }
+  },
+  "required": [
+    "operation",
+    "operation_id",
+    "audience",
+    "binding",
+    "binding_digest",
+    "sequence",
+    "state"
+  ],
+  "title": "Receiver",
+  "type": "object"
+}

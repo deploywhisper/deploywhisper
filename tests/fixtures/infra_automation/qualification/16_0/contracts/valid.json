@@ -1,0 +1,741 @@
+{
+  "workflow": [
+    {
+      "version": 1,
+      "project_id": "project",
+      "workspace_id": "workspace",
+      "steps": [
+        {
+          "version": 1,
+          "id": "intake",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "refs": {}
+        },
+        {
+          "version": 1,
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "intake"
+          ],
+          "refs": {
+            "artifact": {
+              "version": 1,
+              "step_id": "intake",
+              "output": "screened_artifacts"
+            }
+          }
+        },
+        {
+          "version": 1,
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "refs": {
+            "report": {
+              "version": 1,
+              "step_id": "analysis",
+              "output": "report"
+            }
+          },
+          "target_id": "target",
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "version": 1,
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "refs": {
+            "binding": {
+              "version": 1,
+              "step_id": "gate",
+              "output": "action_binding"
+            }
+          }
+        },
+        {
+          "version": 1,
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "refs": {
+            "binding": {
+              "version": 1,
+              "step_id": "gate",
+              "output": "action_binding"
+            },
+            "decision": {
+              "version": 1,
+              "step_id": "decision",
+              "output": "decision_receipt"
+            }
+          },
+          "target_id": "target",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "project_id": "project",
+      "workspace_id": "workspace",
+      "steps": [
+        {
+          "version": 1,
+          "id": "intake",
+          "kind": "admitted_collection",
+          "depends_on": [],
+          "refs": {}
+        },
+        {
+          "version": 1,
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "intake"
+          ],
+          "refs": {
+            "artifact": {
+              "version": 1,
+              "step_id": "intake",
+              "output": "screened_artifacts"
+            }
+          }
+        },
+        {
+          "version": 1,
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "refs": {
+            "report": {
+              "version": 1,
+              "step_id": "analysis",
+              "output": "report"
+            }
+          },
+          "target_id": "target",
+          "authorization_kind": "exact_plan"
+        },
+        {
+          "version": 1,
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "refs": {
+            "binding": {
+              "version": 1,
+              "step_id": "gate",
+              "output": "action_binding"
+            }
+          }
+        },
+        {
+          "version": 1,
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "refs": {
+            "binding": {
+              "version": 1,
+              "step_id": "gate",
+              "output": "action_binding"
+            },
+            "decision": {
+              "version": 1,
+              "step_id": "decision",
+              "output": "decision_receipt"
+            }
+          },
+          "target_id": "target",
+          "authorization_kind": "exact_plan"
+        }
+      ]
+    }
+  ],
+  "provenance": [
+    {
+      "version": 1,
+      "authorization_kind": "advisory_request",
+      "source": {
+        "version": 1,
+        "kind": "uploaded",
+        "repository_source": "unavailable",
+        "limitation": "Repository and immutable commit were not verified for uploaded evidence."
+      }
+    },
+    {
+      "version": 1,
+      "authorization_kind": "advisory_request",
+      "source": {
+        "version": 1,
+        "kind": "collected",
+        "repository_id": "repository",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "collector_id": "collector",
+        "profile_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "screened_transport_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "redaction_version": 1,
+        "collected_at": "2026-10-09T10:00:00Z",
+        "source_deadline": "2026-10-09T11:00:00Z"
+      }
+    },
+    {
+      "version": 1,
+      "authorization_kind": "exact_plan",
+      "source": {
+        "version": 1,
+        "kind": "collected",
+        "repository_id": "repository",
+        "commit_sha": "1111111111111111111111111111111111111111",
+        "collector_id": "collector",
+        "profile_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "screened_transport_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "redaction_version": 1,
+        "collected_at": "2026-10-09T10:00:00Z",
+        "source_deadline": "2026-10-09T11:00:00Z"
+      },
+      "custody": {
+        "version": 1,
+        "handle": "opaque-custody",
+        "raw_local_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "expires_at": "2026-10-09T11:00:00Z"
+      }
+    }
+  ],
+  "runner": [
+    {
+      "version": 1,
+      "operation": "claim",
+      "scope": {
+        "version": 1,
+        "runner_id": "runner",
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "run_id": "run",
+        "step_id": "intake",
+        "attempt": 1,
+        "fence": 1,
+        "coordinator_generation": 1,
+        "authorization_epoch": 1,
+        "restore_epoch": 1,
+        "lease_deadline": "2026-10-09T12:00:00Z",
+        "audience": "runner-task-v1"
+      },
+      "capabilities": [
+        "screened-collection-v1"
+      ],
+      "profile_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sequence": 1
+    },
+    {
+      "version": 1,
+      "operation": "heartbeat",
+      "scope": {
+        "version": 1,
+        "runner_id": "runner",
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "run_id": "run",
+        "step_id": "intake",
+        "attempt": 1,
+        "fence": 1,
+        "coordinator_generation": 1,
+        "authorization_epoch": 1,
+        "restore_epoch": 1,
+        "lease_deadline": "2026-10-09T12:00:00Z",
+        "audience": "runner-task-v1"
+      },
+      "capabilities": [
+        "screened-collection-v1"
+      ],
+      "profile_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sequence": 1
+    },
+    {
+      "version": 1,
+      "operation": "log",
+      "scope": {
+        "version": 1,
+        "runner_id": "runner",
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "run_id": "run",
+        "step_id": "intake",
+        "attempt": 1,
+        "fence": 1,
+        "coordinator_generation": 1,
+        "authorization_epoch": 1,
+        "restore_epoch": 1,
+        "lease_deadline": "2026-10-09T12:00:00Z",
+        "audience": "runner-task-v1"
+      },
+      "capabilities": [
+        "screened-collection-v1"
+      ],
+      "profile_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sequence": 1,
+      "log": "screened synthetic output"
+    },
+    {
+      "version": 1,
+      "operation": "upload",
+      "scope": {
+        "version": 1,
+        "runner_id": "runner",
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "run_id": "run",
+        "step_id": "intake",
+        "attempt": 1,
+        "fence": 1,
+        "coordinator_generation": 1,
+        "authorization_epoch": 1,
+        "restore_epoch": 1,
+        "lease_deadline": "2026-10-09T12:00:00Z",
+        "audience": "runner-task-v1"
+      },
+      "capabilities": [
+        "screened-collection-v1"
+      ],
+      "profile_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sequence": 1,
+      "upload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "atomic_upload_id": "upload"
+    },
+    {
+      "version": 1,
+      "operation": "complete",
+      "scope": {
+        "version": 1,
+        "runner_id": "runner",
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "run_id": "run",
+        "step_id": "intake",
+        "attempt": 1,
+        "fence": 1,
+        "coordinator_generation": 1,
+        "authorization_epoch": 1,
+        "restore_epoch": 1,
+        "lease_deadline": "2026-10-09T12:00:00Z",
+        "audience": "runner-task-v1"
+      },
+      "capabilities": [
+        "screened-collection-v1"
+      ],
+      "profile_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sequence": 1,
+      "atomic_upload_id": "upload",
+      "state": "succeeded"
+    }
+  ],
+  "enrollment": [
+    {
+      "version": 1,
+      "audience": "runner-enrollment-v1",
+      "enrollment_id": "enrollment",
+      "runner_id": "runner",
+      "project_id": "project",
+      "workspace_id": "workspace",
+      "expires_at": "2026-10-09T12:00:00Z",
+      "one_use": true
+    }
+  ],
+  "receiver": [
+    {
+      "version": 1,
+      "operation": "consume",
+      "operation_id": "operation",
+      "audience": "receiver-operation-v1",
+      "binding": {
+        "version": 1,
+        "authorization_kind": "advisory_request",
+        "workflow_id": "workflow",
+        "workflow_revision_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "provenance": {
+          "version": 1,
+          "authorization_kind": "advisory_request",
+          "source": {
+            "version": 1,
+            "kind": "uploaded",
+            "repository_source": "unavailable",
+            "limitation": "Repository and immutable commit were not verified for uploaded evidence."
+          }
+        },
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "environment": "environment",
+        "canonical_target": "target",
+        "receiver_id": "receiver",
+        "pipeline_repository_id": "pipeline-repository",
+        "pipeline_workflow_id": "pipeline-workflow",
+        "pipeline_workflow_revision": "2222222222222222222222222222222222222222",
+        "report_id": 1,
+        "report_schema_version": "v2",
+        "report_bytes_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_version": 1,
+        "policy_result": "passed",
+        "policy_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "unit_waves_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "screened_artifact_digests": [
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "redaction_version": 1,
+        "payload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evidence_deadline": "2026-10-09T12:00:00Z",
+        "approval_deadline": "2026-10-09T12:00:00Z",
+        "authorization_epoch": 1,
+        "restore_epoch": 1
+      },
+      "binding_digest": "sha256:070ac612a2b1a8157716a532887225ed32b72f39ec821469d950d7844a31abcb",
+      "sequence": 1,
+      "state": "consumed"
+    },
+    {
+      "version": 1,
+      "operation": "receipt",
+      "operation_id": "operation",
+      "audience": "receiver-operation-v1",
+      "binding": {
+        "version": 1,
+        "authorization_kind": "advisory_request",
+        "workflow_id": "workflow",
+        "workflow_revision_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "provenance": {
+          "version": 1,
+          "authorization_kind": "advisory_request",
+          "source": {
+            "version": 1,
+            "kind": "uploaded",
+            "repository_source": "unavailable",
+            "limitation": "Repository and immutable commit were not verified for uploaded evidence."
+          }
+        },
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "environment": "environment",
+        "canonical_target": "target",
+        "receiver_id": "receiver",
+        "pipeline_repository_id": "pipeline-repository",
+        "pipeline_workflow_id": "pipeline-workflow",
+        "pipeline_workflow_revision": "2222222222222222222222222222222222222222",
+        "report_id": 1,
+        "report_schema_version": "v2",
+        "report_bytes_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_version": 1,
+        "policy_result": "passed",
+        "policy_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "unit_waves_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "screened_artifact_digests": [
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "redaction_version": 1,
+        "payload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evidence_deadline": "2026-10-09T12:00:00Z",
+        "approval_deadline": "2026-10-09T12:00:00Z",
+        "authorization_epoch": 1,
+        "restore_epoch": 1
+      },
+      "binding_digest": "sha256:070ac612a2b1a8157716a532887225ed32b72f39ec821469d950d7844a31abcb",
+      "sequence": 1,
+      "state": "accepted"
+    },
+    {
+      "version": 1,
+      "operation": "status",
+      "operation_id": "operation",
+      "audience": "receiver-operation-v1",
+      "binding": {
+        "version": 1,
+        "authorization_kind": "advisory_request",
+        "workflow_id": "workflow",
+        "workflow_revision_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "provenance": {
+          "version": 1,
+          "authorization_kind": "advisory_request",
+          "source": {
+            "version": 1,
+            "kind": "uploaded",
+            "repository_source": "unavailable",
+            "limitation": "Repository and immutable commit were not verified for uploaded evidence."
+          }
+        },
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "environment": "environment",
+        "canonical_target": "target",
+        "receiver_id": "receiver",
+        "pipeline_repository_id": "pipeline-repository",
+        "pipeline_workflow_id": "pipeline-workflow",
+        "pipeline_workflow_revision": "2222222222222222222222222222222222222222",
+        "report_id": 1,
+        "report_schema_version": "v2",
+        "report_bytes_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_version": 1,
+        "policy_result": "passed",
+        "policy_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "unit_waves_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "screened_artifact_digests": [
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "redaction_version": 1,
+        "payload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evidence_deadline": "2026-10-09T12:00:00Z",
+        "approval_deadline": "2026-10-09T12:00:00Z",
+        "authorization_epoch": 1,
+        "restore_epoch": 1
+      },
+      "binding_digest": "sha256:070ac612a2b1a8157716a532887225ed32b72f39ec821469d950d7844a31abcb",
+      "sequence": 1,
+      "state": "delivery_unknown"
+    },
+    {
+      "version": 1,
+      "operation": "outcome",
+      "operation_id": "operation",
+      "audience": "receiver-operation-v1",
+      "binding": {
+        "version": 1,
+        "authorization_kind": "advisory_request",
+        "workflow_id": "workflow",
+        "workflow_revision_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "provenance": {
+          "version": 1,
+          "authorization_kind": "advisory_request",
+          "source": {
+            "version": 1,
+            "kind": "uploaded",
+            "repository_source": "unavailable",
+            "limitation": "Repository and immutable commit were not verified for uploaded evidence."
+          }
+        },
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "environment": "environment",
+        "canonical_target": "target",
+        "receiver_id": "receiver",
+        "pipeline_repository_id": "pipeline-repository",
+        "pipeline_workflow_id": "pipeline-workflow",
+        "pipeline_workflow_revision": "2222222222222222222222222222222222222222",
+        "report_id": 1,
+        "report_schema_version": "v2",
+        "report_bytes_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_version": 1,
+        "policy_result": "passed",
+        "policy_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "unit_waves_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "screened_artifact_digests": [
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "redaction_version": 1,
+        "payload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evidence_deadline": "2026-10-09T12:00:00Z",
+        "approval_deadline": "2026-10-09T12:00:00Z",
+        "authorization_epoch": 1,
+        "restore_epoch": 1
+      },
+      "binding_digest": "sha256:070ac612a2b1a8157716a532887225ed32b72f39ec821469d950d7844a31abcb",
+      "sequence": 1,
+      "state": "succeeded"
+    },
+    {
+      "version": 1,
+      "operation": "reconcile",
+      "operation_id": "operation",
+      "audience": "receiver-operation-v1",
+      "binding": {
+        "version": 1,
+        "authorization_kind": "advisory_request",
+        "workflow_id": "workflow",
+        "workflow_revision_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "provenance": {
+          "version": 1,
+          "authorization_kind": "advisory_request",
+          "source": {
+            "version": 1,
+            "kind": "uploaded",
+            "repository_source": "unavailable",
+            "limitation": "Repository and immutable commit were not verified for uploaded evidence."
+          }
+        },
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "environment": "environment",
+        "canonical_target": "target",
+        "receiver_id": "receiver",
+        "pipeline_repository_id": "pipeline-repository",
+        "pipeline_workflow_id": "pipeline-workflow",
+        "pipeline_workflow_revision": "2222222222222222222222222222222222222222",
+        "report_id": 1,
+        "report_schema_version": "v2",
+        "report_bytes_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_version": 1,
+        "policy_result": "passed",
+        "policy_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "unit_waves_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "screened_artifact_digests": [
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "redaction_version": 1,
+        "payload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evidence_deadline": "2026-10-09T12:00:00Z",
+        "approval_deadline": "2026-10-09T12:00:00Z",
+        "authorization_epoch": 1,
+        "restore_epoch": 1
+      },
+      "binding_digest": "sha256:070ac612a2b1a8157716a532887225ed32b72f39ec821469d950d7844a31abcb",
+      "sequence": 1,
+      "state": "delivery_unknown"
+    },
+    {
+      "version": 1,
+      "operation": "consume",
+      "operation_id": "operation",
+      "audience": "receiver-operation-v1",
+      "binding": {
+        "version": 1,
+        "authorization_kind": "exact_plan",
+        "workflow_id": "workflow",
+        "workflow_revision_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "provenance": {
+          "version": 1,
+          "authorization_kind": "exact_plan",
+          "source": {
+            "version": 1,
+            "kind": "collected",
+            "repository_id": "repository",
+            "commit_sha": "1111111111111111111111111111111111111111",
+            "collector_id": "collector",
+            "profile_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "screened_transport_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "redaction_version": 1,
+            "collected_at": "2026-10-09T10:00:00Z",
+            "source_deadline": "2026-10-09T11:00:00Z"
+          },
+          "custody": {
+            "version": 1,
+            "handle": "opaque-custody",
+            "raw_local_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "expires_at": "2026-10-09T11:00:00Z"
+          }
+        },
+        "project_id": "project",
+        "workspace_id": "workspace",
+        "environment": "environment",
+        "canonical_target": "target",
+        "receiver_id": "receiver",
+        "pipeline_repository_id": "pipeline-repository",
+        "pipeline_workflow_id": "pipeline-workflow",
+        "pipeline_workflow_revision": "2222222222222222222222222222222222222222",
+        "report_id": 1,
+        "report_schema_version": "v2",
+        "report_bytes_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_version": 1,
+        "policy_result": "passed",
+        "policy_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "unit_waves_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "screened_artifact_digests": [
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "redaction_version": 1,
+        "payload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evidence_deadline": "2026-10-09T12:00:00Z",
+        "approval_deadline": "2026-10-09T12:00:00Z",
+        "authorization_epoch": 1,
+        "restore_epoch": 1
+      },
+      "binding_digest": "sha256:10fdf8f82fa4e489eba2cef723335d44a6df074e567abe51f993fac9bbe8bbca",
+      "sequence": 1,
+      "state": "consumed"
+    }
+  ],
+  "state": [
+    {
+      "version": 1,
+      "run_state": "delivery_unknown",
+      "attempt_state": "running"
+    }
+  ],
+  "error": [
+    {
+      "version": 1,
+      "http_status": 401,
+      "code": "authentication_required",
+      "message": "Authentication required.",
+      "retryable": false,
+      "correlation_id": "correlation"
+    },
+    {
+      "version": 1,
+      "http_status": 403,
+      "code": "permission_denied",
+      "message": "Operation unavailable.",
+      "retryable": false,
+      "correlation_id": "correlation"
+    },
+    {
+      "version": 1,
+      "http_status": 409,
+      "code": "binding_conflict",
+      "message": "Review current evidence again.",
+      "retryable": false,
+      "correlation_id": "correlation"
+    },
+    {
+      "version": 1,
+      "http_status": 422,
+      "code": "request_validation_failed",
+      "message": "Request validation failed.",
+      "retryable": false,
+      "correlation_id": "correlation"
+    },
+    {
+      "version": 1,
+      "http_status": 429,
+      "code": "quota_exceeded",
+      "message": "Request limit reached.",
+      "retryable": true,
+      "correlation_id": "correlation"
+    },
+    {
+      "version": 1,
+      "http_status": 503,
+      "code": "authority_unavailable",
+      "message": "Current authority could not be verified.",
+      "retryable": true,
+      "correlation_id": "correlation"
+    }
+  ],
+  "cursor": [
+    {
+      "version": 1,
+      "snapshot_id": "snapshot",
+      "next_cursor": null,
+      "limit": 100,
+      "last_sequence": 0,
+      "truncated": false,
+      "gap": false
+    }
+  ]
+}

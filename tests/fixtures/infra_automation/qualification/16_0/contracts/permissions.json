@@ -1,0 +1,145 @@
+{
+  "cases": [
+    {
+      "input": {
+        "role": "maintainer",
+        "operation": "decide",
+        "authenticated": true,
+        "scoped": true,
+        "requester": false,
+        "single_operator": false,
+        "audience": "human-session-v1"
+      },
+      "expected": 200
+    },
+    {
+      "input": {
+        "role": "maintainer",
+        "operation": "decide",
+        "authenticated": true,
+        "scoped": true,
+        "requester": true,
+        "single_operator": false,
+        "audience": "human-session-v1"
+      },
+      "expected": 403
+    },
+    {
+      "input": {
+        "role": "maintainer",
+        "operation": "decide",
+        "authenticated": true,
+        "scoped": true,
+        "requester": true,
+        "single_operator": true,
+        "audience": "human-session-v1"
+      },
+      "expected": 200
+    },
+    {
+      "input": {
+        "role": "agent",
+        "operation": "decide",
+        "authenticated": true,
+        "scoped": true,
+        "requester": false,
+        "single_operator": false,
+        "audience": "service-request-v1"
+      },
+      "expected": 403
+    },
+    {
+      "input": {
+        "role": "admin",
+        "operation": "publish",
+        "authenticated": true,
+        "scoped": true,
+        "requester": false,
+        "single_operator": false,
+        "audience": "human-session-v1"
+      },
+      "expected": 200
+    },
+    {
+      "input": {
+        "role": "maintainer",
+        "operation": "publish",
+        "authenticated": true,
+        "scoped": true,
+        "requester": false,
+        "single_operator": false,
+        "audience": "human-session-v1"
+      },
+      "expected": 403
+    },
+    {
+      "input": {
+        "role": "runner",
+        "operation": "runner_task",
+        "authenticated": true,
+        "scoped": true,
+        "requester": false,
+        "single_operator": false,
+        "audience": "runner-task-v1"
+      },
+      "expected": 200
+    },
+    {
+      "input": {
+        "role": "runner",
+        "operation": "runner_task",
+        "authenticated": true,
+        "scoped": true,
+        "requester": false,
+        "single_operator": false,
+        "audience": "human-session-v1"
+      },
+      "expected": 403
+    },
+    {
+      "input": {
+        "role": "receiver",
+        "operation": "receiver_operation",
+        "authenticated": true,
+        "scoped": true,
+        "requester": false,
+        "single_operator": false,
+        "audience": "receiver-operation-v1"
+      },
+      "expected": 200
+    },
+    {
+      "input": {
+        "role": "admin",
+        "operation": "read",
+        "authenticated": true,
+        "scoped": false,
+        "requester": false,
+        "single_operator": false,
+        "audience": "human-session-v1"
+      },
+      "expected": 403
+    },
+    {
+      "input": {
+        "role": "service",
+        "operation": "request",
+        "authenticated": true,
+        "scoped": true,
+        "requester": false,
+        "single_operator": false,
+        "audience": "service-request-v1"
+      },
+      "expected": 200
+    },
+    {
+      "input": {
+        "role": "admin",
+        "operation": "read",
+        "authenticated": false,
+        "scoped": true
+      },
+      "expected": 401
+    }
+  ]
+}

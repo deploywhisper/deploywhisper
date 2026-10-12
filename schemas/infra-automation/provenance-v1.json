@@ -1,0 +1,202 @@
+{
+  "$defs": {
+    "Collected": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "collected",
+          "title": "Kind",
+          "type": "string"
+        },
+        "repository_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "commit_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "collector_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Collector Id",
+          "type": "string"
+        },
+        "profile_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Profile Digest",
+          "type": "string"
+        },
+        "screened_transport_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Screened Transport Digest",
+          "type": "string"
+        },
+        "redaction_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Redaction Version",
+          "type": "integer"
+        },
+        "collected_at": {
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+          "title": "Collected At",
+          "type": "string"
+        },
+        "source_deadline": {
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+          "title": "Source Deadline",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "repository_id",
+        "commit_sha",
+        "collector_id",
+        "profile_digest",
+        "screened_transport_digest",
+        "redaction_version",
+        "collected_at",
+        "source_deadline"
+      ],
+      "title": "Collected",
+      "type": "object"
+    },
+    "Custody": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "handle": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Handle",
+          "type": "string"
+        },
+        "raw_local_digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Raw Local Digest",
+          "type": "string"
+        },
+        "expires_at": {
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "handle",
+        "raw_local_digest",
+        "expires_at"
+      ],
+      "title": "Custody",
+      "type": "object"
+    },
+    "Uploaded": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "uploaded",
+          "title": "Kind",
+          "type": "string"
+        },
+        "repository_source": {
+          "const": "unavailable",
+          "title": "Repository Source",
+          "type": "string"
+        },
+        "limitation": {
+          "const": "Repository and immutable commit were not verified for uploaded evidence.",
+          "title": "Limitation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "repository_source",
+        "limitation"
+      ],
+      "title": "Uploaded",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "default": 1,
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "authorization_kind": {
+      "enum": [
+        "advisory_request",
+        "exact_plan"
+      ],
+      "title": "Authorization Kind",
+      "type": "string"
+    },
+    "source": {
+      "discriminator": {
+        "mapping": {
+          "collected": "#/$defs/Collected",
+          "uploaded": "#/$defs/Uploaded"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Uploaded"
+        },
+        {
+          "$ref": "#/$defs/Collected"
+        }
+      ],
+      "title": "Source"
+    },
+    "custody": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Custody"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "authorization_kind",
+    "source"
+  ],
+  "title": "Provenance",
+  "type": "object"
+}

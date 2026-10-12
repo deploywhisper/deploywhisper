@@ -1,0 +1,66 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "default": 1,
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "audience": {
+      "const": "runner-enrollment-v1",
+      "title": "Audience",
+      "type": "string"
+    },
+    "enrollment_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+      "title": "Enrollment Id",
+      "type": "string"
+    },
+    "runner_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+      "title": "Runner Id",
+      "type": "string"
+    },
+    "project_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "workspace_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+      "title": "Workspace Id",
+      "type": "string"
+    },
+    "expires_at": {
+      "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "one_use": {
+      "const": true,
+      "title": "One Use",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "audience",
+    "enrollment_id",
+    "runner_id",
+    "project_id",
+    "workspace_id",
+    "expires_at",
+    "one_use"
+  ],
+  "title": "Enrollment",
+  "type": "object"
+}

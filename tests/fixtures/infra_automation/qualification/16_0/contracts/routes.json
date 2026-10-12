@@ -1,0 +1,405 @@
+{
+  "version": 1,
+  "status": "frozen-future-resources-not-implemented",
+  "prefix": "/api/v1/infra-automation",
+  "required_every_route": [
+    "verified_identity",
+    "current_project_workspace_object_scope",
+    "capability",
+    "credential_audience"
+  ],
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/workflows",
+      "operation": "draft",
+      "owner": "16.3",
+      "roles": [
+        "admin",
+        "maintainer"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/workflows",
+      "operation": "read",
+      "owner": "16.3",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor",
+        "reviewer",
+        "read_only"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/workflows/{workflow_id}/validate",
+      "operation": "draft",
+      "owner": "16.3",
+      "roles": [
+        "admin",
+        "maintainer"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/workflows/{workflow_id}/revisions",
+      "operation": "publish",
+      "owner": "16.4",
+      "roles": [
+        "admin"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runs",
+      "operation": "request",
+      "owner": "16.5",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor",
+        "service",
+        "agent"
+      ],
+      "audience": "principal-specific"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runs",
+      "operation": "read",
+      "owner": "16.5",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor",
+        "reviewer",
+        "read_only",
+        "service",
+        "agent"
+      ],
+      "audience": "principal-specific"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runs/{run_id}",
+      "operation": "read",
+      "owner": "16.5",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor",
+        "reviewer",
+        "read_only",
+        "service",
+        "agent"
+      ],
+      "audience": "principal-specific"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runs/{run_id}/logs",
+      "operation": "read",
+      "owner": "16.5",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor",
+        "reviewer",
+        "read_only",
+        "service",
+        "agent"
+      ],
+      "audience": "principal-specific"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runs/{run_id}/artifacts",
+      "operation": "read",
+      "owner": "16.6",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor",
+        "reviewer",
+        "read_only"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runs/{run_id}/cancel",
+      "operation": "cancel",
+      "owner": "16.5",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/approvals",
+      "operation": "read",
+      "owner": "16.8",
+      "roles": [
+        "admin",
+        "maintainer",
+        "reviewer"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/approvals/{approval_id}/decision",
+      "operation": "decide",
+      "owner": "16.8",
+      "roles": [
+        "admin",
+        "maintainer",
+        "reviewer"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/targets",
+      "operation": "manage_target",
+      "owner": "16.10",
+      "roles": [
+        "admin"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/enrollments",
+      "operation": "enroll",
+      "owner": "16.12",
+      "roles": [
+        "admin"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/claim",
+      "operation": "runner_task",
+      "owner": "16.12",
+      "roles": [
+        "runner"
+      ],
+      "audience": "runner-task-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "operation": "runner_task",
+      "owner": "16.12",
+      "roles": [
+        "runner"
+      ],
+      "audience": "runner-task-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "operation": "runner_task",
+      "owner": "16.12",
+      "roles": [
+        "runner"
+      ],
+      "audience": "runner-task-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/uploads",
+      "operation": "runner_task",
+      "owner": "16.14",
+      "roles": [
+        "runner"
+      ],
+      "audience": "runner-task-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/complete",
+      "operation": "runner_task",
+      "owner": "16.12",
+      "roles": [
+        "runner"
+      ],
+      "audience": "runner-task-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/handoffs/{operation_id}/consume",
+      "operation": "receiver_operation",
+      "owner": "16.11",
+      "roles": [
+        "receiver"
+      ],
+      "audience": "receiver-operation-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/handoffs/{operation_id}/receipt",
+      "operation": "receiver_operation",
+      "owner": "16.11",
+      "roles": [
+        "receiver"
+      ],
+      "audience": "receiver-operation-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/handoffs/{operation_id}/status",
+      "operation": "receiver_operation",
+      "owner": "16.11",
+      "roles": [
+        "receiver"
+      ],
+      "audience": "receiver-operation-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/handoffs/{operation_id}/outcome",
+      "operation": "receiver_operation",
+      "owner": "16.11",
+      "roles": [
+        "receiver"
+      ],
+      "audience": "receiver-operation-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/handoffs/{operation_id}/reconcile",
+      "operation": "reconcile",
+      "owner": "16.11",
+      "roles": [
+        "admin",
+        "maintainer"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/triggers/webhook",
+      "operation": "webhook",
+      "owner": "16.17",
+      "roles": [
+        "service"
+      ],
+      "audience": "signed-webhook-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/workflows/{workflow_id}/revisions",
+      "operation": "read",
+      "owner": "16.4",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor",
+        "reviewer",
+        "read_only"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runs/{run_id}/steps",
+      "operation": "read",
+      "owner": "16.5",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor",
+        "reviewer",
+        "read_only"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners",
+      "operation": "read",
+      "owner": "16.15",
+      "roles": [
+        "admin",
+        "maintainer"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/{runner_id}/revoke",
+      "operation": "enroll",
+      "owner": "16.12",
+      "roles": [
+        "admin"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/units",
+      "operation": "read",
+      "owner": "16.16",
+      "roles": [
+        "admin",
+        "maintainer",
+        "contributor",
+        "reviewer",
+        "read_only"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/units",
+      "operation": "draft",
+      "owner": "16.16",
+      "roles": [
+        "admin",
+        "maintainer"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/settings",
+      "operation": "read",
+      "owner": "16.18",
+      "roles": [
+        "admin",
+        "maintainer"
+      ],
+      "audience": "human-session-v1"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/infra-automation/settings",
+      "operation": "manage_target",
+      "owner": "16.18",
+      "roles": [
+        "admin"
+      ],
+      "audience": "human-session-v1"
+    }
+  ],
+  "special_rules": {
+    "cancel": "requester owner with cancellation capability or scoped admin; machines need separately assigned cancellation capability",
+    "decide": "shared requester excluded; server-configured single-operator acknowledgement allowed without independent-review claim",
+    "webhook": "HMAC/timestamp/nonce replay proof before scheduling; never human decision",
+    "runner": "claim requires exact task grant; server owns all task scope fields",
+    "receiver": "one-use consume + live bound authority; acceptance is nonterminal",
+    "read": "signed cursors are scope/principal/filter/snapshot bound; share links/role headers denied"
+  }
+}

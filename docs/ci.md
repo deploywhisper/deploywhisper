@@ -12,7 +12,7 @@ required high-priority finding dispositions.
 - `quality`: installs dependencies, runs `pip check`, and bytecode-compiles project modules.
 - `security`: runs dependency audit, Bandit static analysis, and secret-pattern scanning.
 - `frontend`: installs the React SPA workspace, then runs typecheck, Vitest, and the production build.
-- `changed-tests`: on pull requests, runs only changed Python test modules for faster early feedback.
+- `changed-tests`: on pull requests, runs changed `test_*.py` modules under `tests/`, excluding `tests/fixtures/` and helper scripts, for faster early feedback. Qualification probes stay executable through their owning tests and are never imported as test modules.
 - `test`: runs the Python suite with pytest in four logical shards with `fail-fast: false`.
 - The blocking `tests/test_llm` shard includes the prompt-injection regression
   suite documented in
