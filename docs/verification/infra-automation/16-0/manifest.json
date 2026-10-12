@@ -284,6 +284,13 @@
       "status": "passed",
       "exit_code": 0,
       "date": "2026-10-12"
+    },
+    {
+      "command": "BASE_REF=origin/develop PYTHON_BIN=./.venv/bin/python bash scripts/test-changed.sh",
+      "status": "passed",
+      "exit_code": 0,
+      "result": "85 tests; OK;1 opt-in Docker skip; fixtures excluded; after commit and develop integration",
+      "date": "2026-10-12"
     }
   ],
   "runtime_evidence_claimed": true,
@@ -614,6 +621,9 @@
     "ci_followup": "exclude fixtures/helpers from changed-test module selection; Bash3-compatible reader",
     "independent_review": "blind, edge and acceptance layers clean; real Linux independently repeated; concurrent finalizers one publication/one refusal",
     "limits": "same bounded Linux ARM64 tools; process/container restart, not host-power-loss or production readiness",
-    "previous_profile_sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49"
+    "previous_profile_sha256": "1f91ca01dcfce0a06b6ab19cba7f145dae499a551608f0cdc8386c25dd1cbf49",
+    "fix_commit": "e09bab2",
+    "integration_commit": "1befda8",
+    "changed_test_feedback": "85 tests;OK1skip"
   }
 }
