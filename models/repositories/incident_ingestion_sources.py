@@ -40,6 +40,7 @@ def list_incident_ingestion_sources(
     *,
     project_id: int,
     workspace_id: int | None = None,
+    visibility=None,
 ) -> list[IncidentIngestionSource]:
     stmt = select(IncidentIngestionSource).order_by(
         IncidentIngestionSource.workspace_id.asc(),
@@ -47,6 +48,8 @@ def list_incident_ingestion_sources(
         IncidentIngestionSource.id.asc(),
     )
     stmt = _scope_predicate(stmt, project_id=project_id, workspace_id=workspace_id)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
     return list(session.execute(stmt).scalars().all())
 
 

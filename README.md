@@ -569,7 +569,10 @@ prompt-injection risks, and forbidden auto-approval patterns, is documented in
 python cli.py skills
 ```
 
-This shows built-in and custom skill override status.
+This shows custom skill status, including overrides of built-in skills. When
+protected projects exist, this administration command requires trusted global
+configuration authority; it cannot use a caller role or local shell invocation
+as a project grant. See [project permissions](docs/infra-automation/permissions.md).
 
 ## Configuration
 
@@ -579,8 +582,21 @@ Named local accounts and sessions are available through the opt-in
 `DEPLOYWHISPER_IDENTITY_PROFILE` and `DEPLOYWHISPER_IDENTITY_ORIGIN` settings.
 See [local identity setup and recovery](docs/infra-automation/identity.md) for the
 protected CLI bootstrap, HTTPS/proxy configuration, session API and development
-profile. Identity defaults to disabled; project-scoped automation permissions
-remain a separate integration.
+profile. Identity defaults to disabled; a verified account alone grants no
+project permission.
+
+Server-owned project memberships are described in
+[trusted project permissions](docs/infra-automation/permissions.md), including
+first-project administrator bootstrap, membership APIs, role/workspace limits and
+revocation. `DEPLOYWHISPER_AUTHORIZATION_PROFILE=legacy-evaluation` (default)
+preserves unrelated unprotected analysis; protected projects and report context
+always require live membership. `verified` requires membership for all project
+data, and unknown profiles deny. Global settings and custom skill administration
+require a global identity administrator plus unrestricted `settings.manage` in
+every protected project (every project in `verified` mode).
+`DEPLOYWHISPER_IDENTITY_DECISION_MODE=shared` (default) rejects requester
+self-approval; `single-operator` records acknowledgement only. These backend
+contracts do not enable machine credentials or workflow execution.
 
 ### Core Runtime Variables
 

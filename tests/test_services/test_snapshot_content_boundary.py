@@ -35,6 +35,25 @@ class SnapshotContentBoundaryTests(unittest.TestCase):
         reload(database_module)
         reload(snapshot_service)
         database_module.init_db()
+        with database_module.SessionLocal.begin() as session:
+            project = tables_module.Project(
+                project_key="snapshot-fixture", display_name="Snapshot fixture"
+            )
+            session.add(project)
+            session.flush()
+            session.add(
+                tables_module.AnalysisReport(
+                    id=1,
+                    project_id=project.id,
+                    risk_score=0,
+                    severity="low",
+                    recommendation="go",
+                    top_risk="synthetic",
+                    parse_summary="synthetic",
+                    narrative_opening="synthetic",
+                    narrative_explanation="synthetic",
+                )
+            )
 
     def tearDown(self) -> None:
         database_module.engine.dispose()

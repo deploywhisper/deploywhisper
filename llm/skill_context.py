@@ -185,77 +185,85 @@ def get_active_skills() -> dict[str, ActiveSkill]:
 
 def get_custom_skill_statuses() -> list[CustomSkillStatus]:
     """Return admin-facing summaries for custom skill discovery."""
-    built_in_names = {
-        name
-        for path in _iter_skill_files(SKILLS_DIR)
-        if path.parent == SKILLS_DIR
-        for name in [_skill_name_from_path(path)]
-        if name
-    }
-    statuses: list[CustomSkillStatus] = []
-    for path in _iter_skill_files(CUSTOM_DIR):
-        name = _skill_name_from_path(path)
-        if not name:
-            continue
-        warning = None
-        try:
-            document = load_skill_document(
-                path,
-                strict_manifest=False,
-                allow_legacy_name=True,
+    from services.project_service import authorized_session, guard_global_configuration
+
+    with authorized_session() as session:
+        guard_global_configuration(session)
+        built_in_names = {
+            name
+            for path in _iter_skill_files(SKILLS_DIR)
+            if path.parent == SKILLS_DIR
+            for name in [_skill_name_from_path(path)]
+            if name
+        }
+        statuses: list[CustomSkillStatus] = []
+        for path in _iter_skill_files(CUSTOM_DIR):
+            name = _skill_name_from_path(path)
+            if not name:
+                continue
+            warning = None
+            try:
+                document = load_skill_document(
+                    path,
+                    strict_manifest=False,
+                    allow_legacy_name=True,
+                )
+                content = document.body
+            except SkillManifestValidationError as exc:
+                content = None
+                warning = exc.issues[0]
+            statuses.append(
+                CustomSkillStatus(
+                    name=name,
+                    mode="override" if name in built_in_names else "new",
+                    active=content is not None,
+                    path=str(path),
+                    warning=warning
+                    if warning is not None
+                    else (
+                        None
+                        if content
+                        else "Custom skill file is empty after frontmatter stripping."
+                    ),
+                )
             )
-            content = document.body
-        except SkillManifestValidationError as exc:
-            content = None
-            warning = exc.issues[0]
-        statuses.append(
-            CustomSkillStatus(
-                name=name,
-                mode="override" if name in built_in_names else "new",
-                active=content is not None,
-                path=str(path),
-                warning=warning
-                if warning is not None
-                else (
-                    None
-                    if content
-                    else "Custom skill file is empty after frontmatter stripping."
-                ),
-            )
-        )
-    return statuses
+        return statuses
 
 
 def save_custom_skill(filename: str, raw_text: str) -> CustomSkillStatus:
     """Persist a custom markdown skill file and return its resolved admin status."""
-    candidate_name = Path(filename).name
-    if not candidate_name.lower().endswith(".md"):
-        raise ValueError("Custom skill files must use the .md extension.")
+    from services.project_service import authorized_session, guard_global_configuration
 
-    skill_name = Path(candidate_name).stem.strip().lower()
-    if not skill_name:
-        raise ValueError("Custom skill filename must include a skill name.")
+    with authorized_session() as session:
+        guard_global_configuration(session, mutation=True)
+        candidate_name = Path(filename).name
+        if not candidate_name.lower().endswith(".md"):
+            raise ValueError("Custom skill files must use the .md extension.")
 
-    try:
-        document = parse_skill_document(
-            raw_text,
-            expected_name=skill_name,
-            strict_manifest=False,
-            allow_legacy_name=True,
-        )
-    except SkillManifestValidationError as exc:
-        raise ValueError(str(exc)) from exc
-    if not document.body:
-        raise ValueError("Custom skill content cannot be empty.")
+        skill_name = Path(candidate_name).stem.strip().lower()
+        if not skill_name:
+            raise ValueError("Custom skill filename must include a skill name.")
 
-    CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
-    destination = CUSTOM_DIR / f"{skill_name}.md"
-    destination.write_text(raw_text, encoding="utf-8")
+        try:
+            document = parse_skill_document(
+                raw_text,
+                expected_name=skill_name,
+                strict_manifest=False,
+                allow_legacy_name=True,
+            )
+        except SkillManifestValidationError as exc:
+            raise ValueError(str(exc)) from exc
+        if not document.body:
+            raise ValueError("Custom skill content cannot be empty.")
 
-    for status in get_custom_skill_statuses():
-        if status.name == skill_name:
-            return status
-    raise ValueError("Custom skill could not be resolved after saving.")
+        CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
+        destination = CUSTOM_DIR / f"{skill_name}.md"
+        destination.write_text(raw_text, encoding="utf-8")
+
+        for status in get_custom_skill_statuses():
+            if status.name == skill_name:
+                return status
+        raise ValueError("Custom skill could not be resolved after saving.")
 
 
 def _assessment_search_blob(assessment: RiskAssessment) -> str:

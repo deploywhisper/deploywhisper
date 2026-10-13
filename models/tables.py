@@ -289,6 +289,9 @@ if "Project" not in globals():
         repository_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
         default_branch: Mapped[str | None] = mapped_column(String(120), nullable=True)
         is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+        authorization_required: Mapped[bool] = mapped_column(
+            Boolean, default=False, server_default=text("0")
+        )
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), default=lambda: datetime.now(UTC)
         )
@@ -390,6 +393,9 @@ if "AnalysisReport" not in globals():
             ForeignKey("project_workspaces.id", ondelete="SET NULL"),
             nullable=True,
             index=True,
+        )
+        authorization_required: Mapped[bool] = mapped_column(
+            Boolean, default=False, server_default=text("0")
         )
         risk_score: Mapped[int] = mapped_column(Integer)
         severity: Mapped[str] = mapped_column(String(20))
@@ -851,3 +857,77 @@ if "IdentityCredential" not in globals():
         consumed_at: Mapped[datetime | None] = mapped_column(
             DateTime(timezone=True), nullable=True
         )
+
+
+if "ProjectMembership" not in globals():
+
+    class ProjectMembership(Base):
+        """Server-owned role, optionally restricted to one existing workspace."""
+
+        __tablename__ = "project_memberships"
+        __table_args__ = (
+            UniqueConstraint(
+                "principal_id",
+                "project_id",
+                name="uq_project_membership_principal_project",
+            ),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                name="fk_project_memberships_project_workspace_scope",
+                ondelete="RESTRICT",
+            ),
+            CheckConstraint(
+                "role IN ('admin', 'maintainer', 'reviewer', 'contributor', 'read-only')",
+                name="ck_project_memberships_role",
+            ),
+            CheckConstraint(
+                "authorization_version > 0",
+                name="ck_project_memberships_authorization_version",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        principal_id: Mapped[str] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="RESTRICT"), index=True
+        )
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="RESTRICT"), index=True
+        )
+        workspace_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+        role: Mapped[str] = mapped_column(String(20))
+        enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+        authorization_version: Mapped[int] = mapped_column(Integer, default=1)
+        created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+        updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+if "ProjectAuthorizationAudit" not in globals():
+
+    class ProjectAuthorizationAudit(Base):
+        """Append-only repository record of membership and decision authority changes."""
+
+        __tablename__ = "project_authorization_audit"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                name="fk_project_authorization_audit_project_workspace_scope",
+                ondelete="RESTRICT",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        actor_principal_id: Mapped[str] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="RESTRICT")
+        )
+        target_principal_id: Mapped[str | None] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="RESTRICT"), nullable=True
+        )
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="RESTRICT"), index=True
+        )
+        workspace_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+        action: Mapped[str] = mapped_column(String(80))
+        object_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+        before_json: Mapped[str] = mapped_column(Text, default="{}")
+        after_json: Mapped[str] = mapped_column(Text, default="{}")
+        created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

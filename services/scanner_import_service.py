@@ -14,6 +14,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 from models.database import SessionLocal
+from services.project_service import (
+    authorized_session,
+    guard_project,
+    project_requires_authorization,
+)
+from models.tables import ProjectWorkspace
 from models.repositories.scanner_imports import (
     create_external_scanner_evidence,
     create_scanner_import,
@@ -243,26 +249,27 @@ def import_sarif_file(
     workspace_key: str | None = None,
 ) -> ScannerImportResult:
     """Validate and import SARIF results as project-scoped external evidence."""
-    try:
-        file = _validate_sarif_file_envelope(file)
-        parsed = _parse_sarif(file)
-    except ScannerImportValidationError as exc:
-        raise ScannerImportValidationError(
-            exc.field_errors,
-            sensitive_values=sensitive_artifact_values(
-                file.content.encode("utf-8", errors="replace")
-            ),
-        ) from None
-    return _import_parsed_scanner_evidence(
-        file,
-        parsed=parsed,
-        scanner_format="sarif",
-        format_label="SARIF",
-        project_id=project_id,
-        project_key=project_key,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
+    with authorized_session(SessionLocal):
+        try:
+            file = _validate_sarif_file_envelope(file)
+            parsed = _parse_sarif(file)
+        except ScannerImportValidationError as exc:
+            raise ScannerImportValidationError(
+                exc.field_errors,
+                sensitive_values=sensitive_artifact_values(
+                    file.content.encode("utf-8", errors="replace")
+                ),
+            ) from None
+        return _import_parsed_scanner_evidence(
+            file,
+            parsed=parsed,
+            scanner_format="sarif",
+            format_label="SARIF",
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
 
 
 def import_semgrep_json_file(
@@ -274,26 +281,27 @@ def import_semgrep_json_file(
     workspace_key: str | None = None,
 ) -> ScannerImportResult:
     """Validate and import Semgrep native JSON results as external evidence."""
-    try:
-        file = _validate_semgrep_file_envelope(file)
-        parsed = _parse_semgrep_json(file)
-    except ScannerImportValidationError as exc:
-        raise ScannerImportValidationError(
-            exc.field_errors,
-            sensitive_values=sensitive_artifact_values(
-                file.content.encode("utf-8", errors="replace")
-            ),
-        ) from None
-    return _import_parsed_scanner_evidence(
-        file,
-        parsed=parsed,
-        scanner_format="semgrep",
-        format_label="Semgrep JSON",
-        project_id=project_id,
-        project_key=project_key,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
+    with authorized_session(SessionLocal):
+        try:
+            file = _validate_semgrep_file_envelope(file)
+            parsed = _parse_semgrep_json(file)
+        except ScannerImportValidationError as exc:
+            raise ScannerImportValidationError(
+                exc.field_errors,
+                sensitive_values=sensitive_artifact_values(
+                    file.content.encode("utf-8", errors="replace")
+                ),
+            ) from None
+        return _import_parsed_scanner_evidence(
+            file,
+            parsed=parsed,
+            scanner_format="semgrep",
+            format_label="Semgrep JSON",
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
 
 
 def _scanner_source_alias(
@@ -392,8 +400,15 @@ def _import_parsed_scanner_evidence(
     tool_names = sorted({item.tool_name for item in parsed})
 
     try:
-        with SessionLocal() as session:
-            with session.begin():
+        with authorized_session(SessionLocal) as session:
+            with session.begin_nested():
+                guard_project(
+                    session,
+                    project.id,
+                    workspace_id_value,
+                    "scanner.manage",
+                    mutation=True,
+                )
                 existing_by_source_ref = (
                     find_existing_external_scanner_evidence_by_source_ref(
                         session,
@@ -498,15 +513,23 @@ def list_external_scanner_evidence(
     workspace_id: int | None = None,
 ) -> list[ExternalScannerEvidenceRecord]:
     """List external scanner evidence for a project or workspace scope."""
-    with SessionLocal() as session:
-        return [
-            _serialize_evidence(record)
-            for record in list_external_scanner_evidence_records(
-                session,
-                project_id=project_id,
-                workspace_id=workspace_id,
-            )
-        ]
+    with authorized_session(SessionLocal):
+        with authorized_session(SessionLocal) as session:
+            if (
+                workspace_id is not None
+                and not project_requires_authorization(session, project_id)
+                and session.get(ProjectWorkspace, workspace_id) is None
+            ):
+                return []
+            guard_project(session, project_id, workspace_id, "report.read")
+            return [
+                _serialize_evidence(record)
+                for record in list_external_scanner_evidence_records(
+                    session,
+                    project_id=project_id,
+                    workspace_id=workspace_id,
+                )
+            ]
 
 
 def scanner_import_failure_summaries(

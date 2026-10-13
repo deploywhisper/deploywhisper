@@ -6,6 +6,7 @@ import hmac
 import os
 import hashlib
 from datetime import UTC, datetime
+from functools import wraps
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -78,6 +79,10 @@ from services.feedback_service import (
     record_finding_feedback,
 )
 from services.project_service import (
+    legacy_request_has_identity,
+    authorized_session,
+    guard_report,
+    project_requires_authorization,
     ensure_default_project,
     has_restricted_project_scope,
     require_project_permission,
@@ -110,6 +115,17 @@ class IntegrationEnforcementDecisionResponse(BaseModel):
 
     data: IntegrationEnforcementDecision
     meta: ResourceMetaPayload
+
+
+def _authorized_report_request(operation):
+    """Keep dependent report reads and response construction in one reservation."""
+
+    @wraps(operation)
+    def wrapped(*args, **kwargs):
+        with authorized_session():
+            return operation(*args, **kwargs)
+
+    return wrapped
 
 
 def _share_cookie_name(report_id: int) -> str:
@@ -239,6 +255,8 @@ def _authorization_context(
         Header(alias="X-DeployWhisper-Project-Keys"),
     ] = None,
 ) -> dict[str, object]:
+    if legacy_request_has_identity():
+        return {"role": None, "allowed_project_keys": None}
     return {
         "role": project_role,
         "allowed_project_keys": _split_project_scope_header(project_keys),
@@ -503,12 +521,19 @@ def _reject_unscoped_workspace_id(
 
 
 def require_share_management_token(
+    report_id: int,
     share_token: str | None = Header(
         default=None,
         alias="X-DeployWhisper-Share-Token",
     ),
 ) -> None:
     """Require an explicit management token before mutating share settings."""
+    with authorized_session() as session:
+        report = guard_report(session, report_id, "report.share.manage", mutation=True)
+        if report is not None and project_requires_authorization(
+            session, report.project_id
+        ):
+            return
     configured_token = (
         os.getenv("DEPLOYWHISPER_SHARE_TOKEN")
         or os.getenv("APP_SHARE_MANAGEMENT_TOKEN")
@@ -646,6 +671,7 @@ def _trusted_artifact_paths(
         500: {"model": ErrorResponse},
     },
 )
+@_authorized_report_request
 def list_analyses(
     project_id: int | None = Query(default=None),
     project_key: str | None = Query(default=None),
@@ -770,6 +796,7 @@ def list_analyses(
         500: {"model": ErrorResponse},
     },
 )
+@_authorized_report_request
 def delete_analyses(
     request: AnalysisBulkDeleteRequest,
     authorization: dict[str, object] = Depends(_authorization_context),
@@ -966,51 +993,54 @@ def get_policy_adapter_output(
     authorization: dict[str, object] = Depends(_authorization_context),
 ) -> PolicyAdapterOutputResponse:
     """Generate a configured policy interpretation for one persisted report."""
-    try:
-        report = _fetch_report_for_authorized_read(
-            authorization=authorization,
-            report_id=report_id,
-        )
-        project = report.get("project") or {}
-        project_id = project.get("id")
-        if not isinstance(project_id, int):
+    with authorized_session():
+        try:
+            report = _fetch_report_for_authorized_read(
+                authorization=authorization,
+                report_id=report_id,
+            )
+            project = report.get("project") or {}
+            project_id = project.get("id")
+            if not isinstance(project_id, int):
+                raise ApiError(
+                    status_code=500,
+                    code="analysis_project_scope_invalid",
+                    message="Analysis report project scope is invalid.",
+                )
+            adapter_output = build_adapter_output_contract(
+                build_share_summary(report),
+                AdapterMetadata(
+                    adapter=integration,
+                    format="workflow_decision",
+                    project_id=project_id,
+                ),
+            )
+            policy_output = build_configured_policy_adapter_output(
+                adapter_output, workspace_id=(report.get("workspace") or {}).get("id")
+            )
+        except PermissionError as exc:
+            _raise_authorization_error(exc)
+        except PolicyAdapterSettingsIntegrityError as exc:
             raise ApiError(
                 status_code=500,
-                code="analysis_project_scope_invalid",
-                message="Analysis report project scope is invalid.",
-            )
-        adapter_output = build_adapter_output_contract(
-            build_share_summary(report),
-            AdapterMetadata(
-                adapter=integration,
-                format="workflow_decision",
-                project_id=project_id,
+                code="policy_adapter_settings_integrity_error",
+                message="Stored policy adapter settings failed integrity validation.",
+            ) from exc
+        except ValueError as exc:
+            raise ApiError(
+                status_code=400,
+                code="invalid_policy_adapter_output",
+                message=str(exc),
+            ) from exc
+        return PolicyAdapterOutputResponse(
+            data=policy_output,
+            meta=build_report_meta(
+                id=report_id,
+                report_schema_version=normalize_report_schema_version(
+                    report.get("report_schema_version")
+                ),
             ),
         )
-        policy_output = build_configured_policy_adapter_output(adapter_output)
-    except PermissionError as exc:
-        _raise_authorization_error(exc)
-    except PolicyAdapterSettingsIntegrityError as exc:
-        raise ApiError(
-            status_code=500,
-            code="policy_adapter_settings_integrity_error",
-            message="Stored policy adapter settings failed integrity validation.",
-        ) from exc
-    except ValueError as exc:
-        raise ApiError(
-            status_code=400,
-            code="invalid_policy_adapter_output",
-            message=str(exc),
-        ) from exc
-    return PolicyAdapterOutputResponse(
-        data=policy_output,
-        meta=build_report_meta(
-            id=report_id,
-            report_schema_version=normalize_report_schema_version(
-                report.get("report_schema_version")
-            ),
-        ),
-    )
 
 
 @router.get(
@@ -1030,60 +1060,62 @@ def get_integration_enforcement_decision(
     authorization: dict[str, object] = Depends(_authorization_context),
 ) -> IntegrationEnforcementDecisionResponse:
     """Return the auditable, integration-capped decision for one report."""
-    try:
-        normalized_integration = normalize_policy_integration_label(integration)
-    except ValueError as exc:
-        raise ApiError(
-            status_code=400,
-            code="invalid_integration_identifier",
-            message="Integration identifier is invalid.",
-        ) from exc
-    try:
-        report = _fetch_report_for_authorized_read(
-            authorization=authorization,
-            report_id=report_id,
-        )
-        project = report.get("project") or {}
-        project_id = project.get("id")
-        if not isinstance(project_id, int):
+    with authorized_session():
+        try:
+            normalized_integration = normalize_policy_integration_label(integration)
+        except ValueError as exc:
+            raise ApiError(
+                status_code=400,
+                code="invalid_integration_identifier",
+                message="Integration identifier is invalid.",
+            ) from exc
+        try:
+            report = _fetch_report_for_authorized_read(
+                authorization=authorization,
+                report_id=report_id,
+            )
+            project = report.get("project") or {}
+            project_id = project.get("id")
+            if not isinstance(project_id, int):
+                raise ApiError(
+                    status_code=500,
+                    code="analysis_project_scope_invalid",
+                    message="Analysis report project scope is invalid.",
+                )
+            decision = build_integration_enforcement_decision(
+                build_adapter_output_contract(
+                    build_share_summary(report),
+                    AdapterMetadata(
+                        adapter=normalized_integration,
+                        format="workflow_decision",
+                        project_id=project_id,
+                    ),
+                ),
+                workspace_id=(report.get("workspace") or {}).get("id"),
+            )
+        except PermissionError as exc:
+            _raise_authorization_error(exc)
+        except PolicyAdapterSettingsIntegrityError as exc:
             raise ApiError(
                 status_code=500,
-                code="analysis_project_scope_invalid",
-                message="Analysis report project scope is invalid.",
-            )
-        decision = build_integration_enforcement_decision(
-            build_adapter_output_contract(
-                build_share_summary(report),
-                AdapterMetadata(
-                    adapter=normalized_integration,
-                    format="workflow_decision",
-                    project_id=project_id,
+                code="policy_adapter_settings_integrity_error",
+                message="Stored policy adapter settings failed integrity validation.",
+            ) from exc
+        except ValueError as exc:
+            raise ApiError(
+                status_code=500,
+                code="integration_enforcement_decision_invalid",
+                message="Integration enforcement decision could not be validated.",
+            ) from exc
+        return IntegrationEnforcementDecisionResponse(
+            data=decision,
+            meta=build_report_meta(
+                id=report_id,
+                report_schema_version=normalize_report_schema_version(
+                    report.get("report_schema_version")
                 ),
-            )
-        )
-    except PermissionError as exc:
-        _raise_authorization_error(exc)
-    except PolicyAdapterSettingsIntegrityError as exc:
-        raise ApiError(
-            status_code=500,
-            code="policy_adapter_settings_integrity_error",
-            message="Stored policy adapter settings failed integrity validation.",
-        ) from exc
-    except ValueError as exc:
-        raise ApiError(
-            status_code=500,
-            code="integration_enforcement_decision_invalid",
-            message="Integration enforcement decision could not be validated.",
-        ) from exc
-    return IntegrationEnforcementDecisionResponse(
-        data=decision,
-        meta=build_report_meta(
-            id=report_id,
-            report_schema_version=normalize_report_schema_version(
-                report.get("report_schema_version")
             ),
-        ),
-    )
+        )
 
 
 @router.get(
@@ -1098,6 +1130,7 @@ def get_integration_enforcement_decision(
         500: {"model": ErrorResponse},
     },
 )
+@_authorized_report_request
 def get_analysis(
     report_id: int,
     project_id: int | None = Query(default=None),
@@ -1185,6 +1218,7 @@ def get_analysis(
         500: {"model": ErrorResponse},
     },
 )
+@_authorized_report_request
 def get_shared_analysis(
     report_id: int,
     request: Request,
@@ -1245,6 +1279,7 @@ def get_shared_analysis(
         500: {"model": ErrorResponse},
     },
 )
+@_authorized_report_request
 def unlock_shared_analysis(
     report_id: int,
     payload: SharedReportUnlockRequest,
@@ -1304,6 +1339,7 @@ def unlock_shared_analysis(
         500: {"model": ErrorResponse},
     },
 )
+@_authorized_report_request
 def create_finding_feedback(
     report_id: int,
     finding_id: str,
@@ -1366,6 +1402,7 @@ def create_finding_feedback(
         500: {"model": ErrorResponse},
     },
 )
+@_authorized_report_request
 def configure_analysis_share(
     report_id: int,
     payload: AnalysisShareConfigRequest,

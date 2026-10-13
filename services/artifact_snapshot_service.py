@@ -11,6 +11,12 @@ from typing import Iterable
 from pydantic import BaseModel, Field
 
 from config import settings
+from models.database import SessionLocal
+from services.project_service import (
+    authorized_session,
+    guard_report,
+    TrustedAuthorizationError,
+)
 from services.content_security import (
     BLOCKED_CONTENT,
     redact_text,
@@ -79,73 +85,93 @@ def save_report_artifacts(
     sensitive_values: Iterable[str] = (),
 ) -> None:
     """Persist uploaded artifact snapshots for one report."""
-    if not artifact_snapshots:
-        return
-    if not any(content is not None for content in artifact_snapshots.values()):
-        return
-    report_dir = _report_dir(report_id, create=True)
-    report_dir.mkdir(parents=True, exist_ok=True)
-    manifest: dict[str, str] = {}
-    sensitive_values = tuple(sensitive_values)
-    for artifact_name, raw_content in artifact_snapshots.items():
-        if raw_content is None or is_sensitive_file(artifact_name):
-            continue
-        stored_name = _stored_name(artifact_name)
-        decoded_content = raw_content.decode("utf-8", errors="replace")
-        content = (
-            BLOCKED_CONTENT.encode("utf-8")
-            if sensitive_artifact_values(raw_content)
-            or redact_text(decoded_content, sensitive_values=sensitive_values)
-            != decoded_content
-            else raw_content
+    if type(report_id) is not int or report_id < 1:
+        raise ValueError("Artifact snapshots require a positive integer report ID.")
+    with authorized_session(SessionLocal) as session:
+        if guard_report(session, report_id, "analysis.submit", mutation=True) is None:
+            raise TrustedAuthorizationError()
+        if not artifact_snapshots:
+            return
+        if not any(content is not None for content in artifact_snapshots.values()):
+            return
+        report_dir = _report_dir(report_id, create=True)
+        report_dir.mkdir(parents=True, exist_ok=True)
+        manifest: dict[str, str] = {}
+        sensitive_values = tuple(sensitive_values)
+        for artifact_name, raw_content in artifact_snapshots.items():
+            if raw_content is None or is_sensitive_file(artifact_name):
+                continue
+            stored_name = _stored_name(artifact_name)
+            decoded_content = raw_content.decode("utf-8", errors="replace")
+            content = (
+                BLOCKED_CONTENT.encode("utf-8")
+                if sensitive_artifact_values(raw_content)
+                or redact_text(decoded_content, sensitive_values=sensitive_values)
+                != decoded_content
+                else raw_content
+            )
+            _snapshot_path(report_dir, stored_name).write_bytes(content)
+            manifest[artifact_name] = stored_name
+        _manifest_path(report_id).write_text(
+            json.dumps(manifest, indent=2, sort_keys=True),
+            encoding="utf-8",
         )
-        _snapshot_path(report_dir, stored_name).write_bytes(content)
-        manifest[artifact_name] = stored_name
-    _manifest_path(report_id).write_text(
-        json.dumps(manifest, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
 
 
 def load_report_artifact(report_id: int, artifact_name: str) -> ArtifactSnapshot | None:
     """Return one decoded artifact snapshot when available."""
-    report_dir = _report_dir(report_id, create=False)
-    try:
-        manifest_path = _snapshot_path(report_dir, "manifest.json")
-    except ValueError:
-        return None
-    if not manifest_path.exists():
-        return None
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if not isinstance(manifest, dict):
-        return None
-    stored_name = manifest.get(artifact_name)
-    if not stored_name:
-        return None
-    try:
-        artifact_path = _snapshot_path(report_dir, stored_name)
-    except ValueError:
-        return None
-    if not artifact_path.exists():
-        return None
-    raw_content = artifact_path.read_bytes()
-    sensitive_values = sensitive_artifact_values(raw_content)
-    decoded_content = raw_content.decode("utf-8", errors="replace")
-    return ArtifactSnapshot(
-        report_id=report_id,
-        artifact_name=redact_text(artifact_name, sensitive_values=sensitive_values),
-        content=(
-            BLOCKED_CONTENT
-            if is_sensitive_file(artifact_name)
-            or sensitive_values
-            or redact_text(decoded_content) != decoded_content
-            else decoded_content
-        ),
-    )
+    if type(report_id) is not int or report_id < 1:
+        raise ValueError("Artifact snapshots require a positive integer report ID.")
+    with authorized_session(SessionLocal) as session:
+        if guard_report(session, report_id, "report.read") is None:
+            raise TrustedAuthorizationError()
+        report_dir = _report_dir(report_id, create=False)
+        try:
+            manifest_path = _snapshot_path(report_dir, "manifest.json")
+        except ValueError:
+            return None
+        if not manifest_path.exists():
+            return None
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict):
+            return None
+        stored_name = manifest.get(artifact_name)
+        if not stored_name:
+            return None
+        try:
+            artifact_path = _snapshot_path(report_dir, stored_name)
+        except ValueError:
+            return None
+        if not artifact_path.exists():
+            return None
+        raw_content = artifact_path.read_bytes()
+        sensitive_values = sensitive_artifact_values(raw_content)
+        decoded_content = raw_content.decode("utf-8", errors="replace")
+        return ArtifactSnapshot(
+            report_id=report_id,
+            artifact_name=redact_text(artifact_name, sensitive_values=sensitive_values),
+            content=(
+                BLOCKED_CONTENT
+                if is_sensitive_file(artifact_name)
+                or sensitive_values
+                or redact_text(decoded_content) != decoded_content
+                else decoded_content
+            ),
+        )
 
 
-def delete_report_artifacts(report_id: int) -> None:
+def _delete_report_artifacts_after_authorization(report_id: int) -> None:
     """Remove local artifact snapshots for one report."""
     report_dir = _report_dir(report_id, create=False)
     if report_dir.exists():
         shutil.rmtree(report_dir)
+
+
+def delete_report_artifacts(report_id: int) -> None:
+    """Remove snapshots only while their live report authorizes mutation."""
+    if type(report_id) is not int or report_id < 1:
+        raise ValueError("Artifact snapshots require a positive integer report ID.")
+    with authorized_session(SessionLocal) as session:
+        if guard_report(session, report_id, "report.review", mutation=True) is None:
+            raise TrustedAuthorizationError()
+        _delete_report_artifacts_after_authorization(report_id)

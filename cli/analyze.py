@@ -331,7 +331,10 @@ def _load_artifacts(paths: list[str]) -> list[tuple[str, bytes]]:
 
 
 def _run_skills() -> int:
-    statuses = skill_context_module.get_custom_skill_statuses()
+    try:
+        statuses = skill_context_module.get_custom_skill_statuses()
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     if not statuses:
         print("No custom skills detected.")
         return 0
@@ -424,6 +427,8 @@ def _run_skill_test(skill_ids: list[str], *, emit_json: bool = False) -> int:
 def _run_skill_install(skill_id: str) -> int:
     try:
         result = install_skill(skill_id)
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     except SkillInstallerError as exc:
         sys.stderr.write(f"{exc.message}\n")
         return 2
@@ -435,7 +440,10 @@ def _run_skill_install(skill_id: str) -> int:
 
 
 def _run_skill_list() -> int:
-    installed = list_installed_skills()
+    try:
+        installed = list_installed_skills()
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     if not installed:
         print("No installed custom skills found.")
         return 0
@@ -490,6 +498,8 @@ def _run_skill_catalog_list() -> int:
 def _run_skill_update(skill_id: str) -> int:
     try:
         result = update_skill(skill_id)
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     except SkillInstallerError as exc:
         sys.stderr.write(f"{exc.message}\n")
         return 2
@@ -510,6 +520,8 @@ def _run_skill_update(skill_id: str) -> int:
 def _run_skill_remove(skill_id: str) -> int:
     try:
         result = remove_skill(skill_id)
+    except PermissionError as exc:
+        return _emit_project_authorization_error(exc)
     except SkillInstallerError as exc:
         sys.stderr.write(f"{exc.message}\n")
         return 2

@@ -12,11 +12,43 @@ from unittest.mock import patch
 from urllib.parse import quote
 
 import services.topology_service as topology
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+from models.database import Base
+from models.tables import Project, TopologyVersion
+from services import project_service
+import config
 
 SECRET = "synthetic-topology-secret-731"
 
 
 class TopologyCredentialTests(unittest.TestCase):
+    def setUp(self):
+        self.engine = create_engine("sqlite://")
+        Base.metadata.create_all(self.engine)
+        self.factory = sessionmaker(self.engine, expire_on_commit=False)
+        with self.factory.begin() as session:
+            session.add(
+                Project(id=1, project_key="synthetic", display_name="Synthetic")
+            )
+        for module in (topology, project_service):
+            patcher = patch.object(module, "SessionLocal", self.factory)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        profile = patch.object(
+            config,
+            "settings",
+            SimpleNamespace(
+                **{
+                    **vars(config.settings),
+                    "authorization_profile": "legacy-evaluation",
+                }
+            ),
+        )
+        profile.start()
+        self.addCleanup(profile.stop)
+        self.addCleanup(self.engine.dispose)
+
     def test_manual_topology_discovers_credentials_before_projection(self):
         secret = "manual-review/value!"
         encoded = secret
@@ -220,17 +252,15 @@ class TopologyCredentialTests(unittest.TestCase):
                     warnings=result.warnings,
                 )
                 self.assertNotIn(SECRET, public_result.model_dump_json())
-                with patch.object(topology, "SessionLocal") as factory:
+                with self.factory() as session:
                     topology._persist_topology_payload(
                         payload,
                         project={"id": 1, "project_key": "synthetic"},
                         workspace=None,
                         source_type="terraform",
                     )
-                    row = (
-                        factory.return_value.__enter__.return_value.add.call_args.args[
-                            0
-                        ]
+                    row = session.scalar(
+                        select(TopologyVersion).order_by(TopologyVersion.id.desc())
                     )
                     self.assertNotIn(SECRET, row.payload_json)
 
@@ -294,12 +324,14 @@ class TopologyCredentialTests(unittest.TestCase):
             path = Path(directory) / "synthetic-topology.json"
             with (
                 patch.object(topology, "_topology_path", return_value=path),
-                patch.object(topology, "SessionLocal") as factory,
+                self.factory() as session,
             ):
                 status = topology._persist_topology_payload(
                     payload, project=project, workspace=None, source_type="manual"
                 )
-                row = factory.return_value.__enter__.return_value.add.call_args.args[0]
+                row = session.scalar(
+                    select(TopologyVersion).order_by(TopologyVersion.id.desc())
+                )
                 self.assertNotIn(SECRET, row.payload_json)
                 self.assertNotIn(SECRET, path.read_text())
         self.assertNotIn(SECRET, status.model_dump_json())
@@ -312,7 +344,6 @@ class TopologyCredentialTests(unittest.TestCase):
             "warnings": [f"Bearer {SECRET}"],
         }
         with (
-            patch.object(topology, "SessionLocal"),
             patch.object(
                 topology,
                 "get_setting",

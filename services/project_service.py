@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy import exists, false, func, or_, select, true
 from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.orm import Session, aliased
+
+import config
 
 from models.database import SessionLocal, init_db
 from models.repositories.projects import (
@@ -20,9 +30,19 @@ from models.repositories.projects import (
     get_workspace,
     get_workspace_by_key,
     list_projects as list_project_records,
-    list_workspaces as list_workspace_records,
 )
 from models.repositories.settings import delete_setting, get_setting, upsert_setting
+from models.repositories import project_memberships as membership_repository
+from models.repositories.identity import revoke_sessions
+from models.tables import (
+    AnalysisReport,
+    IdentityAccount,
+    Project,
+    ProjectAuthorizationAudit,
+    ProjectMembership,
+    ProjectWorkspace,
+)
+from services.identity_service import IdentityError, IdentityService, VerifiedPrincipal
 
 DEFAULT_PROJECT_KEY = "unassigned"
 DEFAULT_PROJECT_NAME = "Unassigned"
@@ -149,6 +169,18 @@ PROJECT_ROLE_CAPABILITIES: dict[str, tuple[str, ...]] = {
         "topology.read",
     ),
 }
+
+_AUTOMATION_CAPABILITIES = {
+    "admin": ("read", "request", "draft", "publish", "decision", "cancel", "admin"),
+    "maintainer": ("read", "request", "draft", "decision", "cancel"),
+    "reviewer": ("read", "decision"),
+    "contributor": ("read", "request", "cancel"),
+    "read-only": ("read",),
+}
+for _role, _actions in _AUTOMATION_CAPABILITIES.items():
+    PROJECT_ROLE_CAPABILITIES[_role] += tuple(
+        f"automation.{action}" for action in _actions
+    )
 
 PROJECT_ROLE_DESCRIPTIONS: dict[str, tuple[str, str]] = {
     "admin": (
@@ -279,7 +311,10 @@ def authorize_project_action(
             capability=capability,
         )
 
-    if capability not in PROJECT_ROLE_CAPABILITIES[normalized_role]:
+    if (
+        capability.startswith("automation.")
+        or capability not in PROJECT_ROLE_CAPABILITIES[normalized_role]
+    ):
         return ProjectAuthorizationResult(
             allowed=False,
             code="project_permission_denied",
@@ -529,7 +564,7 @@ def display_name_from_repository(repository_name: str) -> str:
 
 def ensure_default_project() -> ProjectRecord:
     try:
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             default_project = get_default_project(session)
             if default_project is None:
                 default_project = create_project_record(
@@ -538,13 +573,16 @@ def ensure_default_project() -> ProjectRecord:
                     display_name=DEFAULT_PROJECT_NAME,
                     description="Legacy and unassigned analyses.",
                     is_default=True,
+                    commit=False,
                 )
             return _serialize(default_project)
     except OperationalError as exc:
         if "no such table: projects" not in str(exc).lower():
             raise
+        if _operation_session.get() is not None:
+            raise
         init_db()
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             default_project = get_default_project(session)
             if default_project is None:
                 default_project = create_project_record(
@@ -553,6 +591,7 @@ def ensure_default_project() -> ProjectRecord:
                     display_name=DEFAULT_PROJECT_NAME,
                     description="Legacy and unassigned analyses.",
                     is_default=True,
+                    commit=False,
                 )
             return _serialize(default_project)
 
@@ -569,9 +608,14 @@ def create_project(
     normalized_display_name = str(display_name or "").strip()
     if not normalized_display_name:
         raise ValueError("Display name is required.")
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
+        if _profile() == "verified":
+            principal = _verified_principal(session, mutation=True)
+            if not principal.is_admin:
+                raise TrustedAuthorizationError()
         existing = get_project_by_key(session, normalized_key)
         if existing is not None:
+            _guard_project_metadata(session, existing)
             raise ValueError(f"Project key already exists: {normalized_key}")
         try:
             created = create_project_record(
@@ -582,6 +626,7 @@ def create_project(
                 repository_url=(repository_url or None),
                 default_branch=(default_branch or None),
                 is_default=False,
+                commit=False,
             )
         except IntegrityError as exc:
             session.rollback()
@@ -604,13 +649,15 @@ def create_workspace(
     normalized_display_name = str(display_name or "").strip()
     if not normalized_display_name:
         raise ValueError("Display name is required.")
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         project = get_project_by_key(session, normalized_project_key)
         if project is None:
+            _mask_missing_scope(session)
             raise ProjectResolutionError(
                 "project_not_found",
                 f"Unknown project reference: project_key={normalized_project_key}.",
             )
+        guard_project(session, project.id, capability="workspace.manage", mutation=True)
         existing = get_workspace_by_key(
             session,
             project_id=project.id,
@@ -629,6 +676,7 @@ def create_workspace(
                 display_name=normalized_display_name,
                 description=(description or None),
                 environment=(environment or None),
+                commit=False,
             )
         except IntegrityError as exc:
             session.rollback()
@@ -649,8 +697,15 @@ def create_workspace(
 
 def list_projects() -> list[ProjectRecord]:
     ensure_default_project()
-    with SessionLocal() as session:
-        return [_serialize(record) for record in list_project_records(session)]
+    with authorized_session(SessionLocal) as session:
+        return [
+            _serialize(record)
+            for record in session.scalars(
+                select(Project)
+                .where(visible_project_predicate(session))
+                .order_by(Project.is_default.desc(), Project.project_key.asc())
+            )
+        ]
 
 
 def list_workspaces(*, project_key: str | None = None) -> list[WorkspaceRecord]:
@@ -658,28 +713,44 @@ def list_workspaces(*, project_key: str | None = None) -> list[WorkspaceRecord]:
         normalized_project_key = ensure_default_project().project_key
     else:
         normalized_project_key = normalize_project_key(project_key)
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         project = get_project_by_key(session, normalized_project_key)
         if project is None:
+            _mask_missing_scope(session)
             raise ProjectResolutionError(
                 "project_not_found",
                 f"Unknown project reference: project_key={normalized_project_key}.",
             )
+        _guard_project_metadata(session, project)
         return [
             _serialize_workspace(record)
-            for record in list_workspace_records(session, project_id=project.id)
+            for record in session.scalars(
+                select(ProjectWorkspace)
+                .where(
+                    ProjectWorkspace.project_id == project.id,
+                    visible_context_predicate(
+                        session,
+                        ProjectWorkspace.project_id,
+                        ProjectWorkspace.id,
+                        "workspace.read",
+                    ),
+                )
+                .order_by(ProjectWorkspace.workspace_key)
+            )
         ]
 
 
 def get_project_by_id(project_id: int) -> ProjectRecord | None:
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         record = get_project(session, project_id)
+        _guard_project_metadata(session, record)
         return _serialize(record) if record is not None else None
 
 
 def get_project_by_project_key(project_key: str) -> ProjectRecord | None:
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         record = get_project_by_key(session, normalize_project_key(project_key))
+        _guard_project_metadata(session, record)
         return _serialize(record) if record is not None else None
 
 
@@ -702,7 +773,7 @@ def resolve_project_reference(
     derived_key = (
         derive_project_key_from_repository(repository_name) if repository_name else None
     )
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         record_by_id = (
             get_project(session, project_id) if project_id is not None else None
         )
@@ -711,7 +782,11 @@ def resolve_project_reference(
             if normalized_key is not None
             else None
         )
+        for candidate in (record_by_id, record_by_key):
+            if candidate is not None:
+                _guard_project_metadata(session, candidate)
         if project_id is not None and record_by_id is None:
+            _mask_missing_scope(session)
             detail = (
                 f"project_id={project_id}, project_key={normalized_key}"
                 if normalized_key is not None
@@ -752,11 +827,16 @@ def resolve_project_reference(
                     record = get_project_by_key(session, derived_key)
 
         if record is None and allow_create:
+            if _profile() != "legacy-evaluation":
+                principal = _verified_principal(session, mutation=True)
+                if not principal.is_admin:
+                    raise TrustedAuthorizationError()
             if normalized_key is not None:
                 record = create_project_record(
                     session,
                     project_key=normalized_key,
                     display_name=_display_name_from_key(normalized_key),
+                    commit=False,
                 )
             elif derived_key is not None:
                 record = create_project_record(
@@ -766,8 +846,10 @@ def resolve_project_reference(
                         repository_name or derived_key
                     ),
                     repository_url=_repository_storage_value(repository_name),
+                    commit=False,
                 )
         elif record is None and (project_id is not None or normalized_key is not None):
+            _mask_missing_scope(session)
             detail = (
                 f"project_id={project_id}"
                 if project_id is not None and normalized_key is None
@@ -784,6 +866,7 @@ def resolve_project_reference(
             if default_record is None:
                 raise RuntimeError("Default project could not be resolved.")
             record = default_record
+        _guard_project_metadata(session, record)
         return _serialize(record)
 
 
@@ -825,7 +908,7 @@ def resolve_workspace_reference(
         if cleaned_workspace_key
         else None
     )
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         record_by_id = (
             get_workspace(session, workspace_id) if workspace_id is not None else None
         )
@@ -838,7 +921,13 @@ def resolve_workspace_reference(
             if resolved_project is not None and normalized_workspace_key is not None
             else None
         )
+        for candidate in (record_by_id, record_by_key):
+            if candidate is not None:
+                guard_project(
+                    session, candidate.project_id, candidate.id, "workspace.read"
+                )
         if workspace_id is not None and record_by_id is None:
+            _mask_missing_scope(session)
             raise ProjectResolutionError(
                 "workspace_not_found",
                 f"Unknown workspace reference: workspace_id={workspace_id}.",
@@ -848,6 +937,7 @@ def resolve_workspace_reference(
             and resolved_project is not None
             and record_by_key is None
         ):
+            _mask_missing_scope(session)
             raise ProjectResolutionError(
                 "workspace_not_found",
                 (
@@ -881,37 +971,50 @@ def resolve_workspace_reference(
 
 
 def set_active_project(project_id: int) -> ProjectRecord:
-    project = resolve_project_reference(project_id=project_id)
-    with SessionLocal() as session:
-        upsert_setting(session, key=ACTIVE_PROJECT_SETTING_KEY, value=str(project.id))
+    with authorized_session(SessionLocal) as session:
+        project = resolve_project_reference(project_id=project_id)
+        guard_global_configuration(session, mutation=True)
+        upsert_setting(
+            session, key=ACTIVE_PROJECT_SETTING_KEY, value=str(project.id), commit=False
+        )
     return project
 
 
 def clear_active_project_selection() -> None:
     """Clear the saved active-project selection for UI surfaces."""
-    with SessionLocal() as session:
-        delete_setting(session, ACTIVE_PROJECT_SETTING_KEY)
+    with authorized_session(SessionLocal) as session:
+        guard_global_configuration(session, mutation=True)
+        delete_setting(session, ACTIVE_PROJECT_SETTING_KEY, commit=False)
 
 
 def get_active_project() -> ProjectRecord | None:
     ensure_default_project()
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         setting = get_setting(session, ACTIVE_PROJECT_SETTING_KEY)
         if setting is None:
-            return _serialize(get_default_project(session))
+            record = get_default_project(session)
+            try:
+                _guard_project_metadata(session, record)
+            except TrustedAuthorizationError:
+                return None
+            return _serialize(record)
         try:
             project_id = int(setting.value)
         except (TypeError, ValueError):
             project_id = 0
         record = get_project(session, project_id)
         if record is None:
-            return _serialize(get_default_project(session))
+            record = get_default_project(session)
+        try:
+            _guard_project_metadata(session, record)
+        except TrustedAuthorizationError:
+            return None
         return _serialize(record)
 
 
 def has_active_project_selection() -> bool:
     ensure_default_project()
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         setting = get_setting(session, ACTIVE_PROJECT_SETTING_KEY)
         if setting is None:
             return False
@@ -919,7 +1022,12 @@ def has_active_project_selection() -> bool:
             project_id = int(setting.value)
         except (TypeError, ValueError):
             return False
-        return get_project(session, project_id) is not None
+        record = get_project(session, project_id)
+        try:
+            _guard_project_metadata(session, record)
+        except TrustedAuthorizationError:
+            return False
+        return record is not None
 
 
 def build_project_payload(project: ProjectRecord | dict[str, Any]) -> dict[str, Any]:
@@ -934,3 +1042,672 @@ def build_workspace_payload(
     if isinstance(workspace, WorkspaceRecord):
         return workspace.model_dump()
     return dict(workspace)
+
+
+class TrustedAuthorizationError(PermissionError):
+    """Uniform denial with no principal, object or scope existence details."""
+
+    code = "operation_unavailable"
+    message = "Operation unavailable."
+    status_code = 403
+
+    def __init__(self):
+        super().__init__(self.message)
+
+
+@dataclass(frozen=True, repr=False)
+class _CredentialContext:
+    service: IdentityService
+    token: str
+    csrf_token: str | None
+    mutation: bool
+    transport_check: Callable[[], None] | None
+
+
+@dataclass(frozen=True)
+class TrustedProjectScope:
+    principal: VerifiedPrincipal
+    project_id: int
+    workspace_id: int | None
+    role: str
+    authorization_version: int
+
+
+class MembershipView(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+    principal_id: str
+    project_id: int
+    workspace_id: int | None
+    role: str
+    enabled: bool
+    authorization_version: int
+
+
+@dataclass(frozen=True)
+class DecisionContext:
+    """Server-owned seeded integration port; never construct from HTTP claims."""
+
+    project_id: int
+    workspace_id: int | None
+    report_id: int
+    requester_principal_id: str
+    object_id: str
+
+
+_credentials: ContextVar[_CredentialContext | None] = ContextVar(
+    "project_credentials", default=None
+)
+_operation_session: ContextVar[Session | None] = ContextVar(
+    "project_operation_session", default=None
+)
+_operation_transaction: ContextVar[object | None] = ContextVar(
+    "project_operation_transaction", default=None
+)
+
+
+@contextmanager
+def credential_context(
+    service: IdentityService,
+    token: str,
+    *,
+    csrf_token: str | None = None,
+    mutation: bool = False,
+    transport_check: Callable[[], None] | None = None,
+) -> Iterator[None]:
+    """Bind credentials only; every protected operation re-resolves authority."""
+    context_token = _credentials.set(
+        _CredentialContext(service, token, csrf_token, mutation, transport_check)
+    )
+    try:
+        yield
+    finally:
+        _credentials.reset(context_token)
+
+
+def has_authorized_session() -> bool:
+    """Whether this caller already owns an authorization transaction."""
+    return _operation_session.get() is not None
+
+
+@contextmanager
+def authorized_session(session_factory=None) -> Iterator[Session]:
+    """Reserve SQLite before any object/authority read; nested services reuse it.
+
+    Repositories called inside this boundary must flush, never commit. Only the
+    outermost operation owns commit/rollback and materializes its response.
+    """
+    active = _operation_session.get()
+    if active is not None:
+        _require_operation(active)
+        yield active
+        return
+    credentials = _credentials.get()
+    factory = session_factory or (
+        credentials.service.session_factory if credentials else SessionLocal
+    )
+    commit_callbacks: list[Callable[[Callable[[], Session]], None]] = []
+    with factory() as session:
+        if session.get_bind().dialect.name != "sqlite":
+            raise TrustedAuthorizationError()
+        context_token = _operation_session.set(session)
+        rollback_callbacks = ExitStack()
+        session.info["project_operation_rollback"] = rollback_callbacks
+        session.info["project_operation_commit"] = commit_callbacks
+        transaction_token = None
+        connection = None
+        try:
+            connection = session.connection().connection.driver_connection
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            transaction_token = _operation_transaction.set(session.get_transaction())
+            yield session
+            _require_operation(session)
+            session.commit()
+        except BaseException:
+            # Compensate filesystem writes while SQLite still reserves the
+            # report IDs. Cleanup after rollback could erase a newer writer's
+            # artifacts when SQLite reuses an uncommitted integer primary key.
+            try:
+                if connection is not None and connection.in_transaction:
+                    rollback_callbacks.close()
+            finally:
+                session.rollback()
+            raise
+        finally:
+            session.info.pop("project_operation_rollback", None)
+            session.info.pop("project_operation_commit", None)
+            if transaction_token is not None:
+                _operation_transaction.reset(transaction_token)
+            _operation_session.reset(context_token)
+    # The original transaction has committed and its context is gone. Deferred
+    # filesystem cleanup must reserve a fresh transaction from this same factory
+    # before deciding whether an ID is still absent or has been reused.
+    for callback in commit_callbacks:
+        try:
+            callback(factory)
+        except Exception:
+            # Database deletion already succeeded. An orphan is safer than
+            # claiming rollback or retrying cleanup without the reservation.
+            logging.getLogger(__name__).warning(
+                "Deferred operation cleanup failed; retained artifacts may remain."
+            )
+
+
+def register_operation_rollback(session: Session, callback: Callable[[], None]) -> None:
+    """Compensate an authorized side effect if the outer operation cannot commit."""
+    _require_operation(session)
+    session.info["project_operation_rollback"].callback(callback)
+
+
+def register_operation_commit(
+    session: Session, callback: Callable[[Callable[[], Session]], None]
+) -> None:
+    """Run cleanup after the outer commit, passing its captured session factory."""
+    _require_operation(session)
+    session.info["project_operation_commit"].append(callback)
+
+
+def _require_operation(session: Session) -> None:
+    if (
+        _operation_session.get() is not session
+        or not session.in_transaction()
+        or session.get_transaction() is not _operation_transaction.get()
+    ):
+        raise TrustedAuthorizationError()
+
+
+def _profile() -> str:
+    profile = getattr(config.settings, "authorization_profile", "legacy-evaluation")
+    if profile not in {"legacy-evaluation", "verified"}:
+        raise TrustedAuthorizationError()
+    return profile
+
+
+def _verified_principal(
+    session: Session, *, mutation: bool = False
+) -> VerifiedPrincipal:
+    _require_operation(session)
+    context = _credentials.get()
+    if context is None or (mutation and not context.mutation):
+        raise TrustedAuthorizationError()
+    if context.transport_check is not None:
+        context.transport_check()
+    try:
+        return context.service.resolve_session_in_transaction(
+            session,
+            context.token,
+            csrf_token=(context.csrf_token or "")
+            if context.mutation or mutation
+            else None,
+        )
+    except IdentityError:
+        raise TrustedAuthorizationError() from None
+
+
+def _protected_project_predicate(project_id):
+    marked_report = aliased(AnalysisReport)
+    protected_project = aliased(Project)
+    return or_(
+        exists(
+            select(protected_project.id).where(
+                protected_project.id == project_id,
+                protected_project.authorization_required.is_(True),
+            )
+        ),
+        exists(
+            select(marked_report.id).where(
+                marked_report.project_id == project_id,
+                marked_report.authorization_required.is_(True),
+            )
+        ),
+    )
+
+
+def _is_protected(session: Session, project_id: int) -> bool:
+    return _profile() == "verified" or bool(
+        session.scalar(select(_protected_project_predicate(project_id)))
+    )
+
+
+def project_requires_authorization(session: Session, project_id: int) -> bool:
+    """Resolve protection from live server state, including marked child reports."""
+    _require_operation(session)
+    return _is_protected(session, project_id)
+
+
+def legacy_request_has_identity() -> bool:
+    """Whether credentials were supplied, never proof they are valid authority."""
+    context = _credentials.get()
+    return context is not None and bool(context.token)
+
+
+def trusted_capability_allowed(
+    principal: VerifiedPrincipal, role: str, capability: str
+) -> bool:
+    """Pure policy for already verified principals; does not authenticate claims.
+
+    Service/agent audience issuance belongs to 16.17. Its synthetic qualification
+    port is restricted to read/request and cannot enter the human HTTP resolver.
+    """
+    if not principal.enabled or capability not in PROJECT_ROLE_CAPABILITIES.get(
+        role, ()
+    ):
+        return False
+    if principal.principal_type == "human":
+        return principal.credential_audience == "human"
+    return (
+        principal.principal_type in {"service", "agent"}
+        and principal.credential_audience == "service-request-v1"
+        and capability in {"automation.read", "automation.request"}
+    )
+
+
+def guard_project(
+    session: Session,
+    project_id: int,
+    workspace_id: int | None = None,
+    capability: str = "report.read",
+    expected_version: int | None = None,
+    owner_id: str | None = None,
+    *,
+    mutation: bool | None = None,
+) -> TrustedProjectScope | None:
+    _require_operation(session)
+    project = session.get(Project, project_id)
+    workspace = (
+        session.get(ProjectWorkspace, workspace_id)
+        if workspace_id is not None
+        else None
+    )
+    if project is None or (
+        workspace_id is not None
+        and (workspace is None or workspace.project_id != project_id)
+    ):
+        raise TrustedAuthorizationError()
+    if (
+        not _is_protected(session, project_id)
+        and not capability.startswith("automation.")
+        and capability != "role.manage"
+    ):
+        return None
+    principal = _verified_principal(
+        session,
+        mutation=mutation
+        if mutation is not None
+        else capability
+        not in {
+            "project.read",
+            "workspace.read",
+            "report.read",
+            "report.review",
+            "outcome.read",
+            "topology.read",
+            "automation.read",
+            "role.manage",
+        },
+    )
+    member = membership_repository.get_membership(
+        session, principal_id=principal.principal_id, project_id=project_id
+    )
+    if (
+        member is None
+        or not member.enabled
+        or (member.workspace_id is not None and member.workspace_id != workspace_id)
+        or (
+            expected_version is not None
+            and member.authorization_version != expected_version
+        )
+        or not trusted_capability_allowed(principal, member.role, capability)
+        or (
+            capability == "automation.cancel"
+            and member.role != "admin"
+            and owner_id != principal.principal_id
+        )
+    ):
+        raise TrustedAuthorizationError()
+    return TrustedProjectScope(
+        principal,
+        project_id,
+        member.workspace_id,
+        member.role,
+        member.authorization_version,
+    )
+
+
+def guard_report(
+    session: Session,
+    report_id: int,
+    capability: str = "report.read",
+    *,
+    mutation: bool | None = None,
+) -> AnalysisReport | None:
+    _require_operation(session)
+    report = session.get(AnalysisReport, report_id)
+    if report is None:
+        _mask_missing_scope(session)
+        return None
+    guard_project(
+        session, report.project_id, report.workspace_id, capability, mutation=mutation
+    )
+    return report
+
+
+def _visible_scope_predicate(
+    session: Session,
+    project_id,
+    workspace_id,
+    capability: str,
+    *,
+    project_metadata: bool = False,
+):
+    _require_operation(session)
+    profile = _profile()
+    legacy = (
+        ~_protected_project_predicate(project_id)
+        if profile == "legacy-evaluation" and not capability.startswith("automation.")
+        else false()
+    )
+    if _credentials.get() is None:
+        return legacy
+    try:
+        principal = _verified_principal(session)
+    except TrustedAuthorizationError:
+        return legacy
+    roles = [
+        role
+        for role in PROJECT_ROLE_CAPABILITIES
+        if trusted_capability_allowed(principal, role, capability)
+    ]
+    workspace_match = (
+        true()
+        if project_metadata
+        else or_(
+            ProjectMembership.workspace_id.is_(None),
+            ProjectMembership.workspace_id == workspace_id,
+        )
+    )
+    grant = exists(
+        select(ProjectMembership.id).where(
+            ProjectMembership.principal_id == principal.principal_id,
+            ProjectMembership.project_id == project_id,
+            ProjectMembership.enabled.is_(True),
+            ProjectMembership.role.in_(roles),
+            workspace_match,
+        )
+    )
+    return or_(legacy, grant)
+
+
+def visible_project_predicate(session: Session, capability: str = "project.read"):
+    return _visible_scope_predicate(
+        session, Project.id, None, capability, project_metadata=True
+    )
+
+
+def visible_context_predicate(
+    session: Session, project_id, workspace_id, capability: str = "report.read"
+):
+    """Filter scoped context records using the same live membership predicate."""
+    return _visible_scope_predicate(session, project_id, workspace_id, capability)
+
+
+def _mask_missing_scope(session: Session) -> None:
+    """Avoid using legacy resolution errors as a protected-object existence oracle."""
+    if (
+        _profile() == "verified"
+        or legacy_request_has_identity()
+        or session.scalar(
+            select(Project.id).where(_protected_project_predicate(Project.id)).limit(1)
+        )
+    ):
+        raise TrustedAuthorizationError()
+
+
+def _guard_project_metadata(session: Session, record: Project | None) -> None:
+    if record is None:
+        _mask_missing_scope(session)
+        return
+    if (
+        session.scalar(
+            select(Project.id).where(
+                Project.id == record.id, visible_project_predicate(session)
+            )
+        )
+        is None
+    ):
+        raise TrustedAuthorizationError()
+
+
+def guard_global_configuration(
+    session: Session, *, mutation: bool = False
+) -> VerifiedPrincipal | None:
+    """Global administration must not change protected projects through defaults."""
+    _require_operation(session)
+    profile = _profile()
+    projects = select(Project.id)
+    if profile == "legacy-evaluation":
+        projects = projects.where(_protected_project_predicate(Project.id))
+    protected_ids = list(session.scalars(projects))
+    if profile == "legacy-evaluation" and not protected_ids:
+        return None
+    principal = _verified_principal(session, mutation=mutation)
+    if not principal.is_admin:
+        raise TrustedAuthorizationError()
+    for project_id in protected_ids:
+        guard_project(
+            session, project_id, capability="settings.manage", mutation=mutation
+        )
+    return principal
+
+
+def visible_report_predicate(session: Session, capability: str = "report.read"):
+    return _visible_scope_predicate(
+        session, AnalysisReport.project_id, AnalysisReport.workspace_id, capability
+    )
+
+
+def _invalidate_principal(session: Session, account: IdentityAccount) -> None:
+    account.authentication_version += 1
+    revoke_sessions(session, account.id, datetime.now(UTC))
+
+
+def _membership_view(member: ProjectMembership) -> MembershipView:
+    return MembershipView.model_validate(member)
+
+
+def bootstrap_project_membership(project_id: int) -> MembershipView:
+    with authorized_session() as session:
+        _profile()
+        principal = _verified_principal(session, mutation=True)
+        project = session.get(Project, project_id)
+        account = session.get(IdentityAccount, principal.principal_id)
+        if (
+            not principal.is_admin
+            or project is None
+            or account is None
+            or session.scalar(
+                select(ProjectMembership.id)
+                .where(ProjectMembership.project_id == project_id)
+                .limit(1)
+            )
+            is not None
+            or session.scalar(
+                select(ProjectAuthorizationAudit.id)
+                .where(ProjectAuthorizationAudit.project_id == project_id)
+                .limit(1)
+            )
+            is not None
+        ):
+            raise TrustedAuthorizationError()
+        member = membership_repository.upsert_membership(
+            session,
+            principal_id=principal.principal_id,
+            project_id=project_id,
+            role="admin",
+        )
+        project.authorization_required = True
+        view = _membership_view(member)
+        membership_repository.append_audit(
+            session,
+            actor_principal_id=principal.principal_id,
+            project_id=project_id,
+            target_principal_id=principal.principal_id,
+            action="membership.bootstrap",
+            after=view.model_dump(),
+        )
+        _invalidate_principal(session, account)
+        return view
+
+
+def assign_project_membership(
+    project_id: int, principal_id: str, role: str, workspace_id: int | None = None
+) -> MembershipView:
+    with authorized_session() as session:
+        _verified_principal(session, mutation=True)
+        scope = guard_project(session, project_id, capability="role.manage")
+        account = session.get(IdentityAccount, principal_id)
+        project = session.get(Project, project_id)
+        workspace = (
+            session.get(ProjectWorkspace, workspace_id)
+            if workspace_id is not None
+            else None
+        )
+        if (
+            scope is None
+            or project is None
+            or scope.workspace_id is not None
+            or account is None
+            or not account.enabled
+            or role not in membership_repository.ROLES
+            or (
+                workspace_id is not None
+                and (workspace is None or workspace.project_id != project_id)
+            )
+        ):
+            raise TrustedAuthorizationError()
+        old = membership_repository.get_membership(
+            session, principal_id=principal_id, project_id=project_id
+        )
+        before = _membership_view(old).model_dump() if old else {}
+        member = membership_repository.upsert_membership(
+            session,
+            principal_id=principal_id,
+            project_id=project_id,
+            role=role,
+            workspace_id=workspace_id,
+        )
+        project.authorization_required = True
+        view = _membership_view(member)
+        membership_repository.append_audit(
+            session,
+            actor_principal_id=scope.principal.principal_id,
+            project_id=project_id,
+            target_principal_id=principal_id,
+            workspace_id=workspace_id,
+            action="membership.assign",
+            before=before,
+            after=view.model_dump(),
+        )
+        _invalidate_principal(session, account)
+        return view
+
+
+def revoke_project_membership(project_id: int, principal_id: str) -> MembershipView:
+    with authorized_session() as session:
+        _verified_principal(session, mutation=True)
+        scope = guard_project(session, project_id, capability="role.manage")
+        member = membership_repository.get_membership(
+            session, principal_id=principal_id, project_id=project_id
+        )
+        account = session.get(IdentityAccount, principal_id)
+        if (
+            scope is None
+            or scope.workspace_id is not None
+            or member is None
+            or account is None
+        ):
+            raise TrustedAuthorizationError()
+        before = _membership_view(member).model_dump()
+        member = membership_repository.revoke_membership(
+            session, principal_id=principal_id, project_id=project_id
+        )
+        if member is None:
+            raise TrustedAuthorizationError()
+        view = _membership_view(member)
+        membership_repository.append_audit(
+            session,
+            actor_principal_id=scope.principal.principal_id,
+            project_id=project_id,
+            target_principal_id=principal_id,
+            workspace_id=member.workspace_id,
+            action="membership.revoke",
+            before=before,
+            after=view.model_dump(),
+        )
+        _invalidate_principal(session, account)
+        return view
+
+
+def list_project_memberships(project_id: int) -> list[MembershipView]:
+    with authorized_session() as session:
+        scope = guard_project(session, project_id, capability="role.manage")
+        if scope is None or scope.workspace_id is not None:
+            raise TrustedAuthorizationError()
+        return [
+            _membership_view(member)
+            for member in membership_repository.list_memberships(
+                session, project_id=project_id
+            )
+        ]
+
+
+def authorize_automation_decision(context: DecisionContext) -> dict[str, Any]:
+    with authorized_session() as session:
+        _verified_principal(session, mutation=True)
+        scope = guard_project(
+            session, context.project_id, context.workspace_id, "automation.decision"
+        )
+        report = guard_report(session, context.report_id, "report.review")
+        if (
+            scope is None
+            or report is None
+            or report.project_id != context.project_id
+            or report.workspace_id != context.workspace_id
+        ):
+            raise TrustedAuthorizationError()
+        requester = session.get(IdentityAccount, context.requester_principal_id)
+        if requester is None:
+            raise TrustedAuthorizationError()
+        mode = getattr(config.settings, "identity_decision_mode", "shared")
+        if mode == "shared":
+            if scope.principal.principal_id == context.requester_principal_id:
+                raise TrustedAuthorizationError()
+            kind = "independent-approval"
+        elif mode == "single-operator":
+            humans = session.scalar(
+                select(func.count())
+                .select_from(IdentityAccount)
+                .where(
+                    IdentityAccount.enabled.is_(True),
+                    IdentityAccount.principal_type == "human",
+                )
+            )
+            if humans != 1:
+                raise TrustedAuthorizationError()
+            kind = "acknowledgement"
+        else:
+            raise TrustedAuthorizationError()
+        result = {
+            "decision_kind": kind,
+            "actor_principal_id": scope.principal.principal_id,
+            "authorization_version": scope.authorization_version,
+        }
+        membership_repository.append_audit(
+            session,
+            actor_principal_id=scope.principal.principal_id,
+            project_id=context.project_id,
+            workspace_id=context.workspace_id,
+            object_id=context.object_id,
+            action=f"automation.{kind}",
+            after=result,
+        )
+        return result

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, or_
 from sqlalchemy.orm import Session
 
-from models.tables import IncidentRecord
+from models.tables import IncidentRecord, AnalysisReport
 
 
 def create_incident_record(
@@ -45,18 +45,57 @@ def list_incident_records(
     *,
     project_id: int | None = None,
     workspace_id: int | None = None,
+    visibility=None,
+    report_visibility=None,
 ) -> list[IncidentRecord]:
     stmt = select(IncidentRecord).order_by(IncidentRecord.id.asc())
     if project_id is not None:
         stmt = stmt.where(IncidentRecord.project_id == project_id)
     if workspace_id is not None:
         stmt = stmt.where(IncidentRecord.workspace_id == workspace_id)
+    if report_visibility is not None:
+        stmt = stmt.where(
+            or_(
+                IncidentRecord.analysis_id.is_(None),
+                IncidentRecord.analysis_id.in_(
+                    select(AnalysisReport.id).where(
+                        report_visibility,
+                    )
+                ),
+            )
+        )
+    if visibility is not None:
+        stmt = stmt.where(visibility)
     result = session.execute(stmt)
     return list(result.scalars().all())
 
 
 def get_incident_record(session: Session, record_id: int) -> IncidentRecord | None:
     return session.get(IncidentRecord, record_id)
+
+
+def get_visible_incident_reference(
+    session: Session,
+    record_id: int | None,
+    *,
+    visibility,
+    report_visibility,
+) -> int | None:
+    """Select only a visible reference, without loading private incident content."""
+    if record_id is None:
+        return None
+    return session.scalar(
+        select(IncidentRecord.id).where(
+            IncidentRecord.id == record_id,
+            visibility,
+            or_(
+                IncidentRecord.analysis_id.is_(None),
+                IncidentRecord.analysis_id.in_(
+                    select(AnalysisReport.id).where(report_visibility)
+                ),
+            ),
+        )
+    )
 
 
 def list_incident_source_files(

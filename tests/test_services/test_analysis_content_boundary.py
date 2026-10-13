@@ -78,6 +78,31 @@ class AnalysisContentBoundaryTests(unittest.TestCase):
         from pathlib import Path
         from types import SimpleNamespace
         import tempfile
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from models.database import Base
+        from models.tables import AnalysisReport, Project
+
+        engine = create_engine("sqlite://")
+        self.addCleanup(engine.dispose)
+        Base.metadata.create_all(engine)
+        factory = sessionmaker(engine, expire_on_commit=False)
+        with factory.begin() as session:
+            session.add(Project(id=1, project_key="snapshot", display_name="Snapshot"))
+            session.flush()
+            session.add(
+                AnalysisReport(
+                    id=1,
+                    project_id=1,
+                    risk_score=0,
+                    severity="low",
+                    recommendation="go",
+                    top_risk="synthetic",
+                    parse_summary="synthetic",
+                    narrative_opening="synthetic",
+                    narrative_explanation="synthetic",
+                )
+            )
 
         name = "password=synthetic-name.tf"
         files = [(name, b'resource "aws_instance" "web" {}')]
@@ -86,6 +111,7 @@ class AnalysisContentBoundaryTests(unittest.TestCase):
         self.assertEqual(build_parse_batch(files).files, [])
         with (
             tempfile.TemporaryDirectory() as directory,
+            patch("services.artifact_snapshot_service.SessionLocal", factory),
             patch(
                 "services.artifact_snapshot_service.settings",
                 SimpleNamespace(artifact_snapshot_dir=directory),

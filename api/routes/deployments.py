@@ -24,6 +24,7 @@ from services.deployment_outcome_service import (
 )
 from services.project_service import (
     has_restricted_project_scope,
+    legacy_request_has_identity,
     require_project_permission,
     resolve_project_reference,
 )
@@ -95,6 +96,8 @@ def _authorization_context(
         Header(alias="X-DeployWhisper-Project-Keys"),
     ] = None,
 ) -> dict[str, object]:
+    if legacy_request_has_identity():
+        return {"role": None, "allowed_project_keys": None}
     return {
         "role": project_role,
         "allowed_project_keys": _split_project_scope_header(project_keys),

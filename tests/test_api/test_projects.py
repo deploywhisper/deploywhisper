@@ -158,7 +158,13 @@ class ProjectsApiTests(unittest.TestCase):
         self.assertIn("project.manage", roles["admin"]["capabilities"])
         self.assertEqual(
             roles["read-only"]["capabilities"],
-            ["project.read", "workspace.read", "report.read", "topology.read"],
+            [
+                "project.read",
+                "workspace.read",
+                "report.read",
+                "topology.read",
+                "automation.read",
+            ],
         )
 
     def test_project_create_denies_read_only_role_without_scope_leak(self) -> None:

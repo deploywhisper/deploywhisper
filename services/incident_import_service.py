@@ -11,6 +11,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from models.database import SessionLocal
+from services.project_service import authorized_session, guard_project
 from models.repositories.incident_ingestion_sources import (
     list_incident_ingestion_source_files,
     list_incident_ingestion_sources,
@@ -29,7 +30,9 @@ from services.content_security import (
     sensitive_artifact_values,
     sensitive_submission_values,
 )
-from services.backtesting_service import invalidate_backtesting_snapshot
+from services.backtesting_service import (
+    _invalidate_backtesting_snapshot_after_authorization as invalidate_backtesting_snapshot,
+)
 from services.incident_service import (
     IncidentIngestionFailureSummary,
     IncidentIngestionStatus,
@@ -132,130 +135,148 @@ def import_incident_files(
     workspace_key: str | None = None,
 ) -> IncidentImportResult:
     """Validate and import simple Markdown, YAML, and JSON incident files."""
-    raw_files = files
-    sensitive_values = sensitive_submission_values(
-        (item.source_file, item.content.encode("utf-8", errors="replace"))
-        for item in files
-    )
-    files = [
-        _screen_import_file(item, sensitive_values=sensitive_values) for item in files
-    ]
-    field_errors: list[IncidentImportFieldError] = []
-    if project_id is None and project_key is None:
-        field_errors.append(
-            IncidentImportFieldError(
-                source_file="batch",
-                field="project",
-                message="Project scope is required for incident imports.",
-            )
-        )
-        raise IncidentImportValidationError(
-            field_errors, sensitive_values=sensitive_values
-        )
-
-    try:
-        project = resolve_project_reference(
-            project_id=project_id, project_key=project_key
-        )
-        workspace = resolve_workspace_reference(
-            project_id=project.id,
-            workspace_id=workspace_id,
-            workspace_key=workspace_key,
-        )
-    except ProjectResolutionError as exc:
-        raise IncidentImportValidationError(
-            [
-                IncidentImportFieldError(
-                    source_file="batch",
-                    field=_scope_error_field(exc),
-                    message=redact_scope_error_message(exc.message, sensitive_values),
-                )
-            ]
-        ) from None
-
-    resolved_workspace_id = workspace.id if workspace is not None else None
-    files = _reuse_source_aliases(
-        raw_files, files, project_id=project.id, workspace_id=resolved_workspace_id
-    )
-    parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
-    for item in files:
+    with authorized_session(SessionLocal) as authorization_session:
         try:
-            parsed = _screen_incident_record(
-                _parse_incident_file(item),
-                item.content,
-                sensitive_values=sensitive_values,
+            raw_files = files
+            sensitive_values = sensitive_submission_values(
+                (item.source_file, item.content.encode("utf-8", errors="replace"))
+                for item in files
             )
-        except ValueError as exc:
-            field_errors.append(
-                IncidentImportFieldError(
-                    source_file=item.source_file,
-                    field="content",
-                    message=str(exc),
+            files = [
+                _screen_import_file(item, sensitive_values=sensitive_values)
+                for item in files
+            ]
+            field_errors: list[IncidentImportFieldError] = []
+            if project_id is None and project_key is None:
+                field_errors.append(
+                    IncidentImportFieldError(
+                        source_file="batch",
+                        field="project",
+                        message="Project scope is required for incident imports.",
+                    )
                 )
-            )
-            continue
-        field_errors.extend(_validate_record(item.source_file, parsed))
-        parsed_records.append((item, parsed))
+                raise IncidentImportValidationError(
+                    field_errors, sensitive_values=sensitive_values
+                )
 
-    if not files:
-        field_errors.append(
-            IncidentImportFieldError(
-                source_file="batch",
-                field="files",
-                message="At least one incident file is required.",
-            )
-        )
-    if field_errors:
-        _record_source_failures(
-            project_id=project.id,
-            workspace_id=resolved_workspace_id,
-            errors=field_errors,
-        )
-        raise IncidentImportValidationError(
-            field_errors, sensitive_values=sensitive_values
-        )
+            try:
+                project = resolve_project_reference(
+                    project_id=project_id, project_key=project_key
+                )
+                workspace = resolve_workspace_reference(
+                    project_id=project.id,
+                    workspace_id=workspace_id,
+                    workspace_key=workspace_key,
+                )
+            except ProjectResolutionError as exc:
+                raise IncidentImportValidationError(
+                    [
+                        IncidentImportFieldError(
+                            source_file="batch",
+                            field=_scope_error_field(exc),
+                            message=redact_scope_error_message(
+                                exc.message, sensitive_values
+                            ),
+                        )
+                    ]
+                ) from None
 
-    records: list[dict[str, Any]] = []
-    with SessionLocal() as session:
-        with session.begin():
-            for item, parsed in parsed_records:
-                record = create_incident_record_in_session(
-                    session,
-                    source_file=item.source_file,
-                    content=_normalized_incident_content(parsed),
+            resolved_workspace_id = workspace.id if workspace is not None else None
+            guard_project(
+                authorization_session,
+                project.id,
+                resolved_workspace_id,
+                "incident.manage",
+                mutation=True,
+            )
+            files = _reuse_source_aliases(
+                raw_files,
+                files,
+                project_id=project.id,
+                workspace_id=resolved_workspace_id,
+            )
+            parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
+            for item in files:
+                try:
+                    parsed = _screen_incident_record(
+                        _parse_incident_file(item),
+                        item.content,
+                        sensitive_values=sensitive_values,
+                    )
+                except ValueError as exc:
+                    field_errors.append(
+                        IncidentImportFieldError(
+                            source_file=item.source_file,
+                            field="content",
+                            message=str(exc),
+                        )
+                    )
+                    continue
+                field_errors.extend(_validate_record(item.source_file, parsed))
+                parsed_records.append((item, parsed))
+
+            if not files:
+                field_errors.append(
+                    IncidentImportFieldError(
+                        source_file="batch",
+                        field="files",
+                        message="At least one incident file is required.",
+                    )
+                )
+            if field_errors:
+                _record_source_failures(
                     project_id=project.id,
                     workspace_id=resolved_workspace_id,
+                    errors=field_errors,
                 )
-                record_incident_ingestion_source_status(
-                    session,
-                    project_id=project.id,
-                    workspace_id=resolved_workspace_id,
-                    source_file=item.source_file,
-                    status="indexed",
-                    indexed_count=1,
-                    rejected_count=0,
-                    redaction_status=_redaction_status(parsed),
-                    failure_summaries=[],
-                    index_version=None,
-                    last_indexed_at=record.created_at,
+                raise IncidentImportValidationError(
+                    field_errors, sensitive_values=sensitive_values
                 )
-                records.append(
-                    {
-                        "id": record.id,
-                        "project_id": record.project_id,
-                        "workspace_id": record.workspace_id,
-                        "title": record.title,
-                        "severity": record.severity,
-                        "source_file": record.source_file,
-                        "incident_date": record.incident_date,
-                        "analysis_id": record.analysis_id,
-                        "created_at": record.created_at.isoformat()
-                        if record.created_at is not None
-                        else None,
-                    }
-                )
-    invalidate_backtesting_snapshot(project_id=project.id)
-    return IncidentImportResult(imported=len(records), records=records)
+
+            records: list[dict[str, Any]] = []
+            with authorized_session(SessionLocal) as session:
+                with session.begin_nested():
+                    for item, parsed in parsed_records:
+                        record = create_incident_record_in_session(
+                            session,
+                            source_file=item.source_file,
+                            content=_normalized_incident_content(parsed),
+                            project_id=project.id,
+                            workspace_id=resolved_workspace_id,
+                        )
+                        record_incident_ingestion_source_status(
+                            session,
+                            project_id=project.id,
+                            workspace_id=resolved_workspace_id,
+                            source_file=item.source_file,
+                            status="indexed",
+                            indexed_count=1,
+                            rejected_count=0,
+                            redaction_status=_redaction_status(parsed),
+                            failure_summaries=[],
+                            index_version=None,
+                            last_indexed_at=record.created_at,
+                        )
+                        records.append(
+                            {
+                                "id": record.id,
+                                "project_id": record.project_id,
+                                "workspace_id": record.workspace_id,
+                                "title": record.title,
+                                "severity": record.severity,
+                                "source_file": record.source_file,
+                                "incident_date": record.incident_date,
+                                "analysis_id": record.analysis_id,
+                                "created_at": record.created_at.isoformat()
+                                if record.created_at is not None
+                                else None,
+                            }
+                        )
+            invalidate_backtesting_snapshot(project_id=project.id)
+            return IncidentImportResult(imported=len(records), records=records)
+        except IncidentImportValidationError as exc:
+            failure = exc
+    raise failure
 
 
 def reindex_incident_files(
@@ -268,229 +289,242 @@ def reindex_incident_files(
     remove_missing_sources: bool = False,
 ) -> IncidentReindexResult:
     """Replace indexed incident entries from source files within one project scope."""
-    raw_files = files
-    sensitive_values = sensitive_submission_values(
-        (item.source_file, item.content.encode("utf-8", errors="replace"))
-        for item in files
-    )
-    files = [
-        _screen_import_file(item, sensitive_values=sensitive_values) for item in files
-    ]
-    field_errors: list[IncidentImportFieldError] = []
-    if project_id is None and project_key is None:
-        field_errors.append(
-            IncidentImportFieldError(
-                source_file="batch",
-                field="project",
-                message="Project scope is required for incident reindexing.",
-            )
-        )
-        raise IncidentImportValidationError(
-            field_errors, sensitive_values=sensitive_values
-        )
-
-    try:
-        project = resolve_project_reference(
-            project_id=project_id, project_key=project_key
-        )
-        workspace = resolve_workspace_reference(
-            project_id=project.id,
-            workspace_id=workspace_id,
-            workspace_key=workspace_key,
-        )
-    except ProjectResolutionError as exc:
-        raise ProjectResolutionError(
-            exc.code, redact_scope_error_message(exc.message, sensitive_values)
-        ) from None
-    resolved_workspace_id = workspace.id if workspace is not None else None
-    files = _reuse_source_aliases(
-        raw_files,
-        files,
-        project_id=project.id,
-        workspace_id=resolved_workspace_id,
-        project_wide=resolved_workspace_id is None,
-    )
-
-    seen_source_files: set[str] = set()
-    duplicate_source_files: set[str] = set()
-    for item in files:
-        if item.source_file in seen_source_files:
-            duplicate_source_files.add(item.source_file)
-        seen_source_files.add(item.source_file)
-    for source_file in sorted(duplicate_source_files):
-        field_errors.append(
-            IncidentImportFieldError(
-                source_file=source_file,
-                field="source_file",
-                message="Each source_file may appear only once per reindex request.",
-            )
-        )
-
-    parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
-    for item in files:
+    with authorized_session(SessionLocal) as authorization_session:
         try:
-            parsed = _screen_incident_record(
-                _parse_incident_file(item),
-                item.content,
-                sensitive_values=sensitive_values,
+            raw_files = files
+            sensitive_values = sensitive_submission_values(
+                (item.source_file, item.content.encode("utf-8", errors="replace"))
+                for item in files
             )
-        except ValueError as exc:
-            field_errors.append(
-                IncidentImportFieldError(
-                    source_file=item.source_file,
-                    field="content",
-                    message=str(exc),
-                )
-            )
-            continue
-        field_errors.extend(_validate_record(item.source_file, parsed))
-        parsed_records.append((item, parsed))
-
-    if not files and not remove_missing_sources:
-        field_errors.append(
-            IncidentImportFieldError(
-                source_file="batch",
-                field="files",
-                message="At least one incident file is required.",
-            )
-        )
-    if field_errors:
-        _record_source_failures(
-            project_id=project.id,
-            workspace_id=resolved_workspace_id,
-            errors=field_errors,
-        )
-        raise IncidentImportValidationError(
-            field_errors, sensitive_values=sensitive_values
-        )
-
-    source_files = sorted({item.source_file for item, _ in parsed_records})
-    with SessionLocal() as session:
-        with session.begin():
-            project_wide_scope = resolved_workspace_id is None
-            removed_source_refs: list[tuple[int | None, str]]
-            if project_wide_scope:
-                managed_source_refs = [
-                    (source.workspace_id, source.source_file)
-                    for source in list_incident_ingestion_sources(
-                        session,
-                        project_id=project.id,
+            files = [
+                _screen_import_file(item, sensitive_values=sensitive_values)
+                for item in files
+            ]
+            field_errors: list[IncidentImportFieldError] = []
+            if project_id is None and project_key is None:
+                field_errors.append(
+                    IncidentImportFieldError(
+                        source_file="batch",
+                        field="project",
+                        message="Project scope is required for incident reindexing.",
                     )
-                    if source.status != "removed"
-                ]
-                removed_source_refs = (
-                    sorted(
-                        [
-                            source_ref
-                            for source_ref in managed_source_refs
-                            if source_ref[1] not in source_files
-                        ],
-                        key=lambda source_ref: (
-                            source_ref[0] is not None,
-                            source_ref[0] or 0,
-                            source_ref[1],
-                        ),
-                    )
-                    if remove_missing_sources
-                    else []
                 )
-            else:
-                managed_source_files = list_managed_incident_source_files(
-                    session,
+                raise IncidentImportValidationError(
+                    field_errors, sensitive_values=sensitive_values
+                )
+
+            try:
+                project = resolve_project_reference(
+                    project_id=project_id, project_key=project_key
+                )
+                workspace = resolve_workspace_reference(
                     project_id=project.id,
-                    workspace_id=resolved_workspace_id,
+                    workspace_id=workspace_id,
+                    workspace_key=workspace_key,
                 )
-                removed_source_refs = (
-                    [
-                        (resolved_workspace_id, source_file)
-                        for source_file in sorted(
-                            set(managed_source_files) - set(source_files)
-                        )
-                    ]
-                    if remove_missing_sources
-                    else []
-                )
-            replaced_count = (
-                count_incident_records_by_sources(
-                    session,
-                    project_id=project.id,
-                    workspace_id=resolved_workspace_id,
-                    source_files=source_files,
-                )
-                if source_files
-                else 0
+            except ProjectResolutionError as exc:
+                raise ProjectResolutionError(
+                    exc.code, redact_scope_error_message(exc.message, sensitive_values)
+                ) from None
+            resolved_workspace_id = workspace.id if workspace is not None else None
+            guard_project(
+                authorization_session,
+                project.id,
+                resolved_workspace_id,
+                "incident.manage",
+                mutation=True,
             )
-            removed_count = sum(
-                count_incident_records_by_sources(
-                    session,
-                    project_id=project.id,
-                    workspace_id=source_workspace_id,
-                    source_files=[source_file],
-                )
-                for source_workspace_id, source_file in removed_source_refs
-            )
-            delete_incident_records_by_sources(
-                session,
+            files = _reuse_source_aliases(
+                raw_files,
+                files,
                 project_id=project.id,
                 workspace_id=resolved_workspace_id,
-                source_files=source_files,
-                commit=False,
+                project_wide=resolved_workspace_id is None,
             )
-            for source_workspace_id, source_file in removed_source_refs:
-                delete_incident_records_by_sources(
-                    session,
-                    project_id=project.id,
-                    workspace_id=source_workspace_id,
-                    source_files=[source_file],
-                    commit=False,
-                )
-            for item, parsed in parsed_records:
-                record = create_incident_record_in_session(
-                    session,
-                    source_file=item.source_file,
-                    content=_normalized_incident_content(parsed),
-                    project_id=project.id,
-                    workspace_id=resolved_workspace_id,
-                )
-                record_incident_ingestion_source_status(
-                    session,
-                    project_id=project.id,
-                    workspace_id=resolved_workspace_id,
-                    source_file=item.source_file,
-                    status="indexed",
-                    indexed_count=1,
-                    rejected_count=0,
-                    redaction_status=_redaction_status(parsed),
-                    failure_summaries=[],
-                    index_version=None,
-                    last_indexed_at=record.created_at,
-                )
-            for source_workspace_id, source_file in removed_source_refs:
-                record_incident_ingestion_source_status(
-                    session,
-                    project_id=project.id,
-                    workspace_id=source_workspace_id,
-                    source_file=source_file,
-                    status="removed",
-                    indexed_count=0,
-                    rejected_count=0,
-                    redaction_status="unknown",
-                    failure_summaries=[],
-                    index_version=None,
+
+            seen_source_files: set[str] = set()
+            duplicate_source_files: set[str] = set()
+            for item in files:
+                if item.source_file in seen_source_files:
+                    duplicate_source_files.add(item.source_file)
+                seen_source_files.add(item.source_file)
+            for source_file in sorted(duplicate_source_files):
+                field_errors.append(
+                    IncidentImportFieldError(
+                        source_file=source_file,
+                        field="source_file",
+                        message="Each source_file may appear only once per reindex request.",
+                    )
                 )
 
-    invalidate_backtesting_snapshot(project_id=project.id)
-    return IncidentReindexResult(
-        indexed_count=len(parsed_records),
-        replaced_count=replaced_count,
-        removed_count=removed_count,
-        rejected_count=0,
-        failures=[],
-        status=get_incident_ingestion_status(
-            project_id=project.id,
-            workspace_id=resolved_workspace_id,
-        ),
-    )
+            parsed_records: list[tuple[IncidentImportFile, dict[str, Any]]] = []
+            for item in files:
+                try:
+                    parsed = _screen_incident_record(
+                        _parse_incident_file(item),
+                        item.content,
+                        sensitive_values=sensitive_values,
+                    )
+                except ValueError as exc:
+                    field_errors.append(
+                        IncidentImportFieldError(
+                            source_file=item.source_file,
+                            field="content",
+                            message=str(exc),
+                        )
+                    )
+                    continue
+                field_errors.extend(_validate_record(item.source_file, parsed))
+                parsed_records.append((item, parsed))
+
+            if not files and not remove_missing_sources:
+                field_errors.append(
+                    IncidentImportFieldError(
+                        source_file="batch",
+                        field="files",
+                        message="At least one incident file is required.",
+                    )
+                )
+            if field_errors:
+                _record_source_failures(
+                    project_id=project.id,
+                    workspace_id=resolved_workspace_id,
+                    errors=field_errors,
+                )
+                raise IncidentImportValidationError(
+                    field_errors, sensitive_values=sensitive_values
+                )
+
+            source_files = sorted({item.source_file for item, _ in parsed_records})
+            with authorized_session(SessionLocal) as session:
+                with session.begin_nested():
+                    project_wide_scope = resolved_workspace_id is None
+                    removed_source_refs: list[tuple[int | None, str]]
+                    if project_wide_scope:
+                        managed_source_refs = [
+                            (source.workspace_id, source.source_file)
+                            for source in list_incident_ingestion_sources(
+                                session,
+                                project_id=project.id,
+                            )
+                            if source.status != "removed"
+                        ]
+                        removed_source_refs = (
+                            sorted(
+                                [
+                                    source_ref
+                                    for source_ref in managed_source_refs
+                                    if source_ref[1] not in source_files
+                                ],
+                                key=lambda source_ref: (
+                                    source_ref[0] is not None,
+                                    source_ref[0] or 0,
+                                    source_ref[1],
+                                ),
+                            )
+                            if remove_missing_sources
+                            else []
+                        )
+                    else:
+                        managed_source_files = list_managed_incident_source_files(
+                            session,
+                            project_id=project.id,
+                            workspace_id=resolved_workspace_id,
+                        )
+                        removed_source_refs = (
+                            [
+                                (resolved_workspace_id, source_file)
+                                for source_file in sorted(
+                                    set(managed_source_files) - set(source_files)
+                                )
+                            ]
+                            if remove_missing_sources
+                            else []
+                        )
+                    replaced_count = (
+                        count_incident_records_by_sources(
+                            session,
+                            project_id=project.id,
+                            workspace_id=resolved_workspace_id,
+                            source_files=source_files,
+                        )
+                        if source_files
+                        else 0
+                    )
+                    removed_count = sum(
+                        count_incident_records_by_sources(
+                            session,
+                            project_id=project.id,
+                            workspace_id=source_workspace_id,
+                            source_files=[source_file],
+                        )
+                        for source_workspace_id, source_file in removed_source_refs
+                    )
+                    delete_incident_records_by_sources(
+                        session,
+                        project_id=project.id,
+                        workspace_id=resolved_workspace_id,
+                        source_files=source_files,
+                        commit=False,
+                    )
+                    for source_workspace_id, source_file in removed_source_refs:
+                        delete_incident_records_by_sources(
+                            session,
+                            project_id=project.id,
+                            workspace_id=source_workspace_id,
+                            source_files=[source_file],
+                            commit=False,
+                        )
+                    for item, parsed in parsed_records:
+                        record = create_incident_record_in_session(
+                            session,
+                            source_file=item.source_file,
+                            content=_normalized_incident_content(parsed),
+                            project_id=project.id,
+                            workspace_id=resolved_workspace_id,
+                        )
+                        record_incident_ingestion_source_status(
+                            session,
+                            project_id=project.id,
+                            workspace_id=resolved_workspace_id,
+                            source_file=item.source_file,
+                            status="indexed",
+                            indexed_count=1,
+                            rejected_count=0,
+                            redaction_status=_redaction_status(parsed),
+                            failure_summaries=[],
+                            index_version=None,
+                            last_indexed_at=record.created_at,
+                        )
+                    for source_workspace_id, source_file in removed_source_refs:
+                        record_incident_ingestion_source_status(
+                            session,
+                            project_id=project.id,
+                            workspace_id=source_workspace_id,
+                            source_file=source_file,
+                            status="removed",
+                            indexed_count=0,
+                            rejected_count=0,
+                            redaction_status="unknown",
+                            failure_summaries=[],
+                            index_version=None,
+                        )
+
+            invalidate_backtesting_snapshot(project_id=project.id)
+            return IncidentReindexResult(
+                indexed_count=len(parsed_records),
+                replaced_count=replaced_count,
+                removed_count=removed_count,
+                rejected_count=0,
+                failures=[],
+                status=get_incident_ingestion_status(
+                    project_id=project.id,
+                    workspace_id=resolved_workspace_id,
+                ),
+            )
+        except IncidentImportValidationError as exc:
+            failure = exc
+    raise failure
 
 
 def incident_import_failure_summaries(
@@ -521,8 +555,8 @@ def _record_source_failures(
     summaries_by_source: dict[str, list[IncidentIngestionFailureSummary]] = {}
     for summary in summaries:
         summaries_by_source.setdefault(summary.source_file, []).append(summary)
-    with SessionLocal() as session:
-        with session.begin():
+    with authorized_session(SessionLocal) as session:
+        with session.begin_nested():
             for source_file, failures in summaries_by_source.items():
                 record_incident_ingestion_source_status(
                     session,
@@ -546,7 +580,7 @@ def _reuse_source_aliases(
     workspace_id: int | None,
     project_wide: bool = False,
 ) -> list[IncidentImportFile]:
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         aliases = set(
             list_incident_ingestion_source_files(
                 session,

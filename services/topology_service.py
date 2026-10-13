@@ -14,6 +14,12 @@ from pydantic import BaseModel, Field
 
 from config import settings
 from models.database import SessionLocal
+from services.project_service import (
+    authorized_session,
+    guard_project,
+    has_authorized_session,
+    project_requires_authorization,
+)
 from models.repositories.settings import get_setting, upsert_setting
 from models.tables import TopologyVersion
 from services.content_security import (
@@ -538,9 +544,10 @@ def _save_topology_source_status(
         ]
     entries.append(entry)
     payload = {**entry, "entries": entries}
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         upsert_setting(
             session,
+            commit=False,
             key=_source_status_setting_key(project, workspace),
             value=json.dumps(redact_value(payload)),
         )
@@ -549,12 +556,13 @@ def _save_topology_source_status(
 def _load_topology_source_status(
     project: dict[str, Any], workspace: dict[str, Any] | None = None
 ) -> dict[str, Any] | None:
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         record = get_setting(session, _source_status_setting_key(project, workspace))
-    if record is None:
+        raw_value = record.value if record is not None else None
+    if raw_value is None:
         return None
     try:
-        payload = json.loads(record.value)
+        payload = json.loads(raw_value)
     except JSONDecodeError:
         return None
     if not isinstance(payload, dict):
@@ -692,12 +700,13 @@ def _build_next_check_at(checked_at: str | None, interval_hours: int) -> str | N
 def _load_cached_topology_drift(
     project: dict[str, Any], workspace: dict[str, Any] | None = None
 ) -> TopologyDriftStatus | None:
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         record = get_setting(session, _drift_setting_key(project, workspace))
-    if record is None:
+        raw_value = record.value if record is not None else None
+    if raw_value is None:
         return None
     try:
-        payload = json.loads(record.value)
+        payload = json.loads(raw_value)
     except JSONDecodeError:
         return None
     if not isinstance(payload, dict):
@@ -727,9 +736,10 @@ def _save_topology_drift(
     payload = redact_value(drift_status.model_dump())
     payload["source_ref"] = redact_reference(payload.get("source_ref"))
     drift_status = TopologyDriftStatus(**payload)
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         upsert_setting(
             session,
+            commit=False,
             key=_drift_setting_key(project, workspace),
             value=json.dumps(drift_status.model_dump()),
         )
@@ -794,13 +804,19 @@ def _build_drift_status(
 def run_due_topology_drift_checks() -> list[TopologyDriftStatus]:
     """Run due topology drift checks for every known project/workspace scope."""
     drift_statuses: list[TopologyDriftStatus] = []
-    project_ids = {project.id for project in list_projects()}
+    with authorized_session(SessionLocal) as session:
+        project_ids = {
+            project.id
+            for project in list_projects()
+            if not project_requires_authorization(session, project.id)
+        }
     topology_scopes: set[tuple[int, int | None]] = {
         (project_id, None) for project_id in project_ids
     }
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         rows = (
             session.query(TopologyVersion.project_id, TopologyVersion.workspace_id)
+            .filter(TopologyVersion.project_id.in_(project_ids))
             .distinct()
             .all()
         )
@@ -823,7 +839,7 @@ def _load_latest_topology_payload(
     workspace: dict | None = None,
 ) -> tuple[dict | None, Path, TopologyStatus | None]:
     topology_path = _topology_scope_path(project, workspace)
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         stmt = session.query(TopologyVersion).filter(
             TopologyVersion.project_id == int(project["id"])
         )
@@ -833,7 +849,9 @@ def _load_latest_topology_payload(
             stmt = stmt.filter(TopologyVersion.workspace_id == int(workspace["id"]))
         record = stmt.order_by(TopologyVersion.id.desc()).first()
         if record is None:
-            if bool(project.get("is_default")):
+            if bool(project.get("is_default")) and not project_requires_authorization(
+                session, int(project["id"])
+            ):
                 legacy_status = _read_legacy_topology_status()
                 if legacy_status is not None:
                     return (
@@ -1681,11 +1699,13 @@ def _parse_kubernetes_live_state_source(
         deadline=deadline,
     )
     if raw_text is None:
-        warnings = read_warnings or [_kubernetes_context_todo_message(source_ref)]
+        unavailable_warnings = read_warnings or [
+            _kubernetes_context_todo_message(source_ref)
+        ]
         return _kubernetes_live_state_unavailable_change_set(
             source_ref,
-            warnings[0],
-            warnings,
+            unavailable_warnings[0],
+            unavailable_warnings,
         )
     try:
         payload = json.loads(raw_text)
@@ -2393,8 +2413,12 @@ def _persist_topology_payload(
             details={"path": str(topology_path)},
         )
 
-    with SessionLocal() as session:
-        if bool(project.get("is_default")) and workspace is None:
+    with authorized_session(SessionLocal) as session:
+        if (
+            bool(project.get("is_default"))
+            and workspace is None
+            and not project_requires_authorization(session, int(project["id"]))
+        ):
             legacy_path = _topology_path()
             try:
                 legacy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2416,7 +2440,7 @@ def _persist_topology_payload(
                 payload_json=json.dumps(payload),
             )
         )
-        session.commit()
+        session.flush()
     return _build_topology_status(payload, path=topology_path, exists=True)
 
 
@@ -2507,6 +2531,33 @@ def _build_import_result(
     return TopologyImportResult(**screened)
 
 
+def _topology_source_revision(session, project, workspace):
+    """Identify a source version even when a replacement has identical contents."""
+    return (
+        session.query(TopologyVersion.id)
+        .filter(
+            TopologyVersion.project_id == int(project["id"]),
+            TopologyVersion.workspace_id
+            == (int(workspace["id"]) if workspace else None),
+        )
+        .order_by(TopologyVersion.id.desc())
+        .limit(1)
+        .scalar()
+    )
+
+
+def _require_unchanged_topology_source(session, project, workspace, revision, payload):
+    current_payload, _, _ = _load_latest_topology_payload(project, workspace)
+    if (
+        _topology_source_revision(session, project, workspace) != revision
+        or current_payload != payload
+    ):
+        raise TopologyImportError(
+            "topology_source_changed",
+            "Topology changed during collection; retry against the current source.",
+        )
+
+
 def check_topology_drift(
     *,
     project_id: int | None = None,
@@ -2515,167 +2566,239 @@ def check_topology_drift(
     workspace_key: str | None = None,
     force: bool = False,
 ) -> TopologyDriftStatus:
-    """Run or reuse a scheduled topology drift check for one project."""
-    interval_hours = get_topology_drift_check_interval_hours()
-    project = build_project_payload(
-        resolve_project_reference(project_id=project_id, project_key=project_key)
-    )
-    workspace_record = resolve_workspace_reference(
-        project_id=int(project["id"]),
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    workspace = (
-        build_workspace_payload(workspace_record)
-        if workspace_record is not None
-        else None
-    )
-    payload, _, status_override = _load_latest_topology_payload(project, workspace)
-    import_metadata = _import_metadata(payload or {})
-    source_type = str(import_metadata.get("source_type") or "").strip() or None
-    source_ref = str(import_metadata.get("source_ref") or "").strip() or None
-    cached_status = _load_cached_topology_drift(project, workspace)
+    """Collect outside the writer reservation and revalidate before caching.
 
-    if (
-        not force
-        and _cached_drift_matches_source(cached_status, source_type, source_ref)
-        and not _is_drift_check_due(cached_status, interval_hours)
-    ):
-        return cached_status or _build_drift_status(
-            status="unavailable",
-            interval_hours=interval_hours,
-            source_type=source_type,
-            source_ref=source_ref,
-            warnings=["Topology drift check is unavailable."],
+    Nested reads only reuse cached status: the caller owns its transaction and
+    this service cannot release that transaction around external collection.
+    """
+    nested_operation = has_authorized_session()
+    with authorized_session(SessionLocal) as authorization_session:
+        interval_hours = get_topology_drift_check_interval_hours()
+        project = build_project_payload(
+            resolve_project_reference(project_id=project_id, project_key=project_key)
         )
+        workspace_record = resolve_workspace_reference(
+            project_id=int(project["id"]),
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        workspace = (
+            build_workspace_payload(workspace_record)
+            if workspace_record is not None
+            else None
+        )
+        guard_project(
+            authorization_session,
+            int(project["id"]),
+            workspace_record.id if workspace_record else None,
+            "topology.read",
+            mutation=False,
+        )
+        if force:
+            guard_project(
+                authorization_session,
+                int(project["id"]),
+                workspace_record.id if workspace_record else None,
+                "topology.manage",
+                mutation=True,
+            )
+        payload, _, status_override = _load_latest_topology_payload(project, workspace)
+        import_metadata = _import_metadata(payload or {})
+        source_type = str(import_metadata.get("source_type") or "").strip() or None
+        source_ref = str(import_metadata.get("source_ref") or "").strip() or None
+        cached_status = _load_cached_topology_drift(project, workspace)
 
-    if payload is None or status_override is not None:
-        return _save_topology_drift(
-            project,
-            _build_drift_status(
+        if not force and (
+            nested_operation
+            or project_requires_authorization(authorization_session, int(project["id"]))
+        ):
+            if cached_status is not None and _cached_drift_matches_source(
+                cached_status, source_type, source_ref
+            ):
+                return cached_status
+            return _build_drift_status(
                 status="unavailable",
                 interval_hours=interval_hours,
                 source_type=source_type,
                 source_ref=source_ref,
                 warnings=[
-                    "Topology drift is unavailable because no valid topology import is active."
+                    "Topology drift requires an authorized refresh for this project."
                 ],
-            ),
-            workspace,
-        )
+            )
 
-    if not source_type or not source_ref:
-        return _save_topology_drift(
-            project,
-            _build_drift_status(
+        if (
+            not force
+            and _cached_drift_matches_source(cached_status, source_type, source_ref)
+            and not _is_drift_check_due(cached_status, interval_hours)
+        ):
+            return cached_status or _build_drift_status(
                 status="unavailable",
                 interval_hours=interval_hours,
                 source_type=source_type,
                 source_ref=source_ref,
-                warnings=[
-                    "Topology drift is unavailable because the active topology does not include an import source reference."
-                ],
-            ),
-            workspace,
-        )
+                warnings=["Topology drift check is unavailable."],
+            )
 
-    if source_type == "manual":
-        return _save_topology_drift(
-            project,
-            _build_drift_status(
-                status="unavailable",
-                interval_hours=interval_hours,
-                source_type=source_type,
-                source_ref=source_ref,
-                warnings=[
-                    "Topology drift is unavailable for manual topology uploads because there is no source connector to re-evaluate."
-                ],
-            ),
-            workspace,
-        )
+        if payload is None or status_override is not None:
+            return _save_topology_drift(
+                project,
+                _build_drift_status(
+                    status="unavailable",
+                    interval_hours=interval_hours,
+                    source_type=source_type,
+                    source_ref=source_ref,
+                    warnings=[
+                        "Topology drift is unavailable because no valid topology import is active."
+                    ],
+                ),
+                workspace,
+            )
 
+        if not source_type or not source_ref:
+            return _save_topology_drift(
+                project,
+                _build_drift_status(
+                    status="unavailable",
+                    interval_hours=interval_hours,
+                    source_type=source_type,
+                    source_ref=source_ref,
+                    warnings=[
+                        "Topology drift is unavailable because the active topology does not include an import source reference."
+                    ],
+                ),
+                workspace,
+            )
+
+        if source_type == "manual":
+            return _save_topology_drift(
+                project,
+                _build_drift_status(
+                    status="unavailable",
+                    interval_hours=interval_hours,
+                    source_type=source_type,
+                    source_ref=source_ref,
+                    warnings=[
+                        "Topology drift is unavailable for manual topology uploads because there is no source connector to re-evaluate."
+                    ],
+                ),
+                workspace,
+            )
+
+        if nested_operation:
+            raise TopologyImportError(
+                "topology_collection_unavailable",
+                "Topology collection requires a separate operation.",
+            )
+        revision = _topology_source_revision(authorization_session, project, workspace)
+
+    collection_error = None
     try:
         _require_safe_topology_reference(source_ref)
         change_set = _lookup_source_handler(source_type)(source_ref)
     except TopologyImportError as exc:
-        return _save_topology_drift(
-            project,
-            _build_drift_status(
-                status="unavailable",
-                interval_hours=interval_hours,
-                source_type=source_type,
-                source_ref=source_ref,
-                warnings=[str(exc)],
-            ),
-            workspace,
-        )
+        collection_error = exc
 
-    if source_type == "kubernetes" and (
-        _has_kubernetes_live_state_todo_warnings(change_set.warnings)
-        or bool(change_set.partially_parsed_resources)
-    ):
-        return _save_topology_drift(
-            project,
-            _build_drift_status(
-                status="unavailable",
-                interval_hours=interval_hours,
-                source_type=source_type,
-                source_ref=source_ref,
-                warnings=change_set.warnings,
-            ),
-            workspace,
+    with authorized_session(SessionLocal) as authorization_session:
+        guard_project(
+            authorization_session,
+            int(project["id"]),
+            int(workspace["id"]) if workspace else None,
+            "topology.manage" if force else "topology.read",
+            mutation=force,
         )
-
-    if change_set.operation != "replace":
-        return _save_topology_drift(
-            project,
-            _build_drift_status(
-                status="unsupported",
-                interval_hours=interval_hours,
-                source_type=source_type,
-                source_ref=source_ref,
-                warnings=change_set.warnings
-                or [
-                    "Topology drift is not supported for the active source connector yet."
-                ],
-            ),
-            workspace,
+        # A legacy scope may have become protected while the connector was running.
+        if not force and project_requires_authorization(
+            authorization_session, int(project["id"])
+        ):
+            guard_project(
+                authorization_session,
+                int(project["id"]),
+                int(workspace["id"]) if workspace else None,
+                "topology.manage",
+                mutation=True,
+            )
+        _require_unchanged_topology_source(
+            authorization_session, project, workspace, revision, payload
         )
+        if collection_error is not None:
+            return _save_topology_drift(
+                project,
+                _build_drift_status(
+                    status="unavailable",
+                    interval_hours=interval_hours,
+                    source_type=source_type,
+                    source_ref=source_ref,
+                    warnings=[str(collection_error)],
+                ),
+                workspace,
+            )
 
-    current_resources = _resource_snapshot(payload)
-    candidate_payload = {"services": change_set.services}
-    candidate_resources = _resource_snapshot(candidate_payload)
-    added_resources = sorted(
-        resource_ref
-        for resource_ref in candidate_resources
-        if resource_ref not in current_resources
-    )
-    removed_resources = sorted(
-        resource_ref
-        for resource_ref in current_resources
-        if resource_ref not in candidate_resources
-    )
-    modified_resources = sorted(
-        resource_ref
-        for resource_ref in current_resources.keys() & candidate_resources.keys()
-        if current_resources[resource_ref] != candidate_resources[resource_ref]
-    )
-    drift_status = _build_drift_status(
-        status=(
-            "drifted"
-            if added_resources or removed_resources or modified_resources
-            else "up_to_date"
-        ),
-        interval_hours=interval_hours,
-        source_type=source_type,
-        source_ref=source_ref,
-        total_resource_count=max(len(current_resources), len(candidate_resources)),
-        added_resources=added_resources,
-        removed_resources=removed_resources,
-        modified_resources=modified_resources,
-        warnings=change_set.warnings,
-    )
-    return _save_topology_drift(project, drift_status, workspace)
+        if source_type == "kubernetes" and (
+            _has_kubernetes_live_state_todo_warnings(change_set.warnings)
+            or bool(change_set.partially_parsed_resources)
+        ):
+            return _save_topology_drift(
+                project,
+                _build_drift_status(
+                    status="unavailable",
+                    interval_hours=interval_hours,
+                    source_type=source_type,
+                    source_ref=source_ref,
+                    warnings=change_set.warnings,
+                ),
+                workspace,
+            )
+
+        if change_set.operation != "replace":
+            return _save_topology_drift(
+                project,
+                _build_drift_status(
+                    status="unsupported",
+                    interval_hours=interval_hours,
+                    source_type=source_type,
+                    source_ref=source_ref,
+                    warnings=change_set.warnings
+                    or [
+                        "Topology drift is not supported for the active source connector yet."
+                    ],
+                ),
+                workspace,
+            )
+
+        current_resources = _resource_snapshot(payload)
+        candidate_payload = {"services": change_set.services}
+        candidate_resources = _resource_snapshot(candidate_payload)
+        added_resources = sorted(
+            resource_ref
+            for resource_ref in candidate_resources
+            if resource_ref not in current_resources
+        )
+        removed_resources = sorted(
+            resource_ref
+            for resource_ref in current_resources
+            if resource_ref not in candidate_resources
+        )
+        modified_resources = sorted(
+            resource_ref
+            for resource_ref in current_resources.keys() & candidate_resources.keys()
+            if current_resources[resource_ref] != candidate_resources[resource_ref]
+        )
+        drift_status = _build_drift_status(
+            status=(
+                "drifted"
+                if added_resources or removed_resources or modified_resources
+                else "up_to_date"
+            ),
+            interval_hours=interval_hours,
+            source_type=source_type,
+            source_ref=source_ref,
+            total_resource_count=max(len(current_resources), len(candidate_resources)),
+            added_resources=added_resources,
+            removed_resources=removed_resources,
+            modified_resources=modified_resources,
+            warnings=change_set.warnings,
+        )
+        return _save_topology_drift(project, drift_status, workspace)
 
 
 def get_topology_status(
@@ -2686,62 +2809,84 @@ def get_topology_status(
     workspace_key: str | None = None,
 ) -> TopologyStatus:
     """Return the active topology context with validation details for admin workflows."""
-    project = build_project_payload(
-        resolve_project_reference(project_id=project_id, project_key=project_key)
-    )
-    workspace_record = resolve_workspace_reference(
-        project_id=int(project["id"]),
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    workspace = (
-        build_workspace_payload(workspace_record)
-        if workspace_record is not None
-        else None
-    )
-    payload, topology_path, status_override = _load_latest_topology_payload(
-        project, workspace
-    )
-    if status_override is not None and payload is None:
-        status_override.warnings = _unique_messages(
-            list(status_override.warnings)
-            + _load_topology_source_status_warnings(project, workspace)
+    with authorized_session(SessionLocal) as authorization_session:
+        project = build_project_payload(
+            resolve_project_reference(project_id=project_id, project_key=project_key)
         )
-        return status_override
-    if payload is None:
-        source_status_warnings = _load_topology_source_status_warnings(
+        workspace_record = resolve_workspace_reference(
+            project_id=int(project["id"]),
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        workspace = (
+            build_workspace_payload(workspace_record)
+            if workspace_record is not None
+            else None
+        )
+        guard_project(
+            authorization_session,
+            int(project["id"]),
+            workspace_record.id if workspace_record else None,
+            "topology.read",
+            mutation=False,
+        )
+        payload, topology_path, status_override = _load_latest_topology_payload(
             project, workspace
         )
-        if bool(project.get("is_default")):
-            legacy_status = _read_legacy_topology_status()
-            if legacy_status is not None:
-                legacy_status.warnings = _unique_messages(
-                    list(legacy_status.warnings) + source_status_warnings
-                )
-                return legacy_status
-        return TopologyStatus(
-            path=str(topology_path),
-            exists=False,
-            warnings=[
-                "Blast radius may be incomplete — service topology is not configured."
-            ]
-            + source_status_warnings,
+        if status_override is not None and payload is None:
+            status_override.warnings = _unique_messages(
+                list(status_override.warnings)
+                + _load_topology_source_status_warnings(project, workspace)
+            )
+            return status_override
+        if payload is None:
+            source_status_warnings = _load_topology_source_status_warnings(
+                project, workspace
+            )
+            if bool(project.get("is_default")) and not project_requires_authorization(
+                authorization_session, int(project["id"])
+            ):
+                legacy_status = _read_legacy_topology_status()
+                if legacy_status is not None:
+                    legacy_status.warnings = _unique_messages(
+                        list(legacy_status.warnings) + source_status_warnings
+                    )
+                    return legacy_status
+            return TopologyStatus(
+                path=str(topology_path),
+                exists=False,
+                warnings=[
+                    "Blast radius may be incomplete — service topology is not configured."
+                ]
+                + source_status_warnings,
+            )
+        status = _build_topology_status(payload, path=topology_path, exists=True)
+        status.warnings = _unique_messages(
+            list(status.warnings)
+            + _load_topology_source_status_warnings(
+                project,
+                workspace,
+                active_payload=payload,
+                require_active_match=True,
+            )
         )
-    status = _build_topology_status(payload, path=topology_path, exists=True)
+        revision = _topology_source_revision(authorization_session, project, workspace)
     status.drift = check_topology_drift(
         project_id=int(project["id"]),
         workspace_id=int(workspace["id"]) if workspace is not None else None,
     )
-    status.warnings = _unique_messages(
-        list(status.warnings)
-        + _load_topology_source_status_warnings(
-            project,
-            workspace,
-            active_payload=payload,
-            require_active_match=True,
+    with authorized_session(SessionLocal) as authorization_session:
+        guard_project(
+            authorization_session,
+            int(project["id"]),
+            int(workspace["id"]) if workspace else None,
+            "topology.read",
+            mutation=False,
         )
-    )
-    return status
+        _require_unchanged_topology_source(
+            authorization_session, project, workspace, revision, payload
+        )
+        return status
 
 
 def import_topology_source(
@@ -2754,29 +2899,45 @@ def import_topology_source(
     workspace_key: str | None = None,
 ) -> TopologyImportResult:
     """Import topology through the shared source registry."""
-    _require_safe_topology_reference(source_ref)
-    _require_safe_topology_reference(source_type)
-    normalized_source_type = str(source_type or "").strip().lower()
-    if not normalized_source_type:
-        raise TopologyImportError(
-            "invalid_topology_source",
-            "Topology source type is required.",
-        )
+    nested_operation = has_authorized_session()
+    with authorized_session(SessionLocal) as authorization_session:
+        _require_safe_topology_reference(source_ref)
+        _require_safe_topology_reference(source_type)
+        normalized_source_type = str(source_type or "").strip().lower()
+        if not normalized_source_type:
+            raise TopologyImportError(
+                "invalid_topology_source",
+                "Topology source type is required.",
+            )
 
-    project = build_project_payload(
-        resolve_project_reference(project_id=project_id, project_key=project_key)
-    )
-    workspace_record = resolve_workspace_reference(
-        project_id=int(project["id"]),
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    workspace = (
-        build_workspace_payload(workspace_record)
-        if workspace_record is not None
-        else None
-    )
-    previous_payload, _, _ = _load_latest_topology_payload(project, workspace)
+        project = build_project_payload(
+            resolve_project_reference(project_id=project_id, project_key=project_key)
+        )
+        workspace_record = resolve_workspace_reference(
+            project_id=int(project["id"]),
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        workspace = (
+            build_workspace_payload(workspace_record)
+            if workspace_record is not None
+            else None
+        )
+        guard_project(
+            authorization_session,
+            int(project["id"]),
+            workspace_record.id if workspace_record else None,
+            "topology.manage",
+            mutation=True,
+        )
+        previous_payload, _, _ = _load_latest_topology_payload(project, workspace)
+        if nested_operation:
+            raise TopologyImportError(
+                "topology_collection_unavailable",
+                "Topology collection requires a separate operation.",
+            )
+        revision = _topology_source_revision(authorization_session, project, workspace)
+
     resolved_source_ref = source_ref
     source_ref_warnings: list[str] = []
     kubernetes_deadline: float | None = None
@@ -2801,101 +2962,113 @@ def import_topology_source(
         )
     else:
         change_set = _lookup_source_handler(normalized_source_type)(resolved_source_ref)
-    warnings = list(change_set.warnings)
 
-    if change_set.operation == "noop":
-        if normalized_source_type == "kubernetes":
-            _save_topology_source_status(
-                project=project,
-                workspace=workspace,
-                source_type=normalized_source_type,
-                source_ref=resolved_source_ref,
-                warnings=warnings,
-            )
-            _save_topology_drift(
-                project,
-                _build_drift_status(
-                    status="unavailable",
-                    interval_hours=get_topology_drift_check_interval_hours(),
+    with authorized_session(SessionLocal) as authorization_session:
+        guard_project(
+            authorization_session,
+            int(project["id"]),
+            int(workspace["id"]) if workspace else None,
+            "topology.manage",
+            mutation=True,
+        )
+        _require_unchanged_topology_source(
+            authorization_session, project, workspace, revision, previous_payload
+        )
+        warnings = list(change_set.warnings)
+
+        if change_set.operation == "noop":
+            if normalized_source_type == "kubernetes":
+                _save_topology_source_status(
+                    project=project,
+                    workspace=workspace,
                     source_type=normalized_source_type,
                     source_ref=resolved_source_ref,
                     warnings=warnings,
-                ),
-                workspace,
+                )
+                _save_topology_drift(
+                    project,
+                    _build_drift_status(
+                        status="unavailable",
+                        interval_hours=get_topology_drift_check_interval_hours(),
+                        source_type=normalized_source_type,
+                        source_ref=resolved_source_ref,
+                        warnings=warnings,
+                    ),
+                    workspace,
+                )
+            return _build_import_result(
+                source_type=normalized_source_type,
+                source_ref=resolved_source_ref,
+                applied=False,
+                change_set=change_set,
+                before_payload=previous_payload,
+                after_payload=previous_payload,
+                warnings=warnings,
             )
-        return _build_import_result(
-            source_type=normalized_source_type,
-            source_ref=resolved_source_ref,
-            applied=False,
-            change_set=change_set,
-            before_payload=previous_payload,
-            after_payload=previous_payload,
-            warnings=warnings,
-        )
 
-    payload = _build_payload_from_change_set(
-        change_set=change_set,
-        source_type=normalized_source_type,
-        source_ref=resolved_source_ref,
-        requested_source_ref=(
-            "current-context"
-            if normalized_source_type == "kubernetes"
-            and str(source_ref or "").strip() == "current-context"
-            else None
-        ),
-    )
-    status = _persist_topology_payload(
-        payload,
-        project=project,
-        workspace=workspace,
-        source_type=normalized_source_type,
-    )
-    _save_topology_source_status(
-        project=project,
-        workspace=workspace,
-        source_type=normalized_source_type,
-        source_ref=resolved_source_ref,
-        warnings=[],
-        replace_existing=normalized_source_type != "kubernetes",
-    )
-    _save_topology_drift(
-        project,
-        _build_drift_status(
-            status=(
-                "unavailable"
-                if normalized_source_type == "kubernetes"
-                and _has_kubernetes_live_state_degradation_warnings(warnings)
-                else "up_to_date"
-            ),
-            interval_hours=get_topology_drift_check_interval_hours(),
+        payload = _build_payload_from_change_set(
+            change_set=change_set,
             source_type=normalized_source_type,
             source_ref=resolved_source_ref,
-            total_resource_count=len(_resource_snapshot(status.payload or {})),
-            warnings=warnings,
-        ),
-        workspace,
-    )
-    if (
-        normalized_source_type == "kubernetes"
-        and str(source_ref or "").strip() == "current-context"
-        and resolved_source_ref != "current-context"
-    ):
+            requested_source_ref=(
+                "current-context"
+                if normalized_source_type == "kubernetes"
+                and str(source_ref or "").strip() == "current-context"
+                else None
+            ),
+        )
+        status = _persist_topology_payload(
+            payload,
+            project=project,
+            workspace=workspace,
+            source_type=normalized_source_type,
+        )
         _save_topology_source_status(
             project=project,
             workspace=workspace,
             source_type=normalized_source_type,
-            source_ref="current-context",
+            source_ref=resolved_source_ref,
             warnings=[],
+            replace_existing=normalized_source_type != "kubernetes",
         )
-    return _build_import_result(
-        source_type=normalized_source_type,
-        source_ref=resolved_source_ref,
-        applied=True,
-        change_set=change_set,
-        before_payload=previous_payload,
-        after_payload=status.payload,
-        warnings=warnings,
-    )
+        _save_topology_drift(
+            project,
+            _build_drift_status(
+                status=(
+                    "unavailable"
+                    if normalized_source_type == "kubernetes"
+                    and _has_kubernetes_live_state_degradation_warnings(warnings)
+                    else "up_to_date"
+                ),
+                interval_hours=get_topology_drift_check_interval_hours(),
+                source_type=normalized_source_type,
+                source_ref=resolved_source_ref,
+                total_resource_count=len(_resource_snapshot(status.payload or {})),
+                warnings=warnings,
+            ),
+            workspace,
+        )
+        if (
+            normalized_source_type == "kubernetes"
+            and str(source_ref or "").strip() == "current-context"
+            and resolved_source_ref != "current-context"
+        ):
+            _save_topology_source_status(
+                project=project,
+                workspace=workspace,
+                source_type=normalized_source_type,
+                source_ref="current-context",
+                warnings=[],
+            )
+        return _build_import_result(
+            source_type=normalized_source_type,
+            source_ref=resolved_source_ref,
+            applied=True,
+            change_set=change_set,
+            before_payload=previous_payload,
+            after_payload=status.payload,
+            warnings=warnings,
+        )
 
 
 def save_topology_definition(
@@ -2907,58 +3080,66 @@ def save_topology_definition(
     workspace_key: str | None = None,
 ) -> TopologyStatus:
     """Persist topology input as the active blast-radius context and return validation feedback."""
-    validation_status = validate_topology_definition(
-        raw_text,
-        project_id=project_id,
-        project_key=project_key,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    if validation_status.blocking_errors:
-        raise ValueError(" ".join(validation_status.blocking_errors))
+    with authorized_session(SessionLocal) as authorization_session:
+        validation_status = validate_topology_definition(
+            raw_text,
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        if validation_status.blocking_errors:
+            raise ValueError(" ".join(validation_status.blocking_errors))
 
-    payload = dict(validation_status.payload or {})
-    project = build_project_payload(
-        resolve_project_reference(project_id=project_id, project_key=project_key)
-    )
-    workspace_record = resolve_workspace_reference(
-        project_id=int(project["id"]),
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    workspace = (
-        build_workspace_payload(workspace_record)
-        if workspace_record is not None
-        else None
-    )
-    change_set = _build_custom_change_set(payload)
+        payload = dict(validation_status.payload or {})
+        project = build_project_payload(
+            resolve_project_reference(project_id=project_id, project_key=project_key)
+        )
+        workspace_record = resolve_workspace_reference(
+            project_id=int(project["id"]),
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        workspace = (
+            build_workspace_payload(workspace_record)
+            if workspace_record is not None
+            else None
+        )
+        guard_project(
+            authorization_session,
+            int(project["id"]),
+            workspace_record.id if workspace_record else None,
+            "topology.manage",
+            mutation=True,
+        )
+        change_set = _build_custom_change_set(payload)
 
-    try:
-        status = _persist_topology_payload(
-            _build_payload_from_change_set(
-                change_set=change_set,
+        try:
+            status = _persist_topology_payload(
+                _build_payload_from_change_set(
+                    change_set=change_set,
+                    source_type="manual",
+                    source_ref="inline://manual-topology",
+                ),
+                project=project,
+                workspace=workspace,
+                source_type="manual",
+            )
+            _save_topology_source_status(
+                project=project,
+                workspace=workspace,
                 source_type="manual",
                 source_ref="inline://manual-topology",
-            ),
-            project=project,
-            workspace=workspace,
-            source_type="manual",
-        )
-        _save_topology_source_status(
-            project=project,
-            workspace=workspace,
-            source_type="manual",
-            source_ref="inline://manual-topology",
-            warnings=[],
-            replace_existing=True,
-        )
-        status = get_topology_status(
-            project_id=int(project["id"]),
-            workspace_id=int(workspace["id"]) if workspace is not None else None,
-        )
-        return status
-    except TopologyImportError as exc:
-        raise ValueError(exc.message) from exc
+                warnings=[],
+                replace_existing=True,
+            )
+            status = get_topology_status(
+                project_id=int(project["id"]),
+                workspace_id=int(workspace["id"]) if workspace is not None else None,
+            )
+            return status
+        except TopologyImportError as exc:
+            raise ValueError(exc.message) from exc
 
 
 def validate_topology_definition(
@@ -2970,48 +3151,56 @@ def validate_topology_definition(
     workspace_key: str | None = None,
 ) -> TopologyStatus:
     """Validate topology input without persisting it."""
-    try:
-        payload = json.loads(raw_text)
-    except JSONDecodeError as exc:
-        raise ValueError("Topology definition must be valid JSON.") from exc
+    with authorized_session(SessionLocal) as authorization_session:
+        try:
+            payload = json.loads(raw_text)
+        except JSONDecodeError as exc:
+            raise ValueError("Topology definition must be valid JSON.") from exc
 
-    if not isinstance(payload, dict):
-        raise ValueError("Topology definition must be a JSON object.")
+        if not isinstance(payload, dict):
+            raise ValueError("Topology definition must be a JSON object.")
 
-    project = build_project_payload(
-        resolve_project_reference(project_id=project_id, project_key=project_key)
-    )
-    workspace_record = resolve_workspace_reference(
-        project_id=int(project["id"]),
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    workspace = (
-        build_workspace_payload(workspace_record)
-        if workspace_record is not None
-        else None
-    )
-    validation_payload = dict(payload)
-    validation_payload["updated_at"] = _current_timestamp()
-    validation_status = _build_topology_status(
-        validation_payload,
-        path=_topology_scope_path(project, workspace),
-        exists=False,
-    )
-
-    if validation_status.payload is None and validation_status.blocking_errors:
-        return validation_status
-
-    change_set = _build_custom_change_set(payload)
-    if change_set.operation == "noop" and payload.get("services"):
-        message = _join_warnings(change_set.warnings) or (
-            "Topology import did not produce any valid services to apply."
+        project = build_project_payload(
+            resolve_project_reference(project_id=project_id, project_key=project_key)
         )
-        validation_status.blocking_errors.append(message)
-    validation_status.warnings = _unique_messages(
-        list(validation_status.warnings) + list(change_set.warnings)
-    )
-    return validation_status
+        workspace_record = resolve_workspace_reference(
+            project_id=int(project["id"]),
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        workspace = (
+            build_workspace_payload(workspace_record)
+            if workspace_record is not None
+            else None
+        )
+        guard_project(
+            authorization_session,
+            int(project["id"]),
+            workspace_record.id if workspace_record else None,
+            "topology.read",
+            mutation=False,
+        )
+        validation_payload = dict(payload)
+        validation_payload["updated_at"] = _current_timestamp()
+        validation_status = _build_topology_status(
+            validation_payload,
+            path=_topology_scope_path(project, workspace),
+            exists=False,
+        )
+
+        if validation_status.payload is None and validation_status.blocking_errors:
+            return validation_status
+
+        change_set = _build_custom_change_set(payload)
+        if change_set.operation == "noop" and payload.get("services"):
+            message = _join_warnings(change_set.warnings) or (
+                "Topology import did not produce any valid services to apply."
+            )
+            validation_status.blocking_errors.append(message)
+        validation_status.warnings = _unique_messages(
+            list(validation_status.warnings) + list(change_set.warnings)
+        )
+        return validation_status
 
 
 def load_topology(

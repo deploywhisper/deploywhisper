@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from contextlib import contextmanager
 from urllib.parse import urlsplit
 
 from fastapi import Request
@@ -121,3 +122,38 @@ def require_human_principal(request: Request) -> VerifiedPrincipal:
         session_token(request),
         csrf_token=csrf_token(request) if mutation else None,
     )
+
+
+@contextmanager
+def bind_project_credentials(request: Request):
+    """Bind the request before running a route, validating only protected access.
+
+    Invoke from an async route wrapper/middleware so synchronous route execution
+    inherits the context. Legacy evaluation requests need no identity cookie.
+    """
+    from services.project_service import TrustedAuthorizationError, credential_context
+
+    mutation = request.method not in {"GET", "HEAD", "OPTIONS"}
+    try:
+        token = session_token(request)
+    except ApiError:
+        token = ""
+    try:
+        csrf = csrf_token(request) if mutation else None
+    except ApiError:
+        csrf = ""
+
+    def transport_check():
+        try:
+            check_identity_transport(request, mutation=mutation)
+        except ApiError:
+            raise TrustedAuthorizationError() from None
+
+    with credential_context(
+        identity_service(),
+        token,
+        csrf_token=csrf,
+        mutation=mutation,
+        transport_check=transport_check,
+    ):
+        yield

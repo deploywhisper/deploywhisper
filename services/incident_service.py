@@ -14,6 +14,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from models.database import SessionLocal
+from services.project_service import visible_report_predicate
+from services.project_service import visible_context_predicate
+from models.tables import IncidentRecord, IncidentIngestionSource
+from services.project_service import authorized_session, guard_project, guard_report
 from models.repositories.incident_ingestion_sources import (
     list_incident_ingestion_sources,
     upsert_incident_ingestion_source,
@@ -32,7 +36,9 @@ from services.content_security import (
     sensitive_artifact_values,
     sensitive_submission_values,
 )
-from services.backtesting_service import invalidate_backtesting_snapshot
+from services.backtesting_service import (
+    _invalidate_backtesting_snapshot_after_authorization as invalidate_backtesting_snapshot,
+)
 from services.project_service import (
     resolve_project_reference,
     resolve_workspace_reference,
@@ -150,19 +156,18 @@ def _rollup_redaction_status(values: list[str]) -> str:
 
 
 def _latest_timestamp(values: list[datetime | None]) -> str | None:
-    present = [value for value in values if value is not None]
+    present = [stamp for value in values if (stamp := _datetime_iso(value)) is not None]
     if not present:
         return None
-    return _datetime_iso(max(present))
+    return max(present)
 
 
 def _index_version_for_records(records: list) -> str:
     if not records:
         return "incidents:empty"
-    latest = max(
-        (record.created_at for record in records if record.created_at), default=None
+    latest_value = (
+        _latest_timestamp([record.created_at for record in records]) or "unknown"
     )
-    latest_value = _datetime_iso(latest) or "unknown"
     source_parts = [
         f"{record.id}:{record.source_file}:{_datetime_iso(record.created_at) or ''}"
         for record in sorted(records, key=attrgetter("id"))
@@ -277,6 +282,17 @@ def create_incident_record_in_session(
     analysis_id: int | None = None,
 ):
     """Stage a normalized incident record in an existing transaction."""
+    guard_project(session, project_id, workspace_id, "incident.manage", mutation=True)
+    if analysis_id is not None:
+        report = guard_report(session, analysis_id, "incident.manage", mutation=True)
+        if (
+            report is None
+            or report.project_id != project_id
+            or report.workspace_id != workspace_id
+        ):
+            from services.project_service import TrustedAuthorizationError
+
+            raise TrustedAuthorizationError()
     sensitive_values = sensitive_artifact_values(
         content.encode("utf-8", errors="replace")
     )
@@ -309,114 +325,130 @@ def ingest_incident_document(
     workspace_key: str | None = None,
 ) -> dict:
     """Normalize and persist an incident document from markdown/plain text input."""
-    sensitive_values = sensitive_submission_values(
-        [(source_file, content.encode("utf-8", errors="replace"))]
-    )
-    normalized_content = redact_text(content.strip(), sensitive_values=sensitive_values)
-    raw_source_file = source_file
-    source_file = screen_incident_source_file(
-        source_file, sensitive_values=sensitive_values
-    )
-    title = _extract_title(normalized_content, source_file)
-    severity = _extract_severity(normalized_content)
-    incident_date = _extract_incident_date(normalized_content)
-    report = None
-    resolved_project_id: int | None = None
-    resolved_workspace_id: int | None = None
-    try:
-        with SessionLocal() as session:
-            if analysis_id is not None:
-                report = get_analysis_report(
-                    session, analysis_id, include_evidence=False
-                )
-            if analysis_id is not None and report is None:
-                raise ValueError(f"Analysis report not found: {analysis_id}.")
-            if report is not None:
-                resolved_project_id = report.project_id
-                resolved_workspace_id = report.workspace_id
-                requested_project = (
-                    resolve_project_reference(
-                        project_id=project_id, project_key=project_key
+    with authorized_session(SessionLocal):
+        sensitive_values = sensitive_submission_values(
+            [(source_file, content.encode("utf-8", errors="replace"))]
+        )
+        normalized_content = redact_text(
+            content.strip(), sensitive_values=sensitive_values
+        )
+        raw_source_file = source_file
+        source_file = screen_incident_source_file(
+            source_file, sensitive_values=sensitive_values
+        )
+        title = _extract_title(normalized_content, source_file)
+        severity = _extract_severity(normalized_content)
+        incident_date = _extract_incident_date(normalized_content)
+        report = None
+        resolved_project_id: int | None = None
+        resolved_workspace_id: int | None = None
+        try:
+            with authorized_session(SessionLocal) as session:
+                if analysis_id is not None:
+                    guard_report(session, analysis_id, "incident.manage", mutation=True)
+                    report = get_analysis_report(
+                        session, analysis_id, include_evidence=False
                     )
-                    if project_id is not None or project_key is not None
-                    else None
-                )
-                if (
-                    requested_project is not None
-                    and requested_project.id != resolved_project_id
-                ):
-                    raise ValueError(
-                        "The supplied project reference does not match the analysis report project."
+                if analysis_id is not None and report is None:
+                    raise ValueError(f"Analysis report not found: {analysis_id}.")
+                if report is not None:
+                    resolved_project_id = report.project_id
+                    resolved_workspace_id = report.workspace_id
+                    requested_project = (
+                        resolve_project_reference(
+                            project_id=project_id, project_key=project_key
+                        )
+                        if project_id is not None or project_key is not None
+                        else None
                     )
-                requested_workspace = resolve_workspace_reference(
-                    project_id=resolved_project_id,
-                    workspace_id=workspace_id,
-                    workspace_key=workspace_key,
-                )
-                if (
-                    requested_workspace is not None
-                    and requested_workspace.id != resolved_workspace_id
-                ):
-                    raise ValueError(
-                        "The supplied workspace reference does not match the analysis report workspace."
+                    if (
+                        requested_project is not None
+                        and requested_project.id != resolved_project_id
+                    ):
+                        raise ValueError(
+                            "The supplied project reference does not match the analysis report project."
+                        )
+                    requested_workspace = resolve_workspace_reference(
+                        project_id=resolved_project_id,
+                        workspace_id=workspace_id,
+                        workspace_key=workspace_key,
                     )
-            else:
-                if project_id is None and project_key is None:
-                    raise ValueError("Project scope is required for incident records.")
-                project = resolve_project_reference(
-                    project_id=project_id,
-                    project_key=project_key,
-                )
-                workspace = resolve_workspace_reference(
-                    project_id=project.id,
-                    workspace_id=workspace_id,
-                    workspace_key=workspace_key,
-                )
-                resolved_project_id = project.id
-                resolved_workspace_id = workspace.id if workspace is not None else None
-            existing_aliases = set(
-                list_incident_source_files(
+                    if (
+                        requested_workspace is not None
+                        and requested_workspace.id != resolved_workspace_id
+                    ):
+                        raise ValueError(
+                            "The supplied workspace reference does not match the analysis report workspace."
+                        )
+                else:
+                    if project_id is None and project_key is None:
+                        raise ValueError(
+                            "Project scope is required for incident records."
+                        )
+                    project = resolve_project_reference(
+                        project_id=project_id,
+                        project_key=project_key,
+                    )
+                    workspace = resolve_workspace_reference(
+                        project_id=project.id,
+                        workspace_id=workspace_id,
+                        workspace_key=workspace_key,
+                    )
+                    resolved_project_id = project.id
+                    resolved_workspace_id = (
+                        workspace.id if workspace is not None else None
+                    )
+                guard_project(
                     session,
+                    resolved_project_id,
+                    resolved_workspace_id,
+                    "incident.manage",
+                    mutation=True,
+                )
+                existing_aliases = set(
+                    list_incident_source_files(
+                        session,
+                        project_id=resolved_project_id,
+                        workspace_id=resolved_workspace_id,
+                    )
+                )
+                source_file = screen_incident_source_file(
+                    raw_source_file,
+                    sensitive_values=sensitive_values,
+                    existing_aliases=existing_aliases,
+                )
+                title = _extract_title(normalized_content, source_file)
+                record = create_incident_record(
+                    session,
+                    commit=False,
                     project_id=resolved_project_id,
                     workspace_id=resolved_workspace_id,
+                    title=title,
+                    severity=severity,
+                    source_file=source_file,
+                    incident_date=incident_date,
+                    analysis_id=analysis_id,
+                    content=normalized_content,
                 )
-            )
-            source_file = screen_incident_source_file(
-                raw_source_file,
-                sensitive_values=sensitive_values,
-                existing_aliases=existing_aliases,
-            )
-            title = _extract_title(normalized_content, source_file)
-            record = create_incident_record(
-                session,
-                project_id=resolved_project_id,
-                workspace_id=resolved_workspace_id,
-                title=title,
-                severity=severity,
-                source_file=source_file,
-                incident_date=incident_date,
-                analysis_id=analysis_id,
-                content=normalized_content,
-            )
-    except ValueError as exc:
-        message = redact_scope_error_message(str(exc), sensitive_values)
-        exc.args = (message,)
-        if hasattr(exc, "message"):
-            exc.message = message
-        raise
-    if resolved_project_id is not None:
-        invalidate_backtesting_snapshot(project_id=resolved_project_id)
-    return {
-        "id": record.id,
-        "project_id": record.project_id,
-        "workspace_id": record.workspace_id,
-        "title": record.title,
-        "severity": record.severity,
-        "source_file": record.source_file,
-        "incident_date": record.incident_date,
-        "analysis_id": record.analysis_id,
-        "created_at": _datetime_iso(record.created_at),
-    }
+        except ValueError as exc:
+            message = redact_scope_error_message(str(exc), sensitive_values)
+            exc.args = (message,)
+            if hasattr(exc, "message"):
+                exc.message = message
+            raise
+        if resolved_project_id is not None:
+            invalidate_backtesting_snapshot(project_id=resolved_project_id)
+        return {
+            "id": record.id,
+            "project_id": record.project_id,
+            "workspace_id": record.workspace_id,
+            "title": record.title,
+            "severity": record.severity,
+            "source_file": record.source_file,
+            "incident_date": record.incident_date,
+            "analysis_id": record.analysis_id,
+            "created_at": _datetime_iso(record.created_at),
+        }
 
 
 def get_incident_records(
@@ -427,48 +459,58 @@ def get_incident_records(
     workspace_key: str | None = None,
 ) -> list[dict]:
     """Return stored incidents for later matching workflows."""
-    if project_id is None and project_key is None:
-        raise ValueError("Project scope is required for incident records.")
-    project = resolve_project_reference(project_id=project_id, project_key=project_key)
-    workspace = resolve_workspace_reference(
-        project_id=project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    with SessionLocal() as session:
-        records = list_incident_records(
-            session,
+    with authorized_session(SessionLocal):
+        if project_id is None and project_key is None:
+            raise ValueError("Project scope is required for incident records.")
+        project = resolve_project_reference(
+            project_id=project_id, project_key=project_key
+        )
+        workspace = resolve_workspace_reference(
             project_id=project.id,
-            workspace_id=workspace.id if workspace is not None else None,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
         )
-    payload = [
-        {
-            "id": record.id,
-            "project_id": record.project_id,
-            "workspace_id": record.workspace_id,
-            "title": record.title,
-            "severity": record.severity,
-            "source_file": record.source_file,
-            "incident_date": record.incident_date,
-            "analysis_id": record.analysis_id,
-            "content": record.content,
-            "created_at": _datetime_iso(record.created_at),
-        }
-        for record in records
-    ]
-    sensitive_values = tuple(
-        value
-        for record in records
-        for value in sensitive_artifact_values(
-            record.content.encode("utf-8", errors="replace")
+        with authorized_session(SessionLocal) as session:
+            guard_project(
+                session, project.id, workspace.id if workspace else None, "report.read"
+            )
+            records = list_incident_records(
+                session,
+                report_visibility=visible_report_predicate(session),
+                visibility=visible_context_predicate(
+                    session, IncidentRecord.project_id, IncidentRecord.workspace_id
+                ),
+                project_id=project.id,
+                workspace_id=workspace.id if workspace is not None else None,
+            )
+        payload = [
+            {
+                "id": record.id,
+                "project_id": record.project_id,
+                "workspace_id": record.workspace_id,
+                "title": record.title,
+                "severity": record.severity,
+                "source_file": record.source_file,
+                "incident_date": record.incident_date,
+                "analysis_id": record.analysis_id,
+                "content": record.content,
+                "created_at": _datetime_iso(record.created_at),
+            }
+            for record in records
+        ]
+        sensitive_values = tuple(
+            value
+            for record in records
+            for value in sensitive_artifact_values(
+                record.content.encode("utf-8", errors="replace")
+            )
         )
-    )
-    safe = redact_value(payload, sensitive_values=sensitive_values)
-    for record in safe:
-        record["source_file"] = redact_reference(
-            record["source_file"], sensitive_values=sensitive_values
-        )
-    return safe
+        safe = redact_value(payload, sensitive_values=sensitive_values)
+        for record in safe:
+            record["source_file"] = redact_reference(
+                record["source_file"], sensitive_values=sensitive_values
+            )
+        return safe
 
 
 def get_incident_ingestion_status(
@@ -478,119 +520,165 @@ def get_incident_ingestion_status(
     workspace_id: int | None = None,
     workspace_key: str | None = None,
 ) -> IncidentIngestionStatus:
+    """Read ingestion management details using the existing incident capability."""
+    with authorized_session(SessionLocal) as session:
+        project = resolve_project_reference(
+            project_id=project_id, project_key=project_key
+        )
+        workspace = resolve_workspace_reference(
+            project_id=project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        guard_project(
+            session,
+            project.id,
+            workspace.id if workspace else None,
+            "incident.manage",
+            mutation=False,
+        )
+        return _get_incident_ingestion_status_for_context(
+            project_id=project.id, workspace_id=workspace.id if workspace else None
+        )
+
+
+def _get_incident_ingestion_status_for_context(
+    *,
+    project_id: int | None = None,
+    project_key: str | None = None,
+    workspace_id: int | None = None,
+    workspace_key: str | None = None,
+) -> IncidentIngestionStatus:
     """Return admin-facing incident ingestion/index status for one scope."""
-    if project_id is None and project_key is None:
-        raise ValueError("Project scope is required for incident ingestion status.")
-    project = resolve_project_reference(project_id=project_id, project_key=project_key)
-    workspace = resolve_workspace_reference(
-        project_id=project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    with SessionLocal() as session:
-        records = list_incident_records(
-            session,
+    with authorized_session(SessionLocal):
+        if project_id is None and project_key is None:
+            raise ValueError("Project scope is required for incident ingestion status.")
+        project = resolve_project_reference(
+            project_id=project_id, project_key=project_key
+        )
+        workspace = resolve_workspace_reference(
             project_id=project.id,
-            workspace_id=workspace.id if workspace is not None else None,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
         )
-        registered_sources = list_incident_ingestion_sources(
-            session,
-            project_id=project.id,
-            workspace_id=workspace.id if workspace is not None else None,
-        )
-
-    grouped: dict[tuple[int | None, str], list] = defaultdict(list)
-    for record in records:
-        grouped[_group_key(record)].append(record)
-
-    sources: list[IncidentIngestionSourceStatus] = []
-    registry_by_key = {
-        (source.workspace_id, source.source_file): source
-        for source in registered_sources
-    }
-    for key, source_records in sorted(
-        grouped.items(), key=lambda item: _scope_sort_key(item[0])
-    ):
-        registered = registry_by_key.pop(key, None)
-        failures = (
-            _failure_summaries_from_json(registered.failure_summaries_json)
-            if registered is not None
-            else []
-        )
-        rejected_count = registered.rejected_count if registered is not None else 0
-        sources.append(
-            _source_status_from_records(
-                project_id=project.id,
-                workspace_id=key[0],
-                source_file=key[1],
-                source_records=source_records,
-                failure_summaries=failures,
-                rejected_count=rejected_count,
-                status=registered.status if registered is not None else "indexed",
+        with authorized_session(SessionLocal) as session:
+            guard_project(
+                session, project.id, workspace.id if workspace else None, "report.read"
             )
-        )
-    for registered in registry_by_key.values():
-        failures = _failure_summaries_from_json(registered.failure_summaries_json)
-        if registered.status in {"indexed", "removed"} and not failures:
-            continue
-        sources.append(
-            IncidentIngestionSourceStatus(
-                import_source=registered.source_file,
-                project_id=project.id,
-                workspace_id=registered.workspace_id,
-                scope_label=_scope_label(registered.workspace_id),
-                indexed_count=registered.indexed_count,
-                rejected_count=registered.rejected_count,
-                last_indexed_at=_datetime_iso(registered.last_indexed_at),
-                redaction_status=registered.redaction_status,
-                freshness_status=(
-                    "current" if registered.status == "indexed" else "empty"
+            records = list_incident_records(
+                session,
+                report_visibility=visible_report_predicate(session),
+                visibility=visible_context_predicate(
+                    session, IncidentRecord.project_id, IncidentRecord.workspace_id
                 ),
-                failure_summaries=failures,
+                project_id=project.id,
+                workspace_id=workspace.id if workspace is not None else None,
             )
-        )
-    sources.sort(key=lambda source: (source.workspace_id or 0, source.import_source))
+            registered_sources = list_incident_ingestion_sources(
+                session,
+                visibility=visible_context_predicate(
+                    session,
+                    IncidentIngestionSource.project_id,
+                    IncidentIngestionSource.workspace_id,
+                ),
+                project_id=project.id,
+                workspace_id=workspace.id if workspace is not None else None,
+            )
 
-    indexed_count = sum(source.indexed_count for source in sources)
-    rejected_count = sum(source.rejected_count for source in sources)
-    redaction_status = _rollup_redaction_status(
-        [source.redaction_status for source in sources]
-    )
-    index_version = _index_version_for_records(records)
-    result = IncidentIngestionStatus(
-        project_id=project.id,
-        workspace_id=workspace.id if workspace is not None else None,
-        indexed_count=indexed_count,
-        rejected_count=rejected_count,
-        last_indexed_at=_latest_timestamp(
-            [
-                record.created_at
-                for source_records in grouped.values()
-                for record in source_records
-            ]
-        ),
-        index_version=index_version,
-        redaction_status=redaction_status,
-        freshness_status="current" if indexed_count else "empty",
-        sources=sources,
-    )
-    raw_values = tuple(
-        value
-        for record in records
-        for value in sensitive_artifact_values(
-            record.content.encode("utf-8", errors="replace")
-        )
-    )
-    safe = redact_value(result.model_dump(), sensitive_values=raw_values)
-    for source in safe["sources"]:
-        source["import_source"] = redact_reference(
-            source["import_source"], sensitive_values=raw_values
-        )
-        for failure in source["failure_summaries"]:
-            failure["source_file"] = redact_reference(
-                failure["source_file"], sensitive_values=raw_values
+        grouped: dict[tuple[int | None, str], list] = defaultdict(list)
+        for record in records:
+            grouped[_group_key(record)].append(record)
+
+        sources: list[IncidentIngestionSourceStatus] = []
+        registry_by_key = {
+            (source.workspace_id, source.source_file): source
+            for source in registered_sources
+        }
+        for key, source_records in sorted(
+            grouped.items(), key=lambda item: _scope_sort_key(item[0])
+        ):
+            registered = registry_by_key.pop(key, None)
+            failures = (
+                _failure_summaries_from_json(registered.failure_summaries_json)
+                if registered is not None
+                else []
             )
-    return IncidentIngestionStatus.model_validate(safe)
+            rejected_count = registered.rejected_count if registered is not None else 0
+            sources.append(
+                _source_status_from_records(
+                    project_id=project.id,
+                    workspace_id=key[0],
+                    source_file=key[1],
+                    source_records=source_records,
+                    failure_summaries=failures,
+                    rejected_count=rejected_count,
+                    status=registered.status if registered is not None else "indexed",
+                )
+            )
+        for registered in registry_by_key.values():
+            failures = _failure_summaries_from_json(registered.failure_summaries_json)
+            if registered.status in {"indexed", "removed"} and not failures:
+                continue
+            sources.append(
+                IncidentIngestionSourceStatus(
+                    import_source=registered.source_file,
+                    project_id=project.id,
+                    workspace_id=registered.workspace_id,
+                    scope_label=_scope_label(registered.workspace_id),
+                    indexed_count=registered.indexed_count,
+                    rejected_count=registered.rejected_count,
+                    last_indexed_at=_datetime_iso(registered.last_indexed_at),
+                    redaction_status=registered.redaction_status,
+                    freshness_status=(
+                        "current" if registered.status == "indexed" else "empty"
+                    ),
+                    failure_summaries=failures,
+                )
+            )
+        sources.sort(
+            key=lambda source: (source.workspace_id or 0, source.import_source)
+        )
+
+        indexed_count = sum(source.indexed_count for source in sources)
+        rejected_count = sum(source.rejected_count for source in sources)
+        redaction_status = _rollup_redaction_status(
+            [source.redaction_status for source in sources]
+        )
+        index_version = _index_version_for_records(records)
+        result = IncidentIngestionStatus(
+            project_id=project.id,
+            workspace_id=workspace.id if workspace is not None else None,
+            indexed_count=indexed_count,
+            rejected_count=rejected_count,
+            last_indexed_at=_latest_timestamp(
+                [
+                    record.created_at
+                    for source_records in grouped.values()
+                    for record in source_records
+                ]
+            ),
+            index_version=index_version,
+            redaction_status=redaction_status,
+            freshness_status="current" if indexed_count else "empty",
+            sources=sources,
+        )
+        raw_values = tuple(
+            value
+            for record in records
+            for value in sensitive_artifact_values(
+                record.content.encode("utf-8", errors="replace")
+            )
+        )
+        safe = redact_value(result.model_dump(), sensitive_values=raw_values)
+        for source in safe["sources"]:
+            source["import_source"] = redact_reference(
+                source["import_source"], sensitive_values=raw_values
+            )
+            for failure in source["failure_summaries"]:
+                failure["source_file"] = redact_reference(
+                    failure["source_file"], sensitive_values=raw_values
+                )
+        return IncidentIngestionStatus.model_validate(safe)
 
 
 def get_incident_index_snapshot(
@@ -601,18 +689,19 @@ def get_incident_index_snapshot(
     workspace_key: str | None = None,
 ) -> dict[str, str | int | None]:
     """Return compact incident index state for report context snapshots."""
-    status = get_incident_ingestion_status(
-        project_id=project_id,
-        project_key=project_key,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    return {
-        "incident_index_size": status.indexed_count,
-        "incident_index_version": status.index_version,
-        "incident_index_last_indexed_at": status.last_indexed_at,
-        "incident_index_freshness_status": status.freshness_status,
-    }
+    with authorized_session(SessionLocal):
+        status = _get_incident_ingestion_status_for_context(
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        return {
+            "incident_index_size": status.indexed_count,
+            "incident_index_version": status.index_version,
+            "incident_index_last_indexed_at": status.last_indexed_at,
+            "incident_index_freshness_status": status.freshness_status,
+        }
 
 
 def record_incident_ingestion_source_status(
@@ -630,6 +719,7 @@ def record_incident_ingestion_source_status(
     last_indexed_at: datetime | None = None,
 ) -> None:
     """Persist source-level ingestion status in the current transaction."""
+    guard_project(session, project_id, workspace_id, "incident.manage", mutation=True)
     upsert_incident_ingestion_source(
         session,
         project_id=project_id,

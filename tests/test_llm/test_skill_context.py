@@ -17,6 +17,20 @@ from llm.skill_context import (
 
 
 class SkillContextTests(unittest.TestCase):
+    def setUp(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from models.database import Base
+
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        self.addCleanup(engine.dispose)
+        factory_patch = patch(
+            "services.project_service.SessionLocal", sessionmaker(engine)
+        )
+        factory_patch.start()
+        self.addCleanup(factory_patch.stop)
+
     def _assessment(self, tool: str = "terraform") -> RiskAssessment:
         return RiskAssessment(
             score=20,

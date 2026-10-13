@@ -28,6 +28,7 @@ from services.confidence_ledger import (
 )
 from services.skill_manifest_service import SkillTrustLevel
 from services.identity_service import AccountView, VerifiedPrincipal
+from services.project_service import MembershipView
 
 
 class MetaPayload(BaseModel):
@@ -49,6 +50,22 @@ class HumanAccountRequest(BaseModel):
     username: str = Field(min_length=1, max_length=128)
     password: SecretStr
     is_admin: bool = False
+
+
+class ProjectMembershipRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    role: Literal["admin", "maintainer", "reviewer", "contributor", "read-only"]
+    workspace_id: int | None = Field(default=None, ge=1)
+
+
+class ProjectMembershipResponse(BaseModel):
+    data: MembershipView
+    meta: dict[str, Any]
+
+
+class ProjectMembershipListResponse(BaseModel):
+    data: list[MembershipView]
+    meta: dict[str, Any]
 
 
 class IdentityMetaPayload(MetaPayload):

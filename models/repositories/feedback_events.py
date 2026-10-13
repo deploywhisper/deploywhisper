@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 
-from models.tables import FeedbackEvent
+from models.tables import FeedbackEvent, AnalysisReport
 
 
 def create_feedback_event(
@@ -25,6 +25,7 @@ def create_feedback_event(
     false_positive_reason: str | None = None,
     false_negative_note: str | None = None,
     outcome_label: str | None = None,
+    commit: bool = True,
 ) -> FeedbackEvent:
     event = FeedbackEvent(
         project_id=project_id,
@@ -40,7 +41,10 @@ def create_feedback_event(
         outcome_label=outcome_label,
     )
     session.add(event)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(event)
     return event
 
@@ -56,6 +60,8 @@ def list_feedback_events(
     created_to: datetime | None = None,
     created_before: datetime | None = None,
     limit: int | None = None,
+    visibility=None,
+    report_visibility=None,
 ) -> list[FeedbackEvent]:
     if analysis_ids is not None and not analysis_ids:
         return []
@@ -78,5 +84,18 @@ def list_feedback_events(
         stmt = stmt.where(FeedbackEvent.created_at < created_before)
     if limit is not None:
         stmt = stmt.limit(max(1, limit))
+    if report_visibility is not None:
+        stmt = stmt.where(
+            or_(
+                FeedbackEvent.analysis_id.is_(None),
+                FeedbackEvent.analysis_id.in_(
+                    select(AnalysisReport.id).where(
+                        report_visibility,
+                    )
+                ),
+            )
+        )
+    if visibility is not None:
+        stmt = stmt.where(visibility)
     result = session.execute(stmt)
     return list(result.scalars().all())
