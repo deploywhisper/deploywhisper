@@ -27,6 +27,7 @@ from api.errors import (
 )
 from api.routes.agent import router as agent_router
 from api.routes.analyses import router as analyses_router
+from api.routes.auth import router as auth_router
 from api.routes.deployments import router as deployments_router
 from api.routes.github_app import router as github_app_router
 from api.routes.health import router as health_router
@@ -121,6 +122,7 @@ fastapi_app.add_exception_handler(ApiError, api_error_handler)
 fastapi_app.add_exception_handler(RequestValidationError, validation_error_handler)
 fastapi_app.add_exception_handler(StarletteHTTPException, http_error_envelope_handler)
 fastapi_app.include_router(health_router)
+fastapi_app.include_router(auth_router)
 fastapi_app.include_router(agent_router)
 fastapi_app.include_router(analyses_router)
 fastapi_app.include_router(deployments_router)
@@ -314,6 +316,7 @@ def run() -> None:
         host=settings.app_host,
         port=settings.app_port,
         log_config=None,
+        proxy_headers=False,
     )
 
 

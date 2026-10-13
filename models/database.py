@@ -58,6 +58,8 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "025_add_event_analysis_indexes",
     "026_add_evidence_context_source",
     "027_add_scanner_imports",
+    "028_add_narrative_guidance_payload",
+    "029_add_identity_lifecycle",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -927,6 +929,52 @@ def _learning_context_scope_complete(connection) -> bool:
     )
 
 
+def _identity_schema_complete(connection, tables: set[str]) -> bool:
+    """Recognize only a complete, constrained identity schema during repair."""
+    names = {"identity_accounts", "identity_sessions", "identity_credentials"}
+    if not names & tables:
+        return False
+    inspector = inspect(connection)
+    if not names <= tables:
+        raise RuntimeError(
+            "Detected a partial identity schema. Manual recovery is required."
+        )
+    for name in names:
+        expected = Base.metadata.tables[name]
+        columns = {c["name"]: c for c in inspector.get_columns(name)}
+        for column in expected.columns:
+            actual = columns.get(column.name)
+            if (
+                actual is None
+                or actual["type"]._type_affinity is not column.type._type_affinity
+                or actual["nullable"] != column.nullable
+                or bool(actual.get("primary_key")) != bool(column.primary_key)
+            ):
+                raise RuntimeError(
+                    "Detected a partial identity schema. Manual recovery is required."
+                )
+        unique_columns = {
+            tuple(item["column_names"])
+            for item in inspector.get_unique_constraints(name)
+        }
+        required_unique = "username" if name == "identity_accounts" else "token_hash"
+        if (required_unique,) not in unique_columns:
+            raise RuntimeError(
+                "Detected a partial identity schema. Manual recovery is required."
+            )
+        if name != "identity_accounts" and not any(
+            item["constrained_columns"] == ["principal_id"]
+            and item["referred_table"] == "identity_accounts"
+            and item["referred_columns"] == ["id"]
+            and (item.get("options") or {}).get("ondelete") == "CASCADE"
+            for item in inspector.get_foreign_keys(name)
+        ):
+            raise RuntimeError(
+                "Detected a partial identity schema. Manual recovery is required."
+            )
+    return True
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
@@ -957,7 +1005,16 @@ def _bootstrap_brownfield_revision() -> None:
             ).scalar()
 
         if revision in _KNOWN_ALEMBIC_REVISIONS:
+            if (
+                revision == "029_add_identity_lifecycle"
+                and not _identity_schema_complete(connection, tables)
+            ):
+                raise RuntimeError(
+                    "Detected a partial identity schema. Manual recovery is required."
+                )
             return
+
+        has_complete_identity = _identity_schema_complete(connection, tables)
 
         report_columns = (
             _analysis_report_columns(connection)
@@ -1159,6 +1216,12 @@ def _bootstrap_brownfield_revision() -> None:
                 if has_complete_narrative_guidance
                 else "027_add_scanner_imports"
             )
+            if has_complete_identity:
+                if not has_complete_narrative_guidance:
+                    raise RuntimeError(
+                        "Detected a partial identity schema. Manual recovery is required."
+                    )
+                revision = "029_add_identity_lifecycle"
             _write_alembic_revision(connection, revision)
             return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:

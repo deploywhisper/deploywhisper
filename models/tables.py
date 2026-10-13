@@ -787,3 +787,67 @@ if "FeedbackEvent" not in globals():
             back_populates="feedback_events",
             foreign_keys=[workspace_id],
         )
+
+
+if "IdentityAccount" not in globals():
+
+    class IdentityAccount(Base):
+        """Named local principals; credentials never grant project membership."""
+
+        __tablename__ = "identity_accounts"
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        username: Mapped[str] = mapped_column(String(128), unique=True)
+        principal_type: Mapped[str] = mapped_column(String(20), default="human")
+        password_verifier: Mapped[str] = mapped_column(String(160))
+        is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+        enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+        authentication_version: Mapped[int] = mapped_column(Integer, default=1)
+        created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+        revoked_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+
+
+if "IdentitySession" not in globals():
+
+    class IdentitySession(Base):
+        """Hashed, audience- and deployment-bound browser sessions."""
+
+        __tablename__ = "identity_sessions"
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        principal_id: Mapped[str] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="CASCADE"), index=True
+        )
+        token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+        csrf_hash: Mapped[str] = mapped_column(String(64))
+        audience: Mapped[str] = mapped_column(String(20))
+        security_profile: Mapped[str] = mapped_column(String(30))
+        trusted_origin: Mapped[str] = mapped_column(String(512))
+        authentication_version: Mapped[int] = mapped_column(Integer)
+        created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+        last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+        expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+        revoked_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+
+
+if "IdentityCredential" not in globals():
+
+    class IdentityCredential(Base):
+        """One-use local bootstrap/recovery possession evidence."""
+
+        __tablename__ = "identity_credentials"
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+        purpose: Mapped[str] = mapped_column(String(20))
+        principal_id: Mapped[str | None] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="CASCADE"),
+            nullable=True,
+            index=True,
+        )
+        created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+        expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+        consumed_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )

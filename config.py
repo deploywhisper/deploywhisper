@@ -100,6 +100,8 @@ class Settings:
     app_base_url: str | None = os.getenv("APP_BASE_URL") or os.getenv("PUBLIC_APP_URL")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///data/deploywhisper.db")
+    identity_profile: str = os.getenv("DEPLOYWHISPER_IDENTITY_PROFILE", "disabled")
+    identity_origin: str = os.getenv("DEPLOYWHISPER_IDENTITY_ORIGIN", "")
     llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")
     llm_model: str = os.getenv("LLM_MODEL", "ollama/qwen2.5-coder:3b")
     llm_api_base: str = os.getenv("LLM_API_BASE", "http://localhost:11434")

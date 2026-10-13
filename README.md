@@ -575,6 +575,13 @@ This shows built-in and custom skill override status.
 
 DeployWhisper is configured primarily through environment variables and stored non-secret settings.
 
+Named local accounts and sessions are available through the opt-in
+`DEPLOYWHISPER_IDENTITY_PROFILE` and `DEPLOYWHISPER_IDENTITY_ORIGIN` settings.
+See [local identity setup and recovery](docs/infra-automation/identity.md) for the
+protected CLI bootstrap, HTTPS/proxy configuration, session API and development
+profile. Identity defaults to disabled; project-scoped automation permissions
+remain a separate integration.
+
 ### Core Runtime Variables
 
 - `APP_NAME`

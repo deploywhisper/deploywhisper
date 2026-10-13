@@ -19,6 +19,7 @@ from pydantic import (
     computed_field,
     field_validator,
     model_validator,
+    SecretStr,
 )
 
 from services.confidence_ledger import (
@@ -26,11 +27,61 @@ from services.confidence_ledger import (
     normalize_confidence_ledger_payload,
 )
 from services.skill_manifest_service import SkillTrustLevel
+from services.identity_service import AccountView, VerifiedPrincipal
 
 
 class MetaPayload(BaseModel):
     app: str = Field(..., description="Application identifier")
     version: str = Field(..., description="Application version")
+
+
+class HumanLoginRequest(BaseModel):
+    """Closed human password exchange; never accept caller roles or actors."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    username: str = Field(min_length=1, max_length=128)
+    password: SecretStr
+    audience: Literal["human"] = "human"
+
+
+class HumanAccountRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    username: str = Field(min_length=1, max_length=128)
+    password: SecretStr
+    is_admin: bool = False
+
+
+class IdentityMetaPayload(MetaPayload):
+    correlation_id: str
+
+
+class HumanSessionData(BaseModel):
+    principal: VerifiedPrincipal
+    csrf_token: str
+
+
+class HumanSessionResponse(BaseModel):
+    data: HumanSessionData
+    meta: IdentityMetaPayload
+
+
+class HumanPrincipalResponse(BaseModel):
+    data: VerifiedPrincipal
+    meta: IdentityMetaPayload
+
+
+class HumanAccountResponse(BaseModel):
+    data: AccountView
+    meta: IdentityMetaPayload
+
+
+class HumanLogoutData(BaseModel):
+    logged_out: Literal[True] = True
+
+
+class HumanLogoutResponse(BaseModel):
+    data: HumanLogoutData
+    meta: IdentityMetaPayload
 
 
 def build_meta(**extra: Any) -> dict[str, Any]:
