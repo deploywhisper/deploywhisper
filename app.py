@@ -24,6 +24,7 @@ from api.errors import (
     api_error_handler,
     http_error_envelope_handler,
     validation_error_handler,
+    trusted_authorization_error_handler,
 )
 from api.routes.agent import router as agent_router
 from api.routes.analyses import router as analyses_router
@@ -41,6 +42,8 @@ from api.routes.stats import router as stats_router
 from config import settings
 from logging_config import configure_logging
 from models.database import init_db
+from api.dependencies import bind_project_credentials
+from services.project_service import TrustedAuthorizationError
 from services.artifact_snapshot_service import load_report_artifact
 from services.backtesting_service import run_due_weekly_backtests
 from services.skill_manifest_service import build_skill_manifest_v1_schema
@@ -119,6 +122,9 @@ fastapi_app = FastAPI(
     lifespan=lifespan,
 )
 fastapi_app.add_exception_handler(ApiError, api_error_handler)
+fastapi_app.add_exception_handler(
+    TrustedAuthorizationError, trusted_authorization_error_handler
+)
 fastapi_app.add_exception_handler(RequestValidationError, validation_error_handler)
 fastapi_app.add_exception_handler(StarletteHTTPException, http_error_envelope_handler)
 fastapi_app.include_router(health_router)
@@ -189,10 +195,11 @@ def shared_report_artifact_view(report_id: int, name: str) -> HTMLResponse:
 
 @fastapi_app.get("/history/{report_id}/artifacts", include_in_schema=False)
 def report_artifact_view(
-    report_id: int, name: str, line: int | None = None
+    report_id: int, name: str, request: Request, line: int | None = None
 ) -> HTMLResponse:
     """Render one uploaded artifact for report-local evidence drill-down."""
-    snapshot = load_report_artifact(report_id, name)
+    with bind_project_credentials(request):
+        snapshot = load_report_artifact(report_id, name)
     if snapshot is None:
         raise StarletteHTTPException(status_code=404, detail="Artifact not found")
     highlighted_line = str(line) if line is not None and line > 0 else None
@@ -211,6 +218,7 @@ def report_artifact_view(
             )
         )
     return HTMLResponse(
+        headers={"Cache-Control": "no-store"},
         content=(
             "<!doctype html><html><head><meta charset='utf-8'>"
             f"<title>{escape(snapshot.artifact_name)} · DeployWhisper</title>"
@@ -233,7 +241,7 @@ def report_artifact_view(
             f"<p>Report {report_id} artifact snapshot stored locally for review.</p>"
             f"<table><tbody>{''.join(rows)}</tbody></table>"
             "</main></body></html>"
-        )
+        ),
     )
 
 

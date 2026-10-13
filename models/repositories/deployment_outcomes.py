@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session, selectinload
 
-from models.tables import DeploymentOutcome
+from models.tables import DeploymentOutcome, AnalysisReport
 
 
 def _deployment_outcome_load_options() -> list:
@@ -30,6 +30,7 @@ def create_deployment_outcome(
     environment: str | None = None,
     summary: str | None = None,
     notes: str | None = None,
+    commit: bool = True,
 ) -> DeploymentOutcome:
     outcome = DeploymentOutcome(
         project_id=project_id,
@@ -43,7 +44,10 @@ def create_deployment_outcome(
         notes=notes,
     )
     session.add(outcome)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(outcome)
     return session.execute(
         select(DeploymentOutcome)
@@ -64,6 +68,8 @@ def list_deployment_outcomes(
     deployed_to: datetime | None = None,
     deployed_before: datetime | None = None,
     limit: int | None = 100,
+    visibility=None,
+    report_visibility=None,
 ) -> list[DeploymentOutcome]:
     if analysis_ids is not None and not analysis_ids:
         return []
@@ -90,5 +96,18 @@ def list_deployment_outcomes(
         stmt = stmt.where(DeploymentOutcome.deployed_at <= deployed_to)
     if deployed_before is not None:
         stmt = stmt.where(DeploymentOutcome.deployed_at < deployed_before)
+    if report_visibility is not None:
+        stmt = stmt.where(
+            or_(
+                DeploymentOutcome.analysis_id.is_(None),
+                DeploymentOutcome.analysis_id.in_(
+                    select(AnalysisReport.id).where(
+                        report_visibility,
+                    )
+                ),
+            )
+        )
+    if visibility is not None:
+        stmt = stmt.where(visibility)
     result = session.execute(stmt)
     return list(result.scalars().all())

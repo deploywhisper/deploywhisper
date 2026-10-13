@@ -17,6 +17,7 @@ def create_project(
     repository_url: str | None = None,
     default_branch: str | None = None,
     is_default: bool = False,
+    commit: bool = True,
 ) -> Project:
     record = Project(
         project_key=project_key,
@@ -27,7 +28,7 @@ def create_project(
         is_default=is_default,
     )
     session.add(record)
-    session.commit()
+    session.commit() if commit else session.flush()
     session.refresh(record)
     return record
 
@@ -63,6 +64,7 @@ def create_workspace(
     display_name: str,
     description: str | None = None,
     environment: str | None = None,
+    commit: bool = True,
 ) -> ProjectWorkspace:
     record = ProjectWorkspace(
         project_id=project_id,
@@ -72,7 +74,7 @@ def create_workspace(
         environment=environment,
     )
     session.add(record)
-    session.commit()
+    session.commit() if commit else session.flush()
     session.refresh(record)
     return record
 

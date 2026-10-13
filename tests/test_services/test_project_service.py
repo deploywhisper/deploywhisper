@@ -556,7 +556,13 @@ class ProjectServiceTests(unittest.TestCase):
         self.assertIn("outcome.manage", capabilities_by_role["maintainer"])
         self.assertEqual(
             capabilities_by_role["read-only"],
-            {"project.read", "workspace.read", "report.read", "topology.read"},
+            {
+                "project.read",
+                "workspace.read",
+                "report.read",
+                "topology.read",
+                "automation.read",
+            },
         )
 
     def test_blank_project_role_is_invalid_instead_of_admin(self) -> None:

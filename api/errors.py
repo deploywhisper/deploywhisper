@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import Any
+import secrets
 
 from fastapi.exception_handlers import (
     http_exception_handler,
@@ -62,12 +63,29 @@ def build_error_response(
 
 
 async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
-    return build_error_response(
+    if exc.code == "operation_unavailable":
+        exc.details.setdefault("retryable", False)
+        exc.details.setdefault("correlation_id", secrets.token_hex(16))
+    response = build_error_response(
         status_code=exc.status_code,
         code=exc.code,
         message=exc.message,
         details=exc.details,
     )
+    if exc.code == "operation_unavailable":
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+async def trusted_authorization_error_handler(request: Request, exc) -> JSONResponse:
+    response = build_error_response(
+        status_code=exc.status_code,
+        code=exc.code,
+        message=exc.message,
+        details={"retryable": False, "correlation_id": secrets.token_hex(16)},
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 async def validation_error_handler(
@@ -148,8 +166,19 @@ class ApiRoute(APIRoute):
         original_handler = super().get_route_handler()
 
         async def custom_route_handler(request: Request):
+            from api.dependencies import bind_project_credentials
+            from services.project_service import TrustedAuthorizationError
+
             try:
-                return await original_handler(request)
+                with bind_project_credentials(request):
+                    response = await original_handler(request)
+                    from services.project_service import legacy_request_has_identity
+
+                    if legacy_request_has_identity():
+                        response.headers["Cache-Control"] = "no-store"
+                    return response
+            except TrustedAuthorizationError as exc:
+                return await trusted_authorization_error_handler(request, exc)
             except ApiError as exc:
                 return await api_error_handler(request, exc)
             except RequestValidationError as exc:

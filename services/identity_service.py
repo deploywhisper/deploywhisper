@@ -400,9 +400,15 @@ class IdentityService:
     def _resolve(self, db, token: str, now: datetime, csrf_token: str | None = None):
         self._profile()
         session = db.scalar(
-            select(IdentitySession).where(IdentitySession.token_hash == _digest(token))
+            select(IdentitySession)
+            .where(IdentitySession.token_hash == _digest(token))
+            .execution_options(populate_existing=True)
         )
-        account = db.get(IdentityAccount, session.principal_id) if session else None
+        account = (
+            db.get(IdentityAccount, session.principal_id, populate_existing=True)
+            if session
+            else None
+        )
         if (
             session is None
             or account is None
@@ -437,6 +443,20 @@ class IdentityService:
             if touch:
                 session.last_seen_at = now
             return self._principal(account, session)
+
+    def resolve_session_in_transaction(
+        self, db: Session, token: str, *, csrf_token: str | None = None
+    ) -> VerifiedPrincipal:
+        """Resolve live identity inside the caller's reserved SQLite transaction.
+
+        Authorization services own the transaction and must not cache this view
+        across operations. This method neither commits nor opens a connection.
+        """
+        now = _utc(self.now())
+        account, session = self._resolve(db, token, now, csrf_token)
+        session.last_seen_at = now
+        db.flush()
+        return self._principal(account, session)
 
     def rotate_session(self, token: str, *, csrf_token: str) -> IssuedSession:
         with self._transaction() as db:

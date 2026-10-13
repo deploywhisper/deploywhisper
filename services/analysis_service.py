@@ -2648,16 +2648,26 @@ def resolve_analysis_project_scope(
                 "or use a workflow integration that derives one."
             ),
         )
-    resolved_project = resolve_project_reference(
-        project_id=project_id,
-        project_key=cleaned_project_key or None,
-    )
-    resolve_workspace_reference(
-        project_id=resolved_project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    return resolved_project
+    from services.project_service import authorized_session, guard_project
+
+    with authorized_session() as session:
+        resolved_project = resolve_project_reference(
+            project_id=project_id,
+            project_key=cleaned_project_key or None,
+        )
+        workspace = resolve_workspace_reference(
+            project_id=resolved_project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        guard_project(
+            session,
+            resolved_project.id,
+            workspace.id if workspace else None,
+            "analysis.submit",
+            mutation=True,
+        )
+        return resolved_project
 
 
 def analyze_uploaded_files(
@@ -2670,6 +2680,8 @@ def analyze_uploaded_files(
     audit_context: dict | None = None,
 ) -> AnalysisRunResult:
     """Run the shared parse -> assess -> persist pipeline."""
+    from services.project_service import TrustedAuthorizationError
+
     started_at = perf_counter()
     resolved_project = resolve_analysis_project_scope(
         project_id=project_id,
@@ -2704,6 +2716,8 @@ def analyze_uploaded_files(
             audit_context=audit_context,
             analysis_duration_seconds=analysis_duration_seconds,
         )
+    except TrustedAuthorizationError:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise AnalysisPersistenceError(str(exc)) from exc
     return AnalysisRunResult(

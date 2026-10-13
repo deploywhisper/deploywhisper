@@ -60,6 +60,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "027_add_scanner_imports",
     "028_add_narrative_guidance_payload",
     "029_add_identity_lifecycle",
+    "030_add_project_memberships",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -975,6 +976,86 @@ def _identity_schema_complete(connection, tables: set[str]) -> bool:
     return True
 
 
+def _project_authorization_schema_complete(connection, tables: set[str]) -> bool:
+    """Fail closed on incomplete authority tables, constraints, or protection flags."""
+    names = {"project_memberships", "project_authorization_audit"}
+    inspector = inspect(connection)
+    marker_columns = {
+        name: {column["name"]: column for column in inspector.get_columns(name)}
+        for name in ("projects", "analysis_reports")
+        if name in tables
+    }
+    markers_present = any(
+        "authorization_required" in columns for columns in marker_columns.values()
+    )
+    if not names & tables and not markers_present:
+        return False
+
+    def incomplete() -> None:
+        raise RuntimeError(
+            "Detected a partial project authorization schema. Manual recovery is required."
+        )
+
+    if not names <= tables or len(marker_columns) != 2:
+        incomplete()
+    for columns in marker_columns.values():
+        marker = columns.get("authorization_required")
+        if (
+            marker is None
+            or marker["nullable"]
+            or marker["type"]._type_affinity is not Boolean
+            or str(marker.get("default")).strip("()'") != "0"
+        ):
+            incomplete()
+    for name in names:
+        expected = Base.metadata.tables[name]
+        columns = {column["name"]: column for column in inspector.get_columns(name)}
+        for column in expected.columns:
+            actual = columns.get(column.name)
+            if (
+                actual is None
+                or actual["type"]._type_affinity is not column.type._type_affinity
+                or actual["nullable"] != column.nullable
+                or bool(actual.get("primary_key")) != bool(column.primary_key)
+            ):
+                incomplete()
+        actual_foreign_keys = {
+            (
+                tuple(item["constrained_columns"]),
+                item["referred_table"],
+                tuple(item["referred_columns"]),
+                (item.get("options") or {}).get("ondelete"),
+            )
+            for item in inspector.get_foreign_keys(name)
+        }
+        for constraint in expected.foreign_key_constraints:
+            expected_key = (
+                tuple(element.parent.name for element in constraint.elements),
+                constraint.referred_table.name,
+                tuple(element.column.name for element in constraint.elements),
+                constraint.ondelete,
+            )
+            if expected_key not in actual_foreign_keys:
+                incomplete()
+    unique_columns = {
+        tuple(item["column_names"])
+        for item in inspector.get_unique_constraints("project_memberships")
+    }
+    if ("principal_id", "project_id") not in unique_columns:
+        incomplete()
+    checks = {
+        re.sub(r"\s+", "", item["sqltext"]).lower()
+        for item in inspector.get_check_constraints("project_memberships")
+    }
+    required_checks = {
+        "rolein('admin','maintainer','reviewer','contributor','read-only')",
+        "authorization_version>0",
+    }
+    if not required_checks <= checks:
+        incomplete()
+    return True
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
@@ -1004,13 +1085,23 @@ def _bootstrap_brownfield_revision() -> None:
                 "SELECT version_num FROM alembic_version LIMIT 1"
             ).scalar()
 
+        has_complete_authorization = _project_authorization_schema_complete(
+            connection, tables
+        )
         if revision in _KNOWN_ALEMBIC_REVISIONS:
-            if (
-                revision == "029_add_identity_lifecycle"
-                and not _identity_schema_complete(connection, tables)
-            ):
+            if revision in {
+                "029_add_identity_lifecycle",
+                "030_add_project_memberships",
+            } and not _identity_schema_complete(connection, tables):
                 raise RuntimeError(
                     "Detected a partial identity schema. Manual recovery is required."
+                )
+            if (
+                revision == "030_add_project_memberships"
+                and not has_complete_authorization
+            ):
+                raise RuntimeError(
+                    "Detected a partial project authorization schema. Manual recovery is required."
                 )
             return
 
@@ -1222,6 +1313,12 @@ def _bootstrap_brownfield_revision() -> None:
                         "Detected a partial identity schema. Manual recovery is required."
                     )
                 revision = "029_add_identity_lifecycle"
+            if has_complete_authorization:
+                if not has_complete_identity:
+                    raise RuntimeError(
+                        "Detected a partial project authorization schema. Manual recovery is required."
+                    )
+                revision = "030_add_project_memberships"
             _write_alembic_revision(connection, revision)
             return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:

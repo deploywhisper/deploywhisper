@@ -110,7 +110,7 @@ class SettingsServiceTests(unittest.TestCase):
         )
         with (
             patch.object(
-                settings_service_module, "get_provider_settings", return_value=invalid
+                settings_service_module, "_get_provider_settings", return_value=invalid
             ),
             patch.object(
                 settings_service_module, "validate_provider_settings"

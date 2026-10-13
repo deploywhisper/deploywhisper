@@ -5615,8 +5615,10 @@ class ReportServiceTests(unittest.TestCase):
                 side_effect=RuntimeError("snapshot disk full"),
             ),
             patch(
-                "services.report_service.delete_report_artifacts",
-                side_effect=RuntimeError("cleanup disk full"),
+                "services.report_service._delete_report_artifacts_after_authorization",
+                # The initial orphan-directory clear succeeds; compensation
+                # after the snapshot write failure encounters the disk error.
+                side_effect=[None, RuntimeError("cleanup disk full")],
             ),
             self.assertRaisesRegex(RuntimeError, "snapshot disk full"),
         ):
@@ -7588,7 +7590,17 @@ class ReportServiceTests(unittest.TestCase):
             {"password": password},
             RuntimeError("synthetic-sensitive-database-path is read-only"),
         )
-        with patch("sqlalchemy.orm.Session.commit", side_effect=failure):
+        from sqlalchemy.orm import Session
+        from sqlalchemy.sql.dml import Update
+
+        original_execute = Session.execute
+
+        def fail_upgrade(session, statement, *args, **kwargs):
+            if isinstance(statement, Update):
+                raise failure
+            return original_execute(session, statement, *args, **kwargs)
+
+        with patch("sqlalchemy.orm.Session.execute", new=fail_upgrade):
             with self.assertLogs(
                 report_service_module.logger, level="WARNING"
             ) as logged:

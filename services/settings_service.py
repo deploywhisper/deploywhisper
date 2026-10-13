@@ -7,6 +7,7 @@ import json
 import os
 
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
 from config import PROVIDER_ENV_API_KEYS, provider_credential_values, settings
@@ -25,7 +26,13 @@ from services.policy_adapter_settings import (
     PolicyAdapterStatus,
     PolicySeverity,
 )
-from services.project_service import normalize_project_key
+from models.tables import Project
+from services.project_service import (
+    authorized_session,
+    guard_global_configuration,
+    guard_project,
+    normalize_project_key,
+)
 
 
 class ProviderCapabilitySummary(BaseModel):
@@ -220,28 +227,29 @@ def save_policy_adapter_settings(
     enforcement_mode: PolicyAdapterStatus | str | None = None,
 ) -> PolicyAdapterSettings:
     """Persist project defaults or an integration-specific override."""
-    normalized_project_key = normalize_project_key(project_key)
-    normalized_integration = (
-        normalize_policy_integration_label(integration)
-        if integration is not None
-        else None
-    )
-    if enforcement_mode is None:
-        enforcement_mode = get_policy_adapter_settings(
+    with authorized_session(SessionLocal) as session:
+        _guard_policy_project(session, project_key, mutation=True)
+        normalized_project_key = normalize_project_key(project_key)
+        normalized_integration = (
+            normalize_policy_integration_label(integration)
+            if integration is not None
+            else None
+        )
+        if enforcement_mode is None:
+            enforcement_mode = get_policy_adapter_settings(
+                project_key=normalized_project_key,
+                integration=normalized_integration,
+            ).enforcement_mode
+        resolved = PolicyAdapterSettings(
             project_key=normalized_project_key,
             integration=normalized_integration,
-        ).enforcement_mode
-    resolved = PolicyAdapterSettings(
-        project_key=normalized_project_key,
-        integration=normalized_integration,
-        source="integration" if normalized_integration else "project",
-        warn_at=warn_at,
-        soft_block_at=soft_block_at,
-        hard_block_at=hard_block_at,
-        reporting_default=reporting_default,
-        enforcement_mode=enforcement_mode,
-    )
-    with SessionLocal() as session:
+            source="integration" if normalized_integration else "project",
+            warn_at=warn_at,
+            soft_block_at=soft_block_at,
+            hard_block_at=hard_block_at,
+            reporting_default=reporting_default,
+            enforcement_mode=enforcement_mode,
+        )
         upsert_setting(
             session,
             key=_policy_adapter_settings_key(
@@ -249,21 +257,25 @@ def save_policy_adapter_settings(
                 integration=normalized_integration,
             ),
             value=json.dumps(resolved.model_dump(mode="json"), sort_keys=True),
+            commit=False,
         )
-    return resolved
+        return resolved
 
 
 def get_policy_adapter_settings(
-    *, project_key: str, integration: str | None = None
+    *, project_key: str, integration: str | None = None, workspace_id: int | None = None
 ) -> PolicyAdapterSettings:
     """Resolve integration overrides before project and safe built-in defaults."""
-    normalized_project_key = normalize_project_key(project_key)
-    normalized_integration = (
-        normalize_policy_integration_label(integration)
-        if integration is not None
-        else None
-    )
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
+        _guard_policy_project(
+            session, project_key, mutation=False, workspace_id=workspace_id
+        )
+        normalized_project_key = normalize_project_key(project_key)
+        normalized_integration = (
+            normalize_policy_integration_label(integration)
+            if integration is not None
+            else None
+        )
         if normalized_integration is not None:
             integration_record = get_setting(
                 session,
@@ -289,34 +301,36 @@ def get_policy_adapter_settings(
                 integration=None,
             )
 
-    return PolicyAdapterSettings(
-        project_key=normalized_project_key,
-        source="built-in",
-    )
+        return PolicyAdapterSettings(
+            project_key=normalized_project_key,
+            source="built-in",
+        )
 
 
 def delete_policy_adapter_settings(
     *, project_key: str, integration: str | None = None
 ) -> PolicyAdapterSettings:
     """Delete one override and return the newly inherited effective defaults."""
-    normalized_project_key = normalize_project_key(project_key)
-    normalized_integration = (
-        normalize_policy_integration_label(integration)
-        if integration is not None
-        else None
-    )
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
+        _guard_policy_project(session, project_key, mutation=True)
+        normalized_project_key = normalize_project_key(project_key)
+        normalized_integration = (
+            normalize_policy_integration_label(integration)
+            if integration is not None
+            else None
+        )
         delete_setting(
             session,
             _policy_adapter_settings_key(
                 project_key=normalized_project_key,
                 integration=normalized_integration,
             ),
+            commit=False,
         )
-    return get_policy_adapter_settings(
-        project_key=normalized_project_key,
-        integration=normalized_integration,
-    )
+        return get_policy_adapter_settings(
+            project_key=normalized_project_key,
+            integration=normalized_integration,
+        )
 
 
 def provider_select_options() -> dict[str, str]:
@@ -382,75 +396,91 @@ def save_provider_settings(
     activate: bool = True,
 ) -> ProviderSettings:
     """Persist provider settings and optionally mark them as active."""
-    provider = provider.strip().lower()
-    model = model.strip()
-    api_base = api_base.strip()
-    environment_key = _provider_env_api_key(provider)
-    # Validate before normalization/persistence, so rejected profiles cannot become active.
-    try:
-        validate_provider_settings_shape(
-            provider=provider,
-            model=model,
-            api_base=api_base,
-            local_mode=local_mode,
-            api_key=api_key,
-            sensitive_values=provider_credential_values(),
-            request_timeout_seconds=(
-                settings.llm_request_timeout_seconds
-                if request_timeout_seconds is None
-                else request_timeout_seconds
-            ),
+    with authorized_session(SessionLocal) as session:
+        guard_global_configuration(session, mutation=True)
+        provider = provider.strip().lower()
+        model = model.strip()
+        api_base = api_base.strip()
+        environment_key = _provider_env_api_key(provider)
+        # Validate before normalization/persistence, so rejected profiles cannot become active.
+        try:
+            validate_provider_settings_shape(
+                provider=provider,
+                model=model,
+                api_base=api_base,
+                local_mode=local_mode,
+                api_key=api_key,
+                sensitive_values=provider_credential_values(),
+                request_timeout_seconds=(
+                    settings.llm_request_timeout_seconds
+                    if request_timeout_seconds is None
+                    else request_timeout_seconds
+                ),
+            )
+        except NarrativeProviderError as exc:
+            raise ValueError(safe_error_message(exc)) from None
+        normalized_timeout = _normalize_request_timeout_seconds(request_timeout_seconds)
+        upsert_setting(
+            session, key=_provider_key(provider, "model"), value=model, commit=False
         )
-    except NarrativeProviderError as exc:
-        raise ValueError(safe_error_message(exc)) from None
-    normalized_timeout = _normalize_request_timeout_seconds(request_timeout_seconds)
-    with SessionLocal() as session:
-        upsert_setting(session, key=_provider_key(provider, "model"), value=model)
-        upsert_setting(session, key=_provider_key(provider, "api_base"), value=api_base)
+        upsert_setting(
+            session,
+            key=_provider_key(provider, "api_base"),
+            value=api_base,
+            commit=False,
+        )
         upsert_setting(
             session,
             key=_provider_key(provider, "local_mode"),
             value="true" if local_mode else "false",
+            commit=False,
         )
         upsert_setting(
             session,
             key=_provider_key(provider, "request_timeout_seconds"),
             value=str(normalized_timeout),
+            commit=False,
         )
-        delete_setting(session, _provider_key(provider, "api_key"))
+        delete_setting(session, _provider_key(provider, "api_key"), commit=False)
 
         if activate:
-            upsert_setting(session, key="active_llm_provider", value=provider)
-            upsert_setting(session, key="llm_provider", value=provider)
-            upsert_setting(session, key="llm_model", value=model)
-            upsert_setting(session, key="llm_api_base", value=api_base)
+            upsert_setting(
+                session, key="active_llm_provider", value=provider, commit=False
+            )
+            upsert_setting(session, key="llm_provider", value=provider, commit=False)
+            upsert_setting(session, key="llm_model", value=model, commit=False)
+            upsert_setting(session, key="llm_api_base", value=api_base, commit=False)
             upsert_setting(
                 session,
                 key="llm_request_timeout_seconds",
                 value=str(normalized_timeout),
+                commit=False,
             )
             upsert_setting(
-                session, key="llm_local_mode", value="true" if local_mode else "false"
+                session,
+                key="llm_local_mode",
+                value="true" if local_mode else "false",
+                commit=False,
             )
-            delete_setting(session, "llm_api_key")
+            delete_setting(session, "llm_api_key", commit=False)
 
-    return ProviderSettings(
-        provider=provider,
-        model=model,
-        api_base=api_base,
-        api_key=api_key or environment_key,
-        local_mode=local_mode,
-        request_timeout_seconds=normalized_timeout,
-        capabilities=_provider_capability_summary(provider),
-        source="database",
-    )
+        return ProviderSettings(
+            provider=provider,
+            model=model,
+            api_base=api_base,
+            api_key=api_key or environment_key,
+            local_mode=local_mode,
+            request_timeout_seconds=normalized_timeout,
+            capabilities=_provider_capability_summary(provider),
+            source="database",
+        )
 
 
-def get_provider_settings(provider: str | None = None) -> ProviderSettings:
+def _get_provider_settings(provider: str | None = None) -> ProviderSettings:
     """Return active provider settings or a saved config for a specific provider."""
     requested_provider = provider
     try:
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             active_provider = get_setting(session, "active_llm_provider")
             legacy_provider = get_setting(session, "llm_provider")
             selected_provider = requested_provider or (
@@ -565,7 +595,7 @@ def validate_provider_settings(
 
 def check_provider_readiness(completion_client=None) -> ProviderReadiness:
     """Return whether the active provider is ready for live LLM-assisted analysis."""
-    provider_settings = get_provider_settings()
+    provider_settings = _get_provider_settings()
     defaults = provider_defaults(provider_settings.provider)
     requires_api_key = bool(defaults.get("requires_api_key", False))
     has_api_key = bool(provider_settings.api_key)
@@ -618,7 +648,7 @@ def check_provider_readiness(completion_client=None) -> ProviderReadiness:
 
 def get_provider_health_snapshot() -> ProviderReadiness:
     """Return config-derived LLM health data without probing the provider."""
-    provider_settings = get_provider_settings()
+    provider_settings = _get_provider_settings()
     defaults = provider_defaults(provider_settings.provider)
     requires_api_key = bool(defaults.get("requires_api_key", False))
     has_api_key = bool(provider_settings.api_key)
@@ -694,14 +724,15 @@ def activate_local_mode(
 
 def deactivate_local_mode() -> ProviderSettings:
     """Remove local-only mode flag and fall back to configured/environment provider."""
-    with SessionLocal() as session:
-        delete_setting(session, "llm_local_mode")
-    return get_provider_settings()
+    with authorized_session(SessionLocal) as session:
+        guard_global_configuration(session, mutation=True)
+        delete_setting(session, "llm_local_mode", commit=False)
+        return get_provider_settings()
 
 
 def resolve_provider_runtime() -> dict:
     """Resolve the current provider runtime with environment-backed credentials."""
-    provider_settings = get_provider_settings()
+    provider_settings = _get_provider_settings()
     return {
         "provider": provider_settings.provider,
         "model": provider_settings.model,
@@ -715,14 +746,17 @@ def resolve_provider_runtime() -> dict:
 def get_dashboard_result_display_duration_seconds() -> int:
     """Return the configured dashboard result visibility duration."""
     try:
-        with SessionLocal() as session:
-            duration = get_setting(session, "dashboard_result_display_duration_seconds")
+        with authorized_session(SessionLocal) as session:
+            duration_record = get_setting(
+                session, "dashboard_result_display_duration_seconds"
+            )
+            duration = duration_record.value if duration_record else None
     except OperationalError:
         duration = None
 
     if duration:
         try:
-            seconds = int(duration.value)
+            seconds = int(duration)
         except ValueError:
             seconds = DEFAULT_DASHBOARD_RESULT_DURATION_SECONDS
         if seconds in DASHBOARD_RESULT_DURATION_OPTIONS:
@@ -732,28 +766,35 @@ def get_dashboard_result_display_duration_seconds() -> int:
 
 def save_dashboard_result_display_duration_seconds(seconds: int) -> int:
     """Persist the dashboard result visibility duration."""
-    if seconds not in DASHBOARD_RESULT_DURATION_OPTIONS:
-        raise ValueError(
-            "Dashboard result display duration must be one of the supported preset values."
-        )
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
+        guard_global_configuration(session, mutation=True)
+        if seconds not in DASHBOARD_RESULT_DURATION_OPTIONS:
+            raise ValueError(
+                "Dashboard result display duration must be one of the supported preset values."
+            )
         upsert_setting(
-            session, key="dashboard_result_display_duration_seconds", value=str(seconds)
+            session,
+            key="dashboard_result_display_duration_seconds",
+            value=str(seconds),
+            commit=False,
         )
-    return seconds
+        return seconds
 
 
 def get_topology_drift_check_interval_hours() -> int:
     """Return the configured topology drift check interval."""
     try:
-        with SessionLocal() as session:
-            interval = get_setting(session, "topology_drift_check_interval_hours")
+        with authorized_session(SessionLocal) as session:
+            interval_record = get_setting(
+                session, "topology_drift_check_interval_hours"
+            )
+            interval = interval_record.value if interval_record else None
     except OperationalError:
         interval = None
 
     if interval:
         try:
-            hours = int(interval.value)
+            hours = int(interval)
         except ValueError:
             hours = DEFAULT_TOPOLOGY_DRIFT_CHECK_INTERVAL_HOURS
         if hours in TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS:
@@ -763,14 +804,42 @@ def get_topology_drift_check_interval_hours() -> int:
 
 def save_topology_drift_check_interval_hours(hours: int) -> int:
     """Persist the topology drift check interval."""
-    if hours not in TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS:
-        raise ValueError(
-            "Topology drift check interval must be one of the supported preset values."
-        )
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
+        guard_global_configuration(session, mutation=True)
+        if hours not in TOPOLOGY_DRIFT_CHECK_INTERVAL_OPTIONS:
+            raise ValueError(
+                "Topology drift check interval must be one of the supported preset values."
+            )
         upsert_setting(
             session,
             key="topology_drift_check_interval_hours",
             value=str(hours),
+            commit=False,
         )
-    return hours
+        return hours
+
+
+def get_provider_settings(provider: str | None = None) -> ProviderSettings:
+    """Read administrative provider settings under live global authority."""
+    with authorized_session(SessionLocal) as session:
+        guard_global_configuration(session)
+        return _get_provider_settings(provider)
+
+
+def _guard_policy_project(
+    session, project_key: str, *, mutation: bool, workspace_id: int | None = None
+) -> None:
+    project = session.scalar(
+        select(Project).where(Project.project_key == normalize_project_key(project_key))
+    )
+    if project is None:
+        # Legacy evaluation supported settings-only fixture namespaces before projects existed.
+        guard_global_configuration(session, mutation=mutation)
+        return
+    guard_project(
+        session,
+        project.id,
+        workspace_id=workspace_id,
+        capability="settings.manage" if mutation else "report.read",
+        mutation=mutation,
+    )

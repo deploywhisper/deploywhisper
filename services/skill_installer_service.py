@@ -17,6 +17,7 @@ from urllib import error, parse, request
 from pydantic import BaseModel, Field
 
 from config import settings
+from services.project_service import authorized_session, guard_global_configuration
 from services.skill_manifest_service import (
     SkillManifestValidationError,
     is_missing_manifest_frontmatter_error,
@@ -662,42 +663,56 @@ def _replace_skill_content(destination: Path, content: str) -> None:
 def list_installed_skills() -> list[InstalledSkillEntry]:
     """Return installed custom skills from the local cache directory."""
 
-    if not CUSTOM_DIR.exists():
-        return []
+    with authorized_session() as session:
+        guard_global_configuration(session)
+        if not CUSTOM_DIR.exists():
+            return []
 
-    built_in_ids = {
-        path.stem.strip().lower()
-        for path in SKILLS_DIR.glob("*.md")
-        if path.is_file() and path.name.lower() != "readme.md"
-    }
-    entries: list[InstalledSkillEntry] = []
-    for path in sorted(
-        item
-        for item in CUSTOM_DIR.glob("*.md")
-        if item.is_file() and item.name.lower() != "readme.md"
-    ):
-        skill_id = path.stem.strip().lower()
-        mode: SkillInstallMode = "override" if skill_id in built_in_ids else "new"
-        try:
-            document = load_skill_document(
-                path,
-                strict_manifest=True,
-                allow_legacy_name=False,
-                project_root=None,
-            )
-            manifest = document.manifest
-            entries.append(
-                InstalledSkillEntry(
-                    id=skill_id,
-                    version=manifest.version if manifest else None,
-                    mode=mode,
-                    active=True,
-                    path=str(path),
-                    description=manifest.description if manifest else None,
+        built_in_ids = {
+            path.stem.strip().lower()
+            for path in SKILLS_DIR.glob("*.md")
+            if path.is_file() and path.name.lower() != "readme.md"
+        }
+        entries: list[InstalledSkillEntry] = []
+        for path in sorted(
+            item
+            for item in CUSTOM_DIR.glob("*.md")
+            if item.is_file() and item.name.lower() != "readme.md"
+        ):
+            skill_id = path.stem.strip().lower()
+            mode: SkillInstallMode = "override" if skill_id in built_in_ids else "new"
+            try:
+                document = load_skill_document(
+                    path,
+                    strict_manifest=True,
+                    allow_legacy_name=False,
+                    project_root=None,
                 )
-            )
-        except SkillManifestValidationError as exc:
-            if is_missing_manifest_frontmatter_error(exc):
+                manifest = document.manifest
+                entries.append(
+                    InstalledSkillEntry(
+                        id=skill_id,
+                        version=manifest.version if manifest else None,
+                        mode=mode,
+                        active=True,
+                        path=str(path),
+                        description=manifest.description if manifest else None,
+                    )
+                )
+            except SkillManifestValidationError as exc:
+                if is_missing_manifest_frontmatter_error(exc):
+                    entries.append(
+                        InstalledSkillEntry(
+                            id=skill_id,
+                            version=None,
+                            mode=mode,
+                            active=False,
+                            path=str(path),
+                            description=None,
+                            warning=MISSING_MANIFEST_WARNING,
+                        )
+                    )
+                    continue
                 entries.append(
                     InstalledSkillEntry(
                         id=skill_id,
@@ -705,81 +720,101 @@ def list_installed_skills() -> list[InstalledSkillEntry]:
                         mode=mode,
                         active=False,
                         path=str(path),
-                        description=None,
-                        warning=MISSING_MANIFEST_WARNING,
+                        warning=exc.issues[0]
+                        if exc.issues
+                        else "Skill manifest is invalid.",
                     )
                 )
-                continue
-            entries.append(
-                InstalledSkillEntry(
-                    id=skill_id,
-                    version=None,
-                    mode=mode,
-                    active=False,
-                    path=str(path),
-                    warning=exc.issues[0]
-                    if exc.issues
-                    else "Skill manifest is invalid.",
+            except (OSError, UnicodeDecodeError):
+                entries.append(
+                    InstalledSkillEntry(
+                        id=skill_id,
+                        version=None,
+                        mode=mode,
+                        active=False,
+                        path=str(path),
+                        warning="Skill file could not be read as UTF-8.",
+                    )
                 )
-            )
-        except (OSError, UnicodeDecodeError):
-            entries.append(
-                InstalledSkillEntry(
-                    id=skill_id,
-                    version=None,
-                    mode=mode,
-                    active=False,
-                    path=str(path),
-                    warning="Skill file could not be read as UTF-8.",
-                )
-            )
-    return entries
+        return entries
 
 
 def install_skill(skill_id: str) -> SkillInstallResult:
     """Install a skill from the configured source into skills/custom."""
 
-    normalized_id = _normalize_skill_id(skill_id)
-    destination = _skill_destination(normalized_id)
-    if destination.exists():
-        raise SkillInstallerError(
-            "skill_already_installed",
-            "Skill is already installed. Use `deploywhisper skill update` to refresh it.",
-            {"skill_id": normalized_id, "path": str(destination)},
-        )
+    with authorized_session() as session:
+        guard_global_configuration(session, mutation=True)
+        normalized_id = _normalize_skill_id(skill_id)
+        destination = _skill_destination(normalized_id)
+        if destination.exists():
+            raise SkillInstallerError(
+                "skill_already_installed",
+                "Skill is already installed. Use `deploywhisper skill update` to refresh it.",
+                {"skill_id": normalized_id, "path": str(destination)},
+            )
 
     source = fetch_configured_skill_content(normalized_id)
-    CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
-    _replace_skill_content(destination, source.content)
-    return SkillInstallResult(
-        action="installed",
-        skill_id=normalized_id,
-        version=source.version,
-        destination=str(destination),
-        mode=_install_mode(normalized_id),
-        sha256=source.sha256,
-        source_url=source.source_url,
-    )
+    with authorized_session() as session:
+        guard_global_configuration(session, mutation=True)
+        if destination.exists():
+            raise SkillInstallerError(
+                "skill_already_installed",
+                "Skill is already installed. Use `deploywhisper skill update` to refresh it.",
+                {"skill_id": normalized_id, "path": str(destination)},
+            )
+        CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
+        _replace_skill_content(destination, source.content)
+        return SkillInstallResult(
+            action="installed",
+            skill_id=normalized_id,
+            version=source.version,
+            destination=str(destination),
+            mode=_install_mode(normalized_id),
+            sha256=source.sha256,
+            source_url=source.source_url,
+        )
 
 
 def update_skill(skill_id: str) -> SkillInstallResult:
     """Refresh an installed skill from the configured source."""
 
-    normalized_id = _normalize_skill_id(skill_id)
-    destination = _skill_destination(normalized_id)
-    if not destination.exists():
-        raise SkillInstallerError(
-            "skill_not_installed",
-            "Skill is not installed. Use `deploywhisper skill install` first.",
-            {"skill_id": normalized_id, "path": str(destination)},
-        )
+    with authorized_session() as session:
+        guard_global_configuration(session, mutation=True)
+        normalized_id = _normalize_skill_id(skill_id)
+        destination = _skill_destination(normalized_id)
+        if not destination.exists():
+            raise SkillInstallerError(
+                "skill_not_installed",
+                "Skill is not installed. Use `deploywhisper skill install` first.",
+                {"skill_id": normalized_id, "path": str(destination)},
+            )
 
-    previous_version = _current_version(destination)
-    previous_checksum = _current_checksum(destination)
     source = fetch_configured_skill_content(normalized_id)
-    if previous_version == source.version and previous_checksum == source.sha256:
+    with authorized_session() as session:
+        guard_global_configuration(session, mutation=True)
+        if not destination.exists():
+            raise SkillInstallerError(
+                "skill_not_installed",
+                "Skill is not installed. Use `deploywhisper skill install` first.",
+                {"skill_id": normalized_id, "path": str(destination)},
+            )
+        previous_version = _current_version(destination)
+        previous_checksum = _current_checksum(destination)
+        if previous_version == source.version and previous_checksum == source.sha256:
+            return SkillInstallResult(
+                action="unchanged",
+                skill_id=normalized_id,
+                version=source.version,
+                previous_version=previous_version,
+                destination=str(destination),
+                mode=_install_mode(normalized_id),
+                sha256=source.sha256,
+                source_url=source.source_url,
+            )
+
+        _replace_skill_content(destination, source.content)
         return SkillInstallResult(
-            action="unchanged",
+            action="updated",
             skill_id=normalized_id,
             version=source.version,
             previous_version=previous_version,
@@ -789,38 +824,28 @@ def update_skill(skill_id: str) -> SkillInstallResult:
             source_url=source.source_url,
         )
 
-    _replace_skill_content(destination, source.content)
-    return SkillInstallResult(
-        action="updated",
-        skill_id=normalized_id,
-        version=source.version,
-        previous_version=previous_version,
-        destination=str(destination),
-        mode=_install_mode(normalized_id),
-        sha256=source.sha256,
-        source_url=source.source_url,
-    )
-
 
 def remove_skill(skill_id: str) -> SkillInstallResult:
     """Remove an installed custom skill from the local cache."""
 
-    normalized_id = _normalize_skill_id(skill_id)
-    destination = _skill_destination(normalized_id)
-    if not destination.exists():
-        raise SkillInstallerError(
-            "skill_not_installed",
-            "Skill is not installed.",
-            {"skill_id": normalized_id, "path": str(destination)},
-        )
+    with authorized_session() as session:
+        guard_global_configuration(session, mutation=True)
+        normalized_id = _normalize_skill_id(skill_id)
+        destination = _skill_destination(normalized_id)
+        if not destination.exists():
+            raise SkillInstallerError(
+                "skill_not_installed",
+                "Skill is not installed.",
+                {"skill_id": normalized_id, "path": str(destination)},
+            )
 
-    previous_version = _current_version(destination)
-    destination.unlink()
-    return SkillInstallResult(
-        action="removed",
-        skill_id=normalized_id,
-        version=None,
-        previous_version=previous_version,
-        destination=str(destination),
-        mode=_install_mode(normalized_id),
-    )
+        previous_version = _current_version(destination)
+        destination.unlink()
+        return SkillInstallResult(
+            action="removed",
+            skill_id=normalized_id,
+            version=None,
+            previous_version=previous_version,
+            destination=str(destination),
+            mode=_install_mode(normalized_id),
+        )

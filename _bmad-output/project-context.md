@@ -1,11 +1,11 @@
 ---
 project_name: 'deploywhisper'
 user_name: 'psaho01'
-date: '2026-10-12'
+date: '2026-10-13'
 sections_completed:
   ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
 status: 'complete'
-rule_count: 43
+rule_count: 47
 optimized_for_llm: true
 ---
 
@@ -102,9 +102,13 @@ _This file contains critical rules and patterns that AI agents must follow when 
 The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is future implementation guidance, not a claim these subsystems exist in v1.4.0.
 
 - Read `_bmad-output/planning-artifacts/prd-infra-automation.md`, architecture Section 25, Epic 16, the feature UX contract and current implementation-readiness report before automation work. The original `docs/deploywhisper-infra-automation-prd.md` is historical vision; its v1.4.0 phases and draft story sequence are superseded.
-- Preserve existing IDs and completed history. Epic 16 is the highest-priority v1.5.0 feature; 12.5 SBOM remains a separate release enabler. All 20 contexts are prepared. Story16.0 is complete for governance/disposable qualification; consult the story and sprint tracker for16.1 delivery/review, and16.3 remains ready-for-dev. Stories16.2 and16.4–16.19 remain gated until their own dependencies pass.
+- Preserve existing IDs and completed history. Epic 16 is the highest-priority v1.5.0 feature; 12.5 SBOM remains a separate release enabler. All 20 contexts are prepared. Story16.0 is complete for governance/disposable qualification; consult each story and the sprint tracker for current delivery/review state. Story16.2 passed its scoped 2026-10-13 readiness assessment; later stories remain gated by their own dependencies.
 - RFC 0001 is Accepted by direct maintainer decision with a documented RFC-specific early-window exception. Use the final Story 16.0 evidence/readiness record and frozen `docs/infra-automation/contract-v1.md`; production implementation remains in the owning dependent stories. Qualification applies to the declared disposable Linux ARM64/OpenTofu profile and controlled process/container restart, not host-power-loss or universal production support.
-- Automation authority must resolve verified sessions/memberships and separate credential audiences. Never reuse caller role/actor headers or missing-role-to-admin behavior as authenticated approval. Story16.1 supplies `services/identity_service.py`, `api/dependencies.py::require_human_principal`, `/api/v1/auth` and the local `python -m cli.identity` bootstrap/recovery commands. Identity defaults to disabled; sessions bind exact origin/profile and local-development cannot become HTTPS authority. Identity alone grants no project permission; live scoped authorization remains16.2. Follow `docs/infra-automation/identity.md` for cookie/CSRF, protected credential files and explicit proxy trust.
+- Automation authority must resolve verified sessions/memberships and separate credential audiences. Never reuse caller role/actor headers or missing-role-to-admin behavior as authenticated approval. Story16.1 supplies `services/identity_service.py`, `api/dependencies.py::require_human_principal`, `/api/v1/auth` and the local `python -m cli.identity` bootstrap/recovery commands. Identity defaults to disabled; sessions bind exact origin/profile and local-development cannot become HTTPS authority. Identity alone grants no project permission. Follow `docs/infra-automation/identity.md` for cookie/CSRF, protected credential files and explicit proxy trust, and `docs/infra-automation/permissions.md` for Story16.2 membership/capability contracts.
+- Protected service operations use `services/project_service.py::authorized_session` and live scope guards; nested services reuse the operation transaction and repositories flush rather than commit. Bind credentials, never a cached grant. Mutations explicitly require mutation credentials/CSRF even when reusing a read-capability helper. Filter collection/aggregate rows before pagination/counting, and retain `outcome.read` on outcome-derived history/trend/calibration data independently of `report.read`.
+- A protected report also protects its parent context and sibling reports. Deleting the last marked report must persist the parent's protection flag. Artifact access requires a live authorized report row. Share tokens/passwords cannot replace membership. Protected topology drift reads return matching cached status or unavailable; refreshing sources/persisting drift requires `topology.manage` with mutation authority.
+- Global settings/provider/custom-skill administration requires global identity admin and unrestricted `settings.manage` in every protected project; `verified` includes all projects even without persisted markers. Guard installed/custom skill enumeration and installation/update/removal at service boundaries, including direct CLI paths; recheck after source fetching before writing files. Internal skill/provider runtime readers remain for authorized analysis, not administration bypasses.
+- Membership bootstrap creates only the verified global administrator's own first scoped admin grant and never reopens after membership/audit history. Assignments/revocations audit and invalidate target sessions, and authorization versions remain live. Null workspace means whole-project authority; a workspace-specific membership permits parent metadata visibility, not project-wide mutation. Human sessions reject nonhuman principals/audiences; synthetic service/agent policy tests do not enable a machine issuer. Shared decisions require a distinct eligible reviewer; server-selected single-operator decisions are acknowledgement only.
 - Findings/severity stay in the shared analysis core; workflow gates/decisions are separate from canonical advisory reports. Direct apply/destroy/remediation, generalized commands, autonomous approval and new AI workflow composition are outside the adopted P0 release.
 - Approved handoff binds source/evidence/policy/target/payload/deadlines. Fence attempts, persist outbound intent, reconcile uncertain remote work and retain locks; disable/revoke/restore invalidates pending authority without claiming an already-started external action stopped.
 - Collection is privileged execution requiring a qualified isolated trusted-source profile. Binary plans/state remain in protected operator-local custody; sanitized transport digests and collector trust are distinct. A cloud-hosted receiver cannot reconstruct approved plan bytes from a source SHA and redacted JSON.
@@ -127,4 +131,4 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 - Update it when tooling, validation commands, or architecture boundaries materially change.
 - Remove rules that become obsolete or are contradicted by the current codebase.
 
-Last Updated: 2026-10-12
+Last Updated: 2026-10-13

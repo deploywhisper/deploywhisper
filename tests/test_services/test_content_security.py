@@ -570,7 +570,33 @@ Resources:
         self.assertEqual(redact_value(sanitized), sanitized)
 
     def test_sensitive_artifact_snapshot_is_blocked_and_clean_snapshot_preserved(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from models.database import Base
+        from models.tables import Project, AnalysisReport
+
+        engine = create_engine("sqlite://")
+        self.addCleanup(engine.dispose)
+        Base.metadata.create_all(engine)
+        factory = sessionmaker(engine, expire_on_commit=False)
+        with factory.begin() as session:
+            session.add(Project(id=1, project_key="snapshot", display_name="Snapshot"))
+            session.flush()
+            session.add(
+                AnalysisReport(
+                    id=1,
+                    project_id=1,
+                    risk_score=0,
+                    severity="low",
+                    recommendation="go",
+                    top_risk="synthetic",
+                    parse_summary="synthetic",
+                    narrative_opening="synthetic",
+                    narrative_explanation="synthetic",
+                )
+            )
         with (
+            patch.object(artifact_snapshot_service, "SessionLocal", factory),
             tempfile.TemporaryDirectory() as directory,
             patch.object(
                 artifact_snapshot_service,

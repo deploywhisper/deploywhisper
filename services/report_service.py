@@ -16,7 +16,7 @@ import unicodedata
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal, ROUND_HALF_UP
-from functools import lru_cache
+from functools import lru_cache, wraps
 from typing import Any, get_args
 from urllib.parse import urlsplit
 
@@ -45,6 +45,7 @@ from llm.narrator import NarrativeResult
 from llm.providers import redact_provider_field
 
 from models.database import SessionLocal
+from models.tables import DeploymentOutcome, FeedbackEvent
 from models.repositories.analysis_reports import (
     count_analysis_reports,
     create_analysis_report,
@@ -61,7 +62,7 @@ from models.repositories.deployment_outcomes import (
 from models.repositories.feedback_events import list_feedback_events
 from parsers.base import ParseBatchResult, ParsedFileResult
 from services.artifact_snapshot_service import (
-    delete_report_artifacts,
+    _delete_report_artifacts_after_authorization,
     save_report_artifacts,
 )
 from services.confidence_ledger import (
@@ -71,6 +72,13 @@ from services.confidence_ledger import (
     normalize_confidence_ledger_payload,
 )
 from services.project_service import (
+    authorized_session,
+    register_operation_rollback,
+    guard_project,
+    guard_report,
+    project_requires_authorization,
+    visible_report_predicate,
+    visible_context_predicate,
     build_project_payload,
     build_workspace_payload,
     resolve_project_reference,
@@ -184,6 +192,27 @@ _LEGACY_CONTEXT_CORE_FIELDS = {
     "parser_success_by_tool",
     "context_score",
 }
+
+
+def _authorized_report_operation(operation):
+    """Keep compound report materialization in one live authority transaction."""
+
+    @wraps(operation)
+    def wrapped(*args, **kwargs):
+        with authorized_session(SessionLocal):
+            return operation(*args, **kwargs)
+
+    return wrapped
+
+
+def _visible_outcome_predicate(session):
+    """Outcome-derived report metadata retains the outcome.read boundary."""
+    return visible_context_predicate(
+        session,
+        DeploymentOutcome.project_id,
+        DeploymentOutcome.workspace_id,
+        "outcome.read",
+    )
 
 
 def _load_json_string_list(value: object) -> list[str]:
@@ -502,22 +531,25 @@ def _upgrade_share_password(
     new_hash = _hash_share_password(password, salt=new_salt)
 
     def operation():
-        with SessionLocal() as session:
-            current = get_analysis_report(session, report_id)
-            if current is None:
+        with authorized_session(SessionLocal) as session:
+            current = guard_report(session, report_id)
+            if current is None or project_requires_authorization(
+                session, current.project_id
+            ):
                 return
             report_type = type(current)
             # Upgrade only the verified password; preserve concurrent settings.
-            session.execute(
-                update(report_type)
-                .where(
-                    report_type.id == report_id,
-                    report_type.share_password_hash == stored,
-                    report_type.share_password_salt == salt,
+            with session.begin_nested():
+                session.execute(
+                    update(report_type)
+                    .where(
+                        report_type.id == report_id,
+                        report_type.share_password_hash == stored,
+                        report_type.share_password_salt == salt,
+                    )
+                    .values(share_password_hash=new_hash, share_password_salt=new_salt)
                 )
-                .values(share_password_hash=new_hash, share_password_salt=new_salt)
-            )
-            session.commit()
+                session.flush()
 
     try:
         _run_with_schema_retry(operation)
@@ -978,15 +1010,12 @@ def _delivery_metadata(
 
 
 def _cleanup_partial_report(report_id: int | None) -> None:
+    # The operation transaction rolls back the row. Only snapshots written after
+    # authorization need compensation when materialization fails.
     if report_id is None:
         return
     try:
-        with SessionLocal() as session:
-            delete_analysis_report(session, report_id)
-    except Exception:
-        logger.debug("Failed to clean up partial report row", exc_info=True)
-    try:
-        delete_report_artifacts(report_id)
+        _delete_report_artifacts_after_authorization(report_id)
     except Exception:
         logger.debug("Failed to clean up partial report artifacts", exc_info=True)
 
@@ -2137,9 +2166,11 @@ def _list_serialized_reports(
     skip_unreadable_schema: bool = False,
 ) -> list[dict[str, Any]]:
     def operation():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             reports = list_analysis_reports(
                 session,
+                visibility_predicate=visible_report_predicate(session),
+                outcome_visibility_predicate=_visible_outcome_predicate(session),
                 include_evidence=include_evidence,
                 report_schema_versions=(
                     _readable_report_schema_versions()
@@ -2160,6 +2191,7 @@ def _list_serialized_reports(
     return _run_with_schema_retry(operation)
 
 
+@_authorized_report_operation
 def fetch_previous_comparable_report(
     report_id: int,
     *,
@@ -4850,97 +4882,111 @@ def persist_analysis_report(
         )
 
     def operation():
-        report_id: int | None = None
-        try:
-            with SessionLocal() as session:
-                report = create_analysis_report(
-                    session,
-                    project_id=resolved_project.id,
-                    workspace_id=resolved_workspace_id,
-                    risk_score=assessment.score,
-                    severity=assessment.severity,
-                    recommendation=assessment.recommendation,
-                    risk_confidence=assessment.confidence,
-                    top_risk=assessment.top_risk,
-                    report_schema_version=REPORT_SCHEMA_VERSION,
-                    parse_summary=_build_parse_summary(parse_batch),
-                    narrative_opening=narrative.opening_sentence or "",
-                    narrative_explanation=narrative.explanation or "",
-                    narrative_degraded=narrative_degraded,
-                    narrative_failure_notice=narrative.failure_notice,
-                    narrative_guidance_json=json.dumps(narrative.guidance),
-                    warnings_json=json.dumps(combined_warnings),
-                    contributors_json=json.dumps(
-                        [
-                            contributor.model_dump()
-                            for contributor in assessment.contributors
-                        ]
-                    ),
-                    analyzed_files_json=json.dumps(audit["files_analyzed"]),
-                    submission_manifest_json=json.dumps(
-                        submission_manifest.model_dump(mode="json")
-                    ),
-                    submission_manifest_fallback_json=json.dumps(
-                        _submission_manifest_fallback_items(submission_manifest)
-                    ),
-                    blast_radius_json=json.dumps(
-                        blast_radius.model_dump(mode="json")
-                        if blast_radius is not None
-                        else {}
-                    ),
-                    rollback_plan_json=json.dumps(
-                        rollback_plan.model_dump(mode="json")
-                        if rollback_plan is not None
-                        else {}
-                    ),
-                    incident_matches_json=json.dumps(
-                        [
-                            match.model_dump(mode="json")
-                            for match in (incident_matches or [])
-                        ]
-                    ),
-                    llm_provider=audit["llm_provider"],
-                    llm_model=audit["llm_model"],
-                    llm_local_mode="true" if audit["llm_local_mode"] else "false",
-                    assessment_source=assessment.source,
-                    narrative_source=narrative.source,
-                    narrative_skills_json=json.dumps(narrative.skills_applied),
-                    source_interface=audit["source_interface"],
-                    trigger_type=audit["trigger_type"],
-                    trigger_id=audit["trigger_id"],
-                    dashboard_display_duration_seconds=dashboard_display_duration_seconds,
-                    analysis_duration_seconds=analysis_duration_seconds,
-                    top_risk_contributors_json=json.dumps(
-                        assessment.top_risk_contributors
-                    ),
-                    context_completeness_json=json.dumps(
-                        {
-                            **assessment.context_completeness.model_dump(mode="json"),
-                            "partial_context": assessment.partial_context,
-                        }
-                    ),
-                    findings_payload=[
-                        finding.model_dump(mode="json") for finding in (findings or [])
-                    ],
-                    evidence_payload=[
-                        evidence_item.model_dump(mode="json")
-                        for evidence_item in (evidence_items or [])
-                    ],
+        with authorized_session(SessionLocal) as session:
+            trusted_scope = guard_project(
+                session,
+                resolved_project.id,
+                resolved_workspace_id,
+                "analysis.submit",
+                mutation=True,
+            )
+            if trusted_scope is not None:
+                submission_manifest.provenance["actor"] = (
+                    trusted_scope.principal.principal_id
                 )
-                report_id = int(report.id)
-                save_report_artifacts(
-                    report_id,
-                    safe_artifact_snapshots,
-                    sensitive_values=sensitive_values,
-                )
-                return _serialize_report(report, include_evidence=True)
-        except Exception:
-            _cleanup_partial_report(report_id)
-            raise
+                for item in submission_manifest.items:
+                    item.provenance["actor"] = trusted_scope.principal.principal_id
+            report = create_analysis_report(
+                session,
+                commit=False,
+                project_id=resolved_project.id,
+                workspace_id=resolved_workspace_id,
+                risk_score=assessment.score,
+                severity=assessment.severity,
+                recommendation=assessment.recommendation,
+                risk_confidence=assessment.confidence,
+                top_risk=assessment.top_risk,
+                report_schema_version=REPORT_SCHEMA_VERSION,
+                parse_summary=_build_parse_summary(parse_batch),
+                narrative_opening=narrative.opening_sentence or "",
+                narrative_explanation=narrative.explanation or "",
+                narrative_degraded=narrative_degraded,
+                narrative_failure_notice=narrative.failure_notice,
+                narrative_guidance_json=json.dumps(narrative.guidance),
+                warnings_json=json.dumps(combined_warnings),
+                contributors_json=json.dumps(
+                    [
+                        contributor.model_dump()
+                        for contributor in assessment.contributors
+                    ]
+                ),
+                analyzed_files_json=json.dumps(audit["files_analyzed"]),
+                submission_manifest_json=json.dumps(
+                    submission_manifest.model_dump(mode="json")
+                ),
+                submission_manifest_fallback_json=json.dumps(
+                    _submission_manifest_fallback_items(submission_manifest)
+                ),
+                blast_radius_json=json.dumps(
+                    blast_radius.model_dump(mode="json")
+                    if blast_radius is not None
+                    else {}
+                ),
+                rollback_plan_json=json.dumps(
+                    rollback_plan.model_dump(mode="json")
+                    if rollback_plan is not None
+                    else {}
+                ),
+                incident_matches_json=json.dumps(
+                    [
+                        match.model_dump(mode="json")
+                        for match in (incident_matches or [])
+                    ]
+                ),
+                llm_provider=audit["llm_provider"],
+                llm_model=audit["llm_model"],
+                llm_local_mode="true" if audit["llm_local_mode"] else "false",
+                assessment_source=assessment.source,
+                narrative_source=narrative.source,
+                narrative_skills_json=json.dumps(narrative.skills_applied),
+                source_interface=audit["source_interface"],
+                trigger_type=audit["trigger_type"],
+                trigger_id=audit["trigger_id"],
+                dashboard_display_duration_seconds=dashboard_display_duration_seconds,
+                analysis_duration_seconds=analysis_duration_seconds,
+                top_risk_contributors_json=json.dumps(assessment.top_risk_contributors),
+                context_completeness_json=json.dumps(
+                    {
+                        **assessment.context_completeness.model_dump(mode="json"),
+                        "partial_context": assessment.partial_context,
+                    }
+                ),
+                findings_payload=[
+                    finding.model_dump(mode="json") for finding in (findings or [])
+                ],
+                evidence_payload=[
+                    evidence_item.model_dump(mode="json")
+                    for evidence_item in (evidence_items or [])
+                ],
+            )
+            report_id = int(report.id)
+            register_operation_rollback(
+                session, lambda: _cleanup_partial_report(report_id)
+            )
+            # A crash or failed compensation may leave an uncommitted ID's
+            # directory behind. Never attach those snapshots to a new row.
+            _delete_report_artifacts_after_authorization(report_id)
+            save_report_artifacts(
+                report_id,
+                safe_artifact_snapshots,
+                sensitive_values=sensitive_values,
+            )
+            return _serialize_report(report, include_evidence=True)
 
     return _run_with_schema_retry(operation)
 
 
+@_authorized_report_operation
 def fetch_analysis_report(
     report_id: int,
     *,
@@ -4957,7 +5003,8 @@ def fetch_analysis_report(
     )
 
     def operation():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
+            guard_report(session, report_id)
             report = get_analysis_report(
                 session,
                 report_id,
@@ -4972,6 +5019,7 @@ def fetch_analysis_report(
     return _run_with_schema_retry(operation)
 
 
+@_authorized_report_operation
 def fetch_analysis_report_for_project_keys(
     report_id: int,
     *,
@@ -4980,7 +5028,8 @@ def fetch_analysis_report_for_project_keys(
     """Fetch and serialize a report only after project-scope filtering."""
 
     def operation():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
+            guard_report(session, report_id)
             report = get_analysis_report_for_project_keys(
                 session,
                 report_id,
@@ -4994,6 +5043,7 @@ def fetch_analysis_report_for_project_keys(
     return _run_with_schema_retry(operation)
 
 
+@_authorized_report_operation
 def fetch_report_comparison(
     report_id: int,
     *,
@@ -5050,10 +5100,12 @@ def configure_report_share(
     )
 
     def operation():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
+            guard_report(session, report_id, "report.share.manage", mutation=True)
             report = update_analysis_report_share_settings(
                 session,
                 report_id,
+                commit=False,
                 share_password_hash=password_hash,
                 share_password_salt=password_salt,
                 share_redact_filenames=redact_filenames,
@@ -5068,6 +5120,7 @@ def configure_report_share(
     return _share_settings(payload)
 
 
+@_authorized_report_operation
 def fetch_shared_analysis_report(
     report_id: int,
     *,
@@ -5100,6 +5153,7 @@ def fetch_shared_analysis_report(
     return shared
 
 
+@_authorized_report_operation
 def fetch_shared_report_comparison(
     report_id: int,
     *,
@@ -5141,10 +5195,12 @@ def fetch_shared_report_comparison(
     )
 
 
+@_authorized_report_operation
 def fetch_analysis_history() -> list[dict]:
     return fetch_filtered_analysis_history()
 
 
+@_authorized_report_operation
 def fetch_filtered_analysis_history(
     *,
     project_id: int | None = None,
@@ -5177,6 +5233,7 @@ def fetch_filtered_analysis_history(
     return page["items"]
 
 
+@_authorized_report_operation
 def fetch_filtered_analysis_history_page(
     *,
     project_id: int | None = None,
@@ -5219,9 +5276,11 @@ def fetch_filtered_analysis_history_page(
     normalized_outcome = _normalize_trend_outcome(outcome)
 
     def operation():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             all_reports = list_analysis_reports(
                 session,
+                visibility_predicate=visible_report_predicate(session),
+                outcome_visibility_predicate=_visible_outcome_predicate(session),
                 project_id=resolved_project_id,
                 workspace_id=resolved_workspace_id,
                 report_schema_versions=readable_schema_versions,
@@ -5230,6 +5289,8 @@ def fetch_filtered_analysis_history_page(
             if skip_unreadable_schema:
                 reports = list_analysis_reports(
                     session,
+                    visibility_predicate=visible_report_predicate(session),
+                    outcome_visibility_predicate=_visible_outcome_predicate(session),
                     project_id=resolved_project_id,
                     workspace_id=resolved_workspace_id,
                     severity=severity,
@@ -5255,6 +5316,8 @@ def fetch_filtered_analysis_history_page(
                 ]
                 total_count = count_analysis_reports(
                     session,
+                    visibility_predicate=visible_report_predicate(session),
+                    outcome_visibility_predicate=_visible_outcome_predicate(session),
                     project_id=resolved_project_id,
                     workspace_id=resolved_workspace_id,
                     severity=severity,
@@ -5270,6 +5333,8 @@ def fetch_filtered_analysis_history_page(
             else:
                 reports = list_analysis_reports(
                     session,
+                    visibility_predicate=visible_report_predicate(session),
+                    outcome_visibility_predicate=_visible_outcome_predicate(session),
                     project_id=resolved_project_id,
                     workspace_id=resolved_workspace_id,
                     severity=severity,
@@ -5294,6 +5359,8 @@ def fetch_filtered_analysis_history_page(
                 ]
                 total_count = count_analysis_reports(
                     session,
+                    visibility_predicate=visible_report_predicate(session),
+                    outcome_visibility_predicate=_visible_outcome_predicate(session),
                     project_id=resolved_project_id,
                     workspace_id=resolved_workspace_id,
                     severity=severity,
@@ -5319,6 +5386,7 @@ def fetch_filtered_analysis_history_page(
     }
 
 
+@_authorized_report_operation
 def fetch_history_toolchains(
     *,
     project_id: int | None = None,
@@ -5339,9 +5407,11 @@ def fetch_history_toolchains(
     )
 
     def operation():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             reports = list_analysis_reports(
                 session,
+                visibility_predicate=visible_report_predicate(session),
+                outcome_visibility_predicate=_visible_outcome_predicate(session),
                 project_id=resolved_project_id,
                 workspace_id=resolved_workspace_id,
                 report_schema_versions=readable_schema_versions,
@@ -5376,6 +5446,7 @@ def fetch_history_toolchains(
     return _run_with_schema_retry(operation)
 
 
+@_authorized_report_operation
 def fetch_risk_trends(
     *,
     project_id: int | None = None,
@@ -5426,6 +5497,8 @@ def fetch_risk_trends(
             outcomes.extend(
                 list_deployment_outcome_records(
                     session,
+                    visibility=_visible_outcome_predicate(session),
+                    report_visibility=visible_report_predicate(session, "outcome.read"),
                     project_id=resolved_project_id,
                     workspace_id=resolved_workspace_id,
                     analysis_ids=chunk,
@@ -5451,6 +5524,13 @@ def fetch_risk_trends(
             events.extend(
                 list_feedback_events(
                     session,
+                    visibility=visible_context_predicate(
+                        session,
+                        FeedbackEvent.project_id,
+                        FeedbackEvent.workspace_id,
+                        "report.read",
+                    ),
+                    report_visibility=visible_report_predicate(session),
                     project_id=resolved_project_id,
                     workspace_id=resolved_workspace_id,
                     analysis_ids=chunk,
@@ -5487,7 +5567,7 @@ def fetch_risk_trends(
     ) -> dict:
         inclusive_end = None if window_end_exclusive else window_end
         exclusive_end = window_end if window_end_exclusive else None
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             report_ids: list[int] = []
             report_scope_by_id: dict[int, tuple[int, int | None]] = {}
             report_warned_by_id: dict[int, bool] = {}
@@ -5502,6 +5582,8 @@ def fetch_risk_trends(
             while True:
                 report_batch = list_analysis_reports(
                     session,
+                    visibility_predicate=visible_report_predicate(session),
+                    outcome_visibility_predicate=_visible_outcome_predicate(session),
                     project_id=resolved_project_id,
                     workspace_id=resolved_workspace_id,
                     severity=severity,
@@ -5856,6 +5938,7 @@ def fetch_risk_trends(
     return current_payload
 
 
+@_authorized_report_operation
 def fetch_dashboard_stats(
     *,
     project_id: int | None = None,
@@ -5872,9 +5955,11 @@ def fetch_dashboard_stats(
     )
 
     def operation():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             return list_analysis_reports(
                 session,
+                visibility_predicate=visible_report_predicate(session),
+                outcome_visibility_predicate=_visible_outcome_predicate(session),
                 project_id=resolved_project_id,
                 workspace_id=resolved_workspace_id,
                 include_evidence=False,
@@ -5899,6 +5984,7 @@ def fetch_dashboard_stats(
     }
 
 
+@_authorized_report_operation
 def fetch_dashboard_briefing(
     *,
     project_id: int | None = None,
@@ -5915,11 +6001,13 @@ def fetch_dashboard_briefing(
     )
 
     def operation():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             return [
                 _serialize_report(report, include_evidence=False)
                 for report in list_analysis_reports(
                     session,
+                    visibility_predicate=visible_report_predicate(session),
+                    outcome_visibility_predicate=_visible_outcome_predicate(session),
                     project_id=resolved_project_id,
                     workspace_id=resolved_workspace_id,
                     include_evidence=False,
@@ -5978,6 +6066,7 @@ def fetch_dashboard_briefing(
     }
 
 
+@_authorized_report_operation
 def fetch_active_dashboard_report(
     *,
     now: datetime | None = None,
@@ -5996,9 +6085,11 @@ def fetch_active_dashboard_report(
     )
 
     def operation():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
             report = latest_active_dashboard_report(
                 session,
+                visibility_predicate=visible_report_predicate(session),
+                outcome_visibility_predicate=_visible_outcome_predicate(session),
                 now=current_time,
                 project_id=resolved_project_id,
                 workspace_id=resolved_workspace_id,
@@ -6031,24 +6122,28 @@ def fetch_active_dashboard_report(
 
 
 def remove_analysis_report(report_id: int) -> bool:
-    project_id: int | None = None
-    with SessionLocal() as session:
-        report = get_analysis_report(session, report_id, include_evidence=False)
-        if report is not None:
-            project_id = report.project_id
-        removed = delete_analysis_report(session, report_id)
-    if removed:
-        if project_id is not None:
-            from services.backtesting_service import invalidate_backtesting_snapshot
+    with authorized_session(SessionLocal) as session:
+        report = guard_report(session, report_id, "report.review", mutation=True)
+        if report is None:
+            return False
+        project_id = report.project_id
+        if report.authorization_required:
+            # Removing the last marker must not reopen surviving project context.
+            report.project.authorization_required = True
+        removed = delete_analysis_report(session, report_id, commit=False)
+        if removed:
+            from services.backtesting_service import (
+                _invalidate_backtesting_snapshot_after_authorization,
+            )
 
-            invalidate_backtesting_snapshot(project_id=project_id)
-        delete_report_artifacts(report_id)
-    return removed
+            _invalidate_backtesting_snapshot_after_authorization(project_id=project_id)
+            _delete_report_artifacts_after_authorization(report_id)
+        return removed
 
 
 def remove_analysis_reports(report_ids: list[int]) -> int:
-    removed = 0
-    for report_id in report_ids:
-        if remove_analysis_report(report_id):
-            removed += 1
-    return removed
+    with authorized_session(SessionLocal) as session:
+        # Validate the complete batch before touching any row or snapshot.
+        for report_id in report_ids:
+            guard_report(session, report_id, "report.review", mutation=True)
+        return sum(remove_analysis_report(report_id) for report_id in report_ids)

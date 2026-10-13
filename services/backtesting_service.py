@@ -12,9 +12,21 @@ from sqlalchemy import select
 
 from services.artifact_snapshot_service import load_report_artifact
 from models.database import SessionLocal
+from services.project_service import visible_context_predicate
+from models.tables import FeedbackEvent, DeploymentOutcome, IncidentRecord
+from services.project_service import (
+    authorized_session,
+    guard_project,
+    guard_report,
+    visible_report_predicate,
+    project_requires_authorization,
+)
 from models.repositories.analysis_reports import get_analysis_report
 from models.repositories.feedback_events import list_feedback_events
-from models.repositories.incident_records import list_incident_records
+from models.repositories.incident_records import (
+    list_incident_records,
+    get_visible_incident_reference,
+)
 from models.repositories.settings import (
     delete_setting,
     delete_settings_by_key_prefix,
@@ -23,9 +35,6 @@ from models.repositories.settings import (
 )
 from models.tables import (
     AnalysisReport,
-    DeploymentOutcome,
-    FeedbackEvent,
-    IncidentRecord,
 )
 from models.tables import RiskAssessment as PersistedRiskAssessment
 from services.project_service import (
@@ -76,7 +85,7 @@ def _outcome_rows(
 ) -> list[
     tuple[DeploymentOutcome, AnalysisReport | None, PersistedRiskAssessment | None]
 ]:
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         stmt = (
             select(DeploymentOutcome, AnalysisReport, PersistedRiskAssessment)
             .join(
@@ -89,6 +98,15 @@ def _outcome_rows(
                 AnalysisReport.id == PersistedRiskAssessment.analysis_id,
                 isouter=True,
             )
+            .where(visible_report_predicate(session, "outcome.read"))
+            .where(
+                visible_context_predicate(
+                    session,
+                    DeploymentOutcome.project_id,
+                    DeploymentOutcome.workspace_id,
+                    "outcome.read",
+                )
+            )
             .where(DeploymentOutcome.project_id == project_id)
             .where(DeploymentOutcome.deployed_at >= window_start)
             .where(DeploymentOutcome.deployed_at <= window_end)
@@ -97,7 +115,7 @@ def _outcome_rows(
         if workspace_id is not None:
             stmt = stmt.where(DeploymentOutcome.workspace_id == workspace_id)
         result = session.execute(stmt)
-        return list(result.all())
+        return [(outcome, report, risk) for outcome, report, risk in result.all()]
 
 
 def _feedback_rows(
@@ -107,9 +125,13 @@ def _feedback_rows(
     created_from: datetime | None = None,
     created_to: datetime | None = None,
 ) -> list[FeedbackEvent]:
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         return list_feedback_events(
             session,
+            report_visibility=visible_report_predicate(session),
+            visibility=visible_context_predicate(
+                session, FeedbackEvent.project_id, FeedbackEvent.workspace_id
+            ),
             project_id=project_id,
             workspace_id=workspace_id,
             created_from=created_from,
@@ -125,7 +147,7 @@ def _analysis_context_rows(
 ) -> list[tuple[AnalysisReport, PersistedRiskAssessment | None]]:
     if not analysis_ids:
         return []
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         stmt = (
             select(AnalysisReport, PersistedRiskAssessment)
             .join(
@@ -133,13 +155,14 @@ def _analysis_context_rows(
                 AnalysisReport.id == PersistedRiskAssessment.analysis_id,
                 isouter=True,
             )
+            .where(visible_report_predicate(session))
             .where(AnalysisReport.project_id == project_id)
             .where(AnalysisReport.id.in_(sorted(analysis_ids)))
         )
         if workspace_id is not None:
             stmt = stmt.where(AnalysisReport.workspace_id == workspace_id)
         result = session.execute(stmt)
-        return list(result.all())
+        return [(report, risk) for report, risk in result.all()]
 
 
 def _incident_rows(
@@ -149,12 +172,18 @@ def _incident_rows(
 ) -> list[IncidentRecord]:
     if not analysis_ids:
         return []
-    with SessionLocal() as session:
+    with authorized_session(SessionLocal) as session:
         stmt = (
             select(IncidentRecord)
             .join(
                 AnalysisReport,
                 IncidentRecord.analysis_id == AnalysisReport.id,
+            )
+            .where(visible_report_predicate(session))
+            .where(
+                visible_context_predicate(
+                    session, IncidentRecord.project_id, IncidentRecord.workspace_id
+                )
             )
             .where(AnalysisReport.project_id == project_id)
             .where(IncidentRecord.analysis_id.is_not(None))
@@ -562,6 +591,7 @@ def _incident_linked_report(
 ) -> AnalysisReport | None:
     if incident.analysis_id is None:
         return None
+    guard_report(session, int(incident.analysis_id))
     report = get_analysis_report(
         session,
         int(incident.analysis_id),
@@ -857,6 +887,34 @@ def _cached_snapshot_is_usable(
     )
 
 
+def _cached_inputs_are_visible(session, snapshot: dict[str, Any]) -> bool:
+    """Every contributing report must remain visible, including count-only inputs."""
+    inputs = snapshot.get("_authorization_inputs")
+    if not isinstance(inputs, dict) or inputs.get("version") != 1:
+        return False
+    for field, capability in (
+        ("outcome_report_ids", "outcome.read"),
+        ("feedback_report_ids", "report.read"),
+    ):
+        report_ids = inputs.get(field)
+        if not isinstance(report_ids, list) or any(
+            not _is_int_payload_value(report_id) or report_id <= 0
+            for report_id in report_ids
+        ):
+            return False
+        visible_ids = set(
+            session.scalars(
+                select(AnalysisReport.id).where(
+                    AnalysisReport.id.in_(report_ids),
+                    visible_report_predicate(session, capability),
+                )
+            )
+        )
+        if visible_ids != set(report_ids):
+            return False
+    return True
+
+
 def _build_summary(
     *,
     project,
@@ -960,11 +1018,20 @@ def _build_summary(
             by_severity_counts[severity]["warned"] += 1
         if failed:
             linked_incident = incident_by_analysis_id.get(analysis_id)
+            with authorized_session(SessionLocal) as session:
+                explicit_incident_id = get_visible_incident_reference(
+                    session,
+                    outcome.linked_incident_id,
+                    visibility=visible_context_predicate(
+                        session, IncidentRecord.project_id, IncidentRecord.workspace_id
+                    ),
+                    report_visibility=visible_report_predicate(session),
+                )
             by_severity_counts[severity]["failed"] += 1
             failed_rows.append(
                 {
                     "analysis_id": outcome.analysis_id,
-                    "incident_id": outcome.linked_incident_id
+                    "incident_id": explicit_incident_id
                     or (linked_incident.id if linked_incident is not None else None),
                     "outcome": outcome.outcome_label,
                     "severity": severity,
@@ -1223,13 +1290,33 @@ def _build_summary(
     }
 
 
-def invalidate_backtesting_snapshot(*, project_id: int) -> None:
-    with SessionLocal() as session:
-        delete_setting(session, _snapshot_key(project_id))
-        delete_settings_by_key_prefix(
-            session,
-            f"{_snapshot_key(project_id)}:workspace:",
+def invalidate_backtesting_snapshot(
+    *, project_id: int, workspace_id: int | None = None
+) -> None:
+    """Explicit cache invalidation requires permission to manage project outcomes."""
+    with authorized_session(SessionLocal) as session:
+        guard_project(
+            session, project_id, workspace_id, "outcome.manage", mutation=True
         )
+        _invalidate_backtesting_snapshot_after_authorization(project_id=project_id)
+
+
+def _invalidate_backtesting_snapshot_after_authorization(*, project_id: int) -> None:
+    """Invalidate dependent aggregates inside an already guarded writer operation."""
+    from services.project_service import (
+        _operation_session,
+        _require_operation,
+        TrustedAuthorizationError,
+    )
+
+    session = _operation_session.get()
+    if session is None:
+        raise TrustedAuthorizationError()
+    _require_operation(session)
+    delete_setting(session, _snapshot_key(project_id), commit=False)
+    delete_settings_by_key_prefix(
+        session, f"{_snapshot_key(project_id)}:workspace:", commit=False
+    )
 
 
 def run_weekly_backtest(
@@ -1240,46 +1327,79 @@ def run_weekly_backtest(
     workspace_key: str | None = None,
     now: datetime | None = None,
     record_last_run: bool = True,
+    persist_snapshot: bool = True,
 ) -> dict[str, Any]:
-    reference_now = now or datetime.now(UTC)
-    if reference_now.tzinfo is None:
-        reference_now = reference_now.replace(tzinfo=UTC)
-    project = resolve_project_reference(project_id=project_id, project_key=project_key)
-    workspace = resolve_workspace_reference(
-        project_id=project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    window_start = reference_now - timedelta(days=BACKTEST_WINDOW_DAYS)
-    rows = _outcome_rows(
-        project_id=project.id,
-        workspace_id=workspace.id if workspace is not None else None,
-        window_start=window_start,
-        window_end=reference_now,
-    )
-    summary = _build_summary(
-        project=project,
-        workspace=workspace,
-        rows=rows,
-        window_start=window_start,
-        window_end=reference_now,
-    )
-    with SessionLocal() as session:
-        if record_last_run and workspace is None:
+    with authorized_session(SessionLocal) as authorization_session:
+        reference_now = now or datetime.now(UTC)
+        if reference_now.tzinfo is None:
+            reference_now = reference_now.replace(tzinfo=UTC)
+        project = resolve_project_reference(
+            project_id=project_id, project_key=project_key
+        )
+        workspace = resolve_workspace_reference(
+            project_id=project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        guard_project(
+            authorization_session,
+            project.id,
+            workspace.id if workspace else None,
+            "outcome.read",
+        )
+        window_start = reference_now - timedelta(days=BACKTEST_WINDOW_DAYS)
+        rows = _outcome_rows(
+            project_id=project.id,
+            workspace_id=workspace.id if workspace is not None else None,
+            window_start=window_start,
+            window_end=reference_now,
+        )
+        summary = _build_summary(
+            project=project,
+            workspace=workspace,
+            rows=rows,
+            window_start=window_start,
+            window_end=reference_now,
+        )
+        if not persist_snapshot:
+            return summary
+        snapshot_payload = {
+            **summary,
+            "_authorization_inputs": {
+                "version": 1,
+                "outcome_report_ids": sorted(
+                    {report.id for _, report, _ in rows if report is not None}
+                ),
+                "feedback_report_ids": sorted(
+                    {
+                        event.analysis_id
+                        for event in _feedback_rows(
+                            project_id=project.id,
+                            workspace_id=workspace.id if workspace else None,
+                        )
+                        if event.analysis_id is not None
+                    }
+                ),
+            },
+        }
+        with authorized_session(SessionLocal) as session:
+            if record_last_run and workspace is None:
+                upsert_setting(
+                    session,
+                    commit=False,
+                    key=_last_run_key(project.id),
+                    value=_serialize_timestamp(reference_now),
+                )
             upsert_setting(
                 session,
-                key=_last_run_key(project.id),
-                value=_serialize_timestamp(reference_now),
+                commit=False,
+                key=_snapshot_key(
+                    project.id,
+                    workspace.id if workspace is not None else None,
+                ),
+                value=json.dumps(snapshot_payload),
             )
-        upsert_setting(
-            session,
-            key=_snapshot_key(
-                project.id,
-                workspace.id if workspace is not None else None,
-            ),
-            value=json.dumps(summary),
-        )
-    return summary
+        return summary
 
 
 def run_incident_backtest(
@@ -1291,64 +1411,76 @@ def run_incident_backtest(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Replay incident-linked artifacts through the current analysis core."""
-
-    project = resolve_project_reference(project_id=project_id, project_key=project_key)
-    workspace = resolve_workspace_reference(
-        project_id=project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    generated_at = _serialize_timestamp(now or datetime.now(UTC))
-    with SessionLocal() as session:
-        incidents = list_incident_records(
-            session,
-            project_id=project.id,
-            workspace_id=workspace.id if workspace is not None else None,
+    with authorized_session(SessionLocal) as authorization_session:
+        project = resolve_project_reference(
+            project_id=project_id, project_key=project_key
         )
-        scenarios = [
-            _run_incident_backtest_scenario(
-                incident=incident,
-                report=_incident_linked_report(
-                    session=session,
-                    incident=incident,
-                    project_id=project.id,
-                    workspace_id=workspace.id if workspace is not None else None,
+        workspace = resolve_workspace_reference(
+            project_id=project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        guard_project(
+            authorization_session,
+            project.id,
+            workspace.id if workspace else None,
+            "report.read",
+        )
+        generated_at = _serialize_timestamp(now or datetime.now(UTC))
+        with authorized_session(SessionLocal) as session:
+            incidents = list_incident_records(
+                session,
+                report_visibility=visible_report_predicate(session),
+                visibility=visible_context_predicate(
+                    session, IncidentRecord.project_id, IncidentRecord.workspace_id
                 ),
+                project_id=project.id,
+                workspace_id=workspace.id if workspace is not None else None,
             )
-            for incident in incidents
-        ]
-    counts = {
-        status: sum(1 for scenario in scenarios if scenario["status"] == status)
-        for status in INCIDENT_BACKTEST_STATUSES
-    }
-    summary = {
-        "project_id": project.id,
-        "project_key": project.project_key,
-        "workspace_id": workspace.id if workspace is not None else None,
-        "workspace_key": workspace.workspace_key if workspace is not None else None,
-        "scenario_count": len(scenarios),
-        "detected_count": counts["detected"],
-        "missed_count": counts["missed"],
-        "unsupported_count": counts["unsupported"],
-        "insufficient_context_count": counts["insufficient_context"],
-        "error_count": counts["error"],
-        "generated_at": generated_at,
-    }
-    return {
-        "passed": counts["missed"] == 0 and counts["error"] == 0,
-        "project": build_project_payload(project),
-        "workspace": build_workspace_payload(workspace)
-        if workspace is not None
-        else None,
-        "summary": summary,
-        "scenarios": scenarios,
-        "errors": [
-            reason
-            for scenario in scenarios
-            if scenario["status"] == "error"
-            for reason in scenario["reasons"]
-        ],
-    }
+            scenarios = [
+                _run_incident_backtest_scenario(
+                    incident=incident,
+                    report=_incident_linked_report(
+                        session=session,
+                        incident=incident,
+                        project_id=project.id,
+                        workspace_id=workspace.id if workspace is not None else None,
+                    ),
+                )
+                for incident in incidents
+            ]
+        counts = {
+            status: sum(1 for scenario in scenarios if scenario["status"] == status)
+            for status in INCIDENT_BACKTEST_STATUSES
+        }
+        summary = {
+            "project_id": project.id,
+            "project_key": project.project_key,
+            "workspace_id": workspace.id if workspace is not None else None,
+            "workspace_key": workspace.workspace_key if workspace is not None else None,
+            "scenario_count": len(scenarios),
+            "detected_count": counts["detected"],
+            "missed_count": counts["missed"],
+            "unsupported_count": counts["unsupported"],
+            "insufficient_context_count": counts["insufficient_context"],
+            "error_count": counts["error"],
+            "generated_at": generated_at,
+        }
+        return {
+            "passed": counts["missed"] == 0 and counts["error"] == 0,
+            "project": build_project_payload(project),
+            "workspace": build_workspace_payload(workspace)
+            if workspace is not None
+            else None,
+            "summary": summary,
+            "scenarios": scenarios,
+            "errors": [
+                reason
+                for scenario in scenarios
+                if scenario["status"] == "error"
+                for reason in scenario["reasons"]
+            ],
+        }
 
 
 def run_due_weekly_backtests(*, now: datetime | None = None) -> list[dict[str, Any]]:
@@ -1357,10 +1489,13 @@ def run_due_weekly_backtests(*, now: datetime | None = None) -> list[dict[str, A
         reference_now = reference_now.replace(tzinfo=UTC)
     summaries: list[dict[str, Any]] = []
     for project in list_projects():
-        with SessionLocal() as session:
+        with authorized_session(SessionLocal) as session:
+            if project_requires_authorization(session, project.id):
+                continue
             last_run = get_setting(session, _last_run_key(project.id))
-        if last_run is not None:
-            last_run_at = _coerce_utc_timestamp(last_run.value)
+            last_run_value = last_run.value if last_run is not None else None
+        if last_run_value is not None:
+            last_run_at = _coerce_utc_timestamp(last_run_value)
             if reference_now - last_run_at < timedelta(days=BACKTEST_WINDOW_DAYS):
                 continue
         try:
@@ -1380,44 +1515,78 @@ def fetch_calibration_dashboard_seed(
     workspace_key: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    reference_now = now or datetime.now(UTC)
-    if reference_now.tzinfo is None:
-        reference_now = reference_now.replace(tzinfo=UTC)
-    else:
-        reference_now = reference_now.astimezone(UTC)
-    project = resolve_project_reference(project_id=project_id, project_key=project_key)
-    workspace = resolve_workspace_reference(
-        project_id=project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    with SessionLocal() as session:
-        snapshot = get_setting(
-            session,
-            _snapshot_key(
-                project.id,
-                workspace.id if workspace is not None else None,
-            ),
+    with authorized_session(SessionLocal) as authorization_session:
+        reference_now = now or datetime.now(UTC)
+        if reference_now.tzinfo is None:
+            reference_now = reference_now.replace(tzinfo=UTC)
+        else:
+            reference_now = reference_now.astimezone(UTC)
+        project = resolve_project_reference(
+            project_id=project_id, project_key=project_key
         )
-    if snapshot is not None:
-        try:
-            snapshot_payload = json.loads(snapshot.value)
-        except (TypeError, ValueError):
-            logger.warning(
-                "Ignoring invalid cached calibration snapshot for project %s.",
-                project.id,
+        workspace = resolve_workspace_reference(
+            project_id=project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        guard_project(
+            authorization_session,
+            project.id,
+            workspace.id if workspace else None,
+            "outcome.read",
+        )
+        with authorized_session(SessionLocal) as session:
+            snapshot = get_setting(
+                session,
+                _snapshot_key(
+                    project.id,
+                    workspace.id if workspace is not None else None,
+                ),
             )
-            snapshot_payload = None
-        if isinstance(snapshot_payload, dict) and _cached_snapshot_is_usable(
-            snapshot_payload,
+        if snapshot is not None:
+            try:
+                snapshot_payload = json.loads(snapshot.value)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Ignoring invalid cached calibration snapshot for project %s.",
+                    project.id,
+                )
+                snapshot_payload = None
+            if (
+                isinstance(snapshot_payload, dict)
+                and _cached_inputs_are_visible(authorization_session, snapshot_payload)
+                and _cached_snapshot_is_usable(
+                    snapshot_payload,
+                    project_id=project.id,
+                    workspace_id=workspace.id if workspace is not None else None,
+                    now=reference_now,
+                )
+            ):
+                snapshot_payload.pop("_authorization_inputs", None)
+                for row in snapshot_payload["backtest_rows"]:
+                    if isinstance(row, dict) and row.get("incident_id") is not None:
+                        incident_id = row["incident_id"]
+                        row["incident_id"] = (
+                            get_visible_incident_reference(
+                                authorization_session,
+                                incident_id,
+                                visibility=visible_context_predicate(
+                                    authorization_session,
+                                    IncidentRecord.project_id,
+                                    IncidentRecord.workspace_id,
+                                ),
+                                report_visibility=visible_report_predicate(
+                                    authorization_session
+                                ),
+                            )
+                            if _is_int_payload_value(incident_id)
+                            else None
+                        )
+                return snapshot_payload
+        return run_weekly_backtest(
             project_id=project.id,
             workspace_id=workspace.id if workspace is not None else None,
             now=reference_now,
-        ):
-            return snapshot_payload
-    return run_weekly_backtest(
-        project_id=project.id,
-        workspace_id=workspace.id if workspace is not None else None,
-        now=reference_now,
-        record_last_run=False,
-    )
+            record_last_run=False,
+            persist_snapshot=False,
+        )

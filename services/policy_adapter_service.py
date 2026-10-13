@@ -59,6 +59,8 @@ class IntegrationEnforcementDecision(BaseModel):
 
 def build_configured_policy_adapter_output(
     adapter_output: AdapterOutputContract,
+    *,
+    workspace_id: int | None = None,
 ) -> PolicyAdapterOutputContract:
     """Resolve scoped defaults and apply them to adapter interpretation only."""
     metadata = adapter_output.adapter_metadata
@@ -69,6 +71,7 @@ def build_configured_policy_adapter_output(
     settings = get_policy_adapter_settings(
         project_key=project.project_key,
         integration=metadata.adapter,
+        workspace_id=workspace_id,
     )
     return build_policy_adapter_output_from_settings(
         adapter_output,
@@ -79,9 +82,13 @@ def build_configured_policy_adapter_output(
 
 def build_integration_enforcement_decision(
     adapter_output: AdapterOutputContract,
+    *,
+    workspace_id: int | None = None,
 ) -> IntegrationEnforcementDecision:
     """Apply the configured integration ceiling to raw policy interpretation."""
-    policy_output = build_configured_policy_adapter_output(adapter_output)
+    policy_output = build_configured_policy_adapter_output(
+        adapter_output, workspace_id=workspace_id
+    )
     settings = policy_output.applied_settings
     if settings is None:
         raise ValueError("Configured policy output must include applied settings.")

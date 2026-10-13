@@ -45,6 +45,10 @@ from llm.providers import redact_provider_field
 from llm.skill_context import get_custom_skill_statuses, save_custom_skill
 from services.feedback_service import fetch_feedback_summary
 from services.project_service import (
+    TrustedAuthorizationError,
+    authorized_session,
+    guard_global_configuration,
+    legacy_request_has_identity,
     has_restricted_project_scope,
     require_project_permission,
     resolve_project_reference,
@@ -119,6 +123,8 @@ def _authorization_context(
         Header(alias="X-DeployWhisper-Project-Keys"),
     ] = None,
 ) -> dict[str, object]:
+    if legacy_request_has_identity():
+        return {"role": None, "allowed_project_keys": None}
     return {
         "role": project_role,
         "allowed_project_keys": _split_project_scope_header(project_keys),
@@ -202,6 +208,8 @@ def _custom_skill_statuses_data() -> list[CustomSkillStatusData]:
 
 
 def _raise_authorization_error(exc: PermissionError) -> ApiError:
+    if isinstance(exc, TrustedAuthorizationError):
+        raise exc
     raise ApiError(
         status_code=403,
         code=getattr(exc, "code", "project_permission_denied"),
@@ -379,29 +387,31 @@ def _build_settings_summary_response(
     workspace_id: int | None = None,
     workspace_key: str | None = None,
 ) -> SettingsSummaryResponse:
-    topology_context = _build_topology_context_response(
-        authorization=authorization,
-        project_id=project_id,
-        project_key=project_key,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    feedback_payload = fetch_feedback_summary(
-        project_id=topology_context.data.project.id,
-        workspace_id=workspace_id,
-        workspace_key=workspace_key,
-    )
-    return SettingsSummaryResponse(
-        data=SettingsSummaryData(
-            provider=_provider_settings_data(get_provider_settings()),
-            provider_options=_provider_options_data(),
-            topology=topology_context.data.topology,
-            drift_cadence=_drift_cadence_data(),
-            feedback=FeedbackSummaryData(**feedback_payload),
-            custom_skills=_custom_skill_statuses_data(),
-        ),
-        meta=build_meta(),
-    )
+    with authorized_session() as session:
+        guard_global_configuration(session)
+        topology_context = _build_topology_context_response(
+            authorization=authorization,
+            project_id=project_id,
+            project_key=project_key,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        feedback_payload = fetch_feedback_summary(
+            project_id=topology_context.data.project.id,
+            workspace_id=workspace_id,
+            workspace_key=workspace_key,
+        )
+        return SettingsSummaryResponse(
+            data=SettingsSummaryData(
+                provider=_provider_settings_data(get_provider_settings()),
+                provider_options=_provider_options_data(),
+                topology=topology_context.data.topology,
+                drift_cadence=_drift_cadence_data(),
+                feedback=FeedbackSummaryData(**feedback_payload),
+                custom_skills=_custom_skill_statuses_data(),
+            ),
+            meta=build_meta(),
+        )
 
 
 @settings_router.get("", response_model=SettingsSummaryResponse)
@@ -476,7 +486,9 @@ def get_policy_adapter_defaults(
     try:
         project = _resolve_authorized_topology_project(
             authorization=authorization,
-            capability="settings.manage",
+            capability="report.read"
+            if legacy_request_has_identity()
+            else "settings.manage",
             project_id=project_id,
             project_key=project_key,
         )
@@ -698,7 +710,9 @@ def update_topology_drift_cadence(
 @settings_router.get("/custom-skills", response_model=CustomSkillListResponse)
 def list_custom_skills() -> CustomSkillListResponse:
     """Return custom skill override status."""
-    statuses = _custom_skill_statuses_data()
+    with authorized_session() as session:
+        guard_global_configuration(session)
+        statuses = _custom_skill_statuses_data()
     return CustomSkillListResponse(data=statuses, meta=build_meta(count=len(statuses)))
 
 

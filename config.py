@@ -102,6 +102,12 @@ class Settings:
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///data/deploywhisper.db")
     identity_profile: str = os.getenv("DEPLOYWHISPER_IDENTITY_PROFILE", "disabled")
     identity_origin: str = os.getenv("DEPLOYWHISPER_IDENTITY_ORIGIN", "")
+    authorization_profile: str = os.getenv(
+        "DEPLOYWHISPER_AUTHORIZATION_PROFILE", "legacy-evaluation"
+    )
+    identity_decision_mode: str = os.getenv(
+        "DEPLOYWHISPER_IDENTITY_DECISION_MODE", "shared"
+    )
     llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")
     llm_model: str = os.getenv("LLM_MODEL", "ollama/qwen2.5-coder:3b")
     llm_api_base: str = os.getenv("LLM_API_BASE", "http://localhost:11434")
