@@ -42,6 +42,7 @@ class ContainerContractTests(unittest.TestCase):
                 "026_add_evidence_context_source.py",
                 "027_add_scanner_imports.py",
                 "028_add_narrative_guidance_payload.py",
+                "029_add_identity_lifecycle.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
