@@ -232,3 +232,9 @@ Outcome: **Approved / done** for the owned identity slice. UI validation not app
 Git Flow: reviewed branch `feature/16-1-verified-human-principal`, based on `develop`. This reviewed change is prepared for the required commit/push and PR to `develop`; the workflow's final result records the actual publication link. No unrelated story was promoted.
 
 BMad help reassessment: prepare/validate Story 16.2 against the completed identity contract; Story 16.3 is already ready for development as a separate lane. This review does not start either story.
+
+### GitHub CodeQL fixture follow-up — 2026-10-13
+
+The initial PR156 CodeQL gate reported two cleartext-storage alerts (112/113), both classified as test code, in the CLI credential fixtures. The fixtures used generated synthetic account inputs; no operator credentials or production storage were involved. Disk fixtures now reference an explicitly public, fixed test input, and fixture files are created exclusively with mode0600 before writing. Random setup tokens and all exact-value output-leakage assertions remain covered. No CodeQL exclusion, suppression or runtime behavior change was introduced.
+
+The fixture-only change passed17 CLI tests/12 subtests, repository Ruff/334-file formatting and independent review. The existing test subprocess calls are trusted, fixed-argv invocations; the configured security threshold remains clean. Final GitHub re-analysis is part of reviewer closeout. Full local CI above covers the unchanged production implementation; fixture-specific checks validate this follow-up.

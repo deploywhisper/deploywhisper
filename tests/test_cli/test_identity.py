@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 import io
 import os
 from pathlib import Path
-import secrets
 import socket
 import stat
 import subprocess
@@ -24,6 +23,10 @@ from models.database import Base
 from models.tables import IdentityAccount
 from services.identity_service import IdentityError, IdentityService
 
+# Public input for disposable test accounts, never an operator credential.
+# Disk fixtures use this known value directly rather than copying secret state.
+SYNTHETIC_CLI_INPUT = "public identity fixture input only"
+
 
 class IdentityCliTests(unittest.TestCase):
     def setUp(self):
@@ -34,8 +37,8 @@ class IdentityCliTests(unittest.TestCase):
         self.factory = sessionmaker(self.engine, expire_on_commit=False)
         self.time = datetime(2026, 10, 12, tzinfo=timezone.utc)
         self.service = IdentityService(self.factory, now=lambda: self.time)
-        self.password = secrets.token_urlsafe(24)
-        self.password_path = self.private_file("password", self.password + "\n")
+        self.password = SYNTHETIC_CLI_INPUT
+        self.password_path = self.private_file("password", SYNTHETIC_CLI_INPUT + "\n")
         self.setup_path = self.root / "setup"
         self.init_patch = patch.object(identity, "init_db")
         self.init_mock = self.init_patch.start()
@@ -50,8 +53,9 @@ class IdentityCliTests(unittest.TestCase):
 
     def private_file(self, name, value):
         path = self.root / name
-        path.write_text(value, encoding="utf-8")
-        path.chmod(0o600)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(value)
         return path
 
     @contextmanager
@@ -303,7 +307,7 @@ class IdentityCliTests(unittest.TestCase):
                 )[0],
                 1,
             )
-        self.password_path.write_text(self.password)
+        self.password_path.write_text(SYNTHETIC_CLI_INPUT)
         self.assertEqual(
             self.run_cli(
                 "bootstrap",
